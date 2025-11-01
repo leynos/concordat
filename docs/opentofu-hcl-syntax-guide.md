@@ -251,8 +251,8 @@ typically uses the following file layout 8:
   updates.8
 
 - `providers.tofu`: An optional but useful file for explicitly configuring
-  providers (e.g., setting the AWS (Amazon Web Services) region). This separates provider
-  configuration from resource definitions.8
+  providers. For example, you can set the AWS (Amazon Web Services) region
+  here. This separates provider configuration from resource definitions.8
 
 When working with OpenTofu, the tool generates several files and directories
 that should be excluded from version control. A standard `.gitignore` file for
@@ -1014,14 +1014,16 @@ of operations for creating, updating, and destroying resources.
 - **Implicit Dependencies**: The primary and preferred way to manage
   dependencies is implicitly. When one resource's argument references an
   attribute of another resource (e.g., `subnet_id = aws_vpc.main.id`), OpenTofu
-  automatically infers that the virtual private cloud (VPC) must be created before the subnet. It
-  analyses all such references to build the dependency graph.19
+  automatically infers that the virtual private cloud (VPC) must be created
+  before the subnet. It analyses all such references to build the dependency
+  graph.19
 
 - **Explicit Dependencies with** `depends_on`: In some rare cases, a dependency
   exists that cannot be inferred from expression references. This typically
   occurs when one resource depends on the *side effects* of another. For
-  example, an application running on an EC2 instance might need an Identity and Access Management (IAM) policy
-  to be attached to its role before it can boot successfully, but the
+  example, an application running on an EC2 instance might need an Identity and
+  Access Management (IAM) policy to be attached to its role before it can boot
+  successfully, but the
   `aws_instance` resource block itself doesn't reference the
   `aws_iam_role_policy` resource.19
 
@@ -1340,9 +1342,10 @@ to configurations that are robust, maintainable, secure, and scalable.
     per-environment, per-application) to improve performance and reduce the
     blast radius of potential errors.8
 
- 4. **Keep It DRY (Don't Repeat Yourself) with Modules**: Abstract any repeated infrastructure pattern
-    into a reusable, focused module. This reduces code duplication, enforces
-    standardization, and improves the overall maintainability of the codebase.8
+ 4. **Keep It DRY (Don't Repeat Yourself) with Modules**: Abstract any repeated
+    infrastructure pattern into a reusable, focused module. This reduces code
+    duplication, enforces standardization, and improves the overall
+    maintainability of the codebase.8
 
  5. **Document module intent**: Use the `description` field for all variables and
     outputs to create a self-documenting interface for modules. Add comments to

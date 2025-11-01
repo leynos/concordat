@@ -443,9 +443,9 @@ def test_spy_and_record(cmd_mox, monkeypatch, tmp_path):
   manager for existing secrets) should precede writes or rotations.
 - Pure functions that accept configuration objects are preferred over global
   state so that tests can exercise logic deterministically.
-- Exit codes should follow UNIX (Portable Operating System Interface, POSIX) conventions: `0` for success, non‑zero for
-  actionable failures. Human‑friendly error messages should highlight
-  remediation steps.
+- Exit codes should follow UNIX (Portable Operating System Interface, POSIX)
+  conventions: `0` for success, non-zero for actionable failures.
+  Human-friendly error messages should highlight remediation steps.
 - Dependencies must remain minimal. Any new package should be added to the `uv`
   block and the rationale documented within the script or companion tests.
 

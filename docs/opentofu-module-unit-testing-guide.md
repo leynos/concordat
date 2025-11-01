@@ -93,20 +93,21 @@ infrastructure.2 To achieve this isolation, external dependencies, such as
 cloud provider APIs or other modules, are replaced with mocks or stubs.8
 
 Unit tests are characterized by their speed and focus. They provide immediate
-feedback to developers. That responsiveness makes fixes easier and cheaper.8 They give
-teams the confidence to refactor code, knowing that any regressions will be
-caught by the test suite. Furthermore, a well-written set of unit tests serves
-as a form of "living documentation," demonstrating how a module is intended to
-be used and how it behaves under various conditions.18
+feedback to developers, making fixes easier and cheaper.8 This responsiveness
+gives teams the confidence to refactor code, knowing that any regressions will
+be caught by the test suite. Furthermore, a well-written set of unit tests
+serves as a form of "living documentation," demonstrating how a module is
+intended to be used and how it behaves under various conditions.18
 
 #### Layer 3: integration testing (the connections)
 
 While unit tests ensure each component works correctly in isolation,
 integration tests verify that these separate components function together as a
 cohesive system.6 In IaC, this means deploying one or more modules into a real
-or near-real environment. Teams then test how those modules interact.19 For example, an
-integration test could verify that a web server module can correctly connect to
-a database module using the connection string provided as an output.
+or near-real environment. Teams then test how those modules interact.19 For
+example, an integration test could verify that a web server module can
+correctly connect to a database module using the connection string provided as
+an output.
 
 Integration tests are inherently slower and more complex than unit tests
 because they involve provisioning and interacting with actual cloud resources.8
@@ -474,9 +475,9 @@ dependency.
 
 - `override_data`: This is one of the most common and powerful use cases. Many
   modules use data sources to fetch information, such as the latest AMI ID or
-  virtual private cloud (VPC) details. An `override_data` block can intercept this call and return a
-  hardcoded, predictable value, removing the need to query the cloud provider
-  API.
+  virtual private cloud (VPC) details. An `override_data` block can intercept
+  this call and return a hardcoded, predictable value, removing the need to
+  query the cloud provider API.
 
   Example: Overriding a data source for a predictable AMI ID
 
@@ -1378,11 +1379,11 @@ practice; it is a formal engineering discipline that demands the same rigor and
 quality assurance as application development.
 
 The future of IaC testing will likely see this trend continue and accelerate.
-Expect even tighter integration of testing tools within IDEs,
-providing real-time feedback as developers write code. The use of
-policy-as-code (e.g., Open Policy Agent) for testing will become more
-widespread, allowing for complex business and security rules to be validated as
-part of the test suite. Furthermore, the rise of artificial intelligence (AI)-assisted development may
+Expect even tighter integration of testing tools within IDEs, providing
+real-time feedback as developers write code. The use of policy-as-code (e.g.,
+Open Policy Agent) for testing will become more widespread, allowing for
+complex business and security rules to be validated as part of the test suite.
+Furthermore, the rise of artificial intelligence (AI)-assisted development may
 lead to tools that can automatically generate test cases for IaC modules,
 further reducing the manual effort required to achieve comprehensive test
 coverage.
