@@ -1,10 +1,11 @@
 # Project & tooling
-Lille
+Concordat
 markdownlint
 markdownlint-cli2
 Mermaid
 Rust
 no_run
+# Acceptable file names
 README.md
 LICENSE
 

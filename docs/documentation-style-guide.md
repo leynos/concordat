@@ -1,7 +1,7 @@
 # Documentation style guide
 
-This guide outlines conventions for authoring documentation for Lille. Apply
-these rules to keep the documentation clear and consistent for developers.
+This guide outlines conventions for authoring documentation for Concordat.
+Apply these rules to keep the documentation clear and consistent for developers.
 
 ## Spelling
 
@@ -26,7 +26,7 @@ these rules to keep the documentation clear and consistent for developers.
 
 - Use the Oxford comma: "ships, planes, and hovercraft" where it aids
   comprehension.
-- Company names are treated as collective nouns: "Lille Industries are
+- Company names are treated as collective nouns: "Concordat Industries are
   expanding".
 - Avoid first and second person personal pronouns outside of the `README.md`
   file.
