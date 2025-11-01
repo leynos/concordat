@@ -118,5 +118,5 @@ These rules apply to regular and `async def` functions alike.
 
 ______________________________________________________________________
 
-Use the `flake8-return` rules to enforce predictable and clean return logic,
-enhancing readability and correctness.
+Use the `flake8-return` rules to enforce predictable return logic. Doing so
+enhances readability and correctness.

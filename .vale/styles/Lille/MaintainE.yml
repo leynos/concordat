@@ -1,0 +1,10 @@
+extends: substitution
+message: "Keep the 'e' in these: '%s' → '%s'."
+link: "House style: likeable, liveable, rateable."
+level: error
+ignorecase: true
+nonword: true
+swap:
+  likable: likeable
+  livable: liveable
+  ratable: rateable

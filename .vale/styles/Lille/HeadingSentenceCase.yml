@@ -1,0 +1,10 @@
+extends: existence
+message: "Use sentence case for headings."
+link: "House style: headings in sentence case."
+level: warning
+scope: heading
+ignorecase: false
+nonword: true
+# Flags headings with consecutive Title Case words not in the allowed list.
+tokens:
+  - '\\b(?!(?:API|OpenTofu|HashiCorp|HCL|JSON|YAML|Python|Cyclopts|Typer|Rust|GitHub)\\b)[A-Z][a-z]+(?:\\s+(?!(?:API|OpenTofu|HashiCorp|HCL|JSON|YAML|Python|Cyclopts|Typer|Rust|GitHub)\\b)[A-Z][a-z]+)+'

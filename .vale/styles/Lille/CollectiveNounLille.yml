@@ -1,0 +1,9 @@
+extends: existence
+message: "Treat company names as collective nouns: write 'Lille … are', not 'Lille … is'."
+link: "House style: company names as collective nouns."
+level: warning
+scope: text
+ignorecase: true
+nonword: true
+tokens:
+  - '\bLille(?:\s+Industries)?\s+is\b'

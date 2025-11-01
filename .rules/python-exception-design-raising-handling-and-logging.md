@@ -40,8 +40,8 @@ raise CardDeclinedError("insufficient_funds")
 ```
 
 TRY003 discourages raising `Exception` directly. TRY004 encourages appropriate
-built‑ins (`TypeError` for wrong types, `ValueError` for bad values, etc.) or
-domain‑specific classes.
+built‑ins (`TypeError` for wrong types, `ValueError` for bad values, and so on),
+or domain-specific classes.
 
 ### Preserve causal chains with `raise … from …`
 

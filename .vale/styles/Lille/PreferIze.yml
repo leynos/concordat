@@ -1,0 +1,95 @@
+extends: substitution
+message: "Prefer Oxford -ize/-ization spelling: use '%s' instead of '%s'."
+link: "House style: OED (en-GB-oxendict) with -ize."
+level: error
+ignorecase: true
+nonword: true
+swap:
+  organise: organize
+  organised: organized
+  organises: organizes
+  organising: organizing
+  organisation: organization
+  organisations: organizations
+
+  recognise: recognize
+  recognised: recognized
+  recognises: recognizes
+  recognising: recognizing
+  recognisable: recognizable
+  recognisably: recognizably
+  recognisability: recognizability
+
+  specialise: specialize
+  specialised: specialized
+  specialises: specializes
+  specialising: specializing
+  specialisation: specialization
+  specialisations: specializations
+
+  authorise: authorize
+  authorised: authorized
+  authorises: authorizes
+  authorising: authorizing
+  authorisation: authorization
+  authorisations: authorizations
+
+  initialise: initialize
+  initialised: initialized
+  initialises: initializes
+  initialising: initializing
+  initialisation: initialization
+
+  serialise: serialize
+  serialised: serialized
+  serialises: serializes
+  serialising: serializing
+  serialisation: serialization
+
+  customise: customize
+  customised: customized
+  customises: customizes
+  customising: customizing
+  customisation: customization
+
+  prioritise: prioritize
+  prioritised: prioritized
+  prioritises: prioritizes
+  prioritising: prioritizing
+  prioritisation: prioritization
+
+  standardise: standardize
+  standardised: standardized
+  standardises: standardizes
+  standardising: standardizing
+  standardisation: standardization
+
+  minimise: minimize
+  minimised: minimized
+  minimises: minimizes
+  minimising: minimizing
+  minimisation: minimization
+
+  maximise: maximize
+  maximised: maximized
+  maximises: maximizes
+  maximising: maximizing
+  maximisation: maximization
+
+  stabilise: stabilize
+  stabilised: stabilized
+  stabilises: stabilizes
+  stabilising: stabilizing
+  stabilisation: stabilization
+
+  optimise: optimize
+  optimised: optimized
+  optimises: optimizes
+  optimising: optimizing
+  optimisation: optimization
+
+  characterise: characterize
+  characterised: characterized
+  characterises: characterizes
+  characterising: characterizing
+  characterisation: characterization

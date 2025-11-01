@@ -1,0 +1,16 @@
+extends: substitution
+message: "Use double 'l' in these words: '%s' → '%s'."
+link: "House style: cancelled, counsellor, cruellest, travelled, marvellous."
+level: error
+ignorecase: true
+nonword: true
+swap:
+  canceled: cancelled
+  canceling: cancelling
+  counselor: counsellor
+  counseling: counselling
+  traveled: travelled
+  traveler: traveller
+  traveling: travelling
+  marvelous: marvellous
+  cruelest: cruellest
