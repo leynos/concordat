@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
+import os
+
 from cyclopts import App
 
-from .enrol import ConcordatError, enrol_repositories
+from .enrol import enrol_repositories
+from .errors import ConcordatError
+from .listing import list_namespace_repositories
 
 app = App()
 
@@ -25,6 +30,20 @@ def enrol(
     )
     for outcome in outcomes:
         print(outcome.render())
+
+
+@app.command()
+def ls(*namespaces: str, token: str | None = None) -> None:
+    """List SSH URLs for GitHub repositories within the given namespaces."""
+    resolved_token = token or os.getenv("GITHUB_TOKEN")
+    urls = asyncio.run(
+        list_namespace_repositories(
+            namespaces,
+            token=resolved_token,
+        )
+    )
+    for url in urls:
+        print(url)
 
 
 def main(argv: list[str] | tuple[str, ...] | None = None) -> int:

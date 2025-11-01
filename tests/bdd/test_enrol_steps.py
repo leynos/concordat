@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-import dataclasses
 import pathlib
 import subprocess
 import sys
 import typing as typ
 
-import pytest
 from pytest_bdd import given, scenarios, then, when
 from ruamel.yaml import YAML
 
 from concordat.enrol import CONCORDAT_DOCUMENT, CONCORDAT_FILENAME
+
+from .conftest import RunResult
 
 if typ.TYPE_CHECKING:
     from tests.conftest import GitRepo
@@ -20,21 +20,6 @@ else:
     GitRepo = typ.Any  # pragma: no cover - runtime fallback for type hints
 
 scenarios("features/enrol.feature")
-
-
-@dataclasses.dataclass
-class RunResult:
-    """Record CLI invocation results."""
-
-    stdout: str
-    stderr: str
-    returncode: int
-
-
-@pytest.fixture
-def cli_invocation() -> dict[str, RunResult]:
-    """Collect the result of running the CLI within a scenario."""
-    return {}
 
 
 @given("a git repository", target_fixture="repository_path")

@@ -9,6 +9,7 @@ dependencies = [
     "cyclopts",
     "pygit2",
     "ruamel.yaml",
+    "github3.py",
 ]
 
 [project.scripts]
@@ -19,6 +20,7 @@ dev = [
     "pytest",
     "pytest-xdist",
     "pytest-bdd",
+    "pytest-asyncio",
     "ruff",
     "pyright",
     "pytest-timeout",

@@ -50,6 +50,23 @@ Downstream tooling relies on this marker to detect participating repositories.
   The CLI clones the repository, creates the enrolment commit, and pushes it
   back to the remote.
 
+## Listing repositories
+
+- List every repository within one or more GitHub namespaces:
+
+  ```shell
+  uv run concordat ls leynos df12
+  ```
+
+  Each line is an SSH URL that can be passed directly to `concordat enrol`.
+
+- Provide a personal access token with `--token` or the `GITHUB_TOKEN`
+  environment variable when you need to list private repositories:
+
+  ```shell
+  uv run concordat ls --token "$GITHUB_TOKEN" my-org
+  ```
+
 ## Troubleshooting
 
 - The CLI refuses to operate on bare repositories. Create a working tree or

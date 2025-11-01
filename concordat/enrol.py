@@ -13,6 +13,8 @@ import pygit2
 from pygit2 import KeypairFromAgent, RemoteCallbacks, Repository, Signature
 from ruamel.yaml import YAML
 
+from .errors import ConcordatError
+
 CONCORDAT_FILENAME = ".concordat"
 CONCORDAT_DOCUMENT = {"enrolled": True}
 COMMIT_MESSAGE = "chore: enrol repository with concordat"
@@ -20,10 +22,6 @@ ERROR_NO_REPOSITORIES = "At least one repository must be provided."
 ERROR_UNBORN_HEAD = "Enrolment requires a repository with at least one commit."
 ERROR_UNKNOWN_BRANCH = "Cannot determine current branch."
 ERROR_MISSING_ORIGIN = "Repository missing 'origin' remote."
-
-
-class ConcordatError(RuntimeError):
-    """Raised when concordat cannot complete an enrolment action."""
 
 
 def _no_repositories_error() -> ConcordatError:
