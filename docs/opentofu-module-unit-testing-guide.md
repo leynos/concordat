@@ -134,29 +134,29 @@ different purposes, detect different types of bugs, and are applied at
 different stages of the CI/CD pipeline. The following table synthesizes the key
 differences in the context of OpenTofu.
 
-| Feature       | Unit Testing                                                                               | Integration Testing                                                                    | Notes |
-| ------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| Scope         | A single module or resource in isolation.8                                                 | Multiple modules and their interactions.6                                              | |
-| Dependencies  | External dependencies are mocked or stubbed.8 Uses                                         | `mock_provider`, `override_resource`, etc.                                                 | Uses real or closely replicated services (e.g., real cloud APIs).17 |
-| Execution     | tofu plan or tofu test with mocks. Very fast.8                                             | tofu apply or tofu test with command=apply. Slower due to real resource provisioning.6 | |
-| Bugs Detected | Logic errors, incorrect variable interpolation, invalid inputs, broken conditional logic.7 | Interface errors, permission issues, data flow problems, dependency conflicts.7        | |
-| Primary Tools | tofu test (with command=plan and mocks), Terratest (with plan-based checks).               | tofu test (with command=apply), Terratest, Kitchen-Terraform (legacy).                 | |
-| Cost          | Low to none. No real infrastructure deployed.                                              | Higher, as it involves provisioning (and paying for) real cloud resources.             | |
-| CI/CD Stage   | Pre-merge checks on pull requests.                                                         | Post-merge checks in a dedicated test environment.                                     | |
+| Feature       | Unit Testing                                                                               | Integration Testing                                                                    | Notes                                                                             |
+| ------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Scope         | A single module or resource in isolation.8                                                 | Multiple modules and their interactions.6                                              | Isolation keeps feedback fast; integration confirms end-to-end behaviour.         |
+| Dependencies  | External systems are mocked or stubbed with helpers such as `mock_provider`.8              | Relies on real or closely replicated services (for example, live cloud APIs).17        | Overrides make unit tests deterministic; integration tests surface contract drift. |
+| Execution     | `tofu plan` or `tofu test` with mocks. Very fast.8                                         | `tofu apply` or `tofu test` with `command=apply`. Slower due to real provisioning.6    | Choose the fastest option that still exercises the desired behaviour.             |
+| Bugs Detected | Logic errors, invalid inputs, broken conditionals, or interpolation mistakes.7             | Interface errors, permission gaps, data-flow issues, dependency conflicts.7            | Pair both levels to cover both correctness and integration regressions.           |
+| Primary Tools | `tofu test` (plan mode with mocks), Terratest (plan assertions).                            | `tofu test` (apply mode), Terratest, Kitchen-Terraform (legacy).                       | Use consistent tooling and fixtures so findings translate across the pyramid.     |
+| Cost          | Low to none. No real infrastructure deployed.                                              | Higher: provisions real cloud resources and incurs usage costs.                        | Optimise cadence: run unit tests on every change; gate integration on branches.   |
+| CI/CD Stage   | Pre-merge checks on pull requests.                                                         | Post-merge checks in a dedicated test environment.                                     | Promote integration suites to critical branches once stability targets are met.   |
 
 ### 1.4 The blurring lines and the importance of intent
 
 While the testing pyramid provides a clear conceptual model, its practical
 application with modern IaC tools reveals a more nuanced reality. The lines
 between specific test types—particularly unit and integration tests—can appear
-blurry.
-For instance, OpenTofu's native `tofu test` command can be used to run both. It
-can execute a test that provisions real infrastructure, which is a hallmark of
-integration testing.21 Yet, the same command can be configured to run against a
-plan file without deploying anything and can use powerful mocking features to
-isolate the code from external dependencies, which is the very definition of a
-unit test.16 Similarly, a framework like Terratest is most famous for its
-integration testing capabilities but can also be used to validate plan files.
+blurry. For instance, OpenTofu's native `tofu test` command can be used to run
+both. It can execute a test that provisions real infrastructure, which is a
+hallmark of integration testing.21 Yet, the same command can be configured to
+run against a plan file without deploying anything and can use powerful mocking
+features to isolate the code from external dependencies, which is the very
+definition of a unit test.16 Similarly, a framework like Terratest is most
+famous for its integration testing capabilities but can also be used to
+validate plan files.
 
 This flexibility means that the tool or command name alone does not define the
 type of test being performed. The crucial differentiator is the *practitioner's
@@ -176,8 +176,8 @@ validate?"
 
 This shift from a rigid, tool-based definition to a flexible, goal-oriented one
 is central to mastering IaC testing. It empowers engineers to consciously
-select the right approach for the specific validation they need to perform.
-The result is a testing strategy that is both effective and efficient.
+select the right approach for the specific validation they need to perform. The
+result is a testing strategy that is both effective and efficient.
 
 ## Part 2: mastering the OpenTofu native testing framework (`tofu test`)
 
@@ -192,9 +192,10 @@ already proficient with OpenTofu.16
 
 The core of the native framework is the `tofu test` command. When executed, it
 searches the current directory and a `tests/` subdirectory for test files,
-which are identified by the extensions `*.tftest.hcl`, `*.tftest.json`,
-`*.tofutest.hcl`, or `*.tofutest.json`.21 The framework then executes the tests
-defined within these files. Each test run typically involves OpenTofu running a
+which are identified by the extensions
+`*.tftest.hcl`, `*.tftest.json`, `*.tofutest.hcl`, or `*.tofutest.json`.21 The
+framework then executes the tests defined within these files. Each test run
+typically involves OpenTofu running a
 
 `tofu plan` or `tofu apply` command in the background, making assertions
 against the result, and then making a best-effort attempt to destroy any
@@ -1346,9 +1347,9 @@ the development lifecycle. A mature IaC testing strategy is a synthesis of
 these layers:
 
 1. **Static Analysis as the First Gate**: On every commit, fast, automated
-   checks like `tofu fmt`, `tofu validate`, and security scanners (`tfsec`,
-   `Checkov`) should run. This provides immediate feedback on syntax, style,
-   and security, catching the most common errors at virtually no cost.
+   checks like `tofu fmt`, `tofu validate`, and security scanners
+   (`tfsec`, `Checkov`) should run. This provides immediate feedback on syntax,
+   style, and security, catching the most common errors at virtually no cost.
 
 2. **Plan-Based Unit Tests on Every Pull Request**: The core of the testing
    strategy should be a comprehensive suite of unit tests written with
