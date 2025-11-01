@@ -77,15 +77,14 @@ async def list_namespace_repositories(
     runner_fn = runner or (lambda thunk: asyncio.to_thread(thunk))
     factory = client_factory or (lambda: GitHub(token=token))
 
-    tasks = [
-        _list_single_namespace(factory, namespace, runner_fn)
-        for namespace in namespaces
-    ]
-    results = await asyncio.gather(*tasks)
-
     combined: list[str] = []
-    for namespace_repositories in results:
-        combined.extend(namespace_repositories)
+    for namespace in namespaces:
+        namespace_urls = await _list_single_namespace(
+            factory,
+            namespace,
+            runner_fn,
+        )
+        combined.extend(namespace_urls)
     return combined
 
 
