@@ -76,10 +76,10 @@ async def list_namespace_repositories(
 
     runner_fn = runner or (lambda thunk: asyncio.to_thread(thunk))
     factory = client_factory or (lambda: GitHub(token=token))
-    client = factory()
 
     tasks = [
-        _list_single_namespace(client, namespace, runner_fn) for namespace in namespaces
+        _list_single_namespace(factory, namespace, runner_fn)
+        for namespace in namespaces
     ]
     results = await asyncio.gather(*tasks)
 
@@ -90,27 +90,33 @@ async def list_namespace_repositories(
 
 
 async def _list_single_namespace(
-    client: GitHub,
+    client_factory: typ.Callable[[], GitHub],
     namespace: str,
     runner: Runner,
 ) -> list[str]:
     def fetch() -> list[str]:
-        generator = client.repositories_by(namespace, type="owner", number=-1)
-        ssh_urls: list[str] = []
-        for repo in generator:
-            ssh_url = getattr(repo, "ssh_url", None)
-            if not ssh_url:
-                full_name = getattr(repo, "full_name", None)
-                name = getattr(repo, "name", None)
-                if full_name:
-                    ssh_url = f"git@github.com:{full_name}.git"
-                elif name:
-                    ssh_url = f"git@github.com:{namespace}/{name}.git"
-                else:
-                    continue
-            ssh_urls.append(ssh_url)
-        ssh_urls.sort()
-        return ssh_urls
+        client = client_factory()
+        try:
+            generator = client.repositories_by(namespace, type="owner", number=-1)
+            ssh_urls: list[str] = []
+            for repo in generator:
+                ssh_url = getattr(repo, "ssh_url", None)
+                if not ssh_url:
+                    full_name = getattr(repo, "full_name", None)
+                    name = getattr(repo, "name", None)
+                    if full_name:
+                        ssh_url = f"git@github.com:{full_name}.git"
+                    elif name:
+                        ssh_url = f"git@github.com:{namespace}/{name}.git"
+                    else:
+                        continue
+                ssh_urls.append(ssh_url)
+            ssh_urls.sort()
+            return ssh_urls
+        finally:
+            session = getattr(client, "session", None)
+            if session is not None:
+                session.close()
 
     try:
         return await runner(fetch)
