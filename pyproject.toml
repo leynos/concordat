@@ -69,6 +69,10 @@ select = [
     "D",
     "ANN",
 ]
+ignore = [
+    "D203",
+    "D213",
+]
 per-file-ignores = {"**/test_*.py" = ["S101"]}
 
 [tool.ruff.lint.flake8-import-conventions]
