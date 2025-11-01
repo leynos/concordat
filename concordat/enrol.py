@@ -1,0 +1,333 @@
+"""Utilities for enrolling Git repositories with concordat."""
+
+from __future__ import annotations
+
+import dataclasses
+import typing as typ
+from contextlib import contextmanager
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from urllib.parse import urlparse
+
+import pygit2
+from pygit2 import KeypairFromAgent, RemoteCallbacks, Repository, Signature
+from ruamel.yaml import YAML
+
+CONCORDAT_FILENAME = ".concordat"
+CONCORDAT_DOCUMENT = {"enrolled": True}
+COMMIT_MESSAGE = "chore: enrol repository with concordat"
+ERROR_NO_REPOSITORIES = "At least one repository must be provided."
+ERROR_UNBORN_HEAD = "Enrolment requires a repository with at least one commit."
+ERROR_UNKNOWN_BRANCH = "Cannot determine current branch."
+ERROR_MISSING_ORIGIN = "Repository missing 'origin' remote."
+
+
+class ConcordatError(RuntimeError):
+    """Raised when concordat cannot complete an enrolment action."""
+
+
+def _no_repositories_error() -> ConcordatError:
+    return ConcordatError(ERROR_NO_REPOSITORIES)
+
+
+def _remote_clone_failed_error(specification: str, error: Exception) -> ConcordatError:
+    detail = f"Failed to clone {specification!r}: {error}"
+    return ConcordatError(detail)
+
+
+def _remote_clone_bare_error(specification: str) -> ConcordatError:
+    detail = f"Remote clone for {specification!r} is bare."
+    return ConcordatError(detail)
+
+
+def _repository_bare_error(specification: str) -> ConcordatError:
+    detail = f"Repository {specification!r} is bare."
+    return ConcordatError(detail)
+
+
+def _repository_not_found_error(specification: str) -> ConcordatError:
+    detail = f"Repository {specification!r} not found."
+    return ConcordatError(detail)
+
+
+def _open_repository_error(specification: str, error: Exception) -> ConcordatError:
+    detail = f"Cannot open repository {specification!r}: {error}"
+    return ConcordatError(detail)
+
+
+def _unknown_branch_error() -> ConcordatError:
+    return ConcordatError(ERROR_UNKNOWN_BRANCH)
+
+
+def _missing_origin_error() -> ConcordatError:
+    return ConcordatError(ERROR_MISSING_ORIGIN)
+
+
+def _push_failed_error(error: Exception) -> ConcordatError:
+    detail = f"Failed to push changes: {error}"
+    return ConcordatError(detail)
+
+
+def _read_error(path: Path, error: Exception) -> ConcordatError:
+    detail = f"Cannot read {path}: {error}"
+    return ConcordatError(detail)
+
+
+def _unborn_head_error() -> ConcordatError:
+    return ConcordatError(ERROR_UNBORN_HEAD)
+
+
+@dataclasses.dataclass(frozen=True)
+class EnrollmentOutcome:
+    """Captured outcome for a processed repository."""
+
+    repository: str
+    location: Path
+    created: bool
+    committed: bool
+    pushed: bool
+
+    def render(self) -> str:
+        """Return a concise human readable summary."""
+        if not self.created:
+            return f"{self.repository}: already enrolled"
+        status_parts = ["created .concordat"]
+        if self.committed:
+            status_parts.append("committed")
+        if self.pushed:
+            status_parts.append("pushed")
+        status = ", ".join(status_parts)
+        return f"{self.repository}: {status}"
+
+
+_yaml = YAML(typ="safe")
+_yaml.version = (1, 2)
+_yaml.default_flow_style = False
+
+
+def enrol_repositories(
+    repositories: typ.Sequence[str],
+    *,
+    push_remote: bool = False,
+    author_name: str | None = None,
+    author_email: str | None = None,
+) -> list[EnrollmentOutcome]:
+    """Enrol each repository and return the captured outcomes."""
+    if not repositories:
+        raise _no_repositories_error()
+
+    outcomes: list[EnrollmentOutcome] = []
+    for specification in repositories:
+        outcome = _enrol_repository(
+            specification,
+            push_remote=push_remote,
+            author_name=author_name,
+            author_email=author_email,
+        )
+        outcomes.append(outcome)
+    return outcomes
+
+
+def _enrol_repository(
+    specification: str,
+    *,
+    push_remote: bool,
+    author_name: str | None,
+    author_email: str | None,
+) -> EnrollmentOutcome:
+    with _repository_context(specification) as context:
+        created = _ensure_concordat_document(context.location)
+        if not created:
+            return EnrollmentOutcome(
+                repository=specification,
+                location=context.location,
+                created=False,
+                committed=False,
+                pushed=False,
+            )
+
+        _stage_document(context.repository)
+        commit_oid = _commit_document(
+            context.repository,
+            author_name=author_name,
+            author_email=author_email,
+        )
+
+        should_push = context.is_remote or push_remote
+        pushed = False
+        if should_push:
+            _push_document(context.repository, context.callbacks)
+            pushed = True
+
+        return EnrollmentOutcome(
+            repository=specification,
+            location=context.location,
+            created=True,
+            committed=commit_oid is not None,
+            pushed=pushed,
+        )
+
+
+@dataclasses.dataclass
+class _RepositoryContext:
+    repository: Repository
+    location: Path
+    is_remote: bool
+    callbacks: RemoteCallbacks | None
+
+
+@contextmanager
+def _repository_context(
+    specification: str,
+) -> typ.Iterator[_RepositoryContext]:
+    if _looks_like_remote(specification):
+        callbacks = _remote_callbacks(specification)
+        with TemporaryDirectory(prefix="concordat-clone-") as temp_root:
+            target = Path(temp_root, "repo")
+            try:
+                repository = pygit2.clone_repository(
+                    url=specification,
+                    path=str(target),
+                    callbacks=callbacks,
+                )
+            except pygit2.GitError as error:
+                raise _remote_clone_failed_error(specification, error) from error
+
+            workdir = repository.workdir
+            if workdir is None:
+                raise _remote_clone_bare_error(specification)
+
+            yield _RepositoryContext(
+                repository=repository,
+                location=Path(workdir),
+                is_remote=True,
+                callbacks=callbacks,
+            )
+        return
+
+    repository = _open_local_repository(specification)
+    workdir = repository.workdir
+    if workdir is None:
+        raise _repository_bare_error(specification)
+
+    yield _RepositoryContext(
+        repository=repository,
+        location=Path(workdir),
+        is_remote=False,
+        callbacks=None,
+    )
+
+
+def _open_local_repository(specification: str) -> Repository:
+    path = Path(specification).expanduser()
+    try:
+        resolved = pygit2.discover_repository(str(path))
+    except KeyError as error:
+        raise _repository_not_found_error(specification) from error
+
+    if resolved is None:
+        raise _repository_not_found_error(specification)
+
+    try:
+        return pygit2.Repository(resolved)
+    except pygit2.GitError as error:
+        raise _open_repository_error(specification, error) from error
+
+
+def _stage_document(repository: Repository) -> None:
+    index = repository.index
+    index.add(CONCORDAT_FILENAME)
+    index.write()
+
+
+def _commit_document(
+    repository: Repository,
+    *,
+    author_name: str | None,
+    author_email: str | None,
+) -> pygit2.Oid | None:
+    if repository.head_is_unborn:
+        raise _unborn_head_error()
+
+    index = repository.index
+    tree_oid = index.write_tree()
+    parents = [repository.head.target]
+
+    signature = _signature(repository, author_name, author_email)
+    return repository.create_commit(
+        "HEAD",
+        signature,
+        signature,
+        COMMIT_MESSAGE,
+        tree_oid,
+        parents,
+    )
+
+
+def _push_document(repository: Repository, callbacks: RemoteCallbacks | None) -> None:
+    branch = repository.head.shorthand
+    if not branch:
+        raise _unknown_branch_error()
+
+    try:
+        remote = repository.remotes["origin"]
+    except KeyError as error:
+        raise _missing_origin_error() from error
+
+    refspec = f"refs/heads/{branch}:refs/heads/{branch}"
+    try:
+        remote.push([refspec], callbacks=callbacks)
+    except pygit2.GitError as error:
+        raise _push_failed_error(error) from error
+
+
+def _ensure_concordat_document(location: Path) -> bool:
+    destination = location / CONCORDAT_FILENAME
+    if destination.exists():
+        existing = _load_yaml(destination)
+        if existing == CONCORDAT_DOCUMENT:
+            return False
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with destination.open("w", encoding="utf-8") as handle:
+        _yaml.dump(CONCORDAT_DOCUMENT, handle)
+    return True
+
+
+def _load_yaml(path: Path) -> object:
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            return _yaml.load(handle) or {}
+    except OSError as error:
+        raise _read_error(path, error) from error
+
+
+def _signature(
+    repository: Repository,
+    author_name: str | None,
+    author_email: str | None,
+) -> Signature:
+    if author_name and author_email:
+        return Signature(author_name, author_email)
+    try:
+        return repository.default_signature
+    except KeyError:
+        # Fall back to a deterministic identity so commits still succeed in CI.
+        return Signature("concordat", "concordat@local")
+
+
+def _looks_like_remote(specification: str) -> bool:
+    return specification.startswith("git@") or specification.startswith("ssh://")
+
+
+def _remote_callbacks(specification: str) -> RemoteCallbacks | None:
+    if specification.startswith("git@"):
+        username = specification.split("@", 1)[0]
+    else:
+        parsed = urlparse(specification)
+        username = parsed.username or "git"
+    try:
+        credentials = KeypairFromAgent(username)
+    except pygit2.GitError:
+        return None
+    return RemoteCallbacks(credentials=credentials)

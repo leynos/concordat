@@ -1,3 +1,5 @@
+"""Fallback Python implementation for concordat greetings."""
+
 from __future__ import annotations
 
 
