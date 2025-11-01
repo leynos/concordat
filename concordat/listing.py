@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import typing as typ
 
 from github3 import GitHub
@@ -16,8 +15,6 @@ from github3.exceptions import (
 )
 
 from .errors import ConcordatError
-
-Runner = typ.Callable[[typ.Callable[[], list[str]]], typ.Awaitable[list[str]]]
 
 ERROR_NO_NAMESPACES = "Specify at least one namespace to list."
 
@@ -43,14 +40,15 @@ def _github_api_error(error: Exception) -> ConcordatError:
 
 def _connection_error(error: Exception) -> ConcordatError:
     parts: list[str] = []
-    current: Exception | None = error  # type: ignore[assignment]
+    current: Exception | None = error
     seen: set[int] = set()
     while current and id(current) not in seen:
         seen.add(id(current))
         text = str(current).strip()
         if text and text not in parts:
             parts.append(text)
-        current = current.__cause__ or current.__context__  # type: ignore[assignment]
+        next_error = current.__cause__ or current.__context__
+        current = next_error if isinstance(next_error, Exception) else None
 
     detail = "; caused by: ".join(parts) if parts else repr(error)
     suggestion = (
@@ -63,62 +61,46 @@ def _connection_error(error: Exception) -> ConcordatError:
     return ConcordatError(message)
 
 
-async def list_namespace_repositories(
+def list_namespace_repositories(
     namespaces: typ.Sequence[str],
     *,
     token: str | None = None,
-    runner: Runner | None = None,
     client_factory: typ.Callable[[], GitHub] | None = None,
 ) -> list[str]:
     """Return SSH URLs for repositories across the provided namespaces."""
     if not namespaces:
         raise _no_namespaces_error()
 
-    runner_fn = runner or (lambda thunk: asyncio.to_thread(thunk))
     factory = client_factory or (lambda: GitHub(token=token))
-
-    combined: list[str] = []
-    for namespace in namespaces:
-        namespace_urls = await _list_single_namespace(
-            factory,
-            namespace,
-            runner_fn,
-        )
-        combined.extend(namespace_urls)
-    return combined
-
-
-async def _list_single_namespace(
-    client_factory: typ.Callable[[], GitHub],
-    namespace: str,
-    runner: Runner,
-) -> list[str]:
-    def fetch() -> list[str]:
-        client = client_factory()
-        try:
-            generator = client.repositories_by(namespace, type="owner", number=-1)
-            ssh_urls: list[str] = []
-            for repo in generator:
-                ssh_url = getattr(repo, "ssh_url", None)
-                if not ssh_url:
-                    full_name = getattr(repo, "full_name", None)
-                    name = getattr(repo, "name", None)
-                    if full_name:
-                        ssh_url = f"git@github.com:{full_name}.git"
-                    elif name:
-                        ssh_url = f"git@github.com:{namespace}/{name}.git"
-                    else:
-                        continue
-                ssh_urls.append(ssh_url)
-            ssh_urls.sort()
-            return ssh_urls
-        finally:
-            session = getattr(client, "session", None)
-            if session is not None:
-                session.close()
-
+    client = factory()
     try:
-        return await runner(fetch)
+        combined: list[str] = []
+        for namespace in namespaces:
+            combined.extend(_fetch_namespace(client, namespace))
+        return combined
+    finally:
+        session = getattr(client, "session", None)
+        if session is not None:
+            session.close()
+
+
+def _fetch_namespace(client: GitHub, namespace: str) -> list[str]:
+    try:
+        generator = client.repositories_by(namespace, type="owner", number=-1)
+        ssh_urls: list[str] = []
+        for repo in generator:
+            ssh_url = getattr(repo, "ssh_url", None)
+            if not ssh_url:
+                full_name = getattr(repo, "full_name", None)
+                name = getattr(repo, "name", None)
+                if full_name:
+                    ssh_url = f"git@github.com:{full_name}.git"
+                elif name:
+                    ssh_url = f"git@github.com:{namespace}/{name}.git"
+                else:
+                    continue
+            ssh_urls.append(ssh_url)
+        ssh_urls.sort()
     except NotFoundError as error:
         raise _namespace_not_found_error(namespace) from error
     except ForbiddenError as error:
@@ -127,3 +109,5 @@ async def _list_single_namespace(
         raise _connection_error(error) from error
     except GitHubError as error:
         raise _github_api_error(error) from error
+    else:
+        return ssh_urls

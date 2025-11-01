@@ -50,8 +50,8 @@ def when_run_concordat_ls(
 ) -> None:
     """Execute the CLI with the mocked GitHub API."""
     expected = listing_state.get("repositories", [])
-    async_mock = mock.AsyncMock(return_value=expected)
-    monkeypatch.setattr("concordat.cli.list_namespace_repositories", async_mock)
+    mock_list = mock.Mock(return_value=expected)
+    monkeypatch.setattr("concordat.cli.list_namespace_repositories", mock_list)
 
     buffer = io.StringIO()
     with redirect_stdout(buffer):
@@ -61,7 +61,7 @@ def when_run_concordat_ls(
         stderr="",
         returncode=0,
     )
-    async_mock.assert_awaited_once_with(tuple(github_namespaces), token=None)
+    mock_list.assert_called_once_with(tuple(github_namespaces), token=None)
 
 
 @then("the CLI prints the repository SSH URLs")
