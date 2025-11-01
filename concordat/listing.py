@@ -6,7 +6,14 @@ import asyncio
 import typing as typ
 
 from github3 import GitHub
-from github3.exceptions import ForbiddenError, GitHubError, NotFoundError
+from github3.exceptions import (
+    ConnectionError as GitHubConnectionError,
+)
+from github3.exceptions import (
+    ForbiddenError,
+    GitHubError,
+    NotFoundError,
+)
 
 from .errors import ConcordatError
 
@@ -31,6 +38,28 @@ def _namespace_forbidden_error(namespace: str) -> ConcordatError:
 
 def _github_api_error(error: Exception) -> ConcordatError:
     message = f"GitHub API error: {error}"
+    return ConcordatError(message)
+
+
+def _connection_error(error: Exception) -> ConcordatError:
+    parts: list[str] = []
+    current: Exception | None = error  # type: ignore[assignment]
+    seen: set[int] = set()
+    while current and id(current) not in seen:
+        seen.add(id(current))
+        text = str(current).strip()
+        if text and text not in parts:
+            parts.append(text)
+        current = current.__cause__ or current.__context__  # type: ignore[assignment]
+
+    detail = "; caused by: ".join(parts) if parts else repr(error)
+    suggestion = (
+        "Unable to contact GitHub over HTTPS. This usually means your TLS "
+        "configuration or certificate store needs attention. If you are "
+        "behind an intercepting proxy, export REQUESTS_CA_BUNDLE (or "
+        "SSL_CERT_FILE) with the proxy's root certificate."
+    )
+    message = f"{suggestion}\nOriginal error: {detail}"
     return ConcordatError(message)
 
 
@@ -89,5 +118,7 @@ async def _list_single_namespace(
         raise _namespace_not_found_error(namespace) from error
     except ForbiddenError as error:
         raise _namespace_forbidden_error(namespace) from error
+    except GitHubConnectionError as error:
+        raise _connection_error(error) from error
     except GitHubError as error:
         raise _github_api_error(error) from error

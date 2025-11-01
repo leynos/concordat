@@ -7,7 +7,9 @@ import typing as typ
 import unittest.mock as mock
 
 import pytest
+from github3.exceptions import ConnectionError as GitHubConnectionError
 from github3.exceptions import NotFoundError
+from requests import exceptions as requests_exceptions
 
 from concordat import listing
 from concordat.errors import ConcordatError
@@ -113,3 +115,25 @@ async def test_list_namespace_repositories_requires_namespace() -> None:
     """Reject empty namespace lists."""
     with pytest.raises(ConcordatError):
         await listing.list_namespace_repositories(())
+
+
+@pytest.mark.asyncio
+async def test_list_namespace_repositories_formats_connection_error() -> None:
+    """Return a helpful message when TLS negotiation fails."""
+    underlying = requests_exceptions.SSLError("unknown error (_ssl.c:3113)")
+    client = mock.Mock()
+    client.repositories_by.side_effect = GitHubConnectionError(underlying)
+
+    async def runner(func: typ.Callable[[], list[str]]) -> list[str]:
+        return func()
+
+    with pytest.raises(ConcordatError) as caught:
+        await listing.list_namespace_repositories(
+            ("alpha",),
+            runner=runner,
+            client_factory=lambda: client,
+        )
+
+    message = str(caught.value)
+    assert "Unable to contact GitHub" in message
+    assert "unknown error" in message
