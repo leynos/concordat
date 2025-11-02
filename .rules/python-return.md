@@ -1,8 +1,8 @@
 # flake8-return Style Guide (Python 3.13)
 
-The `flake8-return` rules ensure consistent and explicit return behaviour,
-Ensuring your functions are clear in intent and free from unnecessary control
-flow. Follow these rules:
+The `flake8-return` rules ensure consistent, explicit return behaviour, keeping
+functions clear in intent and free from unnecessary control flow. Follow these
+rules:
 
 ## R501 — Avoid Explicit `return None` if It's the Only Return
 
