@@ -374,12 +374,12 @@ are specific concessions and non-obvious rules that reflect JSON's status as a
 secondary, special-purpose dialect.
 
 1. **Special Handling for** `variable` **Blocks**: The arguments within a
-   `variable` block have non-standard mappings in JSON. The `type`,
-   `description`, and `default` arguments expect literal JSON values, not
-   expressions. For example, the `type` must be a simple string like `"string"`
-   or `"list(string)"`, and the `default` value is taken literally without
-   interpreting any string templates it might contain.16 This is a significant
-   departure from native HCL where these can be more dynamic.
+   `variable` block have non-standard mappings in JSON. The
+   `type`, `description`, and `default` arguments expect literal JSON values,
+   not expressions. For example, the `type` must be a simple string like
+   `"string"` or `"list(string)"`, and the `default` value is taken literally
+   without interpreting any string templates it might contain.16 This is a
+   significant departure from native HCL where these can be more dynamic.
 
 2. **The "Attributes as Blocks" Limitation**: Some resource types have a
    special behaviour where an argument can be specified using either argument
@@ -508,10 +508,10 @@ features, often configured via nested blocks.
 
 ### 2.2 variable: parameterizing configurations
 
-Input variables are the parameters of an OpenTofu module, allowing its behaviour
-to be customized without modifying its source code. They are analogous to
-function arguments in traditional programming.11 Each input variable is
-declared using a
+Input variables are the parameters of an OpenTofu module, allowing its
+behaviour to be customized without modifying its source code. They are
+analogous to function arguments in traditional programming.11 Each input
+variable is declared using a
 
 `variable` block.11
 
@@ -641,7 +641,7 @@ The syntax is `data "<PROVIDER>_<TYPE>" "<NAME>" {... }`.25
 
 A key aspect of data source behaviour is its evaluation timing. OpenTofu
 attempts to read data sources during the `plan` phase. However, if any of a
-  data source's arguments depend on a value that is not yet known (that is, a
+data source's arguments depend on a value that is not yet known (that is, a
 "computed value" from a resource that has not been created yet), the reading of
 the data source is deferred until the `apply` phase. When this happens, any
 attributes of that data source will also be unknown during the plan, appearing
@@ -820,8 +820,8 @@ evaluates the `subnet_id` for each instance:
 The result is that OpenTofu plans to **change** the subnet for the instance at
 index 1 (from `subnet-def` to `subnet-ghi`) and **destroy** the instance at
 index 2. This is often not the desired behaviour; the user likely intended only
-to destroy the instance associated with `subnet-def`. This re-indexing behaviour
-makes `count` fragile for managing dynamic collections.2
+to destroy the instance associated with `subnet-def`. This re-indexing
+behaviour makes `count` fragile for managing dynamic collections.2
 
 #### The `for_each` meta-argument
 
@@ -933,8 +933,9 @@ and implementing complex logic within configurations.
 
 - **Splat Expressions**: The splat operator (`[*]`) provides a concise syntax
   for extracting a list of attributes from a list of complex objects. For
-  example, if `aws_instance.server` was created with `count`,
-  `aws_instance.server[*].id` would return a list of all the instance IDs.9
+  example, if `aws_instance.server` was created with
+  `count`, `aws_instance.server[*].id` would return a list of all the instance
+  IDs.9
 
 - `dynamic` **Blocks**: For generating multiple *nested* blocks within a
   resource (such as multiple `ingress` rules for a security group), HCL
@@ -1023,9 +1024,8 @@ of operations for creating, updating, and destroying resources.
   occurs when one resource depends on the *side effects* of another. For
   example, an application running on an EC2 instance might need an Identity and
   Access Management (IAM) policy to be attached to its role before it can boot
-  successfully, but the
-  `aws_instance` resource block itself doesn't reference the
-  `aws_iam_role_policy` resource.19
+  successfully, but the `aws_instance` resource block itself doesn't reference
+  the `aws_iam_role_policy` resource.19
 
   In these "hidden dependency" scenarios, the `depends_on` meta-argument can be
   used to create an explicit dependency.19
@@ -1093,10 +1093,10 @@ principles 8:
    later than to remove an existing one that is widely used.8
 
 5. **Follow the Standard Structure**: A reusable module should follow the
-   standard file structure (`README.md`, `main.tofu`, `variables.tofu`,
-   `outputs.tofu`, `LICENSE`) and include an `examples/` directory to
-   demonstrate usage. A well-documented `README.md` is essential for
-   usability.14
+   standard file structure
+   (`README.md`, `main.tofu`, `variables.tofu`, `outputs.tofu`, `LICENSE`) and
+   include an `examples/` directory to demonstrate usage. A well-documented
+   `README.md` is essential for usability.14
 
 ______________________________________________________________________
 
@@ -1126,10 +1126,10 @@ anti-patterns that lead to brittle, insecure, or unmaintainable configurations.
     prevents an upgrade to a new major version (e.g., 6.0.0).13
 
 - **Mismanaging the Lock File**: The `.terraform.lock.hcl` file contains
-  checksums for provider packages on specific platforms (e.g., `darwin_arm64`,
-  `linux_amd64`). A common pitfall occurs when a developer on one OS (e.g.,
-  macOS) runs `tofu init` and commits the updated lock file. When a
-  continuous integration/continuous delivery (CI/CD) system running on a
+  checksums for provider packages on specific platforms (e.g.,
+  `darwin_arm64`, `linux_amd64`). A common pitfall occurs when a developer on
+  one OS (e.g., macOS) runs `tofu init` and commits the updated lock file. When
+  a continuous integration/continuous delivery (CI/CD) system running on a
   different OS (e.g., Linux) tries to run `init`, it may fail if it cannot find
   a matching hash for its platform.
 
@@ -1347,7 +1347,8 @@ to configurations that are robust, maintainable, secure, and scalable.
     duplication, enforces standardization, and improves the overall
     maintainability of the codebase.8
 
- 5. **Document module intent**: Use the `description` field for all variables and
+ 5. **Document module intent**: Use the `description` field for all variables
+    and
     outputs to create a self-documenting interface for modules. Add comments to
     explain any non-obvious logic, especially for "hidden" dependencies that
     require the use of `depends_on`.8
