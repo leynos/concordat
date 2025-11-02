@@ -79,39 +79,58 @@ Codify consistent branch rules with measurable compliance.
 
 ## Phase 3 – Institutionalize issue prioritization
 
-Phase 3 introduces the issue taxonomy and routing logic aligned to Concordat's
-incident posture.
+Phase 3 introduces the canonical priority taxonomy, aligns GitHub Projects with
+it, and enforces the standard via automated sync and audit pipelines.
 
-### Step: Roll out organization-wide labels and policies
+### Step: Publish the canonical priority model
 
-Ensure every managed repository exposes consistent priority signals.
+Create the single source of truth for priority semantics and expose it to all
+downstream automation.
 
-- [ ] Create GitHub labels for low (`#64b0bc`), medium (`#f3badd`), high
-      (`#f64fbb`), and critical (`#9b360c`) severities via OpenTofu resources.
-      Acceptance: Auditor verification finds the colour hex and descriptions
-      applied identically across repositories.
-- [ ] Add Auditor checks ensuring new issues and pull requests include an
-      approved priority label or a documented exemption. Acceptance: 95 per
-      cent of issues opened during the pilot window carry a valid priority
-      within 48 hours.
-- [ ] Document escalation pathways mapping the priority bands to response
-      expectations and link them in repository templates. Acceptance: template
-      updates propagate through `multi-gitter` pull requests merged by at least
-      80 per cent of repositories within the enforcement cohort.
+- [ ] Author `canon/priorities/priority-model.yaml` in
+      `platform-standards` with the `P0`–`P3` label metadata, Projects v2
+      field schema, and alias mappings. Acceptance: the file ships with unit
+      tests that load and validate its structure.
+- [ ] Version the model with a Git tag (for example, `priorities/v1`) and
+      document the change control process. Acceptance: both OpenTofu modules
+      and the Auditor pin to the tag in their configs.
+- [ ] Announce the model and migration plan to repository owners, providing a
+      playbook for interpreting the new priority names. Acceptance: feedback
+      survey records >80 per cent comprehension among pilot teams.
 
-### Step: Embed signals into workflow automation
+### Step: Apply labels and Projects fields declaratively
 
-Connect priority designations to operational tooling.
+Roll out the canonical state across the estate using OpenTofu.
 
-- [ ] Update notification pipelines so that high and critical issues trigger
-      paging hooks, while low and medium route to backlog queues. Acceptance:
-      incident drills confirm delivery to the correct channels.
-- [ ] Extend dashboards to visualize priority distribution and ageing trends.
-      Acceptance: stakeholders can segment issues by priority and repository in
-      under five seconds per query.
-- [ ] Add backlog hygiene tasks to the compliance scoreboard, flagging issues
-      without updates beyond 30 days per priority band. Acceptance: overdue
-      issue counts trend downward for two consecutive reporting cycles.
+- [ ] Deliver `modules/repo-priority-labels` and
+      `modules/projects-v2-priority-field` under `platform-standards/tofu`,
+      including documentation and examples. Acceptance: `tofu test` succeeds
+      for both modules with fixtures representing real repositories and
+      projects.
+- [ ] Update the top-level OpenTofu configuration to iterate over the managed
+      repository list and relevant Projects v2 boards. Acceptance: a dry run
+      `tofu plan` enumerates intended label and field changes without
+      attempting out-of-scope mutations.
+- [ ] Run a pilot `tofu apply` against 10 per cent of repositories and two
+      Projects boards. Acceptance: Auditor drift reports confirm no unexpected
+      changes, and affected teams sign off on the new labels.
+
+### Step: Wire synchronization and audit enforcement
+
+Keep labels and project fields consistent and make the configuration
+non-optional.
+
+- [ ] Publish `canon/.github/workflows/priority-sync.yml`, the reusable
+      workflow that keeps Projects Priority fields and issue labels in sync.
+      Acceptance: two pilot repositories consume the workflow and report no
+      sync drift over a two-week trial.
+- [ ] Extend the Auditor with PR-001 through PR-004 priority checks (as
+      defined in the design doc) and ship them initially as warnings. Acceptance:
+      Auditor SARIF output shows the new rule IDs with actionable guidance.
+- [ ] Open organization-wide PRs (via `multi-gitter`) to adopt the sync
+      workflow and raise the Auditor checks to `error` once false positive
+      rates drop under five per cent. Acceptance: Code Scanning gates block
+      merges that violate the canonical model after the enforcement switch.
 
 ## Phase 4 – Sustain and expand automation
 
