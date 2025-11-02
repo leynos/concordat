@@ -2,7 +2,7 @@
 
 ## Code Style and Structure
 
-- **Code is for humans.** Write your code with clarity and empathy—assume a
+- **Code is for humans.** Write code with clarity and empathy—assume a
   tired teammate will need to debug it at 3 a.m.
 - **Comment *why*, not *what*.** Explain assumptions, edge cases, trade-offs,
   or complexity. Don't echo the obvious.
@@ -108,7 +108,8 @@ When implementing changes, adhere to the following testing procedures:
 ## Refactoring Heuristics & Workflow
 
 - **Recognizing Refactoring Needs:** Regularly assess the codebase for
-  potential refactoring opportunities. Consider refactoring when you observe:
+  potential refactoring opportunities. Consider refactoring when the following
+  conditions appear:
   - **Long Methods/Functions:** Functions or methods that are excessively long
     or try to do too many things.
   - **Duplicated Code:** Identical or very similar code blocks appearing in
@@ -158,8 +159,8 @@ The following tooling is available in this environment:
   debugging runtime behaviour and syscalls.
 - `gdb` – The GNU Debugger, for inspecting and controlling programs as they
   execute (or post-mortem via core dumps).
-- `ripgrep` – Fast, recursive text search tool (`grep` alternative) that
-  respects `.gitignore` files.
+- `ripgrep` – Fast, recursive text search tool (GNU's Not Unix (GNU) `grep`
+  alternative) that respects `.gitignore` files.
 - `ltrace` – Traces calls to dynamic library functions made by a process.
 - `valgrind` – Suite for detecting memory leaks, profiling, and debugging
   low-level memory errors.
@@ -167,7 +168,7 @@ The following tooling is available in this environment:
   language for kernel and application tracing.
 - `lsof` – Lists open files and the processes using them.
 - `htop` – Interactive process viewer (visual upgrade to `top`).
-- `iotop` – Displays and monitors I/O usage by processes.
+- `iotop` – Displays and monitors input/output usage by processes.
 - `ncdu` – NCurses-based disk usage viewer for finding large files/folders.
 - `tree` – Displays directory structure as a tree.
 - `bat` – `cat` clone with syntax highlighting, Git integration, and paging.
@@ -175,7 +176,7 @@ The following tooling is available in this environment:
 - `tcpdump` – Captures and analyses network traffic at the packet level.
 - `nmap` – Network scanner for host discovery, port scanning, and service
   identification.
-- `lldb` – LLVM debugger, alternative to `gdb`.
+- `lldb` – Low Level Virtual Machine (LLVM) debugger, alternative to `gdb`.
 - `eza` – Modern `ls` replacement with more features and better defaults.
 - `fzf` – Interactive fuzzy finder for selecting files, commands, etc.
 - `hyperfine` – Command-line benchmarking tool with statistical output.
