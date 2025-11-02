@@ -70,8 +70,8 @@ def scale(values: list[float], factor: float) -> list[float]:
 
 - **Explain tricky code.** Use inline comments for non-obvious logic or
   decisions.
-- **Colocate documentation.** Keep README.md or `docs/` near reusable packages;
-  include usage examples.
+- **Colocate documentation.** Keep the project readme (`README.md`) or `docs/`
+  near reusable packages; include usage examples.
 
 ## Testing with pytest
 
