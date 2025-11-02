@@ -90,11 +90,11 @@ Priority signals—labels on issues and the corresponding single-select fields i
 Projects v2—drive incident response for Concordat repositories. Inconsistent
 naming, colouring, or semantics across repositories diminishes routing
 reliability and obscures metrics. To align priority management with the
-"standards as code" philosophy, we introduce a canonical priority model defined
-once in `platform-standards`, applied through OpenTofu, and enforced via the
-Auditor and GitHub rulesets. The `concordat` CLI remains the entry point for
-estate inventory and enrollment but continues to defer all mutation to
-declarative automation.
+"standards as code" philosophy, the architecture introduces a canonical
+priority model defined once in `platform-standards`, applied through OpenTofu,
+and enforced via the Auditor and GitHub rulesets. The `concordat` CLI remains
+the entry point for estate inventory and enrollment but continues to defer all
+mutation to declarative automation.
 
 ### 2.2 Canonical priority model contract
 
@@ -150,8 +150,8 @@ synchronization:
   key.
 
 Target repositories include a thin caller workflow pinning to a tagged version
-of the reusable definition. Authentication uses a repository-scoped PAT with
-`issues:write` and `projects:write` permissions.
+of the reusable definition. Authentication uses a repository-scoped personal
+access token (PAT) with `issues:write` and `projects:write` permissions.
 
 ### 2.5 Auditor enforcement and rulesets
 
@@ -194,8 +194,8 @@ The rollout mirrors other Concordat standards:
    `multi-gitter` PRs.
 3. Active enforcement — promote the Auditor rules to `error` severity and
    activate the ruleset gate.
-4. Sustain — add SLO annotations, dashboards, and optional auto-remediation for
-   missing labels.
+4. Sustain — add service level objective (SLO) annotations, dashboards, and
+   optional auto-remediation for missing labels.
 
 Edge cases such as archived repositories, mirrors, or opt-out manifests use the
 existing exemption model. Repositories without issues bypass label checks
