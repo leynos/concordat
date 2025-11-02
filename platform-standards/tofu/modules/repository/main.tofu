@@ -6,7 +6,12 @@ locals {
     allow_auto_merge   = false
   }
 
-  merge_preferences = merge(local.merge_defaults, var.merge_strategies)
+  sanitized_merge_preferences = {
+    for key, value in var.merge_strategies :
+    key => value if value != null
+  }
+
+  merge_preferences = merge(local.merge_defaults, local.sanitized_merge_preferences)
 
   enabled_release_paths = [
     for mode, enabled in local.merge_preferences :

@@ -82,11 +82,17 @@ variable "merge_strategies" {
   default = {}
 
   validation {
-    condition = length(var.merge_strategies) == 0 || (
-      try(var.merge_strategies.allow_merge_commit, false) ||
-      try(var.merge_strategies.allow_rebase_merge, false) ||
-      try(var.merge_strategies.allow_squash_merge, false)
-    )
+    condition = alltrue([
+      for value in [
+        try(var.merge_strategies.allow_merge_commit, null),
+        try(var.merge_strategies.allow_rebase_merge, null),
+        try(var.merge_strategies.allow_squash_merge, null)
+      ] : value == null
+    ]) || anytrue([
+      try(var.merge_strategies.allow_merge_commit == true, false),
+      try(var.merge_strategies.allow_rebase_merge == true, false),
+      try(var.merge_strategies.allow_squash_merge == true, false)
+    ])
     error_message = "Enable at least one of allow_merge_commit, allow_rebase_merge, or allow_squash_merge."
   }
 }

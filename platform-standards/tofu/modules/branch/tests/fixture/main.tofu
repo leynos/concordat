@@ -12,18 +12,10 @@ provider "github" {
   owner = "platform"
 }
 
-module "repository" {
-  source = "../../repository"
-
-  name        = "branch-fixture"
-  visibility  = "private"
-  topics      = ["fixture"]
-}
-
 module "branch" {
   source = "../.."
 
-  repository_node_id = module.repository.repository_node_id
+  repository_node_id = "R_kgDOExample"
   pattern            = "main"
   status_checks = {
     contexts = ["ci/smoke"]

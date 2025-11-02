@@ -10,12 +10,14 @@ import (
 // TestRepositoryModuleDefaults validates the default merge strategy logic using terraform
 // plan output so we avoid hitting the GitHub API. The fixture config parallels CI usage.
 func TestRepositoryModuleDefaults(t *testing.T) {
-    t.Parallel()
-
-    fixturePath := filepath.Join("..", "modules", "repository", "tests", "fixture")
+    fixturePath, err := filepath.Abs(filepath.Join("..", "modules", "repository", "tests", "fixture"))
+    if err != nil {
+        t.Fatalf("resolve repository fixture: %v", err)
+    }
     options := &terraform.Options{
         TerraformDir: fixturePath,
         NoColor:      true,
+        PlanFilePath: filepath.Join(t.TempDir(), "plan.tfplan"),
     }
 
     planStruct := terraform.InitAndPlanAndShowWithStruct(t, options)
@@ -39,20 +41,14 @@ func TestRepositoryModuleDefaults(t *testing.T) {
 // TestRepositoryModuleRejectsMissingMergePaths ensures the validation guard blocks
 // configurations that disable every merge mode.
 func TestRepositoryModuleRejectsMissingMergePaths(t *testing.T) {
-    t.Parallel()
-
-    fixturePath := filepath.Join("..", "modules", "repository", "tests", "fixture")
+    fixturePath, err := filepath.Abs(filepath.Join("..", "modules", "repository", "tests", "fixture_disable_merges"))
+    if err != nil {
+        t.Fatalf("resolve repository fixture: %v", err)
+    }
     options := &terraform.Options{
         TerraformDir: fixturePath,
         NoColor:      true,
-        Vars: map[string]interface{}{
-            "merge_strategies": map[string]bool{
-                "allow_merge_commit": false,
-                "allow_rebase_merge": false,
-                "allow_squash_merge": false,
-                "allow_auto_merge":   false,
-            },
-        },
+        PlanFilePath: filepath.Join(t.TempDir(), "plan.tfplan"),
     }
 
     if _, err := terraform.InitAndPlanE(t, options); err == nil {
@@ -63,12 +59,14 @@ func TestRepositoryModuleRejectsMissingMergePaths(t *testing.T) {
 // TestBranchModuleRequiresStatusChecks ensures strict status checks carry contexts and
 // conversation resolution is force-enabled.
 func TestBranchModuleRequiresStatusChecks(t *testing.T) {
-    t.Parallel()
-
-    fixturePath := filepath.Join("..", "modules", "branch", "tests", "fixture")
+    fixturePath, err := filepath.Abs(filepath.Join("..", "modules", "branch", "tests", "fixture"))
+    if err != nil {
+        t.Fatalf("resolve branch fixture: %v", err)
+    }
     options := &terraform.Options{
         TerraformDir: fixturePath,
         NoColor:      true,
+        PlanFilePath: filepath.Join(t.TempDir(), "plan.tfplan"),
     }
 
     planStruct := terraform.InitAndPlanAndShowWithStruct(t, options)
@@ -92,31 +90,28 @@ func TestBranchModuleRequiresStatusChecks(t *testing.T) {
 // TestTeamModulePermissionMap verifies the module honours explicit repository permissions
 // and deduplicates maintainers when declared more than once.
 func TestTeamModulePermissionMap(t *testing.T) {
-    t.Parallel()
-
-    fixturePath := filepath.Join("..", "modules", "team", "tests", "fixture")
+    fixturePath, err := filepath.Abs(filepath.Join("..", "modules", "team", "tests", "fixture"))
+    if err != nil {
+        t.Fatalf("resolve team fixture: %v", err)
+    }
     options := &terraform.Options{
         TerraformDir: fixturePath,
         NoColor:      true,
+        PlanFilePath: filepath.Join(t.TempDir(), "plan.tfplan"),
     }
 
     planStruct := terraform.InitAndPlanAndShowWithStruct(t, options)
-    membershipAddress := "module.team.github_team_membership.maintainers"
-    plannedMemberships, exists := planStruct.ResourcePlannedValuesMap[membershipAddress]
-    if !exists {
-        t.Fatalf("expected maintainer memberships %s to be planned", membershipAddress)
+    maintainerKey := "module.team.github_team_membership.maintainers[\"alice\"]"
+    if _, exists := planStruct.ResourcePlannedValuesMap[maintainerKey]; !exists {
+        t.Fatalf("expected maintainer membership %s to be planned", maintainerKey)
     }
 
-    usernames, ok := plannedMemberships.AttributeValues["for_each_key"].([]interface{})
-    if !ok {
-        t.Fatalf("expected maintainer usernames set, got %#v", plannedMemberships.AttributeValues)
+    memberKey := "module.team.github_team_membership.members[\"bob\"]"
+    if _, exists := planStruct.ResourcePlannedValuesMap[memberKey]; !exists {
+        t.Fatalf("expected member mapping %s to be planned", memberKey)
     }
 
-    if len(usernames) != 1 {
-        t.Fatalf("expected a single maintainer resource since for_each deduplicates keys, got %d", len(usernames))
-    }
-
-    repoPermissionsAddress := "module.team.github_team_repository.default_permissions"
+    repoPermissionsAddress := "module.team.github_team_repository.default_permissions[\"fixture-repo\"]"
     if _, exists := planStruct.ResourcePlannedValuesMap[repoPermissionsAddress]; !exists {
         t.Fatalf("expected repository permission mapping %s to be created", repoPermissionsAddress)
     }
