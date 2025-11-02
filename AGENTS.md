@@ -157,10 +157,10 @@ The following tooling is available in this environment:
 - `mbake` – A Makefile validator. Run using `mbake validate Makefile`.
 - `strace` – Traces system calls and signals made by a process; useful for
   debugging runtime behaviour and syscalls.
-- `gdb` – The GNU Debugger, for inspecting and controlling programs as they
-  execute (or post-mortem via core dumps).
-- `ripgrep` – Fast, recursive text search tool (GNU's Not Unix (GNU) `grep`
-  alternative) that respects `.gitignore` files.
+- `gdb` – The GNU (GNU's Not Unix) Debugger, for inspecting and controlling
+  programs as they execute (or post-mortem via core dumps).
+- `ripgrep` – Fast, recursive text search tool that respects `.gitignore`
+  files and serves as an alternative to the GNU (GNU's Not Unix) `grep` utility.
 - `ltrace` – Traces calls to dynamic library functions made by a process.
 - `valgrind` – Suite for detecting memory leaks, profiling, and debugging
   low-level memory errors.
