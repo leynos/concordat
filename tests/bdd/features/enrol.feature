@@ -6,3 +6,10 @@ Feature: Enrolling repositories with concordat
     When I run concordat enrol for that repository
     Then the repository contains the concordat document
     And the concordat document declares enrolled true
+
+  Scenario: Disenrolling a repository clears the enrolled flag
+    Given a git repository
+    And the repository is enrolled with concordat
+    When I run concordat disenrol for that repository
+    Then the repository contains the concordat document
+    And the concordat document declares enrolled false

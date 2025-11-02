@@ -6,7 +6,7 @@ import os
 
 from cyclopts import App
 
-from .enrol import enrol_repositories
+from .enrol import disenrol_repositories, enrol_repositories
 from .errors import ConcordatError
 from .listing import list_namespace_repositories
 
@@ -41,6 +41,24 @@ def ls(*namespaces: str, token: str | None = None) -> None:
     )
     for url in urls:
         print(url)
+
+
+@app.command()
+def disenrol(
+    *repositories: str,
+    push: bool = False,
+    author_name: str | None = None,
+    author_email: str | None = None,
+) -> None:
+    """Mark repositories as no longer enrolled in concordat."""
+    outcomes = disenrol_repositories(
+        repositories,
+        push_remote=push,
+        author_name=author_name,
+        author_email=author_email,
+    )
+    for outcome in outcomes:
+        print(outcome.render())
 
 
 def main(argv: list[str] | tuple[str, ...] | None = None) -> int:

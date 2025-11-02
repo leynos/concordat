@@ -18,6 +18,7 @@ from .errors import ConcordatError
 CONCORDAT_FILENAME = ".concordat"
 CONCORDAT_DOCUMENT = {"enrolled": True}
 COMMIT_MESSAGE = "chore: enrol repository with concordat"
+DISENROL_COMMIT_MESSAGE = "chore: disenrol repository with concordat"
 ERROR_NO_REPOSITORIES = "At least one repository must be provided."
 ERROR_UNBORN_HEAD = "Enrolment requires a repository with at least one commit."
 ERROR_UNKNOWN_BRANCH = "Cannot determine current branch."
@@ -75,6 +76,16 @@ def _unborn_head_error() -> ConcordatError:
     return ConcordatError(ERROR_UNBORN_HEAD)
 
 
+def _missing_document_error(specification: str) -> ConcordatError:
+    detail = f"Repository {specification!r} does not contain a concordat document."
+    return ConcordatError(detail)
+
+
+def _invalid_document_error(specification: str) -> ConcordatError:
+    detail = f"Repository {specification!r} has an invalid concordat document."
+    return ConcordatError(detail)
+
+
 @dataclasses.dataclass(frozen=True)
 class EnrollmentOutcome:
     """Captured outcome for a processed repository."""
@@ -90,6 +101,29 @@ class EnrollmentOutcome:
         if not self.created:
             return f"{self.repository}: already enrolled"
         status_parts = ["created .concordat"]
+        if self.committed:
+            status_parts.append("committed")
+        if self.pushed:
+            status_parts.append("pushed")
+        status = ", ".join(status_parts)
+        return f"{self.repository}: {status}"
+
+
+@dataclasses.dataclass(frozen=True)
+class DisenrollmentOutcome:
+    """Captured outcome for a processed repository during disenrolment."""
+
+    repository: str
+    location: Path
+    updated: bool
+    committed: bool
+    pushed: bool
+
+    def render(self) -> str:
+        """Return a concise human readable summary."""
+        if not self.updated:
+            return f"{self.repository}: already disenrolled"
+        status_parts = ["updated .concordat"]
         if self.committed:
             status_parts.append("committed")
         if self.pushed:
@@ -124,6 +158,73 @@ def enrol_repositories(
         )
         outcomes.append(outcome)
     return outcomes
+
+
+def disenrol_repositories(
+    repositories: typ.Sequence[str],
+    *,
+    push_remote: bool = False,
+    author_name: str | None = None,
+    author_email: str | None = None,
+) -> list[DisenrollmentOutcome]:
+    """Disenrol each repository and return the captured outcomes."""
+    if not repositories:
+        raise _no_repositories_error()
+
+    outcomes: list[DisenrollmentOutcome] = []
+    for specification in repositories:
+        outcome = _disenrol_repository(
+            specification,
+            push_remote=push_remote,
+            author_name=author_name,
+            author_email=author_email,
+        )
+        outcomes.append(outcome)
+    return outcomes
+
+
+def _disenrol_repository(
+    specification: str,
+    *,
+    push_remote: bool,
+    author_name: str | None,
+    author_email: str | None,
+) -> DisenrollmentOutcome:
+    with _repository_context(specification) as context:
+        updated = _set_enrolled_value(
+            context.location,
+            value=False,
+            specification=specification,
+        )
+        if not updated:
+            return DisenrollmentOutcome(
+                repository=specification,
+                location=context.location,
+                updated=False,
+                committed=False,
+                pushed=False,
+            )
+
+        _stage_document(context.repository)
+        commit_oid = _commit_disenrol_document(
+            context.repository,
+            author_name=author_name,
+            author_email=author_email,
+        )
+
+        should_push = context.is_remote or push_remote
+        pushed = False
+        if should_push:
+            _push_document(context.repository, context.callbacks)
+            pushed = True
+
+        return DisenrollmentOutcome(
+            repository=specification,
+            location=context.location,
+            updated=True,
+            committed=commit_oid is not None,
+            pushed=pushed,
+        )
 
 
 def _enrol_repository(
@@ -244,6 +345,35 @@ def _commit_document(
     author_name: str | None,
     author_email: str | None,
 ) -> pygit2.Oid | None:
+    return _commit_with_message(
+        repository,
+        author_name=author_name,
+        author_email=author_email,
+        message=COMMIT_MESSAGE,
+    )
+
+
+def _commit_disenrol_document(
+    repository: Repository,
+    *,
+    author_name: str | None,
+    author_email: str | None,
+) -> pygit2.Oid | None:
+    return _commit_with_message(
+        repository,
+        author_name=author_name,
+        author_email=author_email,
+        message=DISENROL_COMMIT_MESSAGE,
+    )
+
+
+def _commit_with_message(
+    repository: Repository,
+    *,
+    author_name: str | None,
+    author_email: str | None,
+    message: str,
+) -> pygit2.Oid | None:
     if repository.head_is_unborn:
         raise _unborn_head_error()
 
@@ -256,7 +386,7 @@ def _commit_document(
         "HEAD",
         signature,
         signature,
-        COMMIT_MESSAGE,
+        message,
         tree_oid,
         parents,
     )
@@ -279,16 +409,46 @@ def _push_document(repository: Repository, callbacks: RemoteCallbacks | None) ->
         raise _push_failed_error(error) from error
 
 
+def _write_document(destination: Path, document: dict[str, object]) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with destination.open("w", encoding="utf-8") as handle:
+        _yaml.dump(document, handle)
+
+
 def _ensure_concordat_document(location: Path) -> bool:
     destination = location / CONCORDAT_FILENAME
     if destination.exists():
         existing = _load_yaml(destination)
-        if existing == CONCORDAT_DOCUMENT:
-            return False
+        if isinstance(existing, dict):
+            mapping = typ.cast(dict[str, object], existing)
+            enrolled_value = mapping.get("enrolled")
+            if isinstance(enrolled_value, bool) and enrolled_value is True:
+                return False
 
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    with destination.open("w", encoding="utf-8") as handle:
-        _yaml.dump(CONCORDAT_DOCUMENT, handle)
+    _write_document(destination, dict(CONCORDAT_DOCUMENT))
+    return True
+
+
+def _set_enrolled_value(location: Path, *, value: bool, specification: str) -> bool:
+    destination = location / CONCORDAT_FILENAME
+    if not destination.exists():
+        raise _missing_document_error(specification)
+
+    existing = _load_yaml(destination)
+    if not isinstance(existing, dict):
+        raise _invalid_document_error(specification)
+
+    mapping = typ.cast(dict[str, object], existing)
+    current = mapping.get("enrolled")
+    if not isinstance(current, bool):
+        raise _invalid_document_error(specification)
+
+    if current is value:
+        return False
+
+    updated = dict(mapping)
+    updated["enrolled"] = value
+    _write_document(destination, updated)
     return True
 
 

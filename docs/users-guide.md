@@ -50,6 +50,18 @@ Downstream tooling relies on this marker to detect participating repositories.
   The CLI clones the repository, creates the enrolment commit, and pushes it
   back to the remote.
 
+## Disenrolling repositories
+
+- Mark repositories as no longer enrolled by setting the `.concordat` flag to
+  `false`:
+
+  ```shell
+  uv run concordat disenrol path/to/repo-one path/to/repo-two
+  ```
+
+- The CLI commits the change to the current branch and accepts the same
+  `--push`, `--author-name`, and `--author-email` options as the enrol command.
+
 ## Listing repositories
 
 - List every repository within one or more GitHub namespaces:
