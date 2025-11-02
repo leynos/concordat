@@ -150,8 +150,8 @@ synchronization:
   key.
 
 Target repositories include a thin caller workflow pinning to a tagged version
-of the reusable definition. Authentication uses a repository-scoped personal
-access token (PAT) with `issues:write` and `projects:write` permissions.
+of the reusable definition. Authentication uses a repository-scoped Personal
+Access Token (PAT) with `issues:write` and `projects:write` permissions.
 
 ### 2.5 Auditor enforcement and rulesets
 
@@ -194,7 +194,7 @@ The rollout mirrors other Concordat standards:
    `multi-gitter` PRs.
 3. Active enforcement — promote the Auditor rules to `error` severity and
    activate the ruleset gate.
-4. Sustain — add service level objective (SLO) annotations, dashboards, and
+4. Sustain — add Service Level Objective (SLO) annotations, dashboards, and
    optional auto-remediation for missing labels.
 
 Edge cases such as archived repositories, mirrors, or opt-out manifests use the
