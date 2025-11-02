@@ -2,10 +2,11 @@
 
 ## Overview
 
-The `concordat` command line interface (CLI) helps you enrol Git repositories
-with Concordat. Enrolling creates a `.concordat` file at the repository root.
-The file is a YAML 1.2 document with the key/value pair `enrolled: true`.
-Downstream tooling relies on this marker to detect participating repositories.
+The `concordat` command line interface (CLI) helps maintainers enrol Git
+repositories with Concordat. Enrolling creates a `.concordat` file at the
+repository root. The file is a YAML 1.2 document with the key/value pair
+`enrolled: true`. Downstream tooling relies on this marker to detect
+participating repositories.
 
 ## Installing the CLI
 
@@ -28,7 +29,7 @@ Downstream tooling relies on this marker to detect participating repositories.
 - When the repository already contains a `.concordat` file with `enrolled:
   true`, the CLI prints `already enrolled` and makes no changes.
 
-- The CLI commits the new file to the current branch. If your Git configuration
+- The CLI commits the new file to the current branch. If the Git configuration
   does not define `user.name` and `user.email`, supply details explicitly:
 
   ```shell
@@ -73,7 +74,7 @@ Downstream tooling relies on this marker to detect participating repositories.
   Each line is an SSH URL that can be passed directly to `concordat enrol`.
 
 - Provide a personal access token with `--token` or the `GITHUB_TOKEN`
-  environment variable when you need to list private repositories:
+  environment variable when listing private repositories:
 
   ```shell
   uv run concordat ls --token "$GITHUB_TOKEN" my-org
@@ -86,4 +87,4 @@ Downstream tooling relies on this marker to detect participating repositories.
 - Ensure the repository has at least one existing commit. Enrolment commits
   require a parent revision.
 - When pushing fails for an SSH repository, verify that the SSH agent knows the
-  key and that the remote accepts your credentials.
+  key and that the remote accepts the configured credentials.
