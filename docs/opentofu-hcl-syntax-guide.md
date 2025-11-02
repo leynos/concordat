@@ -251,8 +251,8 @@ typically uses the following file layout 8:
   updates.8
 
 - `providers.tofu`: An optional but useful file for explicitly configuring
-  providers. For example, you can set the AWS (Amazon Web Services) region
-  here. This separates provider configuration from resource definitions.8
+  providers. For example, set the AWS (Amazon Web Services) region here. This
+  separates provider configuration from resource definitions.8
 
 When working with OpenTofu, the tool generates several files and directories
 that should be excluded from version control. A standard `.gitignore` file for
