@@ -5,12 +5,97 @@ level: error
 ignorecase: true
 nonword: true
 swap:
+  authorise: authorize
+  authorised: authorized
+  authorises: authorizes
+  authorising: authorizing
+  authorisation: authorization
+  authorisations: authorizations
+
+  canonicalise: canonicalize
+  canonicalised: canonicalized
+  canonicalises: canonicalizes
+  canonicalising: canonicalizing
+  canonicalisation: canonicalization
+
+  characterise: characterize
+  characterised: characterized
+  characterises: characterizes
+  characterising: characterizing
+  characterisation: characterization
+
+  crystalise: crystalize
+  crystalised: crystalized
+  crystalises: crystalizes
+  crystalising: crystalizing
+  crystalisation: crystalization
+
+  customise: customize
+  customised: customized
+  customises: customizes
+  customising: customizing
+  customisation: customization
+
+  finalise: finalize
+  finalised: finalized
+  finalises: finalizes
+  finalising: finalizing
+  finalisation: finalization
+
+  initialise: initialize
+  initialised: initialized
+  initialises: initializes
+  initialising: initializing
+  initialisation: initialization
+
+  localise: localize
+  localised: localized
+  localises: localizes
+  localising: localizing
+  localisation: localization
+
+  materialise: materialize
+  materialised: materialized
+  materialises: materializes
+  materialising: materializing
+  materialisation: materialization
+
+  maximise: maximize
+  maximised: maximized
+  maximises: maximizes
+  maximising: maximizing
+  maximisation: maximization
+
+  minimise: minimize
+  minimised: minimized
+  minimises: minimizes
+  minimising: minimizing
+  minimisation: minimization
+
+  normalise: normalize
+  normalised: normalized
+  normalises: normalizes
+  normalising: normalizing
+  normalisation: normalization
+
+  optimise: optimize
+  optimised: optimized
+  optimises: optimizes
+  optimising: optimizing
+  optimisation: optimization
+
   organise: organize
   organised: organized
   organises: organizes
   organising: organizing
   organisation: organization
   organisations: organizations
+
+  prioritise: prioritize
+  prioritised: prioritized
+  prioritises: prioritizes
+  prioritising: prioritizing
+  prioritisation: prioritization
 
   recognise: recognize
   recognised: recognized
@@ -20,6 +105,12 @@ swap:
   recognisably: recognizably
   recognisability: recognizability
 
+  serialise: serialize
+  serialised: serialized
+  serialises: serializes
+  serialising: serializing
+  serialisation: serialization
+
   specialise: specialize
   specialised: specialized
   specialises: specializes
@@ -27,36 +118,11 @@ swap:
   specialisation: specialization
   specialisations: specializations
 
-  authorise: authorize
-  authorised: authorized
-  authorises: authorizes
-  authorising: authorizing
-  authorisation: authorization
-  authorisations: authorizations
-
-  initialise: initialize
-  initialised: initialized
-  initialises: initializes
-  initialising: initializing
-  initialisation: initialization
-
-  serialise: serialize
-  serialised: serialized
-  serialises: serializes
-  serialising: serializing
-  serialisation: serialization
-
-  customise: customize
-  customised: customized
-  customises: customizes
-  customising: customizing
-  customisation: customization
-
-  prioritise: prioritize
-  prioritised: prioritized
-  prioritises: prioritizes
-  prioritising: prioritizing
-  prioritisation: prioritization
+  stabilise: stabilize
+  stabilised: stabilized
+  stabilises: stabilizes
+  stabilising: stabilizing
+  stabilisation: stabilization
 
   standardise: standardize
   standardised: standardized
@@ -64,68 +130,8 @@ swap:
   standardising: standardizing
   standardisation: standardization
 
-  minimise: minimize
-  minimised: minimized
-  minimises: minimizes
-  minimising: minimizing
-  minimisation: minimization
-
-  maximise: maximize
-  maximised: maximized
-  maximises: maximizes
-  maximising: maximizing
-  maximisation: maximization
-
-  stabilise: stabilize
-  stabilised: stabilized
-  stabilises: stabilizes
-  stabilising: stabilizing
-  stabilisation: stabilization
-
-  optimise: optimize
-  optimised: optimized
-  optimises: optimizes
-  optimising: optimizing
-  optimisation: optimization
-
-  characterise: characterize
-  characterised: characterized
-  characterises: characterizes
-  characterising: characterizing
-  characterisation: characterization
-
-  localise: localize
-  localised: localized
-  localises: localizes
-  localising: localizing
-  localisation: localization
-
   synthesise: synthesize
   synthesised: synthesized
   synthesises: synthesizes
   synthesising: synthesizing
   synthesisation: synthesization
-
-  normalise: normalize
-  normalised: normalized
-  normalises: normalizes
-  normalising: normalizing
-  normalisation: normalization
-
-  materialise: materialize
-  materialised: materialized
-  materialises: materializes
-  materialising: materializing
-  materialisation: materialization
-
-  finalise: finalize
-  finalised: finalized
-  finalises: finalizes
-  finalising: finalizing
-  finalisation: finalization
-
-  crystalise: crystalize
-  crystalised: crystalized
-  crystalises: crystalizes
-  crystalising: crystalizing
-  crystalisation: crystalization
