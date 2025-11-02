@@ -2,106 +2,348 @@
 
 ## 1. System architecture and principles
 
-This document specifies the design of a comprehensive framework for the automated audit and enforcement of engineering standards across a large-scale GitHub organization. It provides a definitive implementation blueprint for the engineering team tasked with its construction, covering the complete system architecture, detailed component specifications, data models, interfaces, enforcement logic, and a practical, phased implementation strategy.
+This document specifies the design of a comprehensive framework for the
+automated audit and enforcement of engineering standards across a large-scale
+GitHub organization. It provides a definitive implementation blueprint for the
+engineering team tasked with its construction, covering the complete system
+architecture, detailed component specifications, data models, interfaces,
+enforcement logic, and a practical, phased implementation strategy.
 
 ### 1.1. Overview and core philosophy
 
-The framework's central tenet is **"Standards as Code"**: the practice of defining, versioning, and enforcing engineering standards through machine-readable files stored in a version control system. This approach transforms governance from a manual, documentation-driven process into an automated system that remains testable while also being auditable, reducing toil and ensuring consistent application of best practices.
+The framework's central tenet is **"Standards as Code"**: the practice of
+defining, versioning, and enforcing engineering standards through
+machine-readable files stored in a version control system. This approach
+transforms governance from a manual, documentation-driven process into an
+automated system that remains testable while also being auditable, reducing
+toil and ensuring consistent application of best practices.
 
 This philosophy is supported by three foundational pillars:
 
-1. **Declarative State:** All target configurations for the GitHub estate, including repository settings, branch protections, and team permissions, are defined declaratively using Infrastructure as Code (IaC) principles. This provides a single source of truth for the desired state of the organization.
-2. **Centralized Policy and Audit:** A single, authoritative "Auditor" engine evaluates the compliance of every repository against a central, version-controlled set of policies and canonical configurations. This ensures that standards are applied uniformly and that the definition of "compliance" is transparent and unambiguous.
-3. **Automated Enforcement and Remediation:** Compliance is rendered non-optional through automated gates integrated directly into the development lifecycle. Deviations from the declared state are automatically detected, and tooling is provided for efficient, scaled remediation, shifting the enforcement mechanism from human review to automated system validation.
+1. **Declarative State:** All target configurations for the GitHub estate,
+   including repository settings, branch protections, and team permissions, are
+   defined declaratively using Infrastructure as Code (IaC) principles. This
+   provides a single source of truth for the desired state of the organization.
+2. **Centralized Policy and Audit:** A single, authoritative "Auditor" engine
+   evaluates the compliance of every repository against a central,
+   version-controlled set of policies and canonical configurations. This
+   ensures that standards are applied uniformly and that the definition of
+   "compliance" is transparent and unambiguous.
+3. **Automated Enforcement and Remediation:** Compliance is rendered
+   non-optional through automated gates integrated directly into the
+   development lifecycle. Deviations from the declared state are automatically
+   detected, and tooling is provided for efficient, scaled remediation,
+   shifting the enforcement mechanism from human review to automated system
+   validation.
 
 ### 1.2. Architectural blueprint and data flow
 
-The system is a composite architecture comprising several specialized, interacting components. The data flow is designed to create a continuous loop of declaration, audit, and enforcement.
+The system is a composite architecture comprising several specialized,
+interacting components. The data flow is designed to create a continuous loop
+of declaration, audit, and enforcement.
 
 The primary components and their interactions are as follows:
 
-1. `platform-standards`** Repository:** This Git repository serves as the canonical source of truth for the entire framework. It contains all policy definitions, canonical file templates, reusable automation workflows, and the declarative configuration for the GitHub estate itself.
-2. **Target Repository:** Any repository within the organization that is subject to the framework's governance. It contains its own application code, project-specific documentation, and a crucial `.repo-meta.yaml` manifest file that declares its characteristics and opts into specific sets of standards.
-3. **OpenTofu Execution Environment:** A secure, automated environment, typically a GitHub Actions runner, responsible for executing the OpenTofu IaC tool. On a recurring schedule, it runs `tofu plan` to compare the declared state in the `platform-standards` repository against the actual state of the GitHub organization reported by the GitHub Application Programming Interface (API). This process detects configuration drift. Upon approval, it can run `tofu apply` to reconcile the actual state with the desired state.
-4. **Auditor Engine:** A custom GitHub Action that serves as the core evaluation component. It runs both on a schedule across all repositories and on every pull request against a protected branch. The Auditor fetches content from the target repository, reads its `.repo-meta.yaml` manifest, and queries the GitHub API for settings. It then evaluates this collected data against the policies and canonical files sourced from a pinned version of the `platform-standards` repository.
-5. **GitHub API:** The programmatic interface to GitHub, serving as the medium for both configuration management (via the OpenTofu provider) and state inspection (via the Auditor).
-6. **GitHub Code Scanning Interface:** The destination for all findings generated by the Auditor. The Auditor formats its output as a single Static Analysis Results Interchange Format (SARIF) file. When uploaded, these findings are natively integrated into the GitHub user interface, appearing in the "Security" tab and as inline annotations on pull requests.
-7. `multi-gitter`** Execution Environment:** An operator-triggered or automated environment for executing the `multi-gitter` tool. This component is used to dispatch mass pull requests across the repository estate to remediate content-level non-compliance at scale, such as rolling out an updated linter configuration file.
+1. `platform-standards`** Repository:** This Git repository serves as the
+   canonical source of truth for the entire framework. It contains all policy
+   definitions, canonical file templates, reusable automation workflows, and
+   the declarative configuration for the GitHub estate itself.
+2. **Target Repository:** Any repository within the organization that is
+   subject to the framework's governance. It contains its own application code,
+   project-specific documentation, and a crucial `.repo-meta.yaml` manifest
+   file that declares its characteristics and opts into specific sets of
+   standards.
+3. **OpenTofu Execution Environment:** A secure, automated environment,
+   typically a GitHub Actions runner, responsible for executing the OpenTofu
+   IaC tool. On a recurring schedule, it runs `tofu plan` to compare the
+   declared state in the `platform-standards` repository against the actual
+   state of the GitHub organization reported by the GitHub Application
+   Programming Interface (API). This process detects configuration drift. Upon
+   approval, it can run `tofu apply` to reconcile the actual state with the
+   desired state.
+4. **Auditor Engine:** A custom GitHub Action that serves as the core
+   evaluation component. It runs both on a schedule across all repositories and
+   on every pull request against a protected branch. The Auditor fetches
+   content from the target repository, reads its `.repo-meta.yaml` manifest,
+   and queries the GitHub API for settings. It then evaluates this collected
+   data against the policies and canonical files sourced from a pinned version
+   of the `platform-standards` repository.
+5. **GitHub API:** The programmatic interface to GitHub, serving as the medium
+   for both configuration management (via the OpenTofu provider) and state
+   inspection (via the Auditor).
+6. **GitHub Code Scanning Interface:** The destination for all findings
+   generated by the Auditor. The Auditor formats its output as a single Static
+   Analysis Results Interchange Format (SARIF) file. When uploaded, these
+   findings are natively integrated into the GitHub user interface, appearing
+   in the "Security" tab and as inline annotations on pull requests.
+7. `multi-gitter`** Execution Environment:** An operator-triggered or automated
+   environment for executing the `multi-gitter` tool. This component is used to
+   dispatch mass pull requests across the repository estate to remediate
+   content-level non-compliance at scale, such as rolling out an updated linter
+   configuration file.
+
+## 2. Canonical priority management
+
+### 2.1 Motivation and scope
+
+Priority signals—labels on issues and the corresponding single-select fields in
+Projects v2—drive incident response for Concordat repositories. Inconsistent
+naming, colouring, or semantics across repositories diminishes routing
+reliability and obscures metrics. To align priority management with the
+"standards as code" philosophy, we introduce a canonical priority model defined
+once in `platform-standards`, applied through OpenTofu, and enforced via the
+Auditor and GitHub rulesets. The `concordat` CLI remains the entry point for
+estate inventory and enrollment but continues to defer all mutation to
+declarative automation.
+
+### 2.2 Canonical priority model contract
+
+The single source of truth for priority metadata lives under
+`platform-standards/canon/priorities/priority-model.yaml`. This YAML contract
+defines:
+
+- The set of labels (`key`, exact `name`, GitHub hex `color`, and
+  `description`).
+- The organization-wide Projects v2 "Priority" field (name, type, allowed
+  options).
+- Optional `aliases` that map historical label names into the canonical keys.
+
+All downstream automation pins to a tagged version of this file, ensuring
+auditable changes and enabling staged rollouts.
+
+### 2.3 OpenTofu modules for application
+
+Two reusable modules extend `platform-standards/tofu`:
+
+1. `modules/repo-priority-labels` — accepts a repository name and the parsed
+   priority model. It creates or updates the canonical `priority/*` labels
+   using `github_issue_label` resources, removes deprecated labels when
+   `aliases` indicate replacement, and operates across an entire repository map
+   via `for_each`. This module is idempotent and captured in nightly
+   `tofu plan` drift reports.
+
+2. `modules/projects-v2-priority-field` — ensures that every targeted Projects
+   v2 board exposes a single-select "Priority" field whose options match the
+   canonical keys. Because the GitHub provider currently lacks full Projects v2
+   coverage, the module orchestrates a small GraphQL helper script via
+   `data "external"` for read operations and a guarded `null_resource` +
+   `local-exec` for apply steps. Drift appears clearly in
+   `tofu plan`; `tofu apply` performs upserts for missing options.
+
+Both modules execute in the standard OpenTofu runner and respect the apply
+workflow already defined in the design: nightly plans surface drift; a manual
+`workflow_dispatch` runs `tofu apply` after review.
+
+### 2.4 Sync workflow between labels and Projects
+
+Declarative creation alone does not ensure ongoing consistency—manual edits can
+reintroduce skew. A reusable workflow hosted within
+`platform-standards/.github/workflows/priority-sync.yml` provides bidirectional
+synchronization:
+
+- Triggered on issue label events, Projects v2 item changes, and an optional
+  scheduled run.
+- When an issue label changes, the workflow updates the matching Projects item,
+  creating one if necessary.
+- When a Projects field changes, it amends the issue labels accordingly.
+- Resolves legacy labels listed in `aliases` by swapping them for the canonical
+  key.
+
+Target repositories include a thin caller workflow pinning to a tagged version
+of the reusable definition. Authentication uses a repository-scoped PAT with
+`issues:write` and `projects:write` permissions.
+
+### 2.5 Auditor enforcement and rulesets
+
+The Auditor gains a new "Priority" domain with SARIF rules:
+
+- PR-001 (error): canonical priority labels must exist with the exact names,
+  colours, and descriptions from the model.
+- PR-002 (warning initially, promotable to error): every open issue must carry
+  zero or one canonical priority labels; duplicates and missing labels are
+  flagged.
+- PR-003 (error): if a repository or organization board uses Projects v2, the
+  "Priority" field must exist with the canonical options.
+- PR-004 (warning): legacy labels listed in `aliases` remain only if the sync
+  workflow has not yet remediated them.
+
+Findings continue to flow into Code Scanning; existing rulesets can transition
+from "evaluate" to "active" to make violations a merge blocker once the
+false-positive rate is acceptable. Exemptions use the existing
+`standards-exemptions.yaml` mechanism with expiry and justification.
+
+### 2.6 Role of the concordat CLI
+
+`concordat` still acts as the human entry point:
+
+- `concordat ls` inventories repositories for OpenTofu targeting.
+- `concordat enrol` drops the `.concordat` marker so repositories opt into
+  standards.
+- Future extensions may scaffold a pull request that adds the reusable
+  `priority-sync` workflow to a repository, but the CLI continues to defer
+  state changes to IaC.
+
+### 2.7 Rollout strategy
+
+The rollout mirrors other Concordat standards:
+
+1. Audit phase — introduce drift detection via OpenTofu plans and Auditor
+   warnings only. Publish a priority scorecard.
+2. Evaluate phase — apply canonical labels and project fields using the
+   modules; encourage repositories to adopt the sync workflow via
+   `multi-gitter` PRs.
+3. Active enforcement — promote the Auditor rules to `error` severity and
+   activate the ruleset gate.
+4. Sustain — add SLO annotations, dashboards, and optional auto-remediation for
+   missing labels.
+
+Edge cases such as archived repositories, mirrors, or opt-out manifests use the
+existing exemption model. Repositories without issues bypass label checks
+automatically.
 
 ### 1.3. Technology stack rationale
 
-The selection of each tool in the technology stack is deliberate, favouring a declarative, GitOps-centric model for organizational governance. This approach moves away from imperative scripting and manual intervention. The stack is composed of best-in-class, open-source solutions for each specific domain, ensuring the framework is powerful, extensible, and avoids vendor lock-in.
+The selection of each tool in the technology stack is deliberate, favouring a
+declarative, GitOps-centric model for organizational governance. This approach
+moves away from imperative scripting and manual intervention. The stack is
+composed of best-in-class, open-source solutions for each specific domain,
+ensuring the framework is powerful, extensible, and avoids vendor lock-in.
 
-The management of a large GitHub estate involves handling distinct types of state: API-level settings (e.g., repository configuration), structured file content (e.g., YAML workflows), and unstructured prose (e.g., documentation). No single tool excels at managing all three, necessitating a composite architecture where each component is specialized for its task.
+The management of a large GitHub estate involves handling distinct types of
+state: API-level settings (e.g., repository configuration), structured file
+content (e.g., YAML workflows), and unstructured prose (e.g., documentation).
+No single tool excels at managing all three, necessitating a composite
+architecture where each component is specialized for its task.
 
-For API-driven resources, OpenTofu is the logical choice. Its declarative nature and plan/apply cycle, along with the state file, provide the capabilities needed to detect drift, then remediate it when managing GitHub settings as code.1 As a fork of Terraform, it remains fully compatible with the mature, comprehensive GitHub provider. That reliability makes it a powerful, low-risk choice for this domain.2
+For API-driven resources, OpenTofu is the logical choice. Its declarative
+nature and plan/apply cycle, along with the state file, provide the
+capabilities needed to detect drift, then remediate it when managing GitHub
+settings as code.1 As a fork of Terraform, it remains fully compatible with the
+mature, comprehensive GitHub provider. That reliability makes it a powerful,
+low-risk choice for this domain.2
 
-For validating structured configuration files, a dedicated policy engine is superior to ad-hoc scripts. The Open Policy Agent (OPA) and its command-line utility, Conftest, represent the industry standard. OPA's query language, Rego, is purpose-built for asserting policies over structured data like YAML or JSON, making it far more robust and maintainable than alternatives.4
+For validating structured configuration files, a dedicated policy engine is
+superior to ad-hoc scripts. The Open Policy Agent (OPA) and its command-line
+utility, Conftest, represent the industry standard. OPA's query language, Rego,
+is purpose-built for asserting policies over structured data like YAML or JSON,
+making it far more robust and maintainable than alternatives.4
 
-For ensuring the quality of unstructured prose, a specialized linguistic tool is required. Vale is a purpose-built prose linter capable of codifying an entire style guide into a set of machine-enforceable rules, a task for which general-purpose text-matching tools are ill-suited.6
+For ensuring the quality of unstructured prose, a specialized linguistic tool
+is required. Vale is a purpose-built prose linter capable of codifying an
+entire style guide into a set of machine-enforceable rules, a task for which
+general-purpose text-matching tools are ill-suited.6
 
-Finally, GitHub Actions serves as the native automation engine for orchestration as well as remediation. For the specific task of creating pull requests across many repositories simultaneously, a specialized tool like `multi-gitter` is more ergonomic and efficient than a general-purpose configuration management tool such as Ansible.8
+Finally, GitHub Actions serves as the native automation engine for
+orchestration as well as remediation. For the specific task of creating pull
+requests across many repositories simultaneously, a specialized tool like
+`multi-gitter` is more ergonomic and efficient than a general-purpose
+configuration management tool such as Ansible.8
 
-This curated set of specialized components is a key architectural strength and yields a system that is more maintainable and more powerful than any monolithic alternative.
+This curated set of specialized components is a key architectural strength and
+yields a system that is more maintainable and more powerful than any monolithic
+alternative.
 
 **Table 1: Technology Stack and Rationale**
 
-| **Tool** | **Primary Role in Framework** | **Justification** | **Rejected Alternative(s) & Rationale** |
-| --- | --- | --- | --- |
-| **OpenTofu** | Declarative management of GitHub API resources (repositories, teams, rulesets). | Provides a declarative, stateful approach with drift detection (`plan`) and remediation (`apply`). Fully compatible with the mature Terraform GitHub provider.[9, 10] | **Ansible:** Imperative, not stateful. Less ergonomic for detecting drift in API-managed resources compared to a dedicated IaC tool. |
-| **OPA/Conftest** | Policy-as-code engine for validating structured configuration files (e.g., YAML, JSON). | Provides a powerful, declarative language (Rego) specifically designed for querying structured data. Enables testable, version-controlled policies.[4, 11] | **Custom Scripts (Python/Shell):** Brittle, harder to maintain, and lacks the expressive power of Rego for complex policy evaluation. |
-| **Vale** | Prose linter for enforcing documentation and style guide standards. | Codifies linguistic and stylistic rules far more effectively than simple regular expressions. Supports custom, shareable style packs.[6, 12] | **Ad-hoc Regex Scripts:** Inadequate for handling the complexities of natural language; difficult to maintain and scale. |
-| `multi-gitter` | Scaled remediation via mass pull request generation. | A specialized tool purpose-built for the task of multi-repository changes. More ergonomic and efficient than general-purpose tools.8 | **Custom Scripts using **`gh`** CLI:** Requires significant boilerplate code to handle cloning, branching, committing, and creating PRs across many repositories. |
-| **GitHub Actions** | Primary automation and orchestration engine. | Native to the platform, providing seamless integration for CI/CD, scheduled tasks, and event-driven automation.[13, 14] | **External CI/CD Systems (e.g., Jenkins):** Adds operational overhead and complexity compared to the tightly integrated native solution. |
-| **OpenSSF Scorecard** | Security posture assessment. | Provides a standardized, automated baseline for security best practices. Integrates easily into CI workflows and is maintained by the Open Source Security Foundation.15 | **Manual Security Audits:** Not scalable, inconsistent, and cannot be integrated into an automated enforcement gate. |
+| **Tool**              | **Primary Role in Framework**                                                           | **Justification**                                                                                                                                                        | **Rejected Alternative(s) & Rationale**                                                                                                                           |
+| --------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **OpenTofu**          | Declarative management of GitHub API resources (repositories, teams, rulesets).         | Provides a declarative, stateful approach with drift detection (`plan`) and remediation (`apply`). Fully compatible with the mature Terraform GitHub provider.[9, 10]    | **Ansible:** Imperative, not stateful. Less ergonomic for detecting drift in API-managed resources compared to a dedicated IaC tool.                              |
+| **OPA/Conftest**      | Policy-as-code engine for validating structured configuration files (e.g., YAML, JSON). | Provides a powerful, declarative language (Rego) specifically designed for querying structured data. Enables testable, version-controlled policies.[4, 11]               | **Custom Scripts (Python/Shell):** Brittle, harder to maintain, and lacks the expressive power of Rego for complex policy evaluation.                             |
+| **Vale**              | Prose linter for enforcing documentation and style guide standards.                     | Codifies linguistic and stylistic rules far more effectively than simple regular expressions. Supports custom, shareable style packs.[6, 12]                             | **Ad-hoc Regex Scripts:** Inadequate for handling the complexities of natural language; difficult to maintain and scale.                                          |
+| `multi-gitter`        | Scaled remediation via mass pull request generation.                                    | A specialized tool purpose-built for the task of multi-repository changes. More ergonomic and efficient than general-purpose tools.8                                     | **Custom Scripts using **`gh`** CLI:** Requires significant boilerplate code to handle cloning, branching, committing, and creating PRs across many repositories. |
+| **GitHub Actions**    | Primary automation and orchestration engine.                                            | Native to the platform, providing seamless integration for CI/CD, scheduled tasks, and event-driven automation.[13, 14]                                                  | **External CI/CD Systems (e.g., Jenkins):** Adds operational overhead and complexity compared to the tightly integrated native solution.                          |
+| **OpenSSF Scorecard** | Security posture assessment.                                                            | Provides a standardized, automated baseline for security best practices. Integrates easily into CI workflows and is maintained by the Open Source Security Foundation.15 | **Manual Security Audits:** Not scalable, inconsistent, and cannot be integrated into an automated enforcement gate.                                              |
 
 ## 2. Foundational components
 
-This section provides detailed specifications for the static, foundational elements of the framework: the central standards repository that holds the canonical definitions, and the per-repository metadata file that provides the context for applying those definitions.
+This section provides detailed specifications for the static, foundational
+elements of the framework: the central standards repository that holds the
+canonical definitions, and the per-repository metadata file that provides the
+context for applying those definitions.
 
 ### 2.1. The `platform-standards` repository: a canonical source of truth
 
-The `org/platform-standards` repository is the definitive source of truth for all standards, policies, and configurations. Its structure must be strictly maintained to ensure the correct functioning of the Auditor and OpenTofu pipelines.
+The `org/platform-standards` repository is the definitive source of truth for
+all standards, policies, and configurations. Its structure must be strictly
+maintained to ensure the correct functioning of the Auditor and OpenTofu
+pipelines.
 
 The mandated directory structure is as follows:
 
-- `canon/`: This directory contains canonical file templates and configuration fragments. These files represent the "gold standard" versions that the Auditor will check for presence and integrity in target repositories. This includes:
+- `canon/`: This directory contains canonical file templates and configuration
+  fragments. These files represent the "gold standard" versions that the
+  Auditor will check for presence and integrity in target repositories. This
+  includes:
 
-- `.github/workflows/`: Reusable GitHub Actions workflows (e.g., `ci.yml`, `release.yml`).
-- `lint/`: Standardized linter configurations (e.g., `python/ruff.toml`, `js/eslint.config.js`).
-- `docs/`: Canonical documentation templates (`AGENTS.md`), Vale configuration (`.vale.ini`), and custom Vale style packs (`Styles/`).
+- `.github/workflows/`: Reusable GitHub Actions workflows (e.g.,
+  `ci.yml`, `release.yml`).
+- `lint/`: Standardized linter configurations (e.g.,
+  `python/ruff.toml`, `js/eslint.config.js`).
+- `docs/`: Canonical documentation templates (`AGENTS.md`), Vale configuration
+  (`.vale.ini`), and custom Vale style packs (`Styles/`).
 - `make/`: Reusable Makefile fragments (`includes.mk`).
-- `policies/`: This directory contains all OPA/Rego policies used by Conftest for validation. Organizing policies by domain (e.g., `workflows/`, `repo/`, `security/`) allows for modularity, enabling policies to be tested and versioned independently.4
-- `tofu/`: This directory contains the master OpenTofu configuration for managing the GitHub estate. It is structured with modules to promote reuse and maintainability (e.g., `modules/repo-defaults/`, `modules/rulesets/`).18
-- `tools/auditor/`: This directory contains the source code for the custom Auditor GitHub Action itself. This includes the main Python application, its dependencies (e.g., `requirements.txt`), and the GitHub Action metadata file (`action.yml`).
+- `policies/`: This directory contains all OPA/Rego policies used by Conftest
+  for validation. Organizing policies by domain (e.g.,
+  `workflows/`, `repo/`, `security/`) allows for modularity, enabling policies
+  to be tested and versioned independently.4
+- `tofu/`: This directory contains the master OpenTofu configuration for
+  managing the GitHub estate. It is structured with modules to promote reuse
+  and maintainability (e.g., `modules/repo-defaults/`, `modules/rulesets/`).18
+- `tools/auditor/`: This directory contains the source code for the custom
+  Auditor GitHub Action itself. This includes the main Python application, its
+  dependencies (e.g., `requirements.txt`), and the GitHub Action metadata file
+  (`action.yml`).
 
 ### 2.2. The `.repo-meta.yaml` manifest: a formal schema definition
 
-The `.repo-meta.yaml` file, located at the root of each target repository, is the primary mechanism for enabling conditional logic within the framework. Its presence and validity are the first checks the Auditor must perform. This manifest is more than just metadata; it is the formal "contract" between a repository and the platform. It allows the central platform team to apply nuanced, context-aware policies without having to hard-code repository-specific exceptions, which is essential for maintaining scalability.
+The `.repo-meta.yaml` file, located at the root of each target repository, is
+the primary mechanism for enabling conditional logic within the framework. Its
+presence and validity are the first checks the Auditor must perform. This
+manifest is more than just metadata; it is the formal "contract" between a
+repository and the platform. It allows the central platform team to apply
+nuanced, context-aware policies without having to hard-code repository-specific
+exceptions, which is essential for maintaining scalability.
 
-A one-size-fits-all policy is inherently brittle; a Python library has different standardization needs from a Go microservice or an OpenTofu infrastructure repository. While fallbacks like repository topics or file detection can provide hints, they are not reliable enough for a strict enforcement system. A declarative manifest file shifts the responsibility of declaration to the repository owners, who possess the most accurate context. By stating `language: primary: python`, the repository owner explicitly opts into the suite of Python-related standards, such as the requirement for a `ruff.toml` file.
+A one-size-fits-all policy is inherently brittle; a Python library has
+different standardization needs from a Go microservice or an OpenTofu
+infrastructure repository. While fallbacks like repository topics or file
+detection can provide hints, they are not reliable enough for a strict
+enforcement system. A declarative manifest file shifts the responsibility of
+declaration to the repository owners, who possess the most accurate context. By
+stating `language: primary: python`, the repository owner explicitly opts into
+the suite of Python-related standards, such as the requirement for a
+`ruff.toml` file.
 
-This design decouples the specific context of a repository from the generic logic of the standards framework. The central Auditor's logic remains generic and scalable; it does not need to know about "repo-A" or "team-B". It simply reads the manifest and applies policies conditionally based on the declared attributes (e.g., `if input.manifest.language.primary == "python"`). This decoupling is a critical design pattern for achieving a maintainable and scalable governance system.
+This design decouples the specific context of a repository from the generic
+logic of the standards framework. The central Auditor's logic remains generic
+and scalable; it does not need to know about "repo-A" or "team-B". It simply
+reads the manifest and applies policies conditionally based on the declared
+attributes (e.g., `if input.manifest.language.primary == "python"`). This
+decoupling is a critical design pattern for achieving a maintainable and
+scalable governance system.
 
 The formal schema for this file is defined below.
 
 **Table 2: Schema for **`.repo-meta.yaml`
 
-| **Field Path** | **Data Type** | **Requirement** | **Description** |
-| --- | --- | --- | --- |
-| `language.primary` | String | Required | The primary programming language of the repository. Must be a lowercase string (e.g., `python`, `go`, `typescript`). This value drives the selection of language-specific linting and CI rules. |
-| `language.others` | Array | Optional | A list of other significant languages present in the repository (e.g., `shell`, `make`). |
-| `infrastructure.opentofu` | Boolean | Optional | Set to `true` if the repository contains OpenTofu/Terraform code. This enables checks for `Makefile` targets like `tf-plan`. Defaults to `false`. |
-| `infrastructure.kubernetes` | Boolean | Optional | Set to `true` if the repository contains Kubernetes manifests. This enables Kubernetes-specific validation rules. Defaults to `false`. |
-| `docs.style` | String | Optional | The name of the Vale style to apply. Must correspond to a directory name in `platform-standards/canon/docs/Styles/`. Example: `your-house`. |
-| `libraries` | Array[Object] | Optional | A list of critical internal libraries consumed by this repository, used for guide parity checks. |
-| `libraries.name` | String | Required (if `libraries` is present) | The name of the consumed library repository (e.g., `acme-lib`). |
-| `libraries.version_tag` | String | Required (if `libraries` is present) | The Git tag of the library version being used (e.g., `v2.4.1`). The Auditor uses this to fetch the correct version of the library's user guide for comparison. |
-| `ci.needs_release_workflow` | Boolean | Optional | Set to `true` if the repository should be configured with the canonical release workflow. Defaults to `false`. |
+| **Field Path**              | **Data Type** | **Requirement**                      | **Description**                                                                                                                                                                                 |
+| --------------------------- | ------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `language.primary`          | String        | Required                             | The primary programming language of the repository. Must be a lowercase string (e.g., `python`, `go`, `typescript`). This value drives the selection of language-specific linting and CI rules. |
+| `language.others`           | Array         | Optional                             | A list of other significant languages present in the repository (e.g., `shell`, `make`).                                                                                                        |
+| `infrastructure.opentofu`   | Boolean       | Optional                             | Set to `true` if the repository contains OpenTofu/Terraform code. This enables checks for `Makefile` targets like `tf-plan`. Defaults to `false`.                                               |
+| `infrastructure.kubernetes` | Boolean       | Optional                             | Set to `true` if the repository contains Kubernetes manifests. This enables Kubernetes-specific validation rules. Defaults to `false`.                                                          |
+| `docs.style`                | String        | Optional                             | The name of the Vale style to apply. Must correspond to a directory name in `platform-standards/canon/docs/Styles/`. Example: `your-house`.                                                     |
+| `libraries`                 | Array[Object] | Optional                             | A list of critical internal libraries consumed by this repository, used for guide parity checks.                                                                                                |
+| `libraries.name`            | String        | Required (if `libraries` is present) | The name of the consumed library repository (e.g., `acme-lib`).                                                                                                                                 |
+| `libraries.version_tag`     | String        | Required (if `libraries` is present) | The Git tag of the library version being used (e.g., `v2.4.1`). The Auditor uses this to fetch the correct version of the library's user guide for comparison.                                  |
+| `ci.needs_release_workflow` | Boolean       | Optional                             | Set to `true` if the repository should be configured with the canonical release workflow. Defaults to `false`.                                                                                  |
 
 ### 2.3. The organization-level `.github` repository
 
-To provide sensible defaults for community health files across the entire organization, a public repository named `.github` must be created at the organization level. This is a native GitHub feature that automatically provides default files for repositories that do not contain their own.
+To provide sensible defaults for community health files across the entire
+organization, a public repository named `.github` must be created at the
+organization level. This is a native GitHub feature that automatically provides
+default files for repositories that do not contain their own.
 
 This repository will contain the organization's standard versions of:
 
@@ -109,286 +351,608 @@ This repository will contain the organization's standard versions of:
 - `CONTRIBUTING.md`
 - `SECURITY.md`
 
-Individual repositories can override these defaults by including their own versions of these files. The Auditor checks whether those files exist in the local repository or originate from the organizational default.
+Individual repositories can override these defaults by including their own
+versions of these files. The Auditor checks whether those files exist in the
+local repository or originate from the organizational default.
 
 ## 3. The auditor: a centralized evaluation engine
 
-The Auditor is the active component of the framework, responsible for performing all compliance checks. It is designed as a centralized, configurable engine that runs within the GitHub Actions environment.
+The Auditor is the active component of the framework, responsible for
+performing all compliance checks. It is designed as a centralized, configurable
+engine that runs within the GitHub Actions environment.
 
 ### 3.1. Functional specification and audit domains
 
-The Auditor's responsibilities are partitioned into logical domains to structure its checks and reporting. Each domain corresponds to a distinct area of engineering standards.
+The Auditor's responsibilities are partitioned into logical domains to
+structure its checks and reporting. Each domain corresponds to a distinct area
+of engineering standards.
 
 The primary audit domains are:
 
-1. **Repository Settings:** Validates settings that are primarily managed by OpenTofu (e.g., default branch name, merge strategies) by querying the GitHub API directly. This provides a secondary, independent verification of the IaC-managed state, acting as a cross-check against manual overrides or IaC failures.
-2. **CI/CD Integrity:** Ensures that repository workflows correctly invoke the canonical reusable workflows from `platform-standards` and do not use disallowed third-party GitHub Actions. This is implemented via OPA/Conftest policies that parse the YAML workflow files to verify their structure and content.20
-3. **File and Content Presence:** Verifies the existence and, where necessary, the content integrity of canonical files defined in `platform-standards/canon/`. Content integrity checks can range from a simple checksum match for files that must be identical, to a more complex structural validation via OPA for configuration files.
-4. **Prose and Documentation Quality:** Executes the Vale prose linter against all Markdown files within the repository to enforce the organization's house style guide, checking for issues related to grammar, tone, and terminology.6
-5. **Security Posture:** Integrates and executes the OpenSSF Scorecard tool. The numeric score and specific findings from Scorecard are incorporated into the Auditor's overall report, providing a consistent, organization-wide security baseline.15
+1. **Repository Settings:** Validates settings that are primarily managed by
+   OpenTofu (e.g., default branch name, merge strategies) by querying the
+   GitHub API directly. This provides a secondary, independent verification of
+   the IaC-managed state, acting as a cross-check against manual overrides or
+   IaC failures.
+2. **CI/CD Integrity:** Ensures that repository workflows correctly invoke the
+   canonical reusable workflows from `platform-standards` and do not use
+   disallowed third-party GitHub Actions. This is implemented via OPA/Conftest
+   policies that parse the YAML workflow files to verify their structure and
+   content.20
+3. **File and Content Presence:** Verifies the existence and, where necessary,
+   the content integrity of canonical files defined in
+   `platform-standards/canon/`. Content integrity checks can range from a
+   simple checksum match for files that must be identical, to a more complex
+   structural validation via OPA for configuration files.
+4. **Prose and Documentation Quality:** Executes the Vale prose linter against
+   all Markdown files within the repository to enforce the organization's house
+   style guide, checking for issues related to grammar, tone, and terminology.6
+5. **Security Posture:** Integrates and executes the OpenSSF Scorecard tool.
+   The numeric score and specific findings from Scorecard are incorporated into
+   the Auditor's overall report, providing a consistent, organization-wide
+   security baseline.15
 
-The following table serves as the master list of requirements for the Auditor. It defines the scope of work for implementation and provides an itemised breakdown of what constitutes "compliance" within the framework.
+The following table serves as the master list of requirements for the Auditor.
+It defines the scope of work for implementation and provides an itemised
+breakdown of what constitutes "compliance" within the framework.
 
 **Table 3: Auditor Check Catalog**
 
-| **Check ID** | **Description** | **Audit Domain** | **Implementation Tool** | **Default Severity** | **Implementation Phase** |
-| --- | --- | --- | --- | --- | --- |
-| RS-001 | Default branch is named `main`. | Repository Settings | Python/GitHub API | error | 1 |
-| RS-002 | Squash merging is enabled; merge commits and rebase merging are disabled. | Repository Settings | Python/GitHub API | error | 1 |
-| RS-003 | "Delete branch on merge" is enabled. | Repository Settings | Python/GitHub API | error | 1 |
-| CI-001 | The `.github/workflows/ci.yml` file must call the canonical reusable CI workflow. | CI/CD Integrity | OPA/Conftest | error | 1 |
-| CI-002 | The `.github/workflows/release.yml` file must call the canonical reusable release workflow (if `ci.needs_release_workflow` is true). | CI/CD Integrity | OPA/Conftest | error | 2 |
-| CI-003 | Workflows must not use disallowed third-party GitHub Actions. | CI/CD Integrity | OPA/Conftest | error | 2 |
-| FP-001 | A `.editorconfig` file must exist and match the canonical version. | File and Content Presence | Python/Checksum | error | 1 |
-| FP-002 | An `AGENTS.md` file must exist and contain required sections. | File and Content Presence | Python/Content Check | error | 1 |
-| FP-003 | A `Makefile` must exist and contain canonical targets (`lint`, `test`, `build`). | File and Content Presence | Python/Content Check | error | 2 |
-| FP-004 | For Python projects, a `ruff.toml` file must exist. | File and Content Presence | OPA/Conftest | error | 1 |
-| PD-001 | All Markdown files must pass Vale linting against the house style guide. | Prose and Documentation Quality | Vale | warning | 2 |
-| SP-001 | OpenSSF Scorecard must achieve a minimum score of 7.0. | Security Posture | OpenSSF Scorecard | warning | 1 |
-| LG-001 | The `docs/library-users-guide.md` file must match the canonical version from the consumed library tag. | File and Content Presence | Python/Content Check | error | 4 |
+| **Check ID** | **Description**                                                                                                                      | **Audit Domain**                | **Implementation Tool** | **Default Severity** | **Implementation Phase** |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------- | ----------------------- | -------------------- | ------------------------ |
+| RS-001       | Default branch is named `main`.                                                                                                      | Repository Settings             | Python/GitHub API       | error                | 1                        |
+| RS-002       | Squash merging is enabled; merge commits and rebase merging are disabled.                                                            | Repository Settings             | Python/GitHub API       | error                | 1                        |
+| RS-003       | "Delete branch on merge" is enabled.                                                                                                 | Repository Settings             | Python/GitHub API       | error                | 1                        |
+| CI-001       | The `.github/workflows/ci.yml` file must call the canonical reusable CI workflow.                                                    | CI/CD Integrity                 | OPA/Conftest            | error                | 1                        |
+| CI-002       | The `.github/workflows/release.yml` file must call the canonical reusable release workflow (if `ci.needs_release_workflow` is true). | CI/CD Integrity                 | OPA/Conftest            | error                | 2                        |
+| CI-003       | Workflows must not use disallowed third-party GitHub Actions.                                                                        | CI/CD Integrity                 | OPA/Conftest            | error                | 2                        |
+| FP-001       | A `.editorconfig` file must exist and match the canonical version.                                                                   | File and Content Presence       | Python/Checksum         | error                | 1                        |
+| FP-002       | An `AGENTS.md` file must exist and contain required sections.                                                                        | File and Content Presence       | Python/Content Check    | error                | 1                        |
+| FP-003       | A `Makefile` must exist and contain canonical targets (`lint`, `test`, `build`).                                                     | File and Content Presence       | Python/Content Check    | error                | 2                        |
+| FP-004       | For Python projects, a `ruff.toml` file must exist.                                                                                  | File and Content Presence       | OPA/Conftest            | error                | 1                        |
+| PD-001       | All Markdown files must pass Vale linting against the house style guide.                                                             | Prose and Documentation Quality | Vale                    | warning              | 2                        |
+| SP-001       | OpenSSF Scorecard must achieve a minimum score of 7.0.                                                                               | Security Posture                | OpenSSF Scorecard       | warning              | 1                        |
+| LG-001       | The `docs/library-users-guide.md` file must match the canonical version from the consumed library tag.                               | File and Content Presence       | Python/Content Check    | error                | 4                        |
 
 ### 3.2. Implementation design and execution model
 
-The Auditor will be implemented as a composite GitHub Action, primarily written in Python 3. This approach provides the necessary flexibility to orchestrate calls to external command-line tools like Conftest and Vale, while also allowing for direct interaction with the GitHub API via a robust client library.
+The Auditor will be implemented as a composite GitHub Action, primarily written
+in Python 3. This approach provides the necessary flexibility to orchestrate
+calls to external command-line tools like Conftest and Vale, while also
+allowing for direct interaction with the GitHub API via a robust client library.
 
 The execution flow of the Auditor action is as follows:
 
-1. **Trigger:** The action is triggered by a GitHub Actions workflow event, such as `pull_request` or `schedule`.
-2. **Checkout:** The workflow checks out the code of the target repository. It also checks out a specific, pinned version of the `platform-standards` repository into a separate directory to ensure that the audit uses a stable version of policies and canonical files.
-3. **Metadata Parsing:** The Python script begins by locating, reading, and parsing the target repository's `.repo-meta.yaml` file. If the file is missing or invalid, the audit fails immediately.
-4. **Parallel Check Execution:** The script orchestrates the execution of the various audit domain checks, running them in parallel where feasible to minimize execution time:
+1. **Trigger:** The action is triggered by a GitHub Actions workflow event,
+   such as `pull_request` or `schedule`.
+2. **Checkout:** The workflow checks out the code of the target repository. It
+   also checks out a specific, pinned version of the `platform-standards`
+   repository into a separate directory to ensure that the audit uses a stable
+   version of policies and canonical files.
+3. **Metadata Parsing:** The Python script begins by locating, reading, and
+   parsing the target repository's `.repo-meta.yaml` file. If the file is
+   missing or invalid, the audit fails immediately.
+4. **Parallel Check Execution:** The script orchestrates the execution of the
+   various audit domain checks, running them in parallel where feasible to
+   minimize execution time:
 
-- A subprocess is spawned to execute `conftest test`, pointing it to the relevant configuration files in the target repository and the policy directory within the checked-out `platform-standards` repository.
-- A subprocess is spawned to execute `vale`, configured to use the `.vale.ini` from `platform-standards` and targeting all Markdown files in the target repository.
-- A Python GitHub API client fetches repository and branch protection settings directly from the GitHub API.
-- A subprocess is spawned to execute the `scorecard` command-line interface against the target repository.
-5. **Result Aggregation:** The main Python script collects and normalises the output from all checker subprocesses.
-6. **SARIF Generation:** The aggregated results are transformed into a single, valid SARIF 2.1.0 file. Each finding is represented as a `result` object within the SARIF log.
-7. **SARIF Upload:** The final step in the job invokes the official `github/codeql-action/upload-sarif` action, passing it the path to the generated SARIF file.
+- A subprocess is spawned to execute `conftest test`, pointing it to the
+  relevant configuration files in the target repository and the policy
+  directory within the checked-out `platform-standards` repository.
+- A subprocess is spawned to execute `vale`, configured to use the `.vale.ini`
+  from `platform-standards` and targeting all Markdown files in the target
+  repository.
+- A Python GitHub API client fetches repository and branch protection settings
+  directly from the GitHub API.
+- A subprocess is spawned to execute the `scorecard` command-line interface
+  against the target repository.
+5. **Result Aggregation:** The main Python script collects and normalizes the
+   output from all checker subprocesses.
+6. **SARIF Generation:** The aggregated results are transformed into a single,
+   valid SARIF 2.1.0 file. Each finding is represented as a `result` object
+   within the SARIF log.
+7. **SARIF Upload:** The final step in the job invokes the official
+   `github/codeql-action/upload-sarif` action, passing it the path to the
+   generated SARIF file.
 
 ### 3.3. Reporting mechanism: SARIF integration with GitHub code scanning
 
-The Auditor **must** output all its findings in the Static Analysis Results Interchange Format (SARIF). This is a critical strategic decision that elevates the Auditor from a simple pass/fail CI check into a rich, integrated developer experience tool, and it is the technical lynchpin of the framework's enforcement mechanism.23
+The Auditor **must** output all its findings in the Static Analysis Results
+Interchange Format (SARIF). This is a critical strategic decision that elevates
+the Auditor from a simple pass/fail CI check into a rich, integrated developer
+experience tool, and it is the technical lynchpin of the framework's
+enforcement mechanism.23
 
-A simple log output from a CI job is easily missed and cannot be used as a granular gate for branch protection. The GitHub Code Scanning feature, however, provides a much richer integration. It is designed to ingest security and quality findings via SARIF files. By adopting SARIF as the single, unified output format, all disparate findings—from OPA policy violations, Vale prose suggestions, Scorecard security risks, and custom Python checks—can be consolidated into a single, machine-readable artefact.
+A simple log output from a CI job is easily missed and cannot be used as a
+granular gate for branch protection. The GitHub Code Scanning feature, however,
+provides a much richer integration. It is designed to ingest security and
+quality findings via SARIF files. By adopting SARIF as the single, unified
+output format, all disparate findings—from OPA policy violations, Vale prose
+suggestions, Scorecard security risks, and custom Python checks—can be
+consolidated into a single, machine-readable artefact.
 
-When this SARIF file is uploaded, GitHub treats the findings as native Code Scanning alerts. This has two profound consequences:
+When this SARIF file is uploaded, GitHub treats the findings as native Code
+Scanning alerts. This has two profound consequences:
 
-1. **Enhanced Developer Experience:** Violations appear directly within the GitHub user interface on the "Security" tab. Crucially, they also appear as annotations on the pull request's "Files changed" view, placing the feedback directly adjacent to the offending code or configuration. This is a far superior feedback mechanism to forcing developers to parse CI logs.
-2. **Robust Enforcement:** The status of the Code Scanning analysis itself becomes a status check that can be required for merging. A GitHub Ruleset can be configured to require that the "Code scanning results" check passes. This effectively transforms the entire suite of Auditor checks into a mandatory, non-bypassable merge gate, thus fulfilling the core "enforcement" requirement of the framework.
+1. **Enhanced Developer Experience:** Violations appear directly within the
+   GitHub user interface on the "Security" tab. Crucially, they also appear as
+   annotations on the pull request's "Files changed" view, placing the feedback
+   directly adjacent to the offending code or configuration. This is a far
+   superior feedback mechanism to forcing developers to parse CI logs.
+2. **Robust Enforcement:** The status of the Code Scanning analysis itself
+   becomes a status check that can be required for merging. A GitHub Ruleset
+   can be configured to require that the "Code scanning results" check passes.
+   This effectively transforms the entire suite of Auditor checks into a
+   mandatory, non-bypassable merge gate, thus fulfilling the core "enforcement"
+   requirement of the framework.
 
-SARIF is therefore not merely a reporting format; it is the key technology that connects the Auditor's evaluation logic to GitHub's native user interface and enforcement machinery, making the entire system cohesive and effective.
+SARIF is therefore not merely a reporting format; it is the key technology that
+connects the Auditor's evaluation logic to GitHub's native user interface and
+enforcement machinery, making the entire system cohesive and effective.
 
 ## 4. Declarative estate management with OpenTofu
 
-This section specifies how OpenTofu will be used to manage the GitHub estate's configuration declaratively. This ensures that all repositories and teams adhere to a baseline configuration, provides an auditable history of changes, and enables automated detection of configuration drift.
+This section specifies how OpenTofu will be used to manage the GitHub estate's
+configuration declaratively. This ensures that all repositories and teams
+adhere to a baseline configuration, provides an auditable history of changes,
+and enables automated detection of configuration drift.
 
 ### 4.1. Managing repository configuration and settings
 
-The `github_repository` resource, provided by the OpenTofu GitHub provider, will be the primary mechanism for standardizing settings across all managed repositories.25 The OpenTofu configuration resides in the `platform-standards/tofu/` directory and defines a module responsible for repository creation and management.
+The `github_repository` resource, provided by the OpenTofu GitHub provider,
+will be the primary mechanism for standardizing settings across all managed
+repositories.25 The OpenTofu configuration resides in the
+`platform-standards/tofu/` directory and defines a module responsible for
+repository creation and management.
 
 Key settings to be managed declaratively include:
 
-- `visibility`: To enforce whether repositories are `public`, `internal`, or `private`.
-- `has_issues`, `has_wiki`, `has_projects`: To standardize the feature set available on repositories.
+- `visibility`: To enforce whether repositories are `public`, `internal`, or
+  `private`.
+- `has_issues`, `has_wiki`, `has_projects`: To standardize the feature set
+  available on repositories.
 - `delete_branch_on_merge`: To enforce repository hygiene.
-- Merge strategies: `allow_squash_merge`, `allow_merge_commit`, `allow_rebase_merge` will be set to enforce a consistent merge strategy across the organization.
+- Merge strategies:
+  `allow_squash_merge`, `allow_merge_commit`, `allow_rebase_merge` will be set
+  to enforce a consistent merge strategy across the organization.
 
-A `for_each` meta-argument in the root OpenTofu configuration will iterate over a map of managed repositories, applying this common module to each one to ensure consistent application of these default settings.
+A `for_each` meta-argument in the root OpenTofu configuration will iterate over
+a map of managed repositories, applying this common module to each one to
+ensure consistent application of these default settings.
 
 ### 4.2. Managing teams and permissions
 
-To ensure that access control is managed as code and is subject to audit as well as periodic review, OpenTofu will be used to manage team membership and repository permissions. The following resources will be used:
+To ensure that access control is managed as code and is subject to audit as
+well as periodic review, OpenTofu will be used to manage team membership and
+repository permissions. The following resources will be used:
 
-- `github_team`: To create and manage the existence of teams within the organization.
+- `github_team`: To create and manage the existence of teams within the
+  organization.
 - `github_team_membership`: To manage the members of each team.
-- `github_team_repository`: To associate teams with repositories and grant specific permission levels (e.g., `read`, `triage`, `write`, `maintain`, `admin`).
+- `github_team_repository`: To associate teams with repositories and grant
+  specific permission levels (e.g.,
+  `read`, `triage`, `write`, `maintain`, `admin`).
 
-This approach provides a transparent and auditable record of who has access to which resources, and why.
+This approach provides a transparent and auditable record of who has access to
+which resources, and why.
 
 ### 4.3. Nightly drift detection and remediation workflows
 
-A critical function of the IaC pipeline is the continuous detection and correction of drift. A naive approach of automatically running `tofu apply` on a schedule is unacceptably risky, as a bug in the configuration or an unexpected provider change could lead to a destructive plan (e.g., deleting a repository) being applied without human oversight.
+A critical function of the IaC pipeline is the continuous detection and
+correction of drift. A naive approach of automatically running `tofu apply` on
+a schedule is unacceptably risky, as a bug in the configuration or an
+unexpected provider change could lead to a destructive plan (e.g., deleting a
+repository) being applied without human oversight.
 
-Therefore, a safer two-step process that separates detection from remediation is mandated:
+Therefore, a safer two-step process that separates detection from remediation
+is mandated:
 
-1. **Nightly Drift Detection:** A GitHub Actions workflow will run on a nightly schedule. Its sole purpose is to detect drift. It will execute `tofu plan -detailed-exitcode`. This command is a safe, read-only operation. It exits with code `0` if there is no drift, `1` for an error, and `2` if drift is detected. If the exit code is `2`, the workflow will fail, immediately alerting the platform team. The full plan output will be uploaded as a workflow artefact for detailed inspection.
-2. **Manual Remediation Trigger:** A separate workflow, triggered manually via `workflow_dispatch`, will be available to authorized operators. After reviewing the plan output from the detection workflow and confirming that the proposed changes are correct and intended, an operator can trigger this workflow to execute `tofu apply -auto-approve`, which will reconcile the state of the GitHub estate with the declarative configuration.
+1. **Nightly Drift Detection:** A GitHub Actions workflow will run on a nightly
+   schedule. Its sole purpose is to detect drift. It will execute
+   `tofu plan -detailed-exitcode`. This command is a safe, read-only operation.
+   It exits with code `0` if there is no drift, `1` for an error, and `2` if
+   drift is detected. If the exit code is `2`, the workflow will fail,
+   immediately alerting the platform team. The full plan output will be
+   uploaded as a workflow artefact for detailed inspection.
+2. **Manual Remediation Trigger:** A separate workflow, triggered manually via
+   `workflow_dispatch`, will be available to authorized operators. After
+   reviewing the plan output from the detection workflow and confirming that
+   the proposed changes are correct and intended, an operator can trigger this
+   workflow to execute `tofu apply -auto-approve`, which will reconcile the
+   state of the GitHub estate with the declarative configuration.
 
-This two-step process provides the benefits of fully automated drift detection while retaining the critical safety feature of a human review gate before making potentially destructive changes, balancing automation with operational safety.
+This two-step process provides the benefits of fully automated drift detection
+while retaining the critical safety feature of a human review gate before
+making potentially destructive changes, balancing automation with operational
+safety.
 
 ## 5. Policy enforcement and compliance gates
 
-This section details the specific mechanisms for policy enforcement, from the validation of file content to the implementation of the final, non-bypassable merge gate.
+This section details the specific mechanisms for policy enforcement, from the
+validation of file content to the implementation of the final, non-bypassable
+merge gate.
 
 ### 5.1. Content validation with OPA/Conftest
 
-The Auditor will invoke `conftest test` against relevant structured configuration files (YAML, JSON, etc.) found in the target repository. The policies used for this validation will be sourced from the checked-out `platform-standards/policies/` directory.
+The Auditor will invoke `conftest test` against relevant structured
+configuration files (YAML, JSON, etc.) found in the target repository. The
+policies used for this validation will be sourced from the checked-out
+`platform-standards/policies/` directory.
 
 Example policies that must be implemented include:
 
-- A policy that parses `.github/workflows/ci.yml` and asserts that it contains a `jobs.*.uses` key pointing to a versioned, canonical reusable workflow (e.g., `org/platform-standards/.github/workflows/ci.yml@v1`).
-- A policy that validates the structure of a `renovate.json` file to ensure that only approved package managers and update schedules are configured.
-- A policy, which runs conditionally based on the `language.primary` field in `.repo-meta.yaml` being `python`, that verifies a `ruff.toml` file exists and contains a required set of linting rules.
+- A policy that parses `.github/workflows/ci.yml` and asserts that it contains
+  a `jobs.*.uses` key pointing to a versioned, canonical reusable workflow
+  (e.g., `org/platform-standards/.github/workflows/ci.yml@v1`).
+- A policy that validates the structure of a `renovate.json` file to ensure
+  that only approved package managers and update schedules are configured.
+- A policy, which runs conditionally based on the `language.primary` field in
+  `.repo-meta.yaml` being `python`, that verifies a `ruff.toml` file exists and
+  contains a required set of linting rules.
 
-To facilitate integration with the overall reporting mechanism, the `conftest` command will be configured to output its results in SARIF format using the `--output sarif` flag.17
+To facilitate integration with the overall reporting mechanism, the `conftest`
+command will be configured to output its results in SARIF format using the
+`--output sarif` flag.17
 
 ### 5.2. Prose and documentation linting with Vale
 
-To enforce consistency in all written materials, the Auditor will invoke the `vale` command-line tool. The tool will be configured to target all Markdown files (`--ext=.md`) within the repository. The configuration file (`.vale.ini`) and any custom style packs (`Styles/YourHouse/`) will be sourced from the `platform-standards/canon/docs/` directory. This ensures that all documentation, from the main `README.md` to developer guides and the `AGENTS.md` file, adheres to the defined house style guide for tone, grammar, and terminology.12
+To enforce consistency in all written materials, the Auditor will invoke the
+`vale` command-line tool. The tool will be configured to target all Markdown
+files (`--ext=.md`) within the repository. The configuration file (`.vale.ini`)
+and any custom style packs (`Styles/YourHouse/`) will be sourced from the
+`platform-standards/canon/docs/` directory. This ensures that all
+documentation, from the main `README.md` to developer guides and the
+`AGENTS.md` file, adheres to the defined house style guide for tone, grammar,
+and terminology.12
 
 ### 5.3. Enforcement via GitHub rulesets and required status checks
 
-The ultimate enforcement point of the entire framework is the GitHub Ruleset. Rulesets provide the modern mechanism for protecting branches and tags in GitHub and offer superior capabilities to legacy branch protection rules. Unlike those legacy rules, rulesets are composable, meaning multiple rulesets from different sources (e.g., organization-level, repository-level) can apply to the same branch simultaneously, with the most restrictive combination of rules being enforced. This layering capability is vital for a large organization. Furthermore, rulesets are visible to any user with read access, providing transparency, and they can be managed declaratively via the API and, consequently, via OpenTofu.27
+The ultimate enforcement point of the entire framework is the GitHub Ruleset.
+Rulesets provide the modern mechanism for protecting branches and tags in
+GitHub and offer superior capabilities to legacy branch protection rules.
+Unlike those legacy rules, rulesets are composable, meaning multiple rulesets
+from different sources (e.g., organization-level, repository-level) can apply
+to the same branch simultaneously, with the most restrictive combination of
+rules being enforced. This layering capability is vital for a large
+organization. Furthermore, rulesets are visible to any user with read access,
+providing transparency, and they can be managed declaratively via the API and,
+consequently, via OpenTofu.27
 
 The enforcement loop will be closed as follows:
 
-1. An OpenTofu module, located at `tofu/modules/rulesets/`, will define a standard ruleset.
-2. This ruleset will be applied via OpenTofu to the default branch of all managed repositories. The `github_repository_ruleset` resource is used for this purpose.29
-3. The key rule within this ruleset will be `required_status_checks`. This rule will be configured to require the status check generated by the Auditor's SARIF upload to have a successful conclusion. The `context` of this check typically follows the pattern `Code scanning results / <tool-name>`.
-4. Because the Auditor's SARIF report includes all findings, a single `error`-level finding from any of its checks (OPA, Vale, Scorecard, etc.) will cause the Code Scanning result to be non-successful.
-5. This configuration makes the entire suite of Auditor checks a mandatory, non-optional gate that must pass before any pull request can be merged.
+1. An OpenTofu module, located at `tofu/modules/rulesets/`, will define a
+   standard ruleset.
+2. This ruleset will be applied via OpenTofu to the default branch of all
+   managed repositories. The `github_repository_ruleset` resource is used for
+   this purpose.29
+3. The key rule within this ruleset will be `required_status_checks`. This rule
+   will be configured to require the status check generated by the Auditor's
+   SARIF upload to have a successful conclusion. The `context` of this check
+   typically follows the pattern `Code scanning results / <tool-name>`.
+4. Because the Auditor's SARIF report includes all findings, a single
+   `error`-level finding from any of its checks (OPA, Vale, Scorecard, etc.)
+   will cause the Code Scanning result to be non-successful.
+5. This configuration makes the entire suite of Auditor checks a mandatory,
+   non-optional gate that must pass before any pull request can be merged.
 
 ### 5.4. Standardization via reusable GitHub workflows
 
-To eliminate redundancy and enforce consistent CI/CD practices, the framework will heavily leverage reusable GitHub Actions workflows. The canonical, authoritative versions of these workflows will reside in the `platform-standards/canon/.github/workflows/` directory.13
+To eliminate redundancy and enforce consistent CI/CD practices, the framework
+will heavily leverage reusable GitHub Actions workflows. The canonical,
+authoritative versions of these workflows will reside in the
+`platform-standards/canon/.github/workflows/` directory.13
 
-These workflows will be designed for flexibility by using the `on.workflow_call.inputs` stanza to accept parameters. This allows consumer repositories to specify context-specific details (e.g., the primary language, specific build arguments, or whether a release is needed) without needing to copy, paste, and maintain the complex underlying workflow logic.14
+These workflows will be designed for flexibility by using the
+`on.workflow_call.inputs` stanza to accept parameters. This allows consumer
+repositories to specify context-specific details (e.g., the primary language,
+specific build arguments, or whether a release is needed) without needing to
+copy, paste, and maintain the complex underlying workflow logic.14
 
-Target repositories will contain only minimal "caller" workflows. These simple YAML files will primarily consist of a `jobs.*.uses` key that points to the versioned, reusable workflow in the `platform-standards` repository, and a `with` block to pass the required inputs. This pattern drastically reduces maintenance overhead and ensures that updates to CI/CD logic can be rolled out centrally.
+Target repositories will contain only minimal "caller" workflows. These simple
+YAML files will primarily consist of a `jobs.*.uses` key that points to the
+versioned, reusable workflow in the `platform-standards` repository, and a
+`with` block to pass the required inputs. This pattern drastically reduces
+maintenance overhead and ensures that updates to CI/CD logic can be rolled out
+centrally.
 
 ## 6. Scaled remediation and change management
 
-This section addresses three practical challenges—rolling out new standards; remediating existing non-compliance; and managing legitimate exceptions across a large, diverse fleet of repositories.
+This section addresses three practical challenges—rolling out new standards;
+remediating existing non-compliance; and managing legitimate exceptions across
+a large, diverse fleet of repositories.
 
 ### 6.1. The `multi-gitter` pattern for mass pull requests
 
-When a new standard is introduced or an existing canonical file is updated (e.g., modifying the standard `ruff.toml` to include a new rule), `multi-gitter` will be used to automate the roll-out across all affected repositories.8
+When a new standard is introduced or an existing canonical file is updated
+(e.g., modifying the standard `ruff.toml` to include a new rule),
+`multi-gitter` will be used to automate the roll-out across all affected
+repositories.8
 
 The process is as follows:
 
-1. A remediation script is created (e.g., a shell script). This script contains the logic for a single repository: clone, copy the new canonical file into place, `git add`, and `git commit`.
+1. A remediation script is created (e.g., a shell script). This script contains
+   the logic for a single repository: clone, copy the new canonical file into
+   place, `git add`, and `git commit`.
 2. The `multi-gitter run` command is executed, pointing to this script.
-3. `multi-gitter` is configured with the organization name and filters (e.g., repository topics) to target the correct set of repositories.
-4. It is also provided with a standard branch name, commit message, and pull request title.
-5. The tool then automatically executes the script against each targeted repository in parallel, opening a pull request in each one that contains the proposed change.
+3. `multi-gitter` is configured with the organization name and filters (e.g.,
+   repository topics) to target the correct set of repositories.
+4. It is also provided with a standard branch name, commit message, and pull
+   request title.
+5. The tool then automatically executes the script against each targeted
+   repository in parallel, opening a pull request in each one that contains the
+   proposed change.
 
-This provides an efficient, auditable mechanism for proposing changes at scale, which can then be reviewed, tested by the repository's own CI, and merged by the respective code owners.
+This provides an efficient, auditable mechanism for proposing changes at scale,
+which can then be reviewed, tested by the repository's own CI, and merged by
+the respective code owners.
 
 ### 6.2. A framework for managing exemptions
 
-In any large-scale system, absolute enforcement without a mechanism for exceptions can be counter-productive. A formal, transparent, and time-bounded process for managing exemptions is therefore required.
+In any large-scale system, absolute enforcement without a mechanism for
+exceptions can be counter-productive. A formal, transparent, and time-bounded
+process for managing exemptions is therefore required.
 
-- **Mechanism:** A repository may contain a file named `standards-exemptions.yaml` at its root.
-- **Schema:** This file must contain a list of exemption objects, where each object has the following keys:
+- **Mechanism:** A repository may contain a file named
+  `standards-exemptions.yaml` at its root.
+- **Schema:** This file must contain a list of exemption objects, where each
+  object has the following keys:
 
-- `check_id`: A string that must exactly match the ID of the check to be exempted, as defined in Table 3 (e.g., `PD-001`).
-- `justification`: A detailed, human-readable string explaining the technical or business reason for the exemption. This text is crucial for auditing purposes.
-- `expiry_date`: An optional date in `YYYY-MM-DD` format. If present, the exemption is considered invalid after this date. This encourages the resolution of technical debt.
-- **Auditor Logic:** The Auditor will parse this file at the beginning of its run. If a check subsequently fails, the Auditor will consult its list of parsed exemptions. If a valid, non-expired exemption exists for that specific `check_id`, the Auditor will modify its reporting. Instead of reporting the finding in the SARIF file with a `level` of `error`, it will downgrade it to `note` or `warning`. The `justification` text from the exemption file will be included in the SARIF result message. This allows the overall Code Scanning status check to pass, unblocking the merge, while still maintaining a machine-readable and human-auditable record of the acknowledged technical debt.
+- `check_id`: A string that must exactly match the ID of the check to be
+  exempted, as defined in Table 3 (e.g., `PD-001`).
+- `justification`: A detailed, human-readable string explaining the technical
+  or business reason for the exemption. This text is crucial for auditing
+  purposes.
+- `expiry_date`: An optional date in `YYYY-MM-DD` format. If present, the
+  exemption is considered invalid after this date. This encourages the
+  resolution of technical debt.
+- **Auditor Logic:** The Auditor will parse this file at the beginning of its
+  run. If a check subsequently fails, the Auditor will consult its list of
+  parsed exemptions. If a valid, non-expired exemption exists for that specific
+  `check_id`, the Auditor will modify its reporting. Instead of reporting the
+  finding in the SARIF file with a `level` of `error`, it will downgrade it to
+  `note` or `warning`. The `justification` text from the exemption file will be
+  included in the SARIF result message. This allows the overall Code Scanning
+  status check to pass, unblocking the merge, while still maintaining a
+  machine-readable and human-auditable record of the acknowledged technical
+  debt.
 
 ## 7. Phased implementation strategy
 
-A pragmatic, multi-phase roll-out plan is essential to minimize disruption, build trust with development teams, and gather feedback before enabling full enforcement. The implementation will proceed through the following four phases.
+A pragmatic, multi-phase roll-out plan is essential to minimize disruption,
+build trust with development teams, and gather feedback before enabling full
+enforcement. The implementation will proceed through the following four phases.
 
 ### 7.1. Phase 1: audit, visibility, and foundational tooling (audit-only mode)
 
-- **Goal:** To establish the complete audit and reporting pipeline without blocking any developer activity, providing full visibility into the current state of compliance across the organization.
+- **Goal:** To establish the complete audit and reporting pipeline without
+  blocking any developer activity, providing full visibility into the current
+  state of compliance across the organization.
 - **Actions:**
 
-1. Construct the `platform-standards` repository with the initial set of policies, canonical files, and reusable workflows.
-2. Develop and deploy the Auditor GitHub Action. Configure it to run on a nightly schedule across all repositories in the organization.
-3. Configure the Auditor to upload its SARIF reports, which will begin to populate the Code Scanning tab in each repository. This makes compliance data visible to repository owners.
-4. Establish the OpenTofu pipeline and configure it to run `tofu plan` nightly. The plan's output will be stored as an artefact, and alerts will be configured to notify the platform team of any detected drift. No `tofu apply` operations will be performed.
+1. Construct the `platform-standards` repository with the initial set of
+   policies, canonical files, and reusable workflows.
+2. Develop and deploy the Auditor GitHub Action. Configure it to run on a
+   nightly schedule across all repositories in the organization.
+3. Configure the Auditor to upload its SARIF reports, which will begin to
+   populate the Code Scanning tab in each repository. This makes compliance
+   data visible to repository owners.
+4. Establish the OpenTofu pipeline and configure it to run `tofu plan` nightly.
+   The plan's output will be stored as an artefact, and alerts will be
+   configured to notify the platform team of any detected drift. No
+   `tofu apply` operations will be performed.
 5. No enforcement rulesets will be created or activated.
-6. The platform team will socialize the findings with development teams, publish a compliance "scoreboard" to track progress, and use the data to prioritize the most common issues.
+6. The platform team will socialize the findings with development teams,
+   publish a compliance "scoreboard" to track progress, and use the data to
+   prioritize the most common issues.
 
 ### 7.2. Phase 2: non-blocking enforcement and automated remediation (opt-in/warning mode)
 
-- **Goal:** To introduce the enforcement mechanisms in a non-blocking "evaluate" mode and to provide developers with automated tools for easy remediation.
+- **Goal:** To introduce the enforcement mechanisms in a non-blocking
+  "evaluate" mode and to provide developers with automated tools for easy
+  remediation.
 - **Actions:**
 
-1. Use OpenTofu to create and apply the primary enforcement ruleset to all managed repositories, but with the `enforcement` attribute set to `evaluate`. This will cause the Auditor's status check to appear in pull requests and report its status, but a failure will not block the merge.
-2. Begin using `multi-gitter` to open pull requests that fix the most common and lowest-risk compliance issues identified in Phase 1 (e.g., adding a missing `.editorconfig`, standardizing a `Makefile`).
-3. Actively solicit and incorporate feedback from development teams to refine policies, improve the Auditor's messaging, and fix false positives.
-4. Develop and publish clear documentation for repository owners on how to interpret Auditor findings and use the provided remediation tools.
+1. Use OpenTofu to create and apply the primary enforcement ruleset to all
+   managed repositories, but with the `enforcement` attribute set to
+   `evaluate`. This will cause the Auditor's status check to appear in pull
+   requests and report its status, but a failure will not block the merge.
+2. Begin using `multi-gitter` to open pull requests that fix the most common
+   and lowest-risk compliance issues identified in Phase 1 (e.g., adding a
+   missing `.editorconfig`, standardizing a `Makefile`).
+3. Actively solicit and incorporate feedback from development teams to refine
+   policies, improve the Auditor's messaging, and fix false positives.
+4. Develop and publish clear documentation for repository owners on how to
+   interpret Auditor findings and use the provided remediation tools.
 
 ### 7.3. Phase 3: mandatory compliance and merge blocking (active enforcement)
 
-- **Goal:** To make compliance with the defined standards a non-negotiable requirement for merging code to the default branch.
+- **Goal:** To make compliance with the defined standards a non-negotiable
+  requirement for merging code to the default branch.
 - **Actions:**
 
-1. Communicate the cut-over date for active enforcement clearly and repeatedly to all engineering teams, providing a grace period for them to address any outstanding issues in their repositories.
-2. Update the OpenTofu configuration for the primary ruleset, changing the `enforcement` attribute from `evaluate` to `active`.
+1. Communicate the cut-over date for active enforcement clearly and repeatedly
+   to all engineering teams, providing a grace period for them to address any
+   outstanding issues in their repositories.
+2. Update the OpenTofu configuration for the primary ruleset, changing the
+   `enforcement` attribute from `evaluate` to `active`.
 3. Run `tofu apply` to activate the change across the organization.
-4. The Auditor's status check now becomes a required merge gate. Pull requests with `error`-level compliance issues will be blocked from merging.
-5. The platform team provides active, high-priority support to teams that are blocked, helping them to resolve issues and, where necessary, use the formal exemption process.
+4. The Auditor's status check now becomes a required merge gate. Pull requests
+   with `error`-level compliance issues will be blocked from merging.
+5. The platform team provides active, high-priority support to teams that are
+   blocked, helping them to resolve issues and, where necessary, use the formal
+   exemption process.
 
 ### 7.4. Phase 4: advanced capabilities and maintenance reduction
 
-- **Goal:** To build upon the stable core framework to add more sophisticated value-adding capabilities and to reduce the long-term operational load on the platform team.
+- **Goal:** To build upon the stable core framework to add more sophisticated
+  value-adding capabilities and to reduce the long-term operational load on the
+  platform team.
 - **Actions:**
 
-1. Implement more advanced and context-aware checks, such as the "library guide parity" check (LG-001) that programmatically verifies that consumer projects are aligned with the documentation of the specific library versions they consume.
-2. Identify categories of OpenTofu drift that are deemed safe for automatic remediation and configure the nightly drift detection workflow to automatically trigger a `tofu apply` for these specific cases.
-3. Develop self-service tooling, such as a command-line interface or a web application, that allows teams to easily onboard new repositories to the framework, automatically generating the initial `.repo-meta.yaml` file and creating the necessary caller workflows.
+1. Implement more advanced and context-aware checks, such as the "library guide
+   parity" check (LG-001) that programmatically verifies that consumer projects
+   are aligned with the documentation of the specific library versions they
+   consume.
+2. Identify categories of OpenTofu drift that are deemed safe for automatic
+   remediation and configure the nightly drift detection workflow to
+   automatically trigger a `tofu apply` for these specific cases.
+3. Develop self-service tooling, such as a command-line interface or a web
+   application, that allows teams to easily onboard new repositories to the
+   framework, automatically generating the initial `.repo-meta.yaml` file and
+   creating the necessary caller workflows.
 
 ## 8. Operational and security considerations
 
-This section addresses the non-functional requirements for operating the framework securely and reliably at enterprise scale.
+This section addresses the non-functional requirements for operating the
+framework securely and reliably at enterprise scale.
 
 ### 8.1. Permissions model and access control
 
-The various components of the framework require different levels of permission to function correctly. These permissions must be carefully scoped to adhere to the principle of least privilege.
+The various components of the framework require different levels of permission
+to function correctly. These permissions must be carefully scoped to adhere to
+the principle of least privilege.
 
-- **OpenTofu Pipeline:** This is the most privileged component. The identity used to run `tofu apply` (either a GitHub App or a Personal Access Token) will require administrative permissions on all managed repositories and potentially organization-level permissions to manage teams and rulesets. This credential is highly sensitive and must be stored securely as an organization-level secret in GitHub Actions, with access strictly limited to the protected OpenTofu workflows.
-- **Auditor Action:** The Auditor itself should run with the default, read-only `GITHUB_TOKEN` wherever possible. This is sufficient for checking out code and reading most repository content. For specific checks that require elevated permissions (e.g., reading repository settings via the API), the workflow calling the Auditor may need to be granted additional read scopes (e.g., `contents: read`, `pull-requests: read`).
-- `multi-gitter`** Execution:** The token used for `multi-gitter` requires permissions to read repositories, create branches, and open pull requests. It does not require write or administrative access to the default branch.
+- **OpenTofu Pipeline:** This is the most privileged component. The identity
+  used to run `tofu apply` (either a GitHub App or a Personal Access Token)
+  will require administrative permissions on all managed repositories and
+  potentially organization-level permissions to manage teams and rulesets. This
+  credential is highly sensitive and must be stored securely as an
+  organization-level secret in GitHub Actions, with access strictly limited to
+  the protected OpenTofu workflows.
+- **Auditor Action:** The Auditor itself should run with the default, read-only
+  `GITHUB_TOKEN` wherever possible. This is sufficient for checking out code
+  and reading most repository content. For specific checks that require
+  elevated permissions (e.g., reading repository settings via the API), the
+  workflow calling the Auditor may need to be granted additional read scopes
+  (e.g., `contents: read`, `pull-requests: read`).
+- `multi-gitter`** Execution:** The token used for `multi-gitter` requires
+  permissions to read repositories, create branches, and open pull requests. It
+  does not require write or administrative access to the default branch.
 
 ### 8.2. Performance, scalability, and reliability
 
-- **Auditor Performance:** The runtime of the Auditor is a critical performance metric, especially when it is configured to run on every pull request. The implementation must parallelize input/output-bound and CPU-bound tasks where possible. The cost of checking out the `platform-standards` repository and the execution time of external tools like Vale and Scorecard must be monitored and optimized. Caching strategies for dependencies and tools within the GitHub Actions runner should be employed.
-- **API Rate Limiting:** All components that interact with the GitHub API must be designed to operate within its rate limits. The OpenTofu GitHub provider has built-in retry logic to handle transient rate limit errors.9 Custom Python scripts used within the Auditor must implement their own exponential backoff and retry strategies when making API calls.
-- **Scalability:** The framework is designed for scalability. The core logic is centralized in the `platform-standards` repository, while the context is decentralized via the `.repo-meta.yaml` manifests. The primary scaling bottleneck will be the total execution time of the scheduled Auditor runs across thousands of repositories. To mitigate this, the organization-wide scheduled workflow can be designed as a fan-out system, where a central workflow enumerates all repositories and triggers a separate, per-repository `workflow_dispatch` event to run the audit in parallel across the entire fleet of GitHub runners.
+- **Auditor Performance:** The runtime of the Auditor is a critical performance
+  metric, especially when it is configured to run on every pull request. The
+  implementation must parallelize input/output-bound and CPU-bound tasks where
+  possible. The cost of checking out the `platform-standards` repository and
+  the execution time of external tools like Vale and Scorecard must be
+  monitored and optimized. Caching strategies for dependencies and tools within
+  the GitHub Actions runner should be employed.
+- **API Rate Limiting:** All components that interact with the GitHub API must
+  be designed to operate within its rate limits. The OpenTofu GitHub provider
+  has built-in retry logic to handle transient rate limit errors.9 Custom
+  Python scripts used within the Auditor must implement their own exponential
+  backoff and retry strategies when making API calls.
+- **Scalability:** The framework is designed for scalability. The core logic is
+  centralized in the `platform-standards` repository, while the context is
+  decentralized via the `.repo-meta.yaml` manifests. The primary scaling
+  bottleneck will be the total execution time of the scheduled Auditor runs
+  across thousands of repositories. To mitigate this, the organization-wide
+  scheduled workflow can be designed as a fan-out system, where a central
+  workflow enumerates all repositories and triggers a separate, per-repository
+  `workflow_dispatch` event to run the audit in parallel across the entire
+  fleet of GitHub runners.
 
 ### 8.3. System monitoring and maintenance
 
-- **Monitoring:** The success, failure, and duration of the Auditor and OpenTofu workflow runs must be continuously monitored. This data should be exported to a central monitoring or business intelligence tool to create dashboards that track overall compliance trends across the organization, identify the most common failures, and measure the framework's impact over time.
-- **Maintenance:** The `platform-standards` repository is a critical piece of shared infrastructure and must be maintained with a high degree of rigour.
+- **Monitoring:** The success, failure, and duration of the Auditor and
+  OpenTofu workflow runs must be continuously monitored. This data should be
+  exported to a central monitoring or business intelligence tool to create
+  dashboards that track overall compliance trends across the organization,
+  identify the most common failures, and measure the framework's impact over
+  time.
+- **Maintenance:** The `platform-standards` repository is a critical piece of
+  shared infrastructure and must be maintained with a high degree of rigour.
 
-- **Change Management:** All changes to policies, canonical files, or reusable workflows must go through a formal pull request review process.
-- **Policy Testing:** OPA/Rego policies must have their own suite of unit tests, written using the `opa test` command. These tests must be run as a required CI check on all pull requests to the `platform-standards` repository to prevent regressions in policy logic.11
-- **Versioning:** Reusable workflows must be versioned using semantic versioning tags (e.g., `v1`, `v1.1.0`). Consumer repositories should pin to a major version tag (e.g., `@v1`) to receive non-breaking updates automatically, while breaking changes must be introduced under a new major version (e.g., `@v2`) and rolled out deliberately. Using a specific commit SHA is the safest option for maximum stability and security.14
+- **Change Management:** All changes to policies, canonical files, or reusable
+  workflows must go through a formal pull request review process.
+- **Policy Testing:** OPA/Rego policies must have their own suite of unit
+  tests, written using the `opa test` command. These tests must be run as a
+  required CI check on all pull requests to the `platform-standards` repository
+  to prevent regressions in policy logic.11
+- **Versioning:** Reusable workflows must be versioned using semantic
+  versioning tags (e.g., `v1`, `v1.1.0`). Consumer repositories should pin to a
+  major version tag (e.g., `@v1`) to receive non-breaking updates
+  automatically, while breaking changes must be introduced under a new major
+  version (e.g., `@v2`) and rolled out deliberately. Using a specific commit
+  SHA is the safest option for maximum stability and security.14
 
 ## Works cited
 
-[^1]: OpenTofu - GitHub, accessed on 26 October 2025, [https://github.com/opentofu](https://github.com/opentofu)
-[^2]: Terraform vs. OpenTofu: A Comprehensive Comparison - Infisical, accessed on 26 October 2025, [https://infisical.com/blog/terraform-vs-opentofu](https://infisical.com/blog/terraform-vs-opentofu)
-[^3]: OpenTofu vs Terraform: IaC Comparison for DevOps Teams ..., accessed on 26 October 2025, [https://controlmonkey.io/opentofu-vs-terraform-comparison/](https://controlmonkey.io/opentofu-vs-terraform-comparison/)
-[^4]: OPA Conftest Basics - KodeKloud Notes, accessed on 26 October 2025, [https://notes.kodekloud.com/docs/DevSecOps-Kubernetes-DevOps-Security/DevSecOps-Pipeline/OPA-Conftest-Basics](https://notes.kodekloud.com/docs/DevSecOps-Kubernetes-DevOps-Security/DevSecOps-Pipeline/OPA-Conftest-Basics)
-[^5]: open-policy-agent/conftest: Write tests against structured configuration data using the Open Policy Agent Rego query language - GitHub, accessed on 26 October 2025, [https://github.com/open-policy-agent/conftest](https://github.com/open-policy-agent/conftest)
-[^6]: How we use Vale to enforce better writing in docs and beyond - Spectro Cloud, accessed on 26 October 2025, [https://www.spectrocloud.com/blog/how-we-use-vale-to-enforce-better-writing-in-docs-and-beyond](https://www.spectrocloud.com/blog/how-we-use-vale-to-enforce-better-writing-in-docs-and-beyond)
-[^7]: Vale: a prose linter | Lance's Quips & Quibbles, accessed on 26 October 2025, [https://lanceleonard.com/tips/doc/vale/](https://lanceleonard.com/tips/doc/vale/)
-[^8]: lindell/multi-gitter: Update multiple repositories in with one ... - GitHub, accessed on 26 October 2025, [https://github.com/lindell/multi-gitter](https://github.com/lindell/multi-gitter)
-[^9]: Provider: GitHub - v6.3.0 - opentofu/github - OpenTofu Registry, accessed on 26 October 2025, [https://search.opentofu.org/provider/opentofu/github/v6.3.0](https://search.opentofu.org/provider/opentofu/github/v6.3.0)
-[^10]: Policy Testing, accessed on 26 October 2025, [https://openpolicyagent.org/docs/policy-testing](https://openpolicyagent.org/docs/policy-testing)
-[^11]: Vale documentation tests - GitLab Docs, accessed on 26 October 2025, [https://docs.gitlab.com/development/documentation/testing/vale/](https://docs.gitlab.com/development/documentation/testing/vale/)
-[^12]: Create reusable workflows in GitHub Actions | GitHub Resources ..., accessed on 26 October 2025, [https://resources.github.com/learn/pathways/automation/intermediate/create-reusable-workflows-in-github-actions/](https://resources.github.com/learn/pathways/automation/intermediate/create-reusable-workflows-in-github-actions/)
-[^13]: Reuse workflows - GitHub Docs, accessed on 26 October 2025, [https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows)
-[^14]: OpenSSF Scorecard, accessed on 26 October 2025, [https://scorecard.dev/](https://scorecard.dev/)
-[^15]: OSSF Scorecard action · Actions · GitHub Marketplace · GitHub, accessed on 26 October 2025, [https://github.com/marketplace/actions/ossf-scorecard-action](https://github.com/marketplace/actions/ossf-scorecard-action)
-[^16]: Conftest, accessed on 26 October 2025, [https://www.conftest.dev/](https://www.conftest.dev/)
-[^17]: Resource Blocks - OpenTofu, accessed on 26 October 2025, [https://opentofu.org/docs/language/resources/syntax/](https://opentofu.org/docs/language/resources/syntax/)
-[^18]: Module Sources - OpenTofu, accessed on 26 October 2025, [https://opentofu.org/docs/language/modules/sources/](https://opentofu.org/docs/language/modules/sources/)
-[^19]: Contexts reference - GitHub Docs, accessed on 26 October 2025, [https://docs.github.com/en/actions/reference/workflows-and-actions/contexts](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts)
-[^20]: Conftest · Actions · GitHub Marketplace, accessed on 26 October 2025, [https://github.com/marketplace/actions/conftest](https://github.com/marketplace/actions/conftest)
-[^21]: Introduction - Vale CLI, accessed on 26 October 2025, [https://vale.sh/docs/](https://vale.sh/docs/)
-[^22]: What is Static Analysis Results Interchange Format (SARIF)? | Aptori App & API Security, accessed on 26 October 2025, [https://www.aptori.com/glossary/static-analysis-results-interchange-format-sarif](https://www.aptori.com/glossary/static-analysis-results-interchange-format-sarif)
-[^23]: The complete guide to SARIF: Standardizing static analysis results ..., accessed on 26 October 2025, [https://www.sonarsource.com/resources/library/sarif/](https://www.sonarsource.com/resources/library/sarif/)
-[^24]: GitHub: github_repository - opentofu/github - OpenTofu Registry, accessed on 26 October 2025, [https://search.opentofu.org/provider/opentofu/github/latest/docs/resources/repository](https://search.opentofu.org/provider/opentofu/github/latest/docs/resources/repository)
-[^25]: Options - Conftest, accessed on 26 October 2025, [https://www.conftest.dev/options/](https://www.conftest.dev/options/)
-[^26]: What are the practical differences between GitHub Rulesets and ..., accessed on 26 October 2025, [https://stackoverflow.com/questions/79292201/what-are-the-practical-differences-between-github-rulesets-and-branch-protection](https://stackoverflow.com/questions/79292201/what-are-the-practical-differences-between-github-rulesets-and-branch-protection)
-[^27]: About rulesets - GitHub Docs, accessed on 26 October 2025, [https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets)
-[^28]: github_repository_ruleset Resource - terraform-provider-github ..., accessed on 26 October 2025, [https://search.opentofu.org/provider/opentofu/github/latest/docs/resources/repository_ruleset](https://search.opentofu.org/provider/opentofu/github/latest/docs/resources/repository_ruleset)
-[^29]: github_repository_ruleset Resource - terraform-provider-github - v6.2.0 - OpenTofu Registry, accessed on 26 October 2025, [https://search.opentofu.org/provider/opentofu/github/v6.2.0/docs/resources/repository_ruleset](https://search.opentofu.org/provider/opentofu/github/v6.2.0/docs/resources/repository_ruleset)
-[^30]: Best Practices for Reusable Workflows in GitHub Actions - Earthly Blog, accessed on 26 October 2025, [https://earthly.dev/blog/github-actions-reusable-workflows/](https://earthly.dev/blog/github-actions-reusable-workflows/)
+[^1]: OpenTofu - GitHub, accessed on 26 October 2025,
+      [https://github.com/opentofu](https://github.com/opentofu)
+[^2]: Terraform vs. OpenTofu: A Comprehensive Comparison - Infisical, accessed
+      on 26 October 2025,
+      [https://infisical.com/blog/terraform-vs-opentofu](https://infisical.com/blog/terraform-vs-opentofu)
+[^3]: OpenTofu vs Terraform: IaC Comparison for DevOps Teams …, accessed on
+      26 October 2025,
+      [https://controlmonkey.io/opentofu-vs-terraform-comparison/](https://controlmonkey.io/opentofu-vs-terraform-comparison/)
+[^4]: OPA Conftest Basics - KodeKloud Notes, accessed on 26 October 2025,
+      [https://notes.kodekloud.com/docs/DevSecOps-Kubernetes-DevOps-Security/DevSecOps-Pipeline/OPA-Conftest-Basics](https://notes.kodekloud.com/docs/DevSecOps-Kubernetes-DevOps-Security/DevSecOps-Pipeline/OPA-Conftest-Basics)
+[^5]: open-policy-agent/conftest: Write tests against structured configuration
+      data using the Open Policy Agent Rego query language - GitHub, accessed
+      on 26 October 2025,
+      [https://github.com/open-policy-agent/conftest](https://github.com/open-policy-agent/conftest)
+[^6]: How we use Vale to enforce better writing in docs and beyond - Spectro
+      Cloud, accessed on 26 October 2025,
+      [https://www.spectrocloud.com/blog/how-we-use-vale-to-enforce-better-writing-in-docs-and-beyond](https://www.spectrocloud.com/blog/how-we-use-vale-to-enforce-better-writing-in-docs-and-beyond)
+[^7]: Vale: a prose linter | Lance's Quips & Quibbles, accessed on 26 October
+      2025,
+      [https://lanceleonard.com/tips/doc/vale/](https://lanceleonard.com/tips/doc/vale/)
+[^8]: lindell/multi-gitter: Update multiple repositories in with one … -
+      GitHub, accessed on 26 October 2025,
+      [https://github.com/lindell/multi-gitter](https://github.com/lindell/multi-gitter)
+[^9]: Provider: GitHub - v6.3.0 - opentofu/github - OpenTofu Registry, accessed
+      on 26 October 2025,
+      [https://search.opentofu.org/provider/opentofu/github/v6.3.0](https://search.opentofu.org/provider/opentofu/github/v6.3.0)
+[^10]: Policy Testing, accessed on 26 October 2025,
+       [https://openpolicyagent.org/docs/policy-testing](https://openpolicyagent.org/docs/policy-testing)
+[^11]: Vale documentation tests - GitLab Docs, accessed on 26 October 2025,
+       [https://docs.gitlab.com/development/documentation/testing/vale/](https://docs.gitlab.com/development/documentation/testing/vale/)
+[^12]: Create reusable workflows in GitHub Actions | GitHub Resources …,
+       accessed on 26 October 2025,
+       [https://resources.github.com/learn/pathways/automation/intermediate/create-reusable-workflows-in-github-actions/](https://resources.github.com/learn/pathways/automation/intermediate/create-reusable-workflows-in-github-actions/)
+[^13]: Reuse workflows - GitHub Docs, accessed on 26 October 2025,
+       [https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows)
+[^14]: OpenSSF Scorecard, accessed on 26 October 2025,
+       [https://scorecard.dev/](https://scorecard.dev/)
+[^15]: OSSF Scorecard action · Actions · GitHub Marketplace · GitHub, accessed
+       on 26 October 2025,
+       [https://github.com/marketplace/actions/ossf-scorecard-action](https://github.com/marketplace/actions/ossf-scorecard-action)
+[^16]: Conftest, accessed on 26 October 2025,
+       [https://www.conftest.dev/](https://www.conftest.dev/)
+[^17]: Resource Blocks - OpenTofu, accessed on 26 October 2025,
+       [https://opentofu.org/docs/language/resources/syntax/](https://opentofu.org/docs/language/resources/syntax/)
+[^18]: Module Sources - OpenTofu, accessed on 26 October 2025,
+       [https://opentofu.org/docs/language/modules/sources/](https://opentofu.org/docs/language/modules/sources/)
+[^19]: Contexts reference - GitHub Docs, accessed on 26 October 2025,
+       [https://docs.github.com/en/actions/reference/workflows-and-actions/contexts](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts)
+[^20]: Conftest · Actions · GitHub Marketplace, accessed on 26 October 2025,
+       [https://github.com/marketplace/actions/conftest](https://github.com/marketplace/actions/conftest)
+[^21]: Introduction - Vale CLI, accessed on 26 October 2025,
+       [https://vale.sh/docs/](https://vale.sh/docs/)
+[^22]: What is Static Analysis Results Interchange Format (SARIF)? | Aptori App
+       & API Security, accessed on 26 October 2025,
+       [https://www.aptori.com/glossary/static-analysis-results-interchange-format-sarif](https://www.aptori.com/glossary/static-analysis-results-interchange-format-sarif)
+[^23]: The complete guide to SARIF: Standardizing static analysis results …,
+       accessed on 26 October 2025,
+       [https://www.sonarsource.com/resources/library/sarif/](https://www.sonarsource.com/resources/library/sarif/)
+[^24]: GitHub: github_repository - opentofu/github - OpenTofu Registry,
+       accessed on 26 October 2025,
+       [https://search.opentofu.org/provider/opentofu/github/latest/docs/resources/repository](https://search.opentofu.org/provider/opentofu/github/latest/docs/resources/repository)
+[^25]: Options - Conftest, accessed on 26 October 2025,
+       [https://www.conftest.dev/options/](https://www.conftest.dev/options/)
+[^26]: What are the practical differences between GitHub Rulesets and …,
+       accessed on 26 October 2025,
+       [https://stackoverflow.com/questions/79292201/what-are-the-practical-differences-between-github-rulesets-and-branch-protection](https://stackoverflow.com/questions/79292201/what-are-the-practical-differences-between-github-rulesets-and-branch-protection)
+[^27]: About rulesets - GitHub Docs, accessed on 26 October 2025,
+       [https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets)
+[^28]: github_repository_ruleset Resource - terraform-provider-github …,
+       accessed on 26 October 2025,
+       [https://search.opentofu.org/provider/opentofu/github/latest/docs/resources/repository_ruleset](https://search.opentofu.org/provider/opentofu/github/latest/docs/resources/repository_ruleset)
+[^29]: github_repository_ruleset Resource - terraform-provider-github - v6.2.0
+       - OpenTofu Registry, accessed on 26 October 2025,
+       [https://search.opentofu.org/provider/opentofu/github/v6.2.0/docs/resources/repository_ruleset](https://search.opentofu.org/provider/opentofu/github/v6.2.0/docs/resources/repository_ruleset)
+[^30]: Best Practices for Reusable Workflows in GitHub Actions - Earthly Blog,
+       accessed on 26 October 2025,
+       [https://earthly.dev/blog/github-actions-reusable-workflows/](https://earthly.dev/blog/github-actions-reusable-workflows/)
