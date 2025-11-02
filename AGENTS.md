@@ -157,10 +157,10 @@ The following tooling is available in this environment:
 - `mbake` – A Makefile validator. Run using `mbake validate Makefile`.
 - `strace` – Traces system calls and signals made by a process; useful for
   debugging runtime behaviour and syscalls.
-- `gdb` – The GNU (GNU's Not Unix) Debugger, for inspecting and controlling
-  programs as they execute (or post-mortem via core dumps).
+- `gdb` – General-purpose debugger for inspecting and controlling programs as
+  they execute (or post-mortem via core dumps).
 - `ripgrep` – Fast, recursive text search tool that respects `.gitignore`
-  files and serves as an alternative to the GNU (GNU's Not Unix) `grep` utility.
+  files and serves as a drop-in replacement for standard `grep`.
 - `ltrace` – Traces calls to dynamic library functions made by a process.
 - `valgrind` – Suite for detecting memory leaks, profiling, and debugging
   low-level memory errors.
@@ -176,7 +176,8 @@ The following tooling is available in this environment:
 - `tcpdump` – Captures and analyses network traffic at the packet level.
 - `nmap` – Network scanner for host discovery, port scanning, and service
   identification.
-- `lldb` – Low Level Virtual Machine (LLVM) debugger, alternative to `gdb`.
+- `lldb` – Debugger from the Low Level Virtual Machine project, alternative to
+  `gdb`.
 - `eza` – Modern `ls` replacement with more features and better defaults.
 - `fzf` – Interactive fuzzy finder for selecting files, commands, etc.
 - `hyperfine` – Command-line benchmarking tool with statistical output.
