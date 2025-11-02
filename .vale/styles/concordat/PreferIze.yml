@@ -94,8 +94,38 @@ swap:
   characterising: characterizing
   characterisation: characterization
 
-  localise: characterize
-  localised: characterized
-  localises: characterizes
-  localising: characterizing
-  localisation: characterization
+  localise: localize
+  localised: localized
+  localises: localizes
+  localising: localizing
+  localisation: localization
+
+  synthesise: synthesize
+  synthesised: synthesized
+  synthesises: synthesizes
+  synthesising: synthesizing
+  synthesisation: synthesization
+
+  normalise: normalize
+  normalised: normalized
+  normalises: normalizes
+  normalising: normalizing
+  normalisation: normalization
+
+  materialise: materialize
+  materialised: materialized
+  materialises: materializes
+  materialising: materializing
+  materialisation: materialization
+
+  finalise: finalize
+  finalised: finalized
+  finalises: finalizes
+  finalising: finalizing
+  finalisation: finalization
+
+  crystalise: crystalize
+  crystalised: crystalized
+  crystalises: crystalizes
+  crystalising: crystalizing
+  crystalisation: crystalization
