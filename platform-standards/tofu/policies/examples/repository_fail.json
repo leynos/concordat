@@ -1,0 +1,16 @@
+{
+  "resource_changes": [
+    {
+      "address": "module.repository.github_repository.this",
+      "type": "github_repository",
+      "change": {
+        "after": {
+          "delete_branch_on_merge": true,
+          "allow_merge_commit": false,
+          "allow_rebase_merge": false,
+          "allow_squash_merge": false
+        }
+      }
+    }
+  ]
+}

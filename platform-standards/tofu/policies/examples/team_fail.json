@@ -1,0 +1,13 @@
+{
+  "resource_changes": [
+    {
+      "address": "module.team.github_team.this",
+      "type": "github_team",
+      "change": {
+        "after": {
+          "default_repository_permission": "owner"
+        }
+      }
+    }
+  ]
+}

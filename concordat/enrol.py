@@ -420,7 +420,7 @@ def _ensure_concordat_document(location: Path) -> bool:
     if destination.exists():
         existing = _load_yaml(destination)
         if isinstance(existing, dict):
-            mapping = typ.cast(dict[str, object], existing)
+            mapping = typ.cast("dict[str, object]", existing)
             enrolled_value = mapping.get("enrolled")
             if isinstance(enrolled_value, bool) and enrolled_value is True:
                 return False
@@ -438,7 +438,7 @@ def _set_enrolled_value(location: Path, *, value: bool, specification: str) -> b
     if not isinstance(existing, dict):
         raise _invalid_document_error(specification)
 
-    mapping = typ.cast(dict[str, object], existing)
+    mapping = typ.cast("dict[str, object]", existing)
     current = mapping.get("enrolled")
     if not isinstance(current, bool):
         raise _invalid_document_error(specification)

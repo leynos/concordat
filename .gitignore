@@ -204,3 +204,8 @@ target/
 **/mutants.out*/
 
 .crush/
+
+# OpenTofu build artefacts
+.terraform/
+platform-standards/**/.terraform/
+*.tfvars

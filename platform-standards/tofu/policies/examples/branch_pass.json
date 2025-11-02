@@ -1,0 +1,20 @@
+{
+  "resource_changes": [
+    {
+      "address": "module.branch.github_branch_protection.this",
+      "type": "github_branch_protection",
+      "change": {
+        "after": {
+          "requires_conversation_resolution": true,
+          "required_status_checks": {
+            "strict": true,
+            "contexts": ["concordat/auditor"]
+          },
+          "required_pull_request_reviews": {
+            "required_approving_review_count": 2
+          }
+        }
+      }
+    }
+  ]
+}

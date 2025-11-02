@@ -1,0 +1,22 @@
+{
+  "resource_changes": [
+    {
+      "address": "module.team.github_team.this",
+      "type": "github_team",
+      "change": {
+        "after": {
+          "default_repository_permission": "pull"
+        }
+      }
+    },
+    {
+      "address": "module.team.github_team_repository.default_permissions[\"repo\"]",
+      "type": "github_team_repository",
+      "change": {
+        "after": {
+          "permission": "maintain"
+        }
+      }
+    }
+  ]
+}
