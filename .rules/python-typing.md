@@ -4,6 +4,9 @@
 > practices to improve clarity, correctness, and tooling support. Use these
 > features to write expressive, modern Python.
 
+This reference cites several Python Enhancement Proposals (PEPs) that define
+the underlying typing semantics.
+
 ## `enum.Enum`, `enum.IntEnum`, `enum.StrEnum`
 
 Use `Enum` for fixed sets of related constants. Use `enum.auto()` to avoid
@@ -26,8 +29,8 @@ class Role(enum.StrEnum):
     GUEST = enum.auto()
 ```
 
-Use `auto()` when exact values are unimportant and you want to avoid
-duplication. Avoid `auto()` in `IntEnum` where numeric meaning matters.
+Use `auto()` when exact values are unimportant and duplication should be
+avoided. Avoid `auto()` in `IntEnum` where numeric meaning matters.
 
 ## `match` / `case` (Structural Pattern Matching)
 
@@ -44,7 +47,7 @@ def handle_status(status: Status) -> str:
             return "Done"
 ```
 
-## Generic Class Declarations (PEP 695)
+## Generic Class Declarations (Python Enhancement Proposal 695)
 
 Use bracketed class-level type variables directly for generic class
 declarations.
@@ -57,7 +60,7 @@ class Box[T]:
 
 This is cleaner and avoids the indirection of separate `TypeVar` declarations.
 
-## `Self` Type (PEP 673)
+## `Self` Type (Python Enhancement Proposal 673)
 
 Use `Self` in fluent interfaces and builder-style APIs to indicate the method
 returns the same instance.
@@ -73,7 +76,7 @@ class Builder:
 
 This improves tool support and enforces correct chaining semantics.
 
-## `@override` Decorator (PEP 698)
+## `@override` Decorator  (Python Enhancement Proposal 698)
 
 Use `@override` to indicate that a method overrides one from a superclass. This
 enables static analysis tools to detect typos and signature mismatches.
@@ -93,7 +96,7 @@ class Child(Base):
 
 This decorator is a no-op at runtime but improves tooling correctness.
 
-## `TypeIs` (PEP 742)
+## `TypeIs`  (Python Enhancement Proposal 742)
 
 Use `TypeIs[T]` to define custom runtime type guards that narrow types in type
 checkers.
@@ -108,7 +111,7 @@ def is_str_list(val: list[object]) -> typing.TypeIs[list[str]]:
 Unlike `isinstance`, this informs the type checker that `val` is now
 `list[str]`.
 
-## Defaults for TypeVars (PEP 696)
+## Defaults for TypeVars  (Python Enhancement Proposal 696)
 
 Allow generic classes/functions to fall back to default types when no specific
 type is provided.
@@ -124,7 +127,7 @@ class Box[T]:
 
 This makes APIs more ergonomic while retaining type safety.
 
-## Standard Library Generics (PEP 585)
+## Standard Library Generics  (Python Enhancement Proposal 585)
 
 Use built-in generics from the standard library (`list`, `dict`, `tuple`, etc.)
 instead of `typing.List`, `typing.Dict`, etc.
@@ -135,7 +138,7 @@ names: list[str] = ["Alice", "Bob"]
 
 This reduces imports and reflects the modern style.
 
-## Union Syntax and Optional (PEP 604)
+## Union Syntax and Optional  (Python Enhancement Proposal 604)
 
 Use `|` to write union types, and `A | None` instead of `Optional[A]`.
 
