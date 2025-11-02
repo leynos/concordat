@@ -1,20 +1,21 @@
-# Python exception design, raising, handling, and logging — Ruff TRY/BLE/EM/LOG, N818, PERF203
+# Python exception design, raising, handling, and logging — Ruff Tryceratops, Blind Except, flake8-errmsg, flake8-logging, pep8-naming, Perflint
 
-This guide distils the intent behind Ruff’s Tryceratops (TRY), Blind Except
-(BLE), flake8‑errmsg (EM), flake8‑logging (LOG), pep8‑naming N818, and Perflint
-PERF203, aligned with practical engineering practice.
+This guide distils the intent behind Ruff’s Tryceratops rule set, Blind Except
+rule, flake8‑errmsg rule, flake8‑logging rule, pep8‑naming convention, and the
+Perflint analysis engine, aligned with practical engineering practice.
 
-## 1) Design a coherent exception hierarchy (N818 + practice)
+## 1) Design a coherent exception hierarchy (pep8-naming N818 + practice)
 
 **Principle:** model failure semantics with a small tree of domain exceptions;
-suffix concrete error classes with `Error` (N818). A single package‑level base
-class enables callers to catch all domain failures without vendor leakage.
+suffix concrete error classes with `Error` (pep8-naming N818). A single
+package‑level base class enables callers to catch all domain failures without
+vendor leakage.
 
 ```python
 class PaymentsError(Exception):
     """All payment-layer errors."""
 
-class CardDeclinedError(PaymentsError):  # ✅ ends with Error (N818)
+class CardDeclinedError(PaymentsError):  # ✅ ends with Error (pep8-naming N818)
     def __init__(self, code: str, *, retry_after: int | None = None):
         super().__init__(f"Card declined ({code})")
         self.code = code
@@ -25,7 +26,7 @@ class CardDeclinedError(PaymentsError):  # ✅ ends with Error (N818)
 attributes (codes, identifiers, retry hints) so that business logic need not
 parse free‑form strings.
 
-## 2) Raise the right thing, with the right cause (TRY003/TRY004/TRY200/TRY201)
+## 2) Raise the right thing, with the right cause (Ruff Tryceratops TRY003/TRY004/TRY200/TRY201)
 
 ### Prefer specific built‑ins or domain errors over “vanilla” exceptions
 
@@ -39,9 +40,9 @@ raise ValueError("Percent must be between 0 and 100")
 raise CardDeclinedError("insufficient_funds")
 ```
 
-TRY003 discourages raising `Exception` directly. TRY004 encourages appropriate
-built‑ins (`TypeError` for wrong types, `ValueError` for bad values, and so
-on), or domain-specific classes.
+Ruff Tryceratops rule TRY003 discourages raising `Exception` directly. Ruff
+Tryceratops rule TRY004 encourages appropriate built‑ins (`TypeError` for wrong
+types, `ValueError` for bad values, and so on), or domain-specific classes.
 
 ### Preserve causal chains with `raise … from …`
 
@@ -49,19 +50,19 @@ on), or domain-specific classes.
 try:
     token = decode_jwt(payload)
 except jwt.InvalidTokenError as exc:
-    raise AuthenticationError("Invalid session token") from exc  # ✅ TRY201
+    raise AuthenticationError("Invalid session token") from exc  # ✅ Ruff Tryceratops rule TRY201
 ```
 
 When transforming low‑level failures into domain errors, `raise … from …`
-retains traceback lineage (TRY201). Avoid discarding causes in contexts
-expected to preserve them (TRY200).
+retains traceback lineage (Ruff Tryceratops rule TRY201). Avoid discarding
+causes in contexts expected to preserve them (Ruff Tryceratops rule TRY200).
 
-## 3) Catch narrowly; avoid blind handlers (BLE001), and use `else` for the happy path (TRY300)
+## 3) Catch narrowly; avoid blind handlers (Ruff Blind Except BLE001), and use `else` for the happy path (Ruff Tryceratops TRY300)
 
 ### Avoid blind `except`
 
 ```python
-# ❌ BLE001: masks defects and unrelated failures
+# ❌ Ruff Blind Except rule BLE001: masks defects and unrelated failures
 try:
     process(row)
 except Exception:
@@ -74,8 +75,8 @@ except (TimeoutError, RateLimitError) as exc:
     backoff_and_retry(exc)
 ```
 
-BLE001 warns on `except:` and `except Exception:`. Handlers should target
-exceptions that can be meaningfully handled.
+Ruff Blind Except rule BLE001 warns on `except:` and `except Exception:`.
+Handlers should target exceptions that can be meaningfully handled.
 
 ### Separate success flow with `else`
 
@@ -86,20 +87,20 @@ def reciprocal(n: float) -> float:
     except ZeroDivisionError:
         log.warning("n was zero")
         return float("inf")
-    else:  # ✅ TRY300
+    else:  # ✅ Ruff Tryceratops rule TRY300
         return result
 ```
 
 `else` emphasises the happy path and avoids odd control‑flow within `try`
 blocks.
 
-## 4) Message construction for raises (EM101/EM102) and logging practice (LOG004/LOG007/LOG009/LOG014/LOG015, TRY401)
+## 4) Message construction for raises (flake8-errmsg EM101/EM102) and logging practice (flake8-logging LOG004/LOG007/LOG009/LOG014/LOG015, Ruff Tryceratops TRY401)
 
 ### Exception messages: construct once, pass once
 
 ```python
 name = user.name
-# ❌ EM102: f-string passed directly into constructor
+# ❌ flake8-errmsg rule EM102: f-string passed directly into constructor
 raise RuntimeError(f"User {name!r} not found")
 
 # ✅ Build the message, then pass a single object
@@ -107,8 +108,8 @@ msg = f"User {name!r} not found"
 raise RuntimeError(msg)
 ```
 
-EM101/EM102 prefer a single message object; this reduces duplication and
-clarifies intent.
+Flake8-errmsg rules EM101/EM102 prefer a single message object; this reduces
+duplication and clarifies intent.
 
 ### Logging: parameterised messages, module loggers, correct APIs
 
@@ -116,11 +117,11 @@ clarifies intent.
 import logging
 logger = logging.getLogger(__name__)
 
-# ❌ LOG issues
-logging.warning(f"failed for {user_id}")        # f-string (LOG004/LOG014)
-logging.warning("failed for %s" % user_id)      # %-formatting (LOG007)
-logging.warn("deprecated")                       # warn() (LOG009)
-logging.error("bad root logger")                 # root logger usage (LOG015)
+# ❌ flake8-logging issues
+logging.warning(f"failed for {user_id}")        # f-string (flake8-logging LOG004/LOG014)
+logging.warning("failed for %s" % user_id)      # %-formatting (flake8-logging LOG007)
+logging.warn("deprecated")                       # warn() (flake8-logging LOG009)
+logging.error("bad root logger")                 # root logger usage (flake8-logging LOG015)
 
 # ✅ Correct
 logger.warning("Failed for user_id=%s", user_id)  # lazy interpolation
@@ -137,13 +138,14 @@ except ValueError:
 ```
 
 `logger.exception` records the active exception and traceback; appending the
-exception object to the format arguments is redundant (TRY401).
+exception object to the format arguments is redundant (Ruff Tryceratops rule
+TRY401).
 
 **Operational note:** log once at a boundary (e.g., request or worker entry
 point). Inner layers should handle or re‑raise without logging to avoid
 duplicate noise.
 
-## 5) Performance considerations in loops (PERF203)
+## 5) Performance considerations in loops (Perflint PERF203)
 
 ```python
 # ❌ try/except inside a tight loop
@@ -203,7 +205,7 @@ def charge(amount_pennies: int, card_token: str) -> str:
     try:
         return gateway.charge(amount_pennies, card_token)
     except gateway.Timeout as exc:
-        raise PaymentsError("Gateway timeout") from exc      # ✅ TRY201
+        raise PaymentsError("Gateway timeout") from exc      # ✅ Tryceratops rule TRY201
     except gateway.CardDeclined as exc:
         raise CardDeclinedError(exc.code, retry_after=60) from exc
 ```
@@ -219,7 +221,7 @@ def worker_main() -> None:
         raise
 ```
 
-### Building exception messages (EM) and logging payloads (LOG)
+### Building exception messages (flake8-errmsg) and logging payloads (flake8-logging)
 
 ```python
 def must_have_key(d: dict, key: str) -> None:
@@ -230,18 +232,18 @@ def must_have_key(d: dict, key: str) -> None:
 logger.info("Dispatching order_id=%s to shop_id=%s", order_id, shop_id)  # structured
 ```
 
-### `try/except` in loops (PERF203) and `else` usage (TRY300)
+### `try/except` in loops (Perflint PERF203) and `else` usage (Ruff Tryceratops TRY300)
 
 ```python
 def parse_all(raw_items: list[str]) -> list[Record]:
     parsed: list[Record] = []
-    try:  # ✅ PERF203 hoist
+    try:  # ✅ Perflint rule PERF203 hoist
         for raw in raw_items:
             rec = parse_record(raw)
             parsed.append(rec)
     except ParseError:
         logger.exception("Parsing aborted")
-    else:  # ✅ TRY300: success-only post-processing
+    else:  # ✅ Tryceratops rule TRY300: success-only post-processing
         logger.info("Parsed %s records", len(parsed))
     return parsed
 ```
@@ -280,13 +282,15 @@ select = [
 > failures with `raise … from …`; catch only what can be handled; use `else`
 > for the happy path; avoid `try/except` in hot loops; never format log
 > messages directly; log exceptions once at a boundary via `logger.exception`.
-> Enforce with Ruff (TRY/BLE/EM/LOG/N818/PERF203/B017).
+> Enforce with Ruff's Tryceratops rule set, Ruff's Blind Except rule, the
+> flake8-errmsg family, the flake8-logging family, the pep8-naming convention,
+> Perflint's static analysis, and the assert-raises-exception safeguard.
 
 ## 11) References
 
-- Ruff rules: Tryceratops (TRY), Blind Except (BLE001), flake8‑errmsg
-  (EM101/EM102), flake8‑logging (LOG004/LOG007/LOG009/LOG014/LOG015), N818,
-  PERF203, B017.
+- Ruff rules: Tryceratops rule set, Blind Except rule, flake8‑errmsg suite,
+  flake8‑logging suite, pep8-naming convention, the Perflint analysis engine,
+  assert-raises-exception check.
   - [https://docs.astral.sh/ruff/rules/#tryceratops-try](https://docs.astral.sh/ruff/rules/#tryceratops-try)
   - [https://docs.astral.sh/ruff/rules/blind-except/](https://docs.astral.sh/ruff/rules/blind-except/)
   - [https://docs.astral.sh/ruff/rules/assert-raises-exception/](https://docs.astral.sh/ruff/rules/assert-raises-exception/)
