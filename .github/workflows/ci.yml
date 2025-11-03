@@ -15,6 +15,11 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -27,6 +32,13 @@ jobs:
         run: |
           for tool in mbake ty ruff; do uv tool install ${tool}; done
           npm install -g markdownlint-cli2
+          go install github.com/open-policy-agent/conftest/v0.52.0@latest
+
+      - name: Run Terratest suite
+        run: go test ./platform-standards/tofu/terratest
+
+      - name: Run policy tests
+        run: conftest test --policy platform-standards/tofu/policies platform-standards/tofu/policies/examples/*.json
 
       - name: Validate Makefile
         run: mbake validate Makefile
