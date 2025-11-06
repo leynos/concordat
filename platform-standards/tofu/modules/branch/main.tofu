@@ -17,14 +17,14 @@ locals {
 }
 
 resource "github_branch_protection" "this" {
-  repository_id                     = var.repository_node_id
-  pattern                           = var.pattern
-  enforce_admins                    = var.enforce_admins
-  require_signed_commits            = var.require_signed_commits
-  required_linear_history           = var.required_linear_history
-  require_conversation_resolution   = var.require_conversation_resolution
-  allows_deletions                  = var.allows_deletions
-  allows_force_pushes               = var.allows_force_pushes
+  repository_id                   = var.repository_node_id
+  pattern                         = var.pattern
+  enforce_admins                  = var.enforce_admins
+  require_signed_commits          = var.require_signed_commits
+  required_linear_history         = var.required_linear_history
+  require_conversation_resolution = var.require_conversation_resolution
+  allows_deletions                = var.allows_deletions
+  allows_force_pushes             = var.allows_force_pushes
 
   required_status_checks {
     strict   = local.status_checks.strict

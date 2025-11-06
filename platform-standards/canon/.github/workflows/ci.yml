@@ -1,0 +1,121 @@
+---
+# yamllint disable rule:truthy
+name: canon-ci
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: Python version used for lint/test stages.
+        required: false
+        default: '3.13'
+        type: string
+      run-tests:
+        description: Whether to execute the canonical `make test` target.
+        required: false
+        default: true
+        type: boolean
+    secrets:
+      CS_ACCESS_TOKEN:
+        required: false
+      CODESCENE_CLI_SHA256:
+        required: false
+  workflow_dispatch:
+    inputs:
+      python-version:
+        description: Python version used for lint/test stages.
+        required: false
+        default: '3.13'
+      run-tests:
+        description: Whether to execute test targets.
+        required: false
+        default: true
+# yamllint enable rule:truthy
+
+permissions:
+  contents: read
+
+concurrency:
+  group: canon-ci-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  lint-test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+    env:
+      PYTHON_VERSION: >-
+        ${{ inputs.python-version
+           || github.event.inputs.python-version
+           || '3.13' }}
+      RUN_TESTS: >-
+        ${{ inputs.run-tests
+           || github.event.inputs.run-tests
+           || true }}
+      CS_ACCESS_TOKEN: >-
+        ${{ secrets.CS_ACCESS_TOKEN }}
+      CODESCENE_CLI_SHA256: >-
+        ${{ secrets.CODESCENE_CLI_SHA256 }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install CLI tools
+        run: |
+          for tool in mbake ty ruff; do
+            uv tool install "${tool}"
+          done
+          npm install -g markdownlint-cli2
+
+      - name: Validate Makefile
+        run: mbake validate Makefile
+
+      - name: Install project (dev)
+        run: make build
+
+      - name: Check formatting
+        run: make check-fmt
+
+      - name: Run lint
+        run: make lint
+
+      - name: Type check
+        run: make typecheck
+
+      - name: Run pytest suite
+        if: ${{ env.RUN_TESTS == 'true' || env.RUN_TESTS == true }}
+        run: make test
+
+      - name: Upload slipcover report
+        if: ${{ env.RUN_TESTS == 'true' || env.RUN_TESTS == true }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.xml
+
+      - name: Install CodeScene Coverage CLI
+        if: env.CS_ACCESS_TOKEN != ''
+        run: |
+          script_url="https://downloads.codescene.io/enterprise/cli/install-cs-coverage-tool.sh"
+          curl -fsSL "$script_url" | bash -s -- -y
+          if [ -n "${CODESCENE_CLI_SHA256:-}" ]; then
+            msg="${CODESCENE_CLI_SHA256}  install-cs-coverage-tool.sh"
+            printf "%s\n" "$msg" | sha256sum -c -
+          fi
+
+      - name: Upload coverage to CodeScene
+        if: env.CS_ACCESS_TOKEN != ''
+        run: |
+          test -f coverage.xml || exit 1
+          cs-coverage upload \
+            --format cobertura \
+            --metric line-coverage \
+            coverage.xml

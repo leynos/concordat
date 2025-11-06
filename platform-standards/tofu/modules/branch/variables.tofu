@@ -68,7 +68,7 @@ variable "status_checks" {
   }
 
   validation {
-    condition = !try(var.status_checks.strict, true) || length(try(var.status_checks.contexts, [])) > 0
+    condition     = !try(var.status_checks.strict, true) || length(try(var.status_checks.contexts, [])) > 0
     error_message = "Provide at least one status check context when strict enforcement is enabled."
   }
 }

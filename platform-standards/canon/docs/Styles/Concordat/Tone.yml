@@ -1,0 +1,12 @@
+---
+extends: existence
+message: "Prefer direct, action-oriented language; avoid filler phrase '%s'."
+ignorecase: true
+level: warning
+scope: text
+nonword: true
+tokens:
+  - "please feel free to"
+  - "if convenient"
+  - "very very"
+---

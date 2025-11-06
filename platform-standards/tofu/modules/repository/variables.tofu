@@ -78,7 +78,7 @@ variable "merge_strategies" {
     allow_rebase_merge = optional(bool)
     allow_squash_merge = optional(bool)
     allow_auto_merge   = optional(bool)
-  }) 
+  })
   default = {}
 
   validation {
@@ -88,7 +88,7 @@ variable "merge_strategies" {
         try(var.merge_strategies.allow_rebase_merge, null),
         try(var.merge_strategies.allow_squash_merge, null)
       ] : value == null
-    ]) || anytrue([
+      ]) || anytrue([
       try(var.merge_strategies.allow_merge_commit == true, false),
       try(var.merge_strategies.allow_rebase_merge == true, false),
       try(var.merge_strategies.allow_squash_merge == true, false)

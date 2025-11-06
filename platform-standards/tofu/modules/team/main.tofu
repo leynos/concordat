@@ -5,11 +5,11 @@ locals {
 }
 
 resource "github_team" "this" {
-  name                       = var.name
-  description                = var.description
-  privacy                    = var.privacy
-  parent_team_id             = local.parent_team_id != "" ? local.parent_team_id : null
-  create_default_maintainer  = false
+  name                      = var.name
+  description               = var.description
+  privacy                   = var.privacy
+  parent_team_id            = local.parent_team_id != "" ? local.parent_team_id : null
+  create_default_maintainer = false
 }
 
 resource "github_team_membership" "maintainers" {

@@ -1,0 +1,72 @@
+---
+# yamllint disable rule:truthy
+name: canon-release
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: Python version for the build matrix.
+        required: false
+        default: '3.13'
+        type: string
+      publish-wheel:
+        description: Publish sdists/wheels to PyPI when true.
+        required: false
+        default: true
+        type: boolean
+    secrets:
+      PYPI_TOKEN:
+        required: false
+  workflow_dispatch:
+    inputs:
+      python-version:
+        description: Python version for builds.
+        required: false
+        default: '3.13'
+      publish-wheel:
+        description: Publish sdists/wheels to PyPI when true.
+        required: false
+        default: true
+# yamllint enable rule:truthy
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    env:
+      PYTHON_VERSION: >-
+        ${{ inputs.python-version
+           || github.event.inputs.python-version
+           || '3.13' }}
+      PUBLISH_WHEEL: >-
+        ${{ inputs.publish-wheel
+           || github.event.inputs.publish-wheel
+           || true }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install build backend
+        run: uv pip install --upgrade build twine
+
+      - name: Build artefacts
+        run: uv run python -m build --sdist --wheel
+
+      - name: Publish to PyPI
+        if: ${{ env.PUBLISH_WHEEL == 'true' || env.PUBLISH_WHEEL == true }}
+        uses: pypa/gh-action-pypi-publish@v1.10.3
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_TOKEN }}

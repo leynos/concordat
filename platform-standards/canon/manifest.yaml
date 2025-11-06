@@ -1,0 +1,49 @@
+---
+schema_version: 1
+artifacts:
+  - id: workflow-ci
+    type: workflow
+    path: platform-standards/canon/.github/workflows/ci.yml
+    description: >
+      Canonical reusable CI workflow consumed via workflow_call.
+    sha256: e697505d07ec294b0c6acb4b5747a0f5a79d59b38aecb5005793a5d600cb530e
+  - id: workflow-release
+    type: workflow
+    path: platform-standards/canon/.github/workflows/release.yml
+    description: >
+      Canonical release pipeline for building and publishing artefacts.
+    sha256: a89ca34fc2c36b7e9e39d6877791c611926c94bde6b56b1de4531c879cdfcfe0
+  - id: template-agents-md
+    type: doc-template
+    path: platform-standards/canon/docs/AGENTS.md
+    description: Source-of-truth roster template enforced by the Auditor.
+    sha256: 98b3ab208b0faff281fda0912a96f598e9a3f5c31180a5a7d0bf88a5b1d511c9
+  - id: vale-config
+    type: lint-config
+    path: platform-standards/canon/docs/.vale.ini
+    description: >
+      Canonical Vale configuration wired into the documentation lint job.
+    sha256: 3e4982988aae92a23f1e1583875d145607e485b22c7231fc6a1d0e2bf5843fec
+  - id: vale-style-tone
+    type: lint-config
+    path: platform-standards/canon/docs/Styles/Concordat/Tone.yml
+    description: Concordat-specific Vale tone checks referenced by .vale.ini.
+    sha256: cec61293974f128207b9219cbbcc84c61686e6fb34e6bfce148e649aadcf94c3
+  - id: python-ruff-config
+    type: lint-config
+    path: platform-standards/canon/lint/python/ruff.toml
+    description: >
+      Canonical Ruff configuration consumed by Python repositories.
+    sha256: 8ed7b7057afc93a72478285b92ae90c3749652a5ea1c78c2defaafc2809fd933
+  - id: make-include
+    type: build-template
+    path: platform-standards/canon/make/includes.mk
+    description: >
+      Shared Make targets imported by managed repositories.
+    sha256: d330af11e9a2b14f253b64f62ade62fd56a6572bfbecb6a462d2c405e9d22a0f
+  - id: policy-ci-workflow
+    type: opa-policy
+    path: platform-standards/canon/policies/workflows/ci_policy.rego
+    description: >
+      OPA policy verifying the canonical CI workflow structure.
+    sha256: e1835fddb3ebaf355d2cee27787aa4a316705d1184079191c1f371662e6d369c
