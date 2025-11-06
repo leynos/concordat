@@ -177,11 +177,30 @@ false-positive rate is acceptable. Exemptions use the existing
 `concordat` still acts as the human entry point:
 
 - `concordat ls` inventories repositories for OpenTofu targeting.
-- `concordat enrol` drops the `.concordat` marker so repositories opt into
-  standards.
+- `concordat enrol` clones the target repository, writes or updates the
+  `.concordat` file, and—when `--push` is provided—commits and pushes the
+  change via pygit2 (see `concordat/enrol.py`). This preserves the current
+  lightweight opt-in flow while keeping repository history intact.
 - Future extensions may scaffold a pull request that adds the reusable
   `priority-sync` workflow to a repository, but the CLI continues to defer
   state changes to IaC.
+
+To bring repositories under OpenTofu management automatically, `concordat
+enrol` will also prepare a pull request against the `platform-standards`
+repository. The PR-based approach keeps IaC reviewable and auditable:
+
+1. Clone `platform-standards`, create a feature branch, and edit the
+   repository inventory (for example, the map that feeds `for_each` in the
+   root OpenTofu module) to include the newly enrolled repository.
+2. Run the required quality gates locally (`tofu fmt -check`, `tflint`, `tofu
+   validate`, module tests) so reviewers see a passing plan.
+3. Commit the HCL change, push the branch, and open a pull request that links
+   to the `.concordat` commit in the target repository.
+
+Only after that PR merges—and the next `tofu plan/apply` cycle runs—will the
+repository be considered “in scope” for OpenTofu. Until then, the `.concordat`
+file simply signals intent, mirroring the current behaviour of
+`concordat/enrol.py`.
 
 ### 2.7 Rollout strategy
 

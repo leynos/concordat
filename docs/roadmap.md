@@ -25,6 +25,11 @@ automation assets.
 - [ ] Check in an initial organization inventory dataset to seed drift reports.
       Acceptance: nightly Auditor dry runs can enumerate the full repository
       catalogue without missing entries.
+- [ ] Extend `concordat enrol` so that, in addition to writing `.concordat`, it
+      opens a pull request in `platform-standards` adding the repository to the
+      OpenTofu inventory. Acceptance: enrolling a repository produces both the
+      `.concordat` commit (optional push) and a passing IaC PR that runs
+      `tofu fmt`, `tflint`, and `tofu validate`.
 
 ### Step: Stand up non-blocking audit execution
 
