@@ -50,9 +50,9 @@ The primary components, and their interactions are as follows:
    the declarative configuration for the GitHub estate itself.
 2. **Target repository:** Any repository within the organization that is
    subject to the framework's governance. It contains its own application code,
-   project-specific documentation, and a crucial `.repo-meta.yaml` manifest
-   file that declares its characteristics, and opts into specific sets of
-   standards.
+   project-specific documentation, and a crucial `.concordat` manifest that
+   declares its characteristics and, via `enrolled: true`, opts into specific
+   sets of standards.
 3. **OpenTofu execution environment:** A secure, automated environment,
    typically a GitHub Actions runner, responsible for executing the OpenTofu
    IaC tool. On a recurring schedule, it runs `tofu plan` to compare the
@@ -64,10 +64,10 @@ The primary components, and their interactions are as follows:
 4. **Auditor engine:** A custom GitHub Action that serves as the core
    evaluation component. It runs both on a schedule across all repositories and
    on every pull request against a protected branch. The Auditor fetches
-   content from the target repository, reads its `.repo-meta.yaml` manifest,
-   and queries the GitHub API for settings. It then evaluates this collected
-   data against the policies and canonical files sourced from a pinned version
-   of the `platform-standards` repository.
+   content from the target repository, reads its `.concordat` manifest, and
+   queries the GitHub API for settings. It then evaluates this collected data
+   against the policies and canonical files sourced from a pinned version of
+   the `platform-standards` repository.
 5. **GitHub API:** The programmatic interface to GitHub, serving as the medium
    for both configuration management (via the OpenTofu provider), and state
    inspection (via the Auditor).
@@ -305,15 +305,16 @@ dispatch events against the canonical workflows. This enables local smoke tests
 and is itself covered by `pytest` + `cmd_mox` fixtures so that CI can verify the
 expected `act` invocation without contacting GitHub Actions.
 
-### 2.2. The `.repo-meta.yaml` manifest: a formal schema definition
+### 2.2. The `.concordat` manifest: a formal schema definition
 
-The `.repo-meta.yaml` file, located at the root of each target repository, is
-the primary mechanism for enabling conditional logic within the framework. Its
-presence, and validity are the first checks the Auditor must perform. This
-manifest is more than just metadata; it is the formal "contract" between a
-repository and the platform. It allows the central platform team to apply
-nuanced, context-aware policies without having to hard-code repository-specific
-exceptions, which is essential for maintaining scalability.
+The `.concordat` file, located at the root of each target repository, is the
+primary mechanism for enabling conditional logic within the framework. Its
+presence—and in particular the `enrolled: true` flag—is the first check the
+Auditor and the OpenTofu pipeline perform. This manifest is more than just
+metadata; it is the formal "contract" between a repository and the platform.
+It allows the central platform team to apply nuanced, context-aware policies
+without hard-coding repository-specific exceptions, which is essential for
+maintaining scalability.
 
 A one-size-fits-all policy is inherently brittle; a Python library has
 different standardization needs from a Go microservice or an OpenTofu
@@ -321,24 +322,25 @@ infrastructure repository. While fallbacks like repository topics or file
 detection can provide hints, they are not reliable enough for a strict
 enforcement system. A declarative manifest file shifts the responsibility of
 declaration to the repository owners, who possess the most accurate context. By
-stating `language: primary: python`, the repository owner explicitly opts into
+stating `language.primary: python`, the repository owner explicitly opts into
 the suite of Python-related standards, such as the requirement for a
 `ruff.toml` file.
 
 This design decouples the specific context of a repository from the generic
 logic of the standards framework. The central Auditor's logic remains generic
 and scalable; it does not need to know about "repo-A" or "team-B". It simply
-reads the manifest, and applies policies conditionally based on the declared
-attributes (e.g., `if input.manifest.language.primary == "python"`). This
-decoupling is a critical design pattern for achieving a maintainable and
+reads the `.concordat` manifest, and applies policies conditionally based on the
+declared attributes (e.g., `if input.manifest.language.primary == "python"`).
+This decoupling is a critical design pattern for achieving a maintainable and
 scalable governance system.
 
 The formal schema for this file is defined below.
 
-#### Table 2: Schema for `.repo-meta.yaml`
+#### Table 2: Schema for `.concordat`
 
 | **Field Path**              | **Data Type** | **Requirement**                      | **Description**                                                                                                                                                                                  |
 | --------------------------- | ------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `enrolled`                  | Boolean       | Required                             | Must be set to `true` to signal that the repository is under Concordat/OpenTofu management.                                                                                                      |
 | `language.primary`          | String        | Required                             | The primary programming language of the repository. Must be a lowercase string (e.g., `python`, `go`, `typescript`). This value drives the selection of language-specific linting, and CI rules. |
 | `language.others`           | Array         | Optional                             | A list of other significant languages present in the repository (e.g., `shell`, `make`).                                                                                                         |
 | `infrastructure.opentofu`   | Boolean       | Optional                             | Set to `true` if the repository contains OpenTofu/Terraform code. This enables checks for `Makefile` targets like `tf-plan`. Defaults to `false`.                                                |
@@ -441,8 +443,8 @@ The execution flow of the Auditor action is as follows:
    repository into a separate directory to ensure that the audit uses a stable
    version of policies, and canonical files.
 3. **Metadata parsing:** The Python script begins by locating, reading, and
-   parsing the target repository's `.repo-meta.yaml` file. If the file is
-   missing or invalid, the audit fails immediately.
+   parsing the target repository's `.concordat` file. If the file is missing,
+   invalid, or does not contain `enrolled: true`, the audit fails immediately.
 4. **Parallel check execution:** The script orchestrates the execution of the
    various audit domain checks, running them in parallel where feasible to
    minimize execution time:
@@ -601,7 +603,7 @@ Example policies that must be implemented include:
 - A policy that validates the structure of a `renovate.json` file to ensure
   that only approved package managers, and update schedules are configured.
 - A policy, which runs conditionally based on the `language.primary` field in
-  `.repo-meta.yaml` being `python`, that verifies a `ruff.toml` file exists and
+  `.concordat` being `python`, that verifies a `ruff.toml` file exists and
   contains a required set of linting rules.
 
 To facilitate integration with the overall reporting mechanism, the `conftest`
@@ -812,7 +814,7 @@ enforcement. The implementation will proceed through the following four phases.
    automatically trigger a `tofu apply` for these specific cases.
 3. Develop self-service tooling, such as a command-line interface or a web
    application, that allows teams to easily onboard new repositories to the
-   framework, automatically generating the initial `.repo-meta.yaml` file and
+   framework, automatically generating the initial `.concordat` file and
    creating the necessary caller workflows.
 
 ## 8. Operational, and security considerations
@@ -859,7 +861,7 @@ the principle of least privilege.
   backoff and retry strategies when making API calls.
 - **Scalability:** The framework is designed for scalability. The core logic is
   centralized in the `platform-standards` repository, while the context is
-  decentralized via the `.repo-meta.yaml` manifests. The primary scaling
+  decentralized via the `.concordat` manifests. The primary scaling
   bottleneck will be the total execution time of the scheduled Auditor runs
   across thousands of repositories. To mitigate this, the organization-wide
   scheduled workflow can be designed as a fan-out system, where a central
