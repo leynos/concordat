@@ -293,6 +293,17 @@ The mandated directory structure is as follows:
   Auditor GitHub Action itself. This includes the main Python application, its
   dependencies (e.g., `requirements.txt`), and the GitHub Action metadata file
   (`action.yml`).
+- `manifest.yaml`: The machine-readable index that enumerates every published
+  canonical artefact (path, SHA-256 checksum, and descriptive metadata). The
+  Auditor and `concordat` tooling resolve canonical resources exclusively via
+  this manifest located at `platform-standards/canon/manifest.yaml`, ensuring
+  deterministic pinning even when the repository grows.
+
+The repository also provides the `scripts/canon_workflows.py` driver, which
+invokes [nektos/act](https://github.com/nektos/act) to execute workflow
+dispatch events against the canonical workflows. This enables local smoke tests
+and is itself covered by `pytest` + `cmd_mox` fixtures so that CI can verify the
+expected `act` invocation without contacting GitHub Actions.
 
 ### 2.2. The `.repo-meta.yaml` manifest: a formal schema definition
 

@@ -47,3 +47,9 @@ artifacts:
     description: >
       OPA policy verifying the canonical CI workflow structure.
     sha256: e1835fddb3ebaf355d2cee27787aa4a316705d1184079191c1f371662e6d369c
+  - id: policy-rust-lints
+    type: opa-policy
+    path: platform-standards/canon/policies/rust/lints_policy.rego
+    description: >
+      OPA policy enforcing the canonical clippy/rust/rustdoc lint baselines.
+    sha256: 9fe70ddd21e4fccaa3d7724c1b855e9ed7886fc7dc27b1fcd78e197924368862
