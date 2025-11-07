@@ -44,7 +44,22 @@ resource "github_repository" "this" {
 
     precondition {
       condition     = length(local.enabled_release_paths) > 0
-      error_message = "Enable at least one of merge_commit, rebase_merge, or squash_merge."
+      error_message = "Enable at least one supported merge strategy (squash merges are required)."
+    }
+
+    precondition {
+      condition     = local.merge_preferences.allow_squash_merge
+      error_message = "Squash merging must remain enabled by the Concordat platform standard."
+    }
+
+    precondition {
+      condition     = local.merge_preferences.allow_merge_commit == false
+      error_message = "Merge commits are disallowed by the Concordat platform standard."
+    }
+
+    precondition {
+      condition     = local.merge_preferences.allow_rebase_merge == false
+      error_message = "Rebase merges are disallowed by the Concordat platform standard."
     }
   }
 }
