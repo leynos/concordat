@@ -1,0 +1,47 @@
+---
+schema_version: 1
+labels:
+  - key: P0
+    name: priority/p0-blocker
+    color: b60205
+    description: >
+      Blocker level work such as active incidents or production outages. These
+      issues pre-empt all other priorities and require immediate staffing.
+  - key: P1
+    name: priority/p1-critical
+    color: d93f0b
+    description: >
+      Critical flow work that unblocks delivery within the current sprint or
+      release window. Reaction time is measured in days, not hours.
+  - key: P2
+    name: priority/p2-major
+    color: fbca04
+    description: >
+      Major roadmap items that should be scheduled within the current quarter.
+      They have clear scope but tolerate normal review cycles.
+  - key: P3
+    name: priority/p3-normal
+    color: 0e8a16
+    description: >
+      Standard backlog work, hygiene tasks, or technical debt that teams plan
+      opportunistically. These issues document an intent but do not carry a
+      strict deadline.
+field:
+  name: Priority
+  type: single_select
+  options:
+    - key: P0
+      name: Blocker
+    - key: P1
+      name: Critical
+    - key: P2
+      name: Major
+    - key: P3
+      name: Normal
+aliases:
+  - from: severity/blocker
+    to: P0
+  - from: sev0
+    to: P0
+  - from: sev1
+    to: P1

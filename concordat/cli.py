@@ -9,6 +9,7 @@ from cyclopts import App
 from .enrol import disenrol_repositories, enrol_repositories
 from .errors import ConcordatError
 from .listing import list_namespace_repositories
+from .platform_standards import PlatformStandardsConfig
 
 app = App()
 
@@ -19,13 +20,31 @@ def enrol(
     push: bool = False,
     author_name: str | None = None,
     author_email: str | None = None,
+    platform_standards_url: str | None = None,
+    platform_standards_branch: str = "main",
+    platform_standards_inventory: str = "tofu/inventory/repositories.yaml",
+    github_token: str | None = None,
 ) -> None:
     """Create the concordat enrolment document in each repository."""
+    platform_url = platform_standards_url or os.getenv(
+        "CONCORDAT_PLATFORM_STANDARDS_URL"
+    )
+    token = github_token or os.getenv("GITHUB_TOKEN")
+    platform_config = None
+    if platform_url:
+        platform_config = PlatformStandardsConfig(
+            repo_url=platform_url,
+            base_branch=platform_standards_branch,
+            inventory_path=platform_standards_inventory,
+            github_token=token,
+        )
+
     outcomes = enrol_repositories(
         repositories,
         push_remote=push,
         author_name=author_name,
         author_email=author_email,
+        platform_standards=platform_config,
     )
     for outcome in outcomes:
         print(outcome.render())

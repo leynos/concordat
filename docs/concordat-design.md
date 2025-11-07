@@ -109,7 +109,9 @@ defines:
 - Optional `aliases` that map historical label names into the canonical keys.
 
 All downstream automation pins to a tagged version of this file, ensuring
-auditable changes while enabling staged rollouts.
+auditable changes while enabling staged rollouts. The Auditor action loads this
+manifest at runtime (defaulting to the repository copy) so deviations surface
+immediately as SARIF findings even before OpenTofu applies corrections.
 
 ### 2.3 OpenTofu modules for application
 
@@ -181,17 +183,25 @@ false-positive rate is acceptable. Exemptions use the existing
   `.concordat` file, and—when `--push` is provided—commits and pushes the
   change via pygit2 (see `concordat/enrol.py`). This preserves the current
   lightweight opt-in flow while keeping repository history intact.
+- When the `--platform-standards-url` (or `CONCORDAT_PLATFORM_STANDARDS_URL`)
+  option is provided, `concordat enrol` also clones the `platform-standards`
+  repository, updates `tofu/inventory/repositories.yaml`, runs
+  `tofu fmt`, `tflint`, and `tofu validate`, pushes a feature branch, and uses
+  the authenticated GitHub token to open a pull request. This satisfies the
+  roadmap acceptance criterion that every enrolment produces both the local
+  `.concordat` commit and a passing IaC PR.
 - Future extensions may scaffold a pull request that adds the reusable
   `priority-sync` workflow to a repository, but the CLI continues to defer
   state changes to IaC.
 
-To bring repositories under OpenTofu management automatically, `concordat
-enrol` will also prepare a pull request against the `platform-standards`
-repository. The PR-based approach keeps IaC reviewable and auditable:
+To bring repositories under OpenTofu management automatically,
+`concordat enrol` will also prepare a pull request against the
+`platform-standards` repository. The PR-based approach keeps IaC reviewable and
+auditable:
 
 1. Clone `platform-standards`, create a feature branch, and edit the
-   repository inventory (for example, the map that feeds `for_each` in the
-   root OpenTofu module) to include the newly enrolled repository.
+   repository inventory (for example, the map that feeds `for_each` in the root
+   OpenTofu module) to include the newly enrolled repository.
 2. Run the required quality gates locally (`tofu fmt -check`, `tflint`, `tofu
    validate`, module tests) so reviewers see a passing plan.
 3. Commit the HCL change, push the branch, and open a pull request that links
@@ -201,6 +211,12 @@ Only after that PR merges—and the next `tofu plan/apply` cycle runs—will the
 repository be considered “in scope” for OpenTofu. Until then, the `.concordat`
 file simply signals intent, mirroring the current behaviour of
 `concordat/enrol.py`.
+
+The repository inventory lives at
+`platform-standards/tofu/inventory/ repositories.yaml`. Each entry contains the
+GitHub `owner/name` slug. The inventory drives the `for_each` meta-arguments in
+the root OpenTofu modules, which lets the CLI add new repositories without
+touching module logic.
 
 ### 2.7 Rollout strategy
 
@@ -321,8 +337,8 @@ The mandated directory structure is as follows:
 The repository also provides the `scripts/canon_workflows.py` driver, which
 invokes [nektos/act](https://github.com/nektos/act) to execute workflow
 dispatch events against the canonical workflows. This enables local smoke tests
-and is itself covered by `pytest` + `cmd_mox` fixtures so that CI can verify the
-expected `act` invocation without contacting GitHub Actions.
+and is itself covered by `pytest` + `cmd_mox` fixtures so that CI can verify
+the expected `act` invocation without contacting GitHub Actions.
 
 ### 2.2. The `.concordat` manifest: a formal schema definition
 
@@ -330,8 +346,8 @@ The `.concordat` file, located at the root of each target repository, is the
 primary mechanism for enabling conditional logic within the framework. Its
 presence—and in particular the `enrolled: true` flag—is the first check the
 Auditor and the OpenTofu pipeline perform. This manifest is more than just
-metadata; it is the formal "contract" between a repository and the platform.
-It allows the central platform team to apply nuanced, context-aware policies
+metadata; it is the formal "contract" between a repository and the platform. It
+allows the central platform team to apply nuanced, context-aware policies
 without hard-coding repository-specific exceptions, which is essential for
 maintaining scalability.
 
@@ -348,10 +364,11 @@ the suite of Python-related standards, such as the requirement for a
 This design decouples the specific context of a repository from the generic
 logic of the standards framework. The central Auditor's logic remains generic
 and scalable; it does not need to know about "repo-A" or "team-B". It simply
-reads the `.concordat` manifest, and applies policies conditionally based on the
-declared attributes (e.g., `if input.manifest.language.primary == "python"`).
-This decoupling is a critical design pattern for achieving a maintainable and
-scalable governance system.
+reads the `.concordat` manifest, and applies policies conditionally based on
+the declared attributes (e.g.,
+`if input.manifest.language.primary == "python"`). This decoupling is a
+critical design pattern for achieving a maintainable and scalable governance
+system.
 
 The formal schema for this file is defined below.
 
@@ -369,6 +386,37 @@ The formal schema for this file is defined below.
 | `libraries.name`            | String        | Required (if `libraries` is present) | The name of the consumed library repository (e.g., `acme-lib`).                                                                                                                                  |
 | `libraries.version_tag`     | String        | Required (if `libraries` is present) | The Git tag of the library version being used (e.g., `v2.4.1`). The Auditor uses this to fetch the correct version of the library's user guide for comparison.                                   |
 | `ci.needs_release_workflow` | Boolean       | Optional                             | Set to `true` if the repository should be configured with the canonical release workflow. Defaults to `false`.                                                                                   |
+
+### 2.3 Comment-preserving remediation provider
+
+Concordat’s enforcement loop now includes a purpose-built OpenTofu provider
+(`concordat/file`) that evaluates Rego policies against repository manifests
+and produces comment-preserving patches instead of rewriting files directly.
+This keeps file standards declarative, ensures audits remain cheap, and routes
+all enforcement through reviewable pull requests.
+
+The provider exposes:
+
+- `concordat_file_opa_plan_toml` (data source) — loads a TOML file (for
+  example, `Cargo.toml`), runs the pinned Rego planner rule from
+  `platform-standards/canon/policies/...`, and returns an RFC 6902 patch list,
+  summary text, and any findings. The provider converts TOML to canonical JSON
+  for policy input but preserves the original AST so comments survive.
+- `concordat_file_toml_remediation_pr` (resource) — applies the planned patch
+  set using the AST, commits the change to a feature branch, and opens a PR via
+  the GitHub API. The resource never writes to the default branch and requires
+  a clean worktree, mirroring Concordat’s PR-first principle.
+- (Optional) `concordat_file_toml_preview` (data source) — renders the pretty
+  diff that will appear in the remediation PR, allowing Auditor workflows to
+  embed the exact change summary into SARIF diagnostics.
+
+Provider configuration pins the exact `platform-standards` ref and policy
+directory so nightly plans remain deterministic
+(`platform_standards_ref`, `policy_dir`). Planner rules are declared in Rego
+(for example, `data.canon.rust.lints.plan_toml`) alongside the companion deny
+rules and include helper functions for JSON Pointer ↔ TOML path translation. By
+releasing this provider as a shared component, we avoid bespoke scripts and
+give the estate a consistent interface for policy-driven remediation.
 
 ### 2.3. The organization-level `.github` repository
 
@@ -435,6 +483,9 @@ breakdown of what constitutes "compliance" within the framework.
 | RS-001       | Default branch is named `main`.                                                                                                      | Repository Settings             | Python/GitHub API       | error                | 1                        |
 | RS-002       | Squash merging is enabled; merge commits and rebase merging are disabled.                                                            | Repository Settings             | Python/GitHub API       | error                | 1                        |
 | RS-003       | "Delete branch on merge" is enabled.                                                                                                 | Repository Settings             | Python/GitHub API       | error                | 1                        |
+| BP-001       | Default branch protection enforces admin parity, signed commits, reviews, and strict status checks (including the Auditor).          | Branch Governance               | Python/GitHub API       | error                | 1                        |
+| PM-001       | Repository permissions route through at least one team with maintain/admin scope and expose no outside collaborators with admin.     | Repository Access Controls      | Python/GitHub API       | error                | 1                        |
+| LB-001       | Canonical priority labels (`priority/p0`–`priority/p3`) exist with the correct colour and description metadata.                      | Label Governance                | Python/GitHub API       | warning              | 1                        |
 | CI-001       | The `.github/workflows/ci.yml` file must call the canonical reusable CI workflow.                                                    | CI/CD Integrity                 | OPA/Conftest            | error                | 1                        |
 | CI-002       | The `.github/workflows/release.yml` file must call the canonical reusable release workflow (if `ci.needs_release_workflow` is true). | CI/CD Integrity                 | OPA/Conftest            | error                | 2                        |
 | CI-003       | Workflows must not use disallowed third-party GitHub Actions.                                                                        | CI/CD Integrity                 | OPA/Conftest            | error                | 2                        |
@@ -488,6 +539,30 @@ The execution flow of the Auditor action is as follows:
 7. **SARIF upload:** The final step in the job invokes the official
    `github/codeql-action/upload-sarif` action, passing it the path to the
    generated SARIF file.
+
+#### 3.2.1 Composite GitHub Action packaging
+
+The reference implementation now ships inside
+`.github/actions/auditor/action.yml`. The composite action handles the entire
+bootstrap process:
+
+- It installs the `concordat` Python package from the root of this repository,
+  ensuring the CLI and dependencies match the workflow revision.
+- Inputs expose the repository slug, output path for the SARIF artefact,
+  optional overrides for the canonical `priority-model.yaml`, and an optional
+  JSON snapshot. The snapshot flag exists purely for local testing with `act`
+  so maintainers can run the workflow without contacting the GitHub API.
+- A single step runs `python -m concordat.auditor`, writing the SARIF log to
+  `artifacts/concordat-auditor.sarif` by default and surfacing the path via
+  action outputs. Downstream steps upload the artefact for inspection and, when
+  not explicitly disabled, call `github/codeql-action/upload-sarif@v3` so the
+  Code Scanning dashboard ingests the findings.
+
+The scheduled workflow `.github/workflows/auditor.yml` invokes this composite
+action nightly (`0 5 * * *`) with permissions limited to `contents: read` and
+`security-events: write`. A manual `workflow_dispatch` input set allows teams
+to supply a fixture snapshot and skip the upload (`upload_sarif=false`), which
+keeps local smoke tests hermetic.
 
 ### 3.3. Reporting mechanism: SARIF integration with GitHub code scanning
 
@@ -628,6 +703,26 @@ Example policies that must be implemented include:
 To facilitate integration with the overall reporting mechanism, the `conftest`
 command will be configured to output its results in SARIF format using the
 `--output sarif` flag.17
+
+#### 5.1.1 From findings to patch plans
+
+Audit alone is insufficient for fast remediation, so the same Rego packages
+include a **planner** rule that emits the JSON-Patch operations needed to bring
+the file into compliance (for example, the `plan_toml` rule in
+`canon/rust/lints_policy.rego`). The OpenTofu `concordat/file` provider reads
+those planner rules, evaluates them against the checked-out repository files,
+and makes the resulting plan available to both humans and automation:
+
+- Nightly `tofu plan` runs call the data source and gate on
+  `patch_count == 0`, surfacing drift without mutating anything.
+- Operator-triggered `tofu apply` runs depend on
+  `concordat_file_toml_remediation_pr`, which reuses the exact patch payload,
+  applies it via the comment-preserving TOML engine, and raises a PR for review.
+
+This approach keeps the Auditor and the remediation provider aligned: they
+share policy definitions, rely on the same canonical checkout of
+`platform-standards`, and preserve Git history via PRs rather than silent
+commits.
 
 ### 5.2. Prose, and documentation linting with Vale
 
@@ -880,11 +975,11 @@ the principle of least privilege.
   backoff and retry strategies when making API calls.
 - **Scalability:** The framework is designed for scalability. The core logic is
   centralized in the `platform-standards` repository, while the context is
-  decentralized via the `.concordat` manifests. The primary scaling
-  bottleneck will be the total execution time of the scheduled Auditor runs
-  across thousands of repositories. To mitigate this, the organization-wide
-  scheduled workflow can be designed as a fan-out system, where a central
-  workflow enumerates all repositories, and triggers a separate, per-repository
+  decentralized via the `.concordat` manifests. The primary scaling bottleneck
+  will be the total execution time of the scheduled Auditor runs across
+  thousands of repositories. To mitigate this, the organization-wide scheduled
+  workflow can be designed as a fan-out system, where a central workflow
+  enumerates all repositories, and triggers a separate, per-repository
   `workflow_dispatch` event to run the audit in parallel across the entire
   fleet of GitHub runners.
 

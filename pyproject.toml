@@ -7,9 +7,10 @@ requires-python = ">=3.10"
 license = { text = "MIT" }
 dependencies = [
     "cyclopts",
-    "pygit2",
-    "ruamel.yaml",
     "github3.py",
+    "pygit2",
+    "requests",
+    "ruamel.yaml",
 ]
 
 [project.scripts]
@@ -106,6 +107,9 @@ typing = "typ"
 asyncio_default_fixture_loop_scope = "function"
 # Tests automatically killed after seconds elapsed
 timeout = 30
+markers = [
+    "integration: marks tests that rely on act or external tooling",
+]
 
 [tool.uv]
 package = true

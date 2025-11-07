@@ -14,6 +14,12 @@ from pygit2 import KeypairFromAgent, RemoteCallbacks, Repository, Signature
 from ruamel.yaml import YAML
 
 from .errors import ConcordatError
+from .platform_standards import (
+    PlatformStandardsConfig,
+    PlatformStandardsResult,
+    ensure_repository_pr,
+    parse_github_slug,
+)
 
 CONCORDAT_FILENAME = ".concordat"
 CONCORDAT_DOCUMENT = {"enrolled": True}
@@ -95,6 +101,7 @@ class EnrollmentOutcome:
     created: bool
     committed: bool
     pushed: bool
+    platform_pr: PlatformStandardsResult | None = None
 
     def render(self) -> str:
         """Return a concise human readable summary."""
@@ -105,6 +112,14 @@ class EnrollmentOutcome:
             status_parts.append("committed")
         if self.pushed:
             status_parts.append("pushed")
+        if self.platform_pr:
+            if self.platform_pr.created:
+                message = "platform PR opened"
+                if self.platform_pr.pr_url:
+                    message = f"{message}: {self.platform_pr.pr_url}"
+            else:
+                message = f"platform PR skipped: {self.platform_pr.message}"
+            status_parts.append(message)
         status = ", ".join(status_parts)
         return f"{self.repository}: {status}"
 
@@ -143,6 +158,7 @@ def enrol_repositories(
     push_remote: bool = False,
     author_name: str | None = None,
     author_email: str | None = None,
+    platform_standards: PlatformStandardsConfig | None = None,
 ) -> list[EnrollmentOutcome]:
     """Enrol each repository and return the captured outcomes."""
     if not repositories:
@@ -155,6 +171,7 @@ def enrol_repositories(
             push_remote=push_remote,
             author_name=author_name,
             author_email=author_email,
+            platform_standards=platform_standards,
         )
         outcomes.append(outcome)
     return outcomes
@@ -233,6 +250,7 @@ def _enrol_repository(
     push_remote: bool,
     author_name: str | None,
     author_email: str | None,
+    platform_standards: PlatformStandardsConfig | None,
 ) -> EnrollmentOutcome:
     with _repository_context(specification) as context:
         created = _ensure_concordat_document(context.location)
@@ -258,12 +276,37 @@ def _enrol_repository(
             _push_document(context.repository, context.callbacks)
             pushed = True
 
+        platform_result: PlatformStandardsResult | None = None
+        if platform_standards:
+            repo_slug = _repository_slug(context.repository, specification)
+            if repo_slug:
+                try:
+                    platform_result = ensure_repository_pr(
+                        repo_slug,
+                        config=platform_standards,
+                    )
+                except ConcordatError as error:
+                    platform_result = PlatformStandardsResult(
+                        created=False,
+                        branch=None,
+                        pr_url=None,
+                        message=str(error),
+                    )
+            else:
+                platform_result = PlatformStandardsResult(
+                    created=False,
+                    branch=None,
+                    pr_url=None,
+                    message="unable to determine GitHub slug",
+                )
+
         return EnrollmentOutcome(
             repository=specification,
             location=context.location,
             created=True,
             committed=commit_oid is not None,
             pushed=pushed,
+            platform_pr=platform_result,
         )
 
 
@@ -450,6 +493,18 @@ def _set_enrolled_value(location: Path, *, value: bool, specification: str) -> b
     updated["enrolled"] = value
     _write_document(destination, updated)
     return True
+
+
+def _repository_slug(repository: Repository, specification: str) -> str | None:
+    try:
+        origin = repository.remotes["origin"]
+    except KeyError:
+        origin = None
+    if origin is not None and origin.url:
+        slug = parse_github_slug(origin.url)
+        if slug:
+            return slug
+    return parse_github_slug(specification)
 
 
 def _load_yaml(path: Path) -> object:

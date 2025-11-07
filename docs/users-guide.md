@@ -80,6 +80,25 @@ participating repositories.
   uv run concordat ls --token "$GITHUB_TOKEN" my-org
   ```
 
+## Auditor workflow
+
+- Scheduled audits run via `.github/workflows/auditor.yml` every day at 05:00
+  UTC. Results land in GitHub's Code Scanning dashboard because the workflow
+  uploads the generated SARIF file using `github/codeql-action/upload-sarif`.
+- Trigger the workflow manually with **Run workflow** if you want to inspect a
+  specific revision. Provide `snapshot_path` (for example,
+  `tests/fixtures/auditor/snapshot.json`) to replay a recorded API response and
+  set `upload_sarif` to `false` when you only need a local artefact.
+- Run the same workflow locally with `act`:
+
+  ```shell
+  CONCORDAT_RUN_ACT_TESTS=1 pytest tests/workflows/test_auditor_workflow.py -k auditor
+  ```
+
+  The test reads `tests/fixtures/workflows/auditor-workflow-dispatch.json`,
+  downloads workflow artefacts under a temporary directory, and asserts that
+  the SARIF log structure is valid.
+
 ## Troubleshooting
 
 - The CLI refuses to operate on bare repositories. Create a working tree or

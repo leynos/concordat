@@ -102,17 +102,17 @@ intended to be used and how it behaves under various conditions.18
 #### Terratest and policy enforcement
 
 - **Go-based Terratest suite**: Concordat ships with a Terratest harness under
-  `platform-standards/tofu/terratest`. Run `go test
-  ./platform-standards/tofu/terratest` whenever OpenTofu modules change. The
-  tests synthesize plan output using the mock provider, exercise preconditions
-  such as merge strategy defaults, and catch regressions in repository, branch,
-  and team modules without talking to the live GitHub API.
+  `platform-standards/tofu/terratest`. Run
+  `go test ./platform-standards/tofu/terratest` whenever OpenTofu modules
+  change. The tests synthesize plan output using the mock provider, exercise
+  preconditions such as merge strategy defaults, and catch regressions in
+  repository, branch, and team modules without talking to the live GitHub API.
 - **Policy regression suite**: Guardrail policies live in
   `platform-standards/tofu/policies`. Validate both happy and unhappy paths by
-  executing `conftest test --policy platform-standards/tofu/policies
-  platform-standards/tofu/policies/examples/*.json`. The JSON fixtures mirror
-  drift scenarios and destructive changes so that policy rules stay in sync
-  with the modules they protect.
+  executing
+  `conftest test --policy platform-standards/tofu/policies platform-standards/tofu/policies/examples/*.json`.
+   The JSON fixtures mirror drift scenarios and destructive changes so that
+  policy rules stay in sync with the modules they protect.
 
 #### Layer 3: integration testing (the connections)
 

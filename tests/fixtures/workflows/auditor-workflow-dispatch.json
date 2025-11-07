@@ -1,0 +1,14 @@
+{
+  "ref": "refs/heads/main",
+  "inputs": {
+    "snapshot_path": "tests/fixtures/auditor/snapshot.json",
+    "upload_sarif": "false"
+  },
+  "repository": {
+    "owner": {
+      "login": "example"
+    },
+    "name": "concordat",
+    "full_name": "example/concordat"
+  }
+}

@@ -29,6 +29,12 @@ artifacts:
     path: platform-standards/canon/docs/Styles/Concordat/Tone.yml
     description: Concordat-specific Vale tone checks referenced by .vale.ini.
     sha256: cec61293974f128207b9219cbbcc84c61686e6fb34e6bfce148e649aadcf94c3
+  - id: vale-root-config
+    type: lint-config
+    path: platform-standards/canon/docs/vale/.vale.ini
+    description: >
+      Root-level `.vale.ini` that consumers copy verbatim for local linting.
+    sha256: e2e047bc4a8004c4cdcb748df4d6498d98080bd4014554a16822d772407d45db
   - id: python-ruff-config
     type: lint-config
     path: platform-standards/canon/lint/python/ruff.toml

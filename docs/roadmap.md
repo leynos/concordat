@@ -15,17 +15,17 @@ visibility without altering production behaviour.
 Define the single source of truth for desired organization state and reusable
 automation assets.
 
-- [ ] Author repository, branch, and team modules in `platform-standards/tofu`
+- [x] Author repository, branch, and team modules in `platform-standards/tofu`
       with merge strategy flags, branch deletion, and default permission maps.
       Acceptance: `tofu validate` and `tofu test` succeed in continuous
       integration using mocked providers.
-- [ ] Populate canonical workflow, policy, and template directories referenced
+- [x] Populate canonical workflow, policy, and template directories referenced
       by the Auditor. Acceptance: repository consumers can fetch pinned
       artefacts via the documented manifest path.
 - [ ] Check in an initial organization inventory dataset to seed drift reports.
       Acceptance: nightly Auditor dry runs can enumerate the full repository
       catalogue without missing entries.
-- [ ] Extend `concordat enrol` so that, in addition to writing `.concordat`, it
+- [x] Extend `concordat enrol` so that, in addition to writing `.concordat`, it
       opens a pull request in `platform-standards` adding the repository to the
       OpenTofu inventory. Acceptance: enrolling a repository produces both the
       `.concordat` commit (optional push) and a passing IaC PR that runs
@@ -36,7 +36,7 @@ automation assets.
 Surface configuration drift and compliance gaps while keeping enforcement in
 evaluate mode.
 
-- [ ] Package the Auditor GitHub Action with SARIF output, covering merge mode,
+- [x] Package the Auditor GitHub Action with SARIF output, covering merge mode,
       branch protection, permission, and label checks. Acceptance: scheduled
       runs populate the Code Scanning dashboard with classified findings.
 - [ ] Schedule OpenTofu plans against a sandbox organization identity using the
@@ -45,6 +45,10 @@ evaluate mode.
 - [ ] Wire compliance telemetry into the reporting stack, producing a baseline
       scorecard for repository posture. Acceptance: the platform team can rank
       repositories by configuration risk within the dashboard.
+- [ ] Publish the `concordat/file` OpenTofu provider data source that evaluates
+      Rego planner rules and emits RFC 6902 patches for TOML manifests (e.g.,
+      `Cargo.toml`). Acceptance: nightly `tofu plan` consumes the data source
+      and fails with a descriptive summary when `patch_count > 0`.
 
 ## Phase 2 – Enforce merge and branch governance
 
@@ -81,6 +85,11 @@ Codify consistent branch rules with measurable compliance.
 - [ ] Deliver runbooks for resolving merge gate failures, validated with three
       pilot repository teams. Acceptance: post-pilot feedback scores the
       guidance at least 4/5 for clarity.
+- [ ] Add the `concordat_file_toml_remediation_pr` resource that applies the
+      planned patches with comment-preserving edits, commits to a branch, and
+      opens a remediation PR. Acceptance: an operator-triggered `tofu apply`
+      run creates a PR touching `Cargo.toml` without altering comments or the
+      default branch directly.
 
 ## Phase 3 – Institutionalize issue prioritization
 

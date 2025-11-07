@@ -222,6 +222,7 @@ dependencies = [
     { name = "github3-py" },
     { name = "pygit2", version = "1.18.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "pygit2", version = "1.19.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "requests" },
     { name = "ruamel-yaml" },
 ]
 
@@ -241,6 +242,7 @@ requires-dist = [
     { name = "cyclopts" },
     { name = "github3-py" },
     { name = "pygit2" },
+    { name = "requests" },
     { name = "ruamel-yaml" },
 ]
 
