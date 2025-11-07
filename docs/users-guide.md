@@ -80,6 +80,98 @@ participating repositories.
   uv run concordat ls --token "$GITHUB_TOKEN" my-org
   ```
 
+## Running the squash-only merge plan
+
+The `platform-standards/tofu` directory contains a runnable OpenTofu stack that
+enforces the squash-only merge strategy (RS-002). The stack consumes
+`platform-standards/tofu/inventory/repositories.yaml`, which now includes the
+non-production `test-case/squash-only-standard` record so operators can
+rehearse changes without touching production.
+
+1. Set a placeholder GitHub token so the provider schema loads without reaching
+   the API:
+
+   ```shell
+   export GITHUB_TOKEN=placeholder
+   ```
+
+2. Initialise the stack and preview the actions with the default `test-case`
+   owner:
+
+   ```shell
+   cd platform-standards/tofu
+   tofu init
+   tofu plan -var github_owner=test-case -detailed-exitcode
+   ```
+
+   Exit code `2` indicates that OpenTofu would make changes (expected for the
+   sample repository), while exit code `0` confirms convergence.
+
+3. Override `github_owner` and extend `inventory/repositories.yaml` when you are
+   ready to target additional organizations. The `github_owner` guard blocks
+   accidental cross-org drift by asserting that every slug shares the
+   configured owner.
+
+### Validating the test-case standard end to end
+
+Use the commands below whenever you modify the squash-only merge test case or
+need to demonstrate the guardrails to stakeholders:
+
+- Keep formatting and linting in sync:
+
+  ```shell
+  tofu fmt -recursive -check
+  tflint --chdir=platform-standards/tofu
+  ```
+
+- Preview the drift that would enrol the sample repository:
+
+  ```shell
+  GITHUB_TOKEN=placeholder tofu -chdir=platform-standards/tofu \
+    plan -var github_owner=test-case -detailed-exitcode
+  ```
+
+  Exit code `2` means changes are pending; exit code `0` shows convergence.
+  Share the plan output when reviewers want to inspect the settings OpenTofu
+  will apply.
+
+- Capture a plan file and run an ephemeral apply in a throwaway workspace:
+
+  ```shell
+  GITHUB_TOKEN=placeholder tofu -chdir=platform-standards/tofu plan \
+    -var github_owner=test-case -out=plan.tfplan
+  tofu -chdir=platform-standards/tofu workspace new demo-squash || true
+  GITHUB_TOKEN=placeholder tofu -chdir=platform-standards/tofu apply plan.tfplan
+  ```
+
+  Always delete the workspace or discard the generated state file afterward.
+
+- Exercise the module’s native unit tests (plan and apply):
+
+  ```shell
+  GITHUB_TOKEN=placeholder tofu -chdir=platform-standards/tofu/modules/repository \
+    test
+  ```
+
+- Drive the Terratest suite for happy and unhappy paths:
+
+  ```shell
+  GOCACHE=$PWD/platform-standards/tofu/terratest/.gocache \
+    go -C platform-standards/tofu/terratest test ./...
+  ```
+
+- Validate the OPA policy expectations:
+
+  ```shell
+  conftest test --policy platform-standards/tofu/policies \
+    platform-standards/tofu/policies/examples/*.json
+  ```
+
+Running the full sequence above mirrors the automation that CI performs, making
+it clear that the test-case standard enforces RS-002 through static checks,
+unit-style tests, Terratest coverage, and policy validation before any real
+repository settings change.
+
 ## Auditor workflow
 
 - Scheduled audits run via `.github/workflows/auditor.yml` every day at 05:00

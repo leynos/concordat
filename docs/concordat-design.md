@@ -236,6 +236,43 @@ Edge cases such as archived repositories, mirrors, or opt-out manifests use the
 existing exemption model. Repositories without issues bypass label checks
 automatically.
 
+### 2.8 Squash-only merge standard test case
+
+Repository standard RS-002 (squash-only merges) now ships as an executable
+OpenTofu stack so operators can inspect drift with a single `tofu plan`. The
+stack lives at `platform-standards/tofu` and decodes
+`platform-standards/tofu/inventory/repositories.yaml`, which now includes the
+non-production entry `test-case/squash-only-standard`. Each inventory record
+retains the historical `name: owner/repo` slug so the CLI can continue to
+append new repositories without understanding optional settings.
+
+- `platform-standards/tofu/main.tofu` materialises the inventory into a
+  `module "repository"` for every slug, enforcing that the owner component
+  matches the `github_owner` variable (defaulting to `test-case`). The
+  populated module parameters surface consistent defaults for topics,
+  visibility, and branch deletion so that even minimalist records render a
+  valid repository plan.
+- `platform-standards/tofu/modules/repository` now contains lifecycle
+  preconditions that require `allow_squash_merge = true` and both
+  `allow_merge_commit` and `allow_rebase_merge` to remain `false`. This aligns
+  the IaC definition with RS-002 and prevents drift-inducing overrides.
+- Policy parity arrives via `platform-standards/tofu/policies/repository.rego`,
+  which denies plans that disable squash merges or re-enable merge/rebase
+  paths. Example payloads under `platform-standards/tofu/policies/examples` and
+  unit tests in `repository_test.rego` exercise the happy and unhappy paths.
+- Quality gates cover the full testing pyramid: `tofu test` now includes an
+  `apply` run with a mocked provider so merge outputs stay assertable,
+  Terratest fixtures fail when disallowed strategies are re-enabled, and
+  `conftest test` validates Rego rules before any plan reaches apply.
+- Operators can run the command below to preview the changes required to enforce
+  the standard. Exit code `2` flags drift, while exit code `0` confirms the
+  inventory already conforms:
+
+  ```shell
+  GITHUB_TOKEN=placeholder tofu -chdir=platform-standards/tofu \
+    plan -var github_owner=test-case -detailed-exitcode
+  ```
+
 ### 1.3. Technology stack rationale
 
 The selection of each tool in the technology stack is deliberate, favouring a
