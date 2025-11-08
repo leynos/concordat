@@ -16,6 +16,18 @@ run "repository_defaults" {
     description = "Repository under test"
   }
 
+  assert {
+    condition     = github_repository.this.allow_squash_merge == true
+    error_message = "squash merge should remain enabled by default"
+  }
+
+  assert {
+    condition = (
+      github_repository.this.allow_merge_commit == false &&
+      github_repository.this.allow_rebase_merge == false
+    )
+    error_message = "merge commits and rebase merges must be disabled by default"
+  }
 }
 
 run "repository_apply_smoke" {
@@ -33,15 +45,15 @@ run "repository_apply_smoke" {
   }
 
   assert {
-    condition     = output.merge_preferences.allow_squash_merge == true
-    error_message = "squash merge must stay enabled during apply"
+    condition     = github_repository.this.allow_squash_merge == true
+    error_message = "squash merge must stay enabled after apply"
   }
 
   assert {
     condition = (
-      output.merge_preferences.allow_merge_commit == false &&
-      output.merge_preferences.allow_rebase_merge == false
+      github_repository.this.allow_merge_commit == false &&
+      github_repository.this.allow_rebase_merge == false
     )
-    error_message = "merge commits and rebase merges must stay disabled"
+    error_message = "merge commits and rebase merges must stay disabled after apply"
   }
 }
