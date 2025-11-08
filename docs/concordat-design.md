@@ -236,7 +236,7 @@ Edge cases such as archived repositories, mirrors, or opt-out manifests use the
 existing exemption model. Repositories without issues bypass label checks
 automatically.
 
-### 2.8 Squash-only merge standard test case
+## 3. Squash-only merge standard test case
 
 Repository standard RS-002 (squash-only merges) now ships as an executable
 OpenTofu stack so operators can inspect drift with a single `tofu plan`. The

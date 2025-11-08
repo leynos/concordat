@@ -46,8 +46,9 @@ test_all_merge_modes_disabled_raises_violation if {
   }
 
   violations := violations_for(cfg)
-  expected_all := "repository module.repository.github_repository.this disables all human merge strategies"
-  expected_squash := "repository module.repository.github_repository.this disables squash merging, which the platform standard requires"
+  repo := "module.repository.github_repository.this"
+  expected_all := violation_message("all_merge_strategies_disabled", repo)
+  expected_squash := violation_message("squash_merge_disabled", repo)
   violations[expected_all]
   violations[expected_squash]
   count(violations) == 2
@@ -72,7 +73,7 @@ test_delete_branch_on_merge_violation_message if {
   }
 
   violations := violations_for(cfg)
-  expected := "repository github_repository.core disables delete_branch_on_merge"
+  expected := violation_message("delete_branch_disabled", "github_repository.core")
   violations[expected]
   count(violations) == 1
 }
@@ -96,7 +97,7 @@ test_merge_commit_violation_message if {
   }
 
   violations := violations_for(cfg)
-  expected := "repository github_repository.core enables merge commits, which are disallowed"
+  expected := violation_message("merge_commit_enabled", "github_repository.core")
   violations[expected]
   count(violations) == 1
 }
@@ -120,7 +121,7 @@ test_rebase_merge_violation_message if {
   }
 
   violations := violations_for(cfg)
-  expected := "repository github_repository.core enables rebase merges, which are disallowed"
+  expected := violation_message("rebase_merge_enabled", "github_repository.core")
   violations[expected]
   count(violations) == 1
 }
@@ -144,6 +145,6 @@ test_squash_merge_disabled_violation_message if {
   }
 
   violations := violations_for(cfg)
-  expected := "repository github_repository.core disables squash merging, which the platform standard requires"
+  expected := violation_message("squash_merge_disabled", "github_repository.core")
   violations[expected]
 }

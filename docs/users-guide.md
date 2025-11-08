@@ -107,8 +107,8 @@ rehearse changes without touching production.
    Exit code `2` indicates that OpenTofu would make changes (expected for the
    sample repository), while exit code `0` confirms convergence.
 
-3. Override `github_owner` and extend `inventory/repositories.yaml` when you are
-   ready to target additional organizations. The `github_owner` guard blocks
+3. Override `github_owner` and extend `inventory/repositories.yaml` when ready
+   to target additional organizations. The `github_owner` guard blocks
    accidental cross-org drift by asserting that every slug shares the
    configured owner.
 
@@ -167,10 +167,10 @@ need to demonstrate the guardrails to stakeholders:
     platform-standards/tofu/policies/examples/*.json
   ```
 
-Running the full sequence above mirrors the automation that CI performs, making
-it clear that the test-case standard enforces RS-002 through static checks,
-unit-style tests, Terratest coverage, and policy validation before any real
-repository settings change.
+Running the full sequence above mirrors the automation that CI performs,
+demonstrating that the test-case standard enforces RS-002 through static
+checks, unit-style tests, Terratest coverage, and policy validation before any
+real repository settings change.
 
 ## Auditor workflow
 

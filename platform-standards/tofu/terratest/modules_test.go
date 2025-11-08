@@ -7,18 +7,32 @@ import (
 	"github.com/gruntwork-io/terratest/modules/terraform"
 )
 
-// TestRepositoryModuleDefaults validates the default merge strategy logic using terraform
-// plan output so we avoid hitting the GitHub API. The fixture config parallels CI usage.
-func TestRepositoryModuleDefaults(t *testing.T) {
-	fixturePath, err := filepath.Abs(filepath.Join("..", "modules", "repository", "tests", "fixture"))
-	if err != nil {
-		t.Fatalf("resolve repository fixture: %v", err)
-	}
-	options := &terraform.Options{
-		TerraformDir: fixturePath,
+func terraformOptions(t *testing.T, pathSegments ...string) *terraform.Options {
+	t.Helper()
+
+	absPath := resolveFixture(t, pathSegments...)
+	return &terraform.Options{
+		TerraformDir: absPath,
 		NoColor:      true,
 		PlanFilePath: filepath.Join(t.TempDir(), "plan.tfplan"),
 	}
+}
+
+func resolveFixture(t *testing.T, pathSegments ...string) string {
+	t.Helper()
+
+	target := filepath.Join(pathSegments...)
+	absPath, err := filepath.Abs(target)
+	if err != nil {
+		t.Fatalf("resolve fixture %s: %v", target, err)
+	}
+	return absPath
+}
+
+// TestRepositoryModuleDefaults validates the default merge strategy logic using terraform
+// plan output so we avoid hitting the GitHub API. The fixture config parallels CI usage.
+func TestRepositoryModuleDefaults(t *testing.T) {
+	options := terraformOptions(t, "..", "modules", "repository", "tests", "fixture")
 
 	planStruct := terraform.InitAndPlanAndShowWithStruct(t, options)
 	repoAddress := "module.repository.github_repository.this"
@@ -51,15 +65,7 @@ func TestRepositoryModuleDefaults(t *testing.T) {
 // TestRepositoryModuleRejectsMissingMergePaths ensures the validation guard blocks
 // configurations that disable every merge mode.
 func TestRepositoryModuleRejectsMissingMergePaths(t *testing.T) {
-	fixturePath, err := filepath.Abs(filepath.Join("..", "modules", "repository", "tests", "fixture_disable_merges"))
-	if err != nil {
-		t.Fatalf("resolve repository fixture: %v", err)
-	}
-	options := &terraform.Options{
-		TerraformDir: fixturePath,
-		NoColor:      true,
-		PlanFilePath: filepath.Join(t.TempDir(), "plan.tfplan"),
-	}
+	options := terraformOptions(t, "..", "modules", "repository", "tests", "fixture_disable_merges")
 
 	if _, err := terraform.InitAndPlanE(t, options); err == nil {
 		t.Fatalf("expected plan to fail when all merge strategies are disabled")
@@ -69,15 +75,7 @@ func TestRepositoryModuleRejectsMissingMergePaths(t *testing.T) {
 // TestRepositoryModuleRejectsDisallowedMergeModes ensures the guardrails block
 // attempts to re-enable merge commits or rebase merges.
 func TestRepositoryModuleRejectsDisallowedMergeModes(t *testing.T) {
-	fixturePath, err := filepath.Abs(filepath.Join("..", "modules", "repository", "tests", "fixture_enable_disallowed_merge"))
-	if err != nil {
-		t.Fatalf("resolve repository fixture: %v", err)
-	}
-	options := &terraform.Options{
-		TerraformDir: fixturePath,
-		NoColor:      true,
-		PlanFilePath: filepath.Join(t.TempDir(), "plan.tfplan"),
-	}
+	options := terraformOptions(t, "..", "modules", "repository", "tests", "fixture_enable_disallowed_merge")
 
 	if _, err := terraform.InitAndPlanE(t, options); err == nil {
 		t.Fatalf("expected plan to fail when merge commits or rebase merges are enabled")
@@ -87,15 +85,7 @@ func TestRepositoryModuleRejectsDisallowedMergeModes(t *testing.T) {
 // TestBranchModuleRequiresStatusChecks ensures strict status checks carry contexts and
 // conversation resolution is force-enabled.
 func TestBranchModuleRequiresStatusChecks(t *testing.T) {
-	fixturePath, err := filepath.Abs(filepath.Join("..", "modules", "branch", "tests", "fixture"))
-	if err != nil {
-		t.Fatalf("resolve branch fixture: %v", err)
-	}
-	options := &terraform.Options{
-		TerraformDir: fixturePath,
-		NoColor:      true,
-		PlanFilePath: filepath.Join(t.TempDir(), "plan.tfplan"),
-	}
+	options := terraformOptions(t, "..", "modules", "branch", "tests", "fixture")
 
 	planStruct := terraform.InitAndPlanAndShowWithStruct(t, options)
 	protectionAddress := "module.branch.github_branch_protection.this"
@@ -118,15 +108,7 @@ func TestBranchModuleRequiresStatusChecks(t *testing.T) {
 // TestTeamModulePermissionMap verifies the module honours explicit repository permissions
 // and deduplicates maintainers when declared more than once.
 func TestTeamModulePermissionMap(t *testing.T) {
-	fixturePath, err := filepath.Abs(filepath.Join("..", "modules", "team", "tests", "fixture"))
-	if err != nil {
-		t.Fatalf("resolve team fixture: %v", err)
-	}
-	options := &terraform.Options{
-		TerraformDir: fixturePath,
-		NoColor:      true,
-		PlanFilePath: filepath.Join(t.TempDir(), "plan.tfplan"),
-	}
+	options := terraformOptions(t, "..", "modules", "team", "tests", "fixture")
 
 	planStruct := terraform.InitAndPlanAndShowWithStruct(t, options)
 	maintainerKey := "module.team.github_team_membership.maintainers[\"alice\"]"
