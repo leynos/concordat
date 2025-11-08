@@ -35,7 +35,8 @@ jobs:
           go install github.com/open-policy-agent/conftest@v0.52.0
 
       - name: Run Terratest suite
-        run: go test ./platform-standards/tofu/terratest
+        working-directory: platform-standards/tofu/terratest
+        run: go test
 
       - name: Run policy tests
         run: conftest test --policy platform-standards/tofu/policies platform-standards/tofu/policies/examples/*.json
