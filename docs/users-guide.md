@@ -114,8 +114,8 @@ rehearse changes without touching production.
 
 ### Validating the test-case standard end to end
 
-Use the commands below whenever you modify the squash-only merge test case or
-need to demonstrate the guardrails to stakeholders:
+Use the commands below when modifying the squash-only merge test case or
+demonstrating the guardrails to stakeholders:
 
 - Keep formatting and linting in sync:
 
