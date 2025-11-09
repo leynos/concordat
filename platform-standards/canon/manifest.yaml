@@ -34,7 +34,7 @@ artifacts:
     path: platform-standards/canon/docs/vale/.vale.ini
     description: >
       Root-level `.vale.ini` that consumers copy verbatim for local linting.
-    sha256: e2e047bc4a8004c4cdcb748df4d6498d98080bd4014554a16822d772407d45db
+    sha256: 3e4982988aae92a23f1e1583875d145607e485b22c7231fc6a1d0e2bf5843fec
   - id: python-ruff-config
     type: lint-config
     path: platform-standards/canon/lint/python/ruff.toml

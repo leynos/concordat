@@ -1,2 +1,13 @@
 schema_version: 1
-repositories: []
+repositories:
+  - name: test-case/squash-only-standard
+    settings:
+      description: >
+        Non-production repository that exercises the squash-only merge policy
+        standard for Concordat test coverage.
+      visibility: internal
+      topics:
+        - concordat
+        - platform-standards
+        - squash-only
+      delete_branch_on_merge: true

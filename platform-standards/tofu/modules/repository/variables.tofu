@@ -69,9 +69,9 @@ variable "delete_branch_on_merge" {
 
 variable "merge_strategies" {
   description = <<-EOT
-    Merge strategy toggles; at least one of merge_commit, rebase_merge, or
-    squash_merge must be enabled to preserve a usable release path. auto_merge
-    should only be enabled for repositories that rely on bot-driven updates.
+    Merge strategy toggles. Concordat mandates squash merges and disables
+    merge commits and rebase merges. auto_merge should only be enabled for
+    repositories that rely on bot-driven updates.
   EOT
   type = object({
     allow_merge_commit = optional(bool)
@@ -83,17 +83,11 @@ variable "merge_strategies" {
 
   validation {
     condition = alltrue([
-      for value in [
-        try(var.merge_strategies.allow_merge_commit, null),
-        try(var.merge_strategies.allow_rebase_merge, null),
-        try(var.merge_strategies.allow_squash_merge, null)
-      ] : value == null
-      ]) || anytrue([
-      try(var.merge_strategies.allow_merge_commit == true, false),
-      try(var.merge_strategies.allow_rebase_merge == true, false),
-      try(var.merge_strategies.allow_squash_merge == true, false)
+      try(var.merge_strategies.allow_merge_commit != true, true),
+      try(var.merge_strategies.allow_rebase_merge != true, true),
+      try(var.merge_strategies.allow_squash_merge != false, true)
     ])
-    error_message = "Enable at least one of allow_merge_commit, allow_rebase_merge, or allow_squash_merge."
+    error_message = "Repositories must enable squash merges and disable merge commits and rebase merges."
   }
 }
 
