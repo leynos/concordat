@@ -29,6 +29,24 @@ func resolveFixture(t *testing.T, pathSegments ...string) string {
 	return absPath
 }
 
+// assertBoolTrue fails the test if the given attribute is not a true boolean.
+func assertBoolTrue(t *testing.T, attributes map[string]interface{}, key, message string) {
+	t.Helper()
+	value, ok := attributes[key].(bool)
+	if !ok || !value {
+		t.Fatalf("%s, got %#v", message, attributes[key])
+	}
+}
+
+// assertBoolFalse fails the test if the given attribute is not a false boolean.
+func assertBoolFalse(t *testing.T, attributes map[string]interface{}, key, message string) {
+	t.Helper()
+	value, ok := attributes[key].(bool)
+	if !ok || value {
+		t.Fatalf("%s, got %#v", message, attributes[key])
+	}
+}
+
 // TestRepositoryModuleDefaults validates the default merge strategy logic using terraform
 // plan output so we avoid hitting the GitHub API. The fixture config parallels CI usage.
 func TestRepositoryModuleDefaults(t *testing.T) {
@@ -41,25 +59,10 @@ func TestRepositoryModuleDefaults(t *testing.T) {
 		t.Fatalf("expected repository resource %s to be planned", repoAddress)
 	}
 
-	allowSquash, ok := plannedRepo.AttributeValues["allow_squash_merge"].(bool)
-	if !ok || !allowSquash {
-		t.Fatalf("expected squash merge to remain enabled, got %#v", plannedRepo.AttributeValues["allow_squash_merge"])
-	}
-
-	mergeCommit, ok := plannedRepo.AttributeValues["allow_merge_commit"].(bool)
-	if !ok || mergeCommit {
-		t.Fatalf("merge commits must stay disabled, got %#v", plannedRepo.AttributeValues["allow_merge_commit"])
-	}
-
-	rebaseMerge, ok := plannedRepo.AttributeValues["allow_rebase_merge"].(bool)
-	if !ok || rebaseMerge {
-		t.Fatalf("rebase merges must stay disabled, got %#v", plannedRepo.AttributeValues["allow_rebase_merge"])
-	}
-
-	deleteBranches, ok := plannedRepo.AttributeValues["delete_branch_on_merge"].(bool)
-	if !ok || !deleteBranches {
-		t.Fatalf("delete_branch_on_merge should default to true, got %#v", plannedRepo.AttributeValues["delete_branch_on_merge"])
-	}
+	assertBoolTrue(t, plannedRepo.AttributeValues, "allow_squash_merge", "expected squash merge to remain enabled")
+	assertBoolFalse(t, plannedRepo.AttributeValues, "allow_merge_commit", "merge commits must stay disabled")
+	assertBoolFalse(t, plannedRepo.AttributeValues, "allow_rebase_merge", "rebase merges must stay disabled")
+	assertBoolTrue(t, plannedRepo.AttributeValues, "delete_branch_on_merge", "delete_branch_on_merge should default to true")
 }
 
 // TestRepositoryModuleRejectsMissingMergePaths ensures the validation guard blocks
