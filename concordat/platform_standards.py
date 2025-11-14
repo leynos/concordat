@@ -14,6 +14,7 @@ import pygit2
 from ruamel.yaml import YAML
 
 from .errors import ConcordatError
+from .gitutils import build_remote_callbacks
 
 _yaml = YAML(typ="safe")
 _yaml.version = (1, 2)
@@ -51,7 +52,7 @@ def ensure_repository_pr(
     config: PlatformStandardsConfig,
 ) -> PlatformStandardsResult:
     """Clone platform-standards, add the repo to the inventory, and open a PR."""
-    callbacks = _remote_callbacks(config.repo_url)
+    callbacks = build_remote_callbacks(config.repo_url)
     with TemporaryDirectory(prefix="concordat-platform-") as temp_root:
         repository = pygit2.clone_repository(
             config.repo_url,
@@ -208,12 +209,3 @@ def parse_github_slug(url: str) -> str | None:
 def _branch_name_for(slug: str) -> str:
     safe = slug.replace("/", "-")
     return f"concordat/enrol/{safe}"
-
-
-def _remote_callbacks(repo_url: str) -> pygit2.RemoteCallbacks | None:
-    username = repo_url.split("@", 1)[0] if repo_url.startswith("git@") else "git"
-    try:
-        credentials = pygit2.KeypairFromAgent(username)
-    except pygit2.GitError:
-        return None
-    return pygit2.RemoteCallbacks(credentials=credentials)

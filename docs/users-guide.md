@@ -80,6 +80,89 @@ participating repositories.
   uv run concordat ls --token "$GITHUB_TOKEN" my-org
   ```
 
+## Managing estates
+
+Concordat tracks platform-standards repositories, referred to as *estates*, in
+`$XDG_CONFIG_HOME/concordat/config.yaml` (`~/.config/concordat/config.yaml` on
+most systems). Each estate entry records an alias, the Git URL for the
+platform-standards repository, the OpenTofu inventory path, and the default
+branch. The CLI uses the **active estate** to determine where enrolment PRs
+should be opened.
+
+- Bootstrap a new estate from the bundled template:
+
+  ```shell
+  uv run concordat estate init core git@github.com:example/platform-standards.git \
+    --github-token "$GITHUB_TOKEN"
+  ```
+
+  - The CLI copies the `platform-standards` directory into a temporary Git repo,
+    commits the initial contents, and pushes to the provided remote.
+  - When the target repository does not exist, Concordat prompts before using
+    the GitHub API (via `github3.py`) to create it. Pass `--yes` to skip the
+    prompt in scripted environments.
+  - Initialisation aborts if the repository already contains commits.
+
+- List the configured estates and their remotes:
+
+  ```shell
+  uv run concordat estate ls
+  ```
+
+- Show the repositories that an estate currently manages. Without an argument,
+  the CLI uses the active estate:
+
+  ```shell
+  uv run concordat estate show
+  uv run concordat estate show sandbox
+  ```
+
+- Switch the active estate:
+
+  ```shell
+  uv run concordat estate use sandbox
+  ```
+
+### Estate configuration file
+
+Concordat stores estate metadata in `$XDG_CONFIG_HOME/concordat/config.yaml`
+(`~/.config/concordat/config.yaml` when the environment variable is unset). The
+file is regular YAML 1.2 with an `estate` section:
+
+```yaml
+estate:
+  active_estate: core
+  estates:
+    core:
+      repo_url: git@github.com:example/platform-standards.git
+      branch: main
+      inventory_path: tofu/inventory/repositories.yaml
+    sandbox:
+      repo_url: git@github.com:example/sandbox-standards.git
+      branch: main
+      inventory_path: tofu/inventory/repositories.yaml
+```
+
+- `active_estate` is optional; the first `estate init` call populates it
+  automatically.
+- `branch` and `inventory_path` default to `main` and
+  `tofu/inventory/repositories.yaml`. Override them when the remote uses
+  another branch name or inventory layout.
+- Manual edits are allowed, but prefer the CLI so validation is applied.
+
+### Interaction with enrolment
+
+The `concordat enrol` command automatically targets the active estate. When no
+estate is active, it falls back to the `--platform-standards-url` option or
+remains a no-op if neither is provided.
+
+- To enrol without touching the estate, continue to pass
+  `--platform-standards-url` explicitly.
+- To switch estates permanently (for example, when working on a fork),
+  run `concordat estate use <alias>` before invoking `concordat enrol`.
+- If the estate inventory misses a repository, run `concordat estate show` to
+  confirm the inventory contents before debugging the enrolment.
+
 ## Running the squash-only merge plan
 
 The `platform-standards/tofu` directory contains a runnable OpenTofu stack that

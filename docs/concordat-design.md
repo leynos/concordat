@@ -129,8 +129,8 @@ Two reusable modules extend `platform-standards/tofu`:
    canonical keys. Because the GitHub provider currently lacks full Projects v2
    coverage, the module orchestrates a small GraphQL helper script via
    `data "external"` for read operations, and a guarded `null_resource` +
-   `local-exec` for apply steps. Drift appears clearly in
-   `tofu plan`; `tofu apply` performs upserts for missing options.
+   `local-exec` for apply steps. Drift appears clearly in `tofu plan`;
+   `tofu apply` performs upserts for missing options.
 
 Both modules execute in the standard OpenTofu runner and respect the apply
 workflow already defined in the design: nightly plans surface drift; a manual
@@ -183,12 +183,17 @@ false-positive rate is acceptable. Exemptions use the existing
   `.concordat` file, and—when `--push` is provided—commits and pushes the
   change via pygit2 (see `concordat/enrol.py`). This preserves the current
   lightweight opt-in flow while keeping repository history intact.
+- `concordat estate` bootstraps `platform-standards` repositories from the
+  bundled template, persists aliases in `~/.config/concordat/config.yaml`, and
+  exposes helpers to list, inspect, and select the active estate. The enrolment
+  workflow automatically targets the active estate unless the operator passes
+  `--platform-standards-url`.
 - When the `--platform-standards-url` (or `CONCORDAT_PLATFORM_STANDARDS_URL`)
   option is provided, `concordat enrol` also clones the `platform-standards`
-  repository, updates `tofu/inventory/repositories.yaml`, runs
-  `tofu fmt`, `tflint`, and `tofu validate`, pushes a feature branch, and uses
-  the authenticated GitHub token to open a pull request. This satisfies the
-  roadmap acceptance criterion that every enrolment produces both the local
+  repository, updates `tofu/inventory/repositories.yaml`, runs `tofu fmt`,
+  `tflint`, and `tofu validate`, pushes a feature branch, and uses the
+  authenticated GitHub token to open a pull request. This satisfies the roadmap
+  acceptance criterion that every enrolment produces both the local
   `.concordat` commit and a passing IaC PR.
 - Future extensions may scaffold a pull request that adds the reusable
   `priority-sync` workflow to a repository, but the CLI continues to defer
@@ -355,9 +360,9 @@ The mandated directory structure is as follows:
   (`.vale.ini`), and custom Vale style packs (`Styles/`).
 - `make/`: Reusable Makefile fragments (`includes.mk`).
 - `policies/`: This directory contains all OPA/Rego policies used by Conftest
-  for validation. Organizing policies by domain (e.g.,
-  `workflows/`, `repo/`, `security/`) allows for modularity, enabling policies
-  to be tested, and versioned independently.4
+  for validation. Organizing policies by domain (e.g., `workflows/`, `repo/`,
+  `security/`) allows for modularity, enabling policies to be tested, and
+  versioned independently.4
 - `tofu/`: This directory contains the master OpenTofu configuration for
   managing the GitHub estate. It is structured with modules to promote reuse
   and maintainability (e.g., `modules/repo-defaults/`, `modules/rulesets/`).18
@@ -448,12 +453,12 @@ The provider exposes:
   embed the exact change summary into SARIF diagnostics.
 
 Provider configuration pins the exact `platform-standards` ref and policy
-directory so nightly plans remain deterministic
-(`platform_standards_ref`, `policy_dir`). Planner rules are declared in Rego
-(for example, `data.canon.rust.lints.plan_toml`) alongside the companion deny
-rules and include helper functions for JSON Pointer ↔ TOML path translation. By
-releasing this provider as a shared component, we avoid bespoke scripts and
-give the estate a consistent interface for policy-driven remediation.
+directory so nightly plans remain deterministic (`platform_standards_ref`,
+`policy_dir`). Planner rules are declared in Rego (for example,
+`data.canon.rust.lints.plan_toml`) alongside the companion deny rules and
+include helper functions for JSON Pointer ↔ TOML path translation. By releasing
+this provider as a shared component, we avoid bespoke scripts and give the
+estate a consistent interface for policy-driven remediation.
 
 ### 2.3. The organization-level `.github` repository
 
@@ -677,8 +682,8 @@ repository permissions. The following resources will be used:
   organization.
 - `github_team_membership`: To manage the members of each team.
 - `github_team_repository`: To associate teams with repositories and grant
-  specific permission levels (e.g.,
-  `read`, `triage`, `write`, `maintain`, `admin`).
+  specific permission levels (e.g., `read`, `triage`, `write`, `maintain`,
+  `admin`).
 
 This approach provides a transparent, and auditable record of who has access to
 which resources, and why.

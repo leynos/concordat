@@ -10,10 +10,11 @@ from tempfile import TemporaryDirectory
 from urllib.parse import urlparse
 
 import pygit2
-from pygit2 import KeypairFromAgent, RemoteCallbacks, Repository, Signature
+from pygit2 import RemoteCallbacks, Repository, Signature
 from ruamel.yaml import YAML
 
 from .errors import ConcordatError
+from .gitutils import build_remote_callbacks
 from .platform_standards import (
     PlatformStandardsConfig,
     PlatformStandardsResult,
@@ -323,7 +324,7 @@ def _repository_context(
     specification: str,
 ) -> typ.Iterator[_RepositoryContext]:
     if _looks_like_remote(specification):
-        callbacks = _remote_callbacks(specification)
+        callbacks = build_remote_callbacks(specification)
         with TemporaryDirectory(prefix="concordat-clone-") as temp_root:
             target = Path(temp_root, "repo")
             try:
@@ -531,16 +532,3 @@ def _signature(
 
 def _looks_like_remote(specification: str) -> bool:
     return specification.startswith("git@") or specification.startswith("ssh://")
-
-
-def _remote_callbacks(specification: str) -> RemoteCallbacks | None:
-    if specification.startswith("git@"):
-        username = specification.split("@", 1)[0]
-    else:
-        parsed = urlparse(specification)
-        username = parsed.username or "git"
-    try:
-        credentials = KeypairFromAgent(username)
-    except pygit2.GitError:
-        return None
-    return RemoteCallbacks(credentials=credentials)

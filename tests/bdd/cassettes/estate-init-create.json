@@ -1,0 +1,113 @@
+{
+  "http_interactions": [
+    {
+      "request": {
+        "body": {
+          "encoding": "utf-8",
+          "string": ""
+        },
+        "headers": {
+          "Accept": [
+            "application/vnd.github.v3+json"
+          ],
+          "Authorization": [
+            "token betamax-token"
+          ]
+        },
+        "method": "GET",
+        "uri": "https://api.github.com/repos/example/platform-estate"
+      },
+      "response": {
+        "body": {
+          "encoding": "utf-8",
+          "string": "{\"message\":\"Not Found\",\"documentation_url\":\"https://docs.github.com/rest\"}"
+        },
+        "headers": {
+          "Content-Type": [
+            "application/json; charset=utf-8"
+          ]
+        },
+        "status": {
+          "code": 404,
+          "message": "Not Found"
+        },
+        "url": "https://api.github.com/repos/example/platform-estate"
+      },
+      "recorded_at": "2025-11-01T00:00:00"
+    },
+    {
+      "request": {
+        "body": {
+          "encoding": "utf-8",
+          "string": ""
+        },
+        "headers": {
+          "Accept": [
+            "application/vnd.github.v3+json"
+          ],
+          "Authorization": [
+            "token betamax-token"
+          ]
+        },
+        "method": "GET",
+        "uri": "https://api.github.com/orgs/example"
+      },
+      "response": {
+        "body": {
+          "encoding": "utf-8",
+          "string": "{\"avatar_url\": \"https://avatars.githubusercontent.com/u/1?v=4\", \"description\": \"\", \"events_url\": \"https://api.github.com/orgs/example/events\", \"hooks_url\": \"https://api.github.com/orgs/example/hooks\", \"id\": 1, \"issues_url\": \"https://api.github.com/orgs/example/issues\", \"login\": \"example\", \"members_url\": \"https://api.github.com/orgs/example/members{/member}\", \"public_members_url\": \"https://api.github.com/orgs/example/public_members{/member}\", \"repos_url\": \"https://api.github.com/orgs/example/repos\", \"url\": \"https://api.github.com/orgs/example\", \"created_at\": \"2020-01-01T00:00:00Z\", \"updated_at\": \"2025-01-01T00:00:00Z\", \"html_url\": \"https://github.com/example\", \"type\": \"Organization\", \"blog\": \"\", \"name\": \"Example\", \"company\": \"\", \"location\": \"\", \"email\": \"\", \"twitter_username\": null, \"public_repos\": 0, \"public_gists\": 0, \"followers\": 0, \"following\": 0, \"has_organization_projects\": true, \"has_repository_projects\": true, \"is_verified\": false}"
+        },
+        "headers": {
+          "Content-Type": [
+            "application/json; charset=utf-8"
+          ]
+        },
+        "status": {
+          "code": 200,
+          "message": "OK"
+        },
+        "url": "https://api.github.com/orgs/example"
+      },
+      "recorded_at": "2025-11-01T00:00:01"
+    },
+    {
+      "request": {
+        "body": {
+          "encoding": "utf-8",
+          "string": "{\"name\": \"platform-estate\", \"description\": \"\", \"homepage\": \"\", \"private\": true, \"has_issues\": true, \"has_wiki\": true, \"license_template\": \"\", \"auto_init\": false, \"gitignore_template\": \"\", \"has_projects\": true}"
+        },
+        "headers": {
+          "Accept": [
+            "application/vnd.github.v3+json"
+          ],
+          "Authorization": [
+            "token betamax-token"
+          ],
+          "Content-Type": [
+            "application/json"
+          ]
+        },
+        "method": "POST",
+        "uri": "https://api.github.com/orgs/example/repos"
+      },
+      "response": {
+        "body": {
+          "encoding": "utf-8",
+          "string": "{\"full_name\": \"example/platform-estate\", \"ssh_url\": \"git@github.com:example/platform-estate.git\", \"clone_url\": \"https://github.com/example/platform-estate.git\", \"default_branch\": \"main\", \"private\": true, \"url\": \"https://api.github.com/repos/example/platform-estate\", \"id\": 12345678, \"name\": \"platform-estate\", \"owner\": {\"login\": \"example\"}, \"created_at\": \"2020-01-01T00:00:00Z\", \"updated_at\": \"2025-01-01T00:00:00Z\", \"pushed_at\": \"2025-01-01T00:00:00Z\"}"
+        },
+        "headers": {
+          "Content-Type": [
+            "application/json; charset=utf-8"
+          ]
+        },
+        "status": {
+          "code": 201,
+          "message": "Created"
+        },
+        "url": "https://api.github.com/orgs/example/repos"
+      },
+      "recorded_at": "2025-11-01T00:00:02"
+    }
+  ],
+  "recorded_with": "betamax/0.9.0"
+}

@@ -22,9 +22,11 @@ dev = [
     "pytest-xdist",
     "pytest-bdd",
     "pytest-asyncio",
+    "pytest-mock",
     "ruff",
     "pyright",
     "pytest-timeout",
+    "betamax",
 ]
 
 [tool.pyright]
