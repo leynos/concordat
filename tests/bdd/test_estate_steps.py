@@ -7,11 +7,13 @@ import typing as typ
 from contextlib import redirect_stdout
 from pathlib import Path
 
+import pygit2
 import pytest
 import pytest_bdd.parsers as parsers
 import requests
 from betamax import Betamax
 from pytest_bdd import given, scenarios, then, when
+from ruamel.yaml import YAML
 
 from concordat import cli, estate
 from concordat.errors import ConcordatError
@@ -20,6 +22,7 @@ from concordat.estate import EstateRecord, RemoteProbe, list_estates, register_e
 from .conftest import RunResult
 
 CASSETTE_DIR = Path(__file__).resolve().parent / "cassettes"
+_yaml = YAML(typ="safe")
 
 scenarios("features/estate.feature")
 
@@ -167,6 +170,13 @@ def given_missing_remote(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(estate, "_bootstrap_template", lambda *args, **kwargs: None)
 
 
+@given("a local estate remote", target_fixture="local_remote_path")
+def given_local_estate_remote(tmp_path: Path) -> Path:
+    remote = tmp_path / "estate-remote.git"
+    pygit2.init_repository(str(remote), bare=True)
+    return remote
+
+
 @when("I run concordat estate ls")
 def when_run_estate_ls(cli_invocation: dict[str, RunResult]) -> None:
     cli_invocation["result"] = _run_cli(["estate", "ls"])
@@ -185,6 +195,23 @@ def when_run_estate_init(cli_invocation: dict[str, RunResult]) -> None:
             "git@github.com:example/platform-estate.git",
             "--github-token",
             "betamax-token",
+            "--yes",
+        ]
+    )
+
+
+@when(parsers.cfparse("I run concordat estate init {alias} using that remote"))
+def when_run_estate_init_local(
+    alias: str,
+    local_remote_path: Path,
+    cli_invocation: dict[str, RunResult],
+) -> None:
+    cli_invocation["result"] = _run_cli(
+        [
+            "estate",
+            "init",
+            alias,
+            str(local_remote_path),
             "--yes",
         ]
     )
@@ -213,3 +240,12 @@ def then_command_succeeds(cli_invocation: dict[str, RunResult]) -> None:
 def then_estate_recorded(alias: str) -> None:
     aliases = [record.alias for record in list_estates()]
     assert alias in aliases
+
+
+@then("the estate inventory contains no sample repositories")
+def then_inventory_sanitised(local_remote_path: Path, tmp_path: Path) -> None:
+    clone_path = tmp_path / "estate-clone"
+    pygit2.clone_repository(str(local_remote_path), str(clone_path))
+    inventory_path = clone_path / "tofu" / "inventory" / "repositories.yaml"
+    data = _yaml.load(inventory_path.read_text(encoding="utf-8")) or {}
+    assert data.get("repositories") == []

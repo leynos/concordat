@@ -17,3 +17,9 @@ Feature: Managing estates with concordat
     When I run concordat estate init core git@github.com:example/platform-estate.git with confirmation
     Then the command succeeds
     And estate "core" is recorded in the config
+
+  Scenario: Estate initialisation sanitises the inventory
+    Given an empty concordat config directory
+    And a local estate remote
+    When I run concordat estate init local-core using that remote
+    Then the estate inventory contains no sample repositories

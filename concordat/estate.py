@@ -229,6 +229,7 @@ def init_estate(
         repo_url,
         branch=branch,
         template_root=template_root or default_template_root(),
+        inventory_path=inventory_path,
         callbacks=callbacks,
     )
 
@@ -345,6 +346,7 @@ def _bootstrap_template(
     *,
     branch: str,
     template_root: Path,
+    inventory_path: str,
     callbacks: RemoteCallbacks | None,
 ) -> None:
     if not template_root.exists():
@@ -352,6 +354,7 @@ def _bootstrap_template(
     with TemporaryDirectory(prefix="concordat-estate-template-") as temp_root:
         target = Path(temp_root, "estate")
         shutil.copytree(template_root, target, dirs_exist_ok=True)
+        _sanitize_inventory(target / inventory_path)
         repository = pygit2.init_repository(str(target), initial_head=branch)
         index = repository.index
         index.add_all()
@@ -393,6 +396,20 @@ def _build_client(
     if client is None:
         raise ConcordatError("Failed to authenticate with the provided token.")
     return client
+
+
+def _sanitize_inventory(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        loaded = _yaml.load(path.read_text(encoding="utf-8")) or {}
+    else:
+        loaded = {}
+    if not isinstance(loaded, dict):
+        loaded = {}
+    loaded.setdefault("schema_version", 1)
+    loaded["repositories"] = []
+    with path.open("w", encoding="utf-8") as handle:
+        _yaml.dump(loaded, handle)
 
 
 def _load_config(config_path: Path | None) -> dict[str, typ.Any]:
