@@ -30,6 +30,32 @@ automation assets.
       OpenTofu inventory. Acceptance: enrolling a repository produces both the
       `.concordat` commit (optional push) and a passing IaC PR that runs
       `tofu fmt`, `tflint`, and `tofu validate`.
+- [ ] Teach estates about the GitHub namespace they govern by persisting
+      `github_owner` in the concordat config file and rejecting enrolments that
+      target other owners. Acceptance: `concordat estate init` records the owner
+      and `concordat enrol` refuses to add repositories whose slug does not
+      begin with it; invoking `concordat ls` without namespaces defaults to the
+      recorded owner.
+
+### Step: Ship the estate execution CLI
+
+Tie the template, estate configuration, and OpenTofu execution together so
+operators can preview and apply changes from concordat.
+
+- [ ] Cache estate repositories under the concordat XDG cache directory (for
+      example, `~/.cache/concordat/estates/<alias>`) and clone the cached state
+      into a temporary execution directory for each run. Acceptance: repeated
+      executions of the same command reuse the cache but leave no residue in
+      `/tmp` unless `--keep-workdir` is passed.
+- [ ] Implement `concordat plan`, using tofupy to run `tofu plan` inside the
+      execution directory after synthesising `terraform.tfvars` from the estate
+      metadata. Acceptance: the command clones the active estate, writes a
+      tfvars file containing `github_owner`, requires `GITHUB_TOKEN`, and exits
+      with the same status code as OpenTofu.
+- [ ] Implement `concordat apply` with the same workspace preparation but using
+      tofupy's apply entrypoint (and support for `--auto-approve`). Acceptance:
+      the command reconciles the estate against the cached repository and
+      reports success/failure without leaving temporary files behind.
 
 ### Step: Stand up non-blocking audit execution
 
