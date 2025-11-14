@@ -188,6 +188,11 @@ false-positive rate is acceptable. Exemptions use the existing
   exposes helpers to list, inspect, and select the active estate. The enrolment
   workflow automatically targets the active estate unless the operator passes
   `--platform-standards-url`.
+- `concordat plan` clones the active estate into a temporary workspace, renders
+  the OpenTofu variable file from estate metadata, and invokes tofupy's `plan`
+  entrypoint so operators can preview drift without leaving the CLI.
+- `concordat apply` reuses the same machinery but calls tofupy's `apply`,
+  allowing auditable changes to estates directly from concordat.
 - When the `--platform-standards-url` (or `CONCORDAT_PLATFORM_STANDARDS_URL`)
   option is provided, `concordat enrol` also clones the `platform-standards`
   repository, updates `tofu/inventory/repositories.yaml`, runs `tofu fmt`,
@@ -198,6 +203,51 @@ false-positive rate is acceptable. Exemptions use the existing
 - Future extensions may scaffold a pull request that adds the reusable
   `priority-sync` workflow to a repository, but the CLI continues to defer
   state changes to IaC.
+
+### 2.7 Estate execution workflow
+
+The CLI now needs to operate on live estates, not just the template. Two new
+commands (`concordat plan` and `concordat apply`) align the workflow with the
+state stored in each estate repository.
+
+#### 2.7.1 Configuration invariants
+
+- Estates persist `github_owner` alongside `repo_url`, `branch`, and
+  `inventory_path` in the concordat config file. This gives the CLI enough
+  context to render `terraform.tfvars` without prompting.
+- All inventory records must belong to the same owner. `concordat estate init`
+  records the owner and enrolment refuses to add repositories outside the
+  namespace.
+- When an estate is active, invoking `concordat ls` without namespaces defaults
+  to the recorded `github_owner`, offering a zero-argument inventory view.
+
+#### 2.7.2 Workspace management
+
+- Estate repositories are cached under
+  `$XDG_CACHE_HOME/concordat/estates/<alias>`. `plan`/`apply` issue a fetch and
+  hard reset against this cache before every run.
+- Each execution clones the cached workspace into a temporary directory (e.g.
+  `/tmp/concordat-plan-XXXX`). This keeps the cache clean and makes it easy to
+  tear down state after completion.
+- Variable files are generated on the fly in the execution directory. At a
+  minimum they set `github_owner`. Sensitive values such as `github_token`
+  continue to come from the environment unless the user explicitly requests a
+  persisted override.
+
+#### 2.7.3 tofupy integration
+
+- Instead of shelling out directly to the `tofu` binary we reuse tofupy, which
+  provides a Python API mirroring OpenTofu's UX. This keeps error handling and
+  output capture in-process.
+- `concordat plan` resolves the active estate, prepares the workspace and
+  tfvars file, ensures `GITHUB_TOKEN` is exported, then calls tofupy's plan API.
+  The CLI streams stdout/stderr and returns a non-zero exit code if the plan
+  fails.
+- `concordat apply` performs the identical setup but calls the apply API. It
+  passes through approval prompts or accepts `--auto-approve` if the user needs
+  unattended applies.
+- Both commands emit the execution directory path (helpful for debugging) and
+  remove it afterward unless `--keep-workdir` is provided.
 
 To bring repositories under OpenTofu management automatically,
 `concordat enrol` will also prepare a pull request against the
