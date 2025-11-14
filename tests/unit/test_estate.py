@@ -8,6 +8,8 @@ import pygit2
 import pytest
 import pytest_mock
 
+import github3
+
 from concordat import estate
 from concordat.errors import ConcordatError
 from concordat.estate import (
@@ -116,6 +118,37 @@ def test_init_estate_creates_repository_when_missing(
     fake_client.organization.assert_called_once_with("example")
     fake_org.create_repository.assert_called_once()
     assert list_estates(config_path=config_path)[0].alias == "core"
+
+
+def test_init_estate_translates_authentication_errors(
+    tmp_path: pathlib.Path,
+    mocker: pytest_mock.MockFixture,
+) -> None:
+    config_path = tmp_path / "config.yaml"
+    mocker.patch.object(
+        estate,
+        "_probe_remote",
+        return_value=RemoteProbe(reachable=False, exists=False, empty=True, error=None),
+    )
+    mocker.patch.object(estate, "_bootstrap_template")
+
+    fake_client = mocker.Mock()
+    fake_client.repository.return_value = None
+    fake_client.organization.side_effect = github3.exceptions.AuthenticationFailed(
+        mocker.Mock()
+    )
+    mocker.patch.object(estate, "_build_client", return_value=fake_client)
+
+    with pytest.raises(ConcordatError) as caught:
+        init_estate(
+            "core",
+            "git@github.com:example/core.git",
+            github_token="token",
+            confirm=lambda _: True,
+            config_path=config_path,
+        )
+
+    assert "GitHub authentication failed" in str(caught.value)
 
 
 def test_build_client_requires_token() -> None:

@@ -10,6 +10,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import github3
+from github3 import exceptions as github3_exceptions
 import pygit2
 from cyclopts import config as cyclopts_config
 from ruamel.yaml import YAML
@@ -300,16 +301,25 @@ def _create_repository(
 ) -> None:
     try:
         org = client.organization(owner)
-    except github3.exceptions.NotFoundError:
+    except github3_exceptions.AuthenticationFailed as error:
+        raise _auth_error(
+            f"GitHub authentication failed accessing organization {owner!r}."
+        ) from error
+    except github3_exceptions.NotFoundError:
         org = None
 
     if org:
-        org.create_repository(
-            name,
-            private=True,
-            auto_init=False,
-            description="Platform standards repository managed by concordat",
-        )
+        try:
+            org.create_repository(
+                name,
+                private=True,
+                auto_init=False,
+                description="Platform standards repository managed by concordat",
+            )
+        except github3_exceptions.AuthenticationFailed as error:
+            raise _auth_error(
+                f"GitHub authentication failed creating {owner}/{name}."
+            ) from error
         return
 
     user = client.me()
@@ -317,12 +327,17 @@ def _create_repository(
         raise ConcordatError(
             f"Authenticated user cannot create repositories under {owner!r}."
         )
-    client.create_repository(
-        name,
-        private=True,
-        auto_init=False,
-        description="Platform standards repository managed by concordat",
-    )
+    try:
+        client.create_repository(
+            name,
+            private=True,
+            auto_init=False,
+            description="Platform standards repository managed by concordat",
+        )
+    except github3_exceptions.AuthenticationFailed as error:
+        raise _auth_error(
+            "GitHub authentication failed when creating the repository"
+        ) from error
 
 
 def _bootstrap_template(
@@ -433,3 +448,9 @@ def _load_metadata(config_path: Path | None) -> dict[str, typ.Any]:
 def _prompt_yes_no(message: str) -> bool:
     response = input(message)  # noqa: S322
     return response.strip().lower() in {"y", "yes"}
+
+
+def _auth_error(message: str) -> ConcordatError:
+    return ConcordatError(
+        f"{message} Ensure GITHUB_TOKEN includes the 'repo' scope and is valid."
+    )
