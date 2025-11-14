@@ -363,12 +363,21 @@ def _build_client(
     token: str | None,
     client_factory: typ.Callable[[str | None], github3.GitHub] | None = None,
 ) -> github3.GitHub:
-    if not token and client_factory is None:
+    if client_factory:
+        client = client_factory(token)
+        if client is None:
+            raise ConcordatError("Unable to initialise GitHub client.")
+        return client
+
+    if not token:
         raise ConcordatError(
             "GITHUB_TOKEN is required to create repositories automatically."
         )
-    factory = client_factory or github3.login
-    return factory(token)
+
+    client = github3.GitHub(token=token)
+    if client is None:
+        raise ConcordatError("Failed to authenticate with the provided token.")
+    return client
 
 
 def _load_config(config_path: Path | None) -> dict[str, typ.Any]:

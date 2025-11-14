@@ -9,11 +9,13 @@ import pytest
 import pytest_mock
 
 from concordat import estate
+from concordat.errors import ConcordatError
 from concordat.estate import (
     DEFAULT_BRANCH,
     DEFAULT_INVENTORY_PATH,
     EstateRecord,
     RemoteProbe,
+    _build_client,
     get_active_estate,
     init_estate,
     list_enrolled_repositories,
@@ -100,7 +102,7 @@ def test_init_estate_creates_repository_when_missing(
     fake_client.repository.return_value = None
     fake_org = mocker.Mock()
     fake_client.organization.return_value = fake_org
-    mocker.patch.object(estate.github3, "login", return_value=fake_client)
+    mocker.patch.object(estate, "_build_client", return_value=fake_client)
 
     record = init_estate(
         "core",
@@ -114,3 +116,18 @@ def test_init_estate_creates_repository_when_missing(
     fake_client.organization.assert_called_once_with("example")
     fake_org.create_repository.assert_called_once()
     assert list_estates(config_path=config_path)[0].alias == "core"
+
+
+def test_build_client_requires_token() -> None:
+    with pytest.raises(ConcordatError):
+        _build_client(None)
+
+
+def test_build_client_uses_token(mocker: pytest_mock.MockFixture) -> None:
+    fake = mocker.Mock()
+    mocked_ctor = mocker.patch.object(estate.github3, "GitHub", return_value=fake)
+
+    client = _build_client("secret")
+
+    assert client is fake
+    mocked_ctor.assert_called_once_with(token="secret")
