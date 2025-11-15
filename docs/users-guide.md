@@ -140,6 +140,36 @@ enrolment PRs should be opened.
   uv run concordat estate use sandbox
   ```
 
+## Previewing and applying estate changes
+
+Use the `plan` and `apply` commands to run OpenTofu against the active estate
+without leaving the CLI. Both commands require `GITHUB_TOKEN` and the estate's
+`github_owner` to be recorded.
+
+- Preview changes with `concordat plan`. Additional OpenTofu arguments can be
+  appended directly to the command (for example, `-detailed-exitcode`).
+
+  ```shell
+  uv run concordat plan -- -detailed-exitcode
+  ```
+
+  The CLI refreshes the cached estate under
+  `$XDG_CACHE_HOME/concordat/estates/<alias>`, clones it into a temporary
+  directory, writes `terraform.tfvars` with the recorded owner, runs
+  `tofu init -input=false`, and then `tofu plan`. Paths are echoed so the
+  workspace can be inspected; pass `--keep-workdir` to skip the cleanup step.
+
+- Reconcile the estate with `concordat apply`. The command requires an explicit
+  `--auto-approve` to match OpenTofu's automation guard.
+
+  ```shell
+  uv run concordat apply --auto-approve
+  ```
+
+  `concordat apply` uses the same workspace preparation as `plan`, adds
+  `-auto-approve` for OpenTofu, and returns the exit code from the underlying
+  `tofu` invocation so pipelines can gate on it.
+
 ### Estate configuration file
 
 Concordat stores estate metadata in `$XDG_CONFIG_HOME/concordat/config.yaml`
