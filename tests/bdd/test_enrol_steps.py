@@ -7,10 +7,13 @@ import subprocess
 import sys
 import typing as typ
 
-from pytest_bdd import given, scenarios, then, when
+import pygit2
+import pytest
+from pytest_bdd import given, parsers, scenarios, then, when
 from ruamel.yaml import YAML
 
 from concordat.enrol import CONCORDAT_DOCUMENT, CONCORDAT_FILENAME
+from concordat.estate import EstateRecord, register_estate
 
 from .conftest import RunResult
 
@@ -22,9 +25,37 @@ else:
 scenarios("features/enrol.feature")
 
 
+@pytest.fixture(autouse=True)
+def configure_active_estate(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Record an active estate with a github_owner for CLI tests."""
+    config_home = tmp_path / "xdg"
+    config_home.mkdir()
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
+    monkeypatch.setenv("CONCORDAT_SKIP_PLATFORM_PR", "1")
+    config_path = config_home / "concordat" / "config.yaml"
+    register_estate(
+        EstateRecord(
+            alias="core",
+            repo_url="git@github.com:test-owner/platform.git",
+            github_owner="test-owner",
+        ),
+        config_path=config_path,
+        set_active_if_missing=True,
+    )
+
+
 @given("a git repository", target_fixture="repository_path")
 def given_git_repository(git_repo: GitRepo) -> pathlib.Path:
     """Provide the repository path for the scenario."""
+    repository = git_repo.repository
+    try:
+        repository.remotes.delete("origin")
+    except KeyError:
+        pass
+    repository.remotes.create("origin", "git@github.com:test-owner/sample.git")
     return git_repo.path
 
 
@@ -34,6 +65,17 @@ def given_repository_is_enrolled(repository_path: pathlib.Path) -> None:
     result = _run_cli(["enrol", str(repository_path)])
     if result.returncode != 0:
         raise AssertionError(_cli_failure_message(result))
+
+
+@given(parsers.cfparse('the repository remote targets owner "{owner}"'))
+def given_repository_remote_owner(repository_path: pathlib.Path, owner: str) -> None:
+    """Point the repository origin at a different GitHub owner."""
+    repository = pygit2.Repository(str(repository_path / ".git"))
+    try:
+        repository.remotes.delete("origin")
+    except KeyError:
+        pass
+    repository.remotes.create("origin", f"git@github.com:{owner}/sample.git")
 
 
 def _run_cli(arguments: list[str]) -> RunResult:
@@ -82,6 +124,16 @@ def when_run_concordat_disenrol(
         raise AssertionError(_cli_failure_message(result))
 
 
+@when("I attempt to enrol that repository")
+def when_attempt_to_enrol(
+    repository_path: pathlib.Path,
+    cli_invocation: dict[str, RunResult],
+) -> None:
+    """Execute the CLI and capture the failure."""
+    result = _run_cli(["enrol", str(repository_path)])
+    cli_invocation["result"] = result
+
+
 @then("the repository contains the concordat document")
 def then_document_exists(repository_path: pathlib.Path) -> None:
     """Ensure that `.concordat` exists."""
@@ -101,6 +153,15 @@ def then_document_enrolled_false(repository_path: pathlib.Path) -> None:
     """Verify the concordat document was cleared."""
     contents = _load_document(repository_path)
     assert contents.get("enrolled") is False
+
+
+@then("concordat reports the owner mismatch")
+def then_owner_mismatch(cli_invocation: dict[str, RunResult]) -> None:
+    """Ensure the CLI surfaces the github_owner guard."""
+    result = cli_invocation["result"]
+    assert result.returncode != 0
+    output = result.stderr or result.stdout
+    assert "github_owner" in output
 
 
 def _load_document(repository_path: pathlib.Path) -> dict[str, object]:

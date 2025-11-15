@@ -25,7 +25,43 @@ from .listing import list_namespace_repositories
 from .platform_standards import PlatformStandardsConfig
 
 app = App()
-estate_app = App(name="estate", help="Manage estates registered with concordat")
+
+
+def _create_estate_app(**kwargs: object) -> App:
+    return App(**kwargs)
+
+
+estate_app = _create_estate_app(
+    name="estate",
+    help="Manage estates registered with concordat",
+)
+
+ERROR_NO_ACTIVE_ESTATE = (
+    "No active estate configured. Run `concordat estate init --github-owner "
+    "<owner>` followed by `concordat estate use <alias>` before enrolling "
+    "repositories."
+)
+ERROR_ACTIVE_ESTATE_OWNER = (
+    "Active estate {alias!r} is missing github_owner. Re-initialise the estate "
+    "with --github-owner or update the config before enrolling repositories."
+)
+ERROR_NAMESPACE_REQUIRED = (
+    "Specify one or more namespaces or activate an estate with "
+    "`concordat estate use <alias>`."
+)
+ERROR_OWNER_LOOKUP_FAILED = (
+    "Estate {alias!r} is missing github_owner; re-run "
+    "`concordat estate init --github-owner <owner>` to record it."
+)
+ERROR_NO_ESTATES = "No estates configured. Run `concordat estate init` first."
+ENV_SKIP_PLATFORM_PR = "CONCORDAT_SKIP_PLATFORM_PR"
+
+
+def _env_flag(name: str) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return False
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 @app.command()
@@ -40,23 +76,34 @@ def enrol(
     github_token: str | None = None,
 ) -> None:
     """Create the concordat enrolment document in each repository."""
-    platform_url = platform_standards_url or os.getenv(
-        "CONCORDAT_PLATFORM_STANDARDS_URL"
-    )
-    token = github_token or os.getenv("GITHUB_TOKEN")
-    if not platform_url:
-        estate = get_active_estate()
-        if estate:
+    estate = get_active_estate()
+    skip_platform_pr = _env_flag(ENV_SKIP_PLATFORM_PR)
+    platform_url = None
+    platform_base_branch = platform_standards_branch
+    platform_inventory = platform_standards_inventory
+    if not skip_platform_pr:
+        platform_url = platform_standards_url or os.getenv(
+            "CONCORDAT_PLATFORM_STANDARDS_URL"
+        )
+        if not platform_url and estate:
             platform_url = estate.repo_url
-            platform_standards_branch = estate.branch
-            platform_standards_inventory = estate.inventory_path
+            platform_base_branch = estate.branch
+            platform_inventory = estate.inventory_path
+
+    token = github_token or os.getenv("GITHUB_TOKEN")
+
+    if estate is None:
+        raise ConcordatError(ERROR_NO_ACTIVE_ESTATE)
+    owner_guard = estate.github_owner
+    if not owner_guard:
+        raise ConcordatError(ERROR_ACTIVE_ESTATE_OWNER.format(alias=estate.alias))
 
     platform_config = None
     if platform_url:
         platform_config = PlatformStandardsConfig(
             repo_url=platform_url,
-            base_branch=platform_standards_branch,
-            inventory_path=platform_standards_inventory,
+            base_branch=platform_base_branch,
+            inventory_path=platform_inventory,
             github_token=token,
         )
 
@@ -66,6 +113,7 @@ def enrol(
         author_name=author_name,
         author_email=author_email,
         platform_standards=platform_config,
+        github_owner=owner_guard,
     )
     for outcome in outcomes:
         print(outcome.render())
@@ -75,8 +123,18 @@ def enrol(
 def ls(*namespaces: str, token: str | None = None) -> None:
     """List SSH URLs for GitHub repositories within the given namespaces."""
     resolved_token = token or os.getenv("GITHUB_TOKEN")
+    effective_namespaces = tuple(namespaces)
+    if not effective_namespaces:
+        estate = get_active_estate()
+        if not estate:
+            raise ConcordatError(ERROR_NAMESPACE_REQUIRED)
+        owner = estate.github_owner
+        if not owner:
+            raise ConcordatError(ERROR_OWNER_LOOKUP_FAILED.format(alias=estate.alias))
+        effective_namespaces = (owner,)
+
     urls = list_namespace_repositories(
-        namespaces,
+        effective_namespaces,
         token=resolved_token,
     )
     for url in urls:
@@ -109,6 +167,7 @@ def init(
     github_token: str | None = None,
     branch: str = ESTATE_DEFAULT_BRANCH,
     inventory_path: str = ESTATE_DEFAULT_INVENTORY,
+    github_owner: str | None = None,
     yes: bool = False,
 ) -> None:
     """Initialise a platform-standards estate repository."""
@@ -119,6 +178,7 @@ def init(
         repo_url,
         branch=branch,
         inventory_path=inventory_path,
+        github_owner=github_owner,
         github_token=token,
         confirm=confirmer,
     )
@@ -132,14 +192,12 @@ def use(alias: str) -> None:
     print(f"active estate: {record.alias}")
 
 
-@estate_app.command()
-def ls() -> None:
+@estate_app.command(name="ls")
+def estate_ls() -> None:
     """List configured estate aliases."""
     records = list_estates()
     if not records:
-        raise ConcordatError(
-            "No estates configured. Run `concordat estate init` first."
-        )
+        raise ConcordatError(ERROR_NO_ESTATES)
     for record in records:
         print(f"{record.alias}\t{record.repo_url}")
 

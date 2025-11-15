@@ -4,3 +4,9 @@ Feature: Listing GitHub repositories
     And the GitHub API returns repositories "git@github.com:alpha/app.git, git@github.com:bravo/service.git"
     When I run concordat ls for those namespaces
     Then the CLI prints the repository SSH URLs
+
+  Scenario: Listing repositories for the active estate
+    Given the GitHub API returns repositories "git@github.com:alpha/app.git"
+    And an active estate records github owner "alpha"
+    When I run concordat ls without specifying namespaces
+    Then the CLI prints the repository SSH URLs

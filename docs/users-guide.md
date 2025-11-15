@@ -26,6 +26,12 @@ participating repositories.
   uv run concordat enrol path/to/repo-one path/to/repo-two
   ```
 
+- Ensure an estate with the correct `github_owner` is active before enrolling:
+  run `concordat estate init --github-owner <owner>` once and
+  `concordat estate use <alias>` to activate it. The CLI refuses repositories
+  whose GitHub slug does not start with the recorded owner and fails fast when
+  it cannot determine the slug from the repository or `origin` remote.
+
 - When the repository already contains a `.concordat` file with `enrolled:
   true`, the CLI prints `already enrolled` and makes no changes.
 
@@ -50,6 +56,9 @@ participating repositories.
 
   The CLI clones the repository, creates the enrolment commit, and pushes it
   back to the remote.
+- When rehearsing or running tests without access to the platform-standards
+  repository, set `CONCORDAT_SKIP_PLATFORM_PR=1` to disable the IaC pull
+  request step while keeping the `github_owner` guard active.
 
 ## Disenrolling repositories
 
@@ -73,6 +82,10 @@ participating repositories.
 
   Each line is an SSH URL that can be passed directly to `concordat enrol`.
 
+- Invoking `concordat ls` without namespaces defaults to the active estate's
+  recorded `github_owner`, which keeps ad-hoc inventory dumps aligned with the
+  estate configuration.
+
 - Provide a personal access token with `--token` or the `GITHUB_TOKEN`
   environment variable when listing private repositories:
 
@@ -84,20 +97,24 @@ participating repositories.
 
 Concordat tracks platform-standards repositories, referred to as *estates*, in
 `$XDG_CONFIG_HOME/concordat/config.yaml` (`~/.config/concordat/config.yaml` on
-most systems). Each estate entry records an alias, the Git URL for the
-platform-standards repository, the OpenTofu inventory path, and the default
-branch. The CLI uses the **active estate** to determine where enrolment PRs
-should be opened.
+most systems). Each estate entry records an alias, the managed `github_owner`,
+the Git URL for the platform-standards repository, the OpenTofu inventory path,
+and the default branch. The CLI uses the **active estate** to determine where
+enrolment PRs should be opened.
 
 - Bootstrap a new estate from the bundled template:
 
   ```shell
   uv run concordat estate init core git@github.com:example/platform-standards.git \
+    --github-owner example \
     --github-token "$GITHUB_TOKEN"
   ```
 
   - The CLI copies the `platform-standards` directory into a temporary Git repo,
     commits the initial contents, and pushes to the provided remote.
+  - `--github-owner` is required when the remote URL is not hosted on GitHub.
+    When omitted, the CLI infers the owner from the repository slug and stores
+    it so `concordat enrol` can enforce the namespace guard.
   - When the target repository does not exist, Concordat prompts before using
     the GitHub API (via `github3.py`) to create it. Pass `--yes` to skip the
     prompt in scripted environments.
@@ -134,10 +151,12 @@ estate:
   active_estate: core
   estates:
     core:
+      github_owner: example
       repo_url: git@github.com:example/platform-standards.git
       branch: main
       inventory_path: tofu/inventory/repositories.yaml
     sandbox:
+      github_owner: example
       repo_url: git@github.com:example/sandbox-standards.git
       branch: main
       inventory_path: tofu/inventory/repositories.yaml
@@ -145,6 +164,9 @@ estate:
 
 - `active_estate` is optional; the first `estate init` call populates it
   automatically.
+- `github_owner` identifies the organization or user managed by the estate.
+  `concordat enrol` and `concordat ls` rely on the stored owner to guard
+  against cross-organization drift.
 - `branch` and `inventory_path` default to `main` and
   `tofu/inventory/repositories.yaml`. Override them when the remote uses
   another branch name or inventory layout.
@@ -152,14 +174,16 @@ estate:
 
 ### Interaction with enrolment
 
-The `concordat enrol` command automatically targets the active estate. When no
-estate is active, it falls back to the `--platform-standards-url` option or
-remains a no-op if neither is provided.
+The `concordat enrol` command automatically targets the active estate and
+refuses to run unless that estate records `github_owner`. The
+`--platform-standards-url` flag still overrides the repository where the
+OpenTofu pull request is opened, but the namespace guard always uses the active
+estate owner.
 
-- To enrol without touching the estate, continue to pass
-  `--platform-standards-url` explicitly.
-- To switch estates permanently (for example, when working on a fork),
-  run `concordat estate use <alias>` before invoking `concordat enrol`.
+- Run `concordat estate use <alias>` before invoking `concordat enrol` when you
+  need to switch estates (for example, when working on a fork).
+- Ensure repositories expose an `origin` remote pointing at GitHub (or pass the
+  SSH URL directly) so the CLI can resolve the slug and enforce the owner guard.
 - If the estate inventory misses a repository, run `concordat estate show` to
   confirm the inventory contents before debugging the enrolment.
 
