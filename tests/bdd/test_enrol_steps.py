@@ -6,6 +6,7 @@ import pathlib
 import subprocess
 import sys
 import typing as typ
+from contextlib import suppress
 
 import pygit2
 import pytest
@@ -51,10 +52,8 @@ def configure_active_estate(
 def given_git_repository(git_repo: GitRepo) -> pathlib.Path:
     """Provide the repository path for the scenario."""
     repository = git_repo.repository
-    try:
+    with suppress(KeyError):
         repository.remotes.delete("origin")
-    except KeyError:
-        pass
     repository.remotes.create("origin", "git@github.com:test-owner/sample.git")
     return git_repo.path
 
@@ -71,10 +70,8 @@ def given_repository_is_enrolled(repository_path: pathlib.Path) -> None:
 def given_repository_remote_owner(repository_path: pathlib.Path, owner: str) -> None:
     """Point the repository origin at a different GitHub owner."""
     repository = pygit2.Repository(str(repository_path / ".git"))
-    try:
+    with suppress(KeyError):
         repository.remotes.delete("origin")
-    except KeyError:
-        pass
     repository.remotes.create("origin", f"git@github.com:{owner}/sample.git")
 
 

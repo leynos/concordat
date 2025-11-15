@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pathlib
 import typing as typ
+from contextlib import suppress
 
 import pygit2
 import pytest
@@ -33,6 +34,12 @@ def _load_yaml(path: pathlib.Path) -> dict[str, object]:
     with path.open("r", encoding="utf-8") as handle:
         data = parser.load(handle)
     return dict(data)
+
+
+def _set_origin(remote_repo: pygit2.Repository, url: str) -> None:
+    with suppress(KeyError):
+        remote_repo.remotes.delete("origin")
+    remote_repo.remotes.create("origin", url)
 
 
 def test_enrol_creates_document_and_commit(git_repo: GitRepo) -> None:
@@ -94,6 +101,36 @@ def test_enrol_remote_repository_pushes(
     assert outcomes[0].created is True
     assert outcomes[0].pushed is True
     assert pushed == [True]
+
+
+def test_enrol_repositories_enforces_github_owner(git_repo: GitRepo) -> None:
+    """Repositories outside the estate owner are rejected."""
+    _set_origin(git_repo.repository, "git@github.com:alpha/example.git")
+
+    with pytest.raises(ConcordatError) as caught:
+        enrol_repositories([str(git_repo.path)], github_owner="bravo")
+
+    assert "github_owner" in str(caught.value)
+
+
+def test_enrol_repositories_require_slug_for_owner_guard(git_repo: GitRepo) -> None:
+    """Owner enforcement requires a resolvable GitHub slug."""
+    with suppress(KeyError):
+        git_repo.repository.remotes.delete("origin")
+
+    with pytest.raises(ConcordatError) as caught:
+        enrol_repositories([str(git_repo.path)], github_owner="alpha")
+
+    assert "GitHub slug" in str(caught.value)
+
+
+def test_enrol_repositories_accept_matching_owner(git_repo: GitRepo) -> None:
+    """Case-insensitive owner matches succeed."""
+    _set_origin(git_repo.repository, "git@github.com:Example/demo.git")
+
+    outcome = enrol_repositories([str(git_repo.path)], github_owner="example")[0]
+
+    assert outcome.created is True
 
 
 def test_disenrol_updates_document_and_commit(git_repo: GitRepo) -> None:

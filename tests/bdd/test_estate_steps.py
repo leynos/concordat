@@ -68,6 +68,7 @@ def _run_cli(arguments: list[str]) -> RunResult:
 
 @given("an empty concordat config directory", target_fixture="config_dir")
 def given_empty_config_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Create an isolated config directory for estate operations."""
     config_home = tmp_path / "xdg"
     config_home.mkdir()
     monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
@@ -76,14 +77,23 @@ def given_empty_config_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> P
 
 @given("sample estates are configured")
 def given_sample_estates(config_dir: Path) -> None:
+    """Seed the config file with two sample estates."""
     config_path = config_dir / "concordat" / "config.yaml"
     register_estate(
-        EstateRecord(alias="core", repo_url="git@github.com:example/core.git"),
+        EstateRecord(
+            alias="core",
+            repo_url="git@github.com:example/core.git",
+            github_owner="example",
+        ),
         config_path=config_path,
         set_active_if_missing=True,
     )
     register_estate(
-        EstateRecord(alias="sandbox", repo_url="git@github.com:example/sandbox.git"),
+        EstateRecord(
+            alias="sandbox",
+            repo_url="git@github.com:example/sandbox.git",
+            github_owner="example",
+        ),
         config_path=config_path,
         set_active_if_missing=False,
     )
@@ -92,9 +102,10 @@ def given_sample_estates(config_dir: Path) -> None:
 @given(parsers.cfparse('betamax cassette "{name}" is active'))
 def given_betamax_cassette(
     name: str,
-    betamax_recorder,
+    betamax_recorder: typ.Callable[[str, requests.Session], None],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Replay GitHub calls through betamax fixtures."""
     session = requests.Session()
     betamax_recorder(name, session)
 
@@ -105,6 +116,7 @@ def given_betamax_cassette(
         def create_repository(
             self,
             name: str,
+            *,
             description: str = "",
             homepage: str = "",
             private: bool = True,
@@ -162,6 +174,7 @@ def given_betamax_cassette(
 
 @given("the estate remote probe reports a missing repository")
 def given_missing_remote(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pretend the remote repository does not exist."""
     monkeypatch.setattr(
         estate,
         "_probe_remote",
@@ -172,6 +185,7 @@ def given_missing_remote(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @given("a local estate remote", target_fixture="local_remote_path")
 def given_local_estate_remote(tmp_path: Path) -> Path:
+    """Expose a bare local Git repository for estate testing."""
     remote = tmp_path / "estate-remote.git"
     pygit2.init_repository(str(remote), bare=True)
     return remote
@@ -179,6 +193,7 @@ def given_local_estate_remote(tmp_path: Path) -> Path:
 
 @when("I run concordat estate ls")
 def when_run_estate_ls(cli_invocation: dict[str, RunResult]) -> None:
+    """Execute the estate listing command."""
     cli_invocation["result"] = _run_cli(["estate", "ls"])
 
 
@@ -187,6 +202,7 @@ def when_run_estate_ls(cli_invocation: dict[str, RunResult]) -> None:
     "git@github.com:example/platform-estate.git with confirmation"
 )
 def when_run_estate_init(cli_invocation: dict[str, RunResult]) -> None:
+    """Initialise an estate remote via CLI."""
     cli_invocation["result"] = _run_cli(
         [
             "estate",
@@ -200,18 +216,26 @@ def when_run_estate_init(cli_invocation: dict[str, RunResult]) -> None:
     )
 
 
-@when(parsers.cfparse("I run concordat estate init {alias} using that remote"))
+@when(
+    parsers.cfparse(
+        'I run concordat estate init {alias} using that remote for owner "{owner}"'
+    )
+)
 def when_run_estate_init_local(
     alias: str,
+    owner: str,
     local_remote_path: Path,
     cli_invocation: dict[str, RunResult],
 ) -> None:
+    """Initialise an estate using the local remote."""
     cli_invocation["result"] = _run_cli(
         [
             "estate",
             "init",
             alias,
             str(local_remote_path),
+            "--github-owner",
+            owner,
             "--yes",
         ]
     )
@@ -222,6 +246,7 @@ def then_cli_prints(
     cli_invocation: dict[str, RunResult],
     docstring: str,
 ) -> None:
+    """Assert the CLI output matches the expected text."""
     expected = [line.strip() for line in docstring.strip().splitlines() if line.strip()]
     result = cli_invocation["result"]
     actual = [
@@ -232,18 +257,21 @@ def then_cli_prints(
 
 @then("the command succeeds")
 def then_command_succeeds(cli_invocation: dict[str, RunResult]) -> None:
+    """Ensure the previous CLI call returned success."""
     result = cli_invocation["result"]
     assert result.returncode == 0, result.stderr or result.stdout
 
 
 @then(parsers.cfparse('estate "{alias}" is recorded in the config'))
 def then_estate_recorded(alias: str) -> None:
+    """Confirm that the provided estate alias exists in config."""
     aliases = [record.alias for record in list_estates()]
     assert alias in aliases
 
 
 @then("the estate inventory contains no sample repositories")
 def then_inventory_sanitised(local_remote_path: Path, tmp_path: Path) -> None:
+    """Ensure the bootstrapped inventory file is empty."""
     clone_path = tmp_path / "estate-clone"
     pygit2.clone_repository(str(local_remote_path), str(clone_path))
     inventory_path = clone_path / "tofu" / "inventory" / "repositories.yaml"

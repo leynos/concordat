@@ -10,9 +10,10 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import github3
-from github3 import exceptions as github3_exceptions
 import pygit2
 from cyclopts import config as cyclopts_config
+from github3 import exceptions as github3_exceptions
+from pygit2 import RemoteCallbacks
 from ruamel.yaml import YAML
 
 from .errors import ConcordatError
@@ -25,10 +26,218 @@ CONFIG_FILENAME = "config.yaml"
 ESTATE_SECTION = "estate"
 ESTATE_COLLECTION_KEY = "estates"
 ACTIVE_ESTATE_KEY = "active_estate"
+ERROR_OWNER_REQUIRED = (
+    "Unable to determine github_owner for the estate. Provide --github-owner "
+    "when the remote URL is not a GitHub repository."
+)
 
 _yaml = YAML(typ="safe")
 _yaml.version = (1, 2)
 _yaml.default_flow_style = False
+
+
+class EstateError(ConcordatError):
+    """Base class for estate-related Concordat errors."""
+
+
+class EstateNotConfiguredError(EstateError):
+    """Raised when referring to an unknown estate alias."""
+
+    def __init__(self, alias: str) -> None:
+        """Initialise the error with the missing alias."""
+        super().__init__(f"Estate {alias!r} is not configured.")
+
+
+class DuplicateEstateAliasError(EstateError):
+    """Raised when attempting to register an alias twice."""
+
+    def __init__(self, alias: str) -> None:
+        """Initialise the error with the duplicate alias."""
+        super().__init__(f"Estate alias {alias!r} already exists.")
+
+
+class NoActiveEstateError(EstateError):
+    """Raised when an operation needs an active estate but none is set."""
+
+    def __init__(self) -> None:
+        """Initialise the error message."""
+        super().__init__(
+            "No active estate configured; run `concordat estate use` first."
+        )
+
+
+class MissingEstateAliasError(EstateError):
+    """Raised when init-estate is invoked without an alias."""
+
+    def __init__(self) -> None:
+        """Initialise the error message."""
+        super().__init__("Estate alias is required.")
+
+
+class UnsupportedRepositoryCreationError(EstateError):
+    """Raised when trying to bootstrap a non-GitHub repository."""
+
+    def __init__(self) -> None:
+        """Initialise the error message."""
+        super().__init__("Only GitHub repositories can be created automatically.")
+
+
+class NonEmptyRepositoryError(EstateError):
+    """Raised when the target repository already has commits."""
+
+    def __init__(self, repo_url: str) -> None:
+        """Initialise the error with the offending repository."""
+        super().__init__(
+            f"Repository {repo_url!r} already contains commits; "
+            "estate init requires an empty repository."
+        )
+
+
+class RepositoryUnreachableError(EstateError):
+    """Raised when the estate repo cannot be reached via SSH."""
+
+    def __init__(self, repo_url: str) -> None:
+        """Initialise the error with the unreachable repository."""
+        super().__init__(f"Cannot reach {repo_url!r}; provide a GitHub SSH URL.")
+
+
+class RepositoryInaccessibleError(EstateError):
+    """Raised when GitHub reports a repo exists but SSH access fails."""
+
+    def __init__(self, repo_url: str) -> None:
+        """Initialise the error with the inaccessible repository."""
+        super().__init__(
+            f"Repository {repo_url!r} exists but could not be reached via SSH; "
+            "ensure your agent exposes the required key."
+        )
+
+
+class RepositorySlugUnknownError(EstateError):
+    """Raised when the GitHub slug cannot be determined."""
+
+    def __init__(self) -> None:
+        """Initialise the error message."""
+        super().__init__("Unable to determine repository slug for automatic creation.")
+
+
+class EstateCreationAbortedError(EstateError):
+    """Raised when the operator declines repository creation."""
+
+    def __init__(self) -> None:
+        """Initialise the error message."""
+        super().__init__("Estate creation aborted by user.")
+
+
+class RepositoryIdentityError(EstateError):
+    """Raised when the owner/name pair cannot be derived for creation."""
+
+    def __init__(self) -> None:
+        """Initialise the error message."""
+        super().__init__("Unable to determine repository owner and name for creation.")
+
+
+class EstateInventoryMissingError(EstateError):
+    """Raised when the inventory file is absent from the estate."""
+
+    def __init__(self, alias: str, path: str) -> None:
+        """Initialise the error with the alias and path."""
+        super().__init__(f"Inventory {path!r} missing from estate {alias!r}.")
+
+
+class RepositoryCreationPermissionError(EstateError):
+    """Raised when neither the org nor the authenticated user can create the repo."""
+
+    def __init__(self, owner: str) -> None:
+        """Initialise the error with the owner namespace."""
+        super().__init__(
+            f"Authenticated user cannot create repositories under {owner!r}."
+        )
+
+
+class TemplateMissingError(EstateError):
+    """Raised when the bundled template cannot be located."""
+
+    def __init__(self, template_root: Path) -> None:
+        """Initialise the error with the template path."""
+        super().__init__(f"Template directory {template_root} is missing.")
+
+
+class TemplatePushError(EstateError):
+    """Raised when pushing the bootstrapped template fails."""
+
+    def __init__(self, detail: str) -> None:
+        """Initialise the error with the push failure detail."""
+        super().__init__(f"Failed to push estate template: {detail}")
+
+
+class GitHubClientInitializationError(EstateError):
+    """Raised when a GitHub client cannot be produced."""
+
+    def __init__(self) -> None:
+        """Initialise the error message."""
+        super().__init__("Unable to initialise GitHub client.")
+
+
+class MissingGitHubTokenError(EstateError):
+    """Raised when a GitHub token is required but missing."""
+
+    def __init__(self) -> None:
+        """Initialise the error message."""
+        super().__init__(
+            "GITHUB_TOKEN is required to create repositories automatically."
+        )
+
+
+class GitHubAuthenticationError(EstateError):
+    """Raised when GitHub rejects authentication."""
+
+    def __init__(
+        self,
+        message: str = "Failed to authenticate with the provided token.",
+    ) -> None:
+        """Initialise the error with the provided detail."""
+        super().__init__(message)
+
+
+class MissingGitHubOwnerError(EstateError):
+    """Raised when github_owner cannot be resolved for an estate."""
+
+    def __init__(self) -> None:
+        """Initialise the error message."""
+        super().__init__(ERROR_OWNER_REQUIRED)
+
+
+class GitHubOrganizationAuthenticationError(GitHubAuthenticationError):
+    """Raised when organisation-level auth fails."""
+
+    def __init__(self, owner: str) -> None:
+        """Initialise the error with the organisation owner."""
+        super().__init__(
+            f"GitHub authentication failed accessing organization {owner!r}. "
+            "Ensure GITHUB_TOKEN includes the 'repo' scope and is valid."
+        )
+
+
+class GitHubRepositoryCreationAuthenticationError(GitHubAuthenticationError):
+    """Raised when repo creation fails due to authentication."""
+
+    def __init__(self, owner: str, name: str) -> None:
+        """Initialise the error with the repository slug."""
+        super().__init__(
+            f"GitHub authentication failed creating {owner}/{name}. "
+            "Ensure GITHUB_TOKEN includes the 'repo' scope and is valid."
+        )
+
+
+class GitHubRepositoryAuthenticationError(GitHubAuthenticationError):
+    """Raised when generic repository operations fail during authentication."""
+
+    def __init__(self) -> None:
+        """Initialise the error message."""
+        super().__init__(
+            "GitHub authentication failed when creating the repository. "
+            "Ensure GITHUB_TOKEN includes the 'repo' scope and is valid."
+        )
 
 
 class _YamlConfig(cyclopts_config.ConfigFromFile):
@@ -50,6 +259,7 @@ class EstateRecord:
     repo_url: str
     branch: str = DEFAULT_BRANCH
     inventory_path: str = DEFAULT_INVENTORY_PATH
+    github_owner: str | None = None
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -110,7 +320,7 @@ def set_active_estate(
     estates = _load_estates(config_path)
     record = estates.get(alias)
     if not record:
-        raise ConcordatError(f"Estate {alias!r} is not configured.")
+        raise EstateNotConfiguredError(alias)
     data = _load_config(config_path)
     estate_section = data.setdefault(ESTATE_SECTION, {})
     estate_section[ACTIVE_ESTATE_KEY] = alias
@@ -129,12 +339,15 @@ def register_estate(
     estate_section = data.setdefault(ESTATE_SECTION, {})
     estates = estate_section.setdefault(ESTATE_COLLECTION_KEY, {})
     if record.alias in estates:
-        raise ConcordatError(f"Estate alias {record.alias!r} already exists.")
-    estates[record.alias] = {
+        raise DuplicateEstateAliasError(record.alias)
+    entry = {
         "repo_url": record.repo_url,
         "branch": record.branch,
         "inventory_path": record.inventory_path,
     }
+    if record.github_owner:
+        entry["github_owner"] = record.github_owner
+    estates[record.alias] = entry
     if set_active_if_missing and not estate_section.get(ACTIVE_ESTATE_KEY):
         estate_section[ACTIVE_ESTATE_KEY] = record.alias
     _write_config(data, config_path)
@@ -150,13 +363,11 @@ def list_enrolled_repositories(
     if alias:
         record = get_estate(alias, config_path=config_path)
         if not record:
-            raise ConcordatError(f"Estate {alias!r} is not configured.")
+            raise EstateNotConfiguredError(alias)
     else:
         record = get_active_estate(config_path)
         if not record:
-            raise ConcordatError(
-                "No active estate configured; run `concordat estate use` first."
-            )
+            raise NoActiveEstateError
     return _collect_inventory(record)
 
 
@@ -166,6 +377,7 @@ def init_estate(
     *,
     branch: str = DEFAULT_BRANCH,
     inventory_path: str = DEFAULT_INVENTORY_PATH,
+    github_owner: str | None = None,
     github_token: str | None = None,
     template_root: Path | None = None,
     confirm: typ.Callable[[str], bool] | None = None,
@@ -174,54 +386,45 @@ def init_estate(
 ) -> EstateRecord:
     """Initialise an estate repository from the bundled template."""
     if not alias:
-        raise ConcordatError("Estate alias is required.")
+        raise MissingEstateAliasError
     records = _load_estates(config_path)
     if alias in records:
-        raise ConcordatError(f"Estate alias {alias!r} already configured.")
+        raise DuplicateEstateAliasError(alias)
 
     probe = _probe_remote(repo_url)
     slug = parse_github_slug(repo_url)
+    resolved_owner = _resolve_github_owner(slug, github_owner)
     needs_creation = not probe.exists
 
     client: github3.GitHub | None = None
     owner = name = None
     if needs_creation:
         if not slug:
-            raise ConcordatError(
-                "Only GitHub repositories can be created automatically."
-            )
+            raise UnsupportedRepositoryCreationError
         owner, name = slug.split("/", 1)
     elif probe.reachable and not probe.empty:
-        raise ConcordatError(
-            f"Repository {repo_url!r} already contains commits; "
-            "estate init requires an empty repository.",
-        )
+        raise NonEmptyRepositoryError(repo_url)
     elif not probe.reachable:
         if not slug:
-            raise ConcordatError(
-                f"Cannot reach {repo_url!r}; provide a GitHub SSH URL."
-            )
+            raise RepositoryUnreachableError(repo_url)
         client = _build_client(github_token, client_factory)
         owner, name = slug.split("/", 1)
         if client.repository(owner, name):
-            raise ConcordatError(
-                f"Repository {repo_url!r} exists but could not be reached via SSH; "
-                "ensure your agent exposes the required key."
-            )
+            raise RepositoryInaccessibleError(repo_url)
         needs_creation = True
 
     if needs_creation:
         if not slug:
-            raise ConcordatError(
-                "Unable to determine repository slug for automatic creation."
-            )
+            raise RepositorySlugUnknownError
         client = client or _build_client(github_token, client_factory)
         if not confirm:
             confirm = _prompt_yes_no
         if not confirm(
             f"Create GitHub repository {slug}? [y/N]: ",
         ):
-            raise ConcordatError("Estate creation aborted by user.")
+            raise EstateCreationAbortedError
+        if not owner or not name:
+            raise RepositoryIdentityError
         _create_repository(client, owner, name)
 
     callbacks = build_remote_callbacks(repo_url)
@@ -238,6 +441,7 @@ def init_estate(
         repo_url=repo_url,
         branch=branch,
         inventory_path=inventory_path,
+        github_owner=_require_owner(resolved_owner),
     )
     register_estate(record, config_path=config_path, set_active_if_missing=True)
     return record
@@ -271,10 +475,7 @@ def _collect_inventory(record: EstateRecord) -> list[str]:
         workdir = Path(repository.workdir or temp_root)
         inventory_path = workdir / record.inventory_path
         if not inventory_path.exists():
-            raise ConcordatError(
-                f"Inventory {record.inventory_path!r} missing from estate "
-                f"{record.alias!r}.",
-            )
+            raise EstateInventoryMissingError(record.alias, record.inventory_path)
         contents = _yaml.load(inventory_path.read_text(encoding="utf-8")) or {}
         repos = contents.get("repositories") or []
         slugs: set[str] = set()
@@ -303,9 +504,7 @@ def _create_repository(
     try:
         org = client.organization(owner)
     except github3_exceptions.AuthenticationFailed as error:
-        raise _auth_error(
-            f"GitHub authentication failed accessing organization {owner!r}."
-        ) from error
+        raise GitHubOrganizationAuthenticationError(owner) from error
     except github3_exceptions.NotFoundError:
         org = None
 
@@ -318,16 +517,12 @@ def _create_repository(
                 description="Platform standards repository managed by concordat",
             )
         except github3_exceptions.AuthenticationFailed as error:
-            raise _auth_error(
-                f"GitHub authentication failed creating {owner}/{name}."
-            ) from error
+            raise GitHubRepositoryCreationAuthenticationError(owner, name) from error
         return
 
     user = client.me()
     if not user or user.login != owner:
-        raise ConcordatError(
-            f"Authenticated user cannot create repositories under {owner!r}."
-        )
+        raise RepositoryCreationPermissionError(owner)
     try:
         client.create_repository(
             name,
@@ -336,9 +531,7 @@ def _create_repository(
             description="Platform standards repository managed by concordat",
         )
     except github3_exceptions.AuthenticationFailed as error:
-        raise _auth_error(
-            "GitHub authentication failed when creating the repository"
-        ) from error
+        raise GitHubRepositoryAuthenticationError from error
 
 
 def _bootstrap_template(
@@ -350,7 +543,7 @@ def _bootstrap_template(
     callbacks: RemoteCallbacks | None,
 ) -> None:
     if not template_root.exists():
-        raise ConcordatError(f"Template directory {template_root} is missing.")
+        raise TemplateMissingError(template_root)
     with TemporaryDirectory(prefix="concordat-estate-template-") as temp_root:
         target = Path(temp_root, "estate")
         shutil.copytree(template_root, target, dirs_exist_ok=True)
@@ -374,7 +567,7 @@ def _bootstrap_template(
         try:
             repo_remote.push([refspec], callbacks=callbacks)
         except pygit2.GitError as error:
-            raise ConcordatError(f"Failed to push estate template: {error}") from error
+            raise TemplatePushError(str(error)) from error
 
 
 def _build_client(
@@ -384,26 +577,25 @@ def _build_client(
     if client_factory:
         client = client_factory(token)
         if client is None:
-            raise ConcordatError("Unable to initialise GitHub client.")
+            raise GitHubClientInitializationError
         return client
 
     if not token:
-        raise ConcordatError(
-            "GITHUB_TOKEN is required to create repositories automatically."
-        )
+        raise MissingGitHubTokenError
 
     client = github3.GitHub(token=token)
     if client is None:
-        raise ConcordatError("Failed to authenticate with the provided token.")
+        raise GitHubAuthenticationError
     return client
 
 
 def _sanitize_inventory(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    if path.exists():
-        loaded = _yaml.load(path.read_text(encoding="utf-8")) or {}
-    else:
-        loaded = {}
+    loaded = (
+        _yaml.load(path.read_text(encoding="utf-8")) or {}
+        if path.exists()
+        else {}
+    )
     if not isinstance(loaded, dict):
         loaded = {}
     loaded.setdefault("schema_version", 1)
@@ -414,7 +606,7 @@ def _sanitize_inventory(path: Path) -> None:
 
 def _load_config(config_path: Path | None) -> dict[str, typ.Any]:
     path = config_path or default_config_path()
-    provider = _YamlConfig(path, must_exist=False)
+    provider = _YamlConfig(str(path), must_exist=False)
     raw = provider.config or {}
     return dict(raw) if isinstance(raw, dict) else {}
 
@@ -444,11 +636,13 @@ def _load_estates(config_path: Path | None) -> dict[str, EstateRecord]:
                     "inventory_path",
                     DEFAULT_INVENTORY_PATH,
                 )
+                owner = payload.get("github_owner")
                 record = EstateRecord(
                     alias=alias,
                     repo_url=repo_url,
                     branch=str(branch),
                     inventory_path=str(inventory_path),
+                    github_owner=_normalise_owner(owner),
                 )
             else:
                 continue
@@ -463,11 +657,35 @@ def _load_metadata(config_path: Path | None) -> dict[str, typ.Any]:
 
 
 def _prompt_yes_no(message: str) -> bool:
-    response = input(message)  # noqa: S322
+    response = input(message)
     return response.strip().lower() in {"y", "yes"}
 
 
-def _auth_error(message: str) -> ConcordatError:
-    return ConcordatError(
-        f"{message} Ensure GITHUB_TOKEN includes the 'repo' scope and is valid."
-    )
+def _normalise_owner(owner: str | None) -> str | None:
+    if owner is None:
+        return None
+    trimmed = owner.strip()
+    return trimmed or None
+
+
+def _owner_from_slug(slug: str | None) -> str | None:
+    if not slug:
+        return None
+    owner, _, _ = slug.partition("/")
+    return _normalise_owner(owner)
+
+
+def _resolve_github_owner(
+    slug: str | None,
+    explicit_owner: str | None,
+) -> str | None:
+    owner = _normalise_owner(explicit_owner)
+    if owner:
+        return owner
+    return _owner_from_slug(slug)
+
+
+def _require_owner(owner: str | None) -> str:
+    if not owner:
+        raise MissingGitHubOwnerError
+    return owner

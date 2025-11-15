@@ -68,7 +68,7 @@ def given_active_estate(
 
 
 def _expected_token() -> str | None:
-    """Helper mirroring cli.ls token resolution for assertions."""
+    """Return the expected token used by the ls tests."""
     return None
 
 
@@ -80,7 +80,7 @@ def when_run_concordat_ls(
     listing_state: dict[str, object],
 ) -> None:
     """Execute the CLI with the mocked GitHub API."""
-    expected = typ.cast(list[str], listing_state.get("repositories", []))
+    expected = typ.cast("list[str]", listing_state.get("repositories", []))
     mock_list = mock.Mock(return_value=expected)
     monkeypatch.setattr("concordat.cli.list_namespace_repositories", mock_list)
 
@@ -105,7 +105,7 @@ def when_run_concordat_ls_without_namespaces(
     listing_state: dict[str, object],
 ) -> None:
     """Execute ls with the recorded estate owner."""
-    expected = typ.cast(list[str], listing_state.get("repositories", []))
+    expected = typ.cast("list[str]", listing_state.get("repositories", []))
     owner = listing_state.get("owner")
     assert owner, "owner fixture must set github_owner"
 
@@ -121,7 +121,7 @@ def when_run_concordat_ls_without_namespaces(
         returncode=0,
     )
     mock_list.assert_called_once_with(
-        (typ.cast(str, owner),),
+        (typ.cast("str", owner),),
         token=_expected_token(),
     )
 
@@ -132,7 +132,7 @@ def then_cli_prints_repositories(
     listing_state: dict[str, object],
 ) -> None:
     """Validate CLI output."""
-    expected = typ.cast(list[str], listing_state.get("repositories", []))
+    expected = typ.cast("list[str]", listing_state.get("repositories", []))
     result = cli_invocation["result"]
     assert result.returncode == 0
     output_lines = [
