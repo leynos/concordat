@@ -29,6 +29,26 @@ if typ.TYPE_CHECKING:
     import pytest_mock
 
 
+@pytest.fixture
+def init_estate_error_setup(
+    tmp_path: pathlib.Path,
+    mocker: pytest_mock.MockFixture,
+) -> tuple[pathlib.Path, pytest_mock.MockFixture, typ.Any]:
+    """Provide shared setup for init_estate error-path tests."""
+    config_path = tmp_path / "config.yaml"
+    mocker.patch.object(
+        estate,
+        "_probe_remote",
+        return_value=RemoteProbe(reachable=False, exists=False, empty=True, error=None),
+    )
+    mocker.patch.object(estate, "_bootstrap_template")
+
+    fake_client = mocker.Mock()
+    fake_client.repository.return_value = None
+    mocker.patch.object(estate, "_build_client", return_value=fake_client)
+    return config_path, mocker, fake_client
+
+
 def test_register_estate_sets_active(tmp_path: pathlib.Path) -> None:
     """Persisting the first estate also marks it active."""
     config_path = tmp_path / "config.yaml"
@@ -162,22 +182,11 @@ def test_init_estate_requires_owner_for_non_github_remote(
 
 
 def test_init_estate_rejects_empty_owner(
-    tmp_path: pathlib.Path,
-    mocker: pytest_mock.MockFixture,
+    init_estate_error_setup: tuple[pathlib.Path, pytest_mock.MockFixture, typ.Any],
 ) -> None:
     """Empty github_owner values are rejected."""
-    config_path = tmp_path / "config.yaml"
-    mocker.patch.object(
-        estate,
-        "_probe_remote",
-        return_value=RemoteProbe(reachable=False, exists=False, empty=True, error=None),
-    )
-    mocker.patch.object(estate, "_bootstrap_template")
-
-    fake_client = mocker.Mock()
-    fake_client.repository.return_value = None
+    config_path, mocker, fake_client = init_estate_error_setup
     fake_client.organization.return_value = mocker.Mock()
-    mocker.patch.object(estate, "_build_client", return_value=fake_client)
 
     with pytest.raises(MissingGitHubOwnerError):
         init_estate(
@@ -223,20 +232,10 @@ def test_init_estate_allows_explicit_owner_override(
 
 
 def test_init_estate_translates_authentication_errors(
-    tmp_path: pathlib.Path,
-    mocker: pytest_mock.MockFixture,
+    init_estate_error_setup: tuple[pathlib.Path, pytest_mock.MockFixture, typ.Any],
 ) -> None:
     """Surface authentication failures when provisioning estates."""
-    config_path = tmp_path / "config.yaml"
-    mocker.patch.object(
-        estate,
-        "_probe_remote",
-        return_value=RemoteProbe(reachable=False, exists=False, empty=True, error=None),
-    )
-    mocker.patch.object(estate, "_bootstrap_template")
-
-    fake_client = mocker.Mock()
-    fake_client.repository.return_value = None
+    config_path, mocker, fake_client = init_estate_error_setup
     fake_client.organization.side_effect = github3_exceptions.AuthenticationFailed(
         mocker.Mock()
     )
