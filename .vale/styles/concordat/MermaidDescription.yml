@@ -1,8 +1,0 @@
-extends: existence
-message: "Introduce each Mermaid diagram with a short descriptive sentence immediately before the code block."
-link: "House style: add a short description before Mermaid diagrams."
-level: suggestion
-scope: raw
-nonword: true
-tokens:
-  - '```mermaid'

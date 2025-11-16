@@ -1,9 +1,0 @@
-extends: existence
-message: "Define footnotes with numeric labels (e.g., '[^1]: …'), not names."
-link: "House style: footnotes must be numbered in order."
-level: warning
-scope: raw
-nonword: true
-# Looks at raw source so it can catch definitions at line starts.
-tokens:
-  - '^\[\^[^0-9\]]+\]:'

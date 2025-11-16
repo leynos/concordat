@@ -21,5 +21,5 @@ Feature: Managing estates with concordat
   Scenario: Estate initialisation sanitises the inventory
     Given an empty concordat config directory
     And a local estate remote
-    When I run concordat estate init local-core using that remote
+    When I run concordat estate init local-core using that remote for owner "sandbox"
     Then the estate inventory contains no sample repositories

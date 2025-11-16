@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 
 from cyclopts import App
 
@@ -15,12 +16,14 @@ from .estate import (
     DEFAULT_INVENTORY_PATH as ESTATE_DEFAULT_INVENTORY,
 )
 from .estate import (
+    EstateRecord,
     get_active_estate,
     init_estate,
     list_enrolled_repositories,
     list_estates,
     set_active_estate,
 )
+from .estate_execution import run_apply, run_plan
 from .listing import list_namespace_repositories
 from .platform_standards import PlatformStandardsConfig
 
@@ -54,6 +57,11 @@ ERROR_OWNER_LOOKUP_FAILED = (
     "`concordat estate init --github-owner <owner>` to record it."
 )
 ERROR_NO_ESTATES = "No estates configured. Run `concordat estate init` first."
+ERROR_MISSING_GITHUB_TOKEN = (
+    "GITHUB_TOKEN is required for concordat plan/apply; pass --github-token "  # noqa: S105
+    "or export the environment variable."
+)
+ERROR_AUTO_APPROVE_REQUIRED = "concordat apply requires --auto-approve to continue."
 ENV_SKIP_PLATFORM_PR = "CONCORDAT_SKIP_PLATFORM_PR"
 
 
@@ -211,6 +219,70 @@ def show(alias: str | None = None) -> None:
 
 
 app.command(estate_app, name="estate")
+
+
+def _require_active_estate() -> EstateRecord:
+    record = get_active_estate()
+    if record is None:
+        raise ConcordatError(ERROR_NO_ACTIVE_ESTATE)
+    if not record.github_owner:
+        raise ConcordatError(ERROR_ACTIVE_ESTATE_OWNER.format(alias=record.alias))
+    return record
+
+
+def _resolve_github_token(explicit: str | None = None) -> str:
+    token = explicit or os.getenv("GITHUB_TOKEN")
+    if not token:
+        raise ConcordatError(ERROR_MISSING_GITHUB_TOKEN)
+    return token
+
+
+@app.command()
+def plan(
+    *tofu_args: str,
+    github_token: str | None = None,
+    keep_workdir: bool = False,
+) -> int:
+    """Run `tofu plan` for the active estate."""
+    record = _require_active_estate()
+    token = _resolve_github_token(github_token)
+    exit_code, _ = run_plan(
+        record,
+        github_owner=record.github_owner or "",
+        github_token=token,
+        extra_args=tofu_args,
+        keep_workdir=keep_workdir,
+        stdout=sys.stdout,
+        stderr=sys.stderr,
+    )
+    return exit_code
+
+
+@app.command()
+def apply(
+    *tofu_args: str,
+    github_token: str | None = None,
+    auto_approve: bool = False,
+    keep_workdir: bool = False,
+) -> int:
+    """Run `tofu apply` for the active estate."""
+    if not auto_approve:
+        raise ConcordatError(ERROR_AUTO_APPROVE_REQUIRED)
+    record = _require_active_estate()
+    token = _resolve_github_token(github_token)
+    args = tuple(arg for arg in tofu_args if arg)
+    if "-auto-approve" not in args and "-auto-approve=true" not in args:
+        args = ("-auto-approve", *args)
+    exit_code, _ = run_apply(
+        record,
+        github_owner=record.github_owner or "",
+        github_token=token,
+        extra_args=args,
+        keep_workdir=keep_workdir,
+        stdout=sys.stdout,
+        stderr=sys.stderr,
+    )
+    return exit_code
 
 
 def main(argv: list[str] | tuple[str, ...] | None = None) -> int:

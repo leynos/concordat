@@ -210,10 +210,9 @@ already proficient with OpenTofu.16
 
 The core of the native framework is the `tofu test` command. When executed, it
 searches the current directory, and a `tests/` subdirectory for test files,
-which are identified by the extensions
-`*.tftest.hcl`, `*.tftest.json`, `*.tofutest.hcl`, or `*.tofutest.json`.21 The
-framework then executes the tests defined within these files. Each test run
-typically involves OpenTofu running a
+which are identified by the extensions `*.tftest.hcl`, `*.tftest.json`,
+`*.tofutest.hcl`, or `*.tofutest.json`.21 The framework then executes the tests
+defined within these files. Each test run typically involves OpenTofu running a
 
 `tofu plan` or `tofu apply` command in the background, making assertions
 against the result, and then making a best-effort attempt to destroy any
@@ -1367,9 +1366,9 @@ the development lifecycle. A mature IaC testing strategy is a synthesis of
 these layers:
 
 1. **Static Analysis as the First Gate**: On every commit, fast, automated
-   checks like `tofu fmt`, `tofu validate`, and security scanners
-   (`tfsec`, `Checkov`) should run. This provides immediate feedback on syntax,
-   style, and security, catching the most common errors at virtually no cost.
+   checks like `tofu fmt`, `tofu validate`, and security scanners (`tfsec`,
+   `Checkov`) should run. This provides immediate feedback on syntax, style,
+   and security, catching the most common errors at virtually no cost.
 
 2. **Plan-Based Unit Tests on Every Pull Request**: The core of the testing
    strategy should be a comprehensive suite of unit tests written with

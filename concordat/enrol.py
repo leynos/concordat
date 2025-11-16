@@ -7,7 +7,6 @@ import typing as typ
 from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from urllib.parse import urlparse
 
 import pygit2
 from pygit2 import RemoteCallbacks, Repository, Signature
@@ -93,6 +92,28 @@ def _invalid_document_error(specification: str) -> ConcordatError:
     return ConcordatError(detail)
 
 
+def _owner_slug_missing_error(specification: str) -> ConcordatError:
+    detail = (
+        f"Unable to determine the GitHub slug for {specification!r}. "
+        "Set the repository's origin remote to a GitHub SSH/HTTPS URL or "
+        "pass the SSH URL directly so concordat can enforce github_owner."
+    )
+    return ConcordatError(detail)
+
+
+def _owner_mismatch_error(
+    specification: str,
+    slug: str,
+    github_owner: str,
+) -> ConcordatError:
+    detail = (
+        f"Repository {slug!r} does not belong to github_owner {github_owner!r}. "
+        "Use `concordat estate use` to switch estates or enrol a repository "
+        "under the configured owner."
+    )
+    return ConcordatError(detail)
+
+
 @dataclasses.dataclass(frozen=True)
 class EnrollmentOutcome:
     """Captured outcome for a processed repository."""
@@ -160,6 +181,7 @@ def enrol_repositories(
     author_name: str | None = None,
     author_email: str | None = None,
     platform_standards: PlatformStandardsConfig | None = None,
+    github_owner: str | None = None,
 ) -> list[EnrollmentOutcome]:
     """Enrol each repository and return the captured outcomes."""
     if not repositories:
@@ -173,6 +195,7 @@ def enrol_repositories(
             author_name=author_name,
             author_email=author_email,
             platform_standards=platform_standards,
+            github_owner=github_owner,
         )
         outcomes.append(outcome)
     return outcomes
@@ -252,8 +275,16 @@ def _enrol_repository(
     author_name: str | None,
     author_email: str | None,
     platform_standards: PlatformStandardsConfig | None,
+    github_owner: str | None,
 ) -> EnrollmentOutcome:
     with _repository_context(specification) as context:
+        repo_slug = _repository_slug(context.repository, specification)
+        if github_owner:
+            repo_slug = _require_allowed_owner(
+                repo_slug,
+                github_owner,
+                specification,
+            )
         created = _ensure_concordat_document(context.location)
         if not created:
             return EnrollmentOutcome(
@@ -279,7 +310,6 @@ def _enrol_repository(
 
         platform_result: PlatformStandardsResult | None = None
         if platform_standards:
-            repo_slug = _repository_slug(context.repository, specification)
             if repo_slug:
                 try:
                     platform_result = ensure_repository_pr(
@@ -506,6 +536,20 @@ def _repository_slug(repository: Repository, specification: str) -> str | None:
         if slug:
             return slug
     return parse_github_slug(specification)
+
+
+def _require_allowed_owner(
+    slug: str | None,
+    github_owner: str,
+    specification: str,
+) -> str:
+    if not slug:
+        raise _owner_slug_missing_error(specification)
+    repo_owner, _, _ = slug.partition("/")
+    expected_owner = github_owner.strip()
+    if repo_owner.lower() != expected_owner.lower():
+        raise _owner_mismatch_error(specification, slug, github_owner)
+    return slug
 
 
 def _load_yaml(path: Path) -> object:

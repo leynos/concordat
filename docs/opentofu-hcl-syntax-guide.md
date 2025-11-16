@@ -374,12 +374,12 @@ are specific concessions and non-obvious rules that reflect JSON's status as a
 secondary, special-purpose dialect.
 
 1. **Special Handling for** `variable` **Blocks**: The arguments within a
-   `variable` block have non-standard mappings in JSON. The
-   `type`, `description`, and `default` arguments expect literal JSON values,
-   not expressions. For example, the `type` must be a simple string like
-   `"string"` or `"list(string)"`, and the `default` value is taken literally
-   without interpreting any string templates it might contain.16 This is a
-   significant departure from native HCL where these can be more dynamic.
+   `variable` block have non-standard mappings in JSON. The `type`,
+   `description`, and `default` arguments expect literal JSON values, not
+   expressions. For example, the `type` must be a simple string like `"string"`
+   or `"list(string)"`, and the `default` value is taken literally without
+   interpreting any string templates it might contain.16 This is a significant
+   departure from native HCL where these can be more dynamic.
 
 2. **The "Attributes as Blocks" Limitation**: Some resource types have a
    special behaviour where an argument can be specified using either argument
@@ -933,9 +933,8 @@ and implementing complex logic within configurations.
 
 - **Splat Expressions**: The splat operator (`[*]`) provides a concise syntax
   for extracting a list of attributes from a list of complex objects. For
-  example, if `aws_instance.server` was created with
-  `count`, `aws_instance.server[*].id` would return a list of all the instance
-  IDs.9
+  example, if `aws_instance.server` was created with `count`,
+  `aws_instance.server[*].id` would return a list of all the instance IDs.9
 
 - `dynamic` **Blocks**: For generating multiple *nested* blocks within a
   resource (such as multiple `ingress` rules for a security group), HCL
@@ -1094,10 +1093,10 @@ principles 8:
    later than to remove an existing one that is widely used.8
 
 5. **Follow the Standard Structure**: A reusable module should follow the
-   standard file structure
-   (`README.md`, `main.tofu`, `variables.tofu`, `outputs.tofu`, `LICENSE`) and
-   include an `examples/` directory to demonstrate usage. A well-documented
-   `README.md` is essential for usability.14
+   standard file structure (`README.md`, `main.tofu`, `variables.tofu`,
+   `outputs.tofu`, `LICENSE`) and include an `examples/` directory to
+   demonstrate usage. A well-documented `README.md` is essential for
+   usability.14
 
 ______________________________________________________________________
 
@@ -1127,12 +1126,12 @@ anti-patterns that lead to brittle, insecure, or unmaintainable configurations.
     prevents an upgrade to a new major version (e.g., 6.0.0).13
 
 - **Mismanaging the Lock File**: The `.terraform.lock.hcl` file contains
-  checksums for provider packages on specific platforms (e.g.,
-  `darwin_arm64`, `linux_amd64`). A common pitfall occurs when a developer on
-  one OS (e.g., macOS) runs `tofu init`, and commits the updated lock file.
-  When a continuous integration/continuous delivery (CI/CD) system running on a
-  different OS (e.g., Linux) tries to run `init`, it may fail if it cannot find
-  a matching hash for its platform.
+  checksums for provider packages on specific platforms (e.g., `darwin_arm64`,
+  `linux_amd64`). A common pitfall occurs when a developer on one OS (e.g.,
+  macOS) runs `tofu init`, and commits the updated lock file. When a continuous
+  integration/continuous delivery (CI/CD) system running on a different OS
+  (e.g., Linux) tries to run `init`, it may fail if it cannot find a matching
+  hash for its platform.
 
   - **Best Practice**: For multi-platform teams, use the
     `tofu providers lock -platform=...` command to pre-populate the lock file

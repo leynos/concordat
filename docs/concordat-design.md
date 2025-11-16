@@ -221,6 +221,16 @@ state stored in each estate repository.
 - When an estate is active, invoking `concordat ls` without namespaces defaults
   to the recorded `github_owner`, offering a zero-argument inventory view.
 
+`concordat estate init` accepts a `--github-owner` flag so estates backed by
+non-GitHub remotes can still record the namespace they manage. When the remote
+URL points to GitHub, the CLI infers the owner automatically; otherwise the
+flag is required. The active estate must provide `github_owner` before any
+enrolment occurs. The `concordat enrol` command queries the active estate,
+rejects repositories whose slug resolves to a different owner, and surfaces an
+explicit error when the repository or specification does not expose a usable
+GitHub slug. This owner guard makes inventory drift visible without blocking
+template usage, satisfying the evaluate-mode acceptance criteria.
+
 #### 2.7.2 Workspace management
 
 - Estate repositories are cached under
@@ -240,9 +250,9 @@ state stored in each estate repository.
   provides a Python API mirroring OpenTofu's UX. This keeps error handling and
   output capture in-process.
 - `concordat plan` resolves the active estate, prepares the workspace and
-  tfvars file, ensures `GITHUB_TOKEN` is exported, then calls tofupy's plan API.
-  The CLI streams stdout/stderr and returns a non-zero exit code if the plan
-  fails.
+  tfvars file, ensures `GITHUB_TOKEN` is exported, then calls tofupy's plan
+  API. The CLI streams stdout/stderr and returns a non-zero exit code if the
+  plan fails.
 - `concordat apply` performs the identical setup but calls the apply API. It
   passes through approval prompts or accepts `--auto-approve` if the user needs
   unattended applies.
@@ -272,6 +282,29 @@ The repository inventory lives at
 GitHub `owner/name` slug. The inventory drives the `for_each` meta-arguments in
 the root OpenTofu modules, which lets the CLI add new repositories without
 touching module logic.
+
+### 2.7.4 CLI implementation notes
+
+The delivered CLI follows the workflow above:
+
+- Active estates are refreshed into `$XDG_CACHE_HOME/concordat/estates/<alias>`
+  and copied into a per-run temporary directory. The CLI prints the workspace
+  path at the start of every execution and removes it afterward unless
+  `--keep-workdir` is passed for debugging.
+- `terraform.tfvars` is synthesised with the estate's `github_owner` before
+  invoking OpenTofu. Commands refuse to run without `GITHUB_TOKEN` so the
+  GitHub provider can load schemas without interactive prompts.
+- OpenTofu execution reuses `tofupy.Tufu`, which resolves the `tofu` binary,
+  runs `init -input=false`, then relays stdout/stderr from `plan` or `apply`
+  while propagating the underlying exit code.
+- `concordat apply` requires an explicit `--auto-approve` flag. The CLI adds
+  the corresponding `-auto-approve` switch so unattended applies remain
+  deliberate.
+
+Unit tests cover the estate cache and CLI wiring, and new pytest-bdd scenarios
+exercise `plan`, `plan --keep-workdir`, and `apply --auto-approve` end to end
+using a fake `tofu` shim. This ensures workspace hygiene and option handling
+remain stable as the estate evolves.
 
 ### 2.7 Rollout strategy
 

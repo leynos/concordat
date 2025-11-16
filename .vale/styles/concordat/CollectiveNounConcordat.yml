@@ -1,9 +1,0 @@
-extends: existence
-message: "Treat company names as collective nouns: write 'Concordat … are', not 'Concordat … is'."
-link: "House style: company names as collective nouns."
-level: warning
-scope: text
-ignorecase: true
-nonword: true
-tokens:
-  - '\bConcordat(?:\s+Industries)?\s+is\b'

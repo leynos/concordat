@@ -209,3 +209,5 @@ target/
 .terraform/
 platform-standards/**/.terraform/
 *.tfvars
+
+.vale

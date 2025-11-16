@@ -13,3 +13,9 @@ Feature: Enrolling repositories with concordat
     When I run concordat disenrol for that repository
     Then the repository contains the concordat document
     And the concordat document declares enrolled false
+
+  Scenario: Rejecting repositories outside the estate owner
+    Given a git repository
+    And the repository remote targets owner "other-owner"
+    When I attempt to enrol that repository
+    Then concordat reports the owner mismatch
