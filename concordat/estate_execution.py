@@ -163,6 +163,30 @@ def run_apply(
     return _run_estate_command(record, "apply", options, io)
 
 
+def _write_stream_output(stream: typ.IO[str], content: str) -> None:
+    stream.write(content)
+    if not content.endswith("\n"):
+        stream.write("\n")
+
+
+def _initialize_tofu(workdir: Path, github_token: str) -> Tofu:
+    try:
+        return Tofu(cwd=str(workdir), env={"GITHUB_TOKEN": github_token})
+    except FileNotFoundError as error:  # pragma: no cover - depends on PATH
+        raise EstateExecutionError(ERROR_MISSING_TOFU) from error
+    except RuntimeError as error:  # pragma: no cover - tofu misconfiguration
+        raise EstateExecutionError(str(error)) from error
+
+
+def _invoke_tofu_command(tofu: Tofu, args: list[str], io: ExecutionIO) -> int:
+    results = tofu._run(args, raise_on_error=False)
+    if results.stdout:
+        _write_stream_output(io.stdout, results.stdout)
+    if results.stderr:
+        _write_stream_output(io.stderr, results.stderr)
+    return results.returncode
+
+
 def _run_estate_command(
     record: EstateRecord,
     verb: str,
@@ -183,27 +207,10 @@ def _run_estate_command(
             f'github_owner = "{options.github_owner}"\n',
             encoding="utf-8",
         )
-        try:
-            tofu = Tofu(cwd=str(workdir), env={"GITHUB_TOKEN": options.github_token})
-        except FileNotFoundError as error:  # pragma: no cover - depends on PATH
-            raise EstateExecutionError(ERROR_MISSING_TOFU) from error
-        except RuntimeError as error:  # pragma: no cover - tofu misconfiguration
-            raise EstateExecutionError(str(error)) from error
-
-        def _invoke(args: list[str]) -> int:
-            results = tofu._run(args, raise_on_error=False)
-            if results.stdout:
-                io.stdout.write(results.stdout)
-                if not results.stdout.endswith("\n"):
-                    io.stdout.write("\n")
-            if results.stderr:
-                io.stderr.write(results.stderr)
-                if not results.stderr.endswith("\n"):
-                    io.stderr.write("\n")
-            return results.returncode
+        tofu = _initialize_tofu(workdir, options.github_token)
 
         for args in [["init", "-input=false"], command]:
-            exit_code = _invoke(list(args))
+            exit_code = _invoke_tofu_command(tofu, list(args), io)
             if exit_code != 0:
                 break
         return exit_code, workdir
