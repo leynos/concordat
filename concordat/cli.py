@@ -115,12 +115,6 @@ def _resolve_namespaces(namespaces: tuple[str, ...]) -> tuple[str, ...]:
     raise ConcordatError(ERROR_OWNER_LOOKUP_FAILED.format(alias=estate.alias))
 
 
-def _resolve_github_token(explicit: str | None = None) -> str:
-    if token := (explicit or os.getenv("GITHUB_TOKEN")):
-        return token
-    raise ConcordatError(ERROR_MISSING_GITHUB_TOKEN)
-
-
 @app.command()
 def enrol(
     *repositories: str,

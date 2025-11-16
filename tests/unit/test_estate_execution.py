@@ -6,17 +6,15 @@ import shutil
 import typing as typ
 
 import pygit2
+import pytest
 
 from concordat.estate import EstateRecord
 from concordat.estate_execution import (
+    EstateExecutionError,
     cache_root,
     ensure_estate_cache,
     estate_workspace,
 )
-
-# Typing-only imports
-if typ.TYPE_CHECKING:
-    import pytest
 
 if typ.TYPE_CHECKING:
     from pathlib import Path
@@ -65,6 +63,20 @@ def test_ensure_estate_cache_clones_repository(
     assert (workdir / ".git").exists()
 
 
+def test_ensure_estate_cache_bare_destination(
+    git_repo: GitRepo,
+    tmp_path: Path,
+) -> None:
+    """Bare repositories at the cache destination raise an error."""
+    record = _make_record(git_repo.path)
+    cache_dir = tmp_path / "cache"
+    bare_path = cache_dir / record.alias
+    pygit2.init_repository(str(bare_path), bare=True)
+
+    with pytest.raises(EstateExecutionError, match="bare"):
+        ensure_estate_cache(record, cache_directory=cache_dir)
+
+
 def test_ensure_estate_cache_fetches_updates(git_repo: GitRepo, tmp_path: Path) -> None:
     """Refreshing the cache resets it to the remote HEAD."""
     record = _make_record(git_repo.path)
@@ -89,6 +101,18 @@ def test_ensure_estate_cache_fetches_updates(git_repo: GitRepo, tmp_path: Path) 
 
     cached_repo = pygit2.Repository(str(workdir))
     assert cached_repo.head.target != initial_head
+
+
+def test_ensure_estate_cache_requires_origin(git_repo: GitRepo, tmp_path: Path) -> None:
+    """Missing origin remote triggers an execution error."""
+    record = _make_record(git_repo.path)
+    cache_dir = tmp_path / "cache"
+    workdir = ensure_estate_cache(record, cache_directory=cache_dir)
+    repo = pygit2.Repository(str(workdir))
+    repo.remotes.delete("origin")
+
+    with pytest.raises(EstateExecutionError, match="origin"):
+        ensure_estate_cache(record, cache_directory=cache_dir)
 
 
 def test_estate_workspace_cleans_up(git_repo: GitRepo, tmp_path: Path) -> None:

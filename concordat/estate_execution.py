@@ -167,6 +167,7 @@ def _write_stream_output(stream: typ.IO[str], content: str) -> None:
     stream.write(content)
     if not content.endswith("\n"):
         stream.write("\n")
+    stream.flush()
 
 
 def _initialize_tofu(workdir: Path, github_token: str) -> Tofu:

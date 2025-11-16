@@ -692,8 +692,7 @@ def _resolve_github_owner(
     explicit_owner: str | None,
 ) -> str | None:
     if explicit_owner is not None:
-        owner = _normalise_owner(explicit_owner)
-        if owner:
+        if owner := _normalise_owner(explicit_owner):
             return owner
         raise MissingGitHubOwnerError
     return _owner_from_slug(slug)
