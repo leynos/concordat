@@ -30,14 +30,7 @@ from .platform_standards import PlatformStandardsConfig
 app = App()
 
 
-def _create_estate_app(**kwargs: object) -> App:
-    return App(**kwargs)
-
-
-estate_app = _create_estate_app(
-    name="estate",
-    help="Manage estates registered with concordat",
-)
+estate_app = App()
 
 ERROR_NO_ACTIVE_ESTATE = (
     "No active estate configured. Run `concordat estate init --github-owner "

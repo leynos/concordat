@@ -602,7 +602,7 @@ def _sanitize_inventory(path: Path) -> None:
 
 def _load_config(config_path: Path | None) -> dict[str, typ.Any]:
     path = config_path or default_config_path()
-    provider = _YamlConfig(str(path), must_exist=False)
+    provider = _YamlConfig(path=str(path), must_exist=False)
     raw = provider.config or {}
     return dict(raw) if isinstance(raw, dict) else {}
 
