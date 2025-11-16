@@ -16,8 +16,14 @@ from concordat.enrol import (
     CONCORDAT_FILENAME,
     DISENROL_COMMIT_MESSAGE,
     ConcordatError,
+    _platform_pr_result,
+    _slug_with_owner_guard,
     disenrol_repositories,
     enrol_repositories,
+)
+from concordat.platform_standards import (
+    PlatformStandardsConfig,
+    PlatformStandardsResult,
 )
 
 if typ.TYPE_CHECKING:
@@ -40,6 +46,32 @@ def _set_origin(remote_repo: pygit2.Repository, url: str) -> None:
     with suppress(KeyError):
         remote_repo.remotes.delete("origin")
     remote_repo.remotes.create("origin", url)
+
+
+def _platform_config() -> PlatformStandardsConfig:
+    return PlatformStandardsConfig(
+        repo_url="git@github.com:example/platform-standards.git",
+    )
+
+
+def test_slug_with_owner_guard_skips_check_without_owner() -> None:
+    """Slug guard leaves slug untouched when owner enforcement disabled."""
+    slug = _slug_with_owner_guard("alpha/example", None, "repo")
+
+    assert slug == "alpha/example"
+
+
+def test_slug_with_owner_guard_respects_owner() -> None:
+    """Slug guard enforces owner comparisons case-insensitively."""
+    slug = _slug_with_owner_guard("Alpha/example", "alpha", "repo")
+
+    assert slug == "Alpha/example"
+
+
+def test_slug_with_owner_guard_requires_slug_when_owner_set() -> None:
+    """Owner checks require a resolvable slug."""
+    with pytest.raises(ConcordatError):
+        _slug_with_owner_guard(None, "alpha", "repo")
 
 
 def test_enrol_creates_document_and_commit(git_repo: GitRepo) -> None:
@@ -131,6 +163,73 @@ def test_enrol_repositories_accept_matching_owner(git_repo: GitRepo) -> None:
     outcome = enrol_repositories([str(git_repo.path)], github_owner="example")[0]
 
     assert outcome.created is True
+
+
+def test_platform_pr_result_skips_without_config() -> None:
+    """Platform PR helper skips work when no config provided."""
+    result = _platform_pr_result("example/repo", None)
+
+    assert result is None
+
+
+def test_platform_pr_result_requires_slug() -> None:
+    """Platform PR helper fails fast when slug missing."""
+    config = _platform_config()
+
+    result = _platform_pr_result(None, config)
+
+    assert result == PlatformStandardsResult(
+        created=False,
+        branch=None,
+        pr_url=None,
+        message="unable to determine GitHub slug",
+    )
+
+
+def test_platform_pr_result_returns_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Successful ensure_repository_pr result is surfaced."""
+    config = _platform_config()
+    expected = PlatformStandardsResult(
+        created=True,
+        branch="feature/concordat",
+        pr_url="https://github.com/example/platform/pull/1",
+        message="opened",
+    )
+
+    def fake_ensure(
+        repo_slug: str,
+        *,
+        config: PlatformStandardsConfig,
+    ) -> PlatformStandardsResult:
+        assert repo_slug == "example/repo"
+        assert config is config_obj
+        return expected
+
+    config_obj = config
+    monkeypatch.setattr("concordat.enrol.ensure_repository_pr", fake_ensure)
+
+    result = _platform_pr_result("example/repo", config_obj)
+
+    assert result is expected
+
+
+def test_platform_pr_result_coerces_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Errors from ensure_repository_pr are converted to results."""
+    config = _platform_config()
+
+    def fake_ensure(*args: object, **kwargs: object) -> PlatformStandardsResult:
+        raise ConcordatError("boom")
+
+    monkeypatch.setattr("concordat.enrol.ensure_repository_pr", fake_ensure)
+
+    result = _platform_pr_result("example/repo", config)
+
+    assert result == PlatformStandardsResult(
+        created=False,
+        branch=None,
+        pr_url=None,
+        message="boom",
+    )
 
 
 def test_disenrol_updates_document_and_commit(git_repo: GitRepo) -> None:

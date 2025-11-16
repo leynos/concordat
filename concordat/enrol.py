@@ -278,13 +278,11 @@ def _enrol_repository(
     github_owner: str | None,
 ) -> EnrollmentOutcome:
     with _repository_context(specification) as context:
-        repo_slug = _repository_slug(context.repository, specification)
-        if github_owner:
-            repo_slug = _require_allowed_owner(
-                repo_slug,
-                github_owner,
-                specification,
-            )
+        repo_slug = _slug_with_owner_guard(
+            _repository_slug(context.repository, specification),
+            github_owner,
+            specification,
+        )
         created = _ensure_concordat_document(context.location)
         if not created:
             return EnrollmentOutcome(
@@ -308,28 +306,10 @@ def _enrol_repository(
             _push_document(context.repository, context.callbacks)
             pushed = True
 
-        platform_result: PlatformStandardsResult | None = None
-        if platform_standards:
-            if repo_slug:
-                try:
-                    platform_result = ensure_repository_pr(
-                        repo_slug,
-                        config=platform_standards,
-                    )
-                except ConcordatError as error:
-                    platform_result = PlatformStandardsResult(
-                        created=False,
-                        branch=None,
-                        pr_url=None,
-                        message=str(error),
-                    )
-            else:
-                platform_result = PlatformStandardsResult(
-                    created=False,
-                    branch=None,
-                    pr_url=None,
-                    message="unable to determine GitHub slug",
-                )
+        platform_result = _platform_pr_result(
+            repo_slug,
+            platform_standards,
+        )
 
         return EnrollmentOutcome(
             repository=specification,
@@ -338,6 +318,45 @@ def _enrol_repository(
             committed=commit_oid is not None,
             pushed=pushed,
             platform_pr=platform_result,
+        )
+
+
+def _slug_with_owner_guard(
+    slug: str | None,
+    github_owner: str | None,
+    specification: str,
+) -> str | None:
+    """Isolate github_owner enforcement so enrolment stays linear."""
+    if github_owner is None:
+        return slug
+    return _require_allowed_owner(slug, github_owner, specification)
+
+
+def _platform_pr_result(
+    repo_slug: str | None,
+    platform_standards: PlatformStandardsConfig | None,
+) -> PlatformStandardsResult | None:
+    """Encapsulate platform PR creation to keep enrolment orchestration clear."""
+    if platform_standards is None:
+        return None
+    if not repo_slug:
+        return PlatformStandardsResult(
+            created=False,
+            branch=None,
+            pr_url=None,
+            message="unable to determine GitHub slug",
+        )
+    try:
+        return ensure_repository_pr(
+            repo_slug,
+            config=platform_standards,
+        )
+    except ConcordatError as error:
+        return PlatformStandardsResult(
+            created=False,
+            branch=None,
+            pr_url=None,
+            message=str(error),
         )
 
 

@@ -23,7 +23,7 @@ from .estate import (
     list_estates,
     set_active_estate,
 )
-from .estate_execution import run_apply, run_plan
+from .estate_execution import ExecutionIO, ExecutionOptions, run_apply, run_plan
 from .listing import list_namespace_repositories
 from .platform_standards import PlatformStandardsConfig
 
@@ -246,15 +246,14 @@ def plan(
     """Run `tofu plan` for the active estate."""
     record = _require_active_estate()
     token = _resolve_github_token(github_token)
-    exit_code, _ = run_plan(
-        record,
+    options = ExecutionOptions(
         github_owner=record.github_owner or "",
         github_token=token,
         extra_args=tofu_args,
         keep_workdir=keep_workdir,
-        stdout=sys.stdout,
-        stderr=sys.stderr,
     )
+    io = ExecutionIO(stdout=sys.stdout, stderr=sys.stderr)
+    exit_code, _ = run_plan(record, options, io)
     return exit_code
 
 
@@ -273,15 +272,14 @@ def apply(
     args = tuple(arg for arg in tofu_args if arg)
     if "-auto-approve" not in args and "-auto-approve=true" not in args:
         args = ("-auto-approve", *args)
-    exit_code, _ = run_apply(
-        record,
+    options = ExecutionOptions(
         github_owner=record.github_owner or "",
         github_token=token,
         extra_args=args,
         keep_workdir=keep_workdir,
-        stdout=sys.stdout,
-        stderr=sys.stderr,
     )
+    io = ExecutionIO(stdout=sys.stdout, stderr=sys.stderr)
+    exit_code, _ = run_apply(record, options, io)
     return exit_code
 
 

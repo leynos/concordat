@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import shutil
 import typing as typ
 
@@ -11,6 +12,7 @@ import pytest
 from concordat.estate import EstateRecord
 from concordat.estate_execution import (
     EstateExecutionError,
+    _emit_stream,
     cache_root,
     ensure_estate_cache,
     estate_workspace,
@@ -136,3 +138,31 @@ def test_write_tfvars_requires_owner(tmp_path: Path) -> None:
 
     with pytest.raises(EstateExecutionError):
         write_tfvars(workdir, github_owner="")
+
+
+def test_emit_stream_appends_newline() -> None:
+    """_emit_stream ensures trailing newline when missing."""
+    buffer = io.StringIO()
+
+    _emit_stream("line", buffer)
+
+    assert buffer.getvalue() == "line\n"
+
+
+def test_emit_stream_preserves_newline() -> None:
+    """Existing trailing newline is preserved."""
+    buffer = io.StringIO()
+
+    _emit_stream("line\n", buffer)
+
+    assert buffer.getvalue() == "line\n"
+
+
+def test_emit_stream_skips_empty_values() -> None:
+    """None or empty text produces no output."""
+    buffer = io.StringIO()
+
+    _emit_stream(None, buffer)
+    _emit_stream("", buffer)
+
+    assert buffer.getvalue() == ""
