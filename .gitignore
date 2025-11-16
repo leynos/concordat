@@ -204,6 +204,8 @@ target/
 **/mutants.out*/
 
 .crush/
+*.swp
+*~
 
 # OpenTofu build artefacts
 .terraform/
