@@ -4,6 +4,7 @@ MDFORMAT_ALL ?= $(shell which mdformat-all)
 VALE ?= $(shell which vale)
 TOOLS = $(MDFORMAT_ALL) ruff ty $(MDLINT) $(NIXIE) uv
 VENV_TOOLS = pytest
+ACRONYM_SCRIPT ?= scripts/update_acronym_allowlist.py
 UV_ENV = UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools
 
 .PHONY: help all clean build build-release lint fmt check-fmt \
@@ -78,6 +79,7 @@ nixie: $(NIXIE) ## Validate Mermaid diagrams
 
 vale: $(VALE) ## Check prose
 	$(VALE) sync
+	uv run --with https://github.com/leynos/concordat-vale.git --script $(ACRONYM_SCRIPT)
 	$(VALE) .
 
 test: build uv $(VENV_TOOLS) ## Run tests
