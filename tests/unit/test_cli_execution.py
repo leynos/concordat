@@ -50,6 +50,17 @@ def _apply_and_capture(
     return captured
 
 
+def _get_applied_args(
+    monkeypatch: pytest.MonkeyPatch,
+    *args: object,
+    **kwargs: object,
+) -> tuple[str, ...]:
+    """Return the extra_args tuple captured from cli.apply."""
+    captured = _apply_and_capture(monkeypatch, *args, **kwargs)
+    options = typ.cast("ExecutionOptions", captured["options"])
+    return tuple(options.extra_args)
+
+
 def test_plan_requires_active_estate(monkeypatch: pytest.MonkeyPatch) -> None:
     """Plan fails when no estate is active."""
     monkeypatch.setattr(cli, "get_active_estate", lambda: None)
@@ -123,14 +134,13 @@ def test_apply_requires_auto_approve(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_apply_injects_auto_approve(monkeypatch: pytest.MonkeyPatch) -> None:
     """Apply prefixes -auto-approve before calling run_apply."""
-    captured = _apply_and_capture(
+    extra_args = _get_applied_args(
         monkeypatch,
         "-var",
         "foo=1",
         auto_approve=True,
     )
 
-    extra_args = typ.cast("ExecutionOptions", captured["options"]).extra_args
     assert extra_args[0] == "-auto-approve"
     assert list(extra_args[1:]) == ["-var", "foo=1"]
 
@@ -139,7 +149,7 @@ def test_apply_does_not_duplicate_auto_approve(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Passing -auto-approve explicitly keeps a single flag."""
-    captured = _apply_and_capture(
+    extra_args = _get_applied_args(
         monkeypatch,
         "-auto-approve",
         "-var",
@@ -147,7 +157,6 @@ def test_apply_does_not_duplicate_auto_approve(
         auto_approve=True,
     )
 
-    extra_args = typ.cast("ExecutionOptions", captured["options"]).extra_args
     assert extra_args.count("-auto-approve") == 1
     assert list(extra_args[1:]) == ["-var", "foo=1"]
 
