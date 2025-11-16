@@ -24,6 +24,13 @@ if typ.TYPE_CHECKING:
 XDG_CACHE_HOME = "XDG_CACHE_HOME"
 CACHE_SEGMENT = ("concordat", "estates")
 TFVARS_FILENAME = "terraform.tfvars"
+ERROR_ALIAS_REQUIRED = "Estate alias is required to cache the repository."
+ERROR_BARE_CACHE = "Cached estate {alias!r} is bare; remove {destination} and retry."
+ERROR_MISSING_ORIGIN = (
+    "Cached estate is missing the 'origin' remote; remove it and retry."
+)
+ERROR_MISSING_BRANCH = "Branch {branch!r} is missing from remote {remote!r}."
+ERROR_MISSING_TOFU = "OpenTofu binary 'tofu' was not found in PATH."
 
 
 class EstateExecutionError(ConcordatError):
@@ -49,40 +56,6 @@ class ExecutionIO:
     stderr: typ.IO[str]
 
 
-def _alias_required_error() -> EstateExecutionError:
-    return EstateExecutionError("Estate alias is required to cache the repository.")
-
-
-def _sync_failed_error(alias: str, detail: str) -> EstateExecutionError:
-    return EstateExecutionError(f"Failed to sync estate {alias!r}: {detail}")
-
-
-def _bare_cache_error(alias: str, destination: Path) -> EstateExecutionError:
-    return EstateExecutionError(
-        f"Cached estate {alias!r} is bare; remove {destination} and retry."
-    )
-
-
-def _owner_missing_error() -> EstateExecutionError:
-    return EstateExecutionError("github_owner must be recorded for the estate.")
-
-
-def _missing_origin_error() -> EstateExecutionError:
-    return EstateExecutionError(
-        "Cached estate is missing the 'origin' remote; remove it and retry."
-    )
-
-
-def _missing_branch_error(branch: str, remote_name: str) -> EstateExecutionError:
-    return EstateExecutionError(
-        f"Branch {branch!r} is missing from remote {remote_name!r}."
-    )
-
-
-def _missing_tofu_error() -> EstateExecutionError:
-    return EstateExecutionError("OpenTofu binary 'tofu' was not found in PATH.")
-
-
 def cache_root(env: dict[str, str] | None = None) -> Path:
     """Return the directory used for caching estate repositories."""
     source = env if env is not None else os.environ
@@ -102,7 +75,7 @@ def ensure_estate_cache(
 ) -> Path:
     """Ensure the estate repository is cloned and fresh in the cache."""
     if not record.alias:
-        raise _alias_required_error()
+        raise EstateExecutionError(ERROR_ALIAS_REQUIRED)
 
     destination = _cache_destination(record.alias, cache_directory)
     callbacks = build_remote_callbacks(record.repo_url)
@@ -139,7 +112,8 @@ def _open_or_clone_cache(
             callbacks=callbacks,
         )
     except pygit2.GitError as error:  # pragma: no cover - pygit2 raises opaque errors
-        raise _sync_failed_error(record.alias, str(error)) from error
+        detail = f"Failed to sync estate {record.alias!r}: {error}"
+        raise EstateExecutionError(detail) from error
 
 
 def _workdir_from_repository(
@@ -147,22 +121,10 @@ def _workdir_from_repository(
     destination: Path,
     repository: pygit2.Repository,
 ) -> Path:
-    if not (workdir := repository.workdir):
-        raise _bare_cache_error(alias, destination)
-    return Path(workdir)
-
-
-def write_tfvars(
-    workdir: Path,
-    *,
-    github_owner: str,
-) -> Path:
-    """Write terraform.tfvars values required by concordat."""
-    if not github_owner:
-        raise _owner_missing_error()
-    path = workdir / TFVARS_FILENAME
-    path.write_text(f'github_owner = "{github_owner}"\n', encoding="utf-8")
-    return path
+    if workdir := repository.workdir:
+        return Path(workdir)
+    detail = ERROR_BARE_CACHE.format(alias=alias, destination=destination)
+    raise EstateExecutionError(detail)
 
 
 @contextlib.contextmanager
@@ -207,7 +169,7 @@ def _run_estate_command(
     options: ExecutionOptions,
     io: ExecutionIO,
 ) -> tuple[int, Path]:
-    command = (verb, *tuple(options.extra_args))
+    command = [verb, *options.extra_args]
     with estate_workspace(
         record,
         cache_directory=options.cache_directory,
@@ -216,12 +178,34 @@ def _run_estate_command(
     ) as workdir:
         io.stderr.write(f"execution workspace: {workdir}\n")
         io.stderr.flush()
-        write_tfvars(workdir, github_owner=options.github_owner)
-        tofu = _initialise_tofu(workdir, options.github_token)
-        init_code = _run_tofu(tofu, ["init", "-input=false"], io.stdout, io.stderr)
-        if init_code != 0:
-            return init_code, workdir
-        exit_code = _run_tofu(tofu, command, io.stdout, io.stderr)
+        tfvars = workdir / TFVARS_FILENAME
+        tfvars.write_text(
+            f'github_owner = "{options.github_owner}"\n',
+            encoding="utf-8",
+        )
+        try:
+            tofu = Tofu(cwd=str(workdir), env={"GITHUB_TOKEN": options.github_token})
+        except FileNotFoundError as error:  # pragma: no cover - depends on PATH
+            raise EstateExecutionError(ERROR_MISSING_TOFU) from error
+        except RuntimeError as error:  # pragma: no cover - tofu misconfiguration
+            raise EstateExecutionError(str(error)) from error
+
+        def _invoke(args: list[str]) -> int:
+            results = tofu._run(args, raise_on_error=False)
+            if results.stdout:
+                io.stdout.write(results.stdout)
+                if not results.stdout.endswith("\n"):
+                    io.stdout.write("\n")
+            if results.stderr:
+                io.stderr.write(results.stderr)
+                if not results.stderr.endswith("\n"):
+                    io.stderr.write("\n")
+            return results.returncode
+
+        for args in [["init", "-input=false"], command]:
+            exit_code = _invoke(list(args))
+            if exit_code != 0:
+                break
         return exit_code, workdir
 
 
@@ -252,7 +236,7 @@ def _fetch_origin_remote(
     try:
         remote = repository.remotes["origin"]
     except KeyError as error:  # pragma: no cover - defensive guard
-        raise _missing_origin_error() from error
+        raise EstateExecutionError(ERROR_MISSING_ORIGIN) from error
     remote.fetch(callbacks=callbacks)
     return remote
 
@@ -267,7 +251,8 @@ def _resolve_remote_commit(
         remote_ref = repository.lookup_reference(ref_name)
     except KeyError as error:
         remote_name = remote.name or remote.url or "origin"
-        raise _missing_branch_error(branch, remote_name) from error
+        detail = ERROR_MISSING_BRANCH.format(branch=branch, remote=remote_name)
+        raise EstateExecutionError(detail) from error
 
     commit = repository.get(remote_ref.target)
     if isinstance(commit, pygit2.Commit):
@@ -293,33 +278,3 @@ def _reset_to_commit(repository: pygit2.Repository, commit: pygit2.Commit) -> No
     reset_mode = typ.cast("typ.Any", pygit2.GIT_RESET_HARD)
     repository.reset(commit.id, reset_mode)
     repository.checkout_head(strategy=pygit2.GIT_CHECKOUT_FORCE)
-
-
-def _initialise_tofu(workdir: Path, github_token: str) -> Tofu:
-    try:
-        return Tofu(cwd=str(workdir), env={"GITHUB_TOKEN": github_token})
-    except FileNotFoundError as error:  # pragma: no cover - depends on system state
-        raise _missing_tofu_error() from error
-    except RuntimeError as error:  # pragma: no cover - version mismatch etc
-        raise EstateExecutionError(str(error)) from error
-
-
-def _run_tofu(
-    tofu: Tofu,
-    args: cabc.Sequence[str],
-    stdout: typ.IO[str],
-    stderr: typ.IO[str],
-) -> int:
-    results = tofu._run(list(args), raise_on_error=False)
-    _emit_stream(results.stdout, stdout)
-    _emit_stream(results.stderr, stderr)
-    return results.returncode
-
-
-def _emit_stream(text: str | None, handle: typ.IO[str]) -> None:
-    """Write command output, ensuring newline termination when needed."""
-    if not text:
-        return
-    handle.write(text)
-    if not text.endswith("\n"):
-        handle.write("\n")
