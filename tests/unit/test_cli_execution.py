@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import typing as typ
+from pathlib import Path
 
 import pytest
 
 from concordat import cli
 from concordat.errors import ConcordatError
 from concordat.estate import EstateRecord
-from concordat.estate_execution import ExecutionIO, ExecutionOptions
+
+if typ.TYPE_CHECKING:
+    from concordat.estate_execution import ExecutionIO, ExecutionOptions
 
 
 def _estate_record() -> EstateRecord:
@@ -79,7 +81,7 @@ def test_plan_runs_with_injected_token(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert exit_code == 2
     assert called["record"] is record
-    options = typ.cast(ExecutionOptions, called["options"])
+    options = typ.cast("ExecutionOptions", called["options"])
     assert options.github_owner == "example"
     assert options.extra_args == ("-detailed-exitcode",)
     assert options.keep_workdir is True
@@ -106,7 +108,7 @@ def test_plan_allows_explicit_token(monkeypatch: pytest.MonkeyPatch) -> None:
     auth_value = "placeholder-value"
     cli.plan(github_token=auth_value)
 
-    assert typ.cast(ExecutionOptions, captured["options"]).github_token == auth_value
+    assert typ.cast("ExecutionOptions", captured["options"]).github_token == auth_value
 
 
 def test_apply_requires_auto_approve(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -128,7 +130,7 @@ def test_apply_injects_auto_approve(monkeypatch: pytest.MonkeyPatch) -> None:
         auto_approve=True,
     )
 
-    extra_args = typ.cast(ExecutionOptions, captured["options"]).extra_args
+    extra_args = typ.cast("ExecutionOptions", captured["options"]).extra_args
     assert extra_args[0] == "-auto-approve"
     assert list(extra_args[1:]) == ["-var", "foo=1"]
 
@@ -141,4 +143,4 @@ def test_apply_passes_keep_workdir(monkeypatch: pytest.MonkeyPatch) -> None:
         keep_workdir=True,
     )
 
-    assert typ.cast(ExecutionOptions, captured["options"]).keep_workdir is True
+    assert typ.cast("ExecutionOptions", captured["options"]).keep_workdir is True

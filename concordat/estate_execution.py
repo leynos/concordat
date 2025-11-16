@@ -114,28 +114,52 @@ def ensure_estate_cache(
     if not record.alias:
         raise _alias_required_error()
 
-    root = cache_directory or cache_root()
-    destination = root / record.alias
+    destination = _cache_destination(record.alias, cache_directory)
     callbacks = build_remote_callbacks(record.repo_url)
+    repository = _open_or_clone_cache(
+        record,
+        destination=destination,
+        callbacks=callbacks,
+    )
+    return _workdir_from_repository(record.alias, destination, repository)
 
+
+def _cache_destination(alias: str, cache_directory: Path | None) -> Path:
+    root = cache_directory or cache_root()
+    return root / alias
+
+
+def _open_or_clone_cache(
+    record: EstateRecord,
+    *,
+    destination: Path,
+    callbacks: pygit2.RemoteCallbacks | None,
+) -> pygit2.Repository:
     try:
         if destination.exists():
             repository = pygit2.Repository(str(destination))
             _refresh_cache(repository, record.branch, callbacks)
-        else:
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            repository = pygit2.clone_repository(
-                record.repo_url,
-                str(destination),
-                checkout_branch=record.branch,
-                callbacks=callbacks,
-            )
+            return repository
+
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        return pygit2.clone_repository(
+            record.repo_url,
+            str(destination),
+            checkout_branch=record.branch,
+            callbacks=callbacks,
+        )
     except pygit2.GitError as error:  # pragma: no cover - pygit2 raises opaque errors
         raise _sync_failed_error(record.alias, str(error)) from error
 
+
+def _workdir_from_repository(
+    alias: str,
+    destination: Path,
+    repository: pygit2.Repository,
+) -> Path:
     workdir = repository.workdir
     if not workdir:
-        raise _bare_cache_error(record.alias, destination)
+        raise _bare_cache_error(alias, destination)
     return Path(workdir)
 
 
@@ -259,7 +283,7 @@ def _resolve_remote_commit(
         return commit
 
     resolved = repository[commit]  # type: ignore[index]
-    return typ.cast(pygit2.Commit, resolved)
+    return typ.cast("pygit2.Commit", resolved)
 
 
 def _sync_local_branch(
