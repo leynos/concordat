@@ -591,11 +591,7 @@ def _build_client(
 
 def _sanitize_inventory(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    loaded = (
-        _yaml.load(path.read_text(encoding="utf-8")) or {}
-        if path.exists()
-        else {}
-    )
+    loaded = _yaml.load(path.read_text(encoding="utf-8")) or {} if path.exists() else {}
     if not isinstance(loaded, dict):
         loaded = {}
     loaded.setdefault("schema_version", 1)
