@@ -1,5 +1,5 @@
 
-# A comprehensive developer's guide to HCL for OpenTofu
+# A comprehensive developer's guide to HashiCorp configuration language (HCL) for OpenTofu
 
 ______________________________________________________________________
 
@@ -251,7 +251,7 @@ module typically uses the following file layout 8:
   updates.8
 
 - `providers.tofu`: An optional but useful file for explicitly configuring
-  providers. For example, set the AWS (Amazon Web Services) region here. This
+  providers. For example, set the Amazon Web Services (AWS) region here. This
   separates provider configuration from resource definitions.8
 
 When working with OpenTofu, the tool generates several files, and directories
@@ -476,11 +476,11 @@ features, often configured via nested blocks.
 
   - A `precondition` is checked before the resource is created or updated and
     can validate inputs or dependencies. For example, it could check that a
-    specified AMI (Amazon Machine Image) has the correct architecture.7
+    specified Amazon Machine Image (AMI) has the correct architecture.7
 
   - A `postcondition` is checked after a resource is created or updated, and can
     validate the resulting state. For example, it could verify that a created
-    EBS (Elastic Block Store) volume is encrypted.21
+    Elastic Block Store (EBS) volume is encrypted.21
 
     If a condition fails, OpenTofu raises an error with a custom message,
     providing clear feedback.7
@@ -782,8 +782,8 @@ of the resource or module.5
 #### The re-indexing pitfall of `count`
 
 The most significant drawback of `count` emerges when it is used to iterate
-over a list of values. For example, creating an EC2 instance for each subnet ID
-in a list:
+over a list of values. For example, creating an Elastic Compute Cloud (EC2)
+instance for each subnet ID in a list:
 
 ```terraform
 variable "subnet_ids" {
@@ -999,7 +999,7 @@ are particularly essential for developers:
 
   - `timestamp()`: Returns the current time.
 
-  - uuid(): Generates a random UUID (Universally Unique Identifier).
+  - uuid(): Generates a random Universally Unique Identifier (UUID).
 
     Caution: These functions are "impure," meaning their result changes on
     every run. Using them directly in resource arguments will cause the
@@ -1009,7 +1009,7 @@ are particularly essential for developers:
 
 ### 3.3 Managing dependencies
 
-OpenTofu builds a DAG (directed acyclic graph) to determine the correct order
+OpenTofu builds a directed acyclic graph (DAG) to determine the correct order
 of operations for creating, updating, and destroying resources.
 
 - **Implicit Dependencies**: The primary, and preferred way to manage
@@ -1129,7 +1129,7 @@ anti-patterns that lead to brittle, insecure, or unmaintainable configurations.
   checksums for provider packages on specific platforms (e.g., `darwin_arm64`,
   `linux_amd64`). A common pitfall occurs when a developer on one OS (e.g.,
   macOS) runs `tofu init`, and commits the updated lock file. When a continuous
-  integration/continuous delivery (CI/CD) system running on a different OS
+  integration (CI) / continuous delivery (CD) system running on a different OS
   (e.g., Linux) tries to run `init`, it may fail if it cannot find a matching
   hash for its platform.
 
@@ -1147,7 +1147,7 @@ anti-patterns that lead to brittle, insecure, or unmaintainable configurations.
   to developers working with outdated state information.13
 
   - **Best Practice**: Immediately configure a remote backend (e.g., AWS S3,
-    GCS (Google Cloud Storage), Azure Blob Storage) with state locking
+    Google Cloud Storage (GCS), Azure Blob Storage) with state locking
     enabled. This ensures that the state is stored securely, and centrally, and
     prevents concurrent operations from corrupting the state.8
 
@@ -1410,7 +1410,7 @@ expertise, the following resources are highly recommended:
     configuration, reduce boilerplate code, and orchestrate dependencies
     between modules, and stacks.26
 
-  - **TACOS (Automation and Collaboration Software)**: Platforms like Spacelift
-    or env0 provide a collaborative workflow for OpenTofu, integrating with
-    version control to automate planning on pull requests, and providing
-    policy-as-code enforcement.
+  - **Terraform Automation & Collaboration Software (TACOS)**: Platforms like
+    Spacelift or env0 provide a collaborative workflow for OpenTofu,
+    integrating with version control to automate planning on pull requests, and
+    providing policy-as-code enforcement.

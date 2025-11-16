@@ -6,7 +6,8 @@ The `concordat` command line interface (CLI) helps maintainers enrol Git
 repositories with Concordat. Enrolling creates a `.concordat` file at the
 repository root. The file is a YAML 1.2 document with the key/value pair
 `enrolled: true`. Downstream tooling relies on this marker to detect
-participating repositories.
+participating repositories, and Concordat's continuous integration (CI)
+workflows read the same flag before applying changes.
 
 ## Installing the CLI
 
@@ -297,7 +298,7 @@ demonstrating the guardrails to stakeholders:
     go -C platform-standards/tofu/terratest test ./...
   ```
 
-- Validate the OPA policy expectations:
+- Validate the Open Policy Agent (OPA) policy expectations:
 
   ```shell
   conftest test --policy platform-standards/tofu/policies \
@@ -313,7 +314,8 @@ real repository settings change.
 
 - Scheduled audits run via `.github/workflows/auditor.yml` every day at 05:00
   UTC. Results land in GitHub's Code Scanning dashboard because the workflow
-  uploads the generated SARIF file using `github/codeql-action/upload-sarif`.
+  uploads the generated Static Analysis Results Interchange Format (SARIF) file
+  using `github/codeql-action/upload-sarif`.
 - Trigger the workflow manually with **Run workflow** to inspect a specific
   revision. Provide `snapshot_path` (for example,
   `tests/fixtures/auditor/snapshot.json`) to replay a recorded API response and

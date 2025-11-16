@@ -39,14 +39,14 @@ automation assets.
 
 ### Step: Ship the estate execution CLI
 
-Tie the template, estate configuration, and OpenTofu execution together, so
-operators can preview and apply changes from concordat.
+Connect the estate configuration template to OpenTofu execution to let
+operators preview and apply changes from concordat.
 
-- [x] Cache estate repositories under the concordat XDG cache directory (for
-      example, `~/.cache/concordat/estates/<alias>`) and clone the cached state
-      into a temporary execution directory for each run. Acceptance: repeated
-      executions of the same command reuse the cache, but leave no residue in
-      `/tmp` unless `--keep-workdir` is passed.
+- [x] Cache estate repositories under the concordat X Desktop Group (XDG) cache
+      directory (for example, `~/.cache/concordat/estates/<alias>`) and clone
+      the cached state into a temporary execution directory for each run.
+      Acceptance: repeated executions of the same command reuse the cache, but
+      leave no residue in `/tmp` unless `--keep-workdir` is passed.
 - [x] Implement `concordat plan`, using tofupy to run `tofu plan` inside the
       execution directory after synthesizing `terraform.tfvars` from the estate
       metadata. Acceptance: the command clones the active estate, writes a
@@ -62,9 +62,10 @@ operators can preview and apply changes from concordat.
 Surface configuration drift and compliance gaps while keeping enforcement in
 evaluate mode.
 
-- [x] Package the Auditor GitHub Action with SARIF output, covering merge mode,
-      branch protection, permission, and label checks. Acceptance: scheduled
-      runs populate the Code Scanning dashboard with classified findings.
+- [x] Package the Auditor GitHub Action with Static Analysis Results
+      Interchange Format (SARIF) output, covering merge mode, branch
+      protection, permission, and label checks. Acceptance: scheduled runs
+      populate the Code Scanning dashboard with classified findings.
 - [ ] Schedule OpenTofu plans against a sandbox organization identity using the
       GitHub provider. Acceptance: nightly plans complete under one hour with
       drift deltas archived.

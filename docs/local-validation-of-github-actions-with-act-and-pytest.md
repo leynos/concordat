@@ -1,9 +1,10 @@
 # Local validation of GitHub Actions with act and pytest (black-box)
 
-This guide focuses on **pre-CI smoke/integration testing** of a workflow using
-`act` and `pytest`, treating the workflow as a **black box**. The assertions
-target artefacts, workspace side effects, and structured logs. Host-side
-command interception is intentionally avoided; containers execute in isolation.
+This guide focuses on **pre-continuous integration (CI) smoke/integration
+testing** of a workflow using `act` and `pytest`, treating the workflow as a
+**black box**. The assertions target artefacts, workspace side effects, and
+structured logs. Host-side command interception is intentionally avoided;
+containers execute in isolation.
 
 ## TL;DR
 
@@ -12,7 +13,7 @@ command interception is intentionally avoided; containers execute in isolation.
 - Integration-test the **workflow** locally via `act`, from a `pytest` harness.
 - Assert on **artefacts**, **file outputs**, and **logs** (using `act --json`).
 - Treat results as pre-CI confidence; certify on GitHub runners for
-  permissions/OIDC parity.
+  permissions/OpenID Connect (OIDC) parity.
 
 ## Prerequisites
 
@@ -212,7 +213,8 @@ The `concordat` repository wires these patterns into
 - Provide a JSON snapshot via the `snapshot_path` workflow input so the
   Auditor CLI operates deterministically without reaching the GitHub API.
 - Pass `upload_sarif=false` to avoid hitting the Code Scanning API during local
-  validation; the workflow still uploads the SARIF artefact for inspection.
+  validation; the workflow still uploads the Static Analysis Results
+  Interchange Format (SARIF) artefact for inspection.
 
 1. **Inspect** the journal. After verification, `cmd_mox.journal` exposes the
    captured `Invocation` objects. Serialize the data into JSON lines or YAML,
@@ -221,7 +223,7 @@ The `concordat` repository wires these patterns into
 ## What to assert (beyond exit code)
 
 - **Artefacts:** existence, schema, and specific fields; normalize line endings
-  when CRLF matters.
+  when carriage return/line feed (CRLF) semantics matter.
 - **Workspace side effects:** files created/modified when using `-b`.
 - **Structured logs:** look for key lines (cache keys, matrix values, tool
   versions). Prefer `--json` and parse rather than grepping raw TTY output.
@@ -242,7 +244,7 @@ The `concordat` repository wires these patterns into
 
 - **Runner parity:** `act` images are close, not identical, to `ubuntu-latest`.
 - **Permissions/OIDC:** token scopes, OIDC federation, and GitHub-provided
-  credentials cannot be faithfully validated locally; rely on GH runners.
+  credentials cannot be faithfully validated locally; rely on GitHub runners.
 - **Service containers & networking:** usually fine but can diverge under load
   or with subtle DNS/health-check timing.
 
@@ -250,8 +252,8 @@ The `concordat` repository wires these patterns into
 
 1. **Local fast loop:** unit tests -> `act` black-box tests via `pytest`.
 2. **Authoritative CI:** run the same workflow on GitHub-hosted runners.
-3. **End-to-end (privileged paths):** GH-only with least-privilege tokens; gate
-   behind labels/paths.
+3. **End-to-end (privileged paths):** GitHub-only with least-privilege tokens;
+   gate behind labels/paths.
 
 This arrangement provides tight feedback for workflow correctness and
 orchestration logic, without pretending local containers are perfect stand-ins

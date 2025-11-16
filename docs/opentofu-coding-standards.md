@@ -1,4 +1,4 @@
-# OpenTofu HCL coding standards
+# OpenTofu HashiCorp configuration language (HCL) coding standards
 
 ## Purpose
 

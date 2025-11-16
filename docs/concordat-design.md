@@ -36,6 +36,10 @@ This philosophy is supported by three foundational pillars:
    shifting the enforcement mechanism from human review to automated system
    validation.
 
+Continuous integration (CI) and continuous delivery (CD) automation provide the
+enforcement surface for these standards; the document references both terms
+frequently when describing guardrails and feedback loops.
+
 ### 1.2. Architectural blueprint and data flow
 
 The system is a composite architecture comprising several specialized,
@@ -269,8 +273,9 @@ auditable:
    OpenTofu module) to include the newly enrolled repository.
 2. Run the required quality gates locally (`tofu fmt -check`, `tflint`, `tofu
    validate`, module tests) so reviewers see a passing plan.
-3. Commit the HCL change, push the branch, and open a pull request that links
-   to the `.concordat` commit in the target repository.
+3. Commit the HashiCorp Configuration Language (HCL) change, push the branch,
+   and open a pull request that links to the `.concordat` commit in the target
+   repository.
 
 Only after that PR merges—and the next `tofu plan/apply` cycle runs—will the
 repository be considered “in scope” for OpenTofu. Until then, the `.concordat`
@@ -405,14 +410,14 @@ alternative.
 
 #### Table 1: Technology stack and rationale
 
-| **Tool**              | **Primary Role in Framework**                                                           | **Justification**                                                                                                                                                         | **Rejected Alternative(s) & Rationale**                                                                                                                           |
-| --------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **OpenTofu**          | Declarative management of GitHub API resources (repositories, teams, rulesets).         | Provides a declarative, stateful approach with drift detection (`plan`), and remediation (`apply`). Fully compatible with the mature Terraform GitHub provider.[^9][^10]  | **Ansible:** Imperative, not stateful. Less ergonomic for detecting drift in API-managed resources compared to a dedicated IaC tool.                              |
-| **OPA/Conftest**      | Policy-as-code engine for validating structured configuration files (e.g., YAML, JSON). | Provides a powerful, declarative language (Rego) specifically designed for querying structured data. Enables testable, version-controlled policies.[^4][^11]              | **Custom Scripts (Python/Shell):** Brittle, harder to maintain, and lacks the expressive power of Rego for complex policy evaluation.                             |
-| **Vale**              | Prose linter for enforcing documentation, and style guide standards.                    | Codifies linguistic and stylistic rules far more effectively than simple regular expressions. Supports custom, shareable style packs.[^6][^12]                            | **Ad-hoc Regex Scripts:** Inadequate for handling the complexities of natural language; difficult to maintain, and scale.                                         |
-| `multi-gitter`        | Scaled remediation via mass pull request generation.                                    | A specialized tool purpose-built for the task of multi-repository changes. More ergonomic and efficient than general-purpose tools.8                                      | **Custom Scripts using **`gh`** CLI:** Requires significant boilerplate code to handle cloning, branching, committing, and creating PRs across many repositories. |
-| **GitHub Actions**    | Primary automation, and orchestration engine.                                           | Native to the platform, providing seamless integration for CI/CD, scheduled tasks, and event-driven automation.[^13][^14]                                                 | **External CI/CD Systems (e.g., Jenkins):** Adds operational overhead, and complexity compared to the tightly integrated native solution.                         |
-| **OpenSSF Scorecard** | Security posture assessment.                                                            | Provides a standardized, automated baseline for security best practices. Integrates easily into CI workflows, and is maintained by the Open Source Security Foundation.15 | **Manual Security Audits:** Not scalable, inconsistent, and cannot be integrated into an automated enforcement gate.                                              |
+| **Tool**                                      | **Primary Role in Framework**                                                           | **Justification**                                                                                                                                                         | **Rejected Alternative(s) & Rationale**                                                                                                                           |
+| --------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **OpenTofu**                                  | Declarative management of GitHub API resources (repositories, teams, rulesets).         | Provides a declarative, stateful approach with drift detection (`plan`), and remediation (`apply`). Fully compatible with the mature Terraform GitHub provider.[^9][^10]  | **Ansible:** Imperative, not stateful. Less ergonomic for detecting drift in API-managed resources compared to a dedicated IaC tool.                              |
+| **OPA/Conftest**                              | Policy-as-code engine for validating structured configuration files (e.g., YAML, JSON). | Provides a powerful, declarative language (Rego) specifically designed for querying structured data. Enables testable, version-controlled policies.[^4][^11]              | **Custom Scripts (Python/Shell):** Brittle, harder to maintain, and lacks the expressive power of Rego for complex policy evaluation.                             |
+| **Vale**                                      | Prose linter for enforcing documentation, and style guide standards.                    | Codifies linguistic and stylistic rules far more effectively than simple regular expressions. Supports custom, shareable style packs.[^6][^12]                            | **Ad-hoc Regex Scripts:** Inadequate for handling the complexities of natural language; difficult to maintain, and scale.                                         |
+| `multi-gitter`                                | Scaled remediation via mass pull request generation.                                    | A specialized tool purpose-built for the task of multi-repository changes. More ergonomic and efficient than general-purpose tools.8                                      | **Custom Scripts using **`gh`** CLI:** Requires significant boilerplate code to handle cloning, branching, committing, and creating PRs across many repositories. |
+| **GitHub Actions**                            | Primary automation, and orchestration engine.                                           | Native to the platform, providing seamless integration for CI/CD, scheduled tasks, and event-driven automation.[^13][^14]                                                 | **External CI/CD Systems (e.g., Jenkins):** Adds operational overhead, and complexity compared to the tightly integrated native solution.                         |
+| **Open Source Security Foundation Scorecard** | Security posture assessment.                                                            | Provides a standardized, automated baseline for security best practices. Integrates easily into CI workflows, and is maintained by the Open Source Security Foundation.15 | **Manual Security Audits:** Not scalable, inconsistent, and cannot be integrated into an automated enforcement gate.                                              |
 
 ## 2. Foundational components
 
@@ -526,7 +531,8 @@ The provider exposes:
   example, `Cargo.toml`), runs the pinned Rego planner rule from
   `platform-standards/canon/policies/...`, and returns an RFC 6902 patch list,
   summary text, and any findings. The provider converts TOML to canonical JSON
-  for policy input but preserves the original AST so comments survive.
+  for policy input but preserves the original abstract syntax tree (AST) so
+  comments survive.
 - `concordat_file_toml_remediation_pr` (resource) — applies the planned patch
   set using the AST, commits the change to a feature branch, and opens a PR via
   the GitHub API. The resource never writes to the default branch and requires
@@ -592,10 +598,10 @@ The primary audit domains are:
 4. **Prose, and Documentation Quality:** Executes the Vale prose linter against
    all Markdown files within the repository to enforce the organization's house
    style guide, checking for issues related to grammar, tone, and terminology.6
-5. **Security Posture:** Integrates, and executes the OpenSSF Scorecard tool.
-   The numeric score and specific findings from Scorecard are incorporated into
-   the Auditor's overall report, providing a consistent, organization-wide
-   security baseline.15
+5. **Security Posture:** Integrates, and executes the Open Source Security
+   Foundation Scorecard tool. The numeric score and specific findings from
+   Scorecard are incorporated into the Auditor's overall report, providing a
+   consistent, organization-wide security baseline.15
 
 The following table serves as the master list of requirements for the Auditor.
 It defines the scope of work for implementation, and provides an itemised
@@ -603,24 +609,24 @@ breakdown of what constitutes "compliance" within the framework.
 
 #### Table 3: Auditor check catalog
 
-| **Check ID** | **Description**                                                                                                                      | **Audit Domain**                | **Implementation Tool** | **Default Severity** | **Implementation Phase** |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------- | ----------------------- | -------------------- | ------------------------ |
-| RS-001       | Default branch is named `main`.                                                                                                      | Repository Settings             | Python/GitHub API       | error                | 1                        |
-| RS-002       | Squash merging is enabled; merge commits and rebase merging are disabled.                                                            | Repository Settings             | Python/GitHub API       | error                | 1                        |
-| RS-003       | "Delete branch on merge" is enabled.                                                                                                 | Repository Settings             | Python/GitHub API       | error                | 1                        |
-| BP-001       | Default branch protection enforces admin parity, signed commits, reviews, and strict status checks (including the Auditor).          | Branch Governance               | Python/GitHub API       | error                | 1                        |
-| PM-001       | Repository permissions route through at least one team with maintain/admin scope and expose no outside collaborators with admin.     | Repository Access Controls      | Python/GitHub API       | error                | 1                        |
-| LB-001       | Canonical priority labels (`priority/p0`–`priority/p3`) exist with the correct colour and description metadata.                      | Label Governance                | Python/GitHub API       | warning              | 1                        |
-| CI-001       | The `.github/workflows/ci.yml` file must call the canonical reusable CI workflow.                                                    | CI/CD Integrity                 | OPA/Conftest            | error                | 1                        |
-| CI-002       | The `.github/workflows/release.yml` file must call the canonical reusable release workflow (if `ci.needs_release_workflow` is true). | CI/CD Integrity                 | OPA/Conftest            | error                | 2                        |
-| CI-003       | Workflows must not use disallowed third-party GitHub Actions.                                                                        | CI/CD Integrity                 | OPA/Conftest            | error                | 2                        |
-| FP-001       | A `.editorconfig` file must exist and match the canonical version.                                                                   | File and Content Presence       | Python/Checksum         | error                | 1                        |
-| FP-002       | An `AGENTS.md` file must exist and contain required sections.                                                                        | File and Content Presence       | Python/Content Check    | error                | 1                        |
-| FP-003       | A `Makefile` must exist and contain canonical targets (`lint`, `test`, `build`).                                                     | File, and Content Presence      | Python/Content Check    | error                | 2                        |
-| FP-004       | For Python projects, a `ruff.toml` file must exist.                                                                                  | File, and Content Presence      | OPA/Conftest            | error                | 1                        |
-| PD-001       | All Markdown files must pass Vale linting against the house style guide.                                                             | Prose and Documentation Quality | Vale                    | warning              | 2                        |
-| SP-001       | OpenSSF Scorecard must achieve a minimum score of 7.0.                                                                               | Security Posture                | OpenSSF Scorecard       | warning              | 1                        |
-| LG-001       | The `docs/library-users-guide.md` file must match the canonical version from the consumed library tag.                               | File and Content Presence       | Python/Content Check    | error                | 4                        |
+| **Check ID** | **Description**                                                                                                                      | **Audit Domain**                | **Implementation Tool**                   | **Default Severity** | **Implementation Phase** |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------- | ----------------------------------------- | -------------------- | ------------------------ |
+| RS-001       | Default branch is named `main`.                                                                                                      | Repository Settings             | Python/GitHub API                         | error                | 1                        |
+| RS-002       | Squash merging is enabled; merge commits and rebase merging are disabled.                                                            | Repository Settings             | Python/GitHub API                         | error                | 1                        |
+| RS-003       | "Delete branch on merge" is enabled.                                                                                                 | Repository Settings             | Python/GitHub API                         | error                | 1                        |
+| BP-001       | Default branch protection enforces admin parity, signed commits, reviews, and strict status checks (including the Auditor).          | Branch Governance               | Python/GitHub API                         | error                | 1                        |
+| PM-001       | Repository permissions route through at least one team with maintain/admin scope and expose no outside collaborators with admin.     | Repository Access Controls      | Python/GitHub API                         | error                | 1                        |
+| LB-001       | Canonical priority labels (`priority/p0`–`priority/p3`) exist with the correct colour and description metadata.                      | Label Governance                | Python/GitHub API                         | warning              | 1                        |
+| CI-001       | The `.github/workflows/ci.yml` file must call the canonical reusable CI workflow.                                                    | CI/CD Integrity                 | OPA/Conftest                              | error                | 1                        |
+| CI-002       | The `.github/workflows/release.yml` file must call the canonical reusable release workflow (if `ci.needs_release_workflow` is true). | CI/CD Integrity                 | OPA/Conftest                              | error                | 2                        |
+| CI-003       | Workflows must not use disallowed third-party GitHub Actions.                                                                        | CI/CD Integrity                 | OPA/Conftest                              | error                | 2                        |
+| FP-001       | A `.editorconfig` file must exist and match the canonical version.                                                                   | File and Content Presence       | Python/Checksum                           | error                | 1                        |
+| FP-002       | An `AGENTS.md` file must exist and contain required sections.                                                                        | File and Content Presence       | Python/Content Check                      | error                | 1                        |
+| FP-003       | A `Makefile` must exist and contain canonical targets (`lint`, `test`, `build`).                                                     | File, and Content Presence      | Python/Content Check                      | error                | 2                        |
+| FP-004       | For Python projects, a `ruff.toml` file must exist.                                                                                  | File, and Content Presence      | OPA/Conftest                              | error                | 1                        |
+| PD-001       | All Markdown files must pass Vale linting against the house style guide.                                                             | Prose and Documentation Quality | Vale                                      | warning              | 2                        |
+| SP-001       | The Open Source Security Foundation Scorecard must achieve a minimum score of 7.0.                                                   | Security Posture                | Open Source Security Foundation Scorecard | warning              | 1                        |
+| LG-001       | The `docs/library-users-guide.md` file must match the canonical version from the consumed library tag.                               | File and Content Presence       | Python/Content Check                      | error                | 4                        |
 
 ### 3.2. Implementation design and execution model
 
@@ -1151,5 +1157,5 @@ the principle of least privilege.
        [https://resources.github.com/learn/pathways/automation/intermediate/create-reusable-workflows-in-github-actions/](https://resources.github.com/learn/pathways/automation/intermediate/create-reusable-workflows-in-github-actions/)
 [^13]: Reuse workflows - GitHub Docs, accessed on 26 October 2025,
        [https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows)
-[^14]: OpenSSF Scorecard, accessed on 26 October 2025,
+[^14]: Open Source Security Foundation Scorecard, accessed on 26 October 2025,
        [https://scorecard.dev/](https://scorecard.dev/)
