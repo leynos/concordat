@@ -21,11 +21,15 @@ from concordat.estate_execution import (
 
 if typ.TYPE_CHECKING:
     from pathlib import Path
-
-    from tests.conftest import GitRepo
-else:  # pragma: no cover - fallback for runtime typing
+else:  # pragma: no cover - runtime fallback
     Path = typ.Any
-    GitRepo = typ.Any
+
+
+class GitRepo(typ.Protocol):
+    """Structural type for the git_repo fixture."""
+
+    path: Path
+    repository: pygit2.Repository
 
 
 def _make_record(repo_path: Path, alias: str = "core") -> EstateRecord:

@@ -35,3 +35,20 @@ Feature: Running estate execution commands
     When I run concordat apply with options "--auto-approve"
     Then the command exits with code 0
     And fake tofu commands were "version -json | init -input=false | apply -auto-approve"
+
+  Scenario: Plan requires GITHUB_TOKEN
+    Given an isolated concordat config directory
+    And an isolated concordat cache directory
+    And a fake estate repository is registered
+    And GITHUB_TOKEN is unset
+    And a fake tofu binary logs invocations
+    When I run concordat plan
+    Then the command fails with message "GITHUB_TOKEN"
+
+  Scenario: Plan requires an active estate
+    Given an isolated concordat config directory
+    And an isolated concordat cache directory
+    And GITHUB_TOKEN is set to "placeholder-token"
+    And a fake tofu binary logs invocations
+    When I run concordat plan
+    Then the command fails with message "No active estate configured"

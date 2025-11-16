@@ -49,16 +49,6 @@ class ExecutionIO:
     stderr: typ.IO[str]
 
 
-@dataclasses.dataclass(frozen=True)
-class _OperationConfig:
-    github_owner: str
-    github_token: str
-    command: cabc.Sequence[str]
-    keep_workdir: bool
-    prefix: str
-    cache_directory: Path | None
-
-
 def _alias_required_error() -> EstateExecutionError:
     return EstateExecutionError("Estate alias is required to cache the repository.")
 
@@ -157,8 +147,7 @@ def _workdir_from_repository(
     destination: Path,
     repository: pygit2.Repository,
 ) -> Path:
-    workdir = repository.workdir
-    if not workdir:
+    if not (workdir := repository.workdir):
         raise _bare_cache_error(alias, destination)
     return Path(workdir)
 
@@ -200,7 +189,7 @@ def run_plan(
     io: ExecutionIO,
 ) -> tuple[int, Path]:
     """Execute `tofu plan` within a prepared estate workspace."""
-    return _run_command(record, "plan", options, io)
+    return _run_estate_command(record, "plan", options, io)
 
 
 def run_apply(
@@ -209,29 +198,31 @@ def run_apply(
     io: ExecutionIO,
 ) -> tuple[int, Path]:
     """Execute `tofu apply` within a prepared estate workspace."""
-    return _run_command(record, "apply", options, io)
+    return _run_estate_command(record, "apply", options, io)
 
 
-def _run_command(
+def _run_estate_command(
     record: EstateRecord,
     verb: str,
     options: ExecutionOptions,
     io: ExecutionIO,
 ) -> tuple[int, Path]:
-    additional = tuple(options.extra_args)
-    command = (verb, *additional)
-    return _run_operation(
+    command = (verb, *tuple(options.extra_args))
+    with estate_workspace(
         record,
-        _OperationConfig(
-            github_owner=options.github_owner,
-            github_token=options.github_token,
-            command=command,
-            keep_workdir=options.keep_workdir,
-            prefix=verb,
-            cache_directory=options.cache_directory,
-        ),
-        io,
-    )
+        cache_directory=options.cache_directory,
+        keep_workdir=options.keep_workdir,
+        prefix=verb,
+    ) as workdir:
+        io.stderr.write(f"execution workspace: {workdir}\n")
+        io.stderr.flush()
+        write_tfvars(workdir, github_owner=options.github_owner)
+        tofu = _initialise_tofu(workdir, options.github_token)
+        init_code = _run_tofu(tofu, ["init", "-input=false"], io.stdout, io.stderr)
+        if init_code != 0:
+            return init_code, workdir
+        exit_code = _run_tofu(tofu, command, io.stdout, io.stderr)
+        return exit_code, workdir
 
 
 def _clone_into_temp(cache_path: Path, prefix: str) -> Path:
@@ -304,28 +295,6 @@ def _reset_to_commit(repository: pygit2.Repository, commit: pygit2.Commit) -> No
     repository.checkout_head(strategy=pygit2.GIT_CHECKOUT_FORCE)
 
 
-def _run_operation(
-    record: EstateRecord,
-    config: _OperationConfig,
-    io: ExecutionIO,
-) -> tuple[int, Path]:
-    with estate_workspace(
-        record,
-        cache_directory=config.cache_directory,
-        keep_workdir=config.keep_workdir,
-        prefix=config.prefix,
-    ) as workdir:
-        io.stderr.write(f"execution workspace: {workdir}\n")
-        io.stderr.flush()
-        write_tfvars(workdir, github_owner=config.github_owner)
-        tofu = _initialise_tofu(workdir, config.github_token)
-        init_code = _run_tofo(tofu, ["init", "-input=false"], io.stdout, io.stderr)
-        if init_code != 0:
-            return init_code, workdir
-        exit_code = _run_tofo(tofu, config.command, io.stdout, io.stderr)
-        return exit_code, workdir
-
-
 def _initialise_tofu(workdir: Path, github_token: str) -> Tofu:
     try:
         return Tofu(cwd=str(workdir), env={"GITHUB_TOKEN": github_token})
@@ -335,7 +304,7 @@ def _initialise_tofu(workdir: Path, github_token: str) -> Tofu:
         raise EstateExecutionError(str(error)) from error
 
 
-def _run_tofo(
+def _run_tofu(
     tofu: Tofu,
     args: cabc.Sequence[str],
     stdout: typ.IO[str],

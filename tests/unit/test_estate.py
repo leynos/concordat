@@ -12,6 +12,7 @@ from concordat import estate
 from concordat.errors import ConcordatError
 from concordat.estate import (
     EstateRecord,
+    MissingGitHubOwnerError,
     RemoteProbe,
     _build_client,
     get_active_estate,
@@ -158,6 +159,35 @@ def test_init_estate_requires_owner_for_non_github_remote(
         )
 
     assert "github_owner" in str(caught.value)
+
+
+def test_init_estate_rejects_empty_owner(
+    tmp_path: pathlib.Path,
+    mocker: pytest_mock.MockFixture,
+) -> None:
+    """Empty github_owner values are rejected."""
+    config_path = tmp_path / "config.yaml"
+    mocker.patch.object(
+        estate,
+        "_probe_remote",
+        return_value=RemoteProbe(reachable=False, exists=False, empty=True, error=None),
+    )
+    mocker.patch.object(estate, "_bootstrap_template")
+
+    fake_client = mocker.Mock()
+    fake_client.repository.return_value = None
+    fake_client.organization.return_value = mocker.Mock()
+    mocker.patch.object(estate, "_build_client", return_value=fake_client)
+
+    with pytest.raises(MissingGitHubOwnerError):
+        init_estate(
+            "core",
+            "git@github.com:example/core.git",
+            github_owner="",
+            github_token="token",  # noqa: S106
+            confirm=lambda _: True,
+            config_path=config_path,
+        )
 
 
 def test_init_estate_allows_explicit_owner_override(

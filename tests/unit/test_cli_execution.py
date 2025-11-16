@@ -135,6 +135,23 @@ def test_apply_injects_auto_approve(monkeypatch: pytest.MonkeyPatch) -> None:
     assert list(extra_args[1:]) == ["-var", "foo=1"]
 
 
+def test_apply_does_not_duplicate_auto_approve(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Passing -auto-approve explicitly keeps a single flag."""
+    captured = _apply_and_capture(
+        monkeypatch,
+        "-auto-approve",
+        "-var",
+        "foo=1",
+        auto_approve=True,
+    )
+
+    extra_args = typ.cast("ExecutionOptions", captured["options"]).extra_args
+    assert extra_args.count("-auto-approve") == 1
+    assert list(extra_args[1:]) == ["-var", "foo=1"]
+
+
 def test_apply_passes_keep_workdir(monkeypatch: pytest.MonkeyPatch) -> None:
     """Setting --keep-workdir forwards the flag to run_apply."""
     captured = _apply_and_capture(

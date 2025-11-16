@@ -108,13 +108,17 @@ def _resolve_namespaces(namespaces: tuple[str, ...]) -> tuple[str, ...]:
     """Return namespaces or fall back to the active estate owner."""
     if namespaces:
         return namespaces
-    estate = get_active_estate()
-    if estate is None:
+    if (estate := get_active_estate()) is None:
         raise ConcordatError(ERROR_NAMESPACE_REQUIRED)
-    owner = estate.github_owner
-    if not owner:
-        raise ConcordatError(ERROR_OWNER_LOOKUP_FAILED.format(alias=estate.alias))
-    return (owner,)
+    if owner := estate.github_owner:
+        return (owner,)
+    raise ConcordatError(ERROR_OWNER_LOOKUP_FAILED.format(alias=estate.alias))
+
+
+def _resolve_github_token(explicit: str | None = None) -> str:
+    if token := (explicit or os.getenv("GITHUB_TOKEN")):
+        return token
+    raise ConcordatError(ERROR_MISSING_GITHUB_TOKEN)
 
 
 @app.command()

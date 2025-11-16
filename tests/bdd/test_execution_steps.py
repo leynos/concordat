@@ -82,6 +82,18 @@ def given_fake_estate(
     monkeypatch.setenv("GITHUB_TOKEN", "placeholder-token")
 
 
+@given("GITHUB_TOKEN is unset")
+def given_token_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Clear any configured GitHub token."""
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+
+
+@given(parsers.cfparse('GITHUB_TOKEN is set to "{token}"'))
+def given_token_set(token: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Force concordat to use the provided GitHub token."""
+    monkeypatch.setenv("GITHUB_TOKEN", token)
+
+
 @given("a fake tofu binary logs invocations")
 def given_fake_tofu(
     tmp_path: Path,
@@ -235,10 +247,6 @@ def then_fake_tofu_commands(
     log_path = execution_state.get("tofu_log")
     assert log_path, "fake tofu log path missing"
     expected = [item.strip() for item in commands.split("|") if item.strip()]
-    actual = []
     with Path(log_path).open("r", encoding="utf-8") as handle:
-        for line in handle:
-            line = line.strip()
-            if line:
-                actual.append(line)
+        actual = [line for raw_line in handle if (line := raw_line.strip())]
     assert actual == expected
