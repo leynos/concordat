@@ -190,7 +190,7 @@ false-positive rate is acceptable. Exemptions use the existing
   `--platform-standards-url`.
 - `concordat plan` clones the active estate into a temporary workspace, renders
   the OpenTofu variable file from estate metadata, and invokes tofupy's `plan`
-  entrypoint so operators can preview drift without leaving the CLI.
+  entrypoint, so operators can preview drift without leaving the CLI.
 - `concordat apply` reuses the same machinery but calls tofupy's `apply`,
   allowing auditable changes to estates directly from concordat.
 - When the `--platform-standards-url` (or `CONCORDAT_PLATFORM_STANDARDS_URL`)
@@ -199,7 +199,7 @@ false-positive rate is acceptable. Exemptions use the existing
   `tflint`, and `tofu validate`, pushes a feature branch, and uses the
   authenticated GitHub token to open a pull request. This satisfies the roadmap
   acceptance criterion that every enrolment produces both the local
-  `.concordat` commit and a passing IaC PR.
+  `.concordat` commit and a passing IaC pull request (PR).
 - Future extensions may scaffold a pull request that adds the reusable
   `priority-sync` workflow to a repository, but the CLI continues to defer
   state changes to IaC.
@@ -221,7 +221,7 @@ state stored in each estate repository.
 - When an estate is active, invoking `concordat ls` without namespaces defaults
   to the recorded `github_owner`, offering a zero-argument inventory view.
 
-`concordat estate init` accepts a `--github-owner` flag so estates backed by
+`concordat estate init` accepts a `--github-owner` flag, so estates backed by
 non-GitHub remotes can still record the namespace they manage. When the remote
 URL points to GitHub, the CLI infers the owner automatically; otherwise the
 flag is required. The active estate must provide `github_owner` before any
@@ -246,9 +246,9 @@ template usage, satisfying the evaluate-mode acceptance criteria.
 
 #### 2.7.3 tofupy integration
 
-- Instead of shelling out directly to the `tofu` binary we reuse tofupy, which
-  provides a Python API mirroring OpenTofu's UX. This keeps error handling and
-  output capture in-process.
+- Instead of shelling out directly to the `tofu` binary, the CLI reuses
+  tofupy, which provides a Python API mirroring OpenTofu's UX. This keeps error
+  handling and output capture in-process.
 - `concordat plan` resolves the active estate, prepares the workspace and
   tfvars file, ensures `GITHUB_TOKEN` is exported, then calls tofupy's plan
   API. The CLI streams stdout/stderr and returns a non-zero exit code if the
@@ -291,14 +291,14 @@ The delivered CLI follows the workflow above:
   and copied into a per-run temporary directory. The CLI prints the workspace
   path at the start of every execution and removes it afterward unless
   `--keep-workdir` is passed for debugging.
-- `terraform.tfvars` is synthesised with the estate's `github_owner` before
-  invoking OpenTofu. Commands refuse to run without `GITHUB_TOKEN` so the
+- `terraform.tfvars` is synthesized with the estate's `github_owner` before
+  invoking OpenTofu. Commands refuse to run without `GITHUB_TOKEN`, so the
   GitHub provider can load schemas without interactive prompts.
 - OpenTofu execution reuses `tofupy.Tufu`, which resolves the `tofu` binary,
   runs `init -input=false`, then relays stdout/stderr from `plan` or `apply`
   while propagating the underlying exit code.
 - `concordat apply` requires an explicit `--auto-approve` flag. The CLI adds
-  the corresponding `-auto-approve` switch so unattended applies remain
+  the corresponding `-auto-approve` switch, so unattended applies remain
   deliberate.
 
 Unit tests cover the estate cache and CLI wiring, and new pytest-bdd scenarios
@@ -327,14 +327,14 @@ automatically.
 ## 3. Squash-only merge standard test case
 
 Repository standard RS-002 (squash-only merges) now ships as an executable
-OpenTofu stack so operators can inspect drift with a single `tofu plan`. The
+OpenTofu stack, so operators can inspect drift with a single `tofu plan`. The
 stack lives at `platform-standards/tofu` and decodes
 `platform-standards/tofu/inventory/repositories.yaml`, which now includes the
 non-production entry `test-case/squash-only-standard`. Each inventory record
 retains the historical `name: owner/repo` slug so the CLI can continue to
 append new repositories without understanding optional settings.
 
-- `platform-standards/tofu/main.tofu` materialises the inventory into a
+- `platform-standards/tofu/main.tofu` materializes the inventory into a
   `module "repository"` for every slug, enforcing that the owner component
   matches the `github_owner` variable (defaulting to `test-case`). The
   populated module parameters surface consistent defaults for topics,
@@ -403,7 +403,7 @@ This curated set of specialized components is a key architectural strength and
 yields a system that is more maintainable and more powerful than any monolithic
 alternative.
 
-#### Table 1: Technology Stack and Rationale
+#### Table 1: Technology stack and rationale
 
 | **Tool**              | **Primary Role in Framework**                                                           | **Justification**                                                                                                                                                         | **Rejected Alternative(s) & Rationale**                                                                                                                           |
 | --------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -536,12 +536,12 @@ The provider exposes:
   embed the exact change summary into SARIF diagnostics.
 
 Provider configuration pins the exact `platform-standards` ref and policy
-directory so nightly plans remain deterministic (`platform_standards_ref`,
+directory, so nightly plans remain deterministic (`platform_standards_ref`,
 `policy_dir`). Planner rules are declared in Rego (for example,
 `data.canon.rust.lints.plan_toml`) alongside the companion deny rules and
-include helper functions for JSON Pointer ↔ TOML path translation. By releasing
-this provider as a shared component, we avoid bespoke scripts and give the
-estate a consistent interface for policy-driven remediation.
+include helper functions for JSON Pointer ↔ TOML path translation. Releasing
+this provider as a shared component avoids bespoke scripts and gives the estate
+a consistent interface for policy-driven remediation.
 
 ### 2.3. The organization-level `.github` repository
 
@@ -601,7 +601,7 @@ The following table serves as the master list of requirements for the Auditor.
 It defines the scope of work for implementation, and provides an itemised
 breakdown of what constitutes "compliance" within the framework.
 
-#### Table 3: Auditor Check Catalog
+#### Table 3: Auditor check catalog
 
 | **Check ID** | **Description**                                                                                                                      | **Audit Domain**                | **Implementation Tool** | **Default Severity** | **Implementation Phase** |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------- | ----------------------- | -------------------- | ------------------------ |
@@ -675,7 +675,7 @@ bootstrap process:
   ensuring the CLI and dependencies match the workflow revision.
 - Inputs expose the repository slug, output path for the SARIF artefact,
   optional overrides for the canonical `priority-model.yaml`, and an optional
-  JSON snapshot. The snapshot flag exists purely for local testing with `act`
+  JSON snapshot. The snapshot flag exists purely for local testing with `act`,
   so maintainers can run the workflow without contacting the GitHub API.
 - A single step runs `python -m concordat.auditor`, writing the SARIF log to
   `artifacts/concordat-auditor.sarif` by default and surfacing the path via
@@ -1136,8 +1136,8 @@ the principle of least privilege.
 
 [^4]: OPA Conftest Basics - KodeKloud Notes, accessed on 26 October 2025,
       [https://notes.kodekloud.com/docs/DevSecOps-Kubernetes-DevOps-Security/DevSecOps-Pipeline/OPA-Conftest-Basics](https://notes.kodekloud.com/docs/DevSecOps-Kubernetes-DevOps-Security/DevSecOps-Pipeline/OPA-Conftest-Basics)
-[^6]: How we use Vale to enforce better writing in docs and beyond - Spectro
-      Cloud, accessed on 26 October 2025,
+[^6]: How Spectro Cloud uses Vale to enforce better writing in docs and beyond,
+      accessed on 26 October 2025,
       [https://www.spectrocloud.com/blog/how-we-use-vale-to-enforce-better-writing-in-docs-and-beyond](https://www.spectrocloud.com/blog/how-we-use-vale-to-enforce-better-writing-in-docs-and-beyond)
 [^9]: Provider: GitHub - v6.3.0 - opentofu/github - OpenTofu Registry, accessed
       on 26 October 2025,

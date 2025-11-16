@@ -2,7 +2,7 @@
 
 Last updated: 25 October 2025 (Europe/London)
 
-This guide distils Cyclopts into one pragmatic, end‑to‑end document you can
+This guide distils Cyclopts into one pragmatic, end‑to‑end document ready to
 drop into a repo. It covers the core mental model, the API surface, design
 patterns, testing, packaging, and a few sharp edges to avoid. All examples use
 Python ≥3.10 and Bash.
@@ -29,14 +29,14 @@ ______________________________________________________________________
 - **`@app.default`** is the action when no explicit command is given.
 - **`run(func)`** is sugar for one‑function CLIs.
 - **Parameters** are inferred from names, type hints, defaults, and docstrings;
-  refine with `typing.Annotated[..., cyclopts.Parameter(...)]` when you need
-  control.
-- **Groups** organise help and enable **validators** across parameters.
+  refine with `typing.Annotated[..., cyclopts.Parameter(...)]` when additional
+  control is required.
+- **Groups** organize help and enable **validators** across parameters.
 - **Config providers** (TOML, env vars, in‑memory dicts) pre‑populate missing
   arguments.
-- **Meta apps** wrap your app to inject session‑level options or alter
+- **Meta apps** wrap the primary app to inject session‑level options or alter
   invocation.
-- **Result handling** is policy‑driven (`result_action`) so CLIs can either
+- **Result handling** is policy‑driven (`result_action`), so CLIs can either
   `sys.exit` or return values for tests/embedding.
 
 ______________________________________________________________________
@@ -90,7 +90,7 @@ if __name__ == "__main__":
 
 ______________________________________________________________________
 
-## 3) Parameters: the 95% you’ll use daily
+## 3) Parameters: the 95% used daily
 
 ### 3.1 Naming, aliases, shorts
 
@@ -117,7 +117,7 @@ def build(
 
 Booleans are flags. `--foo` sets `True`. Cyclopts also provides negative forms
 by default: `--no-foo`. Disable globally via
-`default_parameter=Parameter(negative=())`, or customise per‑param with
+`default_parameter=Parameter(negative=())`, or customize per‑param with
 `Parameter(negative="--anti-foo")`.
 
 ### 3.3 Counting flags (verbosity et al.)
@@ -151,8 +151,8 @@ def main(verbose: Annotated[int, Parameter(alias="-v", count=True)] = 0):
 - **Literal**: define a constrained set of choices (numbers allowed) without
   writing manual validators.
 - **Enum**: Cyclopts matches **by name** (case‑insensitive, hyphens tolerated
-  for underscores). Prefer `Literal[...]` for user‑facing choices unless you
-  need enum semantics.
+  for underscores). Prefer `Literal[...]` for user‑facing choices unless enum
+  semantics are required.
 - **Flag/IntFlag**: treat each member name as a boolean sub‑flag; can be set
   via positional names or `--param.member`.
 
@@ -196,9 +196,9 @@ ______________________________________________________________________
 
 ## 4) User classes: dataclasses, Pydantic, attrs, TypedDict
 
-Cyclopts can bind nested structures directly. Dot‑notation exposes fields; you
-can **flatten** namespaces with `Parameter(name="*")`; or **hide keys** with
-`Parameter(accepts_keys=False)`.
+Cyclopts can bind nested structures directly. Dot‑notation exposes fields,
+supports **flattening** namespaces with `Parameter(name="*")`, and can **hide
+keys** with `Parameter(accepts_keys=False)`.
 
 ```python
 from dataclasses import dataclass
@@ -245,7 +245,7 @@ def create(*,
 ```
 
 Set `Group.sort_key` or use `Group.create_ordered()` to control panel ordering
-in help. You can also assign `help_formatter` per group.
+in help. Assign `help_formatter` per group when a bespoke layout is required.
 
 ______________________________________________________________________
 
@@ -253,7 +253,7 @@ ______________________________________________________________________
 
 - Cyclopts parses **reStructuredText** by default; toggle via `App.help_format`
   ("plaintext", "markdown", or "rst").
-- Customise presentation with `App(help_formatter=...)` or per‑group
+- Customize presentation with `App(help_formatter=...)` or per‑group
   `help_formatter`. Built‑ins: `DefaultFormatter` (rich panels) and
   `PlainFormatter` (ASCII‑only / screen‑reader‑friendly).
 - Short description comes from the first docstring line; parameter docs pull
@@ -284,7 +284,7 @@ cyclopts run app.py --help
 cyclopts run app.py:app sub --flag
 ```
 
-You can also generate or install scripts programmatically with
+Scripts can also be generated or installed programmatically with
 `App.generate_completion()` / `App.install_completion()`.
 
 ______________________________________________________________________
@@ -310,8 +310,8 @@ app = App(
 - TOML mapping uses `[tool.<app>.<command>]` sections by convention (toggle
   keys via provider args).
 - Env var mapping is `PREFIX_<COMMAND>_<PARAM>`, with `-` → `_`.
-- Build a **meta app** (next section) if you want `--config /path/to/file` to
-  select a config at runtime.
+- Build a **meta app** (next section) to let `--config /path/to/file` select a
+  config at runtime.
 
 ______________________________________________________________________
 
@@ -360,9 +360,9 @@ ______________________________________________________________________
 
 ## 12) Meta apps (session wrappers)
 
-A meta app wraps your main app to parse **session parameters** and then forward
-remaining tokens. Common uses: selecting config files, authenticating once,
-injecting a shared client object, or adding global tracing.
+A meta app wraps the main application to parse **session parameters** and then
+forward remaining tokens. Common uses: selecting config files, authenticating
+once, injecting a shared client object, or adding global tracing.
 
 ```python
 from typing import Annotated
@@ -388,7 +388,7 @@ Add `@app.meta.command` when a command should bypass the wrapper.
 
 ______________________________________________________________________
 
-## 13) Help customisation in practice
+## 13) Help customization in practice
 
 Use the rich defaults for most apps, then opt‑in to plain text for TTYs that
 dislike ANSI or for accessibility. Per‑group `help_formatter` is ideal for
@@ -425,8 +425,8 @@ ______________________________________________________________________
 ## 15) Packaging notes (brief)
 
 - Put `app()` under `if __name__ == "__main__":` for `python -m pkg` launches.
-- Provide a console entry point in your packaging config so the user gets
-  `myapp` on PATH.
+- Provide a console entry point in the packaging config so `myapp` lands on
+  PATH.
 - Use `App.version` or expose `__version__`/package metadata for `--version`.
 
 ______________________________________________________________________
@@ -521,11 +521,11 @@ ______________________________________________________________________
 
 ## 18) Gotchas
 
-- **Mixing positional and keyword** follows normal Python rules; once you
-  supply a later param by keyword, you can’t positionally pass an earlier one.
+- **Mixing positional and keyword** follows normal Python rules; once a later
+  param is supplied by keyword, earlier ones cannot be passed positionally.
 - **Lists**: positional lists stop at an option unless
   `allow_leading_hyphen=True`; with keywords, tokens must complete an element
-  or you’ll get a missing‑argument error.
+  or the parser raises a missing-argument error.
 - **Mutable defaults**: do not default list/dict params to `[]/{}`; prefer
   `None` and handle inside the function, or rely on `--empty-<name>` for
   explicit empty lists.

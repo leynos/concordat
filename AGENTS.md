@@ -1,6 +1,6 @@
-# Assistant Instructions
+# Assistant instructions
 
-## Code Style and Structure
+## Code style and structure
 
 - **Code is for humans.** Write code with clarity and empathy—assume a
   tired teammate will need to debug it at 3 a.m.
@@ -18,7 +18,7 @@
 - **Group by feature, not layer.** Colocate views, logic, fixtures, and helpers
   related to a domain concept rather than splitting by type.
 
-## Documentation Maintenance
+## Documentation maintenance
 
 - **Reference:** Use the markdown files within the `docs/` directory as a
   knowledge base and source of truth for project requirements, dependency
@@ -30,7 +30,7 @@
 - **Style:** All documentation must adhere to the
   [documentation style guide](docs/documentation-style-guide.md).
 
-## Guidelines for Code Changes & Testing
+## Guidelines for code changes & testing
 
 When implementing changes, adhere to the following testing procedures:
 
@@ -73,7 +73,7 @@ When implementing changes, adhere to the following testing procedures:
   - After the refactor, ensure the original behavioural test **still passes**
     without modification. Also ensure any new unit tests pass.
 
-## Change Quality & Committing
+## Change quality & committing
 
 - **Atomicity:** Aim for small, focused, atomic changes. Each change (and
   subsequent commit) should represent a single logical unit of work.
@@ -105,7 +105,7 @@ When implementing changes, adhere to the following testing procedures:
       or code snippets) within the commit message body.
   - Do not commit changes that fail any of the quality gates.
 
-## Refactoring Heuristics & Workflow
+## Refactoring heuristics & workflow
 
 - **Recognizing Refactoring Needs:** Regularly assess the codebase for
   potential refactoring opportunities. Consider refactoring when the following
@@ -137,7 +137,7 @@ When implementing changes, adhere to the following testing procedures:
     pass before and after, unit tests added for new units).
   - Ensure the refactoring commit itself passes all quality gates.
 
-## Markdown Guidance
+## Markdown guidance
 
 - Validate Markdown files using `make markdownlint`.
 - Run `make fmt` after any documentation changes to format all Markdown
@@ -189,7 +189,7 @@ The following tooling is available in this environment:
   and enables editing by syntax tree patterns.
 - `difft` **(Difftastic)** – Semantic diff tool that compares code structure
 
-## Python Development Guidelines
+## Python development guidelines
 
 For Python development, refer to the detailed guidelines in the `.rules/`
 directory:

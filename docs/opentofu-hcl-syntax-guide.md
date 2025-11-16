@@ -1,5 +1,5 @@
 
-# A Comprehensive Developer's Guide to HCL for OpenTofu
+# A comprehensive developer's guide to HCL for OpenTofu
 
 ______________________________________________________________________
 
@@ -394,9 +394,9 @@ secondary, special-purpose dialect.
 
 Any developer or tool author aiming to generate OpenTofu configurations
 programmatically must consult these specific JSON mapping rules and cannot
-assume a direct, one-to-one translation from the native syntax. Failure to do
-so can result in configurations that are invalid or, worse, are misinterpreted
-by OpenTofu, leading to unintended infrastructure changes.
+assume a direct, one-to-one translation from the native syntax. Skipping these
+rules produces configurations that are invalid or, worse, misinterpreted by
+OpenTofu, leading to unintended infrastructure changes.
 
 Table 1.1: HCL Data Types, and Literals
 
@@ -640,13 +640,13 @@ The syntax is `data "<PROVIDER>_<TYPE>" "<NAME>" {... }`.25
   name or tags.25
 
 A key aspect of data source behaviour is its evaluation timing. OpenTofu
-attempts to read data sources during the `plan` phase. However, if any of a
-data source's arguments depend on a value that is not yet known (that is, a
-"computed value" from a resource that has not been created yet), the reading of
-the data source is deferred until the `apply` phase. When this happens, any
-attributes of that data source will also be unknown during the plan, appearing
-as `(known after apply)`.25 This deferral is a common source of confusion for
-new users, as it can propagate "unknown" values throughout the plan.
+attempts to read data sources during the `plan` phase. However, if any data
+source argument depends on a value that remains unknown—a "computed value" from
+a resource that has not been created yet—the reading of the data source is
+deferred until the `apply` phase. When this happens, any attributes of that
+data source will also be unknown during the plan, appearing as
+`(known after apply)`.25 This deferral is a common source of confusion for new
+users, as it can propagate "unknown" values throughout the plan.
 
 A common use case is to avoid hardcoding values like AMI IDs. Instead of
 specifying a static ID, a data source can be used to fetch the latest approved
