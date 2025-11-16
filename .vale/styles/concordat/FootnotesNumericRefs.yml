@@ -1,8 +1,0 @@
-extends: existence
-message: "Use numeric footnote markers like '[^1]'; labels should be numeric."
-link: "House style: footnotes must be numbered."
-level: warning
-scope: text
-nonword: true
-tokens:
-  - '\[\^[^0-9\]]+\]'
