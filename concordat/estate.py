@@ -568,6 +568,7 @@ def _bootstrap_template(
             repo_remote.push([refspec], callbacks=callbacks)
         except pygit2.GitError as error:
             raise TemplatePushError(str(error)) from error
+        _set_remote_head_if_local(repo_url, branch)
 
 
 def _build_client(
@@ -598,6 +599,21 @@ def _sanitize_inventory(path: Path) -> None:
     loaded["repositories"] = []
     with path.open("w", encoding="utf-8") as handle:
         _yaml.dump(loaded, handle)
+
+
+def _set_remote_head_if_local(repo_url: str, branch: str) -> None:
+    path = Path(repo_url)
+    if not path.exists():
+        return
+    try:
+        remote = pygit2.Repository(str(path))
+    except pygit2.GitError:
+        return
+    try:
+        remote.set_head(f"refs/heads/{branch}")
+    except pygit2.GitError:
+        # Ignore repositories that refuse head updates (e.g., already configured).
+        return
 
 
 def _load_config(config_path: Path | None) -> dict[str, typ.Any]:
