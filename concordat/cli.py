@@ -65,6 +65,58 @@ def _env_flag(name: str) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _resolve_platform_config(
+    estate: EstateRecord | None,
+    explicit_url: str | None,
+    branch: str,
+    inventory: str,
+    token: str | None,
+) -> PlatformStandardsConfig | None:
+    """Return the platform-standards config if PR automation should run."""
+    if _env_flag(ENV_SKIP_PLATFORM_PR):
+        return None
+
+    platform_url = explicit_url or os.getenv("CONCORDAT_PLATFORM_STANDARDS_URL")
+    base_branch = branch
+    inventory_path = inventory
+    if not platform_url and estate is not None:
+        platform_url = estate.repo_url
+        base_branch = estate.branch
+        inventory_path = estate.inventory_path
+
+    if not platform_url:
+        return None
+
+    return PlatformStandardsConfig(
+        repo_url=platform_url,
+        base_branch=base_branch,
+        inventory_path=inventory_path,
+        github_token=token,
+    )
+
+
+def _ensure_auto_approve_flag(args: tuple[str, ...]) -> tuple[str, ...]:
+    """Ensure -auto-approve is the first argument when not already present."""
+    filtered = tuple(arg for arg in args if arg)
+    lowered = {arg.lower() for arg in filtered}
+    if "-auto-approve" not in lowered and "-auto-approve=true" not in lowered:
+        return ("-auto-approve", *filtered)
+    return filtered
+
+
+def _resolve_namespaces(namespaces: tuple[str, ...]) -> tuple[str, ...]:
+    """Return namespaces or fall back to the active estate owner."""
+    if namespaces:
+        return namespaces
+    estate = get_active_estate()
+    if estate is None:
+        raise ConcordatError(ERROR_NAMESPACE_REQUIRED)
+    owner = estate.github_owner
+    if not owner:
+        raise ConcordatError(ERROR_OWNER_LOOKUP_FAILED.format(alias=estate.alias))
+    return (owner,)
+
+
 @app.command()
 def enrol(
     *repositories: str,
@@ -77,36 +129,20 @@ def enrol(
     github_token: str | None = None,
 ) -> None:
     """Create the concordat enrolment document in each repository."""
-    estate = get_active_estate()
-    skip_platform_pr = _env_flag(ENV_SKIP_PLATFORM_PR)
-    platform_url = None
-    platform_base_branch = platform_standards_branch
-    platform_inventory = platform_standards_inventory
-    if not skip_platform_pr:
-        platform_url = platform_standards_url or os.getenv(
-            "CONCORDAT_PLATFORM_STANDARDS_URL"
-        )
-        if not platform_url and estate:
-            platform_url = estate.repo_url
-            platform_base_branch = estate.branch
-            platform_inventory = estate.inventory_path
-
+    estate = _require_active_estate()
     token = github_token or os.getenv("GITHUB_TOKEN")
 
-    if estate is None:
-        raise ConcordatError(ERROR_NO_ACTIVE_ESTATE)
     owner_guard = estate.github_owner
     if not owner_guard:
         raise ConcordatError(ERROR_ACTIVE_ESTATE_OWNER.format(alias=estate.alias))
 
-    platform_config = None
-    if platform_url:
-        platform_config = PlatformStandardsConfig(
-            repo_url=platform_url,
-            base_branch=platform_base_branch,
-            inventory_path=platform_inventory,
-            github_token=token,
-        )
+    platform_config = _resolve_platform_config(
+        estate=estate,
+        explicit_url=platform_standards_url,
+        branch=platform_standards_branch,
+        inventory=platform_standards_inventory,
+        token=token,
+    )
 
     outcomes = enrol_repositories(
         repositories,
@@ -124,15 +160,7 @@ def enrol(
 def ls(*namespaces: str, token: str | None = None) -> None:
     """List SSH URLs for GitHub repositories within the given namespaces."""
     resolved_token = token or os.getenv("GITHUB_TOKEN")
-    effective_namespaces = tuple(namespaces)
-    if not effective_namespaces:
-        estate = get_active_estate()
-        if not estate:
-            raise ConcordatError(ERROR_NAMESPACE_REQUIRED)
-        owner = estate.github_owner
-        if not owner:
-            raise ConcordatError(ERROR_OWNER_LOOKUP_FAILED.format(alias=estate.alias))
-        effective_namespaces = (owner,)
+    effective_namespaces = _resolve_namespaces(tuple(namespaces))
 
     urls = list_namespace_repositories(
         effective_namespaces,
@@ -262,9 +290,7 @@ def apply(
         raise ConcordatError(ERROR_AUTO_APPROVE_REQUIRED)
     record = _require_active_estate()
     token = _resolve_github_token(github_token)
-    args = tuple(arg for arg in tofu_args if arg)
-    if "-auto-approve" not in args and "-auto-approve=true" not in args:
-        args = ("-auto-approve", *args)
+    args = _ensure_auto_approve_flag(tuple(tofu_args))
     options = ExecutionOptions(
         github_owner=record.github_owner or "",
         github_token=token,
