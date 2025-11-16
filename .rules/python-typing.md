@@ -198,8 +198,8 @@ import datetime as dt
 import collections.abc as cabc
 ```
 
-This simplifies common types such as
-`dt.datetime`, `cabc.Iterable`, `cabc.Callable`, and helps disambiguate usage.
+This simplifies common types such as `dt.datetime`, `cabc.Iterable`,
+`cabc.Callable`, and helps disambiguate usage.
 
 ______________________________________________________________________
 
