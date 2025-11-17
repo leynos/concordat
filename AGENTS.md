@@ -200,8 +200,8 @@ directory:
 - [Python Context Managers](.rules/python-context-managers.md) - Best practices
   for context managers
 - [Python Exceptions and
-  Logging(.rules/python-exception-design-raising-handling-and-logging.md) -
-  Throwing, catching and logging exceptions.
+  Logging](.rules/python-exception-design-raising-handling-and-logging.md) -
+  Throwing, catching, and logging exceptions.
 - [Python Generators](.rules/python-generators.md) - Generator and iterator
   patterns
 - [Python Project Configuration](.rules/python-pyproject.md) - pyproject.toml

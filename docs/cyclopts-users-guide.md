@@ -13,7 +13,8 @@ ______________________________________________________________________
 
 ```bash
 python -m pip install cyclopts
-# or for development against main\python -m pip install git+https://github.com/BrianPugh/cyclopts.git
+# or for development against main
+python -m pip install git+https://github.com/BrianPugh/cyclopts.git
 ```
 
 > Cyclopts relies on Python type hints; annotate parameters deliberately.
