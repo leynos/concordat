@@ -83,7 +83,7 @@ vale: $(VALE) ## Check prose
 	  exit 1; \
 	fi
 	$(VALE) sync
-	uv run --with https://github.com/leynos/concordat-vale.git --script $(ACRONYM_SCRIPT)
+	uv run --with git+https://github.com/leynos/concordat-vale.git $(ACRONYM_SCRIPT)
 	$(VALE) --no-global .
 
 test: build uv $(VENV_TOOLS) ## Run tests
