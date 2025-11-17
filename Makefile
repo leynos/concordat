@@ -79,7 +79,7 @@ nixie: $(NIXIE) ## Validate Mermaid diagrams
 
 vale: $(VALE) $(ACRONYM_SCRIPT) ## Check prose
 	$(VALE) sync
-	uv run --with git+https://github.com/leynos/concordat-vale.git $(ACRONYM_SCRIPT)
+	uv run --with "git+https://github.com/leynos/concordat-vale.git" $(ACRONYM_SCRIPT)
 	$(VALE) --no-global .
 
 test: build uv $(VENV_TOOLS) ## Run tests
