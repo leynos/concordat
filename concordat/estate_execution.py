@@ -101,6 +101,12 @@ def _open_or_clone_cache(
     try:
         if destination.exists():
             repository = pygit2.Repository(str(destination))
+            if repository.is_bare:
+                detail = ERROR_BARE_CACHE.format(
+                    alias=record.alias,
+                    destination=destination,
+                )
+                raise EstateExecutionError(detail)
             _refresh_cache(repository, record.branch, callbacks)
             return repository
 
