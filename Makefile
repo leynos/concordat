@@ -78,10 +78,6 @@ nixie: $(NIXIE) ## Validate Mermaid diagrams
 	$(NIXIE) --no-sandbox
 
 vale: $(VALE) ## Check prose
-	@if [ -z "$(VALE)" ]; then \
-	  printf "Error: 'vale' is required, but not installed\n" >&2; \
-	  exit 1; \
-	fi
 	$(VALE) sync
 	uv run --with git+https://github.com/leynos/concordat-vale.git $(ACRONYM_SCRIPT)
 	$(VALE) --no-global .
