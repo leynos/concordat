@@ -201,7 +201,7 @@ estate:
 - `branch` and `inventory_path` default to `main` and
   `tofu/inventory/repositories.yaml`. Override them when the remote uses
   another branch name or inventory layout.
-- Manual edits are allowed, but prefer the CLI, so validation is applied.
+- Manual edits are allowed, but prefer the CLI to ensure validation is applied.
 
 ### Interaction with enrolment
 

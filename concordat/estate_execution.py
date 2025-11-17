@@ -19,6 +19,8 @@ from .gitutils import build_remote_callbacks
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
+    from pygit2.enums import ResetMode as _Pygit2ResetMode
+
     from .estate import EstateRecord
 
 XDG_CACHE_HOME = "XDG_CACHE_HOME"
@@ -177,8 +179,10 @@ def _write_stream_output(stream: typ.IO[str], content: str) -> None:
 
 
 def _initialize_tofu(workdir: Path, github_token: str) -> Tofu:
+    env = os.environ.copy()
+    env["GITHUB_TOKEN"] = github_token
     try:
-        return Tofu(cwd=str(workdir), env={"GITHUB_TOKEN": github_token})
+        return Tofu(cwd=str(workdir), env=env)
     except FileNotFoundError as error:  # pragma: no cover - depends on PATH
         raise EstateExecutionError(ERROR_MISSING_TOFU) from error
     except RuntimeError as error:  # pragma: no cover - tofu misconfiguration
@@ -289,6 +293,6 @@ def _sync_local_branch(
 
 
 def _reset_to_commit(repository: pygit2.Repository, commit: pygit2.Commit) -> None:
-    reset_mode = typ.cast("typ.Any", pygit2.GIT_RESET_HARD)
+    reset_mode = typ.cast("_Pygit2ResetMode", pygit2.GIT_RESET_HARD)
     repository.reset(commit.id, reset_mode)
     repository.checkout_head(strategy=pygit2.GIT_CHECKOUT_FORCE)

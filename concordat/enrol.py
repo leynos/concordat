@@ -564,8 +564,10 @@ def _require_allowed_owner(
 ) -> str:
     if not slug:
         raise _owner_slug_missing_error(specification)
-    repo_owner, _, _ = slug.partition("/")
     expected_owner = github_owner.strip()
+    if not expected_owner:
+        raise _owner_mismatch_error(specification, slug, github_owner)
+    repo_owner, _, _ = slug.partition("/")
     if repo_owner.lower() != expected_owner.lower():
         raise _owner_mismatch_error(specification, slug, github_owner)
     return slug

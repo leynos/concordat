@@ -999,7 +999,7 @@ are particularly essential for developers:
 
   - `timestamp()`: Returns the current time.
 
-  - uuid(): Generates a random Universally Unique Identifier (UUID).
+  - `uuid()`: Generates a random Universally Unique Identifier (UUID).
 
     Caution: These functions are "impure," meaning their result changes on
     every run. Using them directly in resource arguments will cause the
