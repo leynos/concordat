@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import typing as typ
 from pathlib import Path
 
@@ -10,6 +11,15 @@ import pytest
 from concordat import cli
 from concordat.errors import ConcordatError
 from concordat.estate import EstateRecord
+
+
+@dataclasses.dataclass(frozen=True)
+class ApplyExpectation:
+    """Expected outcome for apply auto-approve handling tests."""
+
+    first_arg: str
+    auto_approve_count: int | None = None
+
 
 if typ.TYPE_CHECKING:
     from concordat.estate_execution import ExecutionIO, ExecutionOptions
@@ -136,29 +146,25 @@ def test_apply_requires_auto_approve(monkeypatch: pytest.MonkeyPatch) -> None:
     (
         "input_args",
         "kwargs",
-        "expected_first_arg",
-        "expected_auto_approve_count",
+        "expected",
     ),
     [
         pytest.param(
             ("-var", "foo=1"),
             {"auto_approve": True},
-            "-auto-approve",
-            None,
+            ApplyExpectation(first_arg="-auto-approve"),
             id="injects_auto_approve",
         ),
         pytest.param(
             ("-auto-approve", "-var", "foo=1"),
             {"auto_approve": True},
-            "-auto-approve",
-            1,
+            ApplyExpectation(first_arg="-auto-approve", auto_approve_count=1),
             id="does_not_duplicate_auto_approve",
         ),
         pytest.param(
             ("-auto-approve=true", "-var", "foo=1"),
             {"auto_approve": True},
-            "-auto-approve=true",
-            None,
+            ApplyExpectation(first_arg="-auto-approve=true"),
             id="respects_auto_approve_true",
         ),
     ],
@@ -167,16 +173,15 @@ def test_apply_auto_approve_handling(
     monkeypatch: pytest.MonkeyPatch,
     input_args: tuple[str, ...],
     kwargs: dict[str, object],
-    expected_first_arg: str,
-    expected_auto_approve_count: int | None,
+    expected: ApplyExpectation,
 ) -> None:
     """Apply correctly handles -auto-approve flag injection and deduplication."""
     extra_args = _get_applied_args(monkeypatch, *input_args, **kwargs)
 
-    assert extra_args[0] == expected_first_arg
+    assert extra_args[0] == expected.first_arg
     assert list(extra_args[1:]) == ["-var", "foo=1"]
-    if expected_auto_approve_count is not None:
-        assert extra_args.count("-auto-approve") == expected_auto_approve_count
+    if expected.auto_approve_count is not None:
+        assert extra_args.count("-auto-approve") == expected.auto_approve_count
 
 
 def test_apply_passes_keep_workdir(monkeypatch: pytest.MonkeyPatch) -> None:
