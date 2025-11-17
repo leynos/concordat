@@ -77,7 +77,7 @@ markdownlint: $(MDLINT) ## Lint Markdown files
 nixie: $(NIXIE) ## Validate Mermaid diagrams
 	$(NIXIE) --no-sandbox
 
-vale: $(VALE) ## Check prose
+vale: $(VALE) $(ACRONYM_SCRIPT) ## Check prose
 	$(VALE) sync
 	uv run --with git+https://github.com/leynos/concordat-vale.git $(ACRONYM_SCRIPT)
 	$(VALE) --no-global .
