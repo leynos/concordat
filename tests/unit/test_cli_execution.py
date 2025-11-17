@@ -132,47 +132,51 @@ def test_apply_requires_auto_approve(monkeypatch: pytest.MonkeyPatch) -> None:
         cli.apply()
 
 
-def test_apply_injects_auto_approve(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Apply prefixes -auto-approve before calling run_apply."""
-    extra_args = _get_applied_args(
-        monkeypatch,
-        "-var",
-        "foo=1",
-        auto_approve=True,
-    )
-
-    assert extra_args[0] == "-auto-approve"
-    assert list(extra_args[1:]) == ["-var", "foo=1"]
-
-
-def test_apply_does_not_duplicate_auto_approve(
+@pytest.mark.parametrize(
+    (
+        "input_args",
+        "kwargs",
+        "expected_first_arg",
+        "expected_auto_approve_count",
+    ),
+    [
+        pytest.param(
+            ("-var", "foo=1"),
+            {"auto_approve": True},
+            "-auto-approve",
+            None,
+            id="injects_auto_approve",
+        ),
+        pytest.param(
+            ("-auto-approve", "-var", "foo=1"),
+            {"auto_approve": True},
+            "-auto-approve",
+            1,
+            id="does_not_duplicate_auto_approve",
+        ),
+        pytest.param(
+            ("-auto-approve=true", "-var", "foo=1"),
+            {"auto_approve": True},
+            "-auto-approve=true",
+            None,
+            id="respects_auto_approve_true",
+        ),
+    ],
+)
+def test_apply_auto_approve_handling(
     monkeypatch: pytest.MonkeyPatch,
+    input_args: tuple[str, ...],
+    kwargs: dict[str, object],
+    expected_first_arg: str,
+    expected_auto_approve_count: int | None,
 ) -> None:
-    """Passing -auto-approve explicitly keeps a single flag."""
-    extra_args = _get_applied_args(
-        monkeypatch,
-        "-auto-approve",
-        "-var",
-        "foo=1",
-        auto_approve=True,
-    )
+    """Apply correctly handles -auto-approve flag injection and deduplication."""
+    extra_args = _get_applied_args(monkeypatch, *input_args, **kwargs)
 
-    assert extra_args.count("-auto-approve") == 1
+    assert extra_args[0] == expected_first_arg
     assert list(extra_args[1:]) == ["-var", "foo=1"]
-
-
-def test_apply_respects_auto_approve_true(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Passing -auto-approve=true avoids injecting another flag."""
-    extra_args = _get_applied_args(
-        monkeypatch,
-        "-auto-approve=true",
-        "-var",
-        "foo=1",
-        auto_approve=True,
-    )
-
-    assert extra_args[0] == "-auto-approve=true"
-    assert list(extra_args[1:]) == ["-var", "foo=1"]
+    if expected_auto_approve_count is not None:
+        assert extra_args.count("-auto-approve") == expected_auto_approve_count
 
 
 def test_apply_passes_keep_workdir(monkeypatch: pytest.MonkeyPatch) -> None:
