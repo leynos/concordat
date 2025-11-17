@@ -241,8 +241,7 @@ app.command(estate_app, name="estate")
 
 
 def _require_active_estate() -> EstateRecord:
-    record = get_active_estate()
-    if record is None:
+    if (record := get_active_estate()) is None:
         raise ConcordatError(ERROR_NO_ACTIVE_ESTATE)
     if not record.github_owner:
         raise ConcordatError(ERROR_ACTIVE_ESTATE_OWNER.format(alias=record.alias))
@@ -250,8 +249,7 @@ def _require_active_estate() -> EstateRecord:
 
 
 def _resolve_github_token(explicit: str | None = None) -> str:
-    token = explicit or os.getenv("GITHUB_TOKEN")
-    if not token:
+    if not (token := explicit or os.getenv("GITHUB_TOKEN")):
         raise ConcordatError(ERROR_MISSING_GITHUB_TOKEN)
     return token
 
