@@ -141,7 +141,10 @@ def given_fake_tofu(
         encoding="utf-8",
     )
     script.chmod(0o755)
-    monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ.get('PATH', '')}")
+    monkeypatch.setenv(
+        "PATH",
+        f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}",
+    )
     monkeypatch.setenv("FAKE_TOFU_LOG", str(log_path))
     execution_state["tofu_log"] = log_path
 
