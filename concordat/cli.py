@@ -79,10 +79,14 @@ def _resolve_platform_config(
     platform_url = explicit_url or os.getenv("CONCORDAT_PLATFORM_STANDARDS_URL")
     base_branch = branch
     inventory_path = inventory
+    branch_is_default = not branch or branch == ESTATE_DEFAULT_BRANCH
+    inventory_is_default = not inventory or inventory == ESTATE_DEFAULT_INVENTORY
     if not platform_url and estate is not None:
         platform_url = estate.repo_url
-        base_branch = estate.branch
-        inventory_path = estate.inventory_path
+        if branch_is_default:
+            base_branch = estate.branch
+        if inventory_is_default:
+            inventory_path = estate.inventory_path
 
     if not platform_url:
         return None
