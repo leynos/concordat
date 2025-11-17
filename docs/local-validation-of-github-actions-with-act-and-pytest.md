@@ -195,10 +195,10 @@ def test_replay(tmp_path: Path, cmd_mox) -> None:
         "--json",
         "tagName",
     ).returns(stdout='{"tagName":"v9.9.9"}\n')
-cmd_mox.replay()
-code, _, logs = run_act(artifact_dir=artifact_dir)
-assert code == 0, logs
-cmd_mox.verify()
+    cmd_mox.replay()
+    code, _, logs = run_act(artifact_dir=artifact_dir)
+    assert code == 0, logs
+    cmd_mox.verify()
 
 ```
 
