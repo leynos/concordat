@@ -29,6 +29,12 @@ Feature: Running estate execution commands
     Then the command exits with code 0
     And fake tofu commands were "version -json | init -input=false | apply -auto-approve"
 
+  Scenario: Apply preserves the workspace when requested
+    Given a fake estate repository is registered
+    When I run concordat apply with options "--auto-approve --keep-workdir"
+    Then the command exits with code 0
+    And the execution workspace remains on disk
+
   Scenario: Plan requires GITHUB_TOKEN
     Given a fake estate repository is registered
     And GITHUB_TOKEN is unset

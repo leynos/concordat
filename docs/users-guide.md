@@ -169,7 +169,8 @@ without leaving the CLI. Both commands require `GITHUB_TOKEN` and the estate's
 
   `concordat apply` uses the same workspace preparation as `plan`, adds
   `-auto-approve` for OpenTofu, and returns the exit code from the underlying
-  `tofu` invocation, so pipelines can gate on it.
+  `tofu` invocation, so pipelines can gate on it. Pass `--keep-workdir` when
+  you also want to retain the apply workspace for inspection.
 
 ### Estate configuration file
 

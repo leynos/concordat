@@ -1,4 +1,8 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run python
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
 """CLI entry point for syncing project acronyms into the Vale allow list."""
 
 from __future__ import annotations
