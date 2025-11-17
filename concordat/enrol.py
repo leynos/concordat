@@ -566,7 +566,12 @@ def _require_allowed_owner(
         raise _owner_slug_missing_error(specification)
     expected_owner = github_owner.strip()
     if not expected_owner:
-        raise _owner_mismatch_error(specification, slug, expected_owner)
+        detail = (
+            f"github_owner is empty or whitespace for {specification!r}. "
+            "Update the estate configuration with a non-empty owner before "
+            "enrolling repositories."
+        )
+        raise ConcordatError(detail)
     repo_owner, _, _ = slug.partition("/")
     if repo_owner.lower() != expected_owner.lower():
         raise _owner_mismatch_error(specification, slug, expected_owner)
