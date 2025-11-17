@@ -259,7 +259,7 @@ requires-dist = [
     { name = "pygit2" },
     { name = "requests" },
     { name = "ruamel-yaml" },
-    { name = "tofupy" },
+    { name = "tofupy", specifier = ">=1.1.1,<2.0" },
 ]
 
 [package.metadata.requires-dev]
