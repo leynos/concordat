@@ -74,6 +74,14 @@ def test_slug_with_owner_guard_requires_slug_when_owner_set() -> None:
         _slug_with_owner_guard(None, "alpha", "repo")
 
 
+def test_slug_with_owner_guard_rejects_malformed_slug() -> None:
+    """Owner enforcement rejects slugs lacking the owner/repo format."""
+    with pytest.raises(ConcordatError) as caught:
+        _slug_with_owner_guard("not-an-owner", "alpha", "repo")
+
+    assert "Expected format" in str(caught.value)
+
+
 def test_enrol_creates_document_and_commit(git_repo: GitRepo) -> None:
     """Create the enrolment file and record a commit."""
     outcomes = enrol_repositories([str(git_repo.path)])

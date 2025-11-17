@@ -564,6 +564,12 @@ def _require_allowed_owner(
 ) -> str:
     if not slug:
         raise _owner_slug_missing_error(specification)
+    if "/" not in slug:
+        detail = (
+            f"Malformed GitHub slug {slug!r} for {specification!r}. "
+            "Expected format: 'owner/repo'."
+        )
+        raise ConcordatError(detail)
     expected_owner = github_owner.strip()
     if not expected_owner:
         detail = (
