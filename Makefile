@@ -1,12 +1,14 @@
 MDLINT ?= $(shell which markdownlint-cli2)
 NIXIE ?= $(shell which nixie)
 MDFORMAT_ALL ?= $(shell which mdformat-all)
+VALE ?= $(shell which vale)
 TOOLS = $(MDFORMAT_ALL) ruff ty $(MDLINT) $(NIXIE) uv
 VENV_TOOLS = pytest
+ACRONYM_SCRIPT ?= scripts/update_acronym_allowlist.py
 UV_ENV = UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools
 
 .PHONY: help all clean build build-release lint fmt check-fmt \
-        markdownlint nixie test typecheck $(TOOLS) $(VENV_TOOLS)
+        markdownlint nixie test typecheck vale $(TOOLS) $(VENV_TOOLS)
 
 .DEFAULT_GOAL := all
 
@@ -74,6 +76,11 @@ markdownlint: $(MDLINT) ## Lint Markdown files
 
 nixie: $(NIXIE) ## Validate Mermaid diagrams
 	$(NIXIE) --no-sandbox
+
+vale: $(VALE) $(ACRONYM_SCRIPT) ## Check prose
+	$(VALE) sync
+	uv run --with "git+https://github.com/leynos/concordat-vale.git" $(ACRONYM_SCRIPT)
+	$(VALE) --no-global .
 
 test: build uv $(VENV_TOOLS) ## Run tests
 	$(UV_ENV) uv run pytest -v -n auto

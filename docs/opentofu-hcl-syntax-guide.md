@@ -1,5 +1,5 @@
 
-# A Comprehensive Developer's Guide to HCL for OpenTofu
+# A comprehensive developer's guide to HashiCorp configuration language (HCL) for OpenTofu
 
 ______________________________________________________________________
 
@@ -251,7 +251,7 @@ module typically uses the following file layout 8:
   updates.8
 
 - `providers.tofu`: An optional but useful file for explicitly configuring
-  providers. For example, set the AWS (Amazon Web Services) region here. This
+  providers. For example, set the Amazon Web Services (AWS) region here. This
   separates provider configuration from resource definitions.8
 
 When working with OpenTofu, the tool generates several files, and directories
@@ -374,12 +374,12 @@ are specific concessions and non-obvious rules that reflect JSON's status as a
 secondary, special-purpose dialect.
 
 1. **Special Handling for** `variable` **Blocks**: The arguments within a
-   `variable` block have non-standard mappings in JSON. The
-   `type`, `description`, and `default` arguments expect literal JSON values,
-   not expressions. For example, the `type` must be a simple string like
-   `"string"` or `"list(string)"`, and the `default` value is taken literally
-   without interpreting any string templates it might contain.16 This is a
-   significant departure from native HCL where these can be more dynamic.
+   `variable` block have non-standard mappings in JSON. The `type`,
+   `description`, and `default` arguments expect literal JSON values, not
+   expressions. For example, the `type` must be a simple string like `"string"`
+   or `"list(string)"`, and the `default` value is taken literally without
+   interpreting any string templates it might contain.16 This is a significant
+   departure from native HCL where these can be more dynamic.
 
 2. **The "Attributes as Blocks" Limitation**: Some resource types have a
    special behaviour where an argument can be specified using either argument
@@ -394,9 +394,9 @@ secondary, special-purpose dialect.
 
 Any developer or tool author aiming to generate OpenTofu configurations
 programmatically must consult these specific JSON mapping rules and cannot
-assume a direct, one-to-one translation from the native syntax. Failure to do
-so can result in configurations that are invalid or, worse, are misinterpreted
-by OpenTofu, leading to unintended infrastructure changes.
+assume a direct, one-to-one translation from the native syntax. Skipping these
+rules produces configurations that are invalid or, worse, misinterpreted by
+OpenTofu, leading to unintended infrastructure changes.
 
 Table 1.1: HCL Data Types, and Literals
 
@@ -476,11 +476,11 @@ features, often configured via nested blocks.
 
   - A `precondition` is checked before the resource is created or updated and
     can validate inputs or dependencies. For example, it could check that a
-    specified AMI (Amazon Machine Image) has the correct architecture.7
+    specified Amazon Machine Image (AMI) has the correct architecture.7
 
   - A `postcondition` is checked after a resource is created or updated, and can
     validate the resulting state. For example, it could verify that a created
-    EBS (Elastic Block Store) volume is encrypted.21
+    Elastic Block Store (EBS) volume is encrypted.21
 
     If a condition fails, OpenTofu raises an error with a custom message,
     providing clear feedback.7
@@ -640,13 +640,13 @@ The syntax is `data "<PROVIDER>_<TYPE>" "<NAME>" {... }`.25
   name or tags.25
 
 A key aspect of data source behaviour is its evaluation timing. OpenTofu
-attempts to read data sources during the `plan` phase. However, if any of a
-data source's arguments depend on a value that is not yet known (that is, a
-"computed value" from a resource that has not been created yet), the reading of
-the data source is deferred until the `apply` phase. When this happens, any
-attributes of that data source will also be unknown during the plan, appearing
-as `(known after apply)`.25 This deferral is a common source of confusion for
-new users, as it can propagate "unknown" values throughout the plan.
+attempts to read data sources during the `plan` phase. However, if any data
+source argument depends on a value that remains unknown—a "computed value" from
+a resource that has not been created yet—the reading of the data source is
+deferred until the `apply` phase. When this happens, any attributes of that
+data source will also be unknown during the plan, appearing as
+`(known after apply)`.25 This deferral is a common source of confusion for new
+users, as it can propagate "unknown" values throughout the plan.
 
 A common use case is to avoid hardcoding values like AMI IDs. Instead of
 specifying a static ID, a data source can be used to fetch the latest approved
@@ -782,8 +782,8 @@ of the resource or module.5
 #### The re-indexing pitfall of `count`
 
 The most significant drawback of `count` emerges when it is used to iterate
-over a list of values. For example, creating an EC2 instance for each subnet ID
-in a list:
+over a list of values. For example, creating an Elastic Compute Cloud (EC2)
+instance for each subnet ID in a list:
 
 ```terraform
 variable "subnet_ids" {
@@ -933,9 +933,8 @@ and implementing complex logic within configurations.
 
 - **Splat Expressions**: The splat operator (`[*]`) provides a concise syntax
   for extracting a list of attributes from a list of complex objects. For
-  example, if `aws_instance.server` was created with
-  `count`, `aws_instance.server[*].id` would return a list of all the instance
-  IDs.9
+  example, if `aws_instance.server` was created with `count`,
+  `aws_instance.server[*].id` would return a list of all the instance IDs.9
 
 - `dynamic` **Blocks**: For generating multiple *nested* blocks within a
   resource (such as multiple `ingress` rules for a security group), HCL
@@ -1000,7 +999,7 @@ are particularly essential for developers:
 
   - `timestamp()`: Returns the current time.
 
-  - uuid(): Generates a random UUID (Universally Unique Identifier).
+  - `uuid()`: Generates a random Universally Unique Identifier (UUID).
 
     Caution: These functions are "impure," meaning their result changes on
     every run. Using them directly in resource arguments will cause the
@@ -1010,7 +1009,7 @@ are particularly essential for developers:
 
 ### 3.3 Managing dependencies
 
-OpenTofu builds a DAG (directed acyclic graph) to determine the correct order
+OpenTofu builds a directed acyclic graph (DAG) to determine the correct order
 of operations for creating, updating, and destroying resources.
 
 - **Implicit Dependencies**: The primary, and preferred way to manage
@@ -1094,10 +1093,10 @@ principles 8:
    later than to remove an existing one that is widely used.8
 
 5. **Follow the Standard Structure**: A reusable module should follow the
-   standard file structure
-   (`README.md`, `main.tofu`, `variables.tofu`, `outputs.tofu`, `LICENSE`) and
-   include an `examples/` directory to demonstrate usage. A well-documented
-   `README.md` is essential for usability.14
+   standard file structure (`README.md`, `main.tofu`, `variables.tofu`,
+   `outputs.tofu`, `LICENSE`) and include an `examples/` directory to
+   demonstrate usage. A well-documented `README.md` is essential for
+   usability.14
 
 ______________________________________________________________________
 
@@ -1127,12 +1126,12 @@ anti-patterns that lead to brittle, insecure, or unmaintainable configurations.
     prevents an upgrade to a new major version (e.g., 6.0.0).13
 
 - **Mismanaging the Lock File**: The `.terraform.lock.hcl` file contains
-  checksums for provider packages on specific platforms (e.g.,
-  `darwin_arm64`, `linux_amd64`). A common pitfall occurs when a developer on
-  one OS (e.g., macOS) runs `tofu init`, and commits the updated lock file.
-  When a continuous integration/continuous delivery (CI/CD) system running on a
-  different OS (e.g., Linux) tries to run `init`, it may fail if it cannot find
-  a matching hash for its platform.
+  checksums for provider packages on specific platforms (e.g., `darwin_arm64`,
+  `linux_amd64`). A common pitfall occurs when a developer on one OS (e.g.,
+  macOS) runs `tofu init`, and commits the updated lock file. When a continuous
+  integration (CI) / continuous delivery (CD) system running on a different OS
+  (e.g., Linux) tries to run `init`, it may fail if it cannot find a matching
+  hash for its platform.
 
   - **Best Practice**: For multi-platform teams, use the
     `tofu providers lock -platform=...` command to pre-populate the lock file
@@ -1148,7 +1147,7 @@ anti-patterns that lead to brittle, insecure, or unmaintainable configurations.
   to developers working with outdated state information.13
 
   - **Best Practice**: Immediately configure a remote backend (e.g., AWS S3,
-    GCS (Google Cloud Storage), Azure Blob Storage) with state locking
+    Google Cloud Storage (GCS), Azure Blob Storage) with state locking
     enabled. This ensures that the state is stored securely, and centrally, and
     prevents concurrent operations from corrupting the state.8
 
@@ -1411,7 +1410,7 @@ expertise, the following resources are highly recommended:
     configuration, reduce boilerplate code, and orchestrate dependencies
     between modules, and stacks.26
 
-  - **TACOS (Automation and Collaboration Software)**: Platforms like Spacelift
-    or env0 provide a collaborative workflow for OpenTofu, integrating with
-    version control to automate planning on pull requests, and providing
-    policy-as-code enforcement.
+  - **Terraform Automation & Collaboration Software (TACOS)**: Platforms like
+    Spacelift or env0 provide a collaborative workflow for OpenTofu,
+    integrating with version control to automate planning on pull requests, and
+    providing policy-as-code enforcement.

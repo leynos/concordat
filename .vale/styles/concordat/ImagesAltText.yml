@@ -1,8 +1,0 @@
-extends: existence
-message: "Provide non-empty alt text for images."
-link: "House style: brief alt text for figures."
-level: warning
-scope: raw
-nonword: true
-tokens:
-  - '!\[\s*\]\('

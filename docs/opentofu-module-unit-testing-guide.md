@@ -11,7 +11,9 @@ technology landscape. Infrastructure as Code (IaC) treats the provisioning and
 management of servers, networks, databases, and other components as a software
 development practice.1 Tools like OpenTofu, an open-source fork of Terraform,
 allow teams to define their infrastructure in a declarative, human-readable
-language, enabling predictable, repeatable, and version-controlled deployments.3
+language, enabling predictable, repeatable, and version-controlled
+deployments.3 The HashiCorp Configuration Language (HCL) underpins these
+definitions and appears throughout this guide.
 
 As infrastructure definitions become code, they inherit not only the benefits
 of software engineering—such as version control, collaboration, and
@@ -47,7 +49,7 @@ Static analysis is the first, and most fundamental layer of testing, performed
 on the code itself without executing it or deploying any infrastructure.9 This
 layer acts as a rapid, low-cost first line of defense, catching a wide range of
 issues before they enter the main development branch or a continuous
-integration/continuous delivery (CI/CD) pipeline.
+integration (CI) / continuous delivery (CD) pipeline.
 
 - **Formatting, and Syntax Validation**: The most basic checks ensure that the
   code adheres to canonical formatting and is syntactically valid.
@@ -69,8 +71,8 @@ integration/continuous delivery (CI/CD) pipeline.
   best practices and identify potential errors.
 
   - `TFLint`: A popular linter that detects issues such as invalid instance
-    types for cloud providers (AWS (Amazon Web Services), Azure, GCP (Google
-    Cloud Platform)), use of deprecated syntax, and
+    types for cloud providers (AWS (Amazon Web Services), Azure, Google Cloud
+    Platform (GCP)), use of deprecated syntax, and
     unused declarations, ensuring cleaner, and more efficient code.9
 
 - **Security and Compliance Scanning**: These specialized static analysis tools
@@ -210,10 +212,9 @@ already proficient with OpenTofu.16
 
 The core of the native framework is the `tofu test` command. When executed, it
 searches the current directory, and a `tests/` subdirectory for test files,
-which are identified by the extensions
-`*.tftest.hcl`, `*.tftest.json`, `*.tofutest.hcl`, or `*.tofutest.json`.21 The
-framework then executes the tests defined within these files. Each test run
-typically involves OpenTofu running a
+which are identified by the extensions `*.tftest.hcl`, `*.tftest.json`,
+`*.tofutest.hcl`, or `*.tofutest.json`.21 The framework then executes the tests
+defined within these files. Each test run typically involves OpenTofu running a
 
 `tofu plan` or `tofu apply` command in the background, making assertions
 against the result, and then making a best-effort attempt to destroy any
@@ -276,6 +277,9 @@ variable.
 
 `main.tf`
 
+The example intentionally uses a placeholder Amazon Machine Image (AMI), so the
+test can focus on assertion mechanics rather than cloud inventory churn.
+
 ```terraform
 variable "instance_name" {
   type        = string
@@ -283,7 +287,7 @@ variable "instance_name" {
 }
 
 resource "aws_instance" "server" {
-  ami           = "ami-0c55b159cbfafe1f0" # A placeholder AMI
+  ami           = "ami-0c55b159cbfafe1f0" # A placeholder Amazon Machine Image (AMI)
   instance_type = "t2.micro"
 
   tags = {
@@ -837,10 +841,10 @@ For testing the *logic of the script itself* (e.g., the `echo` command or a
 more complex shell script), a separate, dedicated testing approach should be
 used. Frameworks like `bunit` 43,
 
-`shunit2`, or the BDD-style `shellspec` 44 are designed for unit testing shell
-scripts. This separation of concerns is a critical best practice: use OpenTofu
-testing tools to test OpenTofu code, and use shell script testing tools to test
-shell scripts.
+`shunit2`, or the behaviour-driven development (BDD) style `shellspec` 44 are
+designed for unit testing shell scripts. This separation of concerns is a
+critical best practice: use OpenTofu testing tools to test OpenTofu code, and
+use shell script testing tools to test shell scripts.
 
 ## Part 4: a comparative analysis of alternative testing frameworks
 
@@ -1367,9 +1371,9 @@ the development lifecycle. A mature IaC testing strategy is a synthesis of
 these layers:
 
 1. **Static Analysis as the First Gate**: On every commit, fast, automated
-   checks like `tofu fmt`, `tofu validate`, and security scanners
-   (`tfsec`, `Checkov`) should run. This provides immediate feedback on syntax,
-   style, and security, catching the most common errors at virtually no cost.
+   checks like `tofu fmt`, `tofu validate`, and security scanners (`tfsec`,
+   `Checkov`) should run. This provides immediate feedback on syntax, style,
+   and security, catching the most common errors at virtually no cost.
 
 2. **Plan-Based Unit Tests on Every Pull Request**: The core of the testing
    strategy should be a comprehensive suite of unit tests written with

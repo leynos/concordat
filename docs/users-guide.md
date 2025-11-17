@@ -6,7 +6,8 @@ The `concordat` command line interface (CLI) helps maintainers enrol Git
 repositories with Concordat. Enrolling creates a `.concordat` file at the
 repository root. The file is a YAML 1.2 document with the key/value pair
 `enrolled: true`. Downstream tooling relies on this marker to detect
-participating repositories.
+participating repositories, and Concordat's continuous integration (CI)
+workflows read the same flag before applying changes.
 
 ## Installing the CLI
 
@@ -118,7 +119,7 @@ enrolment PRs should be opened.
   - When the target repository does not exist, Concordat prompts before using
     the GitHub API (via `github3.py`) to create it. Pass `--yes` to skip the
     prompt in scripted environments.
-  - Initialisation aborts if the repository already contains commits.
+  - Initialization aborts if the repository already contains commits.
 
 - List the configured estates and their remotes:
 
@@ -139,6 +140,37 @@ enrolment PRs should be opened.
   ```shell
   uv run concordat estate use sandbox
   ```
+
+## Previewing and applying estate changes
+
+Use the `plan` and `apply` commands to run OpenTofu against the active estate
+without leaving the CLI. Both commands require `GITHUB_TOKEN` and the estate's
+`github_owner` to be recorded.
+
+- Preview changes with `concordat plan`. Additional OpenTofu arguments can be
+  appended directly to the command (for example, `-detailed-exitcode`).
+
+  ```shell
+  uv run concordat plan -- -detailed-exitcode
+  ```
+
+  The CLI refreshes the cached estate under
+  `$XDG_CACHE_HOME/concordat/estates/<alias>`, clones it into a temporary
+  directory, writes `terraform.tfvars` with the recorded owner, runs
+  `tofu init -input=false`, and then `tofu plan`. Paths are echoed, so the
+  workspace can be inspected; pass `--keep-workdir` to skip the cleanup step.
+
+- Reconcile the estate with `concordat apply`. The command requires an explicit
+  `--auto-approve` to match OpenTofu's automation guard.
+
+  ```shell
+  uv run concordat apply --auto-approve
+  ```
+
+  `concordat apply` uses the same workspace preparation as `plan`, adds
+  `-auto-approve` for OpenTofu, and returns the exit code from the underlying
+  `tofu` invocation, so pipelines can gate on it. Pass `--keep-workdir` when
+  you also want to retain the apply workspace for inspection.
 
 ### Estate configuration file
 
@@ -170,7 +202,7 @@ estate:
 - `branch` and `inventory_path` default to `main` and
   `tofu/inventory/repositories.yaml`. Override them when the remote uses
   another branch name or inventory layout.
-- Manual edits are allowed, but prefer the CLI so validation is applied.
+- Manual edits are allowed, but prefer the CLI to ensure validation is applied.
 
 ### Interaction with enrolment
 
@@ -180,8 +212,8 @@ refuses to run unless that estate records `github_owner`. The
 OpenTofu pull request is opened, but the namespace guard always uses the active
 estate owner.
 
-- Run `concordat estate use <alias>` before invoking `concordat enrol` when you
-  need to switch estates (for example, when working on a fork).
+- Run `concordat estate use <alias>` before invoking `concordat enrol` when
+  switching estates (for example, when working on a fork).
 - Ensure repositories expose an `origin` remote pointing at GitHub (or pass the
   SSH URL directly) so the CLI can resolve the slug and enforce the owner guard.
 - If the estate inventory misses a repository, run `concordat estate show` to
@@ -192,7 +224,7 @@ estate owner.
 The `platform-standards/tofu` directory contains a runnable OpenTofu stack that
 enforces the squash-only merge strategy (RS-002). The stack consumes
 `platform-standards/tofu/inventory/repositories.yaml`, which now includes the
-non-production `test-case/squash-only-standard` record so operators can
+non-production `test-case/squash-only-standard` record, so operators can
 rehearse changes without touching production.
 
 1. Set a placeholder GitHub token so the provider schema loads without reaching
@@ -202,7 +234,7 @@ rehearse changes without touching production.
    export GITHUB_TOKEN=placeholder
    ```
 
-2. Initialise the stack and preview the actions with the default `test-case`
+2. Initialize the stack and preview the actions with the default `test-case`
    owner:
 
    ```shell
@@ -267,7 +299,7 @@ demonstrating the guardrails to stakeholders:
     go -C platform-standards/tofu/terratest test ./...
   ```
 
-- Validate the OPA policy expectations:
+- Validate the Open Policy Agent (OPA) policy expectations:
 
   ```shell
   conftest test --policy platform-standards/tofu/policies \
@@ -283,11 +315,12 @@ real repository settings change.
 
 - Scheduled audits run via `.github/workflows/auditor.yml` every day at 05:00
   UTC. Results land in GitHub's Code Scanning dashboard because the workflow
-  uploads the generated SARIF file using `github/codeql-action/upload-sarif`.
-- Trigger the workflow manually with **Run workflow** if you want to inspect a
-  specific revision. Provide `snapshot_path` (for example,
+  uploads the generated Static Analysis Results Interchange Format (SARIF) file
+  using `github/codeql-action/upload-sarif`.
+- Trigger the workflow manually with **Run workflow** to inspect a specific
+  revision. Provide `snapshot_path` (for example,
   `tests/fixtures/auditor/snapshot.json`) to replay a recorded API response and
-  set `upload_sarif` to `false` when you only need a local artefact.
+  set `upload_sarif` to `false` when only a local artefact is required.
 - Run the same workflow locally with `act`:
 
   ```shell

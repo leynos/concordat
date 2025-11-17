@@ -36,6 +36,10 @@ This philosophy is supported by three foundational pillars:
    shifting the enforcement mechanism from human review to automated system
    validation.
 
+Continuous integration (CI) and continuous delivery (CD) automation provide the
+enforcement surface for these standards; the document references both terms
+frequently when describing guardrails and feedback loops.
+
 ### 1.2. Architectural blueprint and data flow
 
 The system is a composite architecture comprising several specialized,
@@ -190,7 +194,7 @@ false-positive rate is acceptable. Exemptions use the existing
   `--platform-standards-url`.
 - `concordat plan` clones the active estate into a temporary workspace, renders
   the OpenTofu variable file from estate metadata, and invokes tofupy's `plan`
-  entrypoint so operators can preview drift without leaving the CLI.
+  entrypoint, so operators can preview drift without leaving the CLI.
 - `concordat apply` reuses the same machinery but calls tofupy's `apply`,
   allowing auditable changes to estates directly from concordat.
 - When the `--platform-standards-url` (or `CONCORDAT_PLATFORM_STANDARDS_URL`)
@@ -199,7 +203,7 @@ false-positive rate is acceptable. Exemptions use the existing
   `tflint`, and `tofu validate`, pushes a feature branch, and uses the
   authenticated GitHub token to open a pull request. This satisfies the roadmap
   acceptance criterion that every enrolment produces both the local
-  `.concordat` commit and a passing IaC PR.
+  `.concordat` commit and a passing IaC pull request (PR).
 - Future extensions may scaffold a pull request that adds the reusable
   `priority-sync` workflow to a repository, but the CLI continues to defer
   state changes to IaC.
@@ -221,6 +225,16 @@ state stored in each estate repository.
 - When an estate is active, invoking `concordat ls` without namespaces defaults
   to the recorded `github_owner`, offering a zero-argument inventory view.
 
+`concordat estate init` accepts a `--github-owner` flag, so estates backed by
+non-GitHub remotes can still record the namespace they manage. When the remote
+URL points to GitHub, the CLI infers the owner automatically; otherwise the
+flag is required. The active estate must provide `github_owner` before any
+enrolment occurs. The `concordat enrol` command queries the active estate,
+rejects repositories whose slug resolves to a different owner, and surfaces an
+explicit error when the repository or specification does not expose a usable
+GitHub slug. This owner guard makes inventory drift visible without blocking
+template usage, satisfying the evaluate-mode acceptance criteria.
+
 #### 2.7.2 Workspace management
 
 - Estate repositories are cached under
@@ -236,13 +250,13 @@ state stored in each estate repository.
 
 #### 2.7.3 tofupy integration
 
-- Instead of shelling out directly to the `tofu` binary we reuse tofupy, which
-  provides a Python API mirroring OpenTofu's UX. This keeps error handling and
-  output capture in-process.
+- Instead of shelling out directly to the `tofu` binary, the CLI reuses
+  tofupy, which provides a Python API mirroring OpenTofu's UX. This keeps error
+  handling and output capture in-process.
 - `concordat plan` resolves the active estate, prepares the workspace and
-  tfvars file, ensures `GITHUB_TOKEN` is exported, then calls tofupy's plan API.
-  The CLI streams stdout/stderr and returns a non-zero exit code if the plan
-  fails.
+  tfvars file, ensures `GITHUB_TOKEN` is exported, then calls tofupy's plan
+  API. The CLI streams stdout/stderr and returns a non-zero exit code if the
+  plan fails.
 - `concordat apply` performs the identical setup but calls the apply API. It
   passes through approval prompts or accepts `--auto-approve` if the user needs
   unattended applies.
@@ -259,8 +273,9 @@ auditable:
    OpenTofu module) to include the newly enrolled repository.
 2. Run the required quality gates locally (`tofu fmt -check`, `tflint`, `tofu
    validate`, module tests) so reviewers see a passing plan.
-3. Commit the HCL change, push the branch, and open a pull request that links
-   to the `.concordat` commit in the target repository.
+3. Commit the HashiCorp Configuration Language (HCL) change, push the branch,
+   and open a pull request that links to the `.concordat` commit in the target
+   repository.
 
 Only after that PR merges—and the next `tofu plan/apply` cycle runs—will the
 repository be considered “in scope” for OpenTofu. Until then, the `.concordat`
@@ -272,6 +287,29 @@ The repository inventory lives at
 GitHub `owner/name` slug. The inventory drives the `for_each` meta-arguments in
 the root OpenTofu modules, which lets the CLI add new repositories without
 touching module logic.
+
+### 2.7.4 CLI implementation notes
+
+The delivered CLI follows the workflow above:
+
+- Active estates are refreshed into `$XDG_CACHE_HOME/concordat/estates/<alias>`
+  and copied into a per-run temporary directory. The CLI prints the workspace
+  path at the start of every execution and removes it afterward unless
+  `--keep-workdir` is passed for debugging.
+- `terraform.tfvars` is synthesized with the estate's `github_owner` before
+  invoking OpenTofu. Commands refuse to run without `GITHUB_TOKEN`, so the
+  GitHub provider can load schemas without interactive prompts.
+- OpenTofu execution reuses `tofupy.Tufu`, which resolves the `tofu` binary,
+  runs `init -input=false`, then relays stdout/stderr from `plan` or `apply`
+  while propagating the underlying exit code.
+- `concordat apply` requires an explicit `--auto-approve` flag. The CLI adds
+  the corresponding `-auto-approve` switch, so unattended applies remain
+  deliberate.
+
+Unit tests cover the estate cache and CLI wiring, and new pytest-bdd scenarios
+exercise `plan`, `plan --keep-workdir`, and `apply --auto-approve` end to end
+using a fake `tofu` shim. This ensures workspace hygiene and option handling
+remain stable as the estate evolves.
 
 ### 2.7 Rollout strategy
 
@@ -294,14 +332,14 @@ automatically.
 ## 3. Squash-only merge standard test case
 
 Repository standard RS-002 (squash-only merges) now ships as an executable
-OpenTofu stack so operators can inspect drift with a single `tofu plan`. The
+OpenTofu stack, so operators can inspect drift with a single `tofu plan`. The
 stack lives at `platform-standards/tofu` and decodes
 `platform-standards/tofu/inventory/repositories.yaml`, which now includes the
 non-production entry `test-case/squash-only-standard`. Each inventory record
 retains the historical `name: owner/repo` slug so the CLI can continue to
 append new repositories without understanding optional settings.
 
-- `platform-standards/tofu/main.tofu` materialises the inventory into a
+- `platform-standards/tofu/main.tofu` materializes the inventory into a
   `module "repository"` for every slug, enforcing that the owner component
   matches the `github_owner` variable (defaulting to `test-case`). The
   populated module parameters surface consistent defaults for topics,
@@ -370,16 +408,16 @@ This curated set of specialized components is a key architectural strength and
 yields a system that is more maintainable and more powerful than any monolithic
 alternative.
 
-#### Table 1: Technology Stack and Rationale
+#### Table 1: Technology stack and rationale
 
-| **Tool**              | **Primary Role in Framework**                                                           | **Justification**                                                                                                                                                         | **Rejected Alternative(s) & Rationale**                                                                                                                           |
-| --------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **OpenTofu**          | Declarative management of GitHub API resources (repositories, teams, rulesets).         | Provides a declarative, stateful approach with drift detection (`plan`), and remediation (`apply`). Fully compatible with the mature Terraform GitHub provider.[^9][^10]  | **Ansible:** Imperative, not stateful. Less ergonomic for detecting drift in API-managed resources compared to a dedicated IaC tool.                              |
-| **OPA/Conftest**      | Policy-as-code engine for validating structured configuration files (e.g., YAML, JSON). | Provides a powerful, declarative language (Rego) specifically designed for querying structured data. Enables testable, version-controlled policies.[^4][^11]              | **Custom Scripts (Python/Shell):** Brittle, harder to maintain, and lacks the expressive power of Rego for complex policy evaluation.                             |
-| **Vale**              | Prose linter for enforcing documentation, and style guide standards.                    | Codifies linguistic and stylistic rules far more effectively than simple regular expressions. Supports custom, shareable style packs.[^6][^12]                            | **Ad-hoc Regex Scripts:** Inadequate for handling the complexities of natural language; difficult to maintain, and scale.                                         |
-| `multi-gitter`        | Scaled remediation via mass pull request generation.                                    | A specialized tool purpose-built for the task of multi-repository changes. More ergonomic and efficient than general-purpose tools.8                                      | **Custom Scripts using **`gh`** CLI:** Requires significant boilerplate code to handle cloning, branching, committing, and creating PRs across many repositories. |
-| **GitHub Actions**    | Primary automation, and orchestration engine.                                           | Native to the platform, providing seamless integration for CI/CD, scheduled tasks, and event-driven automation.[^13][^14]                                                 | **External CI/CD Systems (e.g., Jenkins):** Adds operational overhead, and complexity compared to the tightly integrated native solution.                         |
-| **OpenSSF Scorecard** | Security posture assessment.                                                            | Provides a standardized, automated baseline for security best practices. Integrates easily into CI workflows, and is maintained by the Open Source Security Foundation.15 | **Manual Security Audits:** Not scalable, inconsistent, and cannot be integrated into an automated enforcement gate.                                              |
+| **Tool**                                      | **Primary Role in Framework**                                                           | **Justification**                                                                                                                                                         | **Rejected Alternative(s) & Rationale**                                                                                                                           |
+| --------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **OpenTofu**                                  | Declarative management of GitHub API resources (repositories, teams, rulesets).         | Provides a declarative, stateful approach with drift detection (`plan`), and remediation (`apply`). Fully compatible with the mature Terraform GitHub provider.[^9][^10]  | **Ansible:** Imperative, not stateful. Less ergonomic for detecting drift in API-managed resources compared to a dedicated IaC tool.                              |
+| **OPA/Conftest**                              | Policy-as-code engine for validating structured configuration files (e.g., YAML, JSON). | Provides a powerful, declarative language (Rego) specifically designed for querying structured data. Enables testable, version-controlled policies.[^4][^11]              | **Custom Scripts (Python/Shell):** Brittle, harder to maintain, and lacks the expressive power of Rego for complex policy evaluation.                             |
+| **Vale**                                      | Prose linter for enforcing documentation, and style guide standards.                    | Codifies linguistic and stylistic rules far more effectively than simple regular expressions. Supports custom, shareable style packs.[^6][^12]                            | **Ad-hoc Regex Scripts:** Inadequate for handling the complexities of natural language; difficult to maintain, and scale.                                         |
+| `multi-gitter`                                | Scaled remediation via mass pull request generation.                                    | A specialized tool purpose-built for the task of multi-repository changes. More ergonomic and efficient than general-purpose tools.8                                      | **Custom Scripts using **`gh`** CLI:** Requires significant boilerplate code to handle cloning, branching, committing, and creating PRs across many repositories. |
+| **GitHub Actions**                            | Primary automation, and orchestration engine.                                           | Native to the platform, providing seamless integration for CI/CD, scheduled tasks, and event-driven automation.[^13][^14]                                                 | **External CI/CD Systems (e.g., Jenkins):** Adds operational overhead, and complexity compared to the tightly integrated native solution.                         |
+| **Open Source Security Foundation Scorecard** | Security posture assessment.                                                            | Provides a standardized, automated baseline for security best practices. Integrates easily into CI workflows, and is maintained by the Open Source Security Foundation.15 | **Manual Security Audits:** Not scalable, inconsistent, and cannot be integrated into an automated enforcement gate.                                              |
 
 ## 2. Foundational components
 
@@ -493,7 +531,8 @@ The provider exposes:
   example, `Cargo.toml`), runs the pinned Rego planner rule from
   `platform-standards/canon/policies/...`, and returns an RFC 6902 patch list,
   summary text, and any findings. The provider converts TOML to canonical JSON
-  for policy input but preserves the original AST so comments survive.
+  for policy input but preserves the original abstract syntax tree (AST) so
+  comments survive.
 - `concordat_file_toml_remediation_pr` (resource) — applies the planned patch
   set using the AST, commits the change to a feature branch, and opens a PR via
   the GitHub API. The resource never writes to the default branch and requires
@@ -503,12 +542,12 @@ The provider exposes:
   embed the exact change summary into SARIF diagnostics.
 
 Provider configuration pins the exact `platform-standards` ref and policy
-directory so nightly plans remain deterministic (`platform_standards_ref`,
+directory, so nightly plans remain deterministic (`platform_standards_ref`,
 `policy_dir`). Planner rules are declared in Rego (for example,
 `data.canon.rust.lints.plan_toml`) alongside the companion deny rules and
-include helper functions for JSON Pointer ↔ TOML path translation. By releasing
-this provider as a shared component, we avoid bespoke scripts and give the
-estate a consistent interface for policy-driven remediation.
+include helper functions for JSON Pointer ↔ TOML path translation. Releasing
+this provider as a shared component avoids bespoke scripts and gives the estate
+a consistent interface for policy-driven remediation.
 
 ### 2.3. The organization-level `.github` repository
 
@@ -559,35 +598,35 @@ The primary audit domains are:
 4. **Prose, and Documentation Quality:** Executes the Vale prose linter against
    all Markdown files within the repository to enforce the organization's house
    style guide, checking for issues related to grammar, tone, and terminology.6
-5. **Security Posture:** Integrates, and executes the OpenSSF Scorecard tool.
-   The numeric score and specific findings from Scorecard are incorporated into
-   the Auditor's overall report, providing a consistent, organization-wide
-   security baseline.15
+5. **Security Posture:** Integrates, and executes the Open Source Security
+   Foundation Scorecard tool. The numeric score and specific findings from
+   Scorecard are incorporated into the Auditor's overall report, providing a
+   consistent, organization-wide security baseline.15
 
 The following table serves as the master list of requirements for the Auditor.
 It defines the scope of work for implementation, and provides an itemised
 breakdown of what constitutes "compliance" within the framework.
 
-#### Table 3: Auditor Check Catalog
+#### Table 3: Auditor check catalog
 
-| **Check ID** | **Description**                                                                                                                      | **Audit Domain**                | **Implementation Tool** | **Default Severity** | **Implementation Phase** |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------- | ----------------------- | -------------------- | ------------------------ |
-| RS-001       | Default branch is named `main`.                                                                                                      | Repository Settings             | Python/GitHub API       | error                | 1                        |
-| RS-002       | Squash merging is enabled; merge commits and rebase merging are disabled.                                                            | Repository Settings             | Python/GitHub API       | error                | 1                        |
-| RS-003       | "Delete branch on merge" is enabled.                                                                                                 | Repository Settings             | Python/GitHub API       | error                | 1                        |
-| BP-001       | Default branch protection enforces admin parity, signed commits, reviews, and strict status checks (including the Auditor).          | Branch Governance               | Python/GitHub API       | error                | 1                        |
-| PM-001       | Repository permissions route through at least one team with maintain/admin scope and expose no outside collaborators with admin.     | Repository Access Controls      | Python/GitHub API       | error                | 1                        |
-| LB-001       | Canonical priority labels (`priority/p0`–`priority/p3`) exist with the correct colour and description metadata.                      | Label Governance                | Python/GitHub API       | warning              | 1                        |
-| CI-001       | The `.github/workflows/ci.yml` file must call the canonical reusable CI workflow.                                                    | CI/CD Integrity                 | OPA/Conftest            | error                | 1                        |
-| CI-002       | The `.github/workflows/release.yml` file must call the canonical reusable release workflow (if `ci.needs_release_workflow` is true). | CI/CD Integrity                 | OPA/Conftest            | error                | 2                        |
-| CI-003       | Workflows must not use disallowed third-party GitHub Actions.                                                                        | CI/CD Integrity                 | OPA/Conftest            | error                | 2                        |
-| FP-001       | A `.editorconfig` file must exist and match the canonical version.                                                                   | File and Content Presence       | Python/Checksum         | error                | 1                        |
-| FP-002       | An `AGENTS.md` file must exist and contain required sections.                                                                        | File and Content Presence       | Python/Content Check    | error                | 1                        |
-| FP-003       | A `Makefile` must exist and contain canonical targets (`lint`, `test`, `build`).                                                     | File, and Content Presence      | Python/Content Check    | error                | 2                        |
-| FP-004       | For Python projects, a `ruff.toml` file must exist.                                                                                  | File, and Content Presence      | OPA/Conftest            | error                | 1                        |
-| PD-001       | All Markdown files must pass Vale linting against the house style guide.                                                             | Prose and Documentation Quality | Vale                    | warning              | 2                        |
-| SP-001       | OpenSSF Scorecard must achieve a minimum score of 7.0.                                                                               | Security Posture                | OpenSSF Scorecard       | warning              | 1                        |
-| LG-001       | The `docs/library-users-guide.md` file must match the canonical version from the consumed library tag.                               | File and Content Presence       | Python/Content Check    | error                | 4                        |
+| **Check ID** | **Description**                                                                                                                      | **Audit Domain**                | **Implementation Tool**                   | **Default Severity** | **Implementation Phase** |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------- | ----------------------------------------- | -------------------- | ------------------------ |
+| RS-001       | Default branch is named `main`.                                                                                                      | Repository Settings             | Python/GitHub API                         | error                | 1                        |
+| RS-002       | Squash merging is enabled; merge commits and rebase merging are disabled.                                                            | Repository Settings             | Python/GitHub API                         | error                | 1                        |
+| RS-003       | "Delete branch on merge" is enabled.                                                                                                 | Repository Settings             | Python/GitHub API                         | error                | 1                        |
+| BP-001       | Default branch protection enforces admin parity, signed commits, reviews, and strict status checks (including the Auditor).          | Branch Governance               | Python/GitHub API                         | error                | 1                        |
+| PM-001       | Repository permissions route through at least one team with maintain/admin scope and expose no outside collaborators with admin.     | Repository Access Controls      | Python/GitHub API                         | error                | 1                        |
+| LB-001       | Canonical priority labels (`priority/p0`–`priority/p3`) exist with the correct colour and description metadata.                      | Label Governance                | Python/GitHub API                         | warning              | 1                        |
+| CI-001       | The `.github/workflows/ci.yml` file must call the canonical reusable CI workflow.                                                    | CI/CD Integrity                 | OPA/Conftest                              | error                | 1                        |
+| CI-002       | The `.github/workflows/release.yml` file must call the canonical reusable release workflow (if `ci.needs_release_workflow` is true). | CI/CD Integrity                 | OPA/Conftest                              | error                | 2                        |
+| CI-003       | Workflows must not use disallowed third-party GitHub Actions.                                                                        | CI/CD Integrity                 | OPA/Conftest                              | error                | 2                        |
+| FP-001       | A `.editorconfig` file must exist and match the canonical version.                                                                   | File and Content Presence       | Python/Checksum                           | error                | 1                        |
+| FP-002       | An `AGENTS.md` file must exist and contain required sections.                                                                        | File and Content Presence       | Python/Content Check                      | error                | 1                        |
+| FP-003       | A `Makefile` must exist and contain canonical targets (`lint`, `test`, `build`).                                                     | File, and Content Presence      | Python/Content Check                      | error                | 2                        |
+| FP-004       | For Python projects, a `ruff.toml` file must exist.                                                                                  | File, and Content Presence      | OPA/Conftest                              | error                | 1                        |
+| PD-001       | All Markdown files must pass Vale linting against the house style guide.                                                             | Prose and Documentation Quality | Vale                                      | warning              | 2                        |
+| SP-001       | The Open Source Security Foundation Scorecard must achieve a minimum score of 7.0.                                                   | Security Posture                | Open Source Security Foundation Scorecard | warning              | 1                        |
+| LG-001       | The `docs/library-users-guide.md` file must match the canonical version from the consumed library tag.                               | File and Content Presence       | Python/Content Check                      | error                | 4                        |
 
 ### 3.2. Implementation design and execution model
 
@@ -642,7 +681,7 @@ bootstrap process:
   ensuring the CLI and dependencies match the workflow revision.
 - Inputs expose the repository slug, output path for the SARIF artefact,
   optional overrides for the canonical `priority-model.yaml`, and an optional
-  JSON snapshot. The snapshot flag exists purely for local testing with `act`
+  JSON snapshot. The snapshot flag exists purely for local testing with `act`,
   so maintainers can run the workflow without contacting the GitHub API.
 - A single step runs `python -m concordat.auditor`, writing the SARIF log to
   `artifacts/concordat-auditor.sarif` by default and surfacing the path via
@@ -1103,8 +1142,8 @@ the principle of least privilege.
 
 [^4]: OPA Conftest Basics - KodeKloud Notes, accessed on 26 October 2025,
       [https://notes.kodekloud.com/docs/DevSecOps-Kubernetes-DevOps-Security/DevSecOps-Pipeline/OPA-Conftest-Basics](https://notes.kodekloud.com/docs/DevSecOps-Kubernetes-DevOps-Security/DevSecOps-Pipeline/OPA-Conftest-Basics)
-[^6]: How we use Vale to enforce better writing in docs and beyond - Spectro
-      Cloud, accessed on 26 October 2025,
+[^6]: How Spectro Cloud uses Vale to enforce better writing in docs and beyond,
+      accessed on 26 October 2025,
       [https://www.spectrocloud.com/blog/how-we-use-vale-to-enforce-better-writing-in-docs-and-beyond](https://www.spectrocloud.com/blog/how-we-use-vale-to-enforce-better-writing-in-docs-and-beyond)
 [^9]: Provider: GitHub - v6.3.0 - opentofu/github - OpenTofu Registry, accessed
       on 26 October 2025,
@@ -1118,5 +1157,5 @@ the principle of least privilege.
        [https://resources.github.com/learn/pathways/automation/intermediate/create-reusable-workflows-in-github-actions/](https://resources.github.com/learn/pathways/automation/intermediate/create-reusable-workflows-in-github-actions/)
 [^13]: Reuse workflows - GitHub Docs, accessed on 26 October 2025,
        [https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows)
-[^14]: OpenSSF Scorecard, accessed on 26 October 2025,
+[^14]: Open Source Security Foundation Scorecard, accessed on 26 October 2025,
        [https://scorecard.dev/](https://scorecard.dev/)

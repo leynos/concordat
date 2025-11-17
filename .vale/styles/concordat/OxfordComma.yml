@@ -1,9 +1,0 @@
-extends: existence
-message: "Use the Oxford comma in lists of three or more items."
-link: "House style: Oxford comma where it aids comprehension."
-level: warning
-scope: sentence
-nonword: true
-# Heuristic: flag a simple 3-item list lacking the comma before the final 'and/or'.
-tokens:
-  - '\b[^,]{1,40},\s[^,]{1,40}(?!,)\s(?:and|or)\s[^,]{1,40}(?!(?:\)\s+(?:and|or)))'

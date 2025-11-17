@@ -568,6 +568,7 @@ def _bootstrap_template(
             repo_remote.push([refspec], callbacks=callbacks)
         except pygit2.GitError as error:
             raise TemplatePushError(str(error)) from error
+        _set_remote_head_if_local(repo_url, branch)
 
 
 def _build_client(
@@ -591,11 +592,9 @@ def _build_client(
 
 def _sanitize_inventory(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    loaded = (
-        _yaml.load(path.read_text(encoding="utf-8")) or {}
-        if path.exists()
-        else {}
-    )
+    loaded: object = {}
+    if path.exists():
+        loaded = _yaml.load(path.read_text(encoding="utf-8")) or {}
     if not isinstance(loaded, dict):
         loaded = {}
     loaded.setdefault("schema_version", 1)
@@ -604,9 +603,24 @@ def _sanitize_inventory(path: Path) -> None:
         _yaml.dump(loaded, handle)
 
 
+def _set_remote_head_if_local(repo_url: str, branch: str) -> None:
+    path = Path(repo_url)
+    if not path.exists():
+        return
+    try:
+        remote = pygit2.Repository(str(path))
+    except pygit2.GitError:
+        return
+    try:
+        remote.set_head(f"refs/heads/{branch}")
+    except pygit2.GitError:
+        # Ignore repositories that refuse head updates (e.g., already configured).
+        return
+
+
 def _load_config(config_path: Path | None) -> dict[str, typ.Any]:
     path = config_path or default_config_path()
-    provider = _YamlConfig(str(path), must_exist=False)
+    provider = _YamlConfig(path=str(path), must_exist=False)
     raw = provider.config or {}
     return dict(raw) if isinstance(raw, dict) else {}
 
@@ -679,9 +693,10 @@ def _resolve_github_owner(
     slug: str | None,
     explicit_owner: str | None,
 ) -> str | None:
-    owner = _normalise_owner(explicit_owner)
-    if owner:
-        return owner
+    if explicit_owner is not None:
+        if owner := _normalise_owner(explicit_owner):
+            return owner
+        raise MissingGitHubOwnerError
     return _owner_from_slug(slug)
 
 

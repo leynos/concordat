@@ -1,9 +1,0 @@
-extends: existence
-message: "Mark Rust example code fences with ',no_run' so they don't execute in doctests."
-link: "House style: Rust API examples use '```rust,no_run'."
-level: warning
-scope: raw
-nonword: true
-# Flag any ```rust fence that's not explicitly marked no_run.
-tokens:
-  - '```rust(?!,no_run)'
