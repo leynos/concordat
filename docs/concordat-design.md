@@ -431,9 +431,13 @@ pull request. The workflow is:
   rotate buckets or rename prefixes.
 - Prompt for the storage provider (AWS, DigitalOcean, or Scaleway) plus bucket
   name, region slug, S3 endpoint URL, and the desired state key suffix. The CLI
-  suggests `estates/<github_owner>/<branch>/terraform.tfstate` and confirms
-  whether a multi-stack estate requires additional path segments (for example,
-  `envs/prod`).
+  suggests `estates/<github_owner>/<branch>/terraform.tfstate` and asks whether
+  the estate hosts multiple stacks. Answering "yes" tells the CLI to record one
+  suffix per stack (for example, `estates/<owner>/<branch>/envs/prod`).
+  `concordat estate persist` runs once per stack so each `.tfbackend` captures a
+  unique key. The CLI does not infer stack layouts automatically; operators
+  follow the documented convention of appending `envs/<stack>` (or another
+  deterministic folder) to keep state segregation obvious.
 - Validate inputs by checking S3 bucket access (using the mapped AWS
   credentials), ensuring key suffixes do not contain directory traversals, and
   confirming the endpoint uses HTTPS. All validation happens before touching Git

@@ -168,10 +168,34 @@ without leaving the CLI. Both commands require `GITHUB_TOKEN` and the estate's
   uv run concordat apply --auto-approve
   ```
 
-  `concordat apply` uses the same workspace preparation as `plan`, adds
-  `-auto-approve` for OpenTofu, and returns the exit code from the underlying
-  `tofu` invocation, so pipelines can gate on it. Pass `--keep-workdir` when you
-  also want to retain the apply workspace for inspection.
+`concordat apply` uses the same workspace preparation as `plan`, adds
+`-auto-approve` for OpenTofu, and returns the exit code from the underlying
+`tofu` invocation, so pipelines can gate on it. Pass `--keep-workdir` when you
+also want to retain the apply workspace for inspection.
+
+### Configuring remote-state credentials
+
+Remote-state backends rely on environment variables; the CLI simply checks that
+they exist before shelling out to OpenTofu. Export the pair that matches the
+selected provider:
+
+| Provider                | Required variables                           | Optional variables                                                       | Notes                                                                      |
+| ----------------------- | -------------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| AWS S3 / Spaces         | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | `AWS_SESSION_TOKEN` (when using temporary credentials such as STS)       | Values are passed straight to OpenTofu's S3 backend.                       |
+| Scaleway Object Storage | `SCW_ACCESS_KEY`, `SCW_SECRET_KEY`           | `AWS_SESSION_TOKEN` (only when scaleway issues temporary AWS-style keys) | Concordat maps these onto the AWS variable names before invoking OpenTofu. |
+
+Example shell snippet:
+
+```bash
+export AWS_ACCESS_KEY_ID=AKIA... # or SCW_ACCESS_KEY for Scaleway
+export AWS_SECRET_ACCESS_KEY=xxxx # or SCW_SECRET_KEY
+# export AWS_SESSION_TOKEN=...    # optional for temporary sessions
+```
+
+When multiple estates exist, run `concordat estate persist` for each remote
+stack using the appropriate credentials. The roadmap and design doc (§2.8)
+describe lock troubleshooting steps and disaster-recovery procedures that build
+on this environment setup.
 
 ### Estate configuration file
 

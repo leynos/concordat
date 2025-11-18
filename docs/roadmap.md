@@ -79,12 +79,13 @@ rollbacks without adding DynamoDB or other AWS-only dependencies.
   otherwise, and logs expose bucket/key details but no secrets.
 - [ ] Extend `docs/users-guide.md` with operator guidance (sourced from Section
   2.8.4 of the design doc) that explicitly documents: (1) how to set required
-  environment variables for AWS and Scaleway, including `AWS_ACCESS_KEY_ID`,
-  `AWS_SECRET_ACCESS_KEY`, `SCW_ACCESS_KEY`, and `SCW_SECRET_KEY`; (2) lock
-  troubleshooting steps and common failure modes; and (3) disaster-recovery
-  procedures using bucket versioning, including how to locate and restore
-  specific object version IDs. Acceptance: `make markdownlint`, `make fmt`, and
-  `make nixie` continue to pass after the documentation changes.
+  environment variables for AWS (`AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY`,
+  plus optional `AWS_SESSION_TOKEN` for temporary credentials) and for
+  Scaleway (`SCW_ACCESS_KEY` + `SCW_SECRET_KEY`, which the CLI maps onto the AWS
+  variable names); (2) lock troubleshooting steps and common failure modes; and
+  (3) disaster-recovery procedures using bucket versioning, including how to
+  locate and restore specific object version IDs. Acceptance: `make markdownlint`, `make fmt`, and `make nixie` continue to pass after the
+  documentation changes.
 
 ### Step: Stand up non-blocking audit execution
 
