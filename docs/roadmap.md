@@ -58,7 +58,8 @@ preview and apply changes from concordat.
 
 ### Step: Persist estate tfstate in Scaleway Object Storage
 
-Move OpenTofu state into a shared, versioned backend so operators and CI jobs
+Move OpenTofu state into a shared, versioned backend so operators and
+Continuous Integration (CI) jobs
 never diverge. Remote persistence also unlocks locking and rollbacks without
 adding DynamoDB or other AWS-only dependencies.
 
