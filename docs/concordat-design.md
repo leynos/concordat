@@ -334,10 +334,14 @@ automatically.
 OpenTofu state currently lives on each operator's workstation, which blocks
 collaboration and risks corrupted local filesystems. Estates must converge on a
 remote backend so every `plan`/`apply` shares the same history, enforces
-locking, and unlocks CI execution. Scaleway Object Storage exposes an
-Amazon Simple Storage Service (S3) compatible API, so the existing OpenTofu S3
-backend can manage state without DynamoDB. Credentials ride in the environment,
-as with `GITHUB_TOKEN`, and never land in Git history.
+locking, and unlocks CI execution. Concordat now treats three S3-compatible
+providers as first-class backends: Amazon Web Services (AWS) S3, DigitalOcean
+Spaces, and Scaleway Object Storage. The OpenTofu S3 backend can manage AWS and
+DigitalOcean state without DynamoDB because Terraform/OpenTofu ≥ 1.10 support
+native `.tflock` locks when `use_lockfile = true`. Scaleway explicitly documents
+that its Object Storage does not implement Terraform locking, so Concordat
+serialises applies there (single-writer discipline plus warnings). Credentials
+ride in the environment, as with `GITHUB_TOKEN`, and never land in Git history.
 
 #### 2.8.1 Backend specification
 
@@ -353,7 +357,8 @@ terraform {
 
 `concordat estate persist` materialises the user-supplied settings into a
 checked-in `.tfbackend` file (for example,
-`platform-standards/tofu/backend/scaleway.tfbackend`):
+`platform-standards/tofu/backend/scaleway.tfbackend`). For AWS S3 and
+DigitalOcean Spaces the generated file resembles:
 
 ```hcl
 bucket                      = "df12-tfstate"
@@ -367,8 +372,10 @@ skip_credentials_validation = true
 use_lockfile                = true
 ```
 
-The backend file is pure configuration; no credentials are recorded. Operators
-export Amazon Web Services (AWS) access keys before invoking Concordat:
+Scaleway variants omit `use_lockfile` entirely because Terraform cannot rely on
+locking there today. The backend file is pure configuration regardless of
+provider; no credentials are recorded. Operators export Amazon Web Services
+(AWS) access keys before invoking Concordat:
 
 ```bash
 export AWS_ACCESS_KEY_ID=SCWXXXXXXXXXXXXXXXXX
@@ -379,11 +386,13 @@ export AWS_SESSION_TOKEN=...
 
 The CLI also supports the Scaleway-specific aliases
 `SCW_ACCESS_KEY`/`SCW_SECRET_KEY` and maps them onto the AWS variables before
-launching OpenTofu. The design deliberately omits `encrypt = true` because
-Scaleway only offers server-side encryption with customer-provided keys (SSE-C)
-and Terraform's backend expects SSE-S3 headers. At-rest encryption therefore
-remains a caller concern (for example, by keeping secrets out of state or using
-client-side encryption).
+launching OpenTofu. DigitalOcean Spaces operators can rely on
+`SPACES_ACCESS_KEY_ID`/`SPACES_SECRET_ACCESS_KEY`; Concordat applies the same
+mapping so every provider reuses the AWS env var contract. The design
+deliberately omits `encrypt = true` because Scaleway only offers server-side
+encryption with customer-provided keys (SSE-C) and Terraform's backend expects
+SSE-S3 headers. At-rest encryption therefore remains a caller concern (for
+example, by keeping secrets out of state or using client-side encryption).
 
 Every persistence descriptor ships alongside a YAML manifest
 (`platform-standards/tofu/backend/persistence.yaml`) storing a schema version,
@@ -392,10 +401,12 @@ bucket, key prefix, region, custom endpoint, and the relative path to the
 reruns `estate persist` and provides machine-readable evidence that the estate
 is eligible for remote state.
 
-Scaleway buckets must enable versioning and, optionally, Object Lock before the
-CLI writes any state. The command performs a `HeadBucket`+`GetBucketVersioning`
-check via boto3, emits a blocking error if versioning is disabled, and surfaces
-a warning (not an error) when Object Lock is absent.
+Every backend bucket—AWS, DigitalOcean, or Scaleway—must enable versioning
+before the CLI writes any state. The command performs a
+`HeadBucket`+`GetBucketVersioning` check via boto3, emits a blocking error if
+versioning is disabled, and surfaces a warning (not an error) when Object Lock
+is absent. Object Lock (the WORM/immutability feature) hardens retention but is
+orthogonal to Terraform's `.tflock` mutexes.
 
 #### 2.8.2 `estate persist` interactive workflow
 
@@ -408,8 +419,9 @@ pull request. The workflow is:
   surgical.
 - Load any prior `persistence.yaml` so prompts are pre-filled when operators
   rotate buckets or rename prefixes.
-- Prompt for: bucket name, Scaleway region slug (`fr-par`, `nl-ams`, or
-  `pl-waw`), S3 endpoint URL, and the desired state key suffix. The CLI suggests
+- Prompt for the storage provider (AWS, DigitalOcean, or Scaleway) plus bucket
+  name, region slug, S3 endpoint URL, and the desired state key suffix. The CLI
+  suggests
   `estates/<github_owner>/<branch>/terraform.tfstate` and confirms whether a
   multi-stack estate requires additional path segments (for example,
   `envs/prod`).
@@ -422,7 +434,8 @@ pull request. The workflow is:
 - Create a branch named `estate/persist-<timestamp>`, commit the new files with
   an imperative subject (for example, `Configure Scaleway remote state`), push
   via pygit2, and open a pull request against the estate repository that
-  restates the collected parameters and links to the Scaleway versioning docs.
+  restates the collected parameters and links to the relevant provider's
+  versioning/locking docs.
 - Leave the branch locally (so operators can amend) and print the PR URL.
 
 The command never stores credentials: it merely verifies that the current
@@ -440,10 +453,10 @@ state migration impact.
   `-backend-config=<path>` to the `tofu init -input=false` invocation. The path
   is resolved relative to the estate root so ephemeral workspaces can reuse it
   verbatim.
-- Missing Amazon Web Services (AWS)/Scaleway environment variables trigger a
-  descriptive error before `tofu init` runs, preventing OpenTofu's opaque
-  credential failures. When the descriptor is absent, both commands retain the
-  current local-state default.
+- Missing Amazon Web Services (AWS)/DigitalOcean/Scaleway environment variables
+  trigger a descriptive error before `tofu init` runs, preventing OpenTofu's
+  opaque credential failures. When the descriptor is absent, both commands
+  retain the current local-state default.
 - The initialisation log echoes the bucket, key, and region (never secrets) so
   operators have traceability in Continuous Integration (CI) logs.
 - Backends remain immutable once initialised; the command-line interface (CLI)
@@ -452,10 +465,12 @@ state migration impact.
   migrations.
 
 Because the backend lockfile feature is available on Terraform/OpenTofu 1.9+
-the command-line interface (CLI) no longer needs DynamoDB. Concurrent applies
-produce native `.tflock` objects in the bucket; secondary applies surface the
-standard "state locked" message with the locking object key so operators can
-diagnose stalled jobs.
+the command-line interface (CLI) no longer needs DynamoDB when targeting AWS or
+DigitalOcean. Those providers honour the conditional writes behind native
+`.tflock` objects, so secondary applies surface the standard "state locked"
+message with the locking object key. When persistence points at Scaleway, the
+CLI omits `use_lockfile`, prints a warning about the missing mutex, and relies
+on single-writer discipline to keep state consistent.
 
 #### 2.8.4 Failure handling and observability
 
@@ -476,8 +491,9 @@ diagnose stalled jobs.
   it simply guarantees that version IDs appear in the CLI output whenever an
   apply updates state.
 
-This design keeps state durable, auditable, and vendor-neutral while requiring
-only standard S3 primitives that Scaleway already supports.
+This design keeps state durable, auditable, and vendor-neutral while calling
+out provider-specific capabilities so operators know where `.tflock` locking is
+guaranteed (AWS, DigitalOcean) and where it is not (Scaleway).
 
 ## 3. Squash-only merge standard test case
 
