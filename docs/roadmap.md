@@ -57,6 +57,34 @@ operators preview and apply changes from concordat.
       the command reconciles the estate against the cached repository and
       reports success/failure without leaving temporary files behind.
 
+### Step: Persist estate tfstate in Scaleway Object Storage
+
+Move OpenTofu state into a shared, versioned backend so operators and CI jobs
+never diverge. Remote persistence also unlocks locking and rollbacks without
+adding DynamoDB or other AWS-only dependencies.
+
+- [ ] Add `platform-standards/tofu/backend.tf` and the accompanying backend
+      directory, declaring the `s3` backend with no inline credentials.
+      Acceptance: running `tofu init -backend-config backend/scaleway.tfbackend`
+      succeeds locally and in CI, and the required OpenTofu version is pinned
+      to `>= 1.12.0`.
+- [ ] Implement `concordat estate persist` as an interactive workflow that
+      prompts for bucket, region, endpoint, and key suffix, validates that the
+      Scaleway bucket has versioning enabled, writes
+      `backend/<alias>.tfbackend` plus `backend/persistence.yaml`, and opens a
+      pull request with the change. Acceptance: pytest-bdd coverage exercises
+      success, validation failure, and `--force` replacement flows without
+      leaking credentials to disk.
+- [ ] Teach `concordat plan`/`concordat apply` to read `persistence.yaml`, pass
+      `-backend-config` to `tofu init`, and refuse to run when the expected
+      AWS/Scaleway environment variables are missing. Acceptance: integration
+      tests confirm remote state is used when configured, local state remains
+      untouched otherwise, and logs expose bucket/key details but no secrets.
+- [ ] Extend `docs/users-guide.md` with operator guidance covering environment
+      variables, lock troubleshooting, and disaster recovery using bucket
+      versioning. Acceptance: `make markdownlint`, `make fmt`, and `make nixie`
+      continue to pass after the documentation changes.
+
 ### Step: Stand up non-blocking audit execution
 
 Surface configuration drift and compliance gaps while keeping enforcement in

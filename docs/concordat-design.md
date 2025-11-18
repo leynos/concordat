@@ -329,6 +329,153 @@ Edge cases such as archived repositories, mirrors, or opt-out manifests use the
 existing exemption model. Repositories without issues bypass label checks
 automatically.
 
+### 2.8 Remote tfstate persistence via Scaleway Object Storage
+
+OpenTofu state currently lives on each operator's workstation, which blocks
+collaboration and risks corrupted local filesystems. Estates must converge on a
+remote backend so every `plan`/`apply` shares the same history, enforces
+locking, and unlocks CI execution. Scaleway Object Storage exposes an
+Amazon Simple Storage Service (S3) compatible API, so the existing OpenTofu S3
+backend can manage state without DynamoDB. Credentials ride in the environment,
+as with `GITHUB_TOKEN`, and never land in Git history.
+
+#### 2.8.1 Backend specification
+
+The root stack gains an explicit backend declaration in
+`platform-standards/tofu/backend.tf`:
+
+```hcl
+terraform {
+  required_version = ">= 1.12.0"
+  backend "s3" {}
+}
+```
+
+`concordat estate persist` materialises the user-supplied settings into a
+checked-in `.tfbackend` file (for example,
+`platform-standards/tofu/backend/scaleway.tfbackend`):
+
+```hcl
+bucket                      = "df12-tfstate"
+key                         = "estates/<github_owner>/<branch>/terraform.tfstate"
+region                      = "fr-par"
+endpoints                   = { s3 = "https://s3.fr-par.scw.cloud" }
+use_path_style              = true
+skip_region_validation      = true
+skip_requesting_account_id  = true
+skip_credentials_validation = true
+use_lockfile                = true
+```
+
+The backend file is pure configuration; no credentials are recorded. Operators
+export access keys before invoking Concordat:
+
+```bash
+export AWS_ACCESS_KEY_ID=SCWXXXXXXXXXXXXXXXXX
+export AWS_SECRET_ACCESS_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# Optional when using temporary keys
+export AWS_SESSION_TOKEN=...
+```
+
+The CLI also supports the Scaleway-specific aliases
+`SCW_ACCESS_KEY`/`SCW_SECRET_KEY` and maps them onto the AWS variables before
+launching OpenTofu. The design deliberately omits `encrypt = true` because
+Scaleway only offers server-side encryption with customer-provided keys (SSE-C)
+and Terraform's backend expects SSE-S3 headers. At-rest encryption therefore
+remains a caller concern (for example, by keeping secrets out of state or using
+client-side encryption).
+
+Every persistence descriptor ships alongside a YAML manifest
+(`platform-standards/tofu/backend/persistence.yaml`) storing a schema version,
+bucket, key prefix, region, custom endpoint, and the relative path to the
+`.tfbackend` file. This YAML lets the CLI rehydrate defaults when the operator
+reruns `estate persist` and provides machine-readable evidence that the estate
+is eligible for remote state.
+
+Scaleway buckets must enable versioning and, optionally, Object Lock before the
+CLI writes any state. The command performs a `HeadBucket`+`GetBucketVersioning`
+check via boto3, emits a blocking error if versioning is disabled, and surfaces
+a warning (not an error) when Object Lock is absent.
+
+#### 2.8.2 `estate persist` interactive workflow
+
+`concordat estate persist` behaves similarly to `concordat enrol`: it stages a
+branch inside the estate repository, writes deterministic artefacts, and opens a
+pull request. The workflow is:
+
+- Resolve the target estate (explicit `--alias` or the active record) and fetch
+  it into the local cache. Dirty worktrees abort the command to keep diffs
+  surgical.
+- Load any prior `persistence.yaml` so prompts are pre-filled when operators
+  rotate buckets or rename prefixes.
+- Prompt for: bucket name, Scaleway region slug (`fr-par`, `nl-ams`, or
+  `pl-waw`), S3 endpoint URL, and the desired state key suffix. The CLI suggests
+  `estates/<github_owner>/<branch>/terraform.tfstate` and confirms whether a
+  multi-stack estate requires additional path segments (for example,
+  `envs/prod`).
+- Validate inputs by checking S3 bucket access (using the mapped AWS
+  credentials), ensuring key suffixes do not contain directory traversals, and
+  confirming the endpoint uses HTTPS. All validation happens before touching
+  Git history.
+- Render both `backend.tf` and `backend/<alias>.tfbackend`, plus the YAML
+  descriptor, then run `tofu fmt` to keep formatting consistent.
+- Create a branch named `estate/persist-<timestamp>`, commit the new files with
+  an imperative subject (for example, `Configure Scaleway remote state`), push
+  via pygit2, and open a pull request against the estate repository that
+  restates the collected parameters and links to the Scaleway versioning docs.
+- Leave the branch locally (so operators can amend) and print the PR URL.
+
+The command never stores credentials: it merely verifies that the current
+environment can talk to the bucket. Re-running `estate persist` updates the YAML
+manifest and regenerates the `.tfbackend`; destructive changes (such as bucket
+renames) require an explicit `--force` flag so that operators acknowledge the
+state migration impact.
+
+#### 2.8.3 Execution-time behaviour
+
+`concordat plan` and `concordat apply` now inspect the checked-in
+`persistence.yaml` while preparing the estate workspace:
+
+- If the file exists and `enabled: true`, the CLI appends
+  `-backend-config=<path>` to the `tofu init -input=false` invocation. The path
+  is resolved relative to the estate root so ephemeral workspaces can reuse it
+  verbatim.
+- Missing AWS/Scaleway environment variables trigger a descriptive error before
+  `tofu init` runs, preventing OpenTofu's opaque credential failures. When the
+  descriptor is absent, both commands retain the current local-state default.
+- The initialisation log echoes the bucket, key, and region (never secrets) so
+  operators have traceability in CI logs.
+- Backends remain immutable once initialised; the CLI refuses to mix local and
+  remote state in the same workspace unless the operator wipes `.terraform`
+  explicitly. This protects estates from partial migrations.
+
+Because the backend lockfile feature is available on Terraform/OpenTofu 1.9+
+the CLI no longer needs DynamoDB. Concurrent applies produce native `.tflock`
+objects in the bucket; secondary applies surface the standard "state locked"
+message with the locking object key so operators can diagnose stalled jobs.
+
+#### 2.8.4 Failure handling and observability
+
+- Preflight validation: `estate persist` performs a zero-byte `PutObject`
+  followed by a delete in the configured prefix to ensure the access keys own
+  write/delete permissions. It rolls back any temporary object on failure and
+  surfaces permission errors with actionable guidance.
+- Health checks: `concordat apply` adds a `--check-lock` dry run (implemented as
+  `tofu state lock -help` substitute) when multiple runs overlap, so operators
+  can observe stuck locks without poking the bucket manually.
+- Alerting hooks: the persistence YAML includes an optional `notification_topic`
+  key. When populated, the CLI emits a structured log line whenever lock
+  acquisition exceeds 60 seconds, giving downstream log routers enough context
+  to alert.
+- Disaster recovery: operators can leverage Scaleway's bucket versioning to
+  roll back a corrupted state by copying the previous version over the active
+  object. The design doc emphasises that Concordat will not automate rollbacks;
+  it simply guarantees that version IDs appear in the CLI output whenever an
+  apply updates state.
+
+This design keeps state durable, auditable, and vendor-neutral while requiring
+only standard S3 primitives that Scaleway already supports.
+
 ## 3. Squash-only merge standard test case
 
 Repository standard RS-002 (squash-only merges) now ships as an executable
