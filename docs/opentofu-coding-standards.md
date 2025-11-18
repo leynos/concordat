@@ -106,8 +106,8 @@ variable "bucket_name" {
   (CI) secrets.
 - Clean up temporary artefacts in provisioners using `trap`, as in
   `modules/deploy`.
-- Grant Identity and Access Management (IAM) permissions on the narrowest
-  scope; prefer data sources for Amazon Resource Names (ARNs).
+- Grant Identity and Access Management (IAM) permissions on the narrowest scope;
+  prefer data sources for Amazon Resource Names (ARNs).
 
 ## Documentation and comments
 

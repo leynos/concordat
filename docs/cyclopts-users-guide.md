@@ -147,23 +147,23 @@ def main(verbose: Annotated[int, Parameter(alias="-v", count=True)] = 0):
 
 ### 3.5 Unions, Optionals, Literals, Enums, Flags
 
-- **Union/Optional**: first match wins; `None` arms in a `Union` are ignored
-  for coercion.
+- **Union/Optional**: first match wins; `None` arms in a `Union` are ignored for
+  coercion.
 - **Literal**: define a constrained set of choices (numbers allowed) without
   writing manual validators.
 - **Enum**: Cyclopts matches **by name** (case‑insensitive, hyphens tolerated
   for underscores). Prefer `Literal[...]` for user‑facing choices unless enum
   semantics are required.
-- **Flag/IntFlag**: treat each member name as a boolean sub‑flag; can be set
-  via positional names or `--param.member`.
+- **Flag/IntFlag**: treat each member name as a boolean sub‑flag; can be set via
+  positional names or `--param.member`.
 
 ### 3.6 Dates & times
 
 - `date`: ISO `YYYY‑MM‑DD` (plus Python ≥3.11 ISO‑8601 variants).
 - `datetime`: permissive ISO forms (`YYYY‑MM‑DD`,
   `YYYY‑MM‑DDTHH:MM:SS[.fff][±TZ]`).
-- `timedelta`: compact units like `90m`, `1h30m`, `3w`, `6M`, `1y`
-  (months/years approximate).
+- `timedelta`: compact units like `90m`, `1h30m`, `3w`, `6M`, `1y` (months/years
+  approximate).
 
 ### 3.7 Custom converters & validation
 
@@ -226,8 +226,8 @@ ______________________________________________________________________
 
 ## 5) Groups & validators (across parameters)
 
-Use `Group` to structure help and enforce cross‑field constraints (e.g.
-mutually exclusive flags) without littering command bodies.
+Use `Group` to structure help and enforce cross‑field constraints (e.g. mutually
+exclusive flags) without littering command bodies.
 
 ```python
 from typing import Annotated
@@ -308,8 +308,8 @@ app = App(
 )
 ```
 
-- TOML mapping uses `[tool.<app>.<command>]` sections by convention (toggle
-  keys via provider args).
+- TOML mapping uses `[tool.<app>.<command>]` sections by convention (toggle keys
+  via provider args).
 - Env var mapping is `PREFIX_<COMMAND>_<PARAM>`, with `-` → `_`.
 - Build a **meta app** (next section) to let `--config /path/to/file` select a
   config at runtime.
@@ -513,8 +513,8 @@ ______________________________________________________________________
   numeric value is meaningful to the program.
 - **Adopt lazy loading** for large apps or when help generation/import cost is
   noticeable.
-- **Install completion** in development via `cyclopts run ...` and in
-  production via `--install-completion`.
+- **Install completion** in development via `cyclopts run ...` and in production
+  via `--install-completion`.
 - **In tests**, set `result_action="return_value"` and assert directly on
   results.
 
@@ -525,8 +525,8 @@ ______________________________________________________________________
 - **Mixing positional and keyword** follows normal Python rules; once a later
   param is supplied by keyword, earlier ones cannot be passed positionally.
 - **Lists**: positional lists stop at an option unless
-  `allow_leading_hyphen=True`; with keywords, tokens must complete an element
-  or the parser raises a missing-argument error.
+  `allow_leading_hyphen=True`; with keywords, tokens must complete an element or
+  the parser raises a missing-argument error.
 - **Mutable defaults**: do not default list/dict params to `[]/{}`; prefer
   `None` and handle inside the function, or rely on `--empty-<name>` for
   explicit empty lists.
@@ -537,9 +537,9 @@ ______________________________________________________________________
 
 ## 19) Cross‑referenced API surface (quick index)
 
-- `App(...)`: `help`, `version`/`version_flags`, `default_parameter`,
-  `group_*`, `help_formatter`, `config`, `exit_on_error`, `print_error`,
-  `help_on_error`, `verbose`, `result_action`.
+- `App(...)`: `help`, `version`/`version_flags`, `default_parameter`, `group_*`,
+  `help_formatter`, `config`, `exit_on_error`, `print_error`, `help_on_error`,
+  `verbose`, `result_action`.
 - `@app.command`, `@app.default`, `app.command(App(...), name="*" )`.
 - `Parameter(...)`: `name`, `alias`, `name_transform`, `help`, `converter`,
   `validator`, `group`, `negative`, `count`, `allow_leading_hyphen`,

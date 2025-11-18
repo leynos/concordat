@@ -1,14 +1,14 @@
 # 1. Overview of `uv` and `pyproject.toml`
 
-Astral's `uv` project manager (short for "universal virtualenv") is a
-Rust-based project and package manager that uses Tom's Obvious Minimal Language
+Astral's `uv` project manager (short for "universal virtualenv") is a Rust-based
+project and package manager that uses Tom's Obvious Minimal Language
 configuration stored in `pyproject.toml` as its central configuration. Running
 commands like `uv init`, `uv sync` or `uv run` will prompt `uv` to:
 
 1. Look for a `pyproject.toml` in the project root and keep a lockfile
    (`uv.lock`) in sync with it.
-2. Create a virtual environment (`.venv`) if one does not already exist.
-3. Read dependency specifications (and any build-system directives) to install
+1. Create a virtual environment (`.venv`) if one does not already exist.
+1. Read dependency specifications (and any build-system directives) to install
    or update packages accordingly. (Astral Docs[^1], RidgeRun.ai[^2])
 
 In other words, the project's `pyproject.toml` drives everything—from metadata
@@ -66,8 +66,8 @@ dependencies = [
 - **`authors`:** A list of tables with `name` and `email`. Many registries
   (e.g., PyPI) pull this for display. (Python Packaging[^4], Reddit[^5])
 - **`keywords` and `classifiers`:** These help search engines and package
-  indexes. Classifiers must follow the exact trove list defined by PyPA.
-  (Python Packaging[^4], Reddit[^5])
+  indexes. Classifiers must follow the exact trove list defined by PyPA. (Python
+  Packaging[^4], Reddit[^5])
 - **`dependencies`:** A list of Python Enhancement Proposal 508-style
   `"requests>=2.25"`). `uv sync` will install exactly those versions, updating
   the lockfile as needed. (Astral Docs[^1], RidgeRun.ai[^2])
@@ -106,8 +106,8 @@ ______________________________________________________________________
 ## 4. Entry Points and Scripts
 
 Projects that expose command-line interfaces or graphical user interfaces can
-use the `[project.scripts]` and `[project.gui-scripts]` tables defined in
-Python Enhancement Proposal 621:
+use the `[project.scripts]` and `[project.gui-scripts]` tables defined in Python
+Enhancement Proposal 621:
 
 ```toml
 [project.scripts]
@@ -130,9 +130,9 @@ ______________________________________________________________________
 ## 5. Declaring a Build System
 
 Python Enhancement Proposals 517 and 518 require a `[build-system]` table to
-describe how the project should be built and installed. A "modern" convention
-is to specify `setuptools>=61.0` (for editable installs without `setup.py`) or
-a lighter alternative like `flit_core`. Below is the typical setup using
+describe how the project should be built and installed. A "modern" convention is
+to specify `setuptools>=61.0` (for editable installs without `setup.py`) or a
+lighter alternative like `flit_core`. Below is the typical setup using
 setuptools:
 
 ```toml
@@ -227,8 +227,8 @@ package = true
 
 1. **Metadata under `[project]`:**
 
-   - `name`, `version` (mandatory per Python Enhancement Proposal 621)
-     (Python Packaging[^4], Reddit[^5])
+   - `name`, `version` (mandatory per Python Enhancement Proposal 621) (Python
+     Packaging[^4], Reddit[^5])
    - `description`, `readme`, `requires-python`: provide clarity about the
      project and help tools like PyPI. (Python Packaging[^4], Reddit[^5])
    - `license`, `authors`, `keywords`, `classifiers`: standardized metadata,
@@ -236,18 +236,18 @@ package = true
    - `dependencies`: runtime requirements, expressed in Python Enhancement
      Proposal 508 syntax. (Astral Docs[^1], RidgeRun.ai[^2])
 
-2. **Optional Dependencies (`[project.optional-dependencies]`):**
+1. **Optional Dependencies (`[project.optional-dependencies]`):**
 
    - Grouped as `dev` (for testing + linting) and `docs` (for documentation).
      Installing them is as simple as `uv add --group dev` or
      `uv sync --include dev`. (Python Packaging[^4], DevsJC[^6])
 
-3. **Entry Points (`[project.scripts]`):**
+1. **Entry Points (`[project.scripts]`):**
 
    - Defines a console command `mycli` that maps to `my_project/cli.py:main`.
      Invoking `uv run mycli` runs the `main()` function. (Astral Docs[^8])
 
-4. **Build System:**
+1. **Build System:**
 
    - `setuptools>=61.0` plus `wheel` ensures both legacy and editable installs
      work. ✱ Newer versions of setuptools support Python Enhancement Proposal
@@ -256,7 +256,7 @@ package = true
    - `build-backend = "setuptools.build_meta"` tells `uv` how to compile the
      package. (Python Packaging[^4], Astral Docs[^8])
 
-5. **`[tool.uv]`:**
+1. **`[tool.uv]`:**
 
    - `package = true` ensures that `uv sync` will build and install the project
      (in editable mode) every time dependencies change. Otherwise, `uv` treats
@@ -272,27 +272,27 @@ ______________________________________________________________________
    Language syntax highlighting and Python Enhancement Proposal 621
    autocompletion. (Python Packaging[^4])
 
-2. **Lockfile Discipline:** After modifying `dependencies` or any `[project]`
+1. **Lockfile Discipline:** After modifying `dependencies` or any `[project]`
    fields, always run `uv sync` (or `uv lock`) to update `uv.lock`. This
    guarantees reproducible environments. (Astral Docs[^1])
 
-3. **Semantic Versioning:** Follow [semver](https://semver.org/) for `version`
+1. **Semantic Versioning:** Follow [semver](https://semver.org/) for `version`
    values (e.g., `1.2.3`). Bump patch versions for bug fixes, minor for
    backward-compatible changes, and major for breaking changes. (Python
    Packaging[^4])
 
-4. **Keep Build Constraints Minimal:** When editable installs are unnecessary,
-   omit `[build-system]` (but note that `uv` will then skip building the
-   package and only install dependencies). To override, set
-   `tool.uv.package = true`. (Astral Docs[^8])
+1. **Keep Build Constraints Minimal:** When editable installs are unnecessary,
+   omit `[build-system]` (but note that `uv` will then skip building the package
+   and only install dependencies). To override, set `tool.uv.package = true`.
+   (Astral Docs[^8])
 
-5. **Use Exact or Bounded Ranges for Dependencies:** Rather than `requests`, use
+1. **Use Exact or Bounded Ranges for Dependencies:** Rather than `requests`, use
    `requests>=2.25, <3.0` to avoid unexpected major bumps. (DevsJC[^6])
 
-6. **Consider Dynamic Fields Sparingly:** Declare fields like
-   `dynamic = ["version"]` only when the version is computed at build time
-   (e.g. via `setuptools_scm`). Ensure the build backend supports dynamic
-   metadata. (Python Packaging[^4])
+1. **Consider Dynamic Fields Sparingly:** Declare fields like
+   `dynamic = ["version"]` only when the version is computed at build time (e.g.
+   via `setuptools_scm`). Ensure the build backend supports dynamic metadata.
+   (Python Packaging[^4])
 
 ______________________________________________________________________
 
@@ -300,26 +300,34 @@ ______________________________________________________________________
 
 A "modern" `pyproject.toml` for an Astral `uv` project should:
 
-- Use the Python Enhancement Proposal 621 `[project]` table for metadata
-  and `dependencies`.
+- Use the Python Enhancement Proposal 621 `[project]` table for metadata and
+  `dependencies`.
 - Distinguish optional dependencies under `[project.optional-dependencies]`.
 - Define any command-line interface or graphical user interface entry points
   under `[project.scripts]` or `[project.gui-scripts]`.
-- Declare a Python Enhancement Proposal 517 `[build-system]`
-  (e.g. `setuptools>=61.0`, `wheel`, `setuptools.build_meta`) to support
-  editable installs, or omit it and rely on `tool.uv.package = true`.
+- Declare a Python Enhancement Proposal 517 `[build-system]` (e.g.
+  `setuptools>=61.0`, `wheel`, `setuptools.build_meta`) to support editable
+  installs, or omit it and rely on `tool.uv.package = true`.
 - Include a `[tool.uv]` section, with at least `package = true`, to direct `uv`
   to build and install the project package.
 
-Following these conventions ensures that the project is fully Python
-Enhancement Proposal compliant, easy to maintain, and integrates seamlessly
-with Astral `uv`.
+Following these conventions ensures that the project is fully Python Enhancement
+Proposal compliant, easy to maintain, and integrates seamlessly with Astral
+`uv`.
 
-[^1]: [Working on projects | uv - Astral Docs](https://docs.astral.sh/uv/guides/projects/)
-[^2]: [uv tutorial: a fast Python package and project manager](https://www.ridgerun.ai/post/uv-tutorial-a-fast-python-package-and-project-manager)
-[^3]: [Modern Python development with pyproject.toml and uv](https://levelup.gitconnected.com/modern-python-development-with-pyproject-toml-and-uv-405dfb8b6ec8)
-[^4]: [Python Packaging User Guide: writing pyproject.toml](https://packaging.python.org/en/latest/guides/writing-pyproject-toml/)
-[^5]: [Anyone used the uv package manager in production? (Reddit)](https://www.reddit.com/r/Python/comments/1ixryec/anyone_used_uv_package_manager_in_production/)
-[^6]: [The Complete Guide to pyproject.toml – devsjc blogs](https://devsjc.github.io/blog/20240627-the-complete-guide-to-pyproject-toml/)
-[^7]: [Start using the uv Python package manager for better dependency management](https://medium.com/%40gnetkov/start-using-uv-python-package-manager-for-better-dependency-management-183e7e428760)
-[^8]: [Configuring projects | uv - Astral Docs](https://docs.astral.sh/uv/concepts/projects/config/)
+\[^1\]:
+[Working on projects | uv - Astral Docs](https://docs.astral.sh/uv/guides/projects/)
+\[^2\]:
+[uv tutorial: a fast Python package and project manager](https://www.ridgerun.ai/post/uv-tutorial-a-fast-python-package-and-project-manager)
+\[^3\]:
+[Modern Python development with pyproject.toml and uv](https://levelup.gitconnected.com/modern-python-development-with-pyproject-toml-and-uv-405dfb8b6ec8)
+\[^4\]:
+[Python Packaging User Guide: writing pyproject.toml](https://packaging.python.org/en/latest/guides/writing-pyproject-toml/)
+\[^5\]:
+[Anyone used the uv package manager in production? (Reddit)](https://www.reddit.com/r/Python/comments/1ixryec/anyone_used_uv_package_manager_in_production/)
+\[^6\]:
+[The Complete Guide to pyproject.toml – devsjc blogs](https://devsjc.github.io/blog/20240627-the-complete-guide-to-pyproject-toml/)
+\[^7\]:
+[Start using the uv Python package manager for better dependency management](https://medium.com/%40gnetkov/start-using-uv-python-package-manager-for-better-dependency-management-183e7e428760)
+\[^8\]:
+[Configuring projects | uv - Astral Docs](https://docs.astral.sh/uv/concepts/projects/config/)

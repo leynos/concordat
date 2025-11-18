@@ -2,19 +2,19 @@
 
 ## Code style and structure
 
-- **Code is for humans.** Write code with clarity and empathy—assume a
-  tired teammate will need to debug it at 3 a.m.
-- **Comment *why*, not *what*.** Explain assumptions, edge cases, trade-offs,
-  or complexity. Don't echo the obvious.
+- **Code is for humans.** Write code with clarity and empathy—assume a tired
+  teammate will need to debug it at 3 a.m.
+- **Comment *why*, not *what*.** Explain assumptions, edge cases, trade-offs, or
+  complexity. Don't echo the obvious.
 - **Clarity over cleverness.** Be concise, but favour explicit over terse or
   obscure idioms. Prefer code that's easy to follow.
 - **Use functions and composition.** Avoid repetition by extracting reusable
   logic. Prefer generators or comprehensions to imperative repetition when
   readable.
-- **Name things precisely.** Use clear, descriptive variable and function
-  names. For booleans, prefer names with `is`, `has`, or `should`.
-- **Structure logically.** Each file should encapsulate a coherent module.
-  Group related code (e.g., models + utilities + fixtures) close together.
+- **Name things precisely.** Use clear, descriptive variable and function names.
+  For booleans, prefer names with `is`, `has`, or `should`.
+- **Structure logically.** Each file should encapsulate a coherent module. Group
+  related code (e.g., models + utilities + fixtures) close together.
 - **Group by feature, not layer.** Colocate views, logic, fixtures, and helpers
   related to a domain concept rather than splitting by type.
 
@@ -68,8 +68,8 @@ When implementing changes, adhere to the following testing procedures:
   - Identify or create a behavioural test that covers the functionality being
     refactored. Ensure this test passes **before** starting the refactor.
   - Perform the refactoring (e.g., extracting logic into a new unit).
-  - If new units are created (e.g., a new function or component), add unit
-    tests for these extracted units.
+  - If new units are created (e.g., a new function or component), add unit tests
+    for these extracted units.
   - After the refactor, ensure the original behavioural test **still passes**
     without modification. Also ensure any new unit tests pass.
 
@@ -77,8 +77,8 @@ When implementing changes, adhere to the following testing procedures:
 
 - **Atomicity:** Aim for small, focused, atomic changes. Each change (and
   subsequent commit) should represent a single logical unit of work.
-- **Quality Gates:** Before considering a change complete or proposing a
-  commit, ensure it meets the following criteria:
+- **Quality Gates:** Before considering a change complete or proposing a commit,
+  ensure it meets the following criteria:
   - For Python files:
     - **Testing:** Passes all relevant unit and behavioural tests according to
       the guidelines above (run `make test` to verify).
@@ -95,21 +95,20 @@ When implementing changes, adhere to the following testing procedures:
     these formatting guidelines:
     - **Imperative Mood:** Use the imperative mood in the subject line (e.g.,
       "Fix bug", "Add feature" instead of "Fixed bug", "Added feature").
-    - **Subject Line:** The first line should be a concise summary of the
-      change (ideally 50 characters or less).
-    - **Body:** Separate the subject from the body with a blank line.
-      Subsequent lines should explain the *what* and *why* of the change in
-      more detail, including rationale, goals, and scope. Wrap the body at 72
-      characters.
-    - **Formatting:** Use Markdown for any formatted text (like bullet points
-      or code snippets) within the commit message body.
+    - **Subject Line:** The first line should be a concise summary of the change
+      (ideally 50 characters or less).
+    - **Body:** Separate the subject from the body with a blank line. Subsequent
+      lines should explain the *what* and *why* of the change in more detail,
+      including rationale, goals, and scope. Wrap the body at 72 characters.
+    - **Formatting:** Use Markdown for any formatted text (like bullet points or
+      code snippets) within the commit message body.
   - Do not commit changes that fail any of the quality gates.
 
 ## Refactoring heuristics & workflow
 
-- **Recognizing Refactoring Needs:** Regularly assess the codebase for
-  potential refactoring opportunities. Consider refactoring when the following
-  conditions appear:
+- **Recognizing Refactoring Needs:** Regularly assess the codebase for potential
+  refactoring opportunities. Consider refactoring when the following conditions
+  appear:
   - **Long Methods/Functions:** Functions or methods that are excessively long
     or try to do too many things.
   - **Duplicated Code:** Identical or very similar code blocks appearing in
@@ -121,8 +120,8 @@ When implementing changes, adhere to the following testing procedures:
   - **Primitive Obsession / Data Clumps:** Groups of simple variables (strings,
     numbers, booleans) that are frequently passed around together, often
     indicating a missing class or object structure.
-  - **Excessive Parameters:** Functions or methods requiring a very long list
-    of parameters.
+  - **Excessive Parameters:** Functions or methods requiring a very long list of
+    parameters.
   - **Feature Envy:** Methods that seem more interested in the data of another
     class/object than their own.
   - **Shotgun Surgery:** A single change requiring small modifications in many
@@ -140,15 +139,14 @@ When implementing changes, adhere to the following testing procedures:
 ## Markdown guidance
 
 - Validate Markdown files using `make markdownlint`.
-- Run `make fmt` after any documentation changes to format all Markdown
-  files and fix table markup.
+- Run `make fmt` after any documentation changes to format all Markdown files
+  and fix table markup.
 - Validate Mermaid diagrams in Markdown files by running `make nixie`.
 - Markdown paragraphs and bullet points must be wrapped at 80 columns.
 - Code blocks must be wrapped at 120 columns.
 - Tables and headings must not be wrapped.
 - Use dashes (`-`) for list bullets.
-- Use GitHub-flavoured Markdown footnotes (`[^1]`) for references and
-  footnotes.
+- Use GitHub-flavoured Markdown footnotes (`[^1]`) for references and footnotes.
 
 ## Additional tooling
 
@@ -159,8 +157,8 @@ The following tooling is available in this environment:
   debugging runtime behaviour and syscalls.
 - `gdb` – General-purpose debugger for inspecting and controlling programs as
   they execute (or post-mortem via core dumps).
-- `ripgrep` – Fast, recursive text search tool that respects `.gitignore`
-  files and serves as a drop-in replacement for standard `grep`.
+- `ripgrep` – Fast, recursive text search tool that respects `.gitignore` files
+  and serves as a drop-in replacement for standard `grep`.
 - `ltrace` – Traces calls to dynamic library functions made by a process.
 - `valgrind` – Suite for detecting memory leaks, profiling, and debugging
   low-level memory errors.
@@ -199,9 +197,8 @@ directory:
   conventions
 - [Python Context Managers](.rules/python-context-managers.md) - Best practices
   for context managers
-- [Python Exceptions and
-  Logging](.rules/python-exception-design-raising-handling-and-logging.md) -
-  Throwing, catching, and logging exceptions.
+- [Python Exceptions and Logging](.rules/python-exception-design-raising-handling-and-logging.md)
+  \- Throwing, catching, and logging exceptions.
 - [Python Generators](.rules/python-generators.md) - Generator and iterator
   patterns
 - [Python Project Configuration](.rules/python-pyproject.md) - pyproject.toml

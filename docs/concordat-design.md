@@ -97,8 +97,8 @@ reliability while obscuring metrics. To align priority management with the
 "standards as code" philosophy, the architecture introduces a canonical
 priority model defined once in `platform-standards`. OpenTofu applies the
 model, and the Auditor alongside GitHub rulesets enforces it. The `concordat`
-CLI remains the entry point for estate inventory and enrollment but continues
-to defer all mutation to declarative automation.
+command-line interface (CLI) remains the entry point for estate inventory and
+enrollment but continues to defer all mutation to declarative automation.
 
 ### 2.2 Canonical priority model contract
 
@@ -368,7 +368,7 @@ use_lockfile                = true
 ```
 
 The backend file is pure configuration; no credentials are recorded. Operators
-export access keys before invoking Concordat:
+export Amazon Web Services (AWS) access keys before invoking Concordat:
 
 ```bash
 export AWS_ACCESS_KEY_ID=SCWXXXXXXXXXXXXXXXXX
@@ -444,7 +444,7 @@ state migration impact.
   `tofu init` runs, preventing OpenTofu's opaque credential failures. When the
   descriptor is absent, both commands retain the current local-state default.
 - The initialisation log echoes the bucket, key, and region (never secrets) so
-  operators have traceability in CI logs.
+  operators have traceability in Continuous Integration (CI) logs.
 - Backends remain immutable once initialised; the CLI refuses to mix local and
   remote state in the same workspace unless the operator wipes `.terraform`
   explicitly. This protects estates from partial migrations.

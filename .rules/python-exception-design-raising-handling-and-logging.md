@@ -278,13 +278,13 @@ select = [
 ## 10) One‑page policy for repositories
 
 > **Exceptions are part of the public API.** Define a small hierarchy with a
-> package base and `*Error` suffix; raise specific types; wrap external
-> failures with `raise … from …`; catch only what can be handled; use `else`
-> for the happy path; avoid `try/except` in hot loops; never format log
-> messages directly; log exceptions once at a boundary via `logger.exception`.
-> Enforce with Ruff's Tryceratops rule set, Ruff's Blind Except rule, the
-> flake8-errmsg family, the flake8-logging family, the pep8-naming convention,
-> Perflint's static analysis, and the assert-raises-exception safeguard.
+> package base and `*Error` suffix; raise specific types; wrap external failures
+> with `raise … from …`; catch only what can be handled; use `else` for the
+> happy path; avoid `try/except` in hot loops; never format log messages
+> directly; log exceptions once at a boundary via `logger.exception`. Enforce
+> with Ruff's Tryceratops rule set, Ruff's Blind Except rule, the flake8-errmsg
+> family, the flake8-logging family, the pep8-naming convention, Perflint's
+> static analysis, and the assert-raises-exception safeguard.
 
 ## 11) References
 

@@ -17,7 +17,7 @@ workflows read the same flag before applying changes.
    uv sync --group dev
    ```
 
-2. Invoke the CLI with `uv run` to ensure the correct environment is used.
+1. Invoke the CLI with `uv run` to ensure the correct environment is used.
 
 ## Enrolling repositories
 
@@ -33,8 +33,8 @@ workflows read the same flag before applying changes.
   whose GitHub slug does not start with the recorded owner and fails fast when
   it cannot determine the slug from the repository or `origin` remote.
 
-- When the repository already contains a `.concordat` file with `enrolled:
-  true`, the CLI prints `already enrolled` and makes no changes.
+- When the repository already contains a `.concordat` file with
+  `enrolled: true`, the CLI prints `already enrolled` and makes no changes.
 
 - The CLI commits the new file to the current branch. If the Git configuration
   does not define `user.name` and `user.email`, supply details explicitly:
@@ -57,9 +57,10 @@ workflows read the same flag before applying changes.
 
   The CLI clones the repository, creates the enrolment commit, and pushes it
   back to the remote.
+
 - When rehearsing or running tests without access to the platform-standards
-  repository, set `CONCORDAT_SKIP_PLATFORM_PR=1` to disable the IaC pull
-  request step while keeping the `github_owner` guard active.
+  repository, set `CONCORDAT_SKIP_PLATFORM_PR=1` to disable the IaC pull request
+  step while keeping the `github_owner` guard active.
 
 ## Disenrolling repositories
 
@@ -169,8 +170,8 @@ without leaving the CLI. Both commands require `GITHUB_TOKEN` and the estate's
 
   `concordat apply` uses the same workspace preparation as `plan`, adds
   `-auto-approve` for OpenTofu, and returns the exit code from the underlying
-  `tofu` invocation, so pipelines can gate on it. Pass `--keep-workdir` when
-  you also want to retain the apply workspace for inspection.
+  `tofu` invocation, so pipelines can gate on it. Pass `--keep-workdir` when you
+  also want to retain the apply workspace for inspection.
 
 ### Estate configuration file
 
@@ -197,11 +198,11 @@ estate:
 - `active_estate` is optional; the first `estate init` call populates it
   automatically.
 - `github_owner` identifies the organization or user managed by the estate.
-  `concordat enrol` and `concordat ls` rely on the stored owner to guard
-  against cross-organization drift.
+  `concordat enrol` and `concordat ls` rely on the stored owner to guard against
+  cross-organization drift.
 - `branch` and `inventory_path` default to `main` and
-  `tofu/inventory/repositories.yaml`. Override them when the remote uses
-  another branch name or inventory layout.
+  `tofu/inventory/repositories.yaml`. Override them when the remote uses another
+  branch name or inventory layout.
 - Manual edits are allowed, but prefer the CLI to ensure validation is applied.
 
 ### Interaction with enrolment
@@ -234,7 +235,7 @@ rehearse changes without touching production.
    export GITHUB_TOKEN=placeholder
    ```
 
-2. Initialize the stack and preview the actions with the default `test-case`
+1. Initialize the stack and preview the actions with the default `test-case`
    owner:
 
    ```shell
@@ -246,10 +247,10 @@ rehearse changes without touching production.
    Exit code `2` indicates that OpenTofu would make changes (expected for the
    sample repository), while exit code `0` confirms convergence.
 
-3. Override `github_owner` and extend `inventory/repositories.yaml` when ready
+1. Override `github_owner` and extend `inventory/repositories.yaml` when ready
    to target additional organizations. The `github_owner` guard blocks
-   accidental cross-org drift by asserting that every slug shares the
-   configured owner.
+   accidental cross-org drift by asserting that every slug shares the configured
+   owner.
 
 ### Validating the test-case standard end to end
 
@@ -307,9 +308,9 @@ demonstrating the guardrails to stakeholders:
   ```
 
 Running the full sequence above mirrors the automation that CI performs,
-demonstrating that the test-case standard enforces RS-002 through static
-checks, unit-style tests, Terratest coverage, and policy validation before any
-real repository settings change.
+demonstrating that the test-case standard enforces RS-002 through static checks,
+unit-style tests, Terratest coverage, and policy validation before any real
+repository settings change.
 
 ## Auditor workflow
 
@@ -317,10 +318,12 @@ real repository settings change.
   UTC. Results land in GitHub's Code Scanning dashboard because the workflow
   uploads the generated Static Analysis Results Interchange Format (SARIF) file
   using `github/codeql-action/upload-sarif`.
+
 - Trigger the workflow manually with **Run workflow** to inspect a specific
   revision. Provide `snapshot_path` (for example,
   `tests/fixtures/auditor/snapshot.json`) to replay a recorded API response and
   set `upload_sarif` to `false` when only a local artefact is required.
+
 - Run the same workflow locally with `act`:
 
   ```shell
@@ -328,8 +331,8 @@ real repository settings change.
   ```
 
   The test reads `tests/fixtures/workflows/auditor-workflow-dispatch.json`,
-  downloads workflow artefacts under a temporary directory, and asserts that
-  the SARIF log structure is valid.
+  downloads workflow artefacts under a temporary directory, and asserts that the
+  SARIF log structure is valid.
 
 ## Troubleshooting
 
