@@ -58,10 +58,9 @@ preview and apply changes from concordat.
 
 ### Step: Persist estate tfstate in Scaleway Object Storage
 
-Move OpenTofu state into a shared, versioned backend so operators and
-Continuous Integration (CI) jobs
-never diverge. Remote persistence also unlocks locking and rollbacks without
-adding DynamoDB or other AWS-only dependencies.
+Move OpenTofu state into a shared, versioned backend so operators and Continuous
+Integration (CI) jobs never diverge. Remote persistence also unlocks locking and
+rollbacks without adding DynamoDB or other AWS-only dependencies.
 
 - [ ] Add `platform-standards/tofu/backend.tf` and the accompanying backend
   directory, declaring the `s3` backend with no inline credentials. Acceptance:
@@ -78,10 +77,14 @@ adding DynamoDB or other AWS-only dependencies.
   AWS/Scaleway environment variables are missing. Acceptance: integration tests
   confirm remote state is used when configured, local state remains untouched
   otherwise, and logs expose bucket/key details but no secrets.
-- [ ] Extend `docs/users-guide.md` with operator guidance covering environment
-  variables, lock troubleshooting, and disaster recovery using bucket
-  versioning. Acceptance: `make markdownlint`, `make fmt`, and `make nixie`
-  continue to pass after the documentation changes.
+- [ ] Extend `docs/users-guide.md` with operator guidance (sourced from Section
+  2.8.4 of the design doc) that explicitly documents: (1) how to set required
+  environment variables for AWS and Scaleway, including `AWS_ACCESS_KEY_ID`,
+  `AWS_SECRET_ACCESS_KEY`, `SCW_ACCESS_KEY`, and `SCW_SECRET_KEY`; (2) lock
+  troubleshooting steps and common failure modes; and (3) disaster-recovery
+  procedures using bucket versioning, including how to locate and restore
+  specific object version IDs. Acceptance: `make markdownlint`, `make fmt`, and
+  `make nixie` continue to pass after the documentation changes.
 
 ### Step: Stand up non-blocking audit execution
 
