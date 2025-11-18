@@ -393,7 +393,23 @@ Every persistence descriptor ships alongside a YAML manifest
 bucket, key prefix, region, custom endpoint, and the relative path to the
 `.tfbackend` file. This YAML lets the CLI rehydrate defaults when the operator
 reruns `estate persist` and provides machine-readable evidence that the estate
-is eligible for remote state.
+is eligible for remote state. The manifest schema is fixed so downstream tools
+can parse it reliably:
+
+| Field                 | Type    | Description                                                                                                                                                                                                       |
+| --------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schema_version`      | int     | Manifest format version. Bumped when new fields are introduced so older CLIs can refuse unsupported layouts.                                                                                                      |
+| `enabled`             | bool    | Whether the estate must use remote state. `false` lets operators opt out temporarily without deleting the manifest.                                                                                               |
+| `bucket`              | string  | Remote object-storage bucket that holds Terraform state.                                                                                                                                                          |
+| `key_prefix`          | string  | Directory-style prefix (for example, `estates/<owner>/<branch>`). The CLI appends module-specific suffixes.                                                                                                       |
+| `region`              | string  | Cloud-provider region/zone identifier (for example, `fr-par`).                                                                                                                                                    |
+| `endpoint`            | string  | Fully qualified HTTPS endpoint for the S3-compatible API.                                                                                                                                                         |
+| `backend_config_path` | string  | Relative path to the generated `.tfbackend` file that OpenTofu consumes.                                                                                                                                          |
+| `notification_topic`  | string? | Optional log-routing or pub/sub topic identifier. When populated, `concordat apply` emits a JSON log line to this target whenever lock acquisition exceeds 60 seconds so alerting pipelines can notify operators. |
+
+The YAML mirrors these fields verbatim, so automation can treat missing optional
+keys (such as `notification_topic`) as unset values. Section 2.8.4 details the
+alerting and disaster-recovery flows that consume these attributes.
 
 Every backend bucket—AWS, DigitalOcean, or Scaleway—must enable versioning
 before the CLI writes any state. The command performs a
@@ -471,9 +487,12 @@ on single-writer discipline to keep state consistent.
   followed by a delete in the configured prefix to ensure the access keys own
   write/delete permissions. It rolls back any temporary object on failure and
   surfaces permission errors with actionable guidance.
-- Health checks: `concordat apply` adds a `--check-lock` dry run (implemented as
-  `tofu state lock -help` substitute) when multiple runs overlap, so operators
-  can observe stuck locks without poking the bucket manually.
+- Health checks (planned): a future `concordat apply --check-lock` mode will
+  attempt to acquire the backend lock using OpenTofu's APIs and report the
+  blocking key when contention persists. The current CLI does not yet implement
+  this flag; running `tofu state lock -help` only prints usage and cannot detect
+  stuck locks, so operators presently depend on the `.tflock` metadata echoed in
+  apply logs.
 - Alerting hooks: the persistence YAML includes an optional `notification_topic`
   key. When populated, the CLI emits a structured log line whenever lock
   acquisition exceeds 60 seconds, giving downstream log routers enough context
