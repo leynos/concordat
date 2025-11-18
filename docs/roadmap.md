@@ -49,8 +49,8 @@ preview and apply changes from concordat.
 - [x] Implement `concordat plan`, using tofupy to run `tofu plan` inside the
   execution directory after synthesizing `terraform.tfvars` from the estate
   metadata. Acceptance: the command clones the active estate, writes a tfvars
-  file containing `github_owner`, requires `GITHUB_TOKEN`, and exits with the
-  same status code as OpenTofu.
+  file containing the `github_owner` (GitHub owner) value, requires
+  `GITHUB_TOKEN`, and exits with the same status code as OpenTofu.
 - [x] Implement `concordat apply` with the same workspace preparation but using
   tofupy's apply entrypoint (and support for `--auto-approve`). Acceptance: the
   command reconciles the estate against the cached repository and reports
@@ -190,10 +190,10 @@ Roll out the canonical state across the estate using OpenTofu.
 Keep labels and project fields consistent and make the configuration
 non-optional.
 
-- [ ] Publish `canon/.github/workflows/priority-sync.yml`, the reusable workflow
-  that keeps Projects Priority fields and issue labels in sync. Acceptance: two
-  pilot repositories consume the workflow and report no sync drift over a
-  two-week trial.
+- [ ] Publish `canon/.github/workflows/priority-sync.yml`, the reusable GitHub
+  workflow that keeps Projects Priority fields and issue labels in sync.
+  Acceptance: two pilot repositories consume the workflow and report no sync
+  drift over a two-week trial.
 - [ ] Extend the Auditor with PR-001 through PR-004 priority checks (as defined
   in the design doc) and ship them initially as warnings. Acceptance: Auditor
   SARIF output shows the new rule IDs with actionable guidance.

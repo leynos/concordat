@@ -60,7 +60,7 @@ workflows read the same flag before applying changes.
 
 - When rehearsing or running tests without access to the platform-standards
   repository, set `CONCORDAT_SKIP_PLATFORM_PR=1` to disable the IaC pull request
-  step while keeping the `github_owner` guard active.
+  step while keeping the `github_owner` (GitHub owner) guard active.
 
 ## Disenrolling repositories
 
@@ -274,7 +274,7 @@ rehearse changes without touching production.
 1. Override `github_owner` and extend `inventory/repositories.yaml` when ready
    to target additional organizations. The `github_owner` guard blocks
    accidental cross-org drift by asserting that every slug shares the configured
-   owner.
+   GitHub owner.
 
 ### Validating the test-case standard end to end
 
@@ -341,7 +341,7 @@ repository settings change.
 - Scheduled audits run via `.github/workflows/auditor.yml` every day at 05:00
   UTC. Results land in GitHub's Code Scanning dashboard because the workflow
   uploads the generated Static Analysis Results Interchange Format (SARIF) file
-  using `github/codeql-action/upload-sarif`.
+  using the GitHub `github/codeql-action/upload-sarif` action.
 
 - Trigger the workflow manually with **Run workflow** to inspect a specific
   revision. Provide `snapshot_path` (for example,

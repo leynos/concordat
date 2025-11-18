@@ -480,7 +480,7 @@ run "test_with_mock_provider" {
   assert {
     # Assertions can also ensure that computed values are not null,
     # even when the content is mocked.
-    condition     = aws_instance.server.arn!= null
+    condition     = aws_instance.server.arn != null
     error_message = "The mocked instance should have a non-null ARN."
   }
 }
@@ -692,7 +692,7 @@ variable "certificate_arn" {
 }
 
 resource "aws_lb_listener" "https" {
-  count = var.certificate_arn!= ""? 1 : 0
+  count = var.certificate_arn != "" ? 1 : 0
 
   load_balancer_arn = var.alb_arn
   port              = 443
@@ -820,7 +820,7 @@ COMMAND=$(jq -r '.resource_changes |
 
 # Assert that the command matches the expectation
 EXPECTED_COMMAND="echo hello-world > /tmp/message.txt"
-if; then
+if [ "$COMMAND" != "$EXPECTED_COMMAND" ]; then
   echo "Assertion failed!"
   echo "Expected: $EXPECTED_COMMAND"
   echo "Got:      $COMMAND"

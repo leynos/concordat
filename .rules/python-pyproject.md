@@ -53,7 +53,7 @@ dependencies = [
 ```
 
 - **`name` and `version`:** Mandatory per Python Enhancement Proposal 621.
-  (Python Packaging[^4], Reddit[^5]) Reddit[^5])
+  (Python Packaging[^4], Reddit[^5])
 - **`description` and `readme`:** Although not mandatory, they help with
   indexing and packaging tools; `readme = "README.md"` tells `uv` (and PyPI) to
   include the readme document as the long description. (Astral Docs[^1], Python
