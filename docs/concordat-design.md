@@ -344,15 +344,40 @@ The root stack gains an explicit backend declaration in
 
 ```hcl
 terraform {
-  required_version = ">= 1.12.0"
+  required_version = ">= 1.10.0"
   backend "s3" {}
 }
 ```
 
 `concordat estate persist` materialises the user-supplied settings into a
 checked-in `.tfbackend` file (for example,
-`platform-standards/tofu/backend/scaleway.tfbackend`). For AWS S3 and
-DigitalOcean Spaces the generated file resembles:
+`platform-standards/tofu/backend/<provider>.tfbackend`). Concordat renders the
+file differently per provider so the semantics stay accurate:
+
+*AWS S3*
+
+```hcl
+bucket     = "df12-tfstate"
+key        = "estates/<github_owner>/<branch>/terraform.tfstate"
+region     = "us-east-1"
+use_lockfile = true
+```
+
+*DigitalOcean Spaces*
+
+```hcl
+bucket                      = "df12-tfstate"
+key                         = "estates/<github_owner>/<branch>/terraform.tfstate"
+region                      = "nyc3"
+endpoints                   = { s3 = "https://nyc3.digitaloceanspaces.com" }
+use_path_style              = true
+skip_region_validation      = true
+skip_requesting_account_id  = true
+skip_credentials_validation = true
+use_lockfile                = true
+```
+
+*Scaleway Object Storage*
 
 ```hcl
 bucket                      = "df12-tfstate"
@@ -363,7 +388,6 @@ use_path_style              = true
 skip_region_validation      = true
 skip_requesting_account_id  = true
 skip_credentials_validation = true
-use_lockfile                = true
 ```
 
 Scaleway variants omit `use_lockfile` entirely because Terraform cannot rely on
@@ -477,7 +501,8 @@ state migration impact.
   operator wipes `.terraform` explicitly. This protects estates from partial
   migrations.
 
-Because the backend lockfile feature is available on Terraform/OpenTofu 1.9+ the
+Because the backend lockfile feature landed in Terraform/OpenTofu 1.10 (beta
+builds shipped first and 1.10.0 is the minimum stable release) the
 command-line interface (CLI) no longer needs DynamoDB when targeting AWS or
 DigitalOcean. Those providers honour the conditional writes behind native
 `.tflock` objects, so secondary applies surface the standard "state locked"
@@ -521,7 +546,7 @@ non-production entry `test-case/squash-only-standard`. Each inventory record
 retains the historical `name: owner/repo` slug so the CLI can continue to append
 new repositories without understanding optional settings.
 
-- `platform-standards/tofu/main.tofu` materializes the inventory into a
+- `platform-standards/tofu/main.tf` materializes the inventory into a
   `module "repository"` for every slug, enforcing that the owner component
   matches the `github_owner` variable (defaulting to `test-case`). The populated
   module parameters surface consistent defaults for topics, visibility, and

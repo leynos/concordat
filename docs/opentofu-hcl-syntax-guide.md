@@ -228,27 +228,27 @@ logical configuration, adopting a standard file structure is a critical best
 practice for maintainability, and collaboration.13 A well-organized root module
 typically uses the following file layout 8:
 
-- `main.tofu`: This file serves as the primary entrypoint for the configuration.
+- `main.tf`: This file serves as the primary entrypoint for the configuration.
   It should contain the core resource definitions and calls to any child
   modules. For complex configurations, resources can be logically split into
-  additional files like `network.tofu` or `compute.tofu`.
+  additional files like `network.tf` or `compute.tf`.
 
-- `variables.tofu`: This file should contain the declarations for all input
+- `variables.tf`: This file should contain the declarations for all input
   variables using `variable` blocks. This centralizes the module's "API" and
   makes it easy to understand what inputs are required or optional.
 
-- `outputs.tofu`: This file should contain the declarations for all output
+- `outputs.tf`: This file should contain the declarations for all output
   values using `output` blocks. This defines what data the module exposes to its
   parent or to the user after an apply.
 
-- `versions.tofu`: A highly recommended file that contains the top-level
+- `versions.tf`: A highly recommended file that contains the top-level
   `terraform` block. This block is used to specify the required version of
   OpenTofu itself (`required_version`) and, most importantly, the versions of
   all providers used (`required_providers`). Pinning provider versions is
   essential for preventing unexpected breaking changes from automatic provider
   updates.8
 
-- `providers.tofu`: An optional but useful file for explicitly configuring
+- `providers.tf`: An optional but useful file for explicitly configuring
   providers. For example, set the Amazon Web Services (AWS) region here. This
   separates provider configuration from resource definitions.8
 
@@ -1087,8 +1087,8 @@ principles 8:
    later than to remove an existing one that is widely used.8
 
 1. **Follow the Standard Structure**: A reusable module should follow the
-   standard file structure (`README.md`, `main.tofu`, `variables.tofu`,
-   `outputs.tofu`, `LICENSE`) and include an `examples/` directory to
+   standard file structure (`README.md`, `main.tf`, `variables.tf`,
+   `outputs.tf`, `LICENSE`) and include an `examples/` directory to
    demonstrate usage. A well-documented `README.md` is essential for
    usability.14
 
