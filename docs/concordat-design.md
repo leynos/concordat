@@ -526,11 +526,29 @@ on single-writer discipline to keep state consistent.
   key. When populated, the CLI emits a structured log line whenever lock
   acquisition exceeds 60 seconds, giving downstream log routers enough context
   to alert.
+- At-rest encryption guidance: state files often contain credentials and other
+  sensitive data. Operators must:
+  - Avoid storing secrets in state whenever possible by marking attributes as
+    `sensitive = true`, splitting secrets into separate vaults, or replacing
+    cleartext values with references. (See Terraform security best practices
+    from OWASP and HashiCorp.)
+  - Enforce strict bucket/object policies: enable bucket versioning, require
+    server-side encryption where available (for example, AWS S3 SSE-S3/KMS), and
+    limit access via IAM or Scaleway access policies.
+  - Use client-side encryption for buckets that lack supported server-side
+    encryption (e.g., Scaleway SSE-C): wrap `tofu state`/`tofu plan` calls with
+    tooling that encrypts state files before upload, or leverage external
+    envelope-encryption workflows.
+  - Periodically audit access logs for the bucket to detect unauthorized reads.
+- Disaster recovery: operators can leverage Scaleway's bucket versioning to roll
+  back a corrupted state by copying the previous version over the active object.
 - Disaster recovery: operators can leverage Scaleway's bucket versioning to roll
   back a corrupted state by copying the previous version over the active object.
   The design doc emphasises that Concordat will not automate rollbacks; it
   simply guarantees that version IDs appear in the CLI output whenever an apply
   updates state.
+  - Scaleway: enable Object Lock's compliance mode with retention windows that
+    match regulatory needs to reduce tampering risk even without SSE-S3.
 
 This design keeps state durable, auditable, and vendor-neutral while calling out
 provider-specific capabilities so operators know where `.tflock` locking is
