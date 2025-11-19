@@ -542,8 +542,6 @@ on single-writer discipline to keep state consistent.
   - Periodically audit access logs for the bucket to detect unauthorized reads.
 - Disaster recovery: operators can leverage Scaleway's bucket versioning to roll
   back a corrupted state by copying the previous version over the active object.
-- Disaster recovery: operators can leverage Scaleway's bucket versioning to roll
-  back a corrupted state by copying the previous version over the active object.
   The design doc emphasises that Concordat will not automate rollbacks; it
   simply guarantees that version IDs appear in the CLI output whenever an apply
   updates state.
