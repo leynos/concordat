@@ -1,4 +1,3 @@
-
 # A comprehensive developer's guide to HashiCorp configuration language (HCL) for OpenTofu
 
 ______________________________________________________________________
@@ -14,8 +13,8 @@ understands the core building blocks of any OpenTofu configuration.
 
 For developers accustomed to imperative programming languages—where code
 specifies the step-by-step "how" of achieving a result—the transition to a
-declarative language like HCL represents a fundamental shift in thinking. HCL
-is used to describe the desired "what": the final, intended state of a system's
+declarative language like HCL represents a fundamental shift in thinking. HCL is
+used to describe the desired "what": the final, intended state of a system's
 infrastructure. OpenTofu operates as an Infrastructure as Code (IaC) tool. It
 reads this declarative configuration, and takes on the responsibility of
 figuring out how to achieve that state.
@@ -28,33 +27,32 @@ recorded in the state file. It then generates an execution plan detailing the
 precise actions—create, update, or destroy—required to make the actual
 infrastructure match the configuration.
 
-This entire process is orchestrated through a core workflow that is
-foundational to using OpenTofu. For developers familiar with Terraform, this
-workflow will be immediately recognizable, as OpenTofu is a drop-in replacement
-that maintains backward compatibility.1 The workflow consists of three primary
-commands:
+This entire process is orchestrated through a core workflow that is foundational
+to using OpenTofu. For developers familiar with Terraform, this workflow will be
+immediately recognizable, as OpenTofu is a drop-in replacement that maintains
+backward compatibility.1 The workflow consists of three primary commands:
 
-1. `tofu init`: This command initializes a working directory containing
-   OpenTofu configuration files. Its primary responsibilities are to download ,
-   and install the necessary provider plugins specified in the configuration
-   and to configure the backend where the state file will be stored. This
-   command must be run before any others.3
+1. `tofu init`: This command initializes a working directory containing OpenTofu
+   configuration files. Its primary responsibilities are to download , and
+   install the necessary provider plugins specified in the configuration and to
+   configure the backend where the state file will be stored. This command must
+   be run before any others.3
 
-2. `tofu plan`: This command creates an execution plan. It performs the
+1. `tofu plan`: This command creates an execution plan. It performs the
    comparison between the desired state (configuration) and the current state
    (state file) and determines what actions are needed. The output of
-   `tofu plan` is a human-readable summary of the proposed changes, allowing
-   for a thorough review before any modifications are made to the actual
+   `tofu plan` is a human-readable summary of the proposed changes, allowing for
+   a thorough review before any modifications are made to the actual
    infrastructure. This is a critical safety, and validation step.1
 
-3. `tofu apply`: This command executes the actions proposed in a plan to
-   create, update, or destroy infrastructure. By default, it will generate a
-   new plan, and ask for confirmation before proceeding. It can also be given a
-   saved plan file to apply a pre-approved set of changes.4
+1. `tofu apply`: This command executes the actions proposed in a plan to create,
+   update, or destroy infrastructure. By default, it will generate a new plan,
+   and ask for confirmation before proceeding. It can also be given a saved plan
+   file to apply a pre-approved set of changes.4
 
-This declarative model, powered by the `init -> plan -> apply` cycle, provides
-a robust, predictable, and version-controllable method for managing
-infrastructure throughout its lifecycle.4
+This declarative model, powered by the `init -> plan -> apply` cycle, provides a
+robust, predictable, and version-controllable method for managing infrastructure
+throughout its lifecycle.4
 
 ### 1.2 The anatomy of HCL syntax
 
@@ -112,11 +110,11 @@ strings to their right are their assigned values (expressions). The context of
 the block determines which arguments are valid, and what value types they
 accept.6
 
-It is useful to clarify a point of terminology. The HCL specification often
-uses the term "attribute" where OpenTofu documentation uses "argument." While
-largely interchangeable in conversation, the OpenTofu documentation reserves
-"argument" for values set *in* the configuration. In contrast, an "attribute"
-is a value *exported by* a resource that can be referenced elsewhere (e.g.,
+It is useful to clarify a point of terminology. The HCL specification often uses
+the term "attribute" where OpenTofu documentation uses "argument." While largely
+interchangeable in conversation, the OpenTofu documentation reserves "argument"
+for values set *in* the configuration. In contrast, an "attribute" is a value
+*exported by* a resource that can be referenced elsewhere (e.g.,
 `aws_instance.web.id`) but cannot be assigned a value directly in the
 configuration.6
 
@@ -130,13 +128,13 @@ constructs like resources, and variables. The rules for identifiers are 6:
 - The first character must not be a digit to avoid ambiguity with number
   literals.
 
-- OpenTofu implements the Unicode identifier syntax, allowing identifiers to
-  use ASCII (American Standard Code for Information Interchange) characters or
-  any other Unicode code point.
+- OpenTofu implements the Unicode identifier syntax, allowing identifiers to use
+  ASCII (American Standard Code for Information Interchange) characters or any
+  other Unicode code point.
 
 For naming conventions, a widely adopted best practice is to use underscores
-(`_`) to separate words (e.g., `web_server_firewall`), and to use singular
-nouns for resource names (e.g., `resource "aws_vpc" "main"`).8
+(`_`) to separate words (e.g., `web_server_firewall`), and to use singular nouns
+for resource names (e.g., `resource "aws_vpc" "main"`).8
 
 #### Comments, and character encoding
 
@@ -150,10 +148,10 @@ HCL supports three syntaxes for comments 6:
 - `/*` and `*/` are delimiters for multi-line comments.
 
 OpenTofu configuration files are expected to be encoded in UTF-8. While both
-Unix-style line feed (LF) and Windows-style carriage return and line feed
-(CRLF) line endings are accepted, the idiomatic style is LF (line feed).
-Automatic formatting tools like `tofu fmt` will typically enforce this
-convention by converting CRLF (carriage return, and line feed) to LF.6
+Unix-style line feed (LF) and Windows-style carriage return and line feed (CRLF)
+line endings are accepted, the idiomatic style is LF (line feed). Automatic
+formatting tools like `tofu fmt` will typically enforce this convention by
+converting CRLF (carriage return, and line feed) to LF.6
 
 ### 1.3 Data types and expressions: the logic layer
 
@@ -176,8 +174,8 @@ OpenTofu supports a range of data types for its values 10:
 
 - **Complex (Collection) Types**:
 
-  - `list(...)`: An ordered sequence of values, identified by zero-based
-    integer indices, e.g., `["us-west-1a", "us-west-1c"]`.
+  - `list(...)`: An ordered sequence of values, identified by zero-based integer
+    indices, e.g., `["us-west-1a", "us-west-1c"]`.
 
   - `set(...)`: An unordered collection of unique values.
 
@@ -194,8 +192,8 @@ OpenTofu supports a range of data types for its values 10:
 - **The Special** `null` **Value**:
 
   - `null` is a special value that represents the absence or omission of a
-    value. Setting a resource argument to `null` is equivalent to not setting
-    it at all, causing OpenTofu to fall back to the argument's default value or
+    value. Setting a resource argument to `null` is equivalent to not setting it
+    at all, causing OpenTofu to fall back to the argument's default value or
     raise an error if it's a required argument.10
 
 #### Expressions
@@ -220,37 +218,37 @@ literals to complex queries, and transformations.9
   - `aws_instance.web.id`: Accessing an attribute exported by a resource.9
 
 - **Operators**: HCL supports standard arithmetic (`+`, `-`, `*`, `/`, `%`),
-  comparison (`==`, `!=`, `<`, `>`), and logical (`&&`, `||`, `!`) operators
-  for use in expressions.9
+  comparison (`==`, `!=`, `<`, `>`), and logical (`&&`, `||`, `!`) operators for
+  use in expressions.9
 
 ### 1.4 The OpenTofu project: standard file structure
 
-While OpenTofu processes all `.tofu`, and `.tf` files in a directory as a
-single logical configuration, adopting a standard file structure is a critical
-best practice for maintainability, and collaboration.13 A well-organized root
-module typically uses the following file layout 8:
+While OpenTofu processes all `.tofu`, and `.tf` files in a directory as a single
+logical configuration, adopting a standard file structure is a critical best
+practice for maintainability, and collaboration.13 A well-organized root module
+typically uses the following file layout 8:
 
-- `main.tofu`: This file serves as the primary entrypoint for the
-  configuration. It should contain the core resource definitions and calls to
-  any child modules. For complex configurations, resources can be logically
-  split into additional files like `network.tofu` or `compute.tofu`.
+- `main.tf`: This file serves as the primary entrypoint for the configuration.
+  It should contain the core resource definitions and calls to any child
+  modules. For complex configurations, resources can be logically split into
+  additional files like `network.tf` or `compute.tf`.
 
-- `variables.tofu`: This file should contain the declarations for all input
+- `variables.tf`: This file should contain the declarations for all input
   variables using `variable` blocks. This centralizes the module's "API" and
   makes it easy to understand what inputs are required or optional.
 
-- `outputs.tofu`: This file should contain the declarations for all output
-  values using `output` blocks. This defines what data the module exposes to
-  its parent or to the user after an apply.
+- `outputs.tf`: This file should contain the declarations for all output
+  values using `output` blocks. This defines what data the module exposes to its
+  parent or to the user after an apply.
 
-- `versions.tofu`: A highly recommended file that contains the top-level
+- `versions.tf`: A highly recommended file that contains the top-level
   `terraform` block. This block is used to specify the required version of
   OpenTofu itself (`required_version`) and, most importantly, the versions of
   all providers used (`required_providers`). Pinning provider versions is
   essential for preventing unexpected breaking changes from automatic provider
   updates.8
 
-- `providers.tofu`: An optional but useful file for explicitly configuring
+- `providers.tf`: An optional but useful file for explicitly configuring
   providers. For example, set the Amazon Web Services (AWS) region here. This
   separates provider configuration from resource definitions.8
 
@@ -258,13 +256,13 @@ When working with OpenTofu, the tool generates several files, and directories
 that should be excluded from version control. A standard `.gitignore` file for
 an OpenTofu project should therefore include entries such as 8:
 
-- `/.terraform/`: This directory is where OpenTofu downloads and caches
-  provider plugins and modules during `tofu init`.
+- `/.terraform/`: This directory is where OpenTofu downloads and caches provider
+  plugins and modules during `tofu init`.
 
 - `/.terraform.lock.hcl`: This file records the exact provider versions and
   checksums selected during initialization to ensure consistent dependency
-  resolution. While it should be committed to version control, local changes
-  may occur that shouldn't be pushed without review.
+  resolution. While it should be committed to version control, local changes may
+  occur that shouldn't be pushed without review.
 
 - `*.tfstate`, and `*.tfstate.*`: These are the state files, which often contain
   sensitive information, and should never be committed to version control.
@@ -279,13 +277,13 @@ an OpenTofu project should therefore include entries such as 8:
 ### 1.5 Alternative syntax: HCL in JSON
 
 In addition to its native syntax, OpenTofu supports an alternative,
-machine-friendly syntax that is JSON-compatible. OpenTofu processes files
-ending in `.tf.json` or `.tofu.json` as this JSON variant.16 This syntax is
-primarily intended for programmatic generation of configurations by other
-tools, as many languages have robust JSON libraries.6
+machine-friendly syntax that is JSON-compatible. OpenTofu processes files ending
+in `.tf.json` or `.tofu.json` as this JSON variant.16 This syntax is primarily
+intended for programmatic generation of configurations by other tools, as many
+languages have robust JSON libraries.6
 
-While every construct in native HCL can be expressed in JSON, the mapping is
-not always a simple or direct translation. Developers generating HCL
+While every construct in native HCL can be expressed in JSON, the mapping is not
+always a simple or direct translation. Developers generating HCL
 programmatically must be aware of several specific rules, and limitations.16
 
 #### Mapping HCL to JSON
@@ -304,7 +302,7 @@ correspond to the top-level block types in HCL.16
   resource "aws_instance" "example" {
     instance_type = "t2.micro"
   }
-  
+
   ```
 
   **JSON Equivalent:**
@@ -319,7 +317,7 @@ correspond to the top-level block types in HCL.16
       }
     }
   }
-  
+
   ```
 
 - **Repeated Nested Blocks**: Some nested blocks, like `provisioner` or
@@ -338,7 +336,7 @@ correspond to the top-level block types in HCL.16
       command = "echo second"
     }
   }
-  
+
   ```
 
   **JSON Equivalent:**
@@ -364,7 +362,7 @@ correspond to the top-level block types in HCL.16
       }
     }
   }
-  
+
   ```
 
 #### The duality of syntax: important gotchas
@@ -381,16 +379,15 @@ secondary, special-purpose dialect.
    interpreting any string templates it might contain.16 This is a significant
    departure from native HCL where these can be more dynamic.
 
-2. **The "Attributes as Blocks" Limitation**: Some resource types have a
-   special behaviour where an argument can be specified using either argument
-   syntax (`example = [...]`) or nested block syntax (`example {... }`). This
-   feature, known as "attributes as blocks," is designed for readability in
-   native HCL. However, due to the ambiguity it would create in JSON, this
-   nested block syntax mode is not supported for these arguments in JSON files.
-   They must be specified using the explicit argument syntax with a JSON
-   array.18 This is a necessary concession made for compatibility with existing
-   provider designs, and underscores that the two syntaxes are not perfectly
-   interchangeable.
+1. **The "Attributes as Blocks" Limitation**: Some resource types have a special
+   behaviour where an argument can be specified using either argument syntax
+   (`example = [...]`) or nested block syntax (`example {... }`). This feature,
+   known as "attributes as blocks," is designed for readability in native HCL.
+   However, due to the ambiguity it would create in JSON, this nested block
+   syntax mode is not supported for these arguments in JSON files. They must be
+   specified using the explicit argument syntax with a JSON array.18 This is a
+   necessary concession made for compatibility with existing provider designs,
+   and underscores that the two syntaxes are not perfectly interchangeable.
 
 Any developer or tool author aiming to generate OpenTofu configurations
 programmatically must consult these specific JSON mapping rules and cannot
@@ -429,25 +426,24 @@ DNS record, or a database instance.
 The syntax for a resource block is
 `resource "<PROVIDER>_<TYPE>" "<NAME>" {... }`.6
 
-- The first label, `"<PROVIDER>_<TYPE>"` (e.g., `"aws_instance"`), specifies
-  the type of resource to manage. By convention, this name is prefixed with the
-  name of the provider that manages it.7
+- The first label, `"<PROVIDER>_<TYPE>"` (e.g., `"aws_instance"`), specifies the
+  type of resource to manage. By convention, this name is prefixed with the name
+  of the provider that manages it.7
 
 - The second label, `"<NAME>"` (e.g., `"web"`), is a local name for this
   resource. This name is used to refer to the resource from other parts of the
   configuration, and must be unique within the module.7
 
-The body of the `resource` block contains arguments that configure the
-resource. These arguments are primarily divided into two categories:
+The body of the `resource` block contains arguments that configure the resource.
+These arguments are primarily divided into two categories:
 
 1. **Provider-Specific Arguments**: These are defined by the resource type
    itself and are documented by the provider. For an `aws_instance`, examples
    include `ami`, and `instance_type`.7
 
-2. **Meta-Arguments**: These are defined by the OpenTofu language itself and
-   can be used with any resource type to change its behaviour. Key
-   meta-arguments include `count`, `for_each`, `provider`, `depends_on`, and
-   `lifecycle`.7
+1. **Meta-Arguments**: These are defined by the OpenTofu language itself and can
+   be used with any resource type to change its behaviour. Key meta-arguments
+   include `count`, `for_each`, `provider`, `depends_on`, and `lifecycle`.7
 
 #### Advanced features, and nested blocks
 
@@ -485,9 +481,9 @@ features, often configured via nested blocks.
     If a condition fails, OpenTofu raises an error with a custom message,
     providing clear feedback.7
 
-- `timeouts` **Block**: For resources that involve long-running operations
-  (like creating a large database), some providers expose a `timeouts` block.
-  This allows authors to specify custom time limits for `create`, `update`, and
+- `timeouts` **Block**: For resources that involve long-running operations (like
+  creating a large database), some providers expose a `timeouts` block. This
+  allows authors to specify custom time limits for `create`, `update`, and
   `delete` operations, overriding the provider's defaults.7
 
 - `removed` **Block**: Introduced to simplify refactoring, the `removed` block
@@ -503,15 +499,15 @@ features, often configured via nested blocks.
   resource address (`to`), and the resource's unique import identifier (ID)
   (`id`). After running `tofu plan -generate-config-out=generated.tofu`,
   OpenTofu inspects the existing resource and generates a corresponding HCL
-  configuration file. This generated code serves as a starting point that can
-  be reviewed and integrated into the main configuration.3
+  configuration file. This generated code serves as a starting point that can be
+  reviewed and integrated into the main configuration.3
 
 ### 2.2 variable: parameterizing configurations
 
-Input variables are the parameters of an OpenTofu module, allowing its
-behaviour to be customized without modifying its source code. They are
-analogous to function arguments in traditional programming.11 Each input
-variable is declared using a
+Input variables are the parameters of an OpenTofu module, allowing its behaviour
+to be customized without modifying its source code. They are analogous to
+function arguments in traditional programming.11 Each input variable is declared
+using a
 
 `variable` block.11
 
@@ -538,11 +534,11 @@ arguments to define the variable's behaviour:
   correctly.13
 
 - `sensitive = true`: This marks the variable as containing sensitive
-  information, like a password or API key. OpenTofu will redact the value of
-  any sensitive variable in its CLI output (`plan`, and `apply`). This
-  sensitivity is "viral": any expression or resource attribute that depends on
-  a sensitive variable will also be treated as sensitive and redacted.11 The
-  value is, however, stored in plain text in the state file.
+  information, like a password or API key. OpenTofu will redact the value of any
+  sensitive variable in its CLI output (`plan`, and `apply`). This sensitivity
+  is "viral": any expression or resource attribute that depends on a sensitive
+  variable will also be treated as sensitive and redacted.11 The value is,
+  however, stored in plain text in the state file.
 
 - `nullable = false`: By default, variables are nullable (`nullable = true`),
   meaning a caller can assign `null` to them. Setting `nullable = false`
@@ -552,15 +548,15 @@ arguments to define the variable's behaviour:
 
 #### Custom validation
 
-The `validation` block provides a mechanism for creating custom validation
-rules beyond simple type constraints. Each `validation` block contains two
-arguments 11:
+The `validation` block provides a mechanism for creating custom validation rules
+beyond simple type constraints. Each `validation` block contains two arguments
+11:
 
 1. `condition`: A boolean expression that must evaluate to `true` for the
    validation to pass. This expression can reference the variable's own value
    using the `var` object (e.g., `var.image_id`).
 
-2. `error_message`: A string that will be displayed to the user if the
+1. `error_message`: A string that will be displayed to the user if the
    `condition` evaluates to `false`.
 
 **Example:**
@@ -615,10 +611,10 @@ An output is declared with an `output` block: `output "<NAME>" {... }`.23
   on other resources or modules. This should be used sparingly.23
 
 Outputs from a child module are accessed in the parent module using the syntax
-`module.<MODULE_NAME>.<OUTPUT_NAME>`. From the command line, outputs of the
-root module can be queried using the `tofu output` command. The `-json` flag
-provides machine-readable output, while the `-raw` flag prints the raw string
-value of a single output, which is useful for shell scripting.24
+`module.<MODULE_NAME>.<OUTPUT_NAME>`. From the command line, outputs of the root
+module can be queried using the `tofu output` command. The `-json` flag provides
+machine-readable output, while the `-raw` flag prints the raw string value of a
+single output, which is useful for shell scripting.24
 
 ### 2.4 data: querying existing state
 
@@ -643,8 +639,8 @@ A key aspect of data source behaviour is its evaluation timing. OpenTofu
 attempts to read data sources during the `plan` phase. However, if any data
 source argument depends on a value that remains unknown—a "computed value" from
 a resource that has not been created yet—the reading of the data source is
-deferred until the `apply` phase. When this happens, any attributes of that
-data source will also be unknown during the plan, appearing as
+deferred until the `apply` phase. When this happens, any attributes of that data
+source will also be unknown during the plan, appearing as
 `(known after apply)`.25 This deferral is a common source of confusion for new
 users, as it can propagate "unknown" values throughout the plan.
 
@@ -655,8 +651,8 @@ maintain.26
 
 ### 2.5 locals: improving readability and reusability
 
-Local values provide a way to assign a name to an expression, allowing that
-name to be used multiple times throughout a module instead of repeating the
+Local values provide a way to assign a name to an expression, allowing that name
+to be used multiple times throughout a module instead of repeating the
 expression. They are analogous to temporary local variables in a function.12
 
 #### Syntax, and best practices
@@ -707,15 +703,15 @@ This top-level block configures core OpenTofu settings.
   breaking changes.13
 
 - `backend "..." {... }`: This block configures where OpenTofu stores its state
-  file. Using a remote backend (like AWS S3 with DynamoDB for locking, or
-  Google Cloud Storage) is essential for any collaborative or automated
-  workflow. It prevents state file corruption from concurrent runs, and keeps
-  sensitive state data off local machines.8
+  file. Using a remote backend (like AWS S3 with DynamoDB for locking, or Google
+  Cloud Storage) is essential for any collaborative or automated workflow. It
+  prevents state file corruption from concurrent runs, and keeps sensitive state
+  data off local machines.8
 
 #### The `provider` block
 
-This block configures a specific provider. Typical settings include
-credentials, the default region, or other provider-specific defaults.2
+This block configures a specific provider. Typical settings include credentials,
+the default region, or other provider-specific defaults.2
 
 ```terraform
 provider "aws" {
@@ -749,9 +745,8 @@ ______________________________________________________________________
 
 This section transitions from static definitions to dynamic configurations,
 covering the language features that enable complex, scalable, and reusable
-infrastructure patterns. These constructs are essential for moving beyond
-simple handcrafted files to truly automated, and manageable Infrastructure as
-Code.
+infrastructure patterns. These constructs are essential for moving beyond simple
+handcrafted files to truly automated, and manageable Infrastructure as Code.
 
 ### 3.1 Dynamic blocks and repetition: count vs. for_each
 
@@ -781,9 +776,9 @@ of the resource or module.5
 
 #### The re-indexing pitfall of `count`
 
-The most significant drawback of `count` emerges when it is used to iterate
-over a list of values. For example, creating an Elastic Compute Cloud (EC2)
-instance for each subnet ID in a list:
+The most significant drawback of `count` emerges when it is used to iterate over
+a list of values. For example, creating an Elastic Compute Cloud (EC2) instance
+for each subnet ID in a list:
 
 ```terraform
 variable "subnet_ids" {
@@ -820,8 +815,8 @@ evaluates the `subnet_id` for each instance:
 The result is that OpenTofu plans to **change** the subnet for the instance at
 index 1 (from `subnet-def` to `subnet-ghi`), and **destroy** the instance at
 index 2. This is often not the desired behaviour; the user likely intended only
-to destroy the instance associated with `subnet-def`. This re-indexing
-behaviour makes `count` fragile for managing dynamic collections.2
+to destroy the instance associated with `subnet-def`. This re-indexing behaviour
+makes `count` fragile for managing dynamic collections.2
 
 #### The `for_each` meta-argument
 
@@ -832,8 +827,8 @@ in the collection.29
 - **Syntax**: `for_each = <MAP_OR_SET_OF_STRINGS>`
 
 - **Behaviour**: It creates a more stable association between the configuration
- , and the real-world resource. Each instance is tracked by the map key or set
- value, not by a transient numeric index.
+  , and the real-world resource. Each instance is tracked by the map key or set
+  value, not by a transient numeric index.
 
 - **The** `each` **Object**: Inside a `for_each` block, the `each` object is
   available. `each.key` provides the map key or set value, and `each.value`
@@ -869,9 +864,9 @@ more robust, and predictable for managing collections of resources.29
 
 #### The identity vs. index paradigm
 
-The choice between `count` and `for_each` reflects a fundamental design
-decision in IaC: whether to manage resources based on their **position** or
-their **identity**.
+The choice between `count` and `for_each` reflects a fundamental design decision
+in IaC: whether to manage resources based on their **position** or their
+**identity**.
 
 - `count` ties a resource's lifecycle to its **positional index**. This is
   fragile because the position can change as the input collection changes,
@@ -888,13 +883,13 @@ treats them differently, which is reflected in the syntax of commands like
 clear design philosophy embedded in the language is to prefer identity-based
 management (
 
-`for_each`) over index-based management (`count`) for any non-trivial
-collection of resources.
+`for_each`) over index-based management (`count`) for any non-trivial collection
+of resources.
 
 There are, however, limitations to `for_each`. The map or set provided to it
 must be known at plan time; it cannot depend on computed values from other
-resources. Additionally, the keys of the collection cannot be sensitive, as
-they are used in resource addresses, and displayed in the UI.29
+resources. Additionally, the keys of the collection cannot be sensitive, as they
+are used in resource addresses, and displayed in the UI.29
 
 Table 3.1: `count` vs. `for_each` - A Comparative Analysis
 
@@ -909,16 +904,16 @@ Table 3.1: `count` vs. `for_each` - A Comparative Analysis
 
 ### 3.2 Advanced expressions and functions
 
-OpenTofu's expression language provides powerful tools for transforming data
-and implementing complex logic within configurations.
+OpenTofu's expression language provides powerful tools for transforming data and
+implementing complex logic within configurations.
 
 - **Conditional Expressions**: The ternary operator
-  (`condition? true_val : false_val`) is a cornerstone of dynamic
-  configuration. It is frequently used with `count` to conditionally create a
-  resource (`count = var.create_resource? 1 : 0`) or to select between two
-  different values for an argument
-  (`instance_type = var.is_prod? "m5.large" : "t2.micro"`).2 A common pitfall
-  is when
+  (`condition? true_val : false_val`) is a cornerstone of dynamic configuration.
+  It is frequently used with `count` to conditionally create a resource
+  (`count = var.create_resource? 1 : 0`) or to select between two different
+  values for an argument
+  (`instance_type = var.is_prod? "m5.large" : "t2.micro"`).2 A common pitfall is
+  when
 
   `true_val` and `false_val` have incompatible types, which results in an
   "Inconsistent conditional result types" error.34
@@ -926,8 +921,8 @@ and implementing complex logic within configurations.
 - `for` **Expressions**: These expressions are used to transform or filter
   collection types. They are invaluable for preparing data structures for use
   with `for_each`. The syntax is
-  `[for item in collection : transform(item) if condition(item)]`.9 For
-  example, a list of objects can be transformed into a map suitable for
+  `[for item in collection : transform(item) if condition(item)]`.9 For example,
+  a list of objects can be transformed into a map suitable for
 
   `for_each`: `for_each = { for user in var.users : user.name => user }`.29
 
@@ -937,8 +932,8 @@ and implementing complex logic within configurations.
   `aws_instance.server[*].id` would return a list of all the instance IDs.9
 
 - `dynamic` **Blocks**: For generating multiple *nested* blocks within a
-  resource (such as multiple `ingress` rules for a security group), HCL
-  provides the `dynamic` block. It uses a `for_each` argument to iterate over a
+  resource (such as multiple `ingress` rules for a security group), HCL provides
+  the `dynamic` block. It uses a `for_each` argument to iterate over a
   collection, and a `content` block to define the arguments for each generated
   nested block.9
 
@@ -964,8 +959,8 @@ are particularly essential for developers:
   - `jsonencode(value)`: Encodes an HCL value into a JSON string. Essential for
     embedding structured data into resource arguments that expect a JSON string.
 
-  - `jsondecode(string)`: Parses a JSON string and returns the corresponding
-    HCL value.
+  - `jsondecode(string)`: Parses a JSON string and returns the corresponding HCL
+    value.
 
   - `base64encode(string)` / `base64decode(string)`: For handling Base64 data.
 
@@ -992,8 +987,8 @@ are particularly essential for developers:
     result of the first one that succeeds without error. Useful for handling
     optional attributes in complex objects.
 
-  - `can(expression)`: Evaluates an expression and returns `true` if it
-    succeeds or `false` if it fails. Primarily used in `validation` blocks.
+  - `can(expression)`: Evaluates an expression and returns `true` if it succeeds
+    or `false` if it fails. Primarily used in `validation` blocks.
 
 - **Lifecycle Functions**:
 
@@ -1001,16 +996,16 @@ are particularly essential for developers:
 
   - `uuid()`: Generates a random Universally Unique Identifier (UUID).
 
-    Caution: These functions are "impure," meaning their result changes on
-    every run. Using them directly in resource arguments will cause the
-    configuration to never converge, as OpenTofu will detect a change on every
-    plan. They should be avoided in most resource configurations or used only
-    with the lifecycle.ignore_changes meta-argument.35
+    Caution: These functions are "impure," meaning their result changes on every
+    run. Using them directly in resource arguments will cause the configuration
+    to never converge, as OpenTofu will detect a change on every plan. They
+    should be avoided in most resource configurations or used only with the
+    lifecycle.ignore_changes meta-argument.35
 
 ### 3.3 Managing dependencies
 
-OpenTofu builds a directed acyclic graph (DAG) to determine the correct order
-of operations for creating, updating, and destroying resources.
+OpenTofu builds a directed acyclic graph (DAG) to determine the correct order of
+operations for creating, updating, and destroying resources.
 
 - **Implicit Dependencies**: The primary, and preferred way to manage
   dependencies is implicitly. When one resource's argument references an
@@ -1032,13 +1027,12 @@ of operations for creating, updating, and destroying resources.
 
   - **Syntax**: `depends_on =`
 
-  - **Pitfall**: `depends_on` should be used as a last resort. It creates a
-    more rigid dependency that can lead to overly conservative plans, as
-    OpenTofu may not be able to determine if a change to the dependency
-    actually affects the downstream resource. Overuse can make configurations
-    brittle, and hard to understand. It is a strong best practice to always
-    include a comment explaining exactly why an explicit dependency is
-    necessary.19
+  - **Pitfall**: `depends_on` should be used as a last resort. It creates a more
+    rigid dependency that can lead to overly conservative plans, as OpenTofu may
+    not be able to determine if a change to the dependency actually affects the
+    downstream resource. Overuse can make configurations brittle, and hard to
+    understand. It is a strong best practice to always include a comment
+    explaining exactly why an explicit dependency is necessary.19
 
 ### 3.4 Modularization and code reuse
 
@@ -1054,8 +1048,8 @@ A child module is called from a parent module (often the root module) using a
 - **Syntax**: `module "<NAME>" {... }`
 
 - **The** `source` **Argument**: This is the most important argument, telling
-  OpenTofu where to find the module's source code. It supports a wide variety
-  of sources 40:
+  OpenTofu where to find the module's source code. It supports a wide variety of
+  sources 40:
 
   - **Local Paths**: `./modules/vpc` or `../shared-modules/iam`.
 
@@ -1065,8 +1059,8 @@ A child module is called from a parent module (often the root module) using a
     `git::https://example.com/vpc.git?ref=v1.2.0`. The `ref` argument can be
     used to pin to a specific branch, tag, or commit hash.
 
-  - **HTTP URLs**: An HTTP URL can point to a zip archive or redirect to
-    another source location.
+  - **HTTP URLs**: An HTTP URL can point to a zip archive or redirect to another
+    source location.
 
 #### Module design best practices
 
@@ -1077,24 +1071,24 @@ principles 8:
    VPC with subnets, or deploy a database cluster). Avoid creating monolithic
    modules that try to do too much.
 
-2. **Avoid Thin Wrappers**: Do not create a module that simply wraps a single
+1. **Avoid Thin Wrappers**: Do not create a module that simply wraps a single
    resource without adding significant logic or abstraction. It's better to use
    the resource directly.
 
-3. **Group by Application, Not Type**: When structuring a larger system, it is
+1. **Group by Application, Not Type**: When structuring a larger system, it is
    generally better to create modules, and state files that group resources by
    application or stack (e.g., all resources for the "billing-api") rather than
    by resource type (e.g., all databases in one place, all instances in
    another). This reduces coupling, and simplifies management.41
 
-4. **Parameterize Sparingly**: Only expose variables for values that genuinely
+1. **Parameterize Sparingly**: Only expose variables for values that genuinely
    need to change between deployments. Hardcode sensible defaults and
    organizational standards where possible. It is easier to add a new variable
    later than to remove an existing one that is widely used.8
 
-5. **Follow the Standard Structure**: A reusable module should follow the
-   standard file structure (`README.md`, `main.tofu`, `variables.tofu`,
-   `outputs.tofu`, `LICENSE`) and include an `examples/` directory to
+1. **Follow the Standard Structure**: A reusable module should follow the
+   standard file structure (`README.md`, `main.tf`, `variables.tf`,
+   `outputs.tf`, `LICENSE`) and include an `examples/` directory to
    demonstrate usage. A well-documented `README.md` is essential for
    usability.14
 
@@ -1114,9 +1108,9 @@ anti-patterns that lead to brittle, insecure, or unmaintainable configurations.
 
 #### Versioning, and dependency management
 
-- **Not Pinning Provider Versions**: A frequent and dangerous mistake is to
-  omit version constraints in the `required_providers` block. When versions are
-  not pinned, `tofu init` will download the latest available version of the
+- **Not Pinning Provider Versions**: A frequent and dangerous mistake is to omit
+  version constraints in the `required_providers` block. When versions are not
+  pinned, `tofu init` will download the latest available version of the
   provider. This can silently introduce breaking changes from a new major
   provider release, causing future plans, and applies to fail unexpectedly.
 
@@ -1147,9 +1141,9 @@ anti-patterns that lead to brittle, insecure, or unmaintainable configurations.
   to developers working with outdated state information.13
 
   - **Best Practice**: Immediately configure a remote backend (e.g., AWS S3,
-    Google Cloud Storage (GCS), Azure Blob Storage) with state locking
-    enabled. This ensures that the state is stored securely, and centrally, and
-    prevents concurrent operations from corrupting the state.8
+    Google Cloud Storage (GCS), Azure Blob Storage) with state locking enabled.
+    This ensures that the state is stored securely, and centrally, and prevents
+    concurrent operations from corrupting the state.8
 
 - **Monolithic State Files ("Terraliths")**: Allowing a single state file to
   grow to manage hundreds or thousands of resources is another common pitfall.
@@ -1165,10 +1159,9 @@ anti-patterns that lead to brittle, insecure, or unmaintainable configurations.
 
 #### Configuration smells
 
-- **Hardcoding Secrets**: Committing secrets (passwords, API keys,
-  certificates) directly into `.tofu` or `.tfvars` files is a severe security
-  vulnerability. Once in version control history, they are difficult to fully
-  purge.13
+- **Hardcoding Secrets**: Committing secrets (passwords, API keys, certificates)
+  directly into `.tofu` or `.tfvars` files is a severe security vulnerability.
+  Once in version control history, they are difficult to fully purge.13
 
   - **Best Practice**: Use a dedicated secrets management tool like HashiCorp
     Vault, AWS Secrets Manager, or Azure Key Vault. Secrets can be injected at
@@ -1177,16 +1170,15 @@ anti-patterns that lead to brittle, insecure, or unmaintainable configurations.
 
 - **Inconsistent Naming, and Structure**: Projects with monolithic `.tofu` files
   containing dozens of unrelated resources and inconsistently named variables
-  are a maintenance nightmare. This makes the code difficult to navigate,
-  debug, and refactor.8
+  are a maintenance nightmare. This makes the code difficult to navigate, debug,
+  and refactor.8
 
-  - **Best Practice**: Adhere to a standard file structure (`main`,
-    `variables`, `outputs`), and a consistent naming convention for resources
-    and variables.
+  - **Best Practice**: Adhere to a standard file structure (`main`, `variables`,
+    `outputs`), and a consistent naming convention for resources and variables.
 
-- **Over-complicating with Conditionals**: While ternary expressions are
-  useful, embedding complex, nested conditionals directly into resource
-  arguments makes the code unreadable, and hard to debug.
+- **Over-complicating with Conditionals**: While ternary expressions are useful,
+  embedding complex, nested conditionals directly into resource arguments makes
+  the code unreadable, and hard to debug.
 
   - **Best Practice**: Abstract complex logic into `local` values. Define a
     local value that computes the final result based on the conditional logic,
@@ -1207,25 +1199,27 @@ anti-patterns that lead to brittle, insecure, or unmaintainable configurations.
 
 OpenTofu error messages are often verbose, but they provide a rich trail of
 context for debugging. Learning to parse these messages is a key skill. An
-effective approach is to identify the core error and its location (file and
-line number). Capture supporting context—for example, the specific module that
+effective approach is to identify the core error and its location (file and line
+number). Capture supporting context—for example, the specific module that
 failed.
 
 #### Initialization, and provider errors
 
 - **Error:**
+
   <!-- markdownlint-disable-next-line MD013 -->
+
   `Error: Failed to install provider... checksums previously recorded in....terraform.lock.hcl do not match`
 
   - **Likely Cause**: This is a security feature. It means the provider package
-    OpenTofu downloaded does not have a checksum that matches any of the
-    trusted checksums recorded in the `.terraform.lock.hcl` file. This could
-    be caused by a corrupted download, a man-in-the-middle attack, or a
-    mismatch between the provider source that generated the lock file entry and
-    the one being used now (e.g., official registry vs. a local mirror).42
+    OpenTofu downloaded does not have a checksum that matches any of the trusted
+    checksums recorded in the `.terraform.lock.hcl` file. This could be caused
+    by a corrupted download, a man-in-the-middle attack, or a mismatch between
+    the provider source that generated the lock file entry and the one being
+    used now (e.g., official registry vs. a local mirror).42
 
-  - **Recommended Solution**: First, verify the integrity of the network and
-    the provider source. If the provider version or source was intentionally
+  - **Recommended Solution**: First, verify the integrity of the network and the
+    provider source. If the provider version or source was intentionally
     changed, update the lock file by running `tofu init -upgrade`. For teams
     working across different operating systems, ensure the lock file contains
     hashes for all required platforms by using `tofu providers lock`.42
@@ -1250,10 +1244,10 @@ failed.
 - **Error:** `Error: Unsupported argument` or
   `An argument named "..." is not expected here.`
 
-  - **Likely Cause**: A typo in an argument name, or an argument has been
-    placed in the wrong block. For example, placing a resource-specific
-    argument like `instance_type` inside a `lifecycle` block instead of at the
-    top level of the `resource` block.43
+  - **Likely Cause**: A typo in an argument name, or an argument has been placed
+    in the wrong block. For example, placing a resource-specific argument like
+    `instance_type` inside a `lifecycle` block instead of at the top level of
+    the `resource` block.43
 
   - **Recommended Solution**: Consult the official provider documentation for
     the resource to verify the correct argument names, and the expected block
@@ -1275,8 +1269,8 @@ failed.
 
 - **Error:** `Error: Provider instance not present`
 
-  - **Likely Cause**: This error frequently occurs when using `for_each` on
-    both a `provider` block (with `alias`), and a `resource` block that uses it,
+  - **Likely Cause**: This error frequently occurs when using `for_each` on both
+    a `provider` block (with `alias`), and a `resource` block that uses it,
     especially if they iterate over the same collection. If an item is removed
     from the collection, OpenTofu removes both the resource instance *and* its
     corresponding provider configuration from the plan simultaneously. When it
@@ -1285,9 +1279,9 @@ failed.
 
   - **Recommended Solution**: Decouple the lifecycles of the provider
     configurations, and the resources. The provider configuration must persist
-    in the plan for the resource to be destroyed cleanly. This may involve
-    using a different collection for the provider's `for_each` or ensuring that
-    the provider configuration remains even after the resource is removed.
+    in the plan for the resource to be destroyed cleanly. This may involve using
+    a different collection for the provider's `for_each` or ensuring that the
+    provider configuration remains even after the resource is removed.
 
 - **Error:** (From a `validation` block)
   `The image_id value must be a valid AMI id, starting with "ami-".`
@@ -1304,7 +1298,7 @@ Table 4.1: Common HCL Parsing, and Planning Errors
 
 | Error Message Snippet                 | Likely Cause(s)                                                                                                                           | Recommended Solution(s)                                                                                                         | Relevant Sources |
 | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| Unresolved reference                  | Typo in a reference; missing index/key for a `count`/`for_each` resource.                                                                 | Correct the typo. Add the appropriate index (e.g., ``) or key (e.g., `["web"]`) to the reference.                               | 30               |
+| Unresolved reference                  | Typo in a reference; missing index/key for a `count`/`for_each` resource.                                                                 | Correct the typo. Add the appropriate index (e.g., \`\`) or key (e.g., `["web"]`) to the reference.                             | 30               |
 | Inconsistent conditional result types | The true, and false branches of a ternary operator (? :) return values of incompatible types.                                             | Use explicit type conversion functions (tostring, tolist, etc.) on the results to ensure they are the same type.                | 34               |
 | Provider instance not present         | A resource's provider configuration was removed from the plan at the same time as the resource itself, often when using for_each on both. | Decouple the resource, and provider lifecycles. Ensure the provider configuration persists for the destroy operation.           | 44               |
 | checksums… do not match               | The downloaded provider package does not match the trusted checksum in .terraform.lock.hcl.                                               | Verify provider source. If the change is intentional, run tofu init -upgrade. Use tofu providers lock for multi-platform teams. | 42               |
@@ -1316,8 +1310,8 @@ ______________________________________________________________________
 
 This guide has provided a comprehensive tour of the HCL language as used by
 OpenTofu, from foundational syntax to advanced dynamic patterns and
-troubleshooting. This final section consolidates the key principles of
-effective HCL development, and offers recommendations for continued learning.
+troubleshooting. This final section consolidates the key principles of effective
+HCL development, and offers recommendations for continued learning.
 
 ### 5.1 The tenets of effective HCL
 
@@ -1325,60 +1319,58 @@ Writing professional-grade Infrastructure as Code with OpenTofu is not just
 about knowing the syntax, but about applying a set of core principles that lead
 to configurations that are robust, maintainable, secure, and scalable.
 
- 1. **Embrace Identity, Not Position**: The most critical design principle for
-    dynamic infrastructure is to prefer the `for_each` meta-argument over
-    `count` when managing any collection of resources. Tying a resource's
-    lifecycle to a stable identity key rather than a fragile positional index
-    prevents unnecessary churn, and makes configurations far more predictable
-    and robust.2
+1. **Embrace Identity, Not Position**: The most critical design principle for
+   dynamic infrastructure is to prefer the `for_each` meta-argument over `count`
+   when managing any collection of resources. Tying a resource's lifecycle to a
+   stable identity key rather than a fragile positional index prevents
+   unnecessary churn, and makes configurations far more predictable and robust.2
 
- 2. **Be Explicit with Versions**: Always pin provider versions using
-    pessimistic constraints (`~>`) in a `versions.tofu` file. This is the
-    single most effective way to prevent unexpected failures caused by breaking
-    changes in provider updates.13
+1. **Be Explicit with Versions**: Always pin provider versions using pessimistic
+   constraints (`~>`) in a `versions.tofu` file. This is the single most
+   effective way to prevent unexpected failures caused by breaking changes in
+   provider updates.13
 
- 3. **Isolate State**: Never use local state for collaborative or production
-    work. Use a remote backend with state locking. Furthermore, split large,
-    monolithic state files into smaller, logically-scoped units (e.g.,
-    per-environment, per-application) to improve performance, and reduce the
-    blast radius of potential errors.8
+1. **Isolate State**: Never use local state for collaborative or production
+   work. Use a remote backend with state locking. Furthermore, split large,
+   monolithic state files into smaller, logically-scoped units (e.g.,
+   per-environment, per-application) to improve performance, and reduce the
+   blast radius of potential errors.8
 
- 4. **Keep It DRY (Don't Repeat Yourself) with Modules**: Abstract any repeated
-    infrastructure pattern into a reusable, focused module. This reduces code
-    duplication, enforces standardization, and improves the overall
-    maintainability of the codebase.8
+1. **Keep It DRY (Don't Repeat Yourself) with Modules**: Abstract any repeated
+   infrastructure pattern into a reusable, focused module. This reduces code
+   duplication, enforces standardization, and improves the overall
+   maintainability of the codebase.8
 
- 5. **Document module intent**: Use the `description` field for all variables
-    and
-    outputs to create a self-documenting interface for modules. Add comments to
-    explain any non-obvious logic, especially for "hidden" dependencies that
-    require the use of `depends_on`.8
+1. **Document module intent**: Use the `description` field for all variables and
+   outputs to create a self-documenting interface for modules. Add comments to
+   explain any non-obvious logic, especially for "hidden" dependencies that
+   require the use of `depends_on`.8
 
- 6. **Manage Secrets Securely**: Never commit sensitive data like passwords or
-    API keys to version control. Use a dedicated secrets management tool (like
-    Vault) or environment variables to inject secrets at runtime.13
+1. **Manage Secrets Securely**: Never commit sensitive data like passwords or
+   API keys to version control. Use a dedicated secrets management tool (like
+   Vault) or environment variables to inject secrets at runtime.13
 
- 7. **Structure for Clarity**: A consistent file structure (`main`,
-    `variables`, `outputs`, `versions`), and a clear naming convention for
-    resources and variables are not optional; they are essential for long-term
-    maintainability and collaboration.8
+1. **Structure for Clarity**: A consistent file structure (`main`, `variables`,
+   `outputs`, `versions`), and a clear naming convention for resources and
+   variables are not optional; they are essential for long-term maintainability
+   and collaboration.8
 
- 8. **Validate module inputs**: Create robust module interfaces by using `type`
-    constraints and `validation` blocks for input variables. This catches
-    configuration errors early and provides clear, actionable feedback to the
-    module's users.11
+1. **Validate module inputs**: Create robust module interfaces by using `type`
+   constraints and `validation` blocks for input variables. This catches
+   configuration errors early and provides clear, actionable feedback to the
+   module's users.11
 
- 9. **Leverage the Ecosystem**: OpenTofu's core language is powerful, but its
-    capabilities are extended by a rich ecosystem of third-party tools.
-    Integrate static analysis tools like `tflint` (for best practices and
-    style), and `checkov` or `tfsec` (for security scanning) into continuous
-    integration/continuous delivery (CI/CD) pipelines to catch issues before
-    they reach production.45
+1. **Leverage the Ecosystem**: OpenTofu's core language is powerful, but its
+   capabilities are extended by a rich ecosystem of third-party tools. Integrate
+   static analysis tools like `tflint` (for best practices and style), and
+   `checkov` or `tfsec` (for security scanning) into continuous
+   integration/continuous delivery (CI/CD) pipelines to catch issues before they
+   reach production.45
 
- 10. **Read the Plan**: The `tofu plan` command is the most important safety
-    mechanism. Always review the plan output carefully to ensure the proposed
-    changes match the intended outcome before running `tofu apply`. For teams,
-    this review should be a mandatory part of the pull request process.4
+1. **Read the Plan**: The `tofu plan` command is the most important safety
+   mechanism. Always review the plan output carefully to ensure the proposed
+   changes match the intended outcome before running `tofu apply`. For teams,
+   this review should be a mandatory part of the pull request process.4
 
 ### 5.2 Recommendations for further learning
 
@@ -1392,9 +1384,9 @@ expertise, the following resources are highly recommended:
   Commands reference.4
 
 - **OpenTofu GitHub Repository**: The project's GitHub repository is an
-  invaluable resource. The Issues page provides insight into active bug
-  reports, ongoing feature discussions (RFCs), and community-driven requests,
-  offering a glimpse into the future direction of the tool.44
+  invaluable resource. The Issues page provides insight into active bug reports,
+  ongoing feature discussions (RFCs), and community-driven requests, offering a
+  glimpse into the future direction of the tool.44
 
 - **Provider Documentation**: Deep expertise often requires a thorough
   understanding of the specific providers being used (e.g., AWS, Google Cloud,
@@ -1407,10 +1399,10 @@ expertise, the following resources are highly recommended:
   build on top of OpenTofu, such as:
 
   - **Terragrunt**, and **Terramate**: These tools help manage remote state
-    configuration, reduce boilerplate code, and orchestrate dependencies
-    between modules, and stacks.26
+    configuration, reduce boilerplate code, and orchestrate dependencies between
+    modules, and stacks.26
 
   - **Terraform Automation & Collaboration Software (TACOS)**: Platforms like
-    Spacelift or env0 provide a collaborative workflow for OpenTofu,
-    integrating with version control to automate planning on pull requests, and
-    providing policy-as-code enforcement.
+    Spacelift or env0 provide a collaborative workflow for OpenTofu, integrating
+    with version control to automate planning on pull requests, and providing
+    policy-as-code enforcement.

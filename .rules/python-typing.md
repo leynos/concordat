@@ -4,14 +4,14 @@
 > practices to improve clarity, correctness, and tooling support. Use these
 > features to write expressive, modern Python.
 
-This reference cites several Python Enhancement Proposals (PEPs) that define
-the underlying typing semantics.
+This reference cites several Python Enhancement Proposals (PEPs) that define the
+underlying typing semantics.
 
 ## `enum.Enum`, `enum.IntEnum`, `enum.StrEnum`
 
 Use `Enum` for fixed sets of related constants. Use `enum.auto()` to avoid
-repeating values manually. Use `IntEnum` or `StrEnum` when interoperability
-with integers or strings is required (e.g. for database or JSON serialization).
+repeating values manually. Use `IntEnum` or `StrEnum` when interoperability with
+integers or strings is required (e.g. for database or JSON serialization).
 
 ```python
 import enum
@@ -76,7 +76,7 @@ class Builder:
 
 This improves tool support and enforces correct chaining semantics.
 
-## `@override` Decorator  (Python Enhancement Proposal 698)
+## `@override` Decorator (Python Enhancement Proposal 698)
 
 Use `@override` to indicate that a method overrides one from a superclass. This
 enables static analysis tools to detect typos and signature mismatches.
@@ -96,7 +96,7 @@ class Child(Base):
 
 This decorator is a no-op at runtime but improves tooling correctness.
 
-## `TypeIs`  (Python Enhancement Proposal 742)
+## `TypeIs` (Python Enhancement Proposal 742)
 
 Use `TypeIs[T]` to define custom runtime type guards that narrow types in type
 checkers.
@@ -111,7 +111,7 @@ def is_str_list(val: list[object]) -> typing.TypeIs[list[str]]:
 Unlike `isinstance`, this informs the type checker that `val` is now
 `list[str]`.
 
-## Defaults for TypeVars  (Python Enhancement Proposal 696)
+## Defaults for TypeVars (Python Enhancement Proposal 696)
 
 Allow generic classes/functions to fall back to default types when no specific
 type is provided.
@@ -127,7 +127,7 @@ class Box[T]:
 
 This makes APIs more ergonomic while retaining type safety.
 
-## Standard Library Generics  (Python Enhancement Proposal 585)
+## Standard Library Generics (Python Enhancement Proposal 585)
 
 Use built-in generics from the standard library (`list`, `dict`, `tuple`, etc.)
 instead of `typing.List`, `typing.Dict`, etc.
@@ -138,7 +138,7 @@ names: list[str] = ["Alice", "Bob"]
 
 This reduces imports and reflects the modern style.
 
-## Union Syntax and Optional  (Python Enhancement Proposal 604)
+## Union Syntax and Optional (Python Enhancement Proposal 604)
 
 Use `|` to write union types, and `A | None` instead of `Optional[A]`.
 

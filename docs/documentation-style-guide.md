@@ -1,17 +1,17 @@
 # Documentation style guide
 
-This guide outlines conventions for authoring documentation for Concordat.
-Apply these rules to keep the documentation clear and consistent for developers.
+This guide outlines conventions for authoring documentation for Concordat. Apply
+these rules to keep the documentation clear and consistent for developers.
 
 ## Spelling
 
 - Use British English based on the
   [Oxford English Dictionary](https://public.oed.com/) locale `en-GB`, which
   denotes English for the Great Britain market:
-  - suffix -ize in words like _realize_ and _organization_ instead of
-     -ise endings,
-  - suffix ‑lyse in words not traced to the Greek ‑izo, ‑izein suffixes,
-     such as _analyse_, _paralyse_ and _catalyse_,
+  - suffix -ize in words like _realize_ and _organization_ instead of -ise
+    endings,
+  - suffix ‑lyse in words not traced to the Greek ‑izo, ‑izein suffixes, such as
+    _analyse_, _paralyse_ and _catalyse_,
   - suffix -our in words such as _colour_, _behaviour_ and _neighbour_,
   - suffix -re in words such as _calibre_, _centre_ and fibre,
   - double "l" in words such as _cancelled_, _counsellor_ and _cruellest_,
@@ -74,8 +74,8 @@ fn add(a: i32, b: i32) -> i32 {
 
 ## API doc comments (Rust)
 
-Use doc comments to document public APIs. Keep them consistent with the
-contents of the manual.
+Use doc comments to document public APIs. Keep them consistent with the contents
+of the manual.
 
 - Begin each block with `///`.
 - Keep the summary line short, followed by further detail.
@@ -83,11 +83,11 @@ contents of the manual.
   argument.
 - Document the return value with `# Returns`.
 - Document any panics or errors with `# Panics` or `# Errors` as appropriate.
-- Place examples under `# Examples` and mark the code block with `no_run`,
-  so they do not execute during documentation tests.
+- Place examples under `# Examples` and mark the code block with `no_run`, so
+  they do not execute during documentation tests.
 - Put function attributes after the doc comment.
 
-```rust,no_run
+````rust,no_run
 /// Returns the sum of `a` and `b`.
 ///
 /// # Parameters
@@ -106,14 +106,14 @@ contents of the manual.
 pub fn add(a: i32, b: i32) -> i32 {
     a + b
 }
-```
+````
 
 ## Diagrams and images
 
-Where it adds clarity, include [Mermaid](https://mermaid.js.org/) diagrams.
-When embedding figures, use `![alt text](path/to/image)` and provide brief alt
-text describing the content. Add a short description before each Mermaid
-diagram, so screen readers can understand it.
+Where it adds clarity, include [Mermaid](https://mermaid.js.org/) diagrams. When
+embedding figures, use `![alt text](path/to/image)` and provide brief alt text
+describing the content. Add a short description before each Mermaid diagram, so
+screen readers can understand it.
 
 For screen readers: The following flowchart outlines the documentation workflow.
 
@@ -137,8 +137,8 @@ task to task.
 - Define outcomes, not intentions: Phrase tasks in terms of the capability
   delivered (e.g. “Implement role-based access control for API endpoints”), not
   aspirations like “Improve security”.
-- Quantify completion criteria: Attach measurable finish lines (e.g. “90%
-  test coverage for new modules”, “response times under 200ms”, “all endpoints
+- Quantify completion criteria: Attach measurable finish lines (e.g. “90% test
+  coverage for new modules”, “response times under 200ms”, “all endpoints
   migrated”).
 - Break into atomic increments: Ensure tasks can be completed in weeks, not
   quarters. Large goals should be decomposed into clear, deliverable units.
@@ -162,4 +162,4 @@ navigability:
 
 ______________________________________________________________________
 
-[^1]: A linter that enforces consistent Markdown formatting.
+\[^1\]: A linter that enforces consistent Markdown formatting.

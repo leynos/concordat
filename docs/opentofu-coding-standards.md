@@ -15,29 +15,29 @@ Configuration Language (HCL) syntax reference and module testing guide.
 
 ## File layout
 
-- Keep `main.tofu` for orchestration and cross-resource wiring.
-- Group related resources in dedicated files (e.g. `acm.tofu`, `dns.tofu`).
-- Define module interfaces in `variables.tofu` and `outputs.tofu`.
-- Pin providers in `terraform.tofu`; declare aliases like `aws.useast1`.
+- Keep `main.tf` for orchestration and cross-resource wiring.
+- Group related resources in dedicated files (e.g. `acm.tf`, `dns.tf`).
+- Define module interfaces in `variables.tf` and `outputs.tf`.
+- Pin providers in `terraform.tf`; declare aliases like `aws.useast1`.
 
 Example module structure:
 
 ```plaintext
 modules/
 ├── static_site/
-│   ├── main.tofu
-│   ├── variables.tofu
-│   ├── outputs.tofu
+│   ├── main.tf
+│   ├── variables.tf
+│   ├── outputs.tf
 │   └── tests/
 ├── deploy/
-│   ├── main.tofu
-│   ├── variables.tofu
-│   ├── outputs.tofu
+│   ├── main.tf
+│   ├── variables.tf
+│   ├── outputs.tf
 │   └── tests/
 └── monitoring/
-    ├── main.tofu
-    ├── variables.tofu
-    ├── outputs.tofu
+    ├── main.tf
+    ├── variables.tf
+    ├── outputs.tf
     └── tests/
 ```
 
@@ -86,7 +86,7 @@ variable "bucket_name" {
 
 ## Providers and backends
 
-- Pin provider versions with pessimistic ranges in `terraform.tofu`.
+- Pin provider versions with pessimistic ranges in `terraform.tf`.
 - Declare required aliases, such as `aws.useast1`, near the provider block.
 - Stub remote calls with `mock_provider` or test doubles so validation stays
   offline.
@@ -106,8 +106,8 @@ variable "bucket_name" {
   (CI) secrets.
 - Clean up temporary artefacts in provisioners using `trap`, as in
   `modules/deploy`.
-- Grant Identity and Access Management (IAM) permissions on the narrowest
-  scope; prefer data sources for Amazon Resource Names (ARNs).
+- Grant Identity and Access Management (IAM) permissions on the narrowest scope;
+  prefer data sources for Amazon Resource Names (ARNs).
 
 ## Documentation and comments
 

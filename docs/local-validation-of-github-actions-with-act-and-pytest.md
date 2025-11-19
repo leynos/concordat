@@ -18,8 +18,11 @@ containers execute in isolation.
 ## Prerequisites
 
 - Docker daemon available.
+
 - `act` installed.
+
 - Python 3.10+ with `pytest`.
+
 - Optional but recommended: pin an image to reduce drift:
 
   ```bash
@@ -35,7 +38,7 @@ scripts/
 tests/
   fixtures/pull_request.event.json
   test_workflow_integration.py
-   ```
+```
 
 ### Example workflow (self-checking)
 
@@ -76,7 +79,7 @@ jobs:
         with:
           name: result
           path: out/result.json
-   ```
+```
 
 ### Event payload fixture
 
@@ -184,7 +187,7 @@ def test_record(tmp_path: Path) -> None:
 ```
 
 - **Replay** deterministically with mocks. Configure expectations using the
-   fluent API and keep verification mandatory, so regressions surface quickly.
+  fluent API and keep verification mandatory, so regressions surface quickly.
 
 ```python
 def test_replay(tmp_path: Path, cmd_mox) -> None:
@@ -210,15 +213,15 @@ The `concordat` repository wires these patterns into
 
 - Set `CONCORDAT_RUN_ACT_TESTS=1` to opt into the containerised run (the default
   suite skips it to avoid Docker requirements).
-- Provide a JSON snapshot via the `snapshot_path` workflow input so the
-  Auditor CLI operates deterministically without reaching the GitHub API.
+- Provide a JSON snapshot via the `snapshot_path` workflow input so the Auditor
+  CLI operates deterministically without reaching the GitHub API.
 - Pass `upload_sarif=false` to avoid hitting the Code Scanning API during local
-  validation; the workflow still uploads the Static Analysis Results
-  Interchange Format (SARIF) artefact for inspection.
+  validation; the workflow still uploads the Static Analysis Results Interchange
+  Format (SARIF) artefact for inspection.
 
 1. **Inspect** the journal. After verification, `cmd_mox.journal` exposes the
-   captured `Invocation` objects. Serialize the data into JSON lines or YAML,
-   so future tests can bootstrap mocks from the same expectations.
+   captured `Invocation` objects. Serialize the data into JSON lines or YAML, so
+   future tests can bootstrap mocks from the same expectations.
 
 ## What to assert (beyond exit code)
 
@@ -234,11 +237,10 @@ The `concordat` repository wires these patterns into
 
 - `-P ubuntu-latest=catthehacker/ubuntu:act-latest`: pin a close runner image.
 - `-b/--bind`: bind mount the repository; enables checking file side effects.
-- `--artifact-server-path <dir>`: export uploaded artefacts to a host
-  directory.
+- `--artifact-server-path <dir>`: export uploaded artefacts to a host directory.
 - `--json`: emit a line-delimited JSON log stream suitable for parsing.
-- `-e <event.json>` / `--env` / `--env-file`: control the event and
-  environment under test.
+- `-e <event.json>` / `--env` / `--env-file`: control the event and environment
+  under test.
 
 ## Known limitations (by design)
 
@@ -251,8 +253,8 @@ The `concordat` repository wires these patterns into
 ## Validation ladder
 
 1. **Local fast loop:** unit tests -> `act` black-box tests via `pytest`.
-2. **Authoritative CI:** run the same workflow on GitHub-hosted runners.
-3. **End-to-end (privileged paths):** GitHub-only with least-privilege tokens;
+1. **Authoritative CI:** run the same workflow on GitHub-hosted runners.
+1. **End-to-end (privileged paths):** GitHub-only with least-privilege tokens;
    gate behind labels/paths.
 
 This arrangement provides tight feedback for workflow correctness and
