@@ -226,8 +226,8 @@ ______________________________________________________________________
 
 ## 5) Groups & validators (across parameters)
 
-Use `Group` to structure help and enforce cross‑field constraints (e.g. mutually
-exclusive flags) without littering command bodies.
+Use `Group` to structure help and enforce cross‑field constraints (e.g.
+mutually exclusive flags) without littering command bodies.
 
 ```python
 from typing import Annotated
@@ -525,8 +525,8 @@ ______________________________________________________________________
 - **Mixing positional and keyword** follows normal Python rules; once a later
   param is supplied by keyword, earlier ones cannot be passed positionally.
 - **Lists**: positional lists stop at an option unless
-  `allow_leading_hyphen=True`; with keywords, tokens must complete an element or
-  the parser raises a missing-argument error.
+  `allow_leading_hyphen=True`; with keywords, tokens must complete an element
+  or the parser raises a missing-argument error.
 - **Mutable defaults**: do not default list/dict params to `[]/{}`; prefer
   `None` and handle inside the function, or rely on `--empty-<name>` for
   explicit empty lists.

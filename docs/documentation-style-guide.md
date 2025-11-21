@@ -1,7 +1,7 @@
 # Documentation style guide
 
-This guide outlines conventions for authoring documentation for Concordat. Apply
-these rules to keep the documentation clear and consistent for developers.
+This guide outlines conventions for authoring documentation for Concordat.
+Apply these rules to keep the documentation clear and consistent for developers.
 
 ## Spelling
 
@@ -74,8 +74,8 @@ fn add(a: i32, b: i32) -> i32 {
 
 ## API doc comments (Rust)
 
-Use doc comments to document public APIs. Keep them consistent with the contents
-of the manual.
+Use doc comments to document public APIs. Keep them consistent with the
+contents of the manual.
 
 - Begin each block with `///`.
 - Keep the summary line short, followed by further detail.
@@ -87,7 +87,7 @@ of the manual.
   they do not execute during documentation tests.
 - Put function attributes after the doc comment.
 
-````rust,no_run
+```rust,no_run
 /// Returns the sum of `a` and `b`.
 ///
 /// # Parameters
@@ -106,14 +106,14 @@ of the manual.
 pub fn add(a: i32, b: i32) -> i32 {
     a + b
 }
-````
+```
 
 ## Diagrams and images
 
-Where it adds clarity, include [Mermaid](https://mermaid.js.org/) diagrams. When
-embedding figures, use `![alt text](path/to/image)` and provide brief alt text
-describing the content. Add a short description before each Mermaid diagram, so
-screen readers can understand it.
+Where it adds clarity, include [Mermaid](https://mermaid.js.org/) diagrams.
+When embedding figures, use `![alt text](path/to/image)` and provide brief alt
+text describing the content. Add a short description before each Mermaid
+diagram, so screen readers can understand it.
 
 For screen readers: The following flowchart outlines the documentation workflow.
 
