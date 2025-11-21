@@ -4,26 +4,26 @@
 
 ### 1.1 The imperative for testing IaC
 
-The evolution of infrastructure management from manual, interactive processes to
-a code-based discipline represents a fundamental paradigm shift in the
+The evolution of infrastructure management from manual, interactive processes
+to a code-based discipline represents a fundamental paradigm shift in the
 technology landscape. Infrastructure as Code (IaC) treats the provisioning and
 management of servers, networks, databases, and other components as a software
 development practice.1 Tools like OpenTofu, an open-source fork of Terraform,
 allow teams to define their infrastructure in a declarative, human-readable
-language, enabling predictable, repeatable, and version-controlled deployments.3
-The HashiCorp Configuration Language (HCL) underpins these definitions and
-appears throughout this guide.
+language, enabling predictable, repeatable, and version-controlled
+deployments.3 The HashiCorp Configuration Language (HCL) underpins these
+definitions and appears throughout this guide.
 
-As infrastructure definitions become code, they inherit not only the benefits of
-software engineering—such as version control, collaboration, and automation—but
-also its inherent risks, including bugs, misconfigurations, and security
-vulnerabilities. Consequently, the discipline of automated testing, long a
-cornerstone of software development, becomes non-negotiable for IaC.5 Deploying
-untested infrastructure code can lead to catastrophic failures, security
-breaches, and costly downtime. The time, and resources required to fix a bug
-increase exponentially as it progresses through the development lifecycle; a
-misconfiguration caught before deployment is orders of magnitude cheaper to
-resolve than one that brings down a production environment.6
+As infrastructure definitions become code, they inherit not only the benefits
+of software engineering—such as version control, collaboration, and
+automation—but also its inherent risks, including bugs, misconfigurations, and
+security vulnerabilities. Consequently, the discipline of automated testing,
+long a cornerstone of software development, becomes non-negotiable for IaC.5
+Deploying untested infrastructure code can lead to catastrophic failures,
+security breaches, and costly downtime. The time, and resources required to fix
+a bug increase exponentially as it progresses through the development
+lifecycle; a misconfiguration caught before deployment is orders of magnitude
+cheaper to resolve than one that brings down a production environment.6
 
 Therefore, implementing a robust testing strategy for OpenTofu modules and
 scripts is not an optional enhancement but a critical practice for any
@@ -47,8 +47,8 @@ coverage with an efficient feedback loop.8
 Static analysis is the first, and most fundamental layer of testing, performed
 on the code itself without executing it or deploying any infrastructure.9 This
 layer acts as a rapid, low-cost first line of defense, catching a wide range of
-issues before they enter the main development branch or a continuous integration
-(CI) / continuous delivery (CD) pipeline.
+issues before they enter the main development branch or a continuous
+integration (CI) / continuous delivery (CD) pipeline.
 
 - **Formatting, and Syntax Validation**: The most basic checks ensure that the
   code adheres to canonical formatting and is syntactically valid.
@@ -75,8 +75,8 @@ issues before they enter the main development branch or a continuous integration
     cleaner, and more efficient code.9
 
 - **Security and Compliance Scanning**: These specialized static analysis tools
-  focus on identifying security vulnerabilities and compliance violations within
-  the IaC definitions.
+  focus on identifying security vulnerabilities and compliance violations
+  within the IaC definitions.
 
   - `tfsec`, `Checkov`, and `Trivy`: These tools scan OpenTofu code for common
     security misconfigurations, such as overly permissive firewall rules,
@@ -89,9 +89,9 @@ Unit testing focuses on verifying the functionality of individual modules or
 components in isolation from the rest of the system.8 In the context of
 OpenTofu, a unit test validates the module's internal logic, its handling of
 input variables, and its expected outputs. The primary goal is to perform these
-checks without the cost, time, and complexity of deploying real infrastructure.2
-To achieve this isolation, external dependencies, such as cloud provider APIs or
-other modules, are replaced with mocks or stubs.8
+checks without the cost, time, and complexity of deploying real
+infrastructure.2 To achieve this isolation, external dependencies, such as
+cloud provider APIs or other modules, are replaced with mocks or stubs.8
 
 Unit tests are characterized by their speed, and focus. They provide immediate
 feedback to developers, making fixes easier, and cheaper.8 This responsiveness
@@ -112,14 +112,14 @@ intended to be used and how it behaves under various conditions.18
   `platform-standards/tofu/policies`. Validate both happy and unhappy paths by
   executing
   `conftest test --policy platform-standards/tofu/policies platform-standards/tofu/policies/examples/*.json`.
-  The JSON fixtures mirror drift scenarios and destructive changes so that
+   The JSON fixtures mirror drift scenarios and destructive changes so that
   policy rules stay in sync with the modules they protect.
 
 #### Layer 3: integration testing (the connections)
 
-While unit tests ensure each component works correctly in isolation, integration
-tests verify that these separate components function together as a cohesive
-system.6 In IaC, integration tests typically:
+While unit tests ensure each component works correctly in isolation,
+integration tests verify that these separate components function together as a
+cohesive system.6 In IaC, integration tests typically:
 
 - Deploy one or more modules into environments that mirror production.
 - Exercise the interactions between those modules.
@@ -149,8 +149,8 @@ brittle, and most expensive to run, which is why they are used most sparingly.20
 
 Clearly distinguishing between unit, and integration testing is fundamental to
 building an effective testing strategy. While both are essential, they serve
-different purposes, detect different types of bugs, and are applied at different
-stages of the CI/CD pipeline. The following table synthesizes the key
+different purposes, detect different types of bugs, and are applied at
+different stages of the CI/CD pipeline. The following table synthesizes the key
 differences in the context of OpenTofu.
 
 | Feature       | Unit Testing                                                                   | Integration Testing                                                                 | Notes                                                                              |
@@ -171,11 +171,11 @@ between specific test types—particularly unit, and integration tests—can app
 blurry. For instance, OpenTofu's native `tofu test` command can be used to run
 both. It can execute a test that provisions real infrastructure, which is a
 hallmark of integration testing.21 Yet, the same command can be configured to
-run against a plan file without deploying anything, and can use powerful mocking
-features to isolate the code from external dependencies, which is the very
-definition of a unit test.16 Similarly, a framework like Terratest is most
-famous for its integration testing capabilities but can also be used to validate
-plan files.
+run against a plan file without deploying anything, and can use powerful
+mocking features to isolate the code from external dependencies, which is the
+very definition of a unit test.16 Similarly, a framework like Terratest is most
+famous for its integration testing capabilities but can also be used to
+validate plan files.
 
 This flexibility means that the tool or command name alone does not define the
 type of test being performed. The crucial differentiator is the *practitioner's
@@ -183,9 +183,9 @@ intent*. The fundamental question to ask is: "What is this test trying to
 validate?"
 
 - If the goal is to verify the module's internal logic, its conditional
-  branches, or its variable handling *in isolation*, then it is a **unit test**.
-  The appropriate technique is to use `command=plan`, leverage mocking features,
-  and avoid interaction with real cloud APIs.
+  branches, or its variable handling *in isolation*, then it is a **unit
+  test**. The appropriate technique is to use `command=plan`, leverage mocking
+  features, and avoid interaction with real cloud APIs.
 
 - If the goal is to verify that the module correctly interacts with a real cloud
   provider, that its provisioned resources can communicate with each other, or
@@ -194,9 +194,9 @@ validate?"
   resources into a controlled test environment.
 
 This shift from a rigid, tool-based definition to a flexible, goal-oriented one
-is central to mastering IaC testing. It empowers engineers to consciously select
-the right approach for the specific validation they need to perform. The result
-is a testing strategy that is both effective, and efficient.
+is central to mastering IaC testing. It empowers engineers to consciously
+select the right approach for the specific validation they need to perform. The
+result is a testing strategy that is both effective, and efficient.
 
 ## Part 2: mastering the OpenTofu native testing framework (`tofu test`)
 
@@ -215,9 +215,9 @@ which are identified by the extensions `*.tftest.hcl`, `*.tftest.json`,
 `*.tofutest.hcl`, or `*.tofutest.json`.21 The framework then executes the tests
 defined within these files. Each test run typically involves OpenTofu running a
 
-`tofu plan` or `tofu apply` command in the background, making assertions against
-the result, and then making a best-effort attempt to destroy any infrastructure
-that was created during the test.21
+`tofu plan` or `tofu apply` command in the background, making assertions
+against the result, and then making a best-effort attempt to destroy any
+infrastructure that was created during the test.21
 
 #### Command-line interface
 
@@ -248,7 +248,7 @@ The framework supports two primary directory layouts for organizing test files:
    the configuration files (`*.tf`) they are intended to test. This co-location
    can make the relationship between code and test immediately obvious.
 
-1. **Nested Layout**: All test files are consolidated within a dedicated
+2. **Nested Layout**: All test files are consolidated within a dedicated
    `tests/` subdirectory. This approach provides a clean separation between
    infrastructure code and test code.21
 
@@ -427,8 +427,8 @@ run "reject_invalid_instance_name" {
 The `expect_failures` attribute takes a list of configuration constructs that
 are expected to produce an error.21 In this case, the validation for
 
-`var.instance_name` is expected to fail. When `tofu test` is run, this test case
-will *pass* because the anticipated failure occurred, confirming that the
+`var.instance_name` is expected to fail. When `tofu test` is run, this test
+case will *pass* because the anticipated failure occurred, confirming that the
 module's input validation is working as designed.
 
 ### 2.4 Achieving true isolation: mocks, and overrides
@@ -449,10 +449,10 @@ in application development.
 The `mock_provider` block is the broadest mocking tool. It replaces an entire
 provider configuration (e.g., `provider "aws"`) with a mock that intercepts all
 calls for resources, and data sources associated with that provider.16 Instead
-of communicating with the cloud provider's API, the mock automatically generates
-fake data for any computed attributes (attributes whose values are only known
-after creation, like an Amazon Resource Name (ARN) or a resource identifier
-(ID).
+of communicating with the cloud provider's API, the mock automatically
+generates fake data for any computed attributes (attributes whose values are
+only known after creation, like an Amazon Resource Name (ARN) or a resource
+identifier (ID).
 
 This allows tests to run completely offline, without any credentials configured.
 
@@ -492,8 +492,9 @@ resources, giving the test suite more control over the test data.24
 #### Overriding specific components
 
 For more granular control, the framework provides `override` blocks to replace
-specific resources, data sources, or modules, rather than the entire provider.25
-This is extremely useful for isolating a module from a specific dependency.
+specific resources, data sources, or modules, rather than the entire
+provider.25 This is extremely useful for isolating a module from a specific
+dependency.
 
 - `override_data`: This is one of the most common, and powerful use cases. Many
   modules use data sources to fetch information, such as the latest AMI ID or
@@ -524,17 +525,17 @@ This is extremely useful for isolating a module from a specific dependency.
 
   ```
 
-  This test verifies that the `aws_instance` resource correctly uses the ID from
-  the data source, without ever needing to contact AWS to resolve that data
-  source.31
+  This test verifies that the `aws_instance` resource correctly uses the ID
+  from the data source, without ever needing to contact AWS to resolve that
+  data source.31
 
 - `override_resource`: This block can override a resource, which is useful for
   testing how other parts of the configuration react to its attributes without
   actually creating it.
 
 - `override_module`: This block can replace a call to a child module, allowing
-  the test to verify how a parent module uses the child's outputs by providing a
-  fixed set of mock outputs.
+  the test to verify how a parent module uses the child's outputs by providing
+  a fixed set of mock outputs.
 
 By combining `command = plan` with these mocking, and overriding capabilities,
 engineers can create a comprehensive suite of true unit tests that are fast,
@@ -544,10 +545,10 @@ test-driven IaC workflow.
 ## Part 3: advanced unit testing scenarios with `tofu test`
 
 Once the fundamentals of plan-based testing and mocking are established, the
-next step is to apply these techniques to the more complex, real-world scenarios
-that engineers frequently encounter in module development. This includes testing
-dynamic resource creation with loops, validating complex conditional logic, and
-handling the imperative nature of provisioners.
+next step is to apply these techniques to the more complex, real-world
+scenarios that engineers frequently encounter in module development. This
+includes testing dynamic resource creation with loops, validating complex
+conditional logic, and handling the imperative nature of provisioners.
 
 ### 3.1 Testing iterative resources (`count`, and `for_each`)
 
@@ -579,8 +580,8 @@ capabilities to inspect the planned collection of resources.
 
 **Example: Testing a module that creates multiple S3 buckets with** `for_each`
 
-Consider a module that accepts a map of bucket configurations, and creates an S3
-bucket for each entry, applying specific tags.
+Consider a module that accepts a map of bucket configurations, and creates an
+S3 bucket for each entry, applying specific tags.
 
 `module/main.tf`
 
@@ -710,8 +711,8 @@ resource "aws_lb_listener" "https" {
 }
 ```
 
-To test this, two `run` blocks are required: one for the "enabled" case, and one
-for the "disabled" case.
+To test this, two `run` blocks are required: one for the "enabled" case, and
+one for the "disabled" case.
 
 `module/tests/alb_listener_test.tftest.hcl`
 
@@ -769,8 +770,8 @@ which are antithetical to pure unit testing.
 A critical distinction must be made: a unit test for an OpenTofu module
 containing a provisioner should not test the *outcome* of the script itself.
 That is the domain of integration testing. The goal of the unit test is to
-verify that the IaC logic *correctly constructs the command* that will be passed
-to the provisioner.
+verify that the IaC logic *correctly constructs the command* that will be
+passed to the provisioner.
 
 The strategy to achieve this involves generating a plan in JSON format and then
 parsing that JSON to inspect the `provisioners` attribute of the planned
@@ -797,8 +798,9 @@ resource "null_resource" "script_trigger" {
 ```
 
 A unit test for this would not run the `echo` command. Instead, it would verify
-that the `command` string is correctly formed. Since `tofu test` cannot directly
-parse the plan JSON within an `assert` block, this requires an external script.
+that the `command` string is correctly formed. Since `tofu test` cannot
+directly parse the plan JSON within an `assert` block, this requires an
+external script.
 
 `test_runner.sh` **(a helper script for the test)**
 
@@ -834,9 +836,9 @@ This test runner script would be executed from a CI pipeline. It validates that
 the `var.message` was correctly interpolated into the `command` string,
 confirming the IaC logic is sound.
 
-For testing the *logic of the script itself* (e.g., the `echo` command or a more
-complex shell script), a separate, dedicated testing approach should be used.
-Frameworks like `bunit` 43,
+For testing the *logic of the script itself* (e.g., the `echo` command or a
+more complex shell script), a separate, dedicated testing approach should be
+used. Frameworks like `bunit` 43,
 
 `shunit2`, or the behaviour-driven development (BDD) style `shellspec` 44 are
 designed for unit testing shell scripts. This separation of concerns is a
@@ -845,12 +847,12 @@ use shell script testing tools to test shell scripts.
 
 ## Part 4: a comparative analysis of alternative testing frameworks
 
-While OpenTofu's native testing framework is a powerful, and accessible starting
-point, the ecosystem offers other mature tools, each with its own philosophy,
-strengths, and weaknesses. The most prominent alternative is Terratest.
-Understanding the trade-offs between these frameworks is essential for selecting
-the right tool—or combination of tools—for a team's specific needs and skill
-set.
+While OpenTofu's native testing framework is a powerful, and accessible
+starting point, the ecosystem offers other mature tools, each with its own
+philosophy, strengths, and weaknesses. The most prominent alternative is
+Terratest. Understanding the trade-offs between these frameworks is essential
+for selecting the right tool—or combination of tools—for a team's specific
+needs and skill set.
 
 ### 4.1 Deep dive into Terratest
 
@@ -870,13 +872,13 @@ Terratest test is a sequence of actions orchestrated by Go code 48:
    `tofu apply`) to provision actual infrastructure in a cloud environment like
    AWS or Azure.
 
-1. **Validate**: After deployment, the test uses a vast library of helper
+2. **Validate**: After deployment, the test uses a vast library of helper
    functions to interact with, and validate the provisioned resources. This can
-   involve making HTTP requests to a web server, querying a cloud provider's API
-   to check resource attributes, or connecting via SSH to run commands on a
+   involve making HTTP requests to a web server, querying a cloud provider's
+   API to check resource attributes, or connecting via SSH to run commands on a
    server.48
 
-1. **Destroy**: The test ensures that all infrastructure created during the test
+3. **Destroy**: The test ensures that all infrastructure created during the test
    is torn down at the end. This is typically accomplished by wrapping the
    destroy command (e.g., `tofu destroy`) in a Go `defer` statement, which
    guarantees its execution even if the validation steps fail.48
@@ -946,8 +948,9 @@ look for a
 
 `terraform` binary in the system's `PATH`. If it's not found, it will
 automatically look for a `tofu` binary. This behaviour ensures that existing
-test suites can be migrated to OpenTofu with minimal to no changes. For explicit
-control, the binary can be specified in the `terraform.Options` struct.50
+test suites can be migrated to OpenTofu with minimal to no changes. For
+explicit control, the binary can be specified in the `terraform.Options`
+struct.50
 
 ### 4.2 Table: `tofu test` vs. Terratest
 
@@ -971,16 +974,17 @@ direct comparison to aid in this decision-making process.
 
 For historical context and for teams maintaining older test suites, it is worth
 mentioning Kitchen-Terraform.16 This framework uses Test Kitchen, a tool from
-the Chef ecosystem, along with Ruby, and the InSpec compliance framework to test
-Terraform code.26 It provides a structured way to converge infrastructure in a
-sandbox environment and then run compliance and validation tests against it.16
+the Chef ecosystem, along with Ruby, and the InSpec compliance framework to
+test Terraform code.26 It provides a structured way to converge infrastructure
+in a sandbox environment and then run compliance and validation tests against
+it.16
 
-However, with the advent of robust native testing in OpenTofu/Terraform, and the
-widespread adoption of the more flexible Terratest framework, Kitchen-Terraform
-is now largely considered a legacy tool. The project itself has been deprecated
-in favor of the native test framework, and while it was a valuable part of the
-ecosystem's history, new projects should favor `tofu test` or Terratest for
-their testing needs.54
+However, with the advent of robust native testing in OpenTofu/Terraform, and
+the widespread adoption of the more flexible Terratest framework,
+Kitchen-Terraform is now largely considered a legacy tool. The project itself
+has been deprecated in favor of the native test framework, and while it was a
+valuable part of the ecosystem's history, new projects should favor `tofu test`
+or Terratest for their testing needs.54
 
 ## Part 5: architectural best practices for testable OpenTofu modules
 
@@ -1062,8 +1066,8 @@ easily, and effectively unit tested.
 
 - **Avoid Thin Wrappers**: A module should provide a meaningful abstraction over
   a set of resources. Creating a module that is merely a thin wrapper around a
-  single resource type (e.g., a module that only creates an `aws_s3_bucket` with
-  a few variables) often adds unnecessary complexity without providing
+  single resource type (e.g., a module that only creates an `aws_s3_bucket`
+  with a few variables) often adds unnecessary complexity without providing
   significant value. In such cases, it is better to use the resource type
   directly in the calling configuration.60
 
@@ -1082,27 +1086,27 @@ easily, and effectively unit tested.
     `sensitive = true` to prevent them from being displayed in logs.58
 
 - **Isolate Side Effects**: Modules that perform imperative actions, such as
-  those containing `local-exec` or `remote-exec` provisioners, have side effects
-  that make them difficult to unit test. Such modules should be small , and
-  isolated from purely declarative modules. This separation allows the
+  those containing `local-exec` or `remote-exec` provisioners, have side
+  effects that make them difficult to unit test. Such modules should be small ,
+  and isolated from purely declarative modules. This separation allows the
   declarative parts of the infrastructure to be tested easily with plan-based
   unit tests, while the imperative parts can be handled with more targeted (and
   often more complex) testing strategies.
 
-By following these design principles, engineers can create a library of reusable
-modules that are not only powerful, and flexible but also inherently testable,
-leading to a more robust, and reliable IaC practice.63
+By following these design principles, engineers can create a library of
+reusable modules that are not only powerful, and flexible but also inherently
+testable, leading to a more robust, and reliable IaC practice.63
 
 ### 5.3 State management and isolation for testing
 
 The OpenTofu state file is a critical component that maps the configuration to
-real-world resources. It is also a potential source of dependency that can break
-the isolation required for reliable testing. A sound state management strategy
-is therefore essential for a robust testing pipeline.
+real-world resources. It is also a potential source of dependency that can
+break the isolation required for reliable testing. A sound state management
+strategy is therefore essential for a robust testing pipeline.
 
 - **Remote vs. Local State**: For any collaborative or production work, state
-  files must be stored in a remote backend (e.g., AWS S3, Azure Blob Storage) to
-  enable sharing, and prevent data loss.61 However, for many unit testing
+  files must be stored in a remote backend (e.g., AWS S3, Azure Blob Storage)
+  to enable sharing, and prevent data loss.61 However, for many unit testing
   scenarios, especially those that are plan-based, and use mocks, a local state
   file is perfectly acceptable, and often faster. The test can run
 
@@ -1141,8 +1145,8 @@ Continuous Integration and Continuous Delivery (CI/CD) pipeline. Automating the
 execution of unit tests on every code change provides rapid feedback, enforces
 quality standards, and gives teams the confidence to merge, and deploy
 frequently. This section details the principles and practical implementations
-for integrating OpenTofu unit tests into CI/CD workflows for both GitHub Actions
-and GitLab CI.
+for integrating OpenTofu unit tests into CI/CD workflows for both GitHub
+Actions and GitLab CI.
 
 ### 6.1 Principles of IaC in CI/CD
 
@@ -1155,20 +1159,20 @@ progression of stages, each building confidence in the proposed changes.69
   1. **Lint & Format (**`tofu fmt -check`**)**: Ensures code style and
      formatting are consistent.
 
-  1. **Validate (**`tofu validate`**)**: Checks for syntactic correctness and
+  2. **Validate (**`tofu validate`**)**: Checks for syntactic correctness and
      internal consistency.
 
-  1. **Test (**`tofu test`**)**: Executes the unit test suite, primarily using
+  3. **Test (**`tofu test`**)**: Executes the unit test suite, primarily using
      plan-based checks, and mocks to validate module logic without deploying
      infrastructure.
 
-  1. **Plan (**`tofu plan`**)**: Generates an execution plan to show the exact
+  4. **Plan (**`tofu plan`**)**: Generates an execution plan to show the exact
      changes that will be made to the infrastructure.
 
-  1. **Manual Approval**: A crucial gate where team members review the plan to
+  5. **Manual Approval**: A crucial gate where team members review the plan to
      ensure the proposed changes are safe and expected.
 
-  1. **Apply (**`tofu apply`**)**: Applies the approved plan to the target
+  6. **Apply (**`tofu apply`**)**: Applies the approved plan to the target
      environment.
 
 - **Pull Request (PR) Automation**: The most effective workflow pattern is to
@@ -1195,8 +1199,8 @@ progression of stages, each building confidence in the proposed changes.69
 
 GitHub Actions is a powerful, and popular platform for building CI/CD pipelines
 directly within a GitHub repository.75 The ecosystem includes a wide range of
-community-built actions that simplify common tasks, including a suite of actions
-for OpenTofu, and Terraform from the user
+community-built actions that simplify common tasks, including a suite of
+actions for OpenTofu, and Terraform from the user
 
 `dflook`.77
 
@@ -1254,19 +1258,19 @@ jobs:
 1. `on: pull_request`: This trigger ensures the workflow runs whenever a pull
    request is opened or updated against the `main` branch.71
 
-1. `permissions`: This block grants the necessary permissions to the job's
-   temporary token, enabling it to request an OIDC token from GitHub for keyless
-   authentication with AWS.75
+2. `permissions`: This block grants the necessary permissions to the job's
+   temporary token, enabling it to request an OIDC token from GitHub for
+   keyless authentication with AWS.75
 
-1. `actions/checkout@v4`: This standard action checks out the repository code
+3. `actions/checkout@v4`: This standard action checks out the repository code
    into the runner environment.
 
-1. `aws-actions/configure-aws-credentials@v4`: This official AWS action handles
+4. `aws-actions/configure-aws-credentials@v4`: This official AWS action handles
    the OIDC authentication flow, exchanging GitHub's OIDC token for temporary
    AWS credentials. This is the secure way to grant cloud access to the
    pipeline.70
 
-1. `dflook/tofu-test@v1`: This action provides a convenient wrapper around the
+5. `dflook/tofu-test@v1`: This action provides a convenient wrapper around the
    `tofu test` command. It automatically handles the installation of a specific
    OpenTofu version, and executes the tests. The `with` block allows for the
    configuration of inputs such as the module `path`, the `test_directory`, and
@@ -1282,8 +1286,8 @@ OpenTofu, primarily through a set of official CI/CD Components.79 These
 components provide pre-packaged, reusable pipeline configurations that simplify
 the setup of standard IaC workflows.
 
-The following is an annotated example of a `.gitlab-ci.yml` file that configures
-a pipeline to run OpenTofu unit tests on merge requests.
+The following is an annotated example of a `.gitlab-ci.yml` file that
+configures a pipeline to run OpenTofu unit tests on merge requests.
 
 `.gitlab-ci.yml`
 
@@ -1322,12 +1326,12 @@ tofu-unit-test:
 1. `stages`: Defines the execution order of the jobs in the pipeline. A `test`
    stage is added between `validate` and `build` (plan).
 
-1. `include: - component:`: This is the modern way to use reusable pipeline
+2. `include: - component:`: This is the modern way to use reusable pipeline
    configurations in GitLab. It imports the official `validate-plan-apply`
    component, which provides templated jobs for `fmt`, `validate`, `plan`, and
    `apply`.80
 
-1. `tofu-unit-test` **job**: This is a custom job defined to run the unit tests.
+3. `tofu-unit-test` **job**: This is a custom job defined to run the unit tests.
 
    - `stage: test`: Assigns the job to the `test` stage.
 
@@ -1346,9 +1350,9 @@ tofu-unit-test:
      the unit tests are executed only in the context of a merge request, which
      is the desired workflow.83
 
-1. **Credential Management**: Similar to GitHub Actions, GitLab CI can be
-   configured with OIDC to securely authenticate with cloud providers, providing
-   temporary credentials to the jobs without storing static secrets.76
+4. **Credential Management**: Similar to GitHub Actions, GitLab CI can be
+   configured with OIDC to securely authenticate with cloud providers,
+   providing temporary credentials to the jobs without storing static secrets.76
 
 By integrating these automated testing workflows, teams can ensure that every
 change to their infrastructure code is validated against a suite of unit tests.
@@ -1361,23 +1365,23 @@ That discipline dramatically improves code quality and deployment confidence.
 This comprehensive guide has navigated the principles, tools, and practices of
 unit testing OpenTofu modules, and scripts. The central thesis is that a robust
 testing strategy is not about selecting a single tool but about thoughtfully
-layering multiple validation techniques to build confidence at each stage of the
-development lifecycle. A mature IaC testing strategy is a synthesis of these
-layers:
+layering multiple validation techniques to build confidence at each stage of
+the development lifecycle. A mature IaC testing strategy is a synthesis of
+these layers:
 
 1. **Static Analysis as the First Gate**: On every commit, fast, automated
    checks like `tofu fmt`, `tofu validate`, and security scanners (`tfsec`,
-   `Checkov`) should run. This provides immediate feedback on syntax, style, and
-   security, catching the most common errors at virtually no cost.
+   `Checkov`) should run. This provides immediate feedback on syntax, style,
+   and security, catching the most common errors at virtually no cost.
 
-1. **Plan-Based Unit Tests on Every Pull Request**: The core of the testing
+2. **Plan-Based Unit Tests on Every Pull Request**: The core of the testing
    strategy should be a comprehensive suite of unit tests written with
    `tofu test` or Terratest. These tests should be plan-based, leveraging mocks
    , and overrides to validate module logic, conditional paths, and input
    handling in complete isolation. Running these on every PR ensures that the
    core behaviour of every module is verified before it is merged.
 
-1. **Integration Tests in a Dedicated Environment**: After a change is merged,
+3. **Integration Tests in a Dedicated Environment**: After a change is merged,
    integration tests should be run in a dedicated, ephemeral test environment.
    These tests, written with `tofu test command=apply` or Terratest, validate
    that the modules work together correctly, and interact with real cloud APIs
@@ -1401,8 +1405,8 @@ quality assurance as application development.
 The future of IaC testing will likely see this trend continue, and accelerate.
 Expect even tighter integration of testing tools within IDEs, providing
 real-time feedback as developers write code. The use of policy-as-code (e.g.,
-Open Policy Agent) for testing will become more widespread, allowing for complex
-business, and security rules to be validated as part of the test suite.
+Open Policy Agent) for testing will become more widespread, allowing for
+complex business, and security rules to be validated as part of the test suite.
 Furthermore, the rise of artificial intelligence (AI)-assisted development may
 lead to tools that can automatically generate test cases for IaC modules,
 further reducing the manual effort required to achieve comprehensive test

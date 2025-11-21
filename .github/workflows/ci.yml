@@ -1,6 +1,7 @@
+---
 name: CI
 
-on:
+'on':
   push:
     branches: [main]
   pull_request:
@@ -13,20 +14,24 @@ jobs:
       CODESCENE_CLI_SHA256: ${{ vars.CODESCENE_CLI_SHA256 }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+        # v4
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
 
       - name: Set up Go
-        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
+        # v5
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5
         with:
           go-version: '1.22'
 
       - name: Set up Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        # v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: '3.13'
 
       - name: Install uv
-        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        # v5
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86
 
       - name: Install CLI tools
         run: |
@@ -35,23 +40,37 @@ jobs:
           go install github.com/open-policy-agent/conftest@v0.52.0
 
       - name: Install OpenTofu
-        env:
-          TOFU_VERSION: "1.10.6"
         run: |
+          set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y unzip
-          curl -sSL "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_linux_amd64.zip" -o tofu.zip
-          unzip -q tofu.zip -d /tmp
-          sudo mv /tmp/tofu /usr/local/bin/tofu
-          sudo chmod +x /usr/local/bin/tofu
-          rm tofu.zip
+          sudo apt-get install -y git unzip
+          tofu_version="1.12.0"
+          tofu_zip="tofu_${tofu_version}_linux_amd64.zip"
+          tofu_url="https://github.com/opentofu/opentofu/releases/download"
+          tofu_url="${tofu_url}/v${tofu_version}/${tofu_zip}"
+          if curl -fsSLO "${tofu_url}"; then
+            unzip -q "${tofu_zip}" -d /tmp
+            sudo mv /tmp/tofu /usr/local/bin/tofu
+            sudo chmod +x /usr/local/bin/tofu
+            rm "${tofu_zip}"
+          else
+            tofu_repo="https://github.com/opentofu/opentofu.git"
+            git clone --depth 1 "${tofu_repo}" /tmp/opentofu
+            cd /tmp/opentofu
+            go build -o /usr/local/bin/tofu ./cmd/tofu
+          fi
 
       - name: Run Terratest suite
         working-directory: platform-standards/tofu/terratest
+        env:
+          TERRAFORM_BINARY: tofu
         run: go test
 
       - name: Run policy tests
-        run: conftest test --policy platform-standards/tofu/policies platform-standards/tofu/policies/examples/*.json
+        run: |
+          conftest test \
+            --policy platform-standards/tofu/policies \
+            platform-standards/tofu/policies/examples/*.json
 
       - name: Validate Makefile
         run: mbake validate Makefile
@@ -87,9 +106,12 @@ jobs:
       - name: Install CodeScene Coverage CLI
         if: env.CS_ACCESS_TOKEN != ''
         run: |
-          curl -fsSL https://downloads.codescene.io/enterprise/cli/install-cs-coverage-tool.sh | bash -s -- -y
+          codescene_url="https://downloads.codescene.io/enterprise/cli"
+          codescene_url="${codescene_url}/install-cs-coverage-tool.sh"
+          curl -fsSL "${codescene_url}" | bash -s -- -y
           if [ -n "${CODESCENE_CLI_SHA256:-}" ]; then
-            echo "${CODESCENE_CLI_SHA256}  install-cs-coverage-tool.sh" | sha256sum -c -
+            echo "${CODESCENE_CLI_SHA256}  install-cs-coverage-tool.sh" \
+              | sha256sum -c -
           fi
 
       - name: Upload coverage to CodeScene

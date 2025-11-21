@@ -2,8 +2,8 @@
 
 The roadmap below sequences the delivery of Concordat, the GitHub estate
 management suite. Work prioritizes configuration health and consistency,
-focusing on merge behaviour, branch governance, and issue prioritization. Phases
-build cumulatively; each phase depends on completion of preceding steps.
+focusing on merge behaviour, branch governance, and issue prioritization.
+Phases build cumulatively; each phase depends on completion of preceding steps.
 
 ## Phase 1 – Audit foundations for the GitHub estate
 
@@ -28,18 +28,19 @@ automation assets.
 - [x] Extend `concordat enrol` so that, in addition to writing `.concordat`, it
   opens a pull request in `platform-standards` adding the repository to the
   OpenTofu inventory. Acceptance: enrolling a repository produces both the
-  `.concordat` commit (optional push) and a passing IaC PR that runs `tofu fmt`,
-  `tflint`, and `tofu validate`.
+  `.concordat` commit (optional push) and a passing IaC PR that runs
+  `tofu fmt`, `tflint`, and `tofu validate`.
 - [x] Teach estates about the GitHub namespace they govern by persisting
   `github_owner` in the concordat config file and rejecting enrolments that
-  target other owners. Acceptance: `concordat estate init` records the owner and
-  `concordat enrol` refuses to add repositories whose slug does not begin with
-  it; invoking `concordat ls` without namespaces defaults to the recorded owner.
+  target other owners. Acceptance: `concordat estate init` records the owner
+  and `concordat enrol` refuses to add repositories whose slug does not begin
+  with it; invoking `concordat ls` without namespaces defaults to the recorded
+  owner.
 
 ### Step: Ship the estate execution CLI
 
-Connect the estate configuration template to OpenTofu execution to let operators
-preview and apply changes from concordat.
+Connect the estate configuration template to OpenTofu execution to let
+operators preview and apply changes from concordat.
 
 - [x] Cache estate repositories under the concordat X Desktop Group (XDG) cache
   directory (for example, `~/.cache/concordat/estates/<alias>`) and clone the
@@ -58,11 +59,11 @@ preview and apply changes from concordat.
 
 ### Step: Persist estate tfstate in Scaleway Object Storage
 
-Move OpenTofu state into a shared, versioned backend so operators and Continuous
-Integration (CI) jobs never diverge. Remote persistence also unlocks locking and
-rollbacks without adding DynamoDB or other AWS-only dependencies.
+Move OpenTofu state into a shared, versioned backend so operators and
+Continuous Integration (CI) jobs never diverge. Remote persistence also unlocks
+locking and rollbacks without adding DynamoDB or other AWS-only dependencies.
 
-- [ ] Add `platform-standards/tofu/backend.tf` and the accompanying backend
+- [x] Add `platform-standards/tofu/backend.tf` and the accompanying backend
   directory, declaring the `s3` backend with no inline credentials. Acceptance:
   running `tofu init -backend-config backend/scaleway.tfbackend` succeeds
   locally and in CI, and the required OpenTofu version is pinned to `>= 1.12.0`.
@@ -80,11 +81,12 @@ rollbacks without adding DynamoDB or other AWS-only dependencies.
 - [ ] Extend `docs/users-guide.md` with operator guidance (sourced from Section
   2.8.4 of the design doc) that explicitly documents: (1) how to set required
   environment variables for AWS (`AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY`,
-  plus optional `AWS_SESSION_TOKEN` for temporary credentials) and for
-  Scaleway (`SCW_ACCESS_KEY` + `SCW_SECRET_KEY`, which the CLI maps onto the AWS
+  plus optional `AWS_SESSION_TOKEN` for temporary credentials) and for Scaleway
+  (`SCW_ACCESS_KEY` + `SCW_SECRET_KEY`, which the CLI maps onto the AWS
   variable names); (2) lock troubleshooting steps and common failure modes; and
   (3) disaster-recovery procedures using bucket versioning, including how to
-  locate and restore specific object version IDs. Acceptance: `make markdownlint`, `make fmt`, and `make nixie` continue to pass after the
+  locate and restore specific object version IDs. Acceptance:
+  `make markdownlint`, `make fmt`, and `make nixie` continue to pass after the
   documentation changes.
 
 ### Step: Stand up non-blocking audit execution
@@ -93,9 +95,9 @@ Surface configuration drift and compliance gaps while keeping enforcement in
 evaluate mode.
 
 - [x] Package the Auditor GitHub Action with Static Analysis Results Interchange
-  Format (SARIF) output, covering merge mode, branch protection, permission, and
-  label checks. Acceptance: scheduled runs populate the Code Scanning dashboard
-  with classified findings.
+  Format (SARIF) output, covering merge mode, branch protection, permission,
+  and label checks. Acceptance: scheduled runs populate the Code Scanning
+  dashboard with classified findings.
 - [ ] Schedule OpenTofu plans against a sandbox organization identity using the
   GitHub provider. Acceptance: nightly plans complete under one hour with drift
   deltas archived.
@@ -118,8 +120,8 @@ Enable merge gating based on Auditor status and standardized repository flags.
 
 - [ ] Convert the organization ruleset module to `enforcement = "active"` once
   Phase 1 telemetry shows false positive rates under 5 per cent. Acceptance:
-  protected branches require the Auditor check and block merges on `error`-level
-  findings.
+  protected branches require the Auditor check and block merges on
+  `error`-level findings.
 - [ ] Apply `delete_branch_on_merge = true` across managed repositories via
   OpenTofu. Acceptance: drift reports show zero repositories with the flag
   disabled after `tofu apply`.
@@ -133,19 +135,19 @@ Codify consistent branch rules with measurable compliance.
 
 - [ ] Enforce required status checks, dismissal of stale reviews, and linear
   history on default branches through OpenTofu-managed rulesets. Acceptance:
-  GitHub API inspection returns the prescribed configuration for 100 per cent of
-  governed repositories.
+  GitHub API inspection returns the prescribed configuration for 100 per cent
+  of governed repositories.
 - [ ] Integrate change control exemptions via `standards-exemptions.yaml`,
   ensuring expiry dates exist for all branch rule relaxations. Acceptance:
   Auditor downgrades exempted findings to `note` while flagging missing or
   expired exemptions.
 - [ ] Deliver runbooks for resolving merge gate failures, validated with three
-  pilot repository teams. Acceptance: post-pilot feedback scores the guidance at
-  least 4/5 for clarity.
+  pilot repository teams. Acceptance: post-pilot feedback scores the guidance
+  at least 4/5 for clarity.
 - [ ] Add the `concordat_file_toml_remediation_pr` resource that applies the
   planned patches with comment-preserving edits, commits to a branch, and opens
-  a remediation PR. Acceptance: an operator-triggered `tofu apply` run creates a
-  PR touching `Cargo.toml` without altering comments or the default branch
+  a remediation PR. Acceptance: an operator-triggered `tofu apply` run creates
+  a PR touching `Cargo.toml` without altering comments or the default branch
   directly.
 
 ## Phase 3 – Institutionalize issue prioritization
@@ -163,8 +165,8 @@ downstream automation.
   Acceptance: the file ships with unit tests that load and validate its
   structure.
 - [ ] Version the model with a Git tag (for example, `priorities/v1`) and
-  document the change control process. Acceptance: both OpenTofu modules and the
-  Auditor pin to the tag in their configs.
+  document the change control process. Acceptance: both OpenTofu modules and
+  the Auditor pin to the tag in their configs.
 - [ ] Announce the model and migration plan to repository owners, providing a
   playbook for interpreting the new priority names. Acceptance: feedback survey
   records >80 per cent comprehension among pilot teams.

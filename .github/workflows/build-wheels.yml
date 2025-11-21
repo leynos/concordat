@@ -1,6 +1,7 @@
+---
 name: Build Wheels
 
-on:
+'on':
   workflow_call:
     inputs:
       python-version:

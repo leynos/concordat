@@ -216,12 +216,12 @@ The `concordat` repository wires these patterns into
 - Provide a JSON snapshot via the `snapshot_path` workflow input so the Auditor
   CLI operates deterministically without reaching the GitHub API.
 - Pass `upload_sarif=false` to avoid hitting the Code Scanning API during local
-  validation; the workflow still uploads the Static Analysis Results Interchange
-  Format (SARIF) artefact for inspection.
+  validation; the workflow still uploads the Static Analysis Results
+  Interchange Format (SARIF) artefact for inspection.
 
 1. **Inspect** the journal. After verification, `cmd_mox.journal` exposes the
-   captured `Invocation` objects. Serialize the data into JSON lines or YAML, so
-   future tests can bootstrap mocks from the same expectations.
+   captured `Invocation` objects. Serialize the data into JSON lines or YAML,
+   so future tests can bootstrap mocks from the same expectations.
 
 ## What to assert (beyond exit code)
 
@@ -253,8 +253,8 @@ The `concordat` repository wires these patterns into
 ## Validation ladder
 
 1. **Local fast loop:** unit tests -> `act` black-box tests via `pytest`.
-1. **Authoritative CI:** run the same workflow on GitHub-hosted runners.
-1. **End-to-end (privileged paths):** GitHub-only with least-privilege tokens;
+2. **Authoritative CI:** run the same workflow on GitHub-hosted runners.
+3. **End-to-end (privileged paths):** GitHub-only with least-privilege tokens;
    gate behind labels/paths.
 
 This arrangement provides tight feedback for workflow correctness and

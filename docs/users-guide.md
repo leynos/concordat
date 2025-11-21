@@ -17,7 +17,7 @@ workflows read the same flag before applying changes.
    uv sync --group dev
    ```
 
-1. Invoke the CLI with `uv run` to ensure the correct environment is used.
+2. Invoke the CLI with `uv run` to ensure the correct environment is used.
 
 ## Enrolling repositories
 
@@ -59,8 +59,8 @@ workflows read the same flag before applying changes.
   back to the remote.
 
 - When rehearsing or running tests without access to the platform-standards
-  repository, set `CONCORDAT_SKIP_PLATFORM_PR=1` to disable the IaC pull request
-  step while keeping the `github_owner` (GitHub owner) guard active.
+  repository, set `CONCORDAT_SKIP_PLATFORM_PR=1` to disable the IaC pull
+  request step while keeping the `github_owner` (GitHub owner) guard active.
 
 ## Disenrolling repositories
 
@@ -184,6 +184,17 @@ selected provider:
 | AWS S3 / Spaces         | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | `AWS_SESSION_TOKEN` (when using temporary credentials such as STS)       | Values are passed straight to OpenTofu's S3 backend.                       |
 | Scaleway Object Storage | `SCW_ACCESS_KEY`, `SCW_SECRET_KEY`           | `AWS_SESSION_TOKEN` (only when scaleway issues temporary AWS-style keys) | Concordat maps these onto the AWS variable names before invoking OpenTofu. |
 
+The stack declares an explicit `s3` backend in
+`platform-standards/tofu/backend.tf` and ships a Scaleway starter config at
+`platform-standards/tofu/backend/scaleway.tfbackend`. Initialise estates with
+OpenTofu 1.12 or newer using:
+
+```bash
+GITHUB_TOKEN=placeholder \
+  tofu -chdir=platform-standards/tofu \
+  init -backend-config backend/scaleway.tfbackend
+```
+
 Example shell snippet:
 
 ```bash
@@ -222,11 +233,11 @@ estate:
 - `active_estate` is optional; the first `estate init` call populates it
   automatically.
 - `github_owner` identifies the organization or user managed by the estate.
-  `concordat enrol` and `concordat ls` rely on the stored owner to guard against
-  cross-organization drift.
+  `concordat enrol` and `concordat ls` rely on the stored owner to guard
+  against cross-organization drift.
 - `branch` and `inventory_path` default to `main` and
-  `tofu/inventory/repositories.yaml`. Override them when the remote uses another
-  branch name or inventory layout.
+  `tofu/inventory/repositories.yaml`. Override them when the remote uses
+  another branch name or inventory layout.
 - Manual edits are allowed, but prefer the CLI to ensure validation is applied.
 
 ### Interaction with enrolment
@@ -259,7 +270,7 @@ rehearse changes without touching production.
    export GITHUB_TOKEN=placeholder
    ```
 
-1. Initialize the stack and preview the actions with the default `test-case`
+2. Initialize the stack and preview the actions with the default `test-case`
    owner:
 
    ```shell
@@ -271,10 +282,10 @@ rehearse changes without touching production.
    Exit code `2` indicates that OpenTofu would make changes (expected for the
    sample repository), while exit code `0` confirms convergence.
 
-1. Override `github_owner` and extend `inventory/repositories.yaml` when ready
+3. Override `github_owner` and extend `inventory/repositories.yaml` when ready
    to target additional organizations. The `github_owner` guard blocks
-   accidental cross-org drift by asserting that every slug shares the configured
-   GitHub owner.
+   accidental cross-org drift by asserting that every slug shares the
+   configured GitHub owner.
 
 ### Validating the test-case standard end to end
 
@@ -332,9 +343,9 @@ demonstrating the guardrails to stakeholders:
   ```
 
 Running the full sequence above mirrors the automation that CI performs,
-demonstrating that the test-case standard enforces RS-002 through static checks,
-unit-style tests, Terratest coverage, and policy validation before any real
-repository settings change.
+demonstrating that the test-case standard enforces RS-002 through static
+checks, unit-style tests, Terratest coverage, and policy validation before any
+real repository settings change.
 
 ## Auditor workflow
 
@@ -355,8 +366,8 @@ repository settings change.
   ```
 
   The test reads `tests/fixtures/workflows/auditor-workflow-dispatch.json`,
-  downloads workflow artefacts under a temporary directory, and asserts that the
-  SARIF log structure is valid.
+  downloads workflow artefacts under a temporary directory, and asserts that
+  the SARIF log structure is valid.
 
 ## Troubleshooting
 
