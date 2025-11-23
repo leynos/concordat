@@ -204,65 +204,10 @@ func TestBackendTerraformRequirementsDeclared(t *testing.T) {
 		t.Fatalf("backend.tf unexpected body type %T", file.Body)
 	}
 
-	var terraformBlock *hclsyntax.Block
-	for _, blk := range body.Blocks {
-		if blk.Type == "terraform" {
-			terraformBlock = blk
-			break
-		}
-	}
-	if terraformBlock == nil {
-		t.Fatalf("expected terraform block in backend.tf")
-	}
-
-	const expectedRequiredVersion = ">= 1.12.0, < 2.0.0"
-	requiredVersionAttr, ok := terraformBlock.Body.Attributes["required_version"]
-	if !ok {
-		t.Fatalf("expected terraform.required_version to be declared in backend.tf")
-	}
-
-	requiredVersionVal, diags := requiredVersionAttr.Expr.Value(&hcl.EvalContext{})
-	if diags.HasErrors() {
-		t.Fatalf("evaluate terraform.required_version: %s", diags.Error())
-	}
-	if requiredVersionVal.AsString() != expectedRequiredVersion {
-		t.Fatalf("expected terraform.required_version %q, got %q", expectedRequiredVersion, requiredVersionVal.AsString())
-	}
-
-	var requiredProviders *hclsyntax.Block
-	for _, blk := range terraformBlock.Body.Blocks {
-		if blk.Type == "required_providers" {
-			requiredProviders = blk
-			break
-		}
-	}
-	if requiredProviders == nil {
-		t.Fatalf("expected terraform.required_providers block in backend.tf")
-	}
-
-	githubProviderAttr, ok := requiredProviders.Body.Attributes["github"]
-	if !ok {
-		t.Fatalf("expected terraform.required_providers.github to be declared in backend.tf")
-	}
-
-	githubProviderVal, diags := githubProviderAttr.Expr.Value(&hcl.EvalContext{})
-	if diags.HasErrors() {
-		t.Fatalf("evaluate terraform.required_providers.github: %s", diags.Error())
-	}
-	if !githubProviderVal.Type().IsObjectType() {
-		t.Fatalf("expected terraform.required_providers.github to be an object, got %s", githubProviderVal.Type().FriendlyName())
-	}
-
-	attrs := githubProviderVal.AsValueMap()
-	versionVal, ok := attrs["version"]
-	if !ok {
-		t.Fatalf("expected terraform.required_providers.github to declare a version constraint")
-	}
-
-	const expectedGitHubProviderVersion = "~> 6.3"
-	if versionVal.AsString() != expectedGitHubProviderVersion {
-		t.Fatalf("expected terraform.required_providers.github.version %q, got %q", expectedGitHubProviderVersion, versionVal.AsString())
-	}
+	terraformBlock := findTerraformBlock(t, body)
+	validateRequiredVersion(t, terraformBlock)
+	requiredProviders := findRequiredProvidersBlock(t, terraformBlock)
+	validateGitHubProvider(t, requiredProviders)
 }
 
 func hasS3BackendBlock(body *hclsyntax.Body) bool {
@@ -300,6 +245,76 @@ func isS3BackendBlock(block *hclsyntax.Block) bool {
 		return false
 	}
 	return block.Labels[0] == "s3"
+}
+
+func findTerraformBlock(t *testing.T, body *hclsyntax.Body) *hclsyntax.Block {
+	t.Helper()
+
+	for _, blk := range body.Blocks {
+		if blk.Type == "terraform" {
+			return blk
+		}
+	}
+	t.Fatalf("expected terraform block in backend.tf")
+	return nil
+}
+
+func validateRequiredVersion(t *testing.T, terraformBlock *hclsyntax.Block) {
+	t.Helper()
+
+	const expectedRequiredVersion = ">= 1.12.0, < 2.0.0"
+	requiredVersionAttr, ok := terraformBlock.Body.Attributes["required_version"]
+	if !ok {
+		t.Fatalf("expected terraform.required_version to be declared in backend.tf")
+	}
+
+	requiredVersionVal, diags := requiredVersionAttr.Expr.Value(&hcl.EvalContext{})
+	if diags.HasErrors() {
+		t.Fatalf("evaluate terraform.required_version: %s", diags.Error())
+	}
+	if requiredVersionVal.AsString() != expectedRequiredVersion {
+		t.Fatalf("expected terraform.required_version %q, got %q", expectedRequiredVersion, requiredVersionVal.AsString())
+	}
+}
+
+func findRequiredProvidersBlock(t *testing.T, terraformBlock *hclsyntax.Block) *hclsyntax.Block {
+	t.Helper()
+
+	for _, blk := range terraformBlock.Body.Blocks {
+		if blk.Type == "required_providers" {
+			return blk
+		}
+	}
+	t.Fatalf("expected terraform.required_providers block in backend.tf")
+	return nil
+}
+
+func validateGitHubProvider(t *testing.T, requiredProviders *hclsyntax.Block) {
+	t.Helper()
+
+	githubProviderAttr, ok := requiredProviders.Body.Attributes["github"]
+	if !ok {
+		t.Fatalf("expected terraform.required_providers.github to be declared in backend.tf")
+	}
+
+	githubProviderVal, diags := githubProviderAttr.Expr.Value(&hcl.EvalContext{})
+	if diags.HasErrors() {
+		t.Fatalf("evaluate terraform.required_providers.github: %s", diags.Error())
+	}
+	if !githubProviderVal.Type().IsObjectType() {
+		t.Fatalf("expected terraform.required_providers.github to be an object, got %s", githubProviderVal.Type().FriendlyName())
+	}
+
+	attrs := githubProviderVal.AsValueMap()
+	versionVal, ok := attrs["version"]
+	if !ok {
+		t.Fatalf("expected terraform.required_providers.github to declare a version constraint")
+	}
+
+	const expectedGitHubProviderVersion = "~> 6.3"
+	if versionVal.AsString() != expectedGitHubProviderVersion {
+		t.Fatalf("expected terraform.required_providers.github.version %q, got %q", expectedGitHubProviderVersion, versionVal.AsString())
+	}
 }
 
 // TestScalewayBackendConfigAssertsNoInlineSecrets guards the committed
@@ -467,38 +482,73 @@ func copyStackToTemp(t *testing.T, src string) string {
 
 	dst := t.TempDir()
 	err := filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-
-		rel, err := filepath.Rel(src, path)
-		if err != nil {
-			return err
-		}
-
-		// skip terraform artefacts and VCS metadata
-		if rel == ".terraform" || strings.HasPrefix(rel, ".git") || rel == ".terraform.lock.hcl" {
-			if d.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if rel == "." {
-			return nil
-		}
-
-		target := filepath.Join(dst, rel)
-		if d.IsDir() {
-			return os.MkdirAll(target, 0o755)
-		}
-
-		return copyFile(path, target)
+		return copyStackEntry(src, dst, path, d, err)
 	})
 	if err != nil {
 		t.Fatalf("copy stack to temp: %v", err)
 	}
 
 	return dst
+}
+
+func copyStackEntry(src, dst, path string, d fs.DirEntry, err error) error {
+	if err != nil {
+		return err
+	}
+
+	rel, err := filepath.Rel(src, path)
+	if err != nil {
+		return err
+	}
+
+	if rel == "." {
+		return nil
+	}
+
+	if shouldSkipPath(rel) {
+		if skipErr := checkSkipPath(rel, d); skipErr != nil {
+			return skipErr
+		}
+		if isSkippablePath(rel) && !d.IsDir() {
+			return nil
+		}
+	}
+
+	target := filepath.Join(dst, rel)
+	if d.IsDir() {
+		return os.MkdirAll(target, 0o755)
+	}
+
+	return copyFile(path, target)
+}
+
+func checkSkipPath(rel string, d fs.DirEntry) error {
+	if !isSkippablePath(rel) {
+		return nil
+	}
+	if d.IsDir() {
+		return filepath.SkipDir
+	}
+	return nil
+}
+
+// shouldSkipPath returns true if the relative path represents a terraform
+// artefact or VCS metadata that should be excluded when copying a stack.
+func shouldSkipPath(rel string) bool {
+	if rel == ".terraform" {
+		return true
+	}
+	if strings.HasPrefix(rel, ".git") {
+		return true
+	}
+	if rel == ".terraform.lock.hcl" {
+		return true
+	}
+	return false
+}
+
+func isSkippablePath(rel string) bool {
+	return shouldSkipPath(rel)
 }
 
 func copyFile(src, dst string) error {
