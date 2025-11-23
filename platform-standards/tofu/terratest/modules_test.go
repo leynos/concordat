@@ -1,15 +1,26 @@
 package terratest
 
 import (
+	"io"
+	"io/fs"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/gruntwork-io/terratest/modules/terraform"
+	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsimple"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
+	"github.com/johannesboyne/gofakes3"
+	"github.com/johannesboyne/gofakes3/backend/s3mem"
 )
 
 type scalewayBackendConfig struct {
@@ -179,6 +190,81 @@ func TestBackendBlockDeclared(t *testing.T) {
 	}
 }
 
+// TestBackendTerraformRequirementsDeclared ensures backend.tf locks the OpenTofu
+// and GitHub provider versions expected by CI.
+func TestBackendTerraformRequirementsDeclared(t *testing.T) {
+	parser := hclparse.NewParser()
+	file, diag := parser.ParseHCLFile(filepath.Join("..", "backend.tf"))
+	if diag.HasErrors() {
+		t.Fatalf("parse backend.tf: %s", diag.Error())
+	}
+
+	body, ok := file.Body.(*hclsyntax.Body)
+	if !ok {
+		t.Fatalf("backend.tf unexpected body type %T", file.Body)
+	}
+
+	var terraformBlock *hclsyntax.Block
+	for _, blk := range body.Blocks {
+		if blk.Type == "terraform" {
+			terraformBlock = blk
+			break
+		}
+	}
+	if terraformBlock == nil {
+		t.Fatalf("expected terraform block in backend.tf")
+	}
+
+	const expectedRequiredVersion = ">= 1.12.0, < 2.0.0"
+	requiredVersionAttr, ok := terraformBlock.Body.Attributes["required_version"]
+	if !ok {
+		t.Fatalf("expected terraform.required_version to be declared in backend.tf")
+	}
+
+	requiredVersionVal, diags := requiredVersionAttr.Expr.Value(&hcl.EvalContext{})
+	if diags.HasErrors() {
+		t.Fatalf("evaluate terraform.required_version: %s", diags.Error())
+	}
+	if requiredVersionVal.AsString() != expectedRequiredVersion {
+		t.Fatalf("expected terraform.required_version %q, got %q", expectedRequiredVersion, requiredVersionVal.AsString())
+	}
+
+	var requiredProviders *hclsyntax.Block
+	for _, blk := range terraformBlock.Body.Blocks {
+		if blk.Type == "required_providers" {
+			requiredProviders = blk
+			break
+		}
+	}
+	if requiredProviders == nil {
+		t.Fatalf("expected terraform.required_providers block in backend.tf")
+	}
+
+	githubProviderAttr, ok := requiredProviders.Body.Attributes["github"]
+	if !ok {
+		t.Fatalf("expected terraform.required_providers.github to be declared in backend.tf")
+	}
+
+	githubProviderVal, diags := githubProviderAttr.Expr.Value(&hcl.EvalContext{})
+	if diags.HasErrors() {
+		t.Fatalf("evaluate terraform.required_providers.github: %s", diags.Error())
+	}
+	if !githubProviderVal.Type().IsObjectType() {
+		t.Fatalf("expected terraform.required_providers.github to be an object, got %s", githubProviderVal.Type().FriendlyName())
+	}
+
+	attrs := githubProviderVal.AsValueMap()
+	versionVal, ok := attrs["version"]
+	if !ok {
+		t.Fatalf("expected terraform.required_providers.github to declare a version constraint")
+	}
+
+	const expectedGitHubProviderVersion = "~> 6.3"
+	if versionVal.AsString() != expectedGitHubProviderVersion {
+		t.Fatalf("expected terraform.required_providers.github.version %q, got %q", expectedGitHubProviderVersion, versionVal.AsString())
+	}
+}
+
 func hasS3BackendBlock(body *hclsyntax.Body) bool {
 	for _, block := range body.Blocks {
 		if block.Type != "terraform" {
@@ -237,12 +323,47 @@ func TestScalewayBackendConfigAssertsNoInlineSecrets(t *testing.T) {
 	validateScalewayOptionalSkipFlags(t, config)
 }
 
-func validateScalewayRequiredFields(t *testing.T, config interface{}) {
-	t.Helper()
-	cfg, ok := config.(scalewayBackendConfig)
-	if !ok {
-		t.Fatalf("invalid config type %T", config)
+// TestBackendInitAgainstFakeS3 exercises backend init using the Scaleway
+// template against a local S3-compatible server to guard backend wiring.
+func TestBackendInitAgainstFakeS3(t *testing.T) {
+	config := loadScalewayBackendConfig(t)
+	fakeS3, bucket := startFakeS3(t)
+	defer fakeS3.Close()
+
+	config.Bucket = bucket
+	config.Key = "behavioural/test/terraform.tfstate"
+	config.Region = "us-east-1"
+	config.Endpoints = map[string]string{"s3": fakeS3.URL}
+
+	workspace := copyStackToTemp(t, "..")
+	opts := &terraform.Options{
+		TerraformDir:    workspace,
+		NoColor:         true,
+		TerraformBinary: terraformBinary(),
+		BackendConfig: map[string]interface{}{
+			"bucket":                      config.Bucket,
+			"key":                         config.Key,
+			"region":                      config.Region,
+			"endpoints":                   config.Endpoints,
+			"use_path_style":              config.UsePathStyle,
+			"skip_region_validation":      config.SkipRegionValidation,
+			"skip_requesting_account_id":  config.SkipRequestingAccountID,
+			"skip_credentials_validation": config.SkipCredentialsValidation,
+		},
+		EnvVars: map[string]string{
+			"AWS_ACCESS_KEY_ID":     "test",
+			"AWS_SECRET_ACCESS_KEY": "test",
+			"AWS_REGION":            config.Region,
+		},
 	}
+
+	if _, err := terraform.InitE(t, opts); err != nil {
+		t.Fatalf("tofu init with fake S3 backend: %v", err)
+	}
+}
+
+func validateScalewayRequiredFields(t *testing.T, cfg scalewayBackendConfig) {
+	t.Helper()
 
 	if cfg.Bucket != "df12-tfstate" {
 		t.Fatalf("unexpected bucket %q", cfg.Bucket)
@@ -260,12 +381,8 @@ func validateScalewayRequiredFields(t *testing.T, config interface{}) {
 	}
 }
 
-func validateScalewayRequiredBooleans(t *testing.T, config interface{}) {
+func validateScalewayRequiredBooleans(t *testing.T, cfg scalewayBackendConfig) {
 	t.Helper()
-	cfg, ok := config.(scalewayBackendConfig)
-	if !ok {
-		t.Fatalf("invalid config type %T", config)
-	}
 
 	assertBoolTrue(t, map[string]interface{}{"use_path_style": cfg.UsePathStyle}, "use_path_style", "use_path_style must be true for Scaleway")
 	assertBoolTrue(t, map[string]interface{}{"skip_region_validation": cfg.SkipRegionValidation}, "skip_region_validation", "skip_region_validation must be true to avoid AWS region probes")
@@ -273,12 +390,8 @@ func validateScalewayRequiredBooleans(t *testing.T, config interface{}) {
 	assertBoolTrue(t, map[string]interface{}{"skip_credentials_validation": cfg.SkipCredentialsValidation}, "skip_credentials_validation", "skip_credentials_validation avoids credentials lookups")
 }
 
-func validateScalewayForbiddenCredentials(t *testing.T, config interface{}) {
+func validateScalewayForbiddenCredentials(t *testing.T, cfg scalewayBackendConfig) {
 	t.Helper()
-	cfg, ok := config.(scalewayBackendConfig)
-	if !ok {
-		t.Fatalf("invalid config type %T", config)
-	}
 
 	if cfg.UseLockfile != nil && *cfg.UseLockfile {
 		t.Fatalf("use_lockfile should be omitted for Scaleway backends")
@@ -294,12 +407,8 @@ func validateScalewayForbiddenCredentials(t *testing.T, config interface{}) {
 	}
 }
 
-func validateScalewayOptionalSkipFlags(t *testing.T, config interface{}) {
+func validateScalewayOptionalSkipFlags(t *testing.T, cfg scalewayBackendConfig) {
 	t.Helper()
-	cfg, ok := config.(scalewayBackendConfig)
-	if !ok {
-		t.Fatalf("invalid config type %T", config)
-	}
 
 	if cfg.SkipGetEc2Platforms != nil && !*cfg.SkipGetEc2Platforms {
 		t.Fatalf("skip_get_ec2_platforms should be omitted or true")
@@ -310,4 +419,107 @@ func validateScalewayOptionalSkipFlags(t *testing.T, config interface{}) {
 	if cfg.SkipOriginAccessValidation != nil && !*cfg.SkipOriginAccessValidation {
 		t.Fatalf("skip_origin_access_validation should be omitted or true")
 	}
+}
+
+func loadScalewayBackendConfig(t *testing.T) scalewayBackendConfig {
+	t.Helper()
+
+	sourcePath := filepath.Join("..", "backend", "scaleway.tfbackend")
+	data, err := os.ReadFile(sourcePath)
+	if err != nil {
+		t.Fatalf("read scaleway backend config: %v", err)
+	}
+
+	var config scalewayBackendConfig
+	if err := hclsimple.Decode("scaleway.hcl", data, nil, &config); err != nil {
+		t.Fatalf("decode scaleway backend config: %v", err)
+	}
+	return config
+}
+
+func startFakeS3(t *testing.T) (*httptest.Server, string) {
+	t.Helper()
+
+	memBackend := s3mem.New()
+	fake := gofakes3.New(memBackend)
+	server := httptest.NewServer(fake.Server())
+
+	awsConfig := &aws.Config{
+		Region:           aws.String("us-east-1"),
+		Endpoint:         aws.String(server.URL),
+		S3ForcePathStyle: aws.Bool(true),
+		Credentials:      credentials.NewStaticCredentials("test", "test", ""),
+	}
+
+	sess := session.Must(session.NewSession(awsConfig))
+	client := s3.New(sess)
+	bucket := strings.ReplaceAll("fake-s3-"+time.Now().UTC().Format("150405.000000000"), ".", "-")
+
+	if _, err := client.CreateBucket(&s3.CreateBucketInput{Bucket: aws.String(bucket)}); err != nil {
+		t.Fatalf("create bucket on fake S3: %v", err)
+	}
+
+	return server, bucket
+}
+
+func copyStackToTemp(t *testing.T, src string) string {
+	t.Helper()
+
+	dst := t.TempDir()
+	err := filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+
+		// skip terraform artefacts and VCS metadata
+		if rel == ".terraform" || strings.HasPrefix(rel, ".git") || rel == ".terraform.lock.hcl" {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if rel == "." {
+			return nil
+		}
+
+		target := filepath.Join(dst, rel)
+		if d.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+
+		return copyFile(path, target)
+	})
+	if err != nil {
+		t.Fatalf("copy stack to temp: %v", err)
+	}
+
+	return dst
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, in); err != nil {
+		return err
+	}
+	return out.Sync()
 }

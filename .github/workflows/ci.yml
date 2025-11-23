@@ -12,6 +12,7 @@ jobs:
     env:
       CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
       CODESCENE_CLI_SHA256: ${{ vars.CODESCENE_CLI_SHA256 }}
+      TOFU_VERSION: "1.12.0"
     steps:
       - name: Check out repository
         # v4
@@ -44,10 +45,9 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y git unzip
-          tofu_version="1.12.0"
-          tofu_zip="tofu_${tofu_version}_linux_amd64.zip"
+          tofu_zip="tofu_${TOFU_VERSION}_linux_amd64.zip"
           tofu_url="https://github.com/opentofu/opentofu/releases/download"
-          tofu_url="${tofu_url}/v${tofu_version}/${tofu_zip}"
+          tofu_url="${tofu_url}/v${TOFU_VERSION}/${tofu_zip}"
           if curl -fsSLO "${tofu_url}"; then
             unzip -q "${tofu_zip}" -d /tmp
             sudo mv /tmp/tofu /usr/local/bin/tofu
@@ -57,7 +57,9 @@ jobs:
             tofu_repo="https://github.com/opentofu/opentofu.git"
             git clone --depth 1 "${tofu_repo}" /tmp/opentofu
             cd /tmp/opentofu
-            go build -o /usr/local/bin/tofu ./cmd/tofu
+            go build -o /tmp/tofu-bin ./cmd/tofu
+            sudo mv /tmp/tofu-bin /usr/local/bin/tofu
+            sudo chmod +x /usr/local/bin/tofu
           fi
 
       - name: Run Terratest suite
