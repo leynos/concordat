@@ -12,6 +12,25 @@ import (
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 )
 
+type scalewayBackendConfig struct {
+	Bucket                     string            `hcl:"bucket"`
+	Key                        string            `hcl:"key"`
+	Region                     string            `hcl:"region"`
+	Endpoints                  map[string]string `hcl:"endpoints"`
+	UsePathStyle               bool              `hcl:"use_path_style,optional"`
+	SkipRegionValidation       bool              `hcl:"skip_region_validation,optional"`
+	SkipRequestingAccountID    bool              `hcl:"skip_requesting_account_id,optional"`
+	SkipCredentialsValidation  bool              `hcl:"skip_credentials_validation,optional"`
+	UseLockfile                *bool             `hcl:"use_lockfile,optional"`
+	AccessKey                  *string           `hcl:"access_key,optional"`
+	SecretKey                  *string           `hcl:"secret_key,optional"`
+	SessionToken               *string           `hcl:"session_token,optional"`
+	DynamodbTable              *string           `hcl:"dynamodb_table,optional"`
+	SkipGetEc2Platforms        *bool             `hcl:"skip_get_ec2_platforms,optional"`
+	SkipMetadataApiCheck       *bool             `hcl:"skip_metadata_api_check,optional"`
+	SkipOriginAccessValidation *bool             `hcl:"skip_origin_access_validation,optional"`
+}
+
 func terraformOptions(t *testing.T, pathSegments ...string) *terraform.Options {
 	t.Helper()
 
@@ -154,48 +173,53 @@ func TestBackendBlockDeclared(t *testing.T) {
 		t.Fatalf("backend.tf unexpected body type %T", file.Body)
 	}
 
-	found := false
+	found := hasS3BackendBlock(body)
+	if !found {
+		t.Fatalf("expected terraform backend \"s3\" block in backend.tf")
+	}
+}
+
+func hasS3BackendBlock(body *hclsyntax.Body) bool {
 	for _, block := range body.Blocks {
 		if block.Type != "terraform" {
 			continue
 		}
-
-		for _, nested := range block.Body.Blocks {
-			if nested.Type == "backend" && len(nested.Labels) > 0 && nested.Labels[0] == "s3" {
-				found = true
-				break
-			}
+		if containsS3Backend(block) {
+			return true
 		}
 	}
+	return false
+}
 
-	if !found {
-		t.Fatalf("expected terraform backend \"s3\" block in backend.tf")
+func containsS3Backend(terraformBlock *hclsyntax.Block) bool {
+	for _, nested := range terraformBlock.Body.Blocks {
+		if nested.Type != "backend" {
+			continue
+		}
+		if len(nested.Labels) == 0 {
+			continue
+		}
+		if isS3BackendBlock(nested) {
+			return true
+		}
 	}
+	return false
+}
+
+func isS3BackendBlock(block *hclsyntax.Block) bool {
+	if block.Type != "backend" {
+		return false
+	}
+	if len(block.Labels) == 0 {
+		return false
+	}
+	return block.Labels[0] == "s3"
 }
 
 // TestScalewayBackendConfigAssertsNoInlineSecrets guards the committed
 // tfbackend specimen against accidental credential leakage and regression of
 // the documented defaults.
 func TestScalewayBackendConfigAssertsNoInlineSecrets(t *testing.T) {
-	type scalewayBackendConfig struct {
-		Bucket                     string            `hcl:"bucket"`
-		Key                        string            `hcl:"key"`
-		Region                     string            `hcl:"region"`
-		Endpoints                  map[string]string `hcl:"endpoints"`
-		UsePathStyle               bool              `hcl:"use_path_style,optional"`
-		SkipRegionValidation       bool              `hcl:"skip_region_validation,optional"`
-		SkipRequestingAccountID    bool              `hcl:"skip_requesting_account_id,optional"`
-		SkipCredentialsValidation  bool              `hcl:"skip_credentials_validation,optional"`
-		UseLockfile                *bool             `hcl:"use_lockfile,optional"`
-		AccessKey                  *string           `hcl:"access_key,optional"`
-		SecretKey                  *string           `hcl:"secret_key,optional"`
-		SessionToken               *string           `hcl:"session_token,optional"`
-		DynamodbTable              *string           `hcl:"dynamodb_table,optional"`
-		SkipGetEc2Platforms        *bool             `hcl:"skip_get_ec2_platforms,optional"`
-		SkipMetadataApiCheck       *bool             `hcl:"skip_metadata_api_check,optional"`
-		SkipOriginAccessValidation *bool             `hcl:"skip_origin_access_validation,optional"`
-	}
-
 	sourcePath := filepath.Join("..", "backend", "scaleway.tfbackend")
 	data, err := os.ReadFile(sourcePath)
 	if err != nil {
@@ -207,45 +231,83 @@ func TestScalewayBackendConfigAssertsNoInlineSecrets(t *testing.T) {
 		t.Fatalf("decode scaleway backend config: %v", err)
 	}
 
-	if config.Bucket != "df12-tfstate" {
-		t.Fatalf("unexpected bucket %q", config.Bucket)
-	}
-	if config.Key != "estates/test-case/main/terraform.tfstate" {
-		t.Fatalf("unexpected key %q", config.Key)
-	}
-	if config.Region != "fr-par" {
-		t.Fatalf("unexpected region %q", config.Region)
+	validateScalewayRequiredFields(t, config)
+	validateScalewayRequiredBooleans(t, config)
+	validateScalewayForbiddenCredentials(t, config)
+	validateScalewayOptionalSkipFlags(t, config)
+}
+
+func validateScalewayRequiredFields(t *testing.T, config interface{}) {
+	t.Helper()
+	cfg, ok := config.(scalewayBackendConfig)
+	if !ok {
+		t.Fatalf("invalid config type %T", config)
 	}
 
-	endpoint, ok := config.Endpoints["s3"]
-	if !ok || endpoint != "https://s3.fr-par.scw.cloud" {
-		t.Fatalf("unexpected endpoint map %#v", config.Endpoints)
+	if cfg.Bucket != "df12-tfstate" {
+		t.Fatalf("unexpected bucket %q", cfg.Bucket)
+	}
+	if cfg.Key != "estates/test-case/main/terraform.tfstate" {
+		t.Fatalf("unexpected key %q", cfg.Key)
+	}
+	if cfg.Region != "fr-par" {
+		t.Fatalf("unexpected region %q", cfg.Region)
 	}
 
-	assertBoolTrue(t, map[string]interface{}{"use_path_style": config.UsePathStyle}, "use_path_style", "use_path_style must be true for Scaleway")
-	assertBoolTrue(t, map[string]interface{}{"skip_region_validation": config.SkipRegionValidation}, "skip_region_validation", "skip_region_validation must be true to avoid AWS region probes")
-	assertBoolTrue(t, map[string]interface{}{"skip_requesting_account_id": config.SkipRequestingAccountID}, "skip_requesting_account_id", "skip_requesting_account_id must prevent AWS-specific API calls")
-	assertBoolTrue(t, map[string]interface{}{"skip_credentials_validation": config.SkipCredentialsValidation}, "skip_credentials_validation", "skip_credentials_validation avoids credentials lookups")
+	endpoint, exists := cfg.Endpoints["s3"]
+	if !exists || endpoint != "https://s3.fr-par.scw.cloud" {
+		t.Fatalf("unexpected endpoint map %#v", cfg.Endpoints)
+	}
+}
 
-	if config.UseLockfile != nil && *config.UseLockfile {
+func validateScalewayRequiredBooleans(t *testing.T, config interface{}) {
+	t.Helper()
+	cfg, ok := config.(scalewayBackendConfig)
+	if !ok {
+		t.Fatalf("invalid config type %T", config)
+	}
+
+	assertBoolTrue(t, map[string]interface{}{"use_path_style": cfg.UsePathStyle}, "use_path_style", "use_path_style must be true for Scaleway")
+	assertBoolTrue(t, map[string]interface{}{"skip_region_validation": cfg.SkipRegionValidation}, "skip_region_validation", "skip_region_validation must be true to avoid AWS region probes")
+	assertBoolTrue(t, map[string]interface{}{"skip_requesting_account_id": cfg.SkipRequestingAccountID}, "skip_requesting_account_id", "skip_requesting_account_id must prevent AWS-specific API calls")
+	assertBoolTrue(t, map[string]interface{}{"skip_credentials_validation": cfg.SkipCredentialsValidation}, "skip_credentials_validation", "skip_credentials_validation avoids credentials lookups")
+}
+
+func validateScalewayForbiddenCredentials(t *testing.T, config interface{}) {
+	t.Helper()
+	cfg, ok := config.(scalewayBackendConfig)
+	if !ok {
+		t.Fatalf("invalid config type %T", config)
+	}
+
+	if cfg.UseLockfile != nil && *cfg.UseLockfile {
 		t.Fatalf("use_lockfile should be omitted for Scaleway backends")
 	}
-	if config.AccessKey != nil || config.SecretKey != nil {
+	if cfg.AccessKey != nil || cfg.SecretKey != nil {
 		t.Fatalf("backend config must not embed credentials")
 	}
-	if config.SessionToken != nil {
+	if cfg.SessionToken != nil {
 		t.Fatalf("backend config must not embed session_token")
 	}
-	if config.DynamodbTable != nil {
+	if cfg.DynamodbTable != nil {
 		t.Fatalf("backend config should not declare DynamoDB locking")
 	}
-	if config.SkipGetEc2Platforms != nil && !*config.SkipGetEc2Platforms {
+}
+
+func validateScalewayOptionalSkipFlags(t *testing.T, config interface{}) {
+	t.Helper()
+	cfg, ok := config.(scalewayBackendConfig)
+	if !ok {
+		t.Fatalf("invalid config type %T", config)
+	}
+
+	if cfg.SkipGetEc2Platforms != nil && !*cfg.SkipGetEc2Platforms {
 		t.Fatalf("skip_get_ec2_platforms should be omitted or true")
 	}
-	if config.SkipMetadataApiCheck != nil && !*config.SkipMetadataApiCheck {
+	if cfg.SkipMetadataApiCheck != nil && !*cfg.SkipMetadataApiCheck {
 		t.Fatalf("skip_metadata_api_check should be omitted or true")
 	}
-	if config.SkipOriginAccessValidation != nil && !*config.SkipOriginAccessValidation {
+	if cfg.SkipOriginAccessValidation != nil && !*cfg.SkipOriginAccessValidation {
 		t.Fatalf("skip_origin_access_validation should be omitted or true")
 	}
 }
