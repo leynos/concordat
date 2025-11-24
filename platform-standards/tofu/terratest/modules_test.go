@@ -268,7 +268,7 @@ func findTerraformBlock(t *testing.T, body *hclsyntax.Body) *hclsyntax.Block {
 func validateRequiredVersion(t *testing.T, terraformBlock *hclsyntax.Block) {
 	t.Helper()
 
-	const expectedRequiredVersion = ">= 1.12.0, < 2.0.0"
+	const expectedRequiredVersion = ">= 1.10.7, < 2.0.0"
 	requiredVersionAttr, ok := terraformBlock.Body.Attributes["required_version"]
 	if !ok {
 		t.Fatalf("expected terraform.required_version to be declared in backend.tf")
