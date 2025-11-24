@@ -2,8 +2,8 @@
 
 Project scripts must prioritize clarity, reproducibility, and testability. The
 baseline tooling is Python and the [`uv`](https://github.com/astral-sh/uv)
-launcher so that scripts remain dependency‑self‑contained and easy to execute in
-Continuous Integration (CI) or locally.
+launcher so that scripts remain dependency‑self‑contained and easy to execute
+in Continuous Integration (CI) or locally.
 
 Cyclopts is the default command‑line interface (CLI) framework for new and
 updated scripts. This document supersedes prior guidance that recommended Typer
@@ -23,8 +23,8 @@ as a default.
 - Small API surface. The API is explicit and integrates cleanly with type hints,
   aiding readability and testing.
 - Backwards‑compatible migration. Option aliases and per‑parameter environment
-  variable names permit preservation of existing interfaces while removing shell
-  glue.
+  variable names permit preservation of existing interfaces while removing
+  shell glue.
 
 ## Language and runtime
 
@@ -445,24 +445,24 @@ def test_spy_and_record(cmd_mox, monkeypatch, tmp_path):
 - Pure functions that accept configuration objects are preferred over global
   state so that tests can exercise logic deterministically.
 - Exit codes should follow UNIX (Portable Operating System Interface, POSIX)
-  conventions: `0` for success, non-zero for actionable failures. Human-friendly
-  error messages should highlight remediation steps.
+  conventions: `0` for success, non-zero for actionable failures.
+  Human-friendly error messages should highlight remediation steps.
 - Dependencies must remain minimal. Any new package should be added to the `uv`
   block and the rationale documented within the script or companion tests.
 
 ## Migration guidance (Typer → Cyclopts)
 
 1. Dependencies: replace Typer with Cyclopts in the script’s `uv` block.
-1. Entry point: replace `app = typer.Typer(...)` with `app = App(...)` and
+2. Entry point: replace `app = typer.Typer(...)` with `app = App(...)` and
    configure `Env("INPUT_", command=False)` where environment variables are
    authoritative in CI.
-1. Parameters: replace `typer.Option(...)` with annotations and
+3. Parameters: replace `typer.Option(...)` with annotations and
    `Parameter(...)`. Mark required options with `required=True`. Map any
    non‑matching environment names via `env_var=...`.
-1. Lists: remove custom split/trim code. Use list‑typed parameters; add
+4. Lists: remove custom split/trim code. Use list‑typed parameters; add
    `env_var_split=","` where a non‑whitespace delimiter is required.
-1. Compatibility: retain legacy flag names using `aliases=["--old-name"]`.
-1. Bash glue: delete argument arrays and conditional appends in GitHub Actions.
+5. Compatibility: retain legacy flag names using `aliases=["--old-name"]`.
+6. Bash glue: delete argument arrays and conditional appends in GitHub Actions.
    Export `INPUT_*` environment variables and call `uv run` on the script.
 
 ## CI wiring: GitHub Actions (Cyclopts‑first)
