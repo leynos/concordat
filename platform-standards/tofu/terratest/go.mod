@@ -1,12 +1,14 @@
 module github.com/leynos/concordat/platform-standards/tofu/terratest
 
-go 1.21
+go 1.24
+
+toolchain go1.24.10
 
 require (
 	github.com/aws/aws-sdk-go v1.44.122
 	github.com/gruntwork-io/terratest v0.46.7
 	github.com/hashicorp/hcl/v2 v2.9.1
-	github.com/johannesboyne/gofakes3 v0.0.0-20221230190718-1c8de03aa0ad
+	github.com/johannesboyne/gofakes3 v0.0.0-20250916175020-ebf3e50324d3
 )
 
 require (
@@ -41,12 +43,12 @@ require (
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/ryszard/goskiplist v0.0.0-20150312221310-2dfbae5fcf46 // indirect
-	github.com/shabbyrobe/gocovmerge v0.0.0-20180507124511-f6ea450bfb63 // indirect
 	github.com/stretchr/testify v1.8.1 // indirect
 	github.com/tmccombs/hcl2json v0.3.3 // indirect
 	github.com/ulikunitz/xz v0.5.10 // indirect
 	github.com/zclconf/go-cty v1.9.1 // indirect
 	go.opencensus.io v0.24.0 // indirect
+	go.shabbyrobe.org/gocovmerge v0.0.0-20230507111327-fa4f82cfbf4d // indirect
 	golang.org/x/crypto v0.14.0 // indirect
 	golang.org/x/net v0.17.0 // indirect
 	golang.org/x/oauth2 v0.7.0 // indirect
@@ -59,5 +61,6 @@ require (
 	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1 // indirect
 	google.golang.org/grpc v1.56.3 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
+	gopkg.in/mgo.v2 v2.0.0-20190816093944-a6b53ec6cb22 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

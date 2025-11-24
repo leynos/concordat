@@ -1,7 +1,7 @@
 ---
 name: Refresh CodeScene CLI SHA256
 
-'on':
+on:
   workflow_dispatch:
 
 jobs:

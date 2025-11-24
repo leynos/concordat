@@ -60,7 +60,8 @@ workflows read the same flag before applying changes.
 
 - When rehearsing or running tests without access to the platform-standards
   repository, set `CONCORDAT_SKIP_PLATFORM_PR=1` to disable the IaC pull
-  request step while keeping the `github_owner` (GitHub owner) guard active.
+  request step while keeping the `github_owner` guard active for the GitHub
+  owner.
 
 ## Disenrolling repositories
 
@@ -232,9 +233,9 @@ estate:
 
 - `active_estate` is optional; the first `estate init` call populates it
   automatically.
-- `github_owner` identifies the organization or user managed by the estate.
-  `concordat enrol` and `concordat ls` rely on the stored owner to guard
-  against cross-organization drift.
+- `github_owner` identifies the GitHub organization or user managed by the
+  estate. `concordat enrol` and `concordat ls` rely on the stored owner to
+  guard against cross-organization drift.
 - `branch` and `inventory_path` default to `main` and
   `tofu/inventory/repositories.yaml`. Override them when the remote uses
   another branch name or inventory layout.

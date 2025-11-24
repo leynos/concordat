@@ -42,6 +42,12 @@ type scalewayBackendConfig struct {
 	SkipOriginAccessValidation *bool             `hcl:"skip_origin_access_validation,optional"`
 }
 
+// copyContext holds the source and destination directories for a stack copy operation.
+type copyContext struct {
+	src string
+	dst string
+}
+
 func terraformOptions(t *testing.T, pathSegments ...string) *terraform.Options {
 	t.Helper()
 
@@ -321,16 +327,7 @@ func validateGitHubProvider(t *testing.T, requiredProviders *hclsyntax.Block) {
 // tfbackend specimen against accidental credential leakage and regression of
 // the documented defaults.
 func TestScalewayBackendConfigAssertsNoInlineSecrets(t *testing.T) {
-	sourcePath := filepath.Join("..", "backend", "scaleway.tfbackend")
-	data, err := os.ReadFile(sourcePath)
-	if err != nil {
-		t.Fatalf("read scaleway backend config: %v", err)
-	}
-
-	var config scalewayBackendConfig
-	if err := hclsimple.Decode("scaleway.hcl", data, nil, &config); err != nil {
-		t.Fatalf("decode scaleway backend config: %v", err)
-	}
+	config := loadScalewayBackendConfig(t)
 
 	validateScalewayRequiredFields(t, config)
 	validateScalewayRequiredBooleans(t, config)
@@ -481,8 +478,9 @@ func copyStackToTemp(t *testing.T, src string) string {
 	t.Helper()
 
 	dst := t.TempDir()
+	ctx := copyContext{src: src, dst: dst}
 	err := filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
-		return copyStackEntry(src, dst, path, d, err)
+		return copyStackEntry(ctx, path, d, err)
 	})
 	if err != nil {
 		t.Fatalf("copy stack to temp: %v", err)
@@ -491,12 +489,12 @@ func copyStackToTemp(t *testing.T, src string) string {
 	return dst
 }
 
-func copyStackEntry(src, dst, path string, d fs.DirEntry, err error) error {
+func copyStackEntry(ctx copyContext, path string, d fs.DirEntry, err error) error {
 	if err != nil {
 		return err
 	}
 
-	rel, err := filepath.Rel(src, path)
+	rel, err := filepath.Rel(ctx.src, path)
 	if err != nil {
 		return err
 	}
@@ -505,31 +503,20 @@ func copyStackEntry(src, dst, path string, d fs.DirEntry, err error) error {
 		return nil
 	}
 
+	// Skip terraform artifacts and VCS metadata
 	if shouldSkipPath(rel) {
-		if skipErr := checkSkipPath(rel, d); skipErr != nil {
-			return skipErr
+		if d.IsDir() {
+			return filepath.SkipDir
 		}
-		if isSkippablePath(rel) && !d.IsDir() {
-			return nil
-		}
+		return nil
 	}
 
-	target := filepath.Join(dst, rel)
+	target := filepath.Join(ctx.dst, rel)
 	if d.IsDir() {
 		return os.MkdirAll(target, 0o755)
 	}
 
 	return copyFile(path, target)
-}
-
-func checkSkipPath(rel string, d fs.DirEntry) error {
-	if !isSkippablePath(rel) {
-		return nil
-	}
-	if d.IsDir() {
-		return filepath.SkipDir
-	}
-	return nil
 }
 
 // shouldSkipPath returns true if the relative path represents a terraform
@@ -546,11 +533,6 @@ func shouldSkipPath(rel string) bool {
 	}
 	return false
 }
-
-func isSkippablePath(rel string) bool {
-	return shouldSkipPath(rel)
-}
-
 func copyFile(src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {
