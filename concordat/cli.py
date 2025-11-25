@@ -16,8 +16,10 @@ from .estate import (
     DEFAULT_INVENTORY_PATH as ESTATE_DEFAULT_INVENTORY,
 )
 from .estate import (
+    EstateNotConfiguredError,
     EstateRecord,
     get_active_estate,
+    get_estate,
     init_estate,
     list_enrolled_repositories,
     list_estates,
@@ -25,6 +27,7 @@ from .estate import (
 )
 from .estate_execution import ExecutionIO, ExecutionOptions, run_apply, run_plan
 from .listing import list_namespace_repositories
+from .persistence import persist_estate
 from .platform_standards import PlatformStandardsConfig
 
 app = App()
@@ -51,8 +54,8 @@ ERROR_OWNER_LOOKUP_FAILED = (
 )
 ERROR_NO_ESTATES = "No estates configured. Run `concordat estate init` first."
 ERROR_MISSING_GITHUB_TOKEN = (
-    "GITHUB_TOKEN is required for concordat plan/apply; pass --github-token "  # noqa: S105
-    "or export the environment variable."
+    "GITHUB_TOKEN is required for concordat plan/apply/persist; "  # noqa: S105
+    "pass --github-token or export the environment variable."
 )
 ERROR_AUTO_APPROVE_REQUIRED = "concordat apply requires --auto-approve to continue."
 ENV_SKIP_PLATFORM_PR = "CONCORDAT_SKIP_PLATFORM_PR"
@@ -241,12 +244,42 @@ def show(alias: str | None = None) -> None:
         print(url)
 
 
+@estate_app.command()
+def persist(
+    alias: str | None = None,
+    *,
+    force: bool = False,
+    github_token: str | None = None,
+) -> None:
+    """Configure remote state persistence for an estate."""
+    record = _resolve_estate_record(alias)
+    token = _resolve_github_token(github_token)
+    result = persist_estate(
+        record,
+        force=force,
+        github_token=token,
+    )
+    print(result.render())
+
+
 app.command(estate_app, name="estate")
 
 
 def _require_active_estate() -> EstateRecord:
     if (record := get_active_estate()) is None:
         raise ConcordatError(ERROR_NO_ACTIVE_ESTATE)
+    if not record.github_owner:
+        raise ConcordatError(ERROR_ACTIVE_ESTATE_OWNER.format(alias=record.alias))
+    return record
+
+
+def _resolve_estate_record(alias: str | None) -> EstateRecord:
+    if alias:
+        record = get_estate(alias)
+        if record is None:
+            raise EstateNotConfiguredError(alias)
+    else:
+        record = _require_active_estate()
     if not record.github_owner:
         raise ConcordatError(ERROR_ACTIVE_ESTATE_OWNER.format(alias=record.alias))
     return record
