@@ -75,6 +75,12 @@ class PersistenceDescriptor:
         if not isinstance(loaded, dict):
             raise PersistenceError(f"Invalid persistence manifest at {path}")
         schema_version = int(loaded.get("schema_version", 0))
+        if schema_version > PERSISTENCE_SCHEMA_VERSION:
+            raise PersistenceError(
+                "Unsupported persistence manifest "
+                f"schema_version={schema_version} at {path}; maximum supported "
+                f"schema_version is {PERSISTENCE_SCHEMA_VERSION}"
+            )
         enabled = bool(loaded.get("enabled", False))
         bucket = str(loaded.get("bucket", "")).strip()
         key_prefix = str(loaded.get("key_prefix", "")).strip()
@@ -134,55 +140,6 @@ class PersistenceResult:
 
 
 @dataclasses.dataclass(frozen=True)
-class PersistenceSetup:
-    """Inputs required to prepare persistence configuration."""
-
-    record: EstateRecord
-    manifest_path: Path
-    backend_path: Path
-    force: bool
-
-
-@dataclasses.dataclass(frozen=True)
-class PersistenceCallbacks:
-    """Callback functions used during persistence setup."""
-
-    input_func: typ.Callable[[str], str]
-    s3_client_factory: typ.Callable[[str, str], S3Client]
-
-
-@dataclasses.dataclass(frozen=True)
-class PersistenceFiles:
-    """Backend file contents to be written to disk."""
-
-    backend_path: Path
-    backend_contents: str
-    manifest_path: Path
-    manifest_contents: dict[str, typ.Any]
-
-
-@dataclasses.dataclass(frozen=True)
-class PublishContext:
-    """Context for publishing persistence changes via git and GitHub."""
-
-    repository: pygit2.Repository
-    record: EstateRecord
-    github_token: str | None
-    pr_opener: typ.Callable[[PullRequestRequest], str | None] | None
-    timestamp_factory: typ.Callable[[], dt.datetime] | None
-
-
-@dataclasses.dataclass(frozen=True)
-class PersistenceArtifacts:
-    """Files and metadata produced during persistence."""
-
-    backend_path: Path
-    manifest_path: Path
-    descriptor: PersistenceDescriptor
-    key_suffix: str
-
-
-@dataclasses.dataclass(frozen=True)
 class PersistenceOptions:
     """Optional configuration and callbacks for persistence workflow."""
 
@@ -207,23 +164,6 @@ class PullRequestRequest:
     github_token: str | None
 
 
-def _build_success_result(
-    backend_path: Path,
-    manifest_path: Path,
-    branch_name: str,
-    pr_url: str | None,
-) -> PersistenceResult:
-    """Build the final success result for the persistence workflow."""
-    return PersistenceResult(
-        backend_path=backend_path,
-        manifest_path=manifest_path,
-        branch=branch_name,
-        pr_url=pr_url,
-        updated=True,
-        message="opened persistence pull request" if pr_url else "pushed branch",
-    )
-
-
 def _setup_persistence_environment(
     record: EstateRecord,
 ) -> tuple[Path, pygit2.Repository, Path, Path]:
@@ -235,95 +175,49 @@ def _setup_persistence_environment(
     return workdir, repository, manifest_path, backend_path
 
 
-def _prepare_persistence_configuration(
-    setup: PersistenceSetup,
-    callbacks: PersistenceCallbacks,
-    opts: PersistenceOptions,
-) -> tuple[PersistenceDescriptor, str]:
-    """Collect operator input, build the descriptor, and validate settings."""
-    existing_descriptor = PersistenceDescriptor.from_yaml(setup.manifest_path)
-    defaults = _defaults_from(setup.record, existing_descriptor)
-    prompts = _collect_user_inputs(defaults, callbacks.input_func)
-    descriptor = _build_descriptor(prompts, setup.backend_path)
-
-    if not setup.force:
-        _guard_existing_files(
-            setup.backend_path,
-            setup.manifest_path,
-            descriptor,
-            prompts.key_suffix,
-        )
-
-    _validate_inputs_with_endpoint(
-        descriptor,
-        prompts.key_suffix,
-        allow_insecure_endpoint=opts.allow_insecure_endpoint,
-    )
-    _validate_bucket(descriptor, prompts.key_suffix, callbacks.s3_client_factory)
-    return descriptor, prompts.key_suffix
-
-
-def _finalize_and_publish_changes(
-    publish_ctx: PublishContext,
-    artifacts: PersistenceArtifacts,
-) -> tuple[str, str | None]:
-    """Commit, push, and optionally open a pull request for persistence files."""
-    branch_name = _commit_changes(
-        publish_ctx.repository,
-        publish_ctx.record.branch,
-        [artifacts.backend_path, artifacts.manifest_path],
-        timestamp_factory=publish_ctx.timestamp_factory,
-    )
-    _push_branch(publish_ctx.repository, branch_name, publish_ctx.record.repo_url)
-    pr_url = None
-    if publish_ctx.github_token or publish_ctx.pr_opener:
-        opener = publish_ctx.pr_opener or _open_pr
-        request = PullRequestRequest(
-            record=publish_ctx.record,
-            branch_name=branch_name,
-            descriptor=artifacts.descriptor,
-            key_suffix=artifacts.key_suffix,
-            github_token=publish_ctx.github_token,
-        )
-        pr_url = opener(request)
-    return branch_name, pr_url
-
-
 def persist_estate(
     record: EstateRecord,
     options: PersistenceOptions | None = None,
 ) -> PersistenceResult:
     """Configure remote state for an estate and open a pull request."""
     opts = options or PersistenceOptions()
-    (
-        workdir,
-        repository,
-        manifest_path,
-        backend_path,
-    ) = _setup_persistence_environment(record)
-
-    setup = PersistenceSetup(
-        record=record,
-        manifest_path=manifest_path,
-        backend_path=backend_path,
-        force=opts.force,
+    workdir, repository, manifest_path, backend_path = _setup_persistence_environment(
+        record
     )
-    callbacks = PersistenceCallbacks(
-        input_func=opts.input_func or input,
-        s3_client_factory=opts.s3_client_factory or _default_s3_client_factory,
-    )
-    descriptor, key_suffix = _prepare_persistence_configuration(setup, callbacks, opts)
 
-    backend_contents = _render_tfbackend(descriptor, key_suffix)
+    input_func = opts.input_func or input
+    s3_client_factory = opts.s3_client_factory or _default_s3_client_factory
+
+    existing_descriptor = PersistenceDescriptor.from_yaml(manifest_path)
+    defaults = _defaults_from(record, existing_descriptor)
+    prompts = _collect_user_inputs(defaults, input_func)
+    descriptor = _build_descriptor(prompts, backend_path)
+
+    if not opts.force:
+        _guard_existing_files(
+            backend_path,
+            manifest_path,
+            descriptor,
+            prompts["key_suffix"],
+        )
+
+    _validate_inputs(
+        descriptor,
+        prompts["key_suffix"],
+        allow_insecure_endpoint=opts.allow_insecure_endpoint,
+    )
+    _validate_bucket(descriptor, prompts["key_suffix"], s3_client_factory)
+
+    backend_contents = _render_tfbackend(descriptor, prompts["key_suffix"])
     manifest_contents = descriptor.to_dict()
 
-    files = PersistenceFiles(
+    if not _write_files(
         backend_path=backend_path,
         backend_contents=backend_contents,
         manifest_path=manifest_path,
         manifest_contents=manifest_contents,
-    )
-    if not _write_files(files, force=opts.force):
+        force=opts.force,
+    ):
         return PersistenceResult(
             backend_path=backend_path,
             manifest_path=manifest_path,
@@ -336,21 +230,35 @@ def persist_estate(
     if opts.fmt_runner:
         opts.fmt_runner(workdir)
 
-    artifacts = PersistenceArtifacts(
-        backend_path=backend_path,
-        manifest_path=manifest_path,
-        descriptor=descriptor,
-        key_suffix=key_suffix,
-    )
-    publish_ctx = PublishContext(
-        repository=repository,
-        record=record,
-        github_token=opts.github_token,
-        pr_opener=opts.pr_opener,
+    branch_name = _commit_changes(
+        repository,
+        record.branch,
+        [backend_path, manifest_path],
         timestamp_factory=opts.timestamp_factory,
     )
-    branch_name, pr_url = _finalize_and_publish_changes(publish_ctx, artifacts)
-    return _build_success_result(backend_path, manifest_path, branch_name, pr_url)
+    _push_branch(repository, branch_name, record.repo_url)
+
+    pr_url = None
+    if opts.github_token or opts.pr_opener:
+        opener = opts.pr_opener or _open_pr
+        request = PullRequestRequest(
+            record=record,
+            branch_name=branch_name,
+            descriptor=descriptor,
+            key_suffix=prompts["key_suffix"],
+            github_token=opts.github_token,
+        )
+        pr_url = opener(request)
+
+    message = "opened persistence pull request" if pr_url else "pushed branch"
+    return PersistenceResult(
+        backend_path=backend_path,
+        manifest_path=manifest_path,
+        branch=branch_name,
+        pr_url=pr_url,
+        updated=True,
+        message=message,
+    )
 
 
 def _load_clean_estate(record: EstateRecord) -> Path:
@@ -369,55 +277,36 @@ def _load_clean_estate(record: EstateRecord) -> Path:
     return workdir
 
 
-@dataclasses.dataclass(frozen=True)
-class _PromptDefaults:
-    bucket: str
-    region: str
-    endpoint: str
-    key_prefix: str
-    key_suffix: str = DEFAULT_KEY_FILENAME
-
-
-@dataclasses.dataclass(frozen=True)
-class _PromptResult:
-    bucket: str
-    region: str
-    endpoint: str
-    key_prefix: str
-    key_suffix: str
-
-
 def _defaults_from(
     record: EstateRecord,
     descriptor: PersistenceDescriptor | None,
-) -> _PromptDefaults:
+) -> dict[str, str]:
     owner = record.github_owner or "unknown-owner"
     base_prefix = f"estates/{owner}/{record.branch}"
-    return _PromptDefaults(
-        bucket=descriptor.bucket if descriptor else "",
-        region=descriptor.region if descriptor else "",
-        endpoint=descriptor.endpoint if descriptor else "",
-        key_prefix=descriptor.key_prefix if descriptor else base_prefix,
-        key_suffix=DEFAULT_KEY_FILENAME,
-    )
+    return {
+        "bucket": descriptor.bucket if descriptor else "",
+        "region": descriptor.region if descriptor else "",
+        "endpoint": descriptor.endpoint if descriptor else "",
+        "key_prefix": descriptor.key_prefix if descriptor else base_prefix,
+        "key_suffix": DEFAULT_KEY_FILENAME,
+    }
 
 
 def _collect_user_inputs(
-    defaults: _PromptDefaults,
+    defaults: dict[str, str],
     input_func: typ.Callable[[str], str],
-) -> _PromptResult:
-    bucket = _prompt_with_default("Bucket", defaults.bucket, input_func)
-    region = _prompt_with_default("Region", defaults.region, input_func)
-    endpoint = _prompt_with_default("Endpoint", defaults.endpoint, input_func)
-    key_prefix = _prompt_with_default("Key prefix", defaults.key_prefix, input_func)
-    key_suffix = _prompt_with_default("Key suffix", defaults.key_suffix, input_func)
-    return _PromptResult(
-        bucket=bucket,
-        region=region,
-        endpoint=endpoint,
-        key_prefix=key_prefix,
-        key_suffix=key_suffix,
-    )
+) -> dict[str, str]:
+    return {
+        "bucket": _prompt_with_default("Bucket", defaults["bucket"], input_func),
+        "region": _prompt_with_default("Region", defaults["region"], input_func),
+        "endpoint": _prompt_with_default("Endpoint", defaults["endpoint"], input_func),
+        "key_prefix": _prompt_with_default(
+            "Key prefix", defaults["key_prefix"], input_func
+        ),
+        "key_suffix": _prompt_with_default(
+            "Key suffix", defaults["key_suffix"], input_func
+        ),
+    }
 
 
 def _prompt_with_default(
@@ -434,33 +323,25 @@ def _prompt_with_default(
 
 
 def _build_descriptor(
-    prompts: _PromptResult,
+    prompts: dict[str, str],
     backend_path: Path,
 ) -> PersistenceDescriptor:
     return PersistenceDescriptor(
         schema_version=PERSISTENCE_SCHEMA_VERSION,
         enabled=True,
-        bucket=prompts.bucket,
-        key_prefix=prompts.key_prefix,
-        region=prompts.region,
-        endpoint=prompts.endpoint,
+        bucket=prompts["bucket"],
+        key_prefix=prompts["key_prefix"],
+        region=prompts["region"],
+        endpoint=prompts["endpoint"],
         backend_config_path=str(Path(BACKEND_DIRNAME) / backend_path.name),
     )
 
 
-def _validate_inputs(descriptor: PersistenceDescriptor, key_suffix: str) -> None:
-    _validate_inputs_with_endpoint(
-        descriptor,
-        key_suffix,
-        allow_insecure_endpoint=False,
-    )
-
-
-def _validate_inputs_with_endpoint(
+def _validate_inputs(
     descriptor: PersistenceDescriptor,
     key_suffix: str,
     *,
-    allow_insecure_endpoint: bool,
+    allow_insecure_endpoint: bool = False,
 ) -> None:
     """Validate descriptor fields and endpoint constraints."""
     _validate_path_safety(descriptor.key_prefix, "Key prefix")
@@ -497,6 +378,8 @@ def _validate_endpoint_protocol(
     endpoint: str, *, allow_insecure_endpoint: bool = False
 ) -> None:
     """Ensure endpoints use HTTPS unless explicitly allowed for dev use."""
+    if not endpoint.strip():
+        raise PersistenceError("Endpoint is required.")
     if endpoint.startswith("https://"):
         return
     if allow_insecure_endpoint and endpoint.startswith("http://"):
@@ -612,18 +495,21 @@ def _guard_backend_file(
 
 
 def _write_files(
-    files: PersistenceFiles,
     *,
+    backend_path: Path,
+    backend_contents: str,
+    manifest_path: Path,
+    manifest_contents: dict[str, typ.Any],
     force: bool,
 ) -> bool:
     backend_changed = _write_if_changed(
-        files.backend_path,
-        files.backend_contents,
+        backend_path,
+        backend_contents,
         force=force,
     )
     manifest_changed = _write_manifest_if_changed(
-        files.manifest_path,
-        files.manifest_contents,
+        manifest_path,
+        manifest_contents,
         force=force,
     )
     return backend_changed or manifest_changed

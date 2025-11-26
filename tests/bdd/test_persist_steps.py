@@ -378,7 +378,7 @@ def then_manifest_bucket(estate_alias: str, bucket: str) -> None:
 
 @then(
     parsers.cfparse(
-        'the persistence permissions probe writes and deletes a single object to '
+        "the persistence permissions probe writes and deletes a single object to "
         'bucket "{bucket}" with key "{key}"'
     )
 )

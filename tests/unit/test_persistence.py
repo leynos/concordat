@@ -57,6 +57,7 @@ def test_render_tfbackend_uses_scaleway_shape() -> None:
     [
         ("", "fr-par", "https://s3.fr-par.scw.cloud", "Bucket is required."),
         ("df12", "", "https://s3.fr-par.scw.cloud", "Region is required."),
+        ("df12", "fr-par", "", "Endpoint is required."),
         ("df12", "fr-par", "http://insecure", "Endpoint must use HTTPS."),
         (
             "df12",
@@ -119,6 +120,40 @@ def test_validate_inputs_rejects_invalid_paths(
     assert expected_message in str(excinfo.value)
 
 
+def test_descriptor_round_trip_from_yaml(tmp_path: Path) -> None:
+    """Descriptors load from YAML and round-trip via to_dict."""
+    path = tmp_path / "persistence.yaml"
+    descriptor = persistence.PersistenceDescriptor(
+        schema_version=persistence.PERSISTENCE_SCHEMA_VERSION,
+        enabled=True,
+        bucket="df12-tfstate",
+        key_prefix="estates/example/main",
+        region="fr-par",
+        endpoint="https://s3.fr-par.scw.cloud",
+        backend_config_path="backend/core.tfbackend",
+        notification_topic="alerts",
+    )
+    with path.open("w", encoding="utf-8") as handle:
+        persistence._yaml.dump(descriptor.to_dict(), handle)
+
+    loaded = persistence.PersistenceDescriptor.from_yaml(path)
+
+    assert loaded is not None
+    assert loaded.notification_topic == "alerts"
+    assert loaded.to_dict() == descriptor.to_dict()
+
+
+def test_descriptor_from_yaml_rejects_malformed(tmp_path: Path) -> None:
+    """Non-mapping manifests are rejected."""
+    path = tmp_path / "persistence.yaml"
+    path.write_text("- not-a-mapping\n- still-not\n", encoding="utf-8")
+
+    with pytest.raises(
+        persistence.PersistenceError, match="Invalid persistence manifest"
+    ):
+        persistence.PersistenceDescriptor.from_yaml(path)
+
+
 def test_validate_inputs_allows_insecure_endpoint_when_opted_in() -> None:
     """Insecure endpoints are permitted when explicitly allowed."""
     descriptor = persistence.PersistenceDescriptor(
@@ -130,7 +165,7 @@ def test_validate_inputs_allows_insecure_endpoint_when_opted_in() -> None:
         endpoint="http://localhost:9000",
         backend_config_path="backend/core.tfbackend",
     )
-    persistence._validate_inputs_with_endpoint(
+    persistence._validate_inputs(
         descriptor,
         "terraform.tfstate",
         allow_insecure_endpoint=True,
@@ -218,6 +253,37 @@ def test_guard_existing_files_detects_conflict(tmp_path: Path) -> None:
             descriptor,
             "terraform.tfstate",
         )
+
+
+def test_guard_existing_files_allows_matching_files(tmp_path: Path) -> None:
+    """Matching manifest and backend files are accepted."""
+    backend_path = tmp_path / "backend.tfbackend"
+    manifest_path = tmp_path / "backend" / "persistence.yaml"
+    backend_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+
+    descriptor = persistence.PersistenceDescriptor(
+        schema_version=1,
+        enabled=True,
+        bucket="df12",
+        key_prefix="estates/example/main",
+        region="fr-par",
+        endpoint="https://s3.fr-par.scw.cloud",
+        backend_config_path="backend.tfbackend",
+    )
+    key_suffix = "terraform.tfstate"
+    persistence._yaml.dump(descriptor.to_dict(), manifest_path)
+    backend_path.write_text(
+        persistence._render_tfbackend(descriptor, key_suffix),
+        encoding="utf-8",
+    )
+
+    persistence._guard_existing_files(
+        backend_path,
+        manifest_path,
+        descriptor,
+        key_suffix,
+    )
 
 
 def test_write_manifest_if_changed_noop(tmp_path: Path) -> None:
