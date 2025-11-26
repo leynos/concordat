@@ -97,18 +97,11 @@ def pr_stub(monkeypatch: pytest.MonkeyPatch) -> dict[str, typ.Any]:
     """Capture pull request creation attempts."""
     log: dict[str, typ.Any] = {}
 
-    def opener(
-        record: EstateRecord,
-        branch_name: str,
-        descriptor: persistence.PersistenceDescriptor,
-        key_suffix: str,
-        github_token: str | None,
-        pr_opener: typ.Callable[..., str | None] | None = None,
-    ) -> str:
-        log["branch"] = branch_name
-        log["bucket"] = descriptor.bucket
-        log["key_suffix"] = key_suffix
-        log["token"] = github_token
+    def opener(request: persistence.PullRequestRequest) -> str:
+        log["branch"] = request.branch_name
+        log["bucket"] = request.descriptor.bucket
+        log["key_suffix"] = request.key_suffix
+        log["token"] = request.github_token
         return "https://example.test/pr/1"
 
     monkeypatch.setattr(persistence, "_open_pr", opener)
