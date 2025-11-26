@@ -133,6 +133,75 @@ class PersistenceResult:
         return "; ".join(parts)
 
 
+def _setup_persistence_environment(
+    record: EstateRecord,
+) -> tuple[Path, pygit2.Repository, Path, Path]:
+    """Load a clean estate workspace and derive persistence file paths."""
+    workdir = _load_clean_estate(record)
+    repository = pygit2.Repository(str(workdir))
+    manifest_path = workdir / MANIFEST_FILENAME
+    backend_path = workdir / BACKEND_DIRNAME / f"{record.alias}.tfbackend"
+    return workdir, repository, manifest_path, backend_path
+
+
+def _prepare_persistence_configuration(
+    record: EstateRecord,
+    manifest_path: Path,
+    backend_path: Path,
+    *,
+    force: bool,
+    input_func: typ.Callable[[str], str],
+    s3_client_factory: typ.Callable[[str, str], S3Client],
+) -> tuple[PersistenceDescriptor, str]:
+    """Collect operator input, build the descriptor, and validate settings."""
+    existing_descriptor = PersistenceDescriptor.from_yaml(manifest_path)
+    defaults = _defaults_from(record, existing_descriptor)
+    prompts = _collect_user_inputs(defaults, input_func)
+    descriptor = _build_descriptor(prompts, backend_path)
+
+    if not force:
+        _guard_existing_files(
+            backend_path,
+            manifest_path,
+            descriptor,
+            prompts.key_suffix,
+        )
+
+    _validate_inputs(descriptor, prompts.key_suffix)
+    _validate_bucket(descriptor, prompts.key_suffix, s3_client_factory)
+    return descriptor, prompts.key_suffix
+
+
+def _finalize_and_publish_changes(
+    repository: pygit2.Repository,
+    record: EstateRecord,
+    backend_path: Path,
+    manifest_path: Path,
+    descriptor: PersistenceDescriptor,
+    key_suffix: str,
+    github_token: str | None,
+    pr_opener: typ.Callable[..., str | None] | None,
+    timestamp_factory: typ.Callable[[], dt.datetime] | None,
+) -> tuple[str, str | None]:
+    """Commit, push, and optionally open a pull request for persistence files."""
+    branch_name = _commit_changes(
+        repository,
+        record.branch,
+        [backend_path, manifest_path],
+        timestamp_factory=timestamp_factory,
+    )
+    _push_branch(repository, branch_name, record.repo_url)
+    pr_url = _open_pr(
+        record,
+        branch_name,
+        descriptor,
+        key_suffix,
+        github_token,
+        pr_opener,
+    )
+    return branch_name, pr_url
+
+
 def persist_estate(
     record: EstateRecord,
     *,
@@ -145,33 +214,23 @@ def persist_estate(
     timestamp_factory: typ.Callable[[], dt.datetime] | None = None,
 ) -> PersistenceResult:
     """Configure remote state for an estate and open a pull request."""
-    workdir = _load_clean_estate(record)
-    repository = pygit2.Repository(str(workdir))
-    manifest_path = workdir / MANIFEST_FILENAME
-    backend_path = workdir / BACKEND_DIRNAME / f"{record.alias}.tfbackend"
+    (
+        workdir,
+        repository,
+        manifest_path,
+        backend_path,
+    ) = _setup_persistence_environment(record)
 
-    existing_descriptor = PersistenceDescriptor.from_yaml(manifest_path)
-    defaults = _defaults_from(record, existing_descriptor)
-
-    prompts = _collect_user_inputs(defaults, input_func or input)
-    descriptor = _build_descriptor(prompts, backend_path)
-
-    if not force:
-        _guard_existing_files(
-            backend_path,
-            manifest_path,
-            descriptor,
-            prompts.key_suffix,
-        )
-
-    _validate_inputs(descriptor, prompts.key_suffix)
-    _validate_bucket(
-        descriptor,
-        prompts.key_suffix,
-        s3_client_factory or _default_s3_client_factory,
+    descriptor, key_suffix = _prepare_persistence_configuration(
+        record,
+        manifest_path,
+        backend_path,
+        force=force,
+        input_func=input_func or input,
+        s3_client_factory=s3_client_factory or _default_s3_client_factory,
     )
 
-    backend_contents = _render_tfbackend(descriptor, prompts.key_suffix)
+    backend_contents = _render_tfbackend(descriptor, key_suffix)
     manifest_contents = descriptor.to_dict()
 
     updated = _write_files(
@@ -194,20 +253,16 @@ def persist_estate(
     if fmt_runner:
         fmt_runner(workdir)
 
-    branch_name = _commit_changes(
+    branch_name, pr_url = _finalize_and_publish_changes(
         repository,
-        record.branch,
-        [backend_path, manifest_path],
-        timestamp_factory=timestamp_factory,
-    )
-    _push_branch(repository, branch_name, record.repo_url)
-    pr_url = _open_pr(
         record,
-        branch_name,
+        backend_path,
+        manifest_path,
         descriptor,
-        prompts.key_suffix,
+        key_suffix,
         github_token,
         pr_opener,
+        timestamp_factory,
     )
     return PersistenceResult(
         backend_path=backend_path,
@@ -317,17 +372,36 @@ def _build_descriptor(
 
 
 def _validate_inputs(descriptor: PersistenceDescriptor, key_suffix: str) -> None:
-    if ".." in descriptor.key_prefix.split("/"):
-        raise PersistenceError("Key prefix may not include directory traversals.")
-    if ".." in key_suffix.split("/"):
-        raise PersistenceError("Key suffix may not include directory traversals.")
+    _validate_path_safety(descriptor.key_prefix, "Key prefix")
+    _validate_path_safety(key_suffix, "Key suffix")
+    _validate_key_suffix_not_empty(key_suffix)
+    _validate_required_fields(descriptor)
+    _validate_endpoint_protocol(descriptor.endpoint)
+
+
+def _validate_path_safety(path: str, field_name: str) -> None:
+    """Ensure path segments do not include traversal elements."""
+    if ".." in path.split("/"):
+        raise PersistenceError(f"{field_name} may not include directory traversals.")
+
+
+def _validate_key_suffix_not_empty(key_suffix: str) -> None:
+    """Ensure the key suffix is not empty or whitespace only."""
     if not key_suffix.strip():
         raise PersistenceError("Key suffix is required.")
+
+
+def _validate_required_fields(descriptor: PersistenceDescriptor) -> None:
+    """Ensure required descriptor fields are populated."""
     if not descriptor.bucket:
         raise PersistenceError("Bucket is required.")
     if not descriptor.region:
         raise PersistenceError("Region is required.")
-    if not descriptor.endpoint.startswith("https://"):
+
+
+def _validate_endpoint_protocol(endpoint: str) -> None:
+    """Ensure endpoints use HTTPS for transport security."""
+    if not endpoint.startswith("https://"):
         raise PersistenceError("Endpoint must use HTTPS.")
 
 
@@ -400,20 +474,42 @@ def _guard_existing_files(
     descriptor: PersistenceDescriptor,
     key_suffix: str,
 ) -> None:
+    """Ensure existing backend artifacts match the intended contents."""
+    _guard_manifest_file(manifest_path, descriptor)
+    _guard_backend_file(backend_path, descriptor, key_suffix)
+
+
+def _guard_manifest_file(
+    manifest_path: Path,
+    descriptor: PersistenceDescriptor,
+) -> None:
+    """Refuse to overwrite a manifest that differs from the expected content."""
+    if not manifest_path.exists():
+        return
+    existing = _yaml.load(manifest_path.read_text(encoding="utf-8")) or {}
     expected_manifest = descriptor.to_dict()
-    if manifest_path.exists():
-        existing = _yaml.load(manifest_path.read_text(encoding="utf-8")) or {}
-        if existing != expected_manifest:
-            raise PersistenceError(
-                f"{manifest_path} already exists; rerun with --force to replace."
-            )
-    if backend_path.exists():
-        current = backend_path.read_text(encoding="utf-8")
-        desired = _render_tfbackend(descriptor, key_suffix)
-        if current != desired:
-            raise PersistenceError(
-                f"{backend_path} already exists; rerun with --force to replace."
-            )
+    if existing == expected_manifest:
+        return
+    raise PersistenceError(
+        f"{manifest_path} already exists; rerun with --force to replace."
+    )
+
+
+def _guard_backend_file(
+    backend_path: Path,
+    descriptor: PersistenceDescriptor,
+    key_suffix: str,
+) -> None:
+    """Refuse to overwrite a backend file that differs from the expected content."""
+    if not backend_path.exists():
+        return
+    current = backend_path.read_text(encoding="utf-8")
+    desired = _render_tfbackend(descriptor, key_suffix)
+    if current == desired:
+        return
+    raise PersistenceError(
+        f"{backend_path} already exists; rerun with --force to replace."
+    )
 
 
 def _write_files(
