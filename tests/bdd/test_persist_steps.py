@@ -222,41 +222,30 @@ def given_bucket_versioning(fake_s3: FakeS3Client, status: str) -> None:
     fake_s3.status = status
 
 
-@given(
-    parsers.cfparse(
-        'persistence prompts are "{bucket}", "{region}", "{endpoint}", '
-        '"{prefix}", "{suffix}"'
-    )
-)
-@when(
-    parsers.cfparse(
-        'persistence prompts are "{bucket}", "{region}", "{endpoint}", '
-        '"{prefix}", "{suffix}"'
-    )
-)
-@then(
-    parsers.cfparse(
-        'persistence prompts are "{bucket}", "{region}", "{endpoint}", '
-        '"{prefix}", "{suffix}"'
-    )
-)
+@given(parsers.cfparse('persistence prompts "{values}"'))
+@when(parsers.cfparse('persistence prompts "{values}"'))
+@then(parsers.cfparse('persistence prompts "{values}"'))
 def given_prompt_values(
-    bucket: str,
-    region: str,
-    endpoint: str,
-    prefix: str,
-    suffix: str,
+    values: str,
     prompt_queue: list[str],
 ) -> None:
     """Populate prompt responses for the persistence workflow."""
-    values = PromptValues(
-        bucket=bucket,
-        region=region,
-        endpoint=endpoint,
-        prefix=prefix,
-        suffix=suffix,
+    parts = [part.strip() for part in values.split(",")]
+    if len(parts) != 5:
+        detail = (
+            "Expected 5 prompt values (bucket, region, endpoint, prefix, suffix), "
+            f"got {len(parts)}"
+        )
+        raise ValueError(detail)
+
+    prompt_values = PromptValues(
+        bucket=parts[0],
+        region=parts[1],
+        endpoint=parts[2],
+        prefix=parts[3],
+        suffix=parts[4],
     )
-    values.populate_queue(prompt_queue)
+    prompt_values.populate_queue(prompt_queue)
 
 
 @given(parsers.cfparse('GITHUB_TOKEN is set to "{token}"'))

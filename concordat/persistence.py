@@ -37,6 +37,7 @@ class S3Client(typ.Protocol):
     def delete_object(self, **kwargs: object) -> dict[str, typ.Any]:
         """Delete an object from the bucket."""
 
+
 PERSISTENCE_SCHEMA_VERSION = 1
 DEFAULT_KEY_FILENAME = "terraform.tfstate"
 MANIFEST_FILENAME = "backend/persistence.yaml"
@@ -131,6 +132,7 @@ class PersistenceResult:
         elif self.branch:
             parts.append(f"branch: {self.branch}")
         return "; ".join(parts)
+
 
 @dataclasses.dataclass(frozen=True)
 class PersistenceSetup:
@@ -699,11 +701,7 @@ def _commit_changes(
 
 
 def _branch_name(timestamp_factory: typ.Callable[[], dt.datetime] | None = None) -> str:
-    now = (
-        timestamp_factory()
-        if timestamp_factory
-        else dt.datetime.now(dt.timezone.utc)
-    )
+    now = timestamp_factory() if timestamp_factory else dt.datetime.now(dt.timezone.utc)
     return f"estate/persist-{now.strftime('%Y%m%d%H%M%S')}"
 
 
@@ -725,8 +723,7 @@ def _open_pr(
     gh_repo = client.repository(owner, name)
     title = "Concordat: persist estate remote state"
     key = (
-        f"{request.descriptor.key_prefix.rstrip('/')}/"
-        f"{request.key_suffix.lstrip('/')}"
+        f"{request.descriptor.key_prefix.rstrip('/')}/{request.key_suffix.lstrip('/')}"
     )
     body = textwrap.dedent(
         f"""
