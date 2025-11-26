@@ -12,6 +12,7 @@ Feature: Persisting estate state remotely
     And backend file "backend/core.tfbackend" contains "bucket                      = \"df12-tfstate\""
     And persistence manifest records bucket "df12-tfstate"
     And credentials are not written to the backend files
+    And the persistence permissions probe writes and deletes a single object to bucket "df12-tfstate" with key "estates/example/main/terraform.tfstate.concordat-tfstate-check"
 
   Scenario: Persisting fails when bucket versioning is disabled
     Given an isolated concordat config directory

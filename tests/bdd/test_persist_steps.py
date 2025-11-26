@@ -61,7 +61,7 @@ def prompt_queue(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     queue: list[str] = []
 
     def fake_input(_: str) -> str:
-        return "" if not queue else queue.pop(0)
+        return queue.pop(0) if queue else ""
 
     monkeypatch.setattr("builtins.input", fake_input)
     return queue
@@ -117,11 +117,8 @@ def fake_s3(monkeypatch: pytest.MonkeyPatch) -> FakeS3Client:
 
 
 @pytest.fixture
-def failing_fake_s3(fake_s3: FakeS3Client) -> FakeS3Client:
-    """Configure the fake S3 client to fail versioning and permission checks."""
-    fake_s3.raise_on_versioning = True
-    fake_s3.raise_on_put = True
-    fake_s3.raise_on_delete = True
+def fake_s3_client(fake_s3: FakeS3Client) -> FakeS3Client:
+    """Expose the default fake S3 client for assertions."""
     return fake_s3
 
 
@@ -130,17 +127,11 @@ def pr_stub(monkeypatch: pytest.MonkeyPatch) -> dict[str, typ.Any]:
     """Capture pull request creation attempts."""
     log: dict[str, typ.Any] = {}
 
-    def opener(
-        record: persistence.EstateRecord,
-        branch_name: str,
-        descriptor: persistence.PersistenceDescriptor,
-        key_suffix: str,
-        github_token: str | None,
-    ) -> str:
-        log["branch"] = branch_name
-        log["bucket"] = descriptor.bucket
-        log["key_suffix"] = key_suffix
-        log["token"] = github_token
+    def opener(request: persistence.PullRequestRequest) -> str:
+        log["branch"] = request.branch_name
+        log["bucket"] = request.descriptor.bucket
+        log["key_suffix"] = request.key_suffix
+        log["token"] = request.github_token
         return "https://example.test/pr/1"
 
     monkeypatch.setattr(persistence, "_open_pr", opener)
@@ -383,6 +374,24 @@ def then_manifest_bucket(estate_alias: str, bucket: str) -> None:
     assert path.exists()
     data = _yaml.load(path.read_text(encoding="utf-8")) or {}
     assert data.get("bucket") == bucket
+
+
+@then(
+    parsers.cfparse(
+        'the persistence permissions probe writes and deletes a single object to '
+        'bucket "{bucket}" with key "{key}"'
+    )
+)
+def then_persistence_probe_uses_expected_key(
+    fake_s3_client: FakeS3Client,
+    bucket: str,
+    key: str,
+) -> None:
+    """Assert the permissions probe uses the expected bucket/key combination."""
+    assert len(fake_s3_client.put_keys) == 1, fake_s3_client.put_keys
+    assert len(fake_s3_client.delete_keys) == 1, fake_s3_client.delete_keys
+    assert fake_s3_client.put_keys[0] == (bucket, key)
+    assert fake_s3_client.delete_keys[0] == (bucket, key)
 
 
 @then("no pull request was attempted")

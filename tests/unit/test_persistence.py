@@ -90,39 +90,33 @@ def test_validate_inputs_enforces_constraints(
         persistence._validate_inputs(descriptor, key_suffix)
 
 
-def test_validate_inputs_rejects_path_traversal_in_key_prefix() -> None:
-    """Path traversal in key prefix is rejected."""
+@pytest.mark.parametrize(
+    ("key_prefix", "key_suffix", "expected_message"),
+    [
+        ("foo/../bar", "terraform.tfstate", "directory traversals"),
+        ("estates/example/main", "   ", "Key suffix is required."),
+    ],
+    ids=["path_traversal_in_prefix", "empty_key_suffix"],
+)
+def test_validate_inputs_rejects_invalid_paths(
+    key_prefix: str,
+    key_suffix: str,
+    expected_message: str,
+) -> None:
+    """Path validation blocks directory traversal and empty key suffix."""
     descriptor = persistence.PersistenceDescriptor(
         schema_version=persistence.PERSISTENCE_SCHEMA_VERSION,
         enabled=True,
         bucket="df12-tfstate",
-        key_prefix="foo/../bar",
+        key_prefix=key_prefix,
         region="fr-par",
         endpoint="https://s3.fr-par.scw.cloud",
         backend_config_path="backend/core.tfbackend",
     )
     with pytest.raises(persistence.PersistenceError) as excinfo:
-        persistence._validate_inputs(descriptor, "terraform.tfstate")
+        persistence._validate_inputs(descriptor, key_suffix)
 
-    assert "directory traversals" in str(excinfo.value)
-
-
-def test_validate_inputs_rejects_empty_key_suffix() -> None:
-    """Empty or whitespace-only key suffix is rejected."""
-    descriptor = persistence.PersistenceDescriptor(
-        schema_version=persistence.PERSISTENCE_SCHEMA_VERSION,
-        enabled=True,
-        bucket="df12-tfstate",
-        key_prefix="estates/example/main",
-        region="fr-par",
-        endpoint="https://s3.fr-par.scw.cloud",
-        backend_config_path="backend/core.tfbackend",
-    )
-
-    with pytest.raises(persistence.PersistenceError) as excinfo:
-        persistence._validate_inputs(descriptor, "   ")
-
-    assert "Key suffix is required." in str(excinfo.value)
+    assert expected_message in str(excinfo.value)
 
 
 def test_validate_inputs_allows_insecure_endpoint_when_opted_in() -> None:
@@ -293,11 +287,12 @@ def test_open_pr_returns_none_without_token() -> None:
         repo_url="git@github.com:example/core.git",
         github_owner="example",
     )
-    result = persistence._open_pr(
-        record,
-        "branch",
-        descriptor,
-        "terraform.tfstate",
-        None,
+    request = persistence.PullRequestRequest(
+        record=record,
+        branch_name="branch",
+        descriptor=descriptor,
+        key_suffix="terraform.tfstate",
+        github_token=None,
     )
+    result = persistence._open_pr(request)
     assert result is None

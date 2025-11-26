@@ -54,7 +54,7 @@ ERROR_OWNER_LOOKUP_FAILED = (
 )
 ERROR_NO_ESTATES = "No estates configured. Run `concordat estate init` first."
 ERROR_MISSING_GITHUB_TOKEN = (
-    "GITHUB_TOKEN is required for concordat plan/apply/persist; "  # noqa: S105
+    "GITHUB_TOKEN is required for concordat plan/apply; "  # noqa: S105
     "pass --github-token or export the environment variable."
 )
 ERROR_AUTO_APPROVE_REQUIRED = "concordat apply requires --auto-approve to continue."
