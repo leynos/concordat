@@ -280,10 +280,10 @@ def _resolve_estate_record(alias: str | None) -> EstateRecord:
         record = get_estate(alias)
         if record is None:
             raise EstateNotConfiguredError(alias)
+        if not record.github_owner:
+            raise ConcordatError(ERROR_ACTIVE_ESTATE_OWNER.format(alias=record.alias))
     else:
         record = _require_active_estate()
-    if not record.github_owner:
-        raise ConcordatError(ERROR_ACTIVE_ESTATE_OWNER.format(alias=record.alias))
     return record
 
 

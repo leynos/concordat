@@ -132,6 +132,8 @@ class PersistenceResult:
         """Return a short human readable summary."""
         action = "updated" if self.updated else "unchanged"
         parts = [f"{action} {self.backend_path} and {self.manifest_path}"]
+        if self.message:
+            parts.append(self.message)
         if self.pr_url:
             parts.append(f"PR: {self.pr_url}")
         elif self.branch:
@@ -384,7 +386,14 @@ def _validate_endpoint_protocol(
         return
     if allow_insecure_endpoint and endpoint.startswith("http://"):
         return
-    raise PersistenceError("Endpoint must use HTTPS.")
+    if "://" not in endpoint:
+        raise PersistenceError(
+            "Endpoint must include an https:// scheme (for example, "
+            "https://s3.example.com)."
+        )
+    raise PersistenceError(
+        "Endpoint must use HTTPS (for example, https://s3.example.com)."
+    )
 
 
 def _validate_bucket(
@@ -470,10 +479,10 @@ def _guard_manifest_file(
         return
     existing = _yaml.load(manifest_path.read_text(encoding="utf-8")) or {}
     expected_manifest = descriptor.to_dict()
-    if existing == expected_manifest:
-        return
-    raise PersistenceError(
-        f"{manifest_path} already exists; rerun with --force to replace."
+    _enforce_existing_policy(
+        manifest_path,
+        is_same=existing == expected_manifest,
+        force=False,
     )
 
 
@@ -487,10 +496,10 @@ def _guard_backend_file(
         return
     current = backend_path.read_text(encoding="utf-8")
     desired = _render_tfbackend(descriptor, key_suffix)
-    if current == desired:
-        return
-    raise PersistenceError(
-        f"{backend_path} already exists; rerun with --force to replace."
+    _enforce_existing_policy(
+        backend_path,
+        is_same=current == desired,
+        force=False,
     )
 
 
@@ -519,12 +528,13 @@ def _write_if_changed(path: Path, contents: str, *, force: bool) -> bool:
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
         current = path.read_text(encoding="utf-8")
-        if current == contents:
+        should_write = _enforce_existing_policy(
+            path,
+            is_same=current == contents,
+            force=force,
+        )
+        if not should_write:
             return False
-        if not force:
-            raise PersistenceError(
-                f"{path} already exists; rerun with --force to replace."
-            )
     path.write_text(contents, encoding="utf-8")
     return True
 
@@ -538,14 +548,33 @@ def _write_manifest_if_changed(
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
         current = _yaml.load(path.read_text(encoding="utf-8")) or {}
-        if current == contents:
+        should_write = _enforce_existing_policy(
+            path,
+            is_same=current == contents,
+            force=force,
+        )
+        if not should_write:
             return False
-        if not force:
-            raise PersistenceError(
-                f"{path} already exists; rerun with --force to replace."
-            )
     with path.open("w", encoding="utf-8") as handle:
         _yaml.dump(contents, handle)
+    return True
+
+
+def _enforce_existing_policy(
+    path: Path,
+    *,
+    is_same: bool,
+    force: bool,
+) -> bool:
+    """Return True if caller should write, False if identical, else raise.
+
+    When ``is_same`` is False and ``force`` is False, raises a PersistenceError
+    to protect existing files from accidental overwrite.
+    """
+    if is_same:
+        return False
+    if not force:
+        raise PersistenceError(f"{path} already exists; rerun with --force to replace.")
     return True
 
 

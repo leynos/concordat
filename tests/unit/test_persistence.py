@@ -58,7 +58,12 @@ def test_render_tfbackend_uses_scaleway_shape() -> None:
         ("", "fr-par", "https://s3.fr-par.scw.cloud", "Bucket is required."),
         ("df12", "", "https://s3.fr-par.scw.cloud", "Region is required."),
         ("df12", "fr-par", "", "Endpoint is required."),
-        ("df12", "fr-par", "http://insecure", "Endpoint must use HTTPS."),
+        (
+            "df12",
+            "fr-par",
+            "http://insecure",
+            "Endpoint must use HTTPS",
+        ),
         (
             "df12",
             "fr-par",
@@ -199,12 +204,29 @@ def test_write_if_changed_noop_when_contents_identical(tmp_path: Path) -> None:
     assert path.read_text(encoding="utf-8") == "unchanged"
 
 
-def test_bucket_versioning_status_wraps_errors() -> None:
+@pytest.mark.parametrize(
+    "exception_factory",
+    [
+        lambda: boto_exceptions.BotoCoreError(),
+        lambda: boto_exceptions.ClientError(  # type: ignore[arg-type]
+            error_response={
+                "Error": {
+                    "Code": "AccessDenied",
+                    "Message": "Access denied while getting bucket versioning",
+                }
+            },
+            operation_name="GetBucketVersioning",
+        ),
+    ],
+)
+def test_bucket_versioning_status_wraps_errors(
+    exception_factory: typ.Callable[[], Exception],
+) -> None:
     """Versioning failures surface as PersistenceError."""
 
     class Client:
         def get_bucket_versioning(self, **kwargs: object) -> dict[str, str]:
-            raise boto_exceptions.BotoCoreError
+            raise exception_factory()
 
     client = typ.cast("persistence.S3Client", Client())
     with pytest.raises(persistence.PersistenceError) as excinfo:
@@ -221,6 +243,22 @@ def test_exercise_write_permissions_wraps_errors() -> None:
 
         def delete_object(self, **kwargs: object) -> dict[str, str]:
             return {}
+
+    client = typ.cast("persistence.S3Client", Client())
+    with pytest.raises(persistence.PersistenceError) as excinfo:
+        persistence._exercise_write_permissions(client, "bucket", "key")
+    assert "Bucket permissions check failed" in str(excinfo.value)
+
+
+def test_exercise_write_permissions_wraps_errors_on_delete() -> None:
+    """Delete failures are wrapped in PersistenceError."""
+
+    class Client:
+        def put_object(self, **kwargs: object) -> dict[str, str]:
+            return {}
+
+        def delete_object(self, **kwargs: object) -> dict[str, str]:
+            raise boto_exceptions.BotoCoreError
 
     client = typ.cast("persistence.S3Client", Client())
     with pytest.raises(persistence.PersistenceError) as excinfo:
