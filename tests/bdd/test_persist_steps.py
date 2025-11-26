@@ -13,6 +13,7 @@ from pathlib import Path
 import pygit2
 import pytest
 import pytest_bdd.parsers as parsers
+from botocore import exceptions as boto_exceptions
 from pytest_bdd import given, scenarios, then, when
 from ruamel.yaml import YAML
 
@@ -60,9 +61,7 @@ def prompt_queue(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     queue: list[str] = []
 
     def fake_input(_: str) -> str:
-        if not queue:
-            return ""
-        return queue.pop(0)
+        return "" if not queue else queue.pop(0)
 
     monkeypatch.setattr("builtins.input", fake_input)
     return queue
@@ -76,13 +75,20 @@ class FakeS3Client:
         self.status = "Enabled"
         self.put_keys: list[tuple[str, str]] = []
         self.delete_keys: list[tuple[str, str]] = []
+        self.raise_on_versioning = False
+        self.raise_on_put = False
+        self.raise_on_delete = False
 
     def get_bucket_versioning(self, **kwargs: object) -> dict[str, str]:
         """Return the configured versioning status."""
+        if self.raise_on_versioning:
+            raise boto_exceptions.BotoCoreError
         return {"Status": self.status}
 
     def put_object(self, **kwargs: object) -> dict[str, str]:
         """Record a write operation."""
+        if self.raise_on_put:
+            raise boto_exceptions.BotoCoreError
         bucket = typ.cast("str", kwargs.get("Bucket", ""))  # type: ignore[index]
         key = typ.cast("str", kwargs.get("Key", ""))  # type: ignore[index]
         self.put_keys.append((bucket, key))
@@ -90,6 +96,8 @@ class FakeS3Client:
 
     def delete_object(self, **kwargs: object) -> dict[str, str]:
         """Record a delete operation."""
+        if self.raise_on_delete:
+            raise boto_exceptions.BotoCoreError
         bucket = typ.cast("str", kwargs.get("Bucket", ""))  # type: ignore[index]
         key = typ.cast("str", kwargs.get("Key", ""))  # type: ignore[index]
         self.delete_keys.append((bucket, key))
@@ -109,15 +117,30 @@ def fake_s3(monkeypatch: pytest.MonkeyPatch) -> FakeS3Client:
 
 
 @pytest.fixture
+def failing_fake_s3(fake_s3: FakeS3Client) -> FakeS3Client:
+    """Configure the fake S3 client to fail versioning and permission checks."""
+    fake_s3.raise_on_versioning = True
+    fake_s3.raise_on_put = True
+    fake_s3.raise_on_delete = True
+    return fake_s3
+
+
+@pytest.fixture
 def pr_stub(monkeypatch: pytest.MonkeyPatch) -> dict[str, typ.Any]:
     """Capture pull request creation attempts."""
     log: dict[str, typ.Any] = {}
 
-    def opener(request: persistence.PullRequestRequest) -> str:
-        log["branch"] = request.branch_name
-        log["bucket"] = request.descriptor.bucket
-        log["key_suffix"] = request.key_suffix
-        log["token"] = request.github_token
+    def opener(
+        record: persistence.EstateRecord,
+        branch_name: str,
+        descriptor: persistence.PersistenceDescriptor,
+        key_suffix: str,
+        github_token: str | None,
+    ) -> str:
+        log["branch"] = branch_name
+        log["bucket"] = descriptor.bucket
+        log["key_suffix"] = key_suffix
+        log["token"] = github_token
         return "https://example.test/pr/1"
 
     monkeypatch.setattr(persistence, "_open_pr", opener)
@@ -214,6 +237,25 @@ def given_estate_repo(alias: str, tmp_path: Path, config_dir: Path) -> str:
 def given_pr_stubbed(pr_stub: dict[str, typ.Any]) -> None:
     """Ensure PR attempts are recorded via stub."""
     return
+
+
+@given("GITHUB_TOKEN is unset")
+def given_github_token_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Clear GitHub token to allow PR-less persistence."""
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+
+
+@given("bucket versioning check fails")
+def given_versioning_failure(fake_s3: FakeS3Client) -> None:
+    """Force the fake S3 client to fail versioning checks."""
+    fake_s3.raise_on_versioning = True
+
+
+@given("bucket write permission check fails")
+def given_write_failure(fake_s3: FakeS3Client) -> None:
+    """Force the fake S3 client to fail write/delete probes."""
+    fake_s3.raise_on_put = True
+    fake_s3.raise_on_delete = True
 
 
 @given(parsers.cfparse('bucket versioning status is "{status}"'))
@@ -341,6 +383,12 @@ def then_manifest_bucket(estate_alias: str, bucket: str) -> None:
     assert path.exists()
     data = _yaml.load(path.read_text(encoding="utf-8")) or {}
     assert data.get("bucket") == bucket
+
+
+@then("no pull request was attempted")
+def then_no_pr(pr_stub: dict[str, typ.Any]) -> None:
+    """Ensure PR opener was not invoked."""
+    assert not pr_stub
 
 
 @then("credentials are not written to the backend files")

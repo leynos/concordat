@@ -250,11 +250,16 @@ def persist(
     *,
     force: bool = False,
     github_token: str | None = None,
+    allow_insecure_endpoint: bool = False,
 ) -> None:
     """Configure remote state persistence for an estate."""
     record = _resolve_estate_record(alias)
-    token = _resolve_github_token(github_token)
-    options = PersistenceOptions(force=force, github_token=token)
+    token = github_token or os.getenv("GITHUB_TOKEN")
+    options = PersistenceOptions(
+        force=force,
+        github_token=token,
+        allow_insecure_endpoint=allow_insecure_endpoint,
+    )
     result = persist_estate(record, options)
     print(result.render())
 

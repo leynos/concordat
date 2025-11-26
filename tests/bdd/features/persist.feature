@@ -44,3 +44,34 @@ Feature: Persisting estate state remotely
     When I run concordat estate persist with options "--force"
     Then backend file "backend/core.tfbackend" contains "second-bucket"
     And persistence manifest records bucket "second-bucket"
+
+  Scenario: Persisting without a GitHub token skips PR creation
+    Given an isolated concordat config directory
+    And an estate repository with alias "core"
+    And pull requests are stubbed
+    And bucket versioning status is "Enabled"
+    And persistence prompts "df12-tfstate, fr-par, https://s3.fr-par.scw.cloud, estates/example/main, terraform.tfstate"
+    And GITHUB_TOKEN is unset
+    When I run concordat estate persist
+    Then the command succeeds
+    And no pull request was attempted
+
+  Scenario: Versioning check failure surfaces an error
+    Given an isolated concordat config directory
+    And an estate repository with alias "core"
+    And pull requests are stubbed
+    And bucket versioning check fails
+    And persistence prompts "df12-tfstate, fr-par, https://s3.fr-par.scw.cloud, estates/example/main, terraform.tfstate"
+    And GITHUB_TOKEN is set to "test-token"
+    When I run concordat estate persist
+    Then the command fails with error containing "Failed to query bucket versioning"
+
+  Scenario: Permission probe failure surfaces an error
+    Given an isolated concordat config directory
+    And an estate repository with alias "core"
+    And pull requests are stubbed
+    And bucket write permission check fails
+    And persistence prompts "df12-tfstate, fr-par, https://s3.fr-par.scw.cloud, estates/example/main, terraform.tfstate"
+    And GITHUB_TOKEN is set to "test-token"
+    When I run concordat estate persist
+    Then the command fails with error containing "Bucket permissions check failed"

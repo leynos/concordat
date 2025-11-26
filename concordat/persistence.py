@@ -124,9 +124,8 @@ class PersistenceResult:
 
     def render(self) -> str:
         """Return a short human readable summary."""
-        parts = []
         action = "updated" if self.updated else "unchanged"
-        parts.append(f"{action} {self.backend_path} and {self.manifest_path}")
+        parts = [f"{action} {self.backend_path} and {self.manifest_path}"]
         if self.pr_url:
             parts.append(f"PR: {self.pr_url}")
         elif self.branch:
@@ -153,27 +152,6 @@ class PersistenceCallbacks:
 
 
 @dataclasses.dataclass(frozen=True)
-class PersistenceArtifacts:
-    """Materialised backend artefacts ready for publishing."""
-
-    backend_path: Path
-    manifest_path: Path
-    descriptor: PersistenceDescriptor
-    key_suffix: str
-
-
-@dataclasses.dataclass(frozen=True)
-class PublishContext:
-    """Context required to commit and publish persistence changes."""
-
-    repository: pygit2.Repository
-    record: EstateRecord
-    github_token: str | None
-    pr_opener: typ.Callable[..., str | None] | None
-    timestamp_factory: typ.Callable[[], dt.datetime] | None
-
-
-@dataclasses.dataclass(frozen=True)
 class PersistenceFiles:
     """Backend file contents to be written to disk."""
 
@@ -181,18 +159,6 @@ class PersistenceFiles:
     backend_contents: str
     manifest_path: Path
     manifest_contents: dict[str, typ.Any]
-
-
-@dataclasses.dataclass(frozen=True)
-class PullRequestRequest:
-    """Data required to open a persistence pull request."""
-
-    record: EstateRecord
-    branch_name: str
-    descriptor: PersistenceDescriptor
-    key_suffix: str
-    github_token: str | None
-    pr_opener: typ.Callable[..., str | None] | None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -206,25 +172,7 @@ class PersistenceOptions:
     pr_opener: typ.Callable[..., str | None] | None = None
     fmt_runner: typ.Callable[[Path], None] | None = None
     timestamp_factory: typ.Callable[[], dt.datetime] | None = None
-
-
-def _write_files_or_return_early(
-    files: PersistenceFiles,
-    *,
-    force: bool,
-) -> PersistenceResult | None:
-    """Write files and return early result if unchanged, None if updated."""
-    updated = _write_files(files, force=force)
-    if updated:
-        return None
-    return PersistenceResult(
-        backend_path=files.backend_path,
-        manifest_path=files.manifest_path,
-        branch=None,
-        pr_url=None,
-        updated=False,
-        message="backend already configured",
-    )
+    allow_insecure_endpoint: bool = False
 
 
 def _build_success_result(
@@ -258,6 +206,7 @@ def _setup_persistence_environment(
 def _prepare_persistence_configuration(
     setup: PersistenceSetup,
     callbacks: PersistenceCallbacks,
+    opts: PersistenceOptions,
 ) -> tuple[PersistenceDescriptor, str]:
     """Collect operator input, build the descriptor, and validate settings."""
     existing_descriptor = PersistenceDescriptor.from_yaml(setup.manifest_path)
@@ -273,41 +222,44 @@ def _prepare_persistence_configuration(
             prompts.key_suffix,
         )
 
-    _validate_inputs(descriptor, prompts.key_suffix)
+    _validate_inputs_with_endpoint(
+        descriptor,
+        prompts.key_suffix,
+        allow_insecure_endpoint=opts.allow_insecure_endpoint,
+    )
     _validate_bucket(descriptor, prompts.key_suffix, callbacks.s3_client_factory)
     return descriptor, prompts.key_suffix
 
 
 def _finalize_and_publish_changes(
-    publish_ctx: PublishContext,
-    artifacts: PersistenceArtifacts,
+    repository: pygit2.Repository,
+    record: EstateRecord,
+    descriptor: PersistenceDescriptor,
+    key_suffix: str,
+    github_token: str | None,
+    pr_opener: typ.Callable[..., str | None] | None,
+    timestamp_factory: typ.Callable[[], dt.datetime] | None,
+    backend_path: Path,
+    manifest_path: Path,
 ) -> tuple[str, str | None]:
     """Commit, push, and optionally open a pull request for persistence files."""
     branch_name = _commit_changes(
-        publish_ctx.repository,
-        publish_ctx.record.branch,
-        [artifacts.backend_path, artifacts.manifest_path],
-        timestamp_factory=publish_ctx.timestamp_factory,
+        repository,
+        record.branch,
+        [backend_path, manifest_path],
+        timestamp_factory=timestamp_factory,
     )
-    _push_branch(publish_ctx.repository, branch_name, publish_ctx.record.repo_url)
-    if publish_ctx.pr_opener:
-        pr_url = publish_ctx.pr_opener(
-            publish_ctx.record,
+    _push_branch(repository, branch_name, record.repo_url)
+    pr_url = None
+    if github_token or pr_opener:
+        opener = pr_opener or _open_pr
+        pr_url = opener(
+            record,
             branch_name,
-            artifacts.descriptor,
-            artifacts.key_suffix,
-            publish_ctx.github_token,
+            descriptor,
+            key_suffix,
+            github_token,
         )
-    else:
-        request = PullRequestRequest(
-            record=publish_ctx.record,
-            branch_name=branch_name,
-            descriptor=artifacts.descriptor,
-            key_suffix=artifacts.key_suffix,
-            github_token=publish_ctx.github_token,
-            pr_opener=None,
-        )
-        pr_url = _open_pr(request)
     return branch_name, pr_url
 
 
@@ -334,7 +286,7 @@ def persist_estate(
         input_func=opts.input_func or input,
         s3_client_factory=opts.s3_client_factory or _default_s3_client_factory,
     )
-    descriptor, key_suffix = _prepare_persistence_configuration(setup, callbacks)
+    descriptor, key_suffix = _prepare_persistence_configuration(setup, callbacks, opts)
 
     backend_contents = _render_tfbackend(descriptor, key_suffix)
     manifest_contents = descriptor.to_dict()
@@ -345,27 +297,30 @@ def persist_estate(
         manifest_path=manifest_path,
         manifest_contents=manifest_contents,
     )
-    early_result = _write_files_or_return_early(files, force=opts.force)
-    if early_result:
-        return early_result
+    if not _write_files(files, force=opts.force):
+        return PersistenceResult(
+            backend_path=backend_path,
+            manifest_path=manifest_path,
+            branch=None,
+            pr_url=None,
+            updated=False,
+            message="backend already configured",
+        )
 
     if opts.fmt_runner:
         opts.fmt_runner(workdir)
 
-    artifacts = PersistenceArtifacts(
-        backend_path=backend_path,
-        manifest_path=manifest_path,
-        descriptor=descriptor,
-        key_suffix=key_suffix,
-    )
-    publish_ctx = PublishContext(
+    branch_name, pr_url = _finalize_and_publish_changes(
         repository=repository,
         record=record,
+        descriptor=descriptor,
+        key_suffix=key_suffix,
         github_token=opts.github_token,
         pr_opener=opts.pr_opener,
         timestamp_factory=opts.timestamp_factory,
+        backend_path=backend_path,
+        manifest_path=manifest_path,
     )
-    branch_name, pr_url = _finalize_and_publish_changes(publish_ctx, artifacts)
     return _build_success_result(backend_path, manifest_path, branch_name, pr_url)
 
 
@@ -375,10 +330,9 @@ def _load_clean_estate(record: EstateRecord) -> Path:
     workdir = ensure_estate_cache(record)
     repository = pygit2.Repository(str(workdir))
     status = repository.status()
-    dirty = [
+    if dirty := [
         path for path, flags in status.items() if flags != pygit2.GIT_STATUS_CURRENT
-    ]
-    if dirty:
+    ]:
         formatted = ", ".join(sorted(dirty))
         raise PersistenceError(
             f"Estate cache for {record.alias!r} has uncommitted changes: {formatted}"
@@ -443,8 +397,7 @@ def _prompt_with_default(
     input_func: typ.Callable[[str], str],
 ) -> str:
     suffix = f" [{default}]" if default else ""
-    response = input_func(f"{label}{suffix}: ").strip()
-    if response:
+    if response := input_func(f"{label}{suffix}: ").strip():
         return response
     if default:
         return default
@@ -467,11 +420,28 @@ def _build_descriptor(
 
 
 def _validate_inputs(descriptor: PersistenceDescriptor, key_suffix: str) -> None:
+    _validate_inputs_with_endpoint(
+        descriptor,
+        key_suffix,
+        allow_insecure_endpoint=False,
+    )
+
+
+def _validate_inputs_with_endpoint(
+    descriptor: PersistenceDescriptor,
+    key_suffix: str,
+    *,
+    allow_insecure_endpoint: bool,
+) -> None:
+    """Validate descriptor fields and endpoint constraints."""
     _validate_path_safety(descriptor.key_prefix, "Key prefix")
     _validate_path_safety(key_suffix, "Key suffix")
     _validate_key_suffix_not_empty(key_suffix)
     _validate_required_fields(descriptor)
-    _validate_endpoint_protocol(descriptor.endpoint)
+    _validate_endpoint_protocol(
+        descriptor.endpoint,
+        allow_insecure_endpoint=allow_insecure_endpoint,
+    )
 
 
 def _validate_path_safety(path: str, field_name: str) -> None:
@@ -494,10 +464,15 @@ def _validate_required_fields(descriptor: PersistenceDescriptor) -> None:
         raise PersistenceError("Region is required.")
 
 
-def _validate_endpoint_protocol(endpoint: str) -> None:
-    """Ensure endpoints use HTTPS for transport security."""
-    if not endpoint.startswith("https://"):
-        raise PersistenceError("Endpoint must use HTTPS.")
+def _validate_endpoint_protocol(
+    endpoint: str, *, allow_insecure_endpoint: bool = False
+) -> None:
+    """Ensure endpoints use HTTPS unless explicitly allowed for dev use."""
+    if endpoint.startswith("https://"):
+        return
+    if allow_insecure_endpoint and endpoint.startswith("http://"):
+        return
+    raise PersistenceError("Endpoint must use HTTPS.")
 
 
 def _validate_bucket(
@@ -713,26 +688,28 @@ def _push_branch(repository: pygit2.Repository, branch: str, repo_url: str) -> N
 
 
 def _open_pr(
-    request: PullRequestRequest,
+    record: EstateRecord,
+    branch_name: str,
+    descriptor: PersistenceDescriptor,
+    key_suffix: str,
+    github_token: str | None,
 ) -> str | None:
-    slug = parse_github_slug(request.record.repo_url)
-    if not slug or not request.github_token:
+    slug = parse_github_slug(record.repo_url)
+    if not slug or not github_token:
         return None
     owner, name = slug.split("/", 1)
-    client = github3.login(token=request.github_token)
+    client = github3.login(token=github_token)
     gh_repo = client.repository(owner, name)
     title = "Concordat: persist estate remote state"
-    key = (
-        f"{request.descriptor.key_prefix.rstrip('/')}/{request.key_suffix.lstrip('/')}"
-    )
+    key = f"{descriptor.key_prefix.rstrip('/')}/{key_suffix.lstrip('/')}"
     body = textwrap.dedent(
         f"""
         This pull request enables remote state for the estate.
 
-        - bucket: `{request.descriptor.bucket}`
+        - bucket: `{descriptor.bucket}`
         - key: `{key}`
-        - region: `{request.descriptor.region}`
-        - endpoint: `{request.descriptor.endpoint}`
+        - region: `{descriptor.region}`
+        - endpoint: `{descriptor.endpoint}`
 
         Credentials are expected via environment variables; none are written to
         the repository.
@@ -740,8 +717,8 @@ def _open_pr(
     ).strip()
     pr = gh_repo.create_pull(
         title,
-        base=request.record.branch,
-        head=request.branch_name,
+        base=record.branch,
+        head=branch_name,
         body=body,
     )
     return pr.html_url
