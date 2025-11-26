@@ -142,6 +142,16 @@ class PersistenceResult:
 
 
 @dataclasses.dataclass(frozen=True)
+class PersistenceFiles:
+    """Backend and manifest file contents to persist."""
+
+    backend_path: Path
+    backend_contents: str
+    manifest_path: Path
+    manifest_contents: dict[str, typ.Any]
+
+
+@dataclasses.dataclass(frozen=True)
 class PersistenceOptions:
     """Optional configuration and callbacks for persistence workflow."""
 
@@ -213,21 +223,19 @@ def persist_estate(
     backend_contents = _render_tfbackend(descriptor, prompts["key_suffix"])
     manifest_contents = descriptor.to_dict()
 
-    if not _write_files(
+    files = PersistenceFiles(
         backend_path=backend_path,
         backend_contents=backend_contents,
         manifest_path=manifest_path,
         manifest_contents=manifest_contents,
+    )
+
+    early_result = _write_files_and_check_for_changes(
+        files,
         force=opts.force,
-    ):
-        return PersistenceResult(
-            backend_path=backend_path,
-            manifest_path=manifest_path,
-            branch=None,
-            pr_url=None,
-            updated=False,
-            message="backend already configured",
-        )
+    )
+    if early_result:
+        return early_result
 
     if opts.fmt_runner:
         opts.fmt_runner(workdir)
@@ -240,26 +248,22 @@ def persist_estate(
     )
     _push_branch(repository, branch_name, record.repo_url)
 
-    pr_url = None
-    if opts.github_token or opts.pr_opener:
-        opener = opts.pr_opener or _open_pr
-        request = PullRequestRequest(
-            record=record,
-            branch_name=branch_name,
-            descriptor=descriptor,
-            key_suffix=prompts["key_suffix"],
-            github_token=opts.github_token,
-        )
-        pr_url = opener(request)
+    request = PullRequestRequest(
+        record=record,
+        branch_name=branch_name,
+        descriptor=descriptor,
+        key_suffix=prompts["key_suffix"],
+        github_token=opts.github_token,
+    )
+    pr_url = _open_pr_if_configured(request, opts.pr_opener)
 
-    message = "opened persistence pull request" if pr_url else "pushed branch"
     return PersistenceResult(
         backend_path=backend_path,
         manifest_path=manifest_path,
         branch=branch_name,
         pr_url=pr_url,
         updated=True,
-        message=message,
+        message=_build_result_message(pr_url),
     )
 
 
@@ -376,17 +380,32 @@ def _validate_required_fields(descriptor: PersistenceDescriptor) -> None:
         raise PersistenceError("Region is required.")
 
 
+def _is_secure_endpoint(endpoint: str) -> bool:
+    """Check if endpoint uses HTTPS protocol."""
+    return endpoint.startswith("https://")
+
+
+def _is_allowed_insecure_endpoint(endpoint: str, *, allow_insecure: bool) -> bool:
+    """Check if endpoint uses HTTP and insecure endpoints are allowed."""
+    return allow_insecure and endpoint.startswith("http://")
+
+
+def _has_protocol_scheme(endpoint: str) -> bool:
+    """Check if endpoint includes a protocol scheme."""
+    return "://" in endpoint
+
+
 def _validate_endpoint_protocol(
     endpoint: str, *, allow_insecure_endpoint: bool = False
 ) -> None:
     """Ensure endpoints use HTTPS unless explicitly allowed for dev use."""
     if not endpoint.strip():
         raise PersistenceError("Endpoint is required.")
-    if endpoint.startswith("https://"):
+    if _is_secure_endpoint(endpoint):
         return
-    if allow_insecure_endpoint and endpoint.startswith("http://"):
+    if _is_allowed_insecure_endpoint(endpoint, allow_insecure=allow_insecure_endpoint):
         return
-    if "://" not in endpoint:
+    if not _has_protocol_scheme(endpoint):
         raise PersistenceError(
             "Endpoint must include an https:// scheme (for example, "
             "https://s3.example.com)."
@@ -459,6 +478,41 @@ def _render_tfbackend(
     return "\n".join(lines)
 
 
+def _write_files_and_check_for_changes(
+    files: PersistenceFiles,
+    *,
+    force: bool,
+) -> PersistenceResult | None:
+    """Write backend and manifest files; return early result if unchanged."""
+    updated = _write_files(files, force=force)
+    if updated:
+        return None
+    return PersistenceResult(
+        backend_path=files.backend_path,
+        manifest_path=files.manifest_path,
+        branch=None,
+        pr_url=None,
+        updated=False,
+        message="backend already configured",
+    )
+
+
+def _open_pr_if_configured(
+    request: PullRequestRequest,
+    pr_opener: typ.Callable[[PullRequestRequest], str | None] | None,
+) -> str | None:
+    """Open a pull request if token or custom opener is provided."""
+    if not (request.github_token or pr_opener):
+        return None
+    opener = pr_opener or _open_pr
+    return opener(request)
+
+
+def _build_result_message(pr_url: str | None) -> str:
+    """Build the result message based on PR creation status."""
+    return "opened persistence pull request" if pr_url else "pushed branch"
+
+
 def _guard_existing_files(
     backend_path: Path,
     manifest_path: Path,
@@ -504,21 +558,19 @@ def _guard_backend_file(
 
 
 def _write_files(
+    files: PersistenceFiles,
     *,
-    backend_path: Path,
-    backend_contents: str,
-    manifest_path: Path,
-    manifest_contents: dict[str, typ.Any],
     force: bool,
 ) -> bool:
+    """Write backend and manifest files if changed."""
     backend_changed = _write_if_changed(
-        backend_path,
-        backend_contents,
+        files.backend_path,
+        files.backend_contents,
         force=force,
     )
     manifest_changed = _write_manifest_if_changed(
-        manifest_path,
-        manifest_contents,
+        files.manifest_path,
+        files.manifest_contents,
         force=force,
     )
     return backend_changed or manifest_changed

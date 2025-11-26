@@ -234,14 +234,29 @@ def test_bucket_versioning_status_wraps_errors(
     assert "Failed to query bucket versioning" in str(excinfo.value)
 
 
-def test_exercise_write_permissions_wraps_errors() -> None:
+@pytest.mark.parametrize(
+    ("failing_operation", "test_description"),
+    [
+        ("put", "write probe"),
+        ("delete", "delete probe"),
+    ],
+    ids=["put_object_fails", "delete_object_fails"],
+)
+def test_exercise_write_permissions_wraps_errors(
+    failing_operation: str,
+    test_description: str,
+) -> None:
     """Write/delete probe failures become PersistenceError."""
 
     class Client:
         def put_object(self, **kwargs: object) -> dict[str, str]:
-            raise boto_exceptions.BotoCoreError
+            if failing_operation == "put":
+                raise boto_exceptions.BotoCoreError
+            return {}
 
         def delete_object(self, **kwargs: object) -> dict[str, str]:
+            if failing_operation == "delete":
+                raise boto_exceptions.BotoCoreError
             return {}
 
     client = typ.cast("persistence.S3Client", Client())
@@ -250,51 +265,20 @@ def test_exercise_write_permissions_wraps_errors() -> None:
     assert "Bucket permissions check failed" in str(excinfo.value)
 
 
-def test_exercise_write_permissions_wraps_errors_on_delete() -> None:
-    """Delete failures are wrapped in PersistenceError."""
-
-    class Client:
-        def put_object(self, **kwargs: object) -> dict[str, str]:
-            return {}
-
-        def delete_object(self, **kwargs: object) -> dict[str, str]:
-            raise boto_exceptions.BotoCoreError
-
-    client = typ.cast("persistence.S3Client", Client())
-    with pytest.raises(persistence.PersistenceError) as excinfo:
-        persistence._exercise_write_permissions(client, "bucket", "key")
-    assert "Bucket permissions check failed" in str(excinfo.value)
-
-
-def test_guard_existing_files_detects_conflict(tmp_path: Path) -> None:
-    """Conflicting manifest or backend files raise errors."""
-    backend_path = tmp_path / "backend.tfbackend"
-    manifest_path = tmp_path / "backend" / "persistence.yaml"
-    backend_path.parent.mkdir(parents=True, exist_ok=True)
-    manifest_path.parent.mkdir(parents=True, exist_ok=True)
-
-    descriptor = persistence.PersistenceDescriptor(
-        schema_version=1,
-        enabled=True,
-        bucket="df12",
-        key_prefix="estates/example/main",
-        region="fr-par",
-        endpoint="https://s3.fr-par.scw.cloud",
-        backend_config_path="backend.tfbackend",
-    )
-    manifest_path.write_text("different: true\n", encoding="utf-8")
-    backend_path.write_text("old-backend", encoding="utf-8")
-    with pytest.raises(persistence.PersistenceError):
-        persistence._guard_existing_files(
-            backend_path,
-            manifest_path,
-            descriptor,
-            "terraform.tfstate",
-        )
-
-
-def test_guard_existing_files_allows_matching_files(tmp_path: Path) -> None:
-    """Matching manifest and backend files are accepted."""
+@pytest.mark.parametrize(
+    ("scenario", "should_raise"),
+    [
+        ("conflict", True),
+        ("matching", False),
+    ],
+)
+def test_guard_existing_files_behavior(
+    tmp_path: Path,
+    scenario: str,
+    *,
+    should_raise: bool,
+) -> None:
+    """Guard logic detects conflicts and accepts matching files."""
     backend_path = tmp_path / "backend.tfbackend"
     manifest_path = tmp_path / "backend" / "persistence.yaml"
     backend_path.parent.mkdir(parents=True, exist_ok=True)
@@ -310,18 +294,33 @@ def test_guard_existing_files_allows_matching_files(tmp_path: Path) -> None:
         backend_config_path="backend.tfbackend",
     )
     key_suffix = "terraform.tfstate"
-    persistence._yaml.dump(descriptor.to_dict(), manifest_path)
-    backend_path.write_text(
-        persistence._render_tfbackend(descriptor, key_suffix),
-        encoding="utf-8",
-    )
 
-    persistence._guard_existing_files(
-        backend_path,
-        manifest_path,
-        descriptor,
-        key_suffix,
-    )
+    if scenario == "conflict":
+        manifest_path.write_text("different: true\n", encoding="utf-8")
+        backend_path.write_text("old-backend", encoding="utf-8")
+    else:
+        with manifest_path.open("w", encoding="utf-8") as handle:
+            persistence._yaml.dump(descriptor.to_dict(), handle)
+        backend_path.write_text(
+            persistence._render_tfbackend(descriptor, key_suffix),
+            encoding="utf-8",
+        )
+
+    if should_raise:
+        with pytest.raises(persistence.PersistenceError):
+            persistence._guard_existing_files(
+                backend_path,
+                manifest_path,
+                descriptor,
+                key_suffix,
+            )
+    else:
+        persistence._guard_existing_files(
+            backend_path,
+            manifest_path,
+            descriptor,
+            key_suffix,
+        )
 
 
 def test_write_manifest_if_changed_noop(tmp_path: Path) -> None:
