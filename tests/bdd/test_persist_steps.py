@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import io
 import shlex
 import shutil
@@ -26,6 +27,21 @@ from .conftest import RunResult
 scenarios("features/persist.feature")
 
 _yaml = YAML(typ="safe")
+
+
+@dataclasses.dataclass(frozen=True)
+class PromptValues:
+    """Container for prompt responses used by persistence scenarios."""
+
+    bucket: str
+    region: str
+    endpoint: str
+    prefix: str
+    suffix: str
+
+    def populate_queue(self, queue: list[str]) -> None:
+        """Populate the prompt queue with stored values."""
+        queue[:] = [self.bucket, self.region, self.endpoint, self.prefix, self.suffix]
 
 
 @pytest.fixture(autouse=True)
@@ -233,7 +249,14 @@ def given_prompt_values(
     prompt_queue: list[str],
 ) -> None:
     """Populate prompt responses for the persistence workflow."""
-    prompt_queue[:] = [bucket, region, endpoint, prefix, suffix]
+    values = PromptValues(
+        bucket=bucket,
+        region=region,
+        endpoint=endpoint,
+        prefix=prefix,
+        suffix=suffix,
+    )
+    values.populate_queue(prompt_queue)
 
 
 @given(parsers.cfparse('GITHUB_TOKEN is set to "{token}"'))

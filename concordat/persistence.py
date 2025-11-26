@@ -193,6 +193,55 @@ class PullRequestRequest:
     pr_opener: typ.Callable[..., str | None] | None
 
 
+@dataclasses.dataclass(frozen=True)
+class PersistenceOptions:
+    """Optional configuration and callbacks for persistence workflow."""
+
+    force: bool = False
+    github_token: str | None = None
+    input_func: typ.Callable[[str], str] | None = None
+    s3_client_factory: typ.Callable[[str, str], S3Client] | None = None
+    pr_opener: typ.Callable[..., str | None] | None = None
+    fmt_runner: typ.Callable[[Path], None] | None = None
+    timestamp_factory: typ.Callable[[], dt.datetime] | None = None
+
+
+def _write_files_or_return_early(
+    files: PersistenceFiles,
+    *,
+    force: bool,
+) -> PersistenceResult | None:
+    """Write files and return early result if unchanged, None if updated."""
+    updated = _write_files(files, force=force)
+    if updated:
+        return None
+    return PersistenceResult(
+        backend_path=files.backend_path,
+        manifest_path=files.manifest_path,
+        branch=None,
+        pr_url=None,
+        updated=False,
+        message="backend already configured",
+    )
+
+
+def _build_success_result(
+    backend_path: Path,
+    manifest_path: Path,
+    branch_name: str,
+    pr_url: str | None,
+) -> PersistenceResult:
+    """Build the final success result for the persistence workflow."""
+    return PersistenceResult(
+        backend_path=backend_path,
+        manifest_path=manifest_path,
+        branch=branch_name,
+        pr_url=pr_url,
+        updated=True,
+        message="opened persistence pull request" if pr_url else "pushed branch",
+    )
+
+
 def _setup_persistence_environment(
     record: EstateRecord,
 ) -> tuple[Path, pygit2.Repository, Path, Path]:
@@ -262,16 +311,10 @@ def _finalize_and_publish_changes(
 
 def persist_estate(
     record: EstateRecord,
-    *,
-    force: bool = False,
-    github_token: str | None = None,
-    input_func: typ.Callable[[str], str] | None = None,
-    s3_client_factory: typ.Callable[[str, str], S3Client] | None = None,
-    pr_opener: typ.Callable[..., str | None] | None = None,
-    fmt_runner: typ.Callable[[Path], None] | None = None,
-    timestamp_factory: typ.Callable[[], dt.datetime] | None = None,
+    options: PersistenceOptions | None = None,
 ) -> PersistenceResult:
     """Configure remote state for an estate and open a pull request."""
+    opts = options or PersistenceOptions()
     (
         workdir,
         repository,
@@ -283,11 +326,11 @@ def persist_estate(
         record=record,
         manifest_path=manifest_path,
         backend_path=backend_path,
-        force=force,
+        force=opts.force,
     )
     callbacks = PersistenceCallbacks(
-        input_func=input_func or input,
-        s3_client_factory=s3_client_factory or _default_s3_client_factory,
+        input_func=opts.input_func or input,
+        s3_client_factory=opts.s3_client_factory or _default_s3_client_factory,
     )
     descriptor, key_suffix = _prepare_persistence_configuration(setup, callbacks)
 
@@ -300,19 +343,12 @@ def persist_estate(
         manifest_path=manifest_path,
         manifest_contents=manifest_contents,
     )
-    updated = _write_files(files, force=force)
-    if not updated:
-        return PersistenceResult(
-            backend_path=backend_path,
-            manifest_path=manifest_path,
-            branch=None,
-            pr_url=None,
-            updated=False,
-            message="backend already configured",
-        )
+    early_result = _write_files_or_return_early(files, force=opts.force)
+    if early_result:
+        return early_result
 
-    if fmt_runner:
-        fmt_runner(workdir)
+    if opts.fmt_runner:
+        opts.fmt_runner(workdir)
 
     artifacts = PersistenceArtifacts(
         backend_path=backend_path,
@@ -323,19 +359,12 @@ def persist_estate(
     publish_ctx = PublishContext(
         repository=repository,
         record=record,
-        github_token=github_token,
-        pr_opener=pr_opener,
-        timestamp_factory=timestamp_factory,
+        github_token=opts.github_token,
+        pr_opener=opts.pr_opener,
+        timestamp_factory=opts.timestamp_factory,
     )
     branch_name, pr_url = _finalize_and_publish_changes(publish_ctx, artifacts)
-    return PersistenceResult(
-        backend_path=backend_path,
-        manifest_path=manifest_path,
-        branch=branch_name,
-        pr_url=pr_url,
-        updated=True,
-        message="opened persistence pull request" if pr_url else "pushed branch",
-    )
+    return _build_success_result(backend_path, manifest_path, branch_name, pr_url)
 
 
 def _load_clean_estate(record: EstateRecord) -> Path:

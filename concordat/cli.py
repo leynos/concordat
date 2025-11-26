@@ -27,7 +27,7 @@ from .estate import (
 )
 from .estate_execution import ExecutionIO, ExecutionOptions, run_apply, run_plan
 from .listing import list_namespace_repositories
-from .persistence import persist_estate
+from .persistence import PersistenceOptions, persist_estate
 from .platform_standards import PlatformStandardsConfig
 
 app = App()
@@ -254,11 +254,8 @@ def persist(
     """Configure remote state persistence for an estate."""
     record = _resolve_estate_record(alias)
     token = _resolve_github_token(github_token)
-    result = persist_estate(
-        record,
-        force=force,
-        github_token=token,
-    )
+    options = PersistenceOptions(force=force, github_token=token)
+    result = persist_estate(record, options)
     print(result.render())
 
 
