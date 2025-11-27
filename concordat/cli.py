@@ -271,19 +271,34 @@ def _resolve_estate_or_active(
     alias: str | None = None, *, require_owner: bool = True
 ) -> EstateRecord:
     """Resolve an estate by alias or fall back to the active estate."""
-    if alias:
-        record = get_estate(alias)
-        if record is None:
-            raise EstateNotConfiguredError(alias)
-    else:
-        record = get_active_estate()
-        if record is None:
-            raise ConcordatError(ERROR_NO_ACTIVE_ESTATE)
+    record = _get_estate_by_alias(alias) if alias else _get_active_estate_required()
 
-    if require_owner and not record.github_owner:
-        raise ConcordatError(ERROR_ACTIVE_ESTATE_OWNER.format(alias=record.alias))
+    if require_owner:
+        _ensure_github_owner(record)
 
     return record
+
+
+def _get_estate_by_alias(alias: str) -> EstateRecord:
+    """Get an estate by alias, raising if not found."""
+    record = get_estate(alias)
+    if record is None:
+        raise EstateNotConfiguredError(alias)
+    return record
+
+
+def _get_active_estate_required() -> EstateRecord:
+    """Get the active estate, raising if not configured."""
+    record = get_active_estate()
+    if record is None:
+        raise ConcordatError(ERROR_NO_ACTIVE_ESTATE)
+    return record
+
+
+def _ensure_github_owner(record: EstateRecord) -> None:
+    """Validate that the estate has a github_owner configured."""
+    if not record.github_owner:
+        raise ConcordatError(ERROR_ACTIVE_ESTATE_OWNER.format(alias=record.alias))
 
 
 def _require_active_estate() -> EstateRecord:
