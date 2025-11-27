@@ -19,6 +19,7 @@ from .models import (  # noqa: F401
     MANIFEST_FILENAME,
     PERSISTENCE_CHECK_SUFFIX,
     PERSISTENCE_SCHEMA_VERSION,
+    FinalizationContext,
     PersistenceDescriptor,
     PersistenceError,
     PersistenceFiles,
@@ -26,9 +27,8 @@ from .models import (  # noqa: F401
     PersistencePaths,
     PersistenceResult,
     PullRequestContext,
-    WorkspaceContext,
-    FinalizationContext,
     S3Client,
+    WorkspaceContext,
     _yaml,
 )
 from .pr import _build_result_message, _open_pr, _open_pr_if_configured  # noqa: F401

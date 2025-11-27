@@ -13,7 +13,9 @@ from concordat.errors import ConcordatError
 if typ.TYPE_CHECKING:
     import datetime as dt
     from pathlib import Path
+
     import pygit2
+
     from concordat.estate import EstateRecord
 
 PERSISTENCE_SCHEMA_VERSION = 1
