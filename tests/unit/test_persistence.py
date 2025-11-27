@@ -416,13 +416,14 @@ def test_open_pr_returns_none_without_token() -> None:
         repo_url="git@github.com:example/core.git",
         github_owner="example",
     )
-    result = persistence._open_pr(
+    context = persistence.PullRequestContext(
         record=record,
         branch_name="branch",
         descriptor=descriptor,
         key_suffix="terraform.tfstate",
         github_token=None,
     )
+    result = persistence._open_pr(context)
     assert result is None
 
 

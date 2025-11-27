@@ -19,6 +19,7 @@ from .models import (
     PersistenceFiles,
     PersistenceOptions,
     PersistenceResult,
+    PullRequestContext,
 )
 from .pr import _build_result_message, _open_pr_if_configured
 from .render import _render_tfbackend
@@ -106,7 +107,7 @@ def persist_estate(
     )
     push_branch(repository, branch_name, record.repo_url)
 
-    pr_url = _open_pr_if_configured(
+    pr_context = PullRequestContext(
         record=record,
         branch_name=branch_name,
         descriptor=descriptor,
@@ -114,6 +115,7 @@ def persist_estate(
         github_token=github_token,
         pr_opener=opts.pr_opener,
     )
+    pr_url = _open_pr_if_configured(pr_context)
 
     return PersistenceResult(
         backend_path=backend_path,

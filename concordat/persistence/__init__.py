@@ -24,6 +24,7 @@ from .models import (  # noqa: F401
     PersistenceFiles,
     PersistenceOptions,
     PersistenceResult,
+    PullRequestContext,
     S3Client,
     _yaml,
 )
@@ -57,6 +58,7 @@ __all__ = [
     "PersistenceFiles",
     "PersistenceOptions",
     "PersistenceResult",
+    "PullRequestContext",
     "S3Client",
     "persist_estate",
 ]

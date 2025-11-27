@@ -14,6 +14,8 @@ if typ.TYPE_CHECKING:
     import datetime as dt
     from pathlib import Path
 
+    from concordat.estate import EstateRecord
+
 PERSISTENCE_SCHEMA_VERSION = 1
 DEFAULT_KEY_FILENAME = "terraform.tfstate"
 MANIFEST_FILENAME = "backend/persistence.yaml"
@@ -152,3 +154,15 @@ class PersistenceOptions:
     fmt_runner: typ.Callable[[Path], None] | None = None
     timestamp_factory: typ.Callable[[], dt.datetime] | None = None
     allow_insecure_endpoint: bool = False
+
+
+@dataclasses.dataclass(frozen=True)
+class PullRequestContext:
+    """Context for opening a pull request."""
+
+    record: EstateRecord
+    branch_name: str
+    descriptor: PersistenceDescriptor
+    key_suffix: str
+    github_token: str | None = None
+    pr_opener: typ.Callable[..., str | None] | None = None
