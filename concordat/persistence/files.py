@@ -25,7 +25,7 @@ class FileIO:
         return FileIO(
             reader=lambda target: target.read_text(encoding="utf-8"),
             writer=lambda target, payload: target.write_text(
-                typ.cast(str, payload), encoding="utf-8"
+                typ.cast("str", payload), encoding="utf-8"
             ),
         )
 

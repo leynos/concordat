@@ -54,18 +54,12 @@ def _validate_required_fields(descriptor: PersistenceDescriptor) -> None:
         raise PersistenceError("Region is required.")
 
 
-def _validate_endpoint_protocol(
-    endpoint: str, *, allow_insecure_endpoint: bool = False
-) -> None:
-    """Ensure endpoints use HTTPS unless explicitly allowed for dev use."""
-    endpoint = endpoint.strip()
-    if not endpoint:
-        raise PersistenceError("Endpoint is required.")
-
+def _check_endpoint_scheme(endpoint: str, *, allow_insecure: bool) -> None:
+    """Validate the endpoint scheme, preserving existing error messaging."""
     if endpoint.startswith("https://"):
         return
 
-    if allow_insecure_endpoint and endpoint.startswith("http://"):
+    if allow_insecure and endpoint.startswith("http://"):
         return
 
     if "://" not in endpoint:
@@ -77,6 +71,16 @@ def _validate_endpoint_protocol(
     raise PersistenceError(
         "Endpoint must use HTTPS (for example, https://s3.example.com)."
     )
+
+
+def _validate_endpoint_protocol(
+    endpoint: str, *, allow_insecure_endpoint: bool = False
+) -> None:
+    """Ensure endpoints use HTTPS unless explicitly allowed for dev use."""
+    endpoint = endpoint.strip()
+    if not endpoint:
+        raise PersistenceError("Endpoint is required.")
+    _check_endpoint_scheme(endpoint, allow_insecure=allow_insecure_endpoint)
 
 
 def _validate_bucket(
