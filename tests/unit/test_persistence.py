@@ -61,7 +61,13 @@ def test_render_tfbackend_uses_scaleway_shape() -> None:
         (
             "df12",
             "fr-par",
-            "http://insecure",
+            "s3.fr-par.scw.cloud",
+            "Endpoint must include an https:// scheme",
+        ),
+        (
+            "df12",
+            "fr-par",
+            "http://endpoint",
             "Endpoint must use HTTPS",
         ),
         (
@@ -157,6 +163,30 @@ def test_descriptor_from_yaml_rejects_malformed(tmp_path: Path) -> None:
         persistence.PersistenceError, match="Invalid persistence manifest"
     ):
         persistence.PersistenceDescriptor.from_yaml(path)
+
+
+def test_descriptor_from_yaml_rejects_newer_schema_version(tmp_path: Path) -> None:
+    """Newer schema versions are rejected with a clear message."""
+    path = tmp_path / "persistence.yaml"
+    newer_version = persistence.PERSISTENCE_SCHEMA_VERSION + 1
+    manifest = {
+        "schema_version": newer_version,
+        "enabled": True,
+        "bucket": "df12-tfstate",
+        "key_prefix": "estates/example/main",
+        "region": "fr-par",
+        "endpoint": "https://s3.fr-par.scw.cloud",
+        "backend_config_path": "backend/core.tfbackend",
+    }
+    with path.open("w", encoding="utf-8") as handle:
+        persistence._yaml.dump(manifest, handle)
+
+    with pytest.raises(persistence.PersistenceError) as excinfo:
+        persistence.PersistenceDescriptor.from_yaml(path)
+
+    message = str(excinfo.value)
+    assert str(newer_version) in message
+    assert "maximum supported" in message
 
 
 def test_validate_inputs_allows_insecure_endpoint_when_opted_in() -> None:
@@ -265,20 +295,41 @@ def test_exercise_write_permissions_wraps_errors(
     assert "Bucket permissions check failed" in str(excinfo.value)
 
 
-@pytest.mark.parametrize(
-    ("scenario", "should_raise"),
-    [
-        ("conflict", True),
-        ("matching", False),
-    ],
-)
-def test_guard_existing_files_behavior(
-    tmp_path: Path,
-    scenario: str,
-    *,
-    should_raise: bool,
-) -> None:
-    """Guard logic detects conflicts and accepts matching files."""
+def test_write_manifest_if_changed_noop(tmp_path: Path) -> None:
+    """Manifest unchanged returns False without writing."""
+    path = tmp_path / "backend" / "persistence.yaml"
+    path.parent.mkdir(parents=True)
+    path.write_text("a: 1\n", encoding="utf-8")
+    changed = persistence._write_manifest_if_changed(
+        path,
+        {"a": 1},
+        force=False,
+    )
+    assert changed is False
+
+
+def test_write_files_raises_on_conflict_without_force(tmp_path: Path) -> None:
+    """Writing differing contents without --force raises PersistenceError."""
+    backend_path = tmp_path / "backend.tfbackend"
+    manifest_path = tmp_path / "backend" / "persistence.yaml"
+    backend_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    backend_path.write_text("old-backend", encoding="utf-8")
+    persistence._yaml.dump({"bucket": "old"}, manifest_path.open("w", encoding="utf-8"))
+
+    files = persistence.PersistenceFiles(
+        backend_path=backend_path,
+        backend_contents="new-backend",
+        manifest_path=manifest_path,
+        manifest_contents={"bucket": "new"},
+    )
+
+    with pytest.raises(persistence.PersistenceError):
+        persistence._write_files(files, force=False)
+
+
+def test_write_files_and_check_returns_unchanged_result(tmp_path: Path) -> None:
+    """When files are identical, early result marks workflow unchanged."""
     backend_path = tmp_path / "backend.tfbackend"
     manifest_path = tmp_path / "backend" / "persistence.yaml"
     backend_path.parent.mkdir(parents=True, exist_ok=True)
@@ -293,47 +344,22 @@ def test_guard_existing_files_behavior(
         endpoint="https://s3.fr-par.scw.cloud",
         backend_config_path="backend.tfbackend",
     )
-    key_suffix = "terraform.tfstate"
+    backend_contents = persistence._render_tfbackend(descriptor, "terraform.tfstate")
+    backend_path.write_text(backend_contents, encoding="utf-8")
+    with manifest_path.open("w", encoding="utf-8") as handle:
+        persistence._yaml.dump(descriptor.to_dict(), handle)
 
-    if scenario == "conflict":
-        manifest_path.write_text("different: true\n", encoding="utf-8")
-        backend_path.write_text("old-backend", encoding="utf-8")
-    else:
-        with manifest_path.open("w", encoding="utf-8") as handle:
-            persistence._yaml.dump(descriptor.to_dict(), handle)
-        backend_path.write_text(
-            persistence._render_tfbackend(descriptor, key_suffix),
-            encoding="utf-8",
-        )
-
-    if should_raise:
-        with pytest.raises(persistence.PersistenceError):
-            persistence._guard_existing_files(
-                backend_path,
-                manifest_path,
-                descriptor,
-                key_suffix,
-            )
-    else:
-        persistence._guard_existing_files(
-            backend_path,
-            manifest_path,
-            descriptor,
-            key_suffix,
-        )
-
-
-def test_write_manifest_if_changed_noop(tmp_path: Path) -> None:
-    """Manifest unchanged returns False without writing."""
-    path = tmp_path / "backend" / "persistence.yaml"
-    path.parent.mkdir(parents=True)
-    path.write_text("a: 1\n", encoding="utf-8")
-    changed = persistence._write_manifest_if_changed(
-        path,
-        {"a": 1},
-        force=False,
+    files = persistence.PersistenceFiles(
+        backend_path=backend_path,
+        backend_contents=backend_contents,
+        manifest_path=manifest_path,
+        manifest_contents=descriptor.to_dict(),
     )
-    assert changed is False
+
+    result = persistence._write_files_and_check_for_changes(files, force=False)
+    assert result is not None
+    assert result.updated is False
+    assert result.message == "backend already configured"
 
 
 def test_setup_persistence_environment_rejects_dirty(
@@ -390,12 +416,90 @@ def test_open_pr_returns_none_without_token() -> None:
         repo_url="git@github.com:example/core.git",
         github_owner="example",
     )
-    request = persistence.PullRequestRequest(
+    result = persistence._open_pr(
         record=record,
         branch_name="branch",
         descriptor=descriptor,
         key_suffix="terraform.tfstate",
         github_token=None,
     )
-    result = persistence._open_pr(request)
     assert result is None
+
+
+def test_persist_estate_uses_env_token_and_remote(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """persist_estate falls back to GITHUB_TOKEN and respects custom remotes."""
+
+    class StubS3:
+        def get_bucket_versioning(self, **kwargs: object) -> dict[str, str]:
+            return {"Status": "Enabled"}
+
+        def put_object(self, **kwargs: object) -> dict[str, str]:
+            return {}
+
+        def delete_object(self, **kwargs: object) -> dict[str, str]:
+            return {}
+
+    workdir = tmp_path / "workdir"
+    repo = _make_repo(workdir)
+
+    bare = tmp_path / "remote.git"
+    pygit2.init_repository(str(bare), bare=True)
+    upstream = repo.remotes.create("upstream", str(bare))
+    upstream.push(["refs/heads/main:refs/heads/main"])
+
+    record = EstateRecord(
+        alias="core",
+        repo_url=str(bare),
+        github_owner="example",
+    )
+
+    monkeypatch.setattr(
+        estate_execution,
+        "ensure_estate_cache",
+        lambda _: workdir,
+    )
+    monkeypatch.setattr(
+        persistence,
+        "_branch_name",
+        lambda *args, **kwargs: "estate/persist-test",
+    )
+    monkeypatch.setenv("GITHUB_TOKEN", "env-token")
+
+    prompts = iter(
+        [
+            "df12",
+            "fr-par",
+            "https://s3.fr-par.scw.cloud",
+            "estates/example/main",
+            "terraform.tfstate",
+        ]
+    )
+
+    pr_log: dict[str, str | None] = {}
+
+    def pr_opener(**kwargs: object) -> str:
+        pr_log["github_token"] = typ.cast("str | None", kwargs.get("github_token"))
+        pr_log["branch_name"] = typ.cast("str", kwargs.get("branch_name"))
+        return "https://example.test/pr/1"
+
+    push_calls: list[tuple[str, str]] = []
+
+    monkeypatch.setattr(
+        persistence,
+        "_push_branch",
+        lambda repository, branch, repo_url: push_calls.append((branch, repo_url)),
+    )
+
+    options = persistence.PersistenceOptions(
+        input_func=lambda _: next(prompts),
+        s3_client_factory=lambda region, endpoint: StubS3(),
+        pr_opener=pr_opener,
+    )
+
+    result = persistence.persist_estate(record, options)
+
+    assert push_calls == [("estate/persist-test", str(bare))]
+    assert pr_log["github_token"] == "env-token"  # noqa: S105
+    assert result.pr_url == "https://example.test/pr/1"
