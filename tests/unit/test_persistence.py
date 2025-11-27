@@ -480,9 +480,9 @@ def test_persist_estate_uses_env_token_and_remote(
 
     pr_log: dict[str, str | None] = {}
 
-    def pr_opener(**kwargs: object) -> str:
-        pr_log["github_token"] = typ.cast("str | None", kwargs.get("github_token"))
-        pr_log["branch_name"] = typ.cast("str", kwargs.get("branch_name"))
+    def pr_opener(context: persistence.PullRequestContext) -> str:
+        pr_log["github_token"] = context.github_token
+        pr_log["branch_name"] = context.branch_name
         return "https://example.test/pr/1"
 
     push_calls: list[tuple[str, str]] = []
