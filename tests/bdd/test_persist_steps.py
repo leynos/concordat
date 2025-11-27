@@ -127,12 +127,11 @@ def pr_stub(monkeypatch: pytest.MonkeyPatch) -> dict[str, typ.Any]:
     """Capture pull request creation attempts."""
     log: dict[str, typ.Any] = {}
 
-    def opener(**kwargs: object) -> str:
-        descriptor = typ.cast("persistence.PersistenceDescriptor", kwargs["descriptor"])
-        log["branch"] = typ.cast("str", kwargs.get("branch_name"))
-        log["bucket"] = descriptor.bucket
-        log["key_suffix"] = typ.cast("str", kwargs.get("key_suffix"))
-        log["token"] = typ.cast("str | None", kwargs.get("github_token"))
+    def opener(context: persistence.PullRequestContext) -> str:
+        log["branch"] = context.branch_name
+        log["bucket"] = context.descriptor.bucket
+        log["key_suffix"] = context.key_suffix
+        log["token"] = context.github_token
         return "https://example.test/pr/1"
 
     monkeypatch.setattr(persistence, "_open_pr", opener)
