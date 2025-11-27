@@ -267,24 +267,29 @@ def persist(
 app.command(estate_app, name="estate")
 
 
-def _require_active_estate() -> EstateRecord:
-    if (record := get_active_estate()) is None:
-        raise ConcordatError(ERROR_NO_ACTIVE_ESTATE)
-    if not record.github_owner:
-        raise ConcordatError(ERROR_ACTIVE_ESTATE_OWNER.format(alias=record.alias))
-    return record
-
-
-def _resolve_estate_record(alias: str | None) -> EstateRecord:
+def _resolve_estate_or_active(alias: str | None = None) -> EstateRecord:
+    """Resolve an estate by alias or fall back to the active estate."""
     if alias:
         record = get_estate(alias)
         if record is None:
             raise EstateNotConfiguredError(alias)
-        if not record.github_owner:
-            raise ConcordatError(ERROR_ACTIVE_ESTATE_OWNER.format(alias=record.alias))
     else:
-        record = _require_active_estate()
+        record = get_active_estate()
+        if record is None:
+            raise ConcordatError(ERROR_NO_ACTIVE_ESTATE)
+
+    if not record.github_owner:
+        raise ConcordatError(ERROR_ACTIVE_ESTATE_OWNER.format(alias=record.alias))
+
     return record
+
+
+def _require_active_estate() -> EstateRecord:
+    return _resolve_estate_or_active()
+
+
+def _resolve_estate_record(alias: str | None) -> EstateRecord:
+    return _resolve_estate_or_active(alias)
 
 
 def _resolve_github_token(explicit: str | None = None) -> str:
