@@ -13,7 +13,7 @@ from concordat.errors import ConcordatError
 if typ.TYPE_CHECKING:
     import datetime as dt
     from pathlib import Path
-
+    import pygit2
     from concordat.estate import EstateRecord
 
 PERSISTENCE_SCHEMA_VERSION = 1
@@ -166,3 +166,31 @@ class PullRequestContext:
     key_suffix: str
     github_token: str | None = None
     pr_opener: typ.Callable[..., str | None] | None = None
+
+
+@dataclasses.dataclass(frozen=True)
+class PersistencePaths:
+    """Resolved paths for manifest and backend files."""
+
+    manifest_path: Path
+    backend_path: Path
+
+
+@dataclasses.dataclass(frozen=True)
+class WorkspaceContext:
+    """Working directory and repository for persistence operations."""
+
+    workdir: Path
+    repository: pygit2.Repository
+
+
+@dataclasses.dataclass(frozen=True)
+class FinalizationContext:
+    """Data needed to finalize persistence results and PR creation."""
+
+    record: EstateRecord
+    branch_name: str
+    descriptor: PersistenceDescriptor
+    key_suffix: str
+    github_token: str | None
+    opts: PersistenceOptions
