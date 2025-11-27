@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import typing as typ
 
 from .models import PersistenceError, PersistenceFiles, PersistenceResult, _yaml
@@ -11,19 +12,35 @@ if typ.TYPE_CHECKING:
     from pathlib import Path
 
 
+@dataclasses.dataclass(frozen=True)
+class FileIO:
+    """Reader/writer pair for persistence file operations."""
+
+    reader: typ.Callable[[Path], object]
+    writer: typ.Callable[[Path, object], None]
+
+    @staticmethod
+    def default() -> FileIO:
+        """Return default text reader/writer."""
+        return FileIO(
+            reader=lambda target: target.read_text(encoding="utf-8"),
+            writer=lambda target, payload: target.write_text(
+                typ.cast(str, payload), encoding="utf-8"
+            ),
+        )
+
+
 def _write_if_changed(
     path: Path,
     contents: object,
     *,
     force: bool,
-    reader: typ.Callable[[Path], object] | None = None,
-    writer: typ.Callable[[Path, object], None] | None = None,
+    io: FileIO | None = None,
 ) -> bool:
     """Write contents if changed; enforce overwrite policy when different."""
-    read = reader or (lambda target: target.read_text(encoding="utf-8"))
-    write = writer or (
-        lambda target, payload: target.write_text(str(payload), encoding="utf-8")
-    )
+    file_io = io or FileIO.default()
+    read = file_io.reader
+    write = file_io.writer
 
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
@@ -52,14 +69,18 @@ def _write_manifest_if_changed(
         with target.open("w", encoding="utf-8") as handle:
             _yaml.dump(manifest, handle)
 
-    return _write_if_changed(
-        path,
-        contents,
-        force=force,
+    manifest_io = FileIO(
         reader=lambda target: dict(
             _yaml.load(target.read_text(encoding="utf-8")) or {}
         ),
         writer=_dump_yaml,
+    )
+
+    return _write_if_changed(
+        path,
+        contents,
+        force=force,
+        io=manifest_io,
     )
 
 
