@@ -273,8 +273,7 @@ def _resolve_estate_or_active(
     """Resolve an estate by alias or fall back to the active estate."""
     record = _get_estate_by_alias(alias) if alias else _get_active_estate_required()
 
-    if require_owner:
-        _ensure_github_owner(record)
+    _ensure_github_owner_if_required(record, require_owner=require_owner)
 
     return record
 
@@ -295,9 +294,11 @@ def _get_active_estate_required() -> EstateRecord:
     return record
 
 
-def _ensure_github_owner(record: EstateRecord) -> None:
-    """Validate that the estate has a github_owner configured."""
-    if not record.github_owner:
+def _ensure_github_owner_if_required(
+    record: EstateRecord, *, require_owner: bool
+) -> None:
+    """Validate that the estate has a github_owner if required."""
+    if require_owner and not record.github_owner:
         raise ConcordatError(ERROR_ACTIVE_ESTATE_OWNER.format(alias=record.alias))
 
 
