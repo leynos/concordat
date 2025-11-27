@@ -267,7 +267,9 @@ def persist(
 app.command(estate_app, name="estate")
 
 
-def _resolve_estate_or_active(alias: str | None = None) -> EstateRecord:
+def _resolve_estate_or_active(
+    alias: str | None = None, *, require_owner: bool = True
+) -> EstateRecord:
     """Resolve an estate by alias or fall back to the active estate."""
     if alias:
         record = get_estate(alias)
@@ -278,18 +280,18 @@ def _resolve_estate_or_active(alias: str | None = None) -> EstateRecord:
         if record is None:
             raise ConcordatError(ERROR_NO_ACTIVE_ESTATE)
 
-    if not record.github_owner:
+    if require_owner and not record.github_owner:
         raise ConcordatError(ERROR_ACTIVE_ESTATE_OWNER.format(alias=record.alias))
 
     return record
 
 
 def _require_active_estate() -> EstateRecord:
-    return _resolve_estate_or_active()
+    return _resolve_estate_or_active(require_owner=True)
 
 
 def _resolve_estate_record(alias: str | None) -> EstateRecord:
-    return _resolve_estate_or_active(alias)
+    return _resolve_estate_or_active(alias, require_owner=False)
 
 
 def _resolve_github_token(explicit: str | None = None) -> str:
