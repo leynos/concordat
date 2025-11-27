@@ -507,13 +507,13 @@ acknowledge the state migration impact.
   migrations.
 
 Because the backend lockfile feature landed in Terraform/OpenTofu 1.10 and
-stabilised in 1.12 (the enforced minimum for this stack), the command-line interface (CLI) no
-longer needs DynamoDB when targeting AWS or DigitalOcean. Those providers
-honour the conditional writes behind native `.tflock` objects, so secondary
-applies surface the standard "state locked" message with the locking object
-key. When persistence points at Scaleway, the CLI omits `use_lockfile`, prints
-a warning about the missing mutex, and relies on single-writer discipline to
-keep state consistent.
+stabilised in 1.12 (the enforced minimum for this stack), the command-line
+interface (CLI) no longer needs DynamoDB when targeting AWS or DigitalOcean.
+Those providers honour the conditional writes behind native `.tflock` objects,
+so secondary applies surface the standard "state locked" message with the
+locking object key. When persistence points at Scaleway, the CLI omits
+`use_lockfile`, prints a warning about the missing mutex, and relies on
+single-writer discipline to keep state consistent.
 
 #### 2.8.4 Failure handling and observability
 

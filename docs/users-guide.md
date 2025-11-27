@@ -174,6 +174,25 @@ without leaving the CLI. Both commands require `GITHUB_TOKEN` and the estate's
 `tofu` invocation, so pipelines can gate on it. Pass `--keep-workdir` when you
 also want to retain the apply workspace for inspection.
 
+### Persisting estate state in object storage
+
+Use `concordat estate persist` to move OpenTofu state into a shared,
+version-controlled backend for the active estate. The command:
+
+- prompts for bucket, region, endpoint, key prefix, and key suffix, seeding
+  defaults from any existing `backend/persistence.yaml`
+- verifies the Scaleway bucket has versioning enabled and performs a zero-byte
+  put/delete to confirm the supplied credentials can write to the prefix
+- writes `backend/<alias>.tfbackend` (no credentials) plus
+  `backend/persistence.yaml` (`schema_version: 1`) describing the backend
+- pushes a branch named `estate/persist-<timestamp>` and opens a pull request
+  when `GITHUB_TOKEN` resolves the estate remote to a GitHub repository
+
+Re-running the command refuses to replace existing backend files unless
+`--force` is supplied; use `--force` when rotating buckets or prefixes. Secrets
+such as `AWS_SECRET_ACCESS_KEY` are validated in memory only and are never
+written to disk.
+
 ### Configuring remote-state credentials
 
 Remote-state backends rely on environment variables; the CLI simply checks that
