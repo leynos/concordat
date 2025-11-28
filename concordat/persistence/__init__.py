@@ -53,11 +53,10 @@ from .workflow import (  # noqa: F401
 __all__ = [
     "BACKEND_DIRNAME",
     "DEFAULT_KEY_FILENAME",
-    "FinalizationContext",
     "MANIFEST_FILENAME",
     "PERSISTENCE_CHECK_SUFFIX",
     "PERSISTENCE_SCHEMA_VERSION",
-    "persist_estate",
+    "FinalizationContext",
     "PersistenceDescriptor",
     "PersistenceError",
     "PersistenceFiles",
@@ -67,4 +66,5 @@ __all__ = [
     "PullRequestContext",
     "S3Client",
     "WorkspaceContext",
+    "persist_estate",
 ]
