@@ -9,6 +9,8 @@ import typing as typ
 
 import pygit2
 
+from . import gitops
+from . import validation as persistence_validation
 from .files import _write_files_and_check_for_changes
 from .inputs import _build_descriptor, _collect_user_inputs, _defaults_from
 from .models import (
@@ -26,7 +28,6 @@ from .models import (
 )
 from .pr import _build_result_message, _open_pr_if_configured
 from .render import _render_tfbackend
-from .validation import _validate_bucket, _validate_inputs
 
 if typ.TYPE_CHECKING:
     from pathlib import Path
@@ -59,12 +60,14 @@ def _prepare_and_validate_descriptor(
     defaults = _defaults_from(record, existing_descriptor)
     prompts = _collect_user_inputs(defaults, input_func)
     descriptor = _build_descriptor(prompts, paths.backend_path)
-    _validate_inputs(
+    persistence_validation._validate_inputs(
         descriptor,
         prompts["key_suffix"],
         allow_insecure_endpoint=opts.allow_insecure_endpoint,
     )
-    _validate_bucket(descriptor, prompts["key_suffix"], s3_client_factory)
+    persistence_validation._validate_bucket(
+        descriptor, prompts["key_suffix"], s3_client_factory
+    )
     return descriptor, prompts["key_suffix"]
 
 
@@ -91,16 +94,15 @@ def _commit_and_push_changes(
     opts: PersistenceOptions,
 ) -> str:
     """Optionally format, then commit and push persistence changes."""
-    persistence_pkg = importlib.import_module("concordat.persistence")
     if opts.fmt_runner:
         opts.fmt_runner(workspace.workdir)
-    branch_name = persistence_pkg._commit_changes(
+    branch_name = gitops._commit_changes(
         workspace.repository,
         record.branch,
         [paths.backend_path, paths.manifest_path],
         timestamp_factory=opts.timestamp_factory,
     )
-    persistence_pkg._push_branch(workspace.repository, branch_name, record.repo_url)
+    gitops._push_branch(workspace.repository, branch_name, record.repo_url)
     return branch_name
 
 
@@ -143,8 +145,7 @@ def persist_estate(
     workspace, paths = _setup_persistence_environment(record)
 
     s3_client_factory = (
-        opts.s3_client_factory
-        or importlib.import_module("concordat.persistence")._default_s3_client_factory
+        opts.s3_client_factory or persistence_validation._default_s3_client_factory
     )
 
     descriptor, key_suffix = _prepare_and_validate_descriptor(

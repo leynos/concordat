@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import datetime as dt
-import importlib
 import os
 import typing as typ
 from pathlib import Path
@@ -25,8 +24,7 @@ def _commit_changes(
 ) -> str:
     target = repository.revparse_single(f"refs/heads/{base_branch}")
     commit = target.peel(pygit2.Commit)
-    persistence_pkg = importlib.import_module("concordat.persistence")
-    branch_name = persistence_pkg._branch_name(timestamp_factory)
+    branch_name = _branch_name(timestamp_factory)
     if branch_name in repository.branches.local:
         try:
             if repository.head.shorthand == branch_name:

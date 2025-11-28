@@ -9,6 +9,7 @@ import pygit2
 import pytest
 from botocore import exceptions as boto_exceptions
 
+import concordat.persistence.gitops as gitops
 from concordat import estate_execution, persistence
 from concordat.estate import EstateRecord
 
@@ -462,7 +463,7 @@ def test_persist_estate_uses_env_token_and_remote(
         lambda _: workdir,
     )
     monkeypatch.setattr(
-        persistence,
+        gitops,
         "_branch_name",
         lambda *args, **kwargs: "estate/persist-test",
     )
@@ -488,7 +489,7 @@ def test_persist_estate_uses_env_token_and_remote(
     push_calls: list[tuple[str, str]] = []
 
     monkeypatch.setattr(
-        persistence,
+        gitops,
         "_push_branch",
         lambda repository, branch, repo_url: push_calls.append((branch, repo_url)),
     )

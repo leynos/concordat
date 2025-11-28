@@ -109,9 +109,7 @@ def _write_files_and_check_for_changes(
     force: bool,
 ) -> PersistenceResult | None:
     """Write backend and manifest files; return early result if unchanged."""
-    if updated := _write_files(files, force=force):
-        return None
-    if not updated:
+    if not _write_files(files, force=force):
         return PersistenceResult(
             backend_path=files.backend_path,
             manifest_path=files.manifest_path,

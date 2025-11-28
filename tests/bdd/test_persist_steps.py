@@ -18,6 +18,9 @@ from pytest_bdd import given, scenarios, then, when
 from ruamel.yaml import YAML
 
 import concordat.persistence as persistence
+import concordat.persistence.gitops as gitops
+import concordat.persistence.pr as persistence_pr
+import concordat.persistence.validation as persistence_validation
 from concordat import cli
 from concordat.errors import ConcordatError
 from concordat.estate import EstateRecord, register_estate
@@ -49,7 +52,7 @@ class PromptValues:
 def deterministic_branch(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep persistence branches deterministic for assertions."""
     monkeypatch.setattr(
-        persistence,
+        gitops,
         "_branch_name",
         lambda *args, **kwargs: "estate/persist-test",
     )
@@ -109,7 +112,7 @@ def fake_s3(monkeypatch: pytest.MonkeyPatch) -> FakeS3Client:
     """Replace the default S3 client factory with a stub."""
     client = FakeS3Client()
     monkeypatch.setattr(
-        persistence,
+        persistence_validation,
         "_default_s3_client_factory",
         lambda region, endpoint: client,
     )
@@ -134,7 +137,7 @@ def pr_stub(monkeypatch: pytest.MonkeyPatch) -> dict[str, typ.Any]:
         log["token"] = context.github_token
         return "https://example.test/pr/1"
 
-    monkeypatch.setattr(persistence, "_open_pr", opener)
+    monkeypatch.setattr(persistence_pr, "_open_pr", opener)
     return log
 
 

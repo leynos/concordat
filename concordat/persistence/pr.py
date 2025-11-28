@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib
 import textwrap
 import typing as typ
 
@@ -18,8 +17,7 @@ def _open_pr_if_configured(context: PullRequestContext) -> str | None:
     """Open a pull request if token or custom opener is provided."""
     if not (context.github_token or context.pr_opener):
         return None
-    persistence_pkg = importlib.import_module("concordat.persistence")
-    opener = context.pr_opener or persistence_pkg._open_pr
+    opener = context.pr_opener or _open_pr
     return opener(context)
 
 
