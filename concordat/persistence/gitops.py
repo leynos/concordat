@@ -15,6 +15,71 @@ from concordat.gitutils import build_remote_callbacks
 from .models import PersistenceError
 
 
+def _ensure_not_on_branch(
+    repository: pygit2.Repository, branch_name: str, base_branch: str
+) -> None:
+    """Leave branch_name if currently checked out, raising on failure."""
+    try:
+        head = repository.head.shorthand
+    except (KeyError, ValueError, pygit2.GitError):
+        head = None
+
+    if head != branch_name:
+        return
+
+    try:
+        repository.checkout(f"refs/heads/{base_branch}")
+    except pygit2.GitError as exc:
+        raise PersistenceError(
+            f"Unable to checkout base branch {base_branch!r} before "
+            f"recreating {branch_name!r}."
+        ) from exc
+
+    try:
+        if repository.head.shorthand == branch_name:
+            raise PersistenceError(
+                f"Failed to leave branch {branch_name!r} before recreation."
+            )
+    except (KeyError, ValueError, pygit2.GitError) as exc:
+        raise PersistenceError(
+            f"Failed to confirm checkout away from {branch_name!r}."
+        ) from exc
+
+
+def _recreate_branch_if_exists(
+    repository: pygit2.Repository, branch_name: str, base_branch: str
+) -> None:
+    """Delete branch_name if present, ensuring we are not currently on it."""
+    if branch_name not in repository.branches.local:
+        return
+
+    _ensure_not_on_branch(repository, branch_name, base_branch)
+
+    try:
+        repository.branches.delete(branch_name)
+    except pygit2.GitError as exc:
+        raise PersistenceError(
+            f"Unable to delete existing branch {branch_name!r}."
+        ) from exc
+
+
+def _stage_paths(repository: pygit2.Repository, paths: list[Path]) -> pygit2.Oid:
+    """Stage provided paths and return the resulting tree OID."""
+    for path in paths:
+        rel = os.path.relpath(path, repository.workdir or ".")
+        repository.index.add(rel)
+    repository.index.write()
+    return repository.index.write_tree()
+
+
+def _get_signature_or_default(repository: pygit2.Repository) -> pygit2.Signature:
+    """Return repository signature or a safe default."""
+    try:
+        return repository.default_signature
+    except KeyError:
+        return pygit2.Signature("concordat", "concordat@local")
+
+
 def _commit_changes(
     repository: pygit2.Repository,
     base_branch: str,
@@ -25,40 +90,11 @@ def _commit_changes(
     target = repository.revparse_single(f"refs/heads/{base_branch}")
     commit = target.peel(pygit2.Commit)
     branch_name = _branch_name(timestamp_factory)
-    if branch_name in repository.branches.local:
-        try:
-            head = repository.head.shorthand
-        except (KeyError, ValueError, pygit2.GitError):
-            head = None
-        if head == branch_name:
-            try:
-                repository.checkout(f"refs/heads/{base_branch}")
-            except pygit2.GitError as exc:
-                raise PersistenceError(
-                    f"Unable to checkout base branch {base_branch!r} before "
-                    f"recreating {branch_name!r}."
-                ) from exc
-            if repository.head.shorthand == branch_name:
-                raise PersistenceError(
-                    f"Failed to leave branch {branch_name!r} before recreation."
-                )
-        try:
-            repository.branches.delete(branch_name)
-        except pygit2.GitError as exc:
-            raise PersistenceError(
-                f"Unable to delete existing branch {branch_name!r}."
-            ) from exc
+    _recreate_branch_if_exists(repository, branch_name, base_branch)
     new_branch = repository.create_branch(branch_name, commit)
     repository.checkout(new_branch)
-    for path in paths:
-        rel = os.path.relpath(path, repository.workdir or ".")
-        repository.index.add(rel)
-    repository.index.write()
-    tree_oid = repository.index.write_tree()
-    try:
-        signature = repository.default_signature
-    except KeyError:
-        signature = pygit2.Signature("concordat", "concordat@local")
+    tree_oid = _stage_paths(repository, paths)
+    signature = _get_signature_or_default(repository)
     commit_message = "chore: configure remote state persistence"
     repository.create_commit(
         "HEAD",

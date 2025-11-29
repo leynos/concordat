@@ -37,6 +37,77 @@ def _make_repo(root: Path) -> pygit2.Repository:
     return repo
 
 
+@pytest.fixture
+def stub_s3() -> type:
+    """Provide a stub S3 client class for persistence tests."""
+
+    class StubS3:
+        def get_bucket_versioning(self, **kwargs: object) -> dict[str, str]:
+            return {"Status": "Enabled"}
+
+        def put_object(self, **kwargs: object) -> dict[str, str]:
+            return {}
+
+        def delete_object(self, **kwargs: object) -> dict[str, str]:
+            return {}
+
+    return StubS3
+
+
+@pytest.fixture
+def persist_repo_setup(
+    tmp_path: Path,
+) -> tuple[Path, pygit2.Repository, Path, EstateRecord]:
+    """Create a working repo, bare remote, and estate record."""
+    workdir = tmp_path / "workdir"
+    repo = _make_repo(workdir)
+
+    bare = tmp_path / "remote.git"
+    pygit2.init_repository(str(bare), bare=True)
+    upstream = repo.remotes.create("upstream", str(bare))
+    upstream.push(["refs/heads/main:refs/heads/main"])
+
+    record = EstateRecord(
+        alias="core",
+        repo_url=str(bare),
+        github_owner="example",
+    )
+    return workdir, repo, bare, record
+
+
+@pytest.fixture
+def persist_prompts() -> typ.Iterator[str]:
+    """Return standard prompt responses for persistence flows."""
+    return iter(
+        [
+            "df12",
+            "fr-par",
+            "https://s3.fr-par.scw.cloud",
+            "estates/example/main",
+            "terraform.tfstate",
+        ]
+    )
+
+
+@pytest.fixture
+def persist_monkeypatch_base(
+    monkeypatch: pytest.MonkeyPatch,
+    persist_repo_setup: tuple[Path, pygit2.Repository, Path, EstateRecord],
+) -> None:
+    """Apply shared monkeypatches for persistence repo setup."""
+    workdir, _, _, _ = persist_repo_setup
+    monkeypatch.setattr(
+        estate_execution,
+        "ensure_estate_cache",
+        lambda _: workdir,
+    )
+    monkeypatch.setattr(
+        gitops,
+        "_branch_name",
+        lambda *args, **kwargs: "estate/persist-test",
+    )
+
+
 def test_render_tfbackend_uses_scaleway_shape() -> None:
     """Rendered tfbackend omits lockfile and records endpoint."""
     descriptor = persistence.PersistenceDescriptor(
@@ -321,16 +392,30 @@ def test_write_manifest_if_changed_noop(tmp_path: Path) -> None:
     assert changed is False
 
 
-def test_write_files_raises_on_conflict_without_force(tmp_path: Path) -> None:
-    """Writing differing contents without --force raises PersistenceError."""
+@pytest.mark.parametrize(
+    ("force", "expect_error", "expected_backend", "expected_manifest"),
+    [
+        (False, True, "old-backend", {"bucket": "old"}),
+        (True, False, "new-backend", {"bucket": "new"}),
+    ],
+    ids=["raises_without_force", "overwrites_with_force"],
+)
+def test_write_files_handles_conflicts(
+    tmp_path: Path,
+    *,
+    force: bool,
+    expect_error: bool,
+    expected_backend: str,
+    expected_manifest: dict[str, str],
+) -> None:
+    """Writing differing contents handles conflicts per force flag."""
     backend_path = tmp_path / "backend.tfbackend"
     manifest_path = tmp_path / "backend" / "persistence.yaml"
     backend_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     backend_path.write_text("old-backend", encoding="utf-8")
-    persistence_models._yaml.dump(
-        {"bucket": "old"}, manifest_path.open("w", encoding="utf-8")
-    )
+    with manifest_path.open("w", encoding="utf-8") as handle:
+        persistence_models._yaml.dump({"bucket": "old"}, handle)
 
     files = persistence.PersistenceFiles(
         backend_path=backend_path,
@@ -339,35 +424,18 @@ def test_write_files_raises_on_conflict_without_force(tmp_path: Path) -> None:
         manifest_contents={"bucket": "new"},
     )
 
-    with pytest.raises(persistence.PersistenceError):
-        persistence_files._write_files(files, force=False)
+    if expect_error:
+        with pytest.raises(persistence.PersistenceError):
+            persistence_files._write_files(files, force=force)
+    else:
+        changed = persistence_files._write_files(files, force=force)
+        assert changed is True
 
-
-def test_write_files_overwrites_on_conflict_with_force(tmp_path: Path) -> None:
-    """Writing differing contents with --force overwrites existing files."""
-    backend_path = tmp_path / "backend.tfbackend"
-    manifest_path = tmp_path / "backend" / "persistence.yaml"
-    backend_path.parent.mkdir(parents=True, exist_ok=True)
-    manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    backend_path.write_text("old-backend", encoding="utf-8")
-    persistence_models._yaml.dump(
-        {"bucket": "old"}, manifest_path.open("w", encoding="utf-8")
+    assert backend_path.read_text(encoding="utf-8") == expected_backend
+    assert (
+        persistence_models._yaml.load(manifest_path.read_text(encoding="utf-8"))
+        == expected_manifest
     )
-
-    files = persistence.PersistenceFiles(
-        backend_path=backend_path,
-        backend_contents="new-backend",
-        manifest_path=manifest_path,
-        manifest_contents={"bucket": "new"},
-    )
-
-    changed = persistence_files._write_files(files, force=True)
-
-    assert changed is True
-    assert backend_path.read_text(encoding="utf-8") == "new-backend"
-    assert persistence_models._yaml.load(manifest_path.read_text(encoding="utf-8")) == {
-        "bucket": "new"
-    }
 
 
 def test_write_files_and_check_returns_unchanged_result(tmp_path: Path) -> None:
@@ -499,55 +567,16 @@ def test_open_pr_returns_none_without_token() -> None:
 
 
 def test_persist_estate_uses_env_token_and_remote(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
+    persist_repo_setup: tuple[Path, pygit2.Repository, Path, EstateRecord],
+    persist_prompts: typ.Iterator[str],
+    persist_monkeypatch_base: None,
+    stub_s3: type,
 ) -> None:
     """persist_estate falls back to GITHUB_TOKEN and respects custom remotes."""
+    _workdir, _repo, bare, record = persist_repo_setup
 
-    class StubS3:
-        def get_bucket_versioning(self, **kwargs: object) -> dict[str, str]:
-            return {"Status": "Enabled"}
-
-        def put_object(self, **kwargs: object) -> dict[str, str]:
-            return {}
-
-        def delete_object(self, **kwargs: object) -> dict[str, str]:
-            return {}
-
-    workdir = tmp_path / "workdir"
-    repo = _make_repo(workdir)
-
-    bare = tmp_path / "remote.git"
-    pygit2.init_repository(str(bare), bare=True)
-    upstream = repo.remotes.create("upstream", str(bare))
-    upstream.push(["refs/heads/main:refs/heads/main"])
-
-    record = EstateRecord(
-        alias="core",
-        repo_url=str(bare),
-        github_owner="example",
-    )
-
-    monkeypatch.setattr(
-        estate_execution,
-        "ensure_estate_cache",
-        lambda _: workdir,
-    )
-    monkeypatch.setattr(
-        gitops,
-        "_branch_name",
-        lambda *args, **kwargs: "estate/persist-test",
-    )
     monkeypatch.setenv("GITHUB_TOKEN", "env-token")
-
-    prompts = iter(
-        [
-            "df12",
-            "fr-par",
-            "https://s3.fr-par.scw.cloud",
-            "estates/example/main",
-            "terraform.tfstate",
-        ]
-    )
 
     pr_log: dict[str, str | None] = {}
 
@@ -565,8 +594,8 @@ def test_persist_estate_uses_env_token_and_remote(
     )
 
     options = persistence.PersistenceOptions(
-        input_func=lambda _: next(prompts),
-        s3_client_factory=lambda region, endpoint: StubS3(),
+        input_func=lambda _: next(persist_prompts),
+        s3_client_factory=lambda region, endpoint: stub_s3(),
         pr_opener=pr_opener,
     )
 
@@ -578,55 +607,16 @@ def test_persist_estate_uses_env_token_and_remote(
 
 
 def test_persist_estate_prefers_explicit_github_token_over_env(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
+    persist_repo_setup: tuple[Path, pygit2.Repository, Path, EstateRecord],
+    persist_prompts: typ.Iterator[str],
+    persist_monkeypatch_base: None,
+    stub_s3: type,
 ) -> None:
     """Explicit github_token overrides any GITHUB_TOKEN environment value."""
+    _workdir, _repo, _bare, record = persist_repo_setup
 
-    class StubS3:
-        def get_bucket_versioning(self, **kwargs: object) -> dict[str, str]:
-            return {"Status": "Enabled"}
-
-        def put_object(self, **kwargs: object) -> dict[str, str]:
-            return {}
-
-        def delete_object(self, **kwargs: object) -> dict[str, str]:
-            return {}
-
-    workdir = tmp_path / "workdir"
-    repo = _make_repo(workdir)
-
-    bare = tmp_path / "remote.git"
-    pygit2.init_repository(str(bare), bare=True)
-    upstream = repo.remotes.create("upstream", str(bare))
-    upstream.push(["refs/heads/main:refs/heads/main"])
-
-    record = EstateRecord(
-        alias="core",
-        repo_url=str(bare),
-        github_owner="example",
-    )
-
-    monkeypatch.setattr(
-        estate_execution,
-        "ensure_estate_cache",
-        lambda _: workdir,
-    )
-    monkeypatch.setattr(
-        gitops,
-        "_branch_name",
-        lambda *args, **kwargs: "estate/persist-test",
-    )
     monkeypatch.setenv("GITHUB_TOKEN", "env-token")
-
-    prompts = iter(
-        [
-            "df12",
-            "fr-par",
-            "https://s3.fr-par.scw.cloud",
-            "estates/example/main",
-            "terraform.tfstate",
-        ]
-    )
 
     captured_token: dict[str, str | None] = {"token": None}
 
@@ -635,8 +625,8 @@ def test_persist_estate_prefers_explicit_github_token_over_env(
         return "https://example.test/pr/2"
 
     options = persistence.PersistenceOptions(
-        input_func=lambda _: next(prompts),
-        s3_client_factory=lambda region, endpoint: StubS3(),
+        input_func=lambda _: next(persist_prompts),
+        s3_client_factory=lambda region, endpoint: stub_s3(),
         pr_opener=pr_opener,
         github_token="explicit-token",  # noqa: S106
     )
