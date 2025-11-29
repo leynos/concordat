@@ -77,8 +77,7 @@ def _validate_endpoint_protocol(
     endpoint: str, *, allow_insecure_endpoint: bool = False
 ) -> None:
     """Ensure endpoints use HTTPS unless explicitly allowed for dev use."""
-    endpoint = endpoint.strip()
-    if not endpoint:
+    if not (endpoint := endpoint.strip()):
         raise PersistenceError("Endpoint is required.")
     _check_endpoint_scheme(endpoint, allow_insecure=allow_insecure_endpoint)
 

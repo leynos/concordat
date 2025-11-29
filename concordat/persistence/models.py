@@ -54,6 +54,7 @@ class PersistenceDescriptor:
     enabled: bool
     bucket: str
     key_prefix: str
+    key_suffix: str
     region: str
     endpoint: str
     backend_config_path: str
@@ -77,6 +78,10 @@ class PersistenceDescriptor:
         enabled = bool(loaded.get("enabled", False))
         bucket = str(loaded.get("bucket", "")).strip()
         key_prefix = str(loaded.get("key_prefix", "")).strip()
+        key_suffix = (
+            str(loaded.get("key_suffix", DEFAULT_KEY_FILENAME)).strip()
+            or DEFAULT_KEY_FILENAME
+        )
         region = str(loaded.get("region", "")).strip()
         endpoint = str(loaded.get("endpoint", "")).strip()
         backend_path = str(loaded.get("backend_config_path", "")).strip()
@@ -86,6 +91,7 @@ class PersistenceDescriptor:
             enabled=enabled,
             bucket=bucket,
             key_prefix=key_prefix,
+            key_suffix=key_suffix,
             region=region,
             endpoint=endpoint,
             backend_config_path=backend_path,
@@ -101,6 +107,7 @@ class PersistenceDescriptor:
             "enabled": self.enabled,
             "bucket": self.bucket,
             "key_prefix": self.key_prefix,
+            "key_suffix": self.key_suffix,
             "region": self.region,
             "endpoint": self.endpoint,
             "backend_config_path": self.backend_config_path,

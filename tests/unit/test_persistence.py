@@ -9,7 +9,13 @@ import pygit2
 import pytest
 from botocore import exceptions as boto_exceptions
 
+import concordat.persistence.files as persistence_files
 import concordat.persistence.gitops as gitops
+import concordat.persistence.models as persistence_models
+import concordat.persistence.pr as persistence_pr
+import concordat.persistence.render as persistence_render
+import concordat.persistence.validation as persistence_validation
+import concordat.persistence.workflow as persistence_workflow
 from concordat import estate_execution, persistence
 from concordat.estate import EstateRecord
 
@@ -38,11 +44,12 @@ def test_render_tfbackend_uses_scaleway_shape() -> None:
         enabled=True,
         bucket="df12-tfstate",
         key_prefix="estates/example/main",
+        key_suffix="terraform.tfstate",
         region="fr-par",
         endpoint="https://s3.fr-par.scw.cloud",
         backend_config_path="backend/core.tfbackend",
     )
-    rendered = persistence._render_tfbackend(descriptor, "terraform.tfstate")
+    rendered = persistence_render._render_tfbackend(descriptor, "terraform.tfstate")
 
     assert "use_lockfile" not in rendered
     assert 'bucket                      = "df12-tfstate"' in rendered
@@ -91,6 +98,7 @@ def test_validate_inputs_enforces_constraints(
         enabled=True,
         bucket=bucket,
         key_prefix="estates/example/main",
+        key_suffix="terraform.tfstate",
         region=region,
         endpoint=endpoint,
         backend_config_path="backend/core.tfbackend",
@@ -98,9 +106,9 @@ def test_validate_inputs_enforces_constraints(
     key_suffix = "terraform.tfstate"
     if message:
         with pytest.raises(persistence.PersistenceError, match=message):
-            persistence._validate_inputs(descriptor, key_suffix)
+            persistence_validation._validate_inputs(descriptor, key_suffix)
     else:
-        persistence._validate_inputs(descriptor, key_suffix)
+        persistence_validation._validate_inputs(descriptor, key_suffix)
 
 
 @pytest.mark.parametrize(
@@ -122,12 +130,13 @@ def test_validate_inputs_rejects_invalid_paths(
         enabled=True,
         bucket="df12-tfstate",
         key_prefix=key_prefix,
+        key_suffix="terraform.tfstate",
         region="fr-par",
         endpoint="https://s3.fr-par.scw.cloud",
         backend_config_path="backend/core.tfbackend",
     )
     with pytest.raises(persistence.PersistenceError) as excinfo:
-        persistence._validate_inputs(descriptor, key_suffix)
+        persistence_validation._validate_inputs(descriptor, key_suffix)
 
     assert expected_message in str(excinfo.value)
 
@@ -140,13 +149,14 @@ def test_descriptor_round_trip_from_yaml(tmp_path: Path) -> None:
         enabled=True,
         bucket="df12-tfstate",
         key_prefix="estates/example/main",
+        key_suffix="terraform.tfstate",
         region="fr-par",
         endpoint="https://s3.fr-par.scw.cloud",
         backend_config_path="backend/core.tfbackend",
         notification_topic="alerts",
     )
     with path.open("w", encoding="utf-8") as handle:
-        persistence._yaml.dump(descriptor.to_dict(), handle)
+        persistence_models._yaml.dump(descriptor.to_dict(), handle)
 
     loaded = persistence.PersistenceDescriptor.from_yaml(path)
 
@@ -175,12 +185,13 @@ def test_descriptor_from_yaml_rejects_newer_schema_version(tmp_path: Path) -> No
         "enabled": True,
         "bucket": "df12-tfstate",
         "key_prefix": "estates/example/main",
+        "key_suffix": "terraform.tfstate",
         "region": "fr-par",
         "endpoint": "https://s3.fr-par.scw.cloud",
         "backend_config_path": "backend/core.tfbackend",
     }
     with path.open("w", encoding="utf-8") as handle:
-        persistence._yaml.dump(manifest, handle)
+        persistence_models._yaml.dump(manifest, handle)
 
     with pytest.raises(persistence.PersistenceError) as excinfo:
         persistence.PersistenceDescriptor.from_yaml(path)
@@ -197,11 +208,12 @@ def test_validate_inputs_allows_insecure_endpoint_when_opted_in() -> None:
         enabled=True,
         bucket="df12-tfstate",
         key_prefix="estates/example/main",
+        key_suffix="terraform.tfstate",
         region="fr-par",
         endpoint="http://localhost:9000",
         backend_config_path="backend/core.tfbackend",
     )
-    persistence._validate_inputs(
+    persistence_validation._validate_inputs(
         descriptor,
         "terraform.tfstate",
         allow_insecure_endpoint=True,
@@ -215,11 +227,11 @@ def test_write_if_changed_respects_force(tmp_path: Path) -> None:
     path.write_text("original", encoding="utf-8")
 
     with pytest.raises(persistence.PersistenceError):
-        persistence._write_if_changed(path, "updated", force=False)
+        persistence_files._write_if_changed(path, "updated", force=False)
 
     assert path.read_text(encoding="utf-8") == "original"
 
-    updated = persistence._write_if_changed(path, "updated", force=True)
+    updated = persistence_files._write_if_changed(path, "updated", force=True)
     assert updated
     assert path.read_text(encoding="utf-8") == "updated"
 
@@ -230,7 +242,7 @@ def test_write_if_changed_noop_when_contents_identical(tmp_path: Path) -> None:
     path.parent.mkdir(parents=True)
     path.write_text("unchanged", encoding="utf-8")
 
-    result = persistence._write_if_changed(path, "unchanged", force=False)
+    result = persistence_files._write_if_changed(path, "unchanged", force=False)
     assert result is False
     assert path.read_text(encoding="utf-8") == "unchanged"
 
@@ -261,7 +273,7 @@ def test_bucket_versioning_status_wraps_errors(
 
     client = typ.cast("persistence.S3Client", Client())
     with pytest.raises(persistence.PersistenceError) as excinfo:
-        persistence._bucket_versioning_status(client, "bucket")
+        persistence_validation._bucket_versioning_status(client, "bucket")
     assert "Failed to query bucket versioning" in str(excinfo.value)
 
 
@@ -292,7 +304,7 @@ def test_exercise_write_permissions_wraps_errors(
 
     client = typ.cast("persistence.S3Client", Client())
     with pytest.raises(persistence.PersistenceError) as excinfo:
-        persistence._exercise_write_permissions(client, "bucket", "key")
+        persistence_validation._exercise_write_permissions(client, "bucket", "key")
     assert "Bucket permissions check failed" in str(excinfo.value)
 
 
@@ -301,7 +313,7 @@ def test_write_manifest_if_changed_noop(tmp_path: Path) -> None:
     path = tmp_path / "backend" / "persistence.yaml"
     path.parent.mkdir(parents=True)
     path.write_text("a: 1\n", encoding="utf-8")
-    changed = persistence._write_manifest_if_changed(
+    changed = persistence_files._write_manifest_if_changed(
         path,
         {"a": 1},
         force=False,
@@ -316,7 +328,9 @@ def test_write_files_raises_on_conflict_without_force(tmp_path: Path) -> None:
     backend_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     backend_path.write_text("old-backend", encoding="utf-8")
-    persistence._yaml.dump({"bucket": "old"}, manifest_path.open("w", encoding="utf-8"))
+    persistence_models._yaml.dump(
+        {"bucket": "old"}, manifest_path.open("w", encoding="utf-8")
+    )
 
     files = persistence.PersistenceFiles(
         backend_path=backend_path,
@@ -326,7 +340,34 @@ def test_write_files_raises_on_conflict_without_force(tmp_path: Path) -> None:
     )
 
     with pytest.raises(persistence.PersistenceError):
-        persistence._write_files(files, force=False)
+        persistence_files._write_files(files, force=False)
+
+
+def test_write_files_overwrites_on_conflict_with_force(tmp_path: Path) -> None:
+    """Writing differing contents with --force overwrites existing files."""
+    backend_path = tmp_path / "backend.tfbackend"
+    manifest_path = tmp_path / "backend" / "persistence.yaml"
+    backend_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    backend_path.write_text("old-backend", encoding="utf-8")
+    persistence_models._yaml.dump(
+        {"bucket": "old"}, manifest_path.open("w", encoding="utf-8")
+    )
+
+    files = persistence.PersistenceFiles(
+        backend_path=backend_path,
+        backend_contents="new-backend",
+        manifest_path=manifest_path,
+        manifest_contents={"bucket": "new"},
+    )
+
+    changed = persistence_files._write_files(files, force=True)
+
+    assert changed is True
+    assert backend_path.read_text(encoding="utf-8") == "new-backend"
+    assert persistence_models._yaml.load(manifest_path.read_text(encoding="utf-8")) == {
+        "bucket": "new"
+    }
 
 
 def test_write_files_and_check_returns_unchanged_result(tmp_path: Path) -> None:
@@ -341,14 +382,17 @@ def test_write_files_and_check_returns_unchanged_result(tmp_path: Path) -> None:
         enabled=True,
         bucket="df12",
         key_prefix="estates/example/main",
+        key_suffix="terraform.tfstate",
         region="fr-par",
         endpoint="https://s3.fr-par.scw.cloud",
         backend_config_path="backend.tfbackend",
     )
-    backend_contents = persistence._render_tfbackend(descriptor, "terraform.tfstate")
+    backend_contents = persistence_render._render_tfbackend(
+        descriptor, "terraform.tfstate"
+    )
     backend_path.write_text(backend_contents, encoding="utf-8")
     with manifest_path.open("w", encoding="utf-8") as handle:
-        persistence._yaml.dump(descriptor.to_dict(), handle)
+        persistence_models._yaml.dump(descriptor.to_dict(), handle)
 
     files = persistence.PersistenceFiles(
         backend_path=backend_path,
@@ -357,10 +401,35 @@ def test_write_files_and_check_returns_unchanged_result(tmp_path: Path) -> None:
         manifest_contents=descriptor.to_dict(),
     )
 
-    result = persistence._write_files_and_check_for_changes(files, force=False)
+    result = persistence_files._write_files_and_check_for_changes(files, force=False)
     assert result is not None
     assert result.updated is False
     assert result.message == "backend already configured"
+
+
+def test_write_files_and_check_returns_none_when_files_updated(
+    tmp_path: Path,
+) -> None:
+    """When files change, helper writes and returns None."""
+    backend_path = tmp_path / "backend.tfbackend"
+    manifest_path = tmp_path / "backend" / "persistence.yaml"
+    backend_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+
+    files = persistence.PersistenceFiles(
+        backend_path=backend_path,
+        backend_contents="new-backend",
+        manifest_path=manifest_path,
+        manifest_contents={"bucket": "new"},
+    )
+
+    result = persistence_files._write_files_and_check_for_changes(files, force=False)
+
+    assert result is None
+    assert backend_path.read_text(encoding="utf-8") == "new-backend"
+    assert persistence_models._yaml.load(manifest_path.read_text(encoding="utf-8")) == {
+        "bucket": "new"
+    }
 
 
 def test_setup_persistence_environment_rejects_dirty(
@@ -383,7 +452,7 @@ def test_setup_persistence_environment_rejects_dirty(
     )
 
     with pytest.raises(persistence.PersistenceError):
-        persistence._load_clean_estate(record)
+        persistence_workflow._load_clean_estate(record)
 
 
 def test_commit_changes_creates_branch(tmp_path: Path) -> None:
@@ -391,7 +460,7 @@ def test_commit_changes_creates_branch(tmp_path: Path) -> None:
     repo = _make_repo(tmp_path)
     target_file = tmp_path / "file.txt"
     target_file.write_text("content", encoding="utf-8")
-    branch_name = persistence._commit_changes(
+    branch_name = gitops._commit_changes(
         repo,
         "main",
         [target_file],
@@ -408,6 +477,7 @@ def test_open_pr_returns_none_without_token() -> None:
         enabled=True,
         bucket="df12",
         key_prefix="estates/example/main",
+        key_suffix="terraform.tfstate",
         region="fr-par",
         endpoint="https://s3.fr-par.scw.cloud",
         backend_config_path="backend.tfbackend",
@@ -424,7 +494,7 @@ def test_open_pr_returns_none_without_token() -> None:
         key_suffix="terraform.tfstate",
         github_token=None,
     )
-    result = persistence._open_pr(context)
+    result = persistence_pr._open_pr(context)
     assert result is None
 
 
@@ -505,3 +575,72 @@ def test_persist_estate_uses_env_token_and_remote(
     assert push_calls == [("estate/persist-test", str(bare))]
     assert pr_log["github_token"] == "env-token"  # noqa: S105
     assert result.pr_url == "https://example.test/pr/1"
+
+
+def test_persist_estate_prefers_explicit_github_token_over_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Explicit github_token overrides any GITHUB_TOKEN environment value."""
+
+    class StubS3:
+        def get_bucket_versioning(self, **kwargs: object) -> dict[str, str]:
+            return {"Status": "Enabled"}
+
+        def put_object(self, **kwargs: object) -> dict[str, str]:
+            return {}
+
+        def delete_object(self, **kwargs: object) -> dict[str, str]:
+            return {}
+
+    workdir = tmp_path / "workdir"
+    repo = _make_repo(workdir)
+
+    bare = tmp_path / "remote.git"
+    pygit2.init_repository(str(bare), bare=True)
+    upstream = repo.remotes.create("upstream", str(bare))
+    upstream.push(["refs/heads/main:refs/heads/main"])
+
+    record = EstateRecord(
+        alias="core",
+        repo_url=str(bare),
+        github_owner="example",
+    )
+
+    monkeypatch.setattr(
+        estate_execution,
+        "ensure_estate_cache",
+        lambda _: workdir,
+    )
+    monkeypatch.setattr(
+        gitops,
+        "_branch_name",
+        lambda *args, **kwargs: "estate/persist-test",
+    )
+    monkeypatch.setenv("GITHUB_TOKEN", "env-token")
+
+    prompts = iter(
+        [
+            "df12",
+            "fr-par",
+            "https://s3.fr-par.scw.cloud",
+            "estates/example/main",
+            "terraform.tfstate",
+        ]
+    )
+
+    captured_token: dict[str, str | None] = {"token": None}
+
+    def pr_opener(context: persistence.PullRequestContext) -> str:
+        captured_token["token"] = context.github_token
+        return "https://example.test/pr/2"
+
+    options = persistence.PersistenceOptions(
+        input_func=lambda _: next(prompts),
+        s3_client_factory=lambda region, endpoint: StubS3(),
+        pr_opener=pr_opener,
+        github_token="explicit-token",  # noqa: S106
+    )
+
+    persistence.persist_estate(record, options)
+
+    assert captured_token["token"] == "explicit-token"  # noqa: S105

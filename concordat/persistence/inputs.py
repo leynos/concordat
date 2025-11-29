@@ -30,7 +30,7 @@ def _defaults_from(
         "region": descriptor.region if descriptor else "",
         "endpoint": descriptor.endpoint if descriptor else "",
         "key_prefix": descriptor.key_prefix if descriptor else base_prefix,
-        "key_suffix": DEFAULT_KEY_FILENAME,
+        "key_suffix": descriptor.key_suffix if descriptor else DEFAULT_KEY_FILENAME,
     }
 
 
@@ -59,8 +59,7 @@ def _prompt_with_default(
 ) -> str:
     """Prompt with a default value and enforce non-empty responses."""
     suffix = f" [{default}]" if default else ""
-    response = input_func(f"{label}{suffix}: ").strip()
-    if response:
+    if response := input_func(f"{label}{suffix}: ").strip():
         return response
     if default:
         return default
@@ -77,6 +76,7 @@ def _build_descriptor(
         enabled=True,
         bucket=prompts["bucket"],
         key_prefix=prompts["key_prefix"],
+        key_suffix=prompts["key_suffix"],
         region=prompts["region"],
         endpoint=prompts["endpoint"],
         backend_config_path=str(Path(BACKEND_DIRNAME) / backend_path.name),

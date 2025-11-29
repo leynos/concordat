@@ -3,11 +3,12 @@
 
 from __future__ import annotations
 
-import importlib
 import os
 import typing as typ
 
 import pygit2
+
+from concordat import estate_execution
 
 from . import gitops
 from . import validation as persistence_validation
@@ -175,14 +176,12 @@ def persist_estate(
 
 def _load_clean_estate(record: EstateRecord) -> Path:
     """Return the cached estate repository and ensure it is clean."""
-    estate_execution = importlib.import_module("concordat.estate_execution")
     workdir = estate_execution.ensure_estate_cache(record)
     repository = pygit2.Repository(str(workdir))
     status = repository.status()
-    dirty = [
+    if dirty := [
         path for path, flags in status.items() if flags != pygit2.GIT_STATUS_CURRENT
-    ]
-    if dirty:
+    ]:
         formatted = ", ".join(sorted(dirty))
         raise PersistenceError(
             f"Estate cache for {record.alias!r} has uncommitted changes: {formatted}"

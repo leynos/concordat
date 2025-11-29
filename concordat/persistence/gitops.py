@@ -27,12 +27,27 @@ def _commit_changes(
     branch_name = _branch_name(timestamp_factory)
     if branch_name in repository.branches.local:
         try:
-            if repository.head.shorthand == branch_name:
+            head = repository.head.shorthand
+        except (KeyError, ValueError, pygit2.GitError):
+            head = None
+        if head == branch_name:
+            try:
                 repository.checkout(f"refs/heads/{base_branch}")
-        except pygit2.GitError:
-            # Detached head; proceed with deletion after recreating the branch.
-            pass
-        repository.branches.delete(branch_name)
+            except pygit2.GitError as exc:
+                raise PersistenceError(
+                    f"Unable to checkout base branch {base_branch!r} before "
+                    f"recreating {branch_name!r}."
+                ) from exc
+            if repository.head.shorthand == branch_name:
+                raise PersistenceError(
+                    f"Failed to leave branch {branch_name!r} before recreation."
+                )
+        try:
+            repository.branches.delete(branch_name)
+        except pygit2.GitError as exc:
+            raise PersistenceError(
+                f"Unable to delete existing branch {branch_name!r}."
+            ) from exc
     new_branch = repository.create_branch(branch_name, commit)
     repository.checkout(new_branch)
     for path in paths:
