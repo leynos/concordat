@@ -142,8 +142,8 @@ def conflict_test_setup(tmp_path: Path) -> tuple[Path, Path]:
 
 
 @dataclasses.dataclass(frozen=True)
-class ConflictScenario:
-    """Conflict handling scenario for write_files tests."""
+class ConflictExpectation:
+    """Expected behavior for conflict handling tests."""
 
     force: bool
     expect_error: bool
@@ -153,13 +153,13 @@ class ConflictScenario:
 
 @pytest.fixture(
     params=[
-        ConflictScenario(
+        ConflictExpectation(
             force=False,
             expect_error=True,
             expected_backend="old-backend",
             expected_manifest={"bucket": "old"},
         ),
-        ConflictScenario(
+        ConflictExpectation(
             force=True,
             expect_error=False,
             expected_backend="new-backend",
@@ -168,7 +168,7 @@ class ConflictScenario:
     ],
     ids=["raises_without_force", "overwrites_with_force"],
 )
-def conflict_scenario(request: pytest.FixtureRequest) -> ConflictScenario:
+def expectation(request: pytest.FixtureRequest) -> ConflictExpectation:
     """Provide conflict scenarios for write handling."""
     return request.param
 
@@ -461,7 +461,7 @@ def test_write_manifest_if_changed_noop(tmp_path: Path) -> None:
 
 def test_write_files_handles_conflicts(
     conflict_test_setup: tuple[Path, Path],
-    conflict_scenario: ConflictScenario,
+    expectation: ConflictExpectation,
 ) -> None:
     """Writing differing contents handles conflicts per force flag."""
     backend_path, manifest_path = conflict_test_setup
@@ -473,19 +473,17 @@ def test_write_files_handles_conflicts(
         manifest_contents={"bucket": "new"},
     )
 
-    if conflict_scenario.expect_error:
+    if expectation.expect_error:
         with pytest.raises(persistence.PersistenceError):
-            persistence_files._write_files(files, force=conflict_scenario.force)
+            persistence_files._write_files(files, force=expectation.force)
     else:
-        changed = persistence_files._write_files(files, force=conflict_scenario.force)
+        changed = persistence_files._write_files(files, force=expectation.force)
         assert changed is True
 
-    assert (
-        backend_path.read_text(encoding="utf-8") == conflict_scenario.expected_backend
-    )
+    assert backend_path.read_text(encoding="utf-8") == expectation.expected_backend
     assert (
         persistence_models._yaml.load(manifest_path.read_text(encoding="utf-8"))
-        == conflict_scenario.expected_manifest
+        == expectation.expected_manifest
     )
 
 
