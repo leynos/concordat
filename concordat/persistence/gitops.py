@@ -15,14 +15,34 @@ from concordat.gitutils import build_remote_callbacks
 from .models import PersistenceError
 
 
+def _get_current_head(repository: pygit2.Repository) -> str | None:
+    """Return the current HEAD branch name, or None if unable to determine."""
+    try:
+        return repository.head.shorthand
+    except (KeyError, ValueError, pygit2.GitError):
+        return None
+
+
+def _verify_checkout_succeeded(repository: pygit2.Repository, branch_name: str) -> None:
+    """Verify repository is no longer on branch_name after checkout."""
+    try:
+        current = repository.head.shorthand
+    except (KeyError, ValueError, pygit2.GitError) as exc:
+        raise PersistenceError(
+            f"Failed to confirm checkout away from {branch_name!r}."
+        ) from exc
+
+    if current == branch_name:
+        raise PersistenceError(
+            f"Failed to leave branch {branch_name!r} before recreation."
+        )
+
+
 def _ensure_not_on_branch(
     repository: pygit2.Repository, branch_name: str, base_branch: str
 ) -> None:
     """Leave branch_name if currently checked out, raising on failure."""
-    try:
-        head = repository.head.shorthand
-    except (KeyError, ValueError, pygit2.GitError):
-        head = None
+    head = _get_current_head(repository)
 
     if head != branch_name:
         return
@@ -35,15 +55,7 @@ def _ensure_not_on_branch(
             f"recreating {branch_name!r}."
         ) from exc
 
-    try:
-        if repository.head.shorthand == branch_name:
-            raise PersistenceError(
-                f"Failed to leave branch {branch_name!r} before recreation."
-            )
-    except (KeyError, ValueError, pygit2.GitError) as exc:
-        raise PersistenceError(
-            f"Failed to confirm checkout away from {branch_name!r}."
-        ) from exc
+    _verify_checkout_succeeded(repository, branch_name)
 
 
 def _recreate_branch_if_exists(

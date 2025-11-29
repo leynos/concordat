@@ -108,6 +108,30 @@ def persist_monkeypatch_base(
     )
 
 
+@pytest.fixture
+def persist_test_context(
+    persist_repo_setup: tuple[Path, pygit2.Repository, Path, EstateRecord],
+    persist_prompts: typ.Iterator[str],
+    persist_monkeypatch_base: None,
+    stub_s3: type,
+) -> tuple[tuple[Path, pygit2.Repository, Path, EstateRecord], typ.Iterator[str], type]:
+    """Bundle common fixtures for persist_estate tests."""
+    return persist_repo_setup, persist_prompts, stub_s3
+
+
+@pytest.fixture
+def conflict_test_setup(tmp_path: Path) -> tuple[Path, Path]:
+    """Set up paths with existing content for conflict testing."""
+    backend_path = tmp_path / "backend.tfbackend"
+    manifest_path = tmp_path / "backend" / "persistence.yaml"
+    backend_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    backend_path.write_text("old-backend", encoding="utf-8")
+    with manifest_path.open("w", encoding="utf-8") as handle:
+        persistence_models._yaml.dump({"bucket": "old"}, handle)
+    return backend_path, manifest_path
+
+
 def test_render_tfbackend_uses_scaleway_shape() -> None:
     """Rendered tfbackend omits lockfile and records endpoint."""
     descriptor = persistence.PersistenceDescriptor(
@@ -401,7 +425,7 @@ def test_write_manifest_if_changed_noop(tmp_path: Path) -> None:
     ids=["raises_without_force", "overwrites_with_force"],
 )
 def test_write_files_handles_conflicts(
-    tmp_path: Path,
+    conflict_test_setup: tuple[Path, Path],
     *,
     force: bool,
     expect_error: bool,
@@ -409,13 +433,7 @@ def test_write_files_handles_conflicts(
     expected_manifest: dict[str, str],
 ) -> None:
     """Writing differing contents handles conflicts per force flag."""
-    backend_path = tmp_path / "backend.tfbackend"
-    manifest_path = tmp_path / "backend" / "persistence.yaml"
-    backend_path.parent.mkdir(parents=True, exist_ok=True)
-    manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    backend_path.write_text("old-backend", encoding="utf-8")
-    with manifest_path.open("w", encoding="utf-8") as handle:
-        persistence_models._yaml.dump({"bucket": "old"}, handle)
+    backend_path, manifest_path = conflict_test_setup
 
     files = persistence.PersistenceFiles(
         backend_path=backend_path,
@@ -568,13 +586,12 @@ def test_open_pr_returns_none_without_token() -> None:
 
 def test_persist_estate_uses_env_token_and_remote(
     monkeypatch: pytest.MonkeyPatch,
-    persist_repo_setup: tuple[Path, pygit2.Repository, Path, EstateRecord],
-    persist_prompts: typ.Iterator[str],
-    persist_monkeypatch_base: None,
-    stub_s3: type,
+    persist_test_context: tuple[
+        tuple[Path, pygit2.Repository, Path, EstateRecord], typ.Iterator[str], type
+    ],
 ) -> None:
     """persist_estate falls back to GITHUB_TOKEN and respects custom remotes."""
-    _workdir, _repo, bare, record = persist_repo_setup
+    (_workdir, _repo, bare, record), persist_prompts, stub_s3 = persist_test_context
 
     monkeypatch.setenv("GITHUB_TOKEN", "env-token")
 
@@ -608,13 +625,12 @@ def test_persist_estate_uses_env_token_and_remote(
 
 def test_persist_estate_prefers_explicit_github_token_over_env(
     monkeypatch: pytest.MonkeyPatch,
-    persist_repo_setup: tuple[Path, pygit2.Repository, Path, EstateRecord],
-    persist_prompts: typ.Iterator[str],
-    persist_monkeypatch_base: None,
-    stub_s3: type,
+    persist_test_context: tuple[
+        tuple[Path, pygit2.Repository, Path, EstateRecord], typ.Iterator[str], type
+    ],
 ) -> None:
     """Explicit github_token overrides any GITHUB_TOKEN environment value."""
-    _workdir, _repo, _bare, record = persist_repo_setup
+    (_workdir, _repo, _bare, record), persist_prompts, stub_s3 = persist_test_context
 
     monkeypatch.setenv("GITHUB_TOKEN", "env-token")
 
