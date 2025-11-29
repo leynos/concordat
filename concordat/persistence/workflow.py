@@ -24,6 +24,7 @@ from .models import (
     PersistenceResult,
     PersistenceWorkspaceDirtyError,
     PullRequestContext,
+    S3Client,
     WorkspaceContext,
 )
 from .pr import _build_result_message, _open_pr_if_configured
@@ -39,8 +40,7 @@ def _setup_persistence_environment(
     record: EstateRecord,
 ) -> tuple[WorkspaceContext, PersistencePaths]:
     """Load a clean estate workspace and derive persistence file paths."""
-    workdir = _load_clean_estate(record)
-    repository = pygit2.Repository(str(workdir))
+    workdir, repository = _load_clean_estate(record)
     manifest_path = workdir / MANIFEST_FILENAME
     backend_path = workdir / BACKEND_DIRNAME / f"{record.alias}.tfbackend"
     return WorkspaceContext(workdir=workdir, repository=repository), PersistencePaths(
@@ -52,7 +52,7 @@ def _prepare_and_validate_descriptor(
     record: EstateRecord,
     paths: PersistencePaths,
     opts: PersistenceOptions,
-    s3_client_factory: typ.Callable[[str, str], typ.Any],
+    s3_client_factory: typ.Callable[[str, str], S3Client],
 ) -> tuple[PersistenceDescriptor, str]:
     """Collect inputs, build the descriptor, and validate settings."""
     input_func = opts.input_func or input
@@ -173,7 +173,7 @@ def persist_estate(
     return _finalize_persistence_result(finalization_ctx, paths)
 
 
-def _load_clean_estate(record: EstateRecord) -> Path:
+def _load_clean_estate(record: EstateRecord) -> tuple[Path, pygit2.Repository]:
     """Return the cached estate repository and ensure it is clean."""
     workdir = estate_execution.ensure_estate_cache(record)
     repository = pygit2.Repository(str(workdir))
@@ -182,4 +182,4 @@ def _load_clean_estate(record: EstateRecord) -> Path:
         path for path, flags in status.items() if flags != pygit2.GIT_STATUS_CURRENT
     ]:
         raise PersistenceWorkspaceDirtyError(record.alias, dirty)
-    return workdir
+    return workdir, repository

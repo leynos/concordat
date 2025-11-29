@@ -23,6 +23,34 @@ from concordat.estate import EstateRecord
 if typ.TYPE_CHECKING:
     from pathlib import Path
 
+    from concordat.persistence import S3Client
+
+
+@dataclasses.dataclass(frozen=True)
+class ConflictExpectation:
+    """Expected behavior for conflict handling tests."""
+
+    force: bool
+    expect_error: bool
+    expected_backend: str
+    expected_manifest: dict[str, str]
+
+
+class StubS3:
+    """Stub S3 client used in persistence tests."""
+
+    def get_bucket_versioning(self, **kwargs: object) -> dict[str, str]:
+        """Return enabled status for bucket versioning."""
+        return {"Status": "Enabled"}
+
+    def put_object(self, **kwargs: object) -> dict[str, str]:
+        """Simulate writing an object."""
+        return {}
+
+    def delete_object(self, **kwargs: object) -> dict[str, str]:
+        """Simulate deleting an object."""
+        return {}
+
 
 def _make_repo(root: Path) -> pygit2.Repository:
     repo = pygit2.init_repository(root, initial_head="main")
@@ -39,19 +67,8 @@ def _make_repo(root: Path) -> pygit2.Repository:
 
 
 @pytest.fixture
-def stub_s3() -> type:
+def stub_s3() -> type[StubS3]:
     """Provide a stub S3 client class for persistence tests."""
-
-    class StubS3:
-        def get_bucket_versioning(self, **kwargs: object) -> dict[str, str]:
-            return {"Status": "Enabled"}
-
-        def put_object(self, **kwargs: object) -> dict[str, str]:
-            return {}
-
-        def delete_object(self, **kwargs: object) -> dict[str, str]:
-            return {}
-
     return StubS3
 
 
@@ -139,16 +156,6 @@ def conflict_test_setup(tmp_path: Path) -> tuple[Path, Path]:
     with manifest_path.open("w", encoding="utf-8") as handle:
         persistence_models._yaml.dump({"bucket": "old"}, handle)
     return backend_path, manifest_path
-
-
-@dataclasses.dataclass(frozen=True)
-class ConflictExpectation:
-    """Expected behavior for conflict handling tests."""
-
-    force: bool
-    expect_error: bool
-    expected_backend: str
-    expected_manifest: dict[str, str]
 
 
 @pytest.fixture(
@@ -407,7 +414,7 @@ def test_bucket_versioning_status_wraps_errors(
         def get_bucket_versioning(self, **kwargs: object) -> dict[str, str]:
             raise exception_factory()
 
-    client = typ.cast("persistence.S3Client", Client())
+    client = typ.cast("S3Client", Client())
     with pytest.raises(persistence.PersistenceError) as excinfo:
         persistence_validation._bucket_versioning_status(client, "bucket")
     assert "Failed to query bucket versioning" in str(excinfo.value)
@@ -438,7 +445,7 @@ def test_exercise_write_permissions_wraps_errors(
                 raise boto_exceptions.BotoCoreError
             return {}
 
-    client = typ.cast("persistence.S3Client", Client())
+    client = typ.cast("S3Client", Client())
     with pytest.raises(persistence.PersistenceError) as excinfo:
         persistence_validation._exercise_write_permissions(client, "bucket", "key")
     message = str(excinfo.value)

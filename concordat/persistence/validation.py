@@ -115,26 +115,29 @@ def _bucket_versioning_status(client: S3Client, bucket: str) -> str | None:
     return str(status) if status is not None else None
 
 
+def _perform_s3_operation(
+    operation: typ.Callable[[], typ.Any], error_message: str
+) -> None:
+    """Execute an S3 operation and convert exceptions to PersistenceError."""
+    try:
+        operation()
+    except boto_exceptions.BotoCoreError as error:
+        raise PersistenceError(f"{error_message}: {error}") from error
+    except boto_exceptions.ClientError as error:  # type: ignore[attr-defined]
+        raise PersistenceError(f"{error_message}: {error}") from error
+
+
 def _exercise_write_permissions(client: S3Client, bucket: str, key: str) -> None:
     """Attempt to put/delete a probe object to confirm permissions."""
     probe_key = f"{key}.{PERSISTENCE_CHECK_SUFFIX}"
-    try:
-        client.put_object(Bucket=bucket, Key=probe_key, Body=b"")
-    except boto_exceptions.BotoCoreError as error:
-        raise PersistenceError(f"Bucket permissions check failed: {error}") from error
-    except boto_exceptions.ClientError as error:  # type: ignore[attr-defined]
-        raise PersistenceError(f"Bucket permissions check failed: {error}") from error
-
-    try:
-        client.delete_object(Bucket=bucket, Key=probe_key)
-    except boto_exceptions.BotoCoreError as error:
-        raise PersistenceError(
-            f"Bucket permissions cleanup failed after write probe: {error}"
-        ) from error
-    except boto_exceptions.ClientError as error:  # type: ignore[attr-defined]
-        raise PersistenceError(
-            f"Bucket permissions cleanup failed after write probe: {error}"
-        ) from error
+    _perform_s3_operation(
+        lambda: client.put_object(Bucket=bucket, Key=probe_key, Body=b""),
+        "Bucket permissions check failed",
+    )
+    _perform_s3_operation(
+        lambda: client.delete_object(Bucket=bucket, Key=probe_key),
+        "Bucket permissions cleanup failed after write probe",
+    )
 
 
 def _default_s3_client_factory(region: str, endpoint: str) -> S3Client:
