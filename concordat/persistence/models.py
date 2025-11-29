@@ -33,6 +33,19 @@ class PersistenceError(ConcordatError):
     """Raised when persisting remote state configuration fails."""
 
 
+class PersistenceWorkspaceDirtyError(PersistenceError):
+    """Raised when the cached estate workspace contains uncommitted changes."""
+
+    def __init__(self, alias: str, dirty_paths: list[str]) -> None:
+        """Initialise with the estate alias and list of dirty paths."""
+        self.alias = alias
+        self.dirty_paths = sorted(dirty_paths)
+        formatted = ", ".join(self.dirty_paths)
+        super().__init__(
+            f"Estate cache for {alias!r} has uncommitted changes: {formatted}"
+        )
+
+
 class S3Client(typ.Protocol):
     """Protocol capturing the minimal S3 operations needed for persistence."""
 

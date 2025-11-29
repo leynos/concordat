@@ -1,5 +1,4 @@
 """Orchestration for persisting estate backend configuration."""
-# ruff: noqa: TRY003
 
 from __future__ import annotations
 
@@ -19,11 +18,11 @@ from .models import (
     MANIFEST_FILENAME,
     FinalizationContext,
     PersistenceDescriptor,
-    PersistenceError,
     PersistenceFiles,
     PersistenceOptions,
     PersistencePaths,
     PersistenceResult,
+    PersistenceWorkspaceDirtyError,
     PullRequestContext,
     WorkspaceContext,
 )
@@ -182,8 +181,5 @@ def _load_clean_estate(record: EstateRecord) -> Path:
     if dirty := [
         path for path, flags in status.items() if flags != pygit2.GIT_STATUS_CURRENT
     ]:
-        formatted = ", ".join(sorted(dirty))
-        raise PersistenceError(
-            f"Estate cache for {record.alias!r} has uncommitted changes: {formatted}"
-        )
+        raise PersistenceWorkspaceDirtyError(record.alias, dirty)
     return workdir

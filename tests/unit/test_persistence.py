@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 import typing as typ
 
@@ -114,9 +115,17 @@ def persist_test_context(
     persist_prompts: typ.Iterator[str],
     persist_monkeypatch_base: None,
     stub_s3: type,
-) -> tuple[tuple[Path, pygit2.Repository, Path, EstateRecord], typ.Iterator[str], type]:
+) -> PersistTestContext:
     """Bundle common fixtures for persist_estate tests."""
-    return persist_repo_setup, persist_prompts, stub_s3
+    workdir, repo, bare, record = persist_repo_setup
+    return PersistTestContext(
+        workdir=workdir,
+        repo=repo,
+        bare=bare,
+        record=record,
+        prompts=persist_prompts,
+        stub_s3=stub_s3,
+    )
 
 
 @pytest.fixture
@@ -130,6 +139,38 @@ def conflict_test_setup(tmp_path: Path) -> tuple[Path, Path]:
     with manifest_path.open("w", encoding="utf-8") as handle:
         persistence_models._yaml.dump({"bucket": "old"}, handle)
     return backend_path, manifest_path
+
+
+@dataclasses.dataclass(frozen=True)
+class ConflictScenario:
+    """Conflict handling scenario for write_files tests."""
+
+    force: bool
+    expect_error: bool
+    expected_backend: str
+    expected_manifest: dict[str, str]
+
+
+@pytest.fixture(
+    params=[
+        ConflictScenario(
+            force=False,
+            expect_error=True,
+            expected_backend="old-backend",
+            expected_manifest={"bucket": "old"},
+        ),
+        ConflictScenario(
+            force=True,
+            expect_error=False,
+            expected_backend="new-backend",
+            expected_manifest={"bucket": "new"},
+        ),
+    ],
+    ids=["raises_without_force", "overwrites_with_force"],
+)
+def conflict_scenario(request: pytest.FixtureRequest) -> ConflictScenario:
+    """Provide conflict scenarios for write handling."""
+    return request.param
 
 
 def test_render_tfbackend_uses_scaleway_shape() -> None:
@@ -400,7 +441,9 @@ def test_exercise_write_permissions_wraps_errors(
     client = typ.cast("persistence.S3Client", Client())
     with pytest.raises(persistence.PersistenceError) as excinfo:
         persistence_validation._exercise_write_permissions(client, "bucket", "key")
-    assert "Bucket permissions check failed" in str(excinfo.value)
+    message = str(excinfo.value)
+    assert "Bucket permissions" in message
+    assert "failed" in message
 
 
 def test_write_manifest_if_changed_noop(tmp_path: Path) -> None:
@@ -416,21 +459,9 @@ def test_write_manifest_if_changed_noop(tmp_path: Path) -> None:
     assert changed is False
 
 
-@pytest.mark.parametrize(
-    ("force", "expect_error", "expected_backend", "expected_manifest"),
-    [
-        (False, True, "old-backend", {"bucket": "old"}),
-        (True, False, "new-backend", {"bucket": "new"}),
-    ],
-    ids=["raises_without_force", "overwrites_with_force"],
-)
 def test_write_files_handles_conflicts(
     conflict_test_setup: tuple[Path, Path],
-    *,
-    force: bool,
-    expect_error: bool,
-    expected_backend: str,
-    expected_manifest: dict[str, str],
+    conflict_scenario: ConflictScenario,
 ) -> None:
     """Writing differing contents handles conflicts per force flag."""
     backend_path, manifest_path = conflict_test_setup
@@ -442,17 +473,19 @@ def test_write_files_handles_conflicts(
         manifest_contents={"bucket": "new"},
     )
 
-    if expect_error:
+    if conflict_scenario.expect_error:
         with pytest.raises(persistence.PersistenceError):
-            persistence_files._write_files(files, force=force)
+            persistence_files._write_files(files, force=conflict_scenario.force)
     else:
-        changed = persistence_files._write_files(files, force=force)
+        changed = persistence_files._write_files(files, force=conflict_scenario.force)
         assert changed is True
 
-    assert backend_path.read_text(encoding="utf-8") == expected_backend
+    assert (
+        backend_path.read_text(encoding="utf-8") == conflict_scenario.expected_backend
+    )
     assert (
         persistence_models._yaml.load(manifest_path.read_text(encoding="utf-8"))
-        == expected_manifest
+        == conflict_scenario.expected_manifest
     )
 
 
@@ -586,12 +619,10 @@ def test_open_pr_returns_none_without_token() -> None:
 
 def test_persist_estate_uses_env_token_and_remote(
     monkeypatch: pytest.MonkeyPatch,
-    persist_test_context: tuple[
-        tuple[Path, pygit2.Repository, Path, EstateRecord], typ.Iterator[str], type
-    ],
+    persist_test_context: PersistTestContext,
 ) -> None:
     """persist_estate falls back to GITHUB_TOKEN and respects custom remotes."""
-    (_workdir, _repo, bare, record), persist_prompts, stub_s3 = persist_test_context
+    ctx = persist_test_context
 
     monkeypatch.setenv("GITHUB_TOKEN", "env-token")
 
@@ -611,26 +642,24 @@ def test_persist_estate_uses_env_token_and_remote(
     )
 
     options = persistence.PersistenceOptions(
-        input_func=lambda _: next(persist_prompts),
-        s3_client_factory=lambda region, endpoint: stub_s3(),
+        input_func=lambda _: next(ctx.prompts),
+        s3_client_factory=lambda region, endpoint: ctx.stub_s3(),
         pr_opener=pr_opener,
     )
 
-    result = persistence.persist_estate(record, options)
+    result = persistence.persist_estate(ctx.record, options)
 
-    assert push_calls == [("estate/persist-test", str(bare))]
+    assert push_calls == [("estate/persist-test", str(ctx.bare))]
     assert pr_log["github_token"] == "env-token"  # noqa: S105
     assert result.pr_url == "https://example.test/pr/1"
 
 
 def test_persist_estate_prefers_explicit_github_token_over_env(
     monkeypatch: pytest.MonkeyPatch,
-    persist_test_context: tuple[
-        tuple[Path, pygit2.Repository, Path, EstateRecord], typ.Iterator[str], type
-    ],
+    persist_test_context: PersistTestContext,
 ) -> None:
     """Explicit github_token overrides any GITHUB_TOKEN environment value."""
-    (_workdir, _repo, _bare, record), persist_prompts, stub_s3 = persist_test_context
+    ctx = persist_test_context
 
     monkeypatch.setenv("GITHUB_TOKEN", "env-token")
 
@@ -641,12 +670,24 @@ def test_persist_estate_prefers_explicit_github_token_over_env(
         return "https://example.test/pr/2"
 
     options = persistence.PersistenceOptions(
-        input_func=lambda _: next(persist_prompts),
-        s3_client_factory=lambda region, endpoint: stub_s3(),
+        input_func=lambda _: next(ctx.prompts),
+        s3_client_factory=lambda region, endpoint: ctx.stub_s3(),
         pr_opener=pr_opener,
         github_token="explicit-token",  # noqa: S106
     )
 
-    persistence.persist_estate(record, options)
+    persistence.persist_estate(ctx.record, options)
 
     assert captured_token["token"] == "explicit-token"  # noqa: S105
+
+
+@dataclasses.dataclass(frozen=True)
+class PersistTestContext:
+    """Shared context for persist_estate integration-style tests."""
+
+    workdir: Path
+    repo: pygit2.Repository
+    bare: Path
+    record: EstateRecord
+    prompts: typ.Iterator[str]
+    stub_s3: type

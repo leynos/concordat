@@ -120,11 +120,21 @@ def _exercise_write_permissions(client: S3Client, bucket: str, key: str) -> None
     probe_key = f"{key}.{PERSISTENCE_CHECK_SUFFIX}"
     try:
         client.put_object(Bucket=bucket, Key=probe_key, Body=b"")
-        client.delete_object(Bucket=bucket, Key=probe_key)
     except boto_exceptions.BotoCoreError as error:
         raise PersistenceError(f"Bucket permissions check failed: {error}") from error
     except boto_exceptions.ClientError as error:  # type: ignore[attr-defined]
         raise PersistenceError(f"Bucket permissions check failed: {error}") from error
+
+    try:
+        client.delete_object(Bucket=bucket, Key=probe_key)
+    except boto_exceptions.BotoCoreError as error:
+        raise PersistenceError(
+            f"Bucket permissions cleanup failed after write probe: {error}"
+        ) from error
+    except boto_exceptions.ClientError as error:  # type: ignore[attr-defined]
+        raise PersistenceError(
+            f"Bucket permissions cleanup failed after write probe: {error}"
+        ) from error
 
 
 def _default_s3_client_factory(region: str, endpoint: str) -> S3Client:

@@ -13,7 +13,7 @@ if typ.TYPE_CHECKING:
 
 def _write_if_changed(
     path: Path,
-    contents: object,
+    contents: str,
     *,
     force: bool,
 ) -> bool:
@@ -28,7 +28,7 @@ def _write_if_changed(
         )
         if not should_write:
             return False
-    path.write_text(typ.cast("str", contents), encoding="utf-8")
+    path.write_text(contents, encoding="utf-8")
     return True
 
 
