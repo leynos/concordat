@@ -76,3 +76,21 @@ Feature: Persisting estate state remotely
     And GITHUB_TOKEN is set to "test-token"
     When I run concordat estate persist
     Then the command fails with error containing "Bucket permissions check failed"
+
+  Scenario: Persisting to an explicitly named estate alias
+    Given an isolated concordat config directory
+    And an estate repository with alias "demo-estate"
+    And pull requests are stubbed
+    And bucket versioning status is "Enabled"
+    And persistence prompts "df12-tfstate, fr-par, https://s3.fr-par.scw.cloud, estates/example/main, terraform.tfstate"
+    And GITHUB_TOKEN is set to "test-token"
+    When I run "concordat estate persist --alias demo-estate"
+    Then the command succeeds
+    And backend file "backend/demo-estate.tfbackend" contains "df12-tfstate"
+    And persistence manifest records bucket "df12-tfstate"
+
+  Scenario: Persisting with an unknown estate alias fails
+    Given an isolated concordat config directory
+    And no estate repository is registered with alias "missing-estate"
+    When I run "concordat estate persist --alias missing-estate"
+    Then the command fails with error containing "is not configured"

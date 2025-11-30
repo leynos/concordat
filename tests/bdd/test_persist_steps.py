@@ -18,6 +18,9 @@ from pytest_bdd import given, scenarios, then, when
 from ruamel.yaml import YAML
 
 import concordat.persistence as persistence
+import concordat.persistence.gitops as gitops
+import concordat.persistence.pr as persistence_pr
+import concordat.persistence.validation as persistence_validation
 from concordat import cli
 from concordat.errors import ConcordatError
 from concordat.estate import EstateRecord, register_estate
@@ -49,7 +52,7 @@ class PromptValues:
 def deterministic_branch(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep persistence branches deterministic for assertions."""
     monkeypatch.setattr(
-        persistence,
+        gitops,
         "_branch_name",
         lambda *args, **kwargs: "estate/persist-test",
     )
@@ -109,7 +112,7 @@ def fake_s3(monkeypatch: pytest.MonkeyPatch) -> FakeS3Client:
     """Replace the default S3 client factory with a stub."""
     client = FakeS3Client()
     monkeypatch.setattr(
-        persistence,
+        persistence_validation,
         "_default_s3_client_factory",
         lambda region, endpoint: client,
     )
@@ -127,14 +130,14 @@ def pr_stub(monkeypatch: pytest.MonkeyPatch) -> dict[str, typ.Any]:
     """Capture pull request creation attempts."""
     log: dict[str, typ.Any] = {}
 
-    def opener(request: persistence.PullRequestRequest) -> str:
-        log["branch"] = request.branch_name
-        log["bucket"] = request.descriptor.bucket
-        log["key_suffix"] = request.key_suffix
-        log["token"] = request.github_token
+    def opener(context: persistence.PullRequestContext) -> str:
+        log["branch"] = context.branch_name
+        log["bucket"] = context.descriptor.bucket
+        log["key_suffix"] = context.key_suffix
+        log["token"] = context.github_token
         return "https://example.test/pr/1"
 
-    monkeypatch.setattr(persistence, "_open_pr", opener)
+    monkeypatch.setattr(persistence_pr, "_open_pr", opener)
     return log
 
 
@@ -200,7 +203,11 @@ def _seed_estate_remote(root: Path) -> Path:
 
 @given("an isolated concordat config directory", target_fixture="config_path")
 def given_config_dir(config_dir: Path) -> Path:
-    """Expose the config directory path for downstream steps."""
+    """Expose the isolated concordat config directory for downstream steps.
+
+    Shared by active-estate and explicit --alias persistence scenarios so each
+    scenario interacts with its own config namespace.
+    """
     return config_dir
 
 
@@ -303,6 +310,18 @@ def when_run_persist_with_options(
     cli_invocation["result"] = _run_cli(["estate", "persist", *extra])
 
 
+@when(parsers.cfparse('I run "{command}"'))
+def when_run_arbitrary_command(
+    command: str,
+    cli_invocation: dict[str, RunResult],
+) -> None:
+    """Execute an arbitrary concordat CLI invocation."""
+    args = shlex.split(command)
+    if args and args[0] == "concordat":
+        args = args[1:]
+    cli_invocation["result"] = _run_cli(args)
+
+
 @then("the command succeeds")
 def then_command_succeeds(cli_invocation: dict[str, RunResult]) -> None:
     """Assert the CLI exited successfully."""
@@ -350,6 +369,13 @@ def then_manifest_absent(estate_alias: str) -> None:
     """Ensure the persistence manifest was not created."""
     path = _estate_path(estate_alias, "backend/persistence.yaml")
     assert not path.exists()
+
+
+@given(parsers.cfparse('no estate repository is registered with alias "{alias}"'))
+def given_no_estate_registered(alias: str, config_dir: Path) -> None:
+    """Ensure the concordat config does not define the provided alias."""
+    config_path = config_dir / "concordat" / "config.yaml"
+    config_path.unlink(missing_ok=True)
 
 
 @then("the persistence change is merged into main")
