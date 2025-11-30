@@ -131,7 +131,7 @@ def persist_test_context(
     persist_repo_setup: tuple[Path, pygit2.Repository, Path, EstateRecord],
     persist_prompts: typ.Iterator[str],
     persist_monkeypatch_base: None,
-    stub_s3: type,
+    stub_s3: type[StubS3],
 ) -> PersistTestContext:
     """Bundle common fixtures for persist_estate tests."""
     workdir, repo, bare, record = persist_repo_setup
@@ -437,12 +437,14 @@ def test_exercise_write_permissions_wraps_errors(
     class Client:
         def put_object(self, **kwargs: object) -> dict[str, str]:
             if failing_operation == "put":
-                raise boto_exceptions.BotoCoreError
+                exc = boto_exceptions.BotoCoreError()
+                raise exc
             return {}
 
         def delete_object(self, **kwargs: object) -> dict[str, str]:
             if failing_operation == "delete":
-                raise boto_exceptions.BotoCoreError
+                exc = boto_exceptions.BotoCoreError()
+                raise exc
             return {}
 
     client = typ.cast("S3Client", Client())
@@ -502,7 +504,7 @@ def test_write_files_and_check_returns_unchanged_result(tmp_path: Path) -> None:
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
 
     descriptor = persistence.PersistenceDescriptor(
-        schema_version=1,
+        schema_version=persistence.PERSISTENCE_SCHEMA_VERSION,
         enabled=True,
         bucket="df12",
         key_prefix="estates/example/main",
@@ -597,7 +599,7 @@ def test_commit_changes_creates_branch(tmp_path: Path) -> None:
 def test_open_pr_returns_none_without_token() -> None:
     """_open_pr gracefully skips when token missing."""
     descriptor = persistence.PersistenceDescriptor(
-        schema_version=1,
+        schema_version=persistence.PERSISTENCE_SCHEMA_VERSION,
         enabled=True,
         bucket="df12",
         key_prefix="estates/example/main",
@@ -695,4 +697,4 @@ class PersistTestContext:
     bare: Path
     record: EstateRecord
     prompts: typ.Iterator[str]
-    stub_s3: type
+    stub_s3: type[StubS3]

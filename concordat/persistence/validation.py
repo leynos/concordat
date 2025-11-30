@@ -108,9 +108,11 @@ def _bucket_versioning_status(client: S3Client, bucket: str) -> str | None:
     try:
         response = client.get_bucket_versioning(Bucket=bucket)
     except boto_exceptions.BotoCoreError as error:
-        raise PersistenceError(f"Failed to query bucket versioning: {error}") from error
+        message = f"Failed to query bucket versioning: {error}"
+        raise PersistenceError(message) from error
     except boto_exceptions.ClientError as error:  # type: ignore[attr-defined]
-        raise PersistenceError(f"Failed to query bucket versioning: {error}") from error
+        message = f"Failed to query bucket versioning: {error}"
+        raise PersistenceError(message) from error
     status = response.get("Status")
     return str(status) if status is not None else None
 
@@ -122,9 +124,11 @@ def _perform_s3_operation(
     try:
         operation()
     except boto_exceptions.BotoCoreError as error:
-        raise PersistenceError(f"{error_message}: {error}") from error
+        message = f"{error_message}: {error}"
+        raise PersistenceError(message) from error
     except boto_exceptions.ClientError as error:  # type: ignore[attr-defined]
-        raise PersistenceError(f"{error_message}: {error}") from error
+        message = f"{error_message}: {error}"
+        raise PersistenceError(message) from error
 
 
 def _exercise_write_permissions(client: S3Client, bucket: str, key: str) -> None:
