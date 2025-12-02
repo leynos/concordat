@@ -15,6 +15,7 @@ import pygit2
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
+import concordat.persistence.models as persistence_models
 from concordat import cli
 from concordat.errors import ConcordatError
 from concordat.estate import EstateRecord, register_estate
@@ -54,6 +55,7 @@ def given_fake_estate(
     tmp_path: Path,
     config_dir: Path,
     monkeypatch: pytest.MonkeyPatch,
+    execution_state: dict[str, typ.Any],
 ) -> None:
     """Seed the config with a local estate repository."""
     repo_path = tmp_path / "estate-remote"
@@ -80,6 +82,53 @@ def given_fake_estate(
         set_active_if_missing=True,
     )
     monkeypatch.setenv("GITHUB_TOKEN", "placeholder-token")
+    execution_state["estate_repo_path"] = repo_path
+
+
+@given("the estate repository has remote state configured")
+def given_estate_persistence(execution_state: dict[str, typ.Any]) -> None:
+    """Add persistence manifest and backend config to the estate repo."""
+    repo_path = execution_state.get("estate_repo_path")
+    assert repo_path, "estate repo path missing"
+    repository = pygit2.Repository(str(repo_path))
+
+    backend_dir = Path(repo_path) / "backend"
+    backend_dir.mkdir(parents=True, exist_ok=True)
+    tfbackend_path = backend_dir / "core.tfbackend"
+    tfbackend_path.write_text(
+        'bucket = "df12-tfstate"\n'
+        'key    = "estates/example/main/terraform.tfstate"\n'
+        'region = "fr-par"\n',
+        encoding="utf-8",
+    )
+    manifest_path = backend_dir / "persistence.yaml"
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_payload = {
+        "schema_version": persistence_models.PERSISTENCE_SCHEMA_VERSION,
+        "enabled": True,
+        "bucket": "df12-tfstate",
+        "key_prefix": "estates/example/main",
+        "key_suffix": "terraform.tfstate",
+        "region": "fr-par",
+        "endpoint": "https://s3.fr-par.scw.cloud",
+        "backend_config_path": "backend/core.tfbackend",
+    }
+    with manifest_path.open("w", encoding="utf-8") as handle:
+        persistence_models._yaml.dump(manifest_payload, handle)
+
+    index = repository.index
+    index.add_all()
+    index.write()
+    tree_oid = index.write_tree()
+    sig = pygit2.Signature("Test", "test@example.com")
+    repository.create_commit(
+        "refs/heads/main",
+        sig,
+        sig,
+        "add persistence backend",
+        tree_oid,
+        [repository.head.target],
+    )
 
 
 @given("GITHUB_TOKEN is unset")
@@ -92,6 +141,30 @@ def given_token_unset(monkeypatch: pytest.MonkeyPatch) -> None:
 def given_token_set(token: str, monkeypatch: pytest.MonkeyPatch) -> None:
     """Force concordat to use the provided GitHub token."""
     monkeypatch.setenv("GITHUB_TOKEN", token)
+
+
+@given("remote backend credentials are set")
+def given_remote_backend_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Provide S3-compatible credentials via Scaleway aliases."""
+    monkeypatch.setenv("SCW_ACCESS_KEY", "scw-access-key")
+    monkeypatch.setenv("SCW_SECRET_KEY", "scw-secret-key")
+    monkeypatch.delenv("AWS_ACCESS_KEY_ID", raising=False)
+    monkeypatch.delenv("AWS_SECRET_ACCESS_KEY", raising=False)
+
+
+@given("remote backend credentials are missing")
+def given_remote_backend_credentials_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ensure no backend credentials are present in the environment."""
+    for variable in (
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_SESSION_TOKEN",
+        "SCW_ACCESS_KEY",
+        "SCW_SECRET_KEY",
+        "SPACES_ACCESS_KEY_ID",
+        "SPACES_SECRET_ACCESS_KEY",
+    ):
+        monkeypatch.delenv(variable, raising=False)
 
 
 @given("a fake tofu binary logs invocations")
@@ -253,3 +326,24 @@ def then_fake_tofu_commands(
     with Path(log_path).open("r", encoding="utf-8") as handle:
         actual = [line for raw_line in handle if (line := raw_line.strip())]
     assert actual == expected
+
+
+@then(parsers.cfparse('the backend details mention bucket "{bucket}" and key "{key}"'))
+def then_backend_details_logged(
+    cli_invocation: dict[str, RunResult],
+    bucket: str,
+    key: str,
+) -> None:
+    """Ensure stderr includes backend metadata but not secrets."""
+    stderr = cli_invocation["result"].stderr
+    assert bucket in stderr
+    assert key in stderr
+
+
+@then("no backend secrets are logged")
+def then_no_backend_secrets(cli_invocation: dict[str, RunResult]) -> None:
+    """Assert that secret-like values are absent from output."""
+    result = cli_invocation["result"]
+    for secret in ("scw-secret-key", "SCW_SECRET_KEY"):
+        assert secret not in result.stderr
+        assert secret not in result.stdout

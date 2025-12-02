@@ -21,6 +21,8 @@ if typ.TYPE_CHECKING:
 
     from pygit2.enums import ResetMode as _Pygit2ResetMode
 
+    from concordat.persistence.models import PersistenceDescriptor
+
     from .estate import EstateRecord
 
 XDG_CACHE_HOME = "XDG_CACHE_HOME"
@@ -33,6 +35,16 @@ ERROR_MISSING_ORIGIN = (
 )
 ERROR_MISSING_BRANCH = "Branch {branch!r} is missing from remote {remote!r}."
 ERROR_MISSING_TOFU = "OpenTofu binary 'tofu' was not found in PATH."
+ERROR_BACKEND_CONFIG_MISSING = (
+    "Remote backend config {path!r} was not found in the estate workspace."
+)
+ERROR_BACKEND_ENV_MISSING = (
+    "Remote state backend requires AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY "
+    "(or SCW_ACCESS_KEY and SCW_SECRET_KEY)."
+)
+ERROR_BACKEND_PATH_OUTSIDE = (
+    "Remote backend config must live inside the estate workspace (got {path})."
+)
 
 
 class EstateExecutionError(ConcordatError):
@@ -56,6 +68,16 @@ class ExecutionIO:
 
     stdout: typ.IO[str]
     stderr: typ.IO[str]
+
+
+@dataclasses.dataclass(frozen=True)
+class PersistenceRuntime:
+    """Runtime data for invoking tofu with a remote backend."""
+
+    descriptor: PersistenceDescriptor
+    backend_config: str
+    object_key: str
+    env_overrides: dict[str, str]
 
 
 def cache_root(env: dict[str, str] | None = None) -> Path:
@@ -178,8 +200,106 @@ def _write_stream_output(stream: typ.IO[str], content: str) -> None:
     stream.flush()
 
 
-def _initialize_tofu(workdir: Path, github_token: str) -> Tofu:
+def _object_key(descriptor: PersistenceDescriptor) -> str:
+    """Return the full state object key derived from the descriptor."""
+    prefix = descriptor.key_prefix.rstrip("/")
+    suffix = descriptor.key_suffix.lstrip("/")
+    if prefix:
+        return f"{prefix}/{suffix}"
+    return suffix
+
+
+def _resolve_backend_environment(env: typ.Mapping[str, str]) -> dict[str, str]:
+    """Return env overrides for tofu, erroring when credentials are missing."""
+
+    def _value(name: str) -> str:
+        return env.get(name, "").strip()
+
+    def _has_pair(first: str, second: str) -> bool:
+        return bool(_value(first) and _value(second))
+
+    if _has_pair("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"):
+        return {}
+
+    if _has_pair("SCW_ACCESS_KEY", "SCW_SECRET_KEY"):
+        return {
+            "AWS_ACCESS_KEY_ID": _value("SCW_ACCESS_KEY"),
+            "AWS_SECRET_ACCESS_KEY": _value("SCW_SECRET_KEY"),
+        }
+
+    if _has_pair("SPACES_ACCESS_KEY_ID", "SPACES_SECRET_ACCESS_KEY"):
+        return {
+            "AWS_ACCESS_KEY_ID": _value("SPACES_ACCESS_KEY_ID"),
+            "AWS_SECRET_ACCESS_KEY": _value("SPACES_SECRET_ACCESS_KEY"),
+        }
+
+    raise EstateExecutionError(ERROR_BACKEND_ENV_MISSING)
+
+
+def _backend_config_argument(workdir: Path, descriptor: PersistenceDescriptor) -> str:
+    """Validate backend path and return a safe relative argument for tofu."""
+    backend_path = (workdir / descriptor.backend_config_path).resolve()
+    workdir_resolved = workdir.resolve()
+    try:
+        relative = backend_path.relative_to(workdir_resolved)
+    except ValueError as error:  # pragma: no cover - defensive
+        message = ERROR_BACKEND_PATH_OUTSIDE.format(path=descriptor.backend_config_path)
+        raise EstateExecutionError(message) from error
+
+    if not backend_path.exists():
+        message = ERROR_BACKEND_CONFIG_MISSING.format(
+            path=descriptor.backend_config_path
+        )
+        raise EstateExecutionError(message)
+
+    return str(relative)
+
+
+def _load_persistence_runtime(workdir: Path) -> PersistenceRuntime | None:
+    """Load persistence manifest and derive runtime backend settings."""
+    from concordat.persistence import models as persistence_models
+
+    manifest_path = workdir / persistence_models.MANIFEST_FILENAME
+    try:
+        descriptor = persistence_models.PersistenceDescriptor.from_yaml(manifest_path)
+    except persistence_models.PersistenceError as error:
+        raise EstateExecutionError(str(error)) from error
+
+    if descriptor is None or not descriptor.enabled:
+        return None
+
+    backend_config = _backend_config_argument(workdir, descriptor)
+    env_overrides = _resolve_backend_environment(os.environ)
+    return PersistenceRuntime(
+        descriptor=descriptor,
+        backend_config=backend_config,
+        object_key=_object_key(descriptor),
+        env_overrides=env_overrides,
+    )
+
+
+def _log_backend_details(io: ExecutionIO, runtime: PersistenceRuntime) -> None:
+    """Emit backend metadata without secrets for observability."""
+    descriptor = runtime.descriptor
+    message = (
+        "remote backend: "
+        f"bucket={descriptor.bucket} "
+        f"key={runtime.object_key} "
+        f"region={descriptor.region} "
+        f"config={runtime.backend_config}"
+    )
+    _write_stream_output(io.stderr, message)
+
+
+def _initialize_tofu(
+    workdir: Path,
+    github_token: str,
+    *,
+    env_overrides: typ.Mapping[str, str] | None = None,
+) -> Tofu:
     env = os.environ.copy()
+    if env_overrides:
+        env.update(env_overrides)
     env["GITHUB_TOKEN"] = github_token
     try:
         return Tofu(cwd=str(workdir), env=env)
@@ -218,9 +338,24 @@ def _run_estate_command(
             f'github_owner = "{options.github_owner}"\n',
             encoding="utf-8",
         )
-        tofu = _initialize_tofu(workdir, options.github_token)
 
-        for args in [["init", "-input=false"], command]:
+        persistence_runtime = _load_persistence_runtime(workdir)
+        backend_args: list[str] = []
+        env_overrides: dict[str, str] = {}
+        if persistence_runtime is not None:
+            backend_args.append(f"-backend-config={persistence_runtime.backend_config}")
+            env_overrides = persistence_runtime.env_overrides
+            _log_backend_details(io, persistence_runtime)
+
+        tofu = _initialize_tofu(
+            workdir,
+            options.github_token,
+            env_overrides=env_overrides,
+        )
+
+        init_args = ["init", "-input=false", *backend_args]
+
+        for args in [init_args, command]:
             exit_code = _invoke_tofu_command(tofu, list(args), io)
             if exit_code != 0:
                 break

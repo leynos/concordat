@@ -497,10 +497,17 @@ acknowledge the state migration impact.
   verbatim.
 - Missing Amazon Web Services (AWS)/DigitalOcean/Scaleway environment variables
   trigger a descriptive error before `tofu init` runs, preventing OpenTofu's
-  opaque credential failures. When the descriptor is absent, both commands
-  retain the current local-state default.
+  opaque credential failures. The CLI prefers existing
+  `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`, falls back to
+  `SCW_ACCESS_KEY`/`SCW_SECRET_KEY` or
+  `SPACES_ACCESS_KEY_ID`/`SPACES_SECRET_ACCESS_KEY`, and aborts when none are
+  set. When the descriptor is absent, both commands retain the current
+  local-state default.
 - The initialisation log echoes the bucket, key, and region (never secrets) so
   operators have traceability in Continuous Integration (CI) logs.
+- The backend config path in the manifest must resolve inside the estate
+  workspace; missing or external paths abort execution to avoid mixing state
+  files from other locations.
 - Backends remain immutable once initialised; the command-line interface (CLI)
   refuses to mix local and remote state in the same workspace unless the
   operator wipes `.terraform` explicitly. This protects estates from partial
