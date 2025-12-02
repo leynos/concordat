@@ -56,6 +56,27 @@ Feature: Running estate execution commands
     And the backend details mention bucket "df12-tfstate" and key "estates/example/main/terraform.tfstate"
     And no backend secrets are logged
 
+  Scenario: Plan uses the remote backend with SPACES credentials
+    Given a fake estate repository is registered
+    And the estate repository has remote state configured
+    And remote backend credentials are set via SPACES
+    When I run concordat plan
+    Then the command exits with code 0
+    And fake tofu commands were "version -json | init -input=false -backend-config=backend/core.tfbackend | plan"
+    And the backend details mention bucket "df12-tfstate" and key "estates/example/main/terraform.tfstate"
+    And no backend secrets are logged
+
+  Scenario: Plan uses the remote backend with AWS credentials
+    Given a fake estate repository is registered
+    And the estate repository has remote state configured
+    And remote backend credentials are set via AWS
+    And aws-style backend secrets are present in the environment
+    When I run concordat plan
+    Then the command exits with code 0
+    And fake tofu commands were "version -json | init -input=false -backend-config=backend/core.tfbackend | plan"
+    And the backend details mention bucket "df12-tfstate" and key "estates/example/main/terraform.tfstate"
+    And no backend secrets are logged
+
   Scenario: Plan refuses to run without remote backend credentials
     Given a fake estate repository is registered
     And the estate repository has remote state configured

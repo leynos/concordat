@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import os
 import shutil
 import typing as typ
 from types import SimpleNamespace
@@ -10,17 +11,20 @@ from types import SimpleNamespace
 import pygit2
 import pytest
 
-import concordat.persistence.models as persistence_models
 from concordat.estate import EstateRecord
 from concordat.estate_execution import (
+    ERROR_BACKEND_CONFIG_MISSING,
+    ERROR_BACKEND_PATH_OUTSIDE,
     EstateExecutionError,
     ExecutionIO,
     ExecutionOptions,
+    _resolve_backend_environment,
     cache_root,
     ensure_estate_cache,
     estate_workspace,
     run_plan,
 )
+from tests.helpers.persistence import seed_persistence_files
 
 if typ.TYPE_CHECKING:
     from pathlib import Path
@@ -41,25 +45,6 @@ def _make_record(repo_path: Path, alias: str = "core") -> EstateRecord:
         repo_url=str(repo_path),
         github_owner="example",
     )
-
-
-def _seed_persistence_files(repo_path: Path, *, enabled: bool = True) -> None:
-    backend_dir = repo_path / "backend"
-    backend_dir.mkdir(parents=True, exist_ok=True)
-    tfbackend = backend_dir / "core.tfbackend"
-    tfbackend.write_text('bucket = "df12-tfstate"\n', encoding="utf-8")
-    manifest = {
-        "schema_version": persistence_models.PERSISTENCE_SCHEMA_VERSION,
-        "enabled": enabled,
-        "bucket": "df12-tfstate",
-        "key_prefix": "estates/example/main",
-        "key_suffix": "terraform.tfstate",
-        "region": "fr-par",
-        "endpoint": "https://s3.fr-par.scw.cloud",
-        "backend_config_path": "backend/core.tfbackend",
-    }
-    with (backend_dir / "persistence.yaml").open("w", encoding="utf-8") as handle:
-        persistence_models._yaml.dump(manifest, handle)
 
 
 def test_cache_root_honours_xdg(
@@ -178,7 +163,7 @@ def test_run_plan_uses_persistence_backend_when_enabled(
     git_repo: GitRepo,
 ) -> None:
     """Plan passes backend config and maps SCW credentials to AWS env vars."""
-    _seed_persistence_files(git_repo.path)
+    seed_persistence_files(git_repo.path)
     monkeypatch.setattr(
         "concordat.estate_execution.ensure_estate_cache",
         lambda *_, **__: git_repo.path,
@@ -227,12 +212,81 @@ def test_run_plan_uses_persistence_backend_when_enabled(
     assert "scw-secret" not in stderr_buffer.getvalue()
 
 
+def test_run_plan_uses_spaces_credentials_when_present(
+    monkeypatch: pytest.MonkeyPatch,
+    git_repo: GitRepo,
+) -> None:
+    """SPACES_* credentials are mapped to AWS_* for tofu init."""
+    seed_persistence_files(git_repo.path)
+    monkeypatch.setattr(
+        "concordat.estate_execution.ensure_estate_cache",
+        lambda *_, **__: git_repo.path,
+    )
+    for variable in (
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "SCW_ACCESS_KEY",
+        "SCW_SECRET_KEY",
+    ):
+        monkeypatch.delenv(variable, raising=False)
+    monkeypatch.setenv("SPACES_ACCESS_KEY_ID", "spaces-access")
+    monkeypatch.setenv("SPACES_SECRET_ACCESS_KEY", "spaces-secret")
+
+    created: list[FakeTofu] = []
+
+    class FakeTofu:
+        def __init__(self, cwd: str, env: dict[str, str]) -> None:
+            self.env = env
+            self.calls: list[list[str]] = []
+            created.append(self)
+
+        def _run(self, args: list[str], *, raise_on_error: bool = False) -> object:
+            self.calls.append(args)
+            return SimpleNamespace(stdout="", stderr="", returncode=0)
+
+    monkeypatch.setattr("concordat.estate_execution.Tofu", FakeTofu)
+
+    options = ExecutionOptions(
+        github_owner="example",
+        github_token="token",  # noqa: S106
+    )
+    io_streams = ExecutionIO(stdout=io.StringIO(), stderr=io.StringIO())
+
+    exit_code, _ = run_plan(_make_record(git_repo.path), options, io_streams)
+
+    assert exit_code == 0
+    tofu = created[-1]
+    assert tofu.env["AWS_ACCESS_KEY_ID"] == "spaces-access"
+    assert tofu.env["AWS_SECRET_ACCESS_KEY"] == "spaces-secret"  # noqa: S105
+    assert [
+        "init",
+        "-input=false",
+        "-backend-config=backend/core.tfbackend",
+    ] in tofu.calls
+
+
+def test_resolve_backend_environment_prefers_aws(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Existing AWS_* values override SCW/SPACES aliases."""
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "aws-access")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "aws-secret")
+    monkeypatch.setenv("SCW_ACCESS_KEY", "scw-access")
+    monkeypatch.setenv("SCW_SECRET_KEY", "scw-secret")
+    monkeypatch.setenv("SPACES_ACCESS_KEY_ID", "spaces-access")
+    monkeypatch.setenv("SPACES_SECRET_ACCESS_KEY", "spaces-secret")
+
+    resolved = _resolve_backend_environment(os.environ)
+
+    assert resolved == {}
+
+
 def test_run_plan_requires_backend_credentials(
     monkeypatch: pytest.MonkeyPatch,
     git_repo: GitRepo,
 ) -> None:
     """Plan aborts before init when backend credentials are missing."""
-    _seed_persistence_files(git_repo.path)
+    seed_persistence_files(git_repo.path)
     monkeypatch.setattr(
         "concordat.estate_execution.ensure_estate_cache",
         lambda *_, **__: git_repo.path,
@@ -259,12 +313,82 @@ def test_run_plan_requires_backend_credentials(
         run_plan(_make_record(git_repo.path), options, io_streams)
 
 
+def test_run_plan_backend_config_missing(
+    monkeypatch: pytest.MonkeyPatch,
+    git_repo: GitRepo,
+) -> None:
+    """Missing backend config file aborts before tofu initialises."""
+    seed_persistence_files(
+        git_repo.path,
+        backend_config_path="backend/missing.tfbackend",
+        create_backend_file=False,
+    )
+    monkeypatch.setattr(
+        "concordat.estate_execution.ensure_estate_cache",
+        lambda *_, **__: git_repo.path,
+    )
+    monkeypatch.setenv("SCW_ACCESS_KEY", "scw-access")
+    monkeypatch.setenv("SCW_SECRET_KEY", "scw-secret")
+
+    def _fail_init(*args: object, **kwargs: object) -> object:
+        pytest.fail("Tofu must not be initialised when backend config is missing")
+
+    monkeypatch.setattr("concordat.estate_execution.Tofu", _fail_init)
+    options = ExecutionOptions(
+        github_owner="example",
+        github_token="token",  # noqa: S106
+    )
+    io_streams = ExecutionIO(stdout=io.StringIO(), stderr=io.StringIO())
+
+    with pytest.raises(EstateExecutionError) as excinfo:
+        run_plan(_make_record(git_repo.path), options, io_streams)
+
+    message = str(excinfo.value)
+    assert "Remote backend config" in message
+    assert "backend/missing.tfbackend" in message
+
+
+def test_run_plan_backend_config_outside_workspace(
+    monkeypatch: pytest.MonkeyPatch,
+    git_repo: GitRepo,
+) -> None:
+    """Backend config paths escaping the workspace are rejected."""
+    seed_persistence_files(
+        git_repo.path,
+        backend_config_path="../outside.tfbackend",
+        create_backend_file=False,
+    )
+    monkeypatch.setattr(
+        "concordat.estate_execution.ensure_estate_cache",
+        lambda *_, **__: git_repo.path,
+    )
+    monkeypatch.setenv("SCW_ACCESS_KEY", "scw-access")
+    monkeypatch.setenv("SCW_SECRET_KEY", "scw-secret")
+
+    def _fail_init(*args: object, **kwargs: object) -> object:
+        pytest.fail("Tofu must not be initialised when backend path escapes")
+
+    monkeypatch.setattr("concordat.estate_execution.Tofu", _fail_init)
+    options = ExecutionOptions(
+        github_owner="example",
+        github_token="token",  # noqa: S106
+    )
+    io_streams = ExecutionIO(stdout=io.StringIO(), stderr=io.StringIO())
+
+    with pytest.raises(EstateExecutionError) as excinfo:
+        run_plan(_make_record(git_repo.path), options, io_streams)
+
+    message = str(excinfo.value)
+    assert "Remote backend config must live inside the estate workspace" in message
+    assert "../outside.tfbackend" in message
+
+
 def test_run_plan_skips_disabled_persistence(
     monkeypatch: pytest.MonkeyPatch,
     git_repo: GitRepo,
 ) -> None:
     """Disabled persistence manifests fall back to local state handling."""
-    _seed_persistence_files(git_repo.path, enabled=False)
+    seed_persistence_files(git_repo.path, enabled=False)
     monkeypatch.setattr(
         "concordat.estate_execution.ensure_estate_cache",
         lambda *_, **__: git_repo.path,

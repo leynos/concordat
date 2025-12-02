@@ -15,10 +15,10 @@ import pygit2
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
-import concordat.persistence.models as persistence_models
 from concordat import cli
 from concordat.errors import ConcordatError
 from concordat.estate import EstateRecord, register_estate
+from tests.helpers.persistence import seed_persistence_files
 
 from .conftest import RunResult
 
@@ -92,29 +92,7 @@ def given_estate_persistence(execution_state: dict[str, typ.Any]) -> None:
     assert repo_path, "estate repo path missing"
     repository = pygit2.Repository(str(repo_path))
 
-    backend_dir = Path(repo_path) / "backend"
-    backend_dir.mkdir(parents=True, exist_ok=True)
-    tfbackend_path = backend_dir / "core.tfbackend"
-    tfbackend_path.write_text(
-        'bucket = "df12-tfstate"\n'
-        'key    = "estates/example/main/terraform.tfstate"\n'
-        'region = "fr-par"\n',
-        encoding="utf-8",
-    )
-    manifest_path = backend_dir / "persistence.yaml"
-    manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    manifest_payload = {
-        "schema_version": persistence_models.PERSISTENCE_SCHEMA_VERSION,
-        "enabled": True,
-        "bucket": "df12-tfstate",
-        "key_prefix": "estates/example/main",
-        "key_suffix": "terraform.tfstate",
-        "region": "fr-par",
-        "endpoint": "https://s3.fr-par.scw.cloud",
-        "backend_config_path": "backend/core.tfbackend",
-    }
-    with manifest_path.open("w", encoding="utf-8") as handle:
-        persistence_models._yaml.dump(manifest_payload, handle)
+    seed_persistence_files(Path(repo_path))
 
     index = repository.index
     index.add_all()
@@ -148,8 +126,41 @@ def given_remote_backend_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     """Provide S3-compatible credentials via Scaleway aliases."""
     monkeypatch.setenv("SCW_ACCESS_KEY", "scw-access-key")
     monkeypatch.setenv("SCW_SECRET_KEY", "scw-secret-key")
-    monkeypatch.delenv("AWS_ACCESS_KEY_ID", raising=False)
-    monkeypatch.delenv("AWS_SECRET_ACCESS_KEY", raising=False)
+    for variable in (
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "SPACES_ACCESS_KEY_ID",
+        "SPACES_SECRET_ACCESS_KEY",
+    ):
+        monkeypatch.delenv(variable, raising=False)
+
+
+@given("remote backend credentials are set via SPACES")
+def given_remote_backend_credentials_spaces(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Provide S3-compatible credentials via DigitalOcean Spaces aliases."""
+    monkeypatch.setenv("SPACES_ACCESS_KEY_ID", "spaces-access-key-id")
+    monkeypatch.setenv("SPACES_SECRET_ACCESS_KEY", "spaces-secret-access-key")
+    for variable in (
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "SCW_ACCESS_KEY",
+        "SCW_SECRET_KEY",
+    ):
+        monkeypatch.delenv(variable, raising=False)
+
+
+@given("remote backend credentials are set via AWS")
+def given_remote_backend_credentials_aws(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Provide native AWS credentials."""
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "aws-access-key-id")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "aws-secret-access-key")
+    for variable in (
+        "SCW_ACCESS_KEY",
+        "SCW_SECRET_KEY",
+        "SPACES_ACCESS_KEY_ID",
+        "SPACES_SECRET_ACCESS_KEY",
+    ):
+        monkeypatch.delenv(variable, raising=False)
 
 
 @given("remote backend credentials are missing")
@@ -165,6 +176,16 @@ def given_remote_backend_credentials_missing(monkeypatch: pytest.MonkeyPatch) ->
         "SPACES_SECRET_ACCESS_KEY",
     ):
         monkeypatch.delenv(variable, raising=False)
+
+
+@given("aws-style backend secrets are present in the environment")
+def given_aws_style_backend_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Seed representative AWS-like credentials for leak checks."""
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAFAKEACCESSKEYID1234")
+    monkeypatch.setenv(
+        "AWS_SECRET_ACCESS_KEY",
+        "wJalrXUtnFEMI/K7MDENG/bPxRfiCYFAKESECRET",
+    )
 
 
 @given("a fake tofu binary logs invocations")
@@ -344,6 +365,17 @@ def then_backend_details_logged(
 def then_no_backend_secrets(cli_invocation: dict[str, RunResult]) -> None:
     """Assert that secret-like values are absent from output."""
     result = cli_invocation["result"]
-    for secret in ("scw-secret-key", "SCW_SECRET_KEY"):
+    secrets_to_check = ["scw-secret-key", "SCW_SECRET_KEY"]
+    for env_var in (
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "SPACES_ACCESS_KEY_ID",
+        "SPACES_SECRET_ACCESS_KEY",
+    ):
+        value = os.environ.get(env_var)
+        if value:
+            secrets_to_check.append(value)
+
+    for secret in secrets_to_check:
         assert secret not in result.stderr
         assert secret not in result.stdout

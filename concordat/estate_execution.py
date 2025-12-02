@@ -39,8 +39,9 @@ ERROR_BACKEND_CONFIG_MISSING = (
     "Remote backend config {path!r} was not found in the estate workspace."
 )
 ERROR_BACKEND_ENV_MISSING = (
-    "Remote state backend requires AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY "
-    "(or SCW_ACCESS_KEY and SCW_SECRET_KEY)."
+    "Remote state backend requires credentials in the environment: either "
+    "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, SCW_ACCESS_KEY and "
+    "SCW_SECRET_KEY, or SPACES_ACCESS_KEY_ID and SPACES_SECRET_ACCESS_KEY."
 )
 ERROR_BACKEND_PATH_OUTSIDE = (
     "Remote backend config must live inside the estate workspace (got {path})."
@@ -60,6 +61,7 @@ class ExecutionOptions:
     extra_args: cabc.Sequence[str] = dataclasses.field(default_factory=tuple)
     keep_workdir: bool = False
     cache_directory: Path | None = None
+    environment: cabc.Mapping[str, str] | None = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -204,9 +206,7 @@ def _object_key(descriptor: PersistenceDescriptor) -> str:
     """Return the full state object key derived from the descriptor."""
     prefix = descriptor.key_prefix.rstrip("/")
     suffix = descriptor.key_suffix.lstrip("/")
-    if prefix:
-        return f"{prefix}/{suffix}"
-    return suffix
+    return f"{prefix}/{suffix}" if prefix else suffix
 
 
 def _resolve_backend_environment(env: typ.Mapping[str, str]) -> dict[str, str]:
@@ -255,7 +255,9 @@ def _backend_config_argument(workdir: Path, descriptor: PersistenceDescriptor) -
     return str(relative)
 
 
-def _load_persistence_runtime(workdir: Path) -> PersistenceRuntime | None:
+def _load_persistence_runtime(
+    workdir: Path, env: typ.Mapping[str, str]
+) -> PersistenceRuntime | None:
     """Load persistence manifest and derive runtime backend settings."""
     from concordat.persistence import models as persistence_models
 
@@ -269,7 +271,7 @@ def _load_persistence_runtime(workdir: Path) -> PersistenceRuntime | None:
         return None
 
     backend_config = _backend_config_argument(workdir, descriptor)
-    env_overrides = _resolve_backend_environment(os.environ)
+    env_overrides = _resolve_backend_environment(env)
     return PersistenceRuntime(
         descriptor=descriptor,
         backend_config=backend_config,
@@ -295,11 +297,12 @@ def _initialize_tofu(
     workdir: Path,
     github_token: str,
     *,
+    base_env: typ.Mapping[str, str] | None = None,
     env_overrides: typ.Mapping[str, str] | None = None,
 ) -> Tofu:
-    env = os.environ.copy()
+    env = dict(base_env) if base_env is not None else dict(os.environ)
     if env_overrides:
-        env.update(env_overrides)
+        env |= env_overrides
     env["GITHUB_TOKEN"] = github_token
     try:
         return Tofu(cwd=str(workdir), env=env)
@@ -325,6 +328,11 @@ def _run_estate_command(
     io: ExecutionIO,
 ) -> tuple[int, Path]:
     command = [verb, *options.extra_args]
+    env_source = (
+        dict(options.environment)
+        if options.environment is not None
+        else dict(os.environ)
+    )
     with estate_workspace(
         record,
         cache_directory=options.cache_directory,
@@ -339,7 +347,7 @@ def _run_estate_command(
             encoding="utf-8",
         )
 
-        persistence_runtime = _load_persistence_runtime(workdir)
+        persistence_runtime = _load_persistence_runtime(workdir, env_source)
         backend_args: list[str] = []
         env_overrides: dict[str, str] = {}
         if persistence_runtime is not None:
@@ -350,6 +358,7 @@ def _run_estate_command(
         tofu = _initialize_tofu(
             workdir,
             options.github_token,
+            base_env=env_source,
             env_overrides=env_overrides,
         )
 
