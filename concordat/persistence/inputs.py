@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import typing as typ
 from pathlib import Path
 
@@ -16,6 +17,16 @@ from .models import (
 
 if typ.TYPE_CHECKING:
     from concordat.estate import EstateRecord
+
+
+@dataclasses.dataclass(frozen=True)
+class InputCollectionConfig:
+    """Configuration for collecting user inputs."""
+
+    preset: dict[str, str]
+    defaults: dict[str, str]
+    allow_prompt: bool
+    input_func: typ.Callable[[str], str]
 
 
 def _defaults_from(
@@ -42,6 +53,12 @@ def _collect_user_inputs(
     allow_prompt: bool,
 ) -> dict[str, str]:
     """Gather bucket, region, endpoint, and key values from the user."""
+    config = InputCollectionConfig(
+        preset=preset,
+        defaults=defaults,
+        allow_prompt=allow_prompt,
+        input_func=input_func,
+    )
     labels = {
         "bucket": "Bucket",
         "region": "Region",
@@ -51,33 +68,22 @@ def _collect_user_inputs(
     }
     responses: dict[str, str] = {}
     for field, label in labels.items():
-        responses[field] = _collect_single_input(
-            field,
-            label,
-            preset,
-            defaults,
-            allow_prompt=allow_prompt,
-            input_func=input_func,
-        )
+        responses[field] = _collect_single_input(field, label, config)
     return responses
 
 
 def _collect_single_input(
     field: str,
     label: str,
-    preset: dict[str, str],
-    defaults: dict[str, str],
-    *,
-    allow_prompt: bool,
-    input_func: typ.Callable[[str], str],
+    config: InputCollectionConfig,
 ) -> str:
     """Return a single collected value honoring preset, prompt, and defaults."""
-    if value := preset.get(field, "").strip():
+    if value := config.preset.get(field, "").strip():
         return value
 
-    default = defaults[field]
-    if allow_prompt:
-        return _prompt_with_default(label, default, input_func)
+    default = config.defaults[field]
+    if config.allow_prompt:
+        return _prompt_with_default(label, default, config.input_func)
 
     if default:
         return default
