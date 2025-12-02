@@ -37,19 +37,35 @@ def _defaults_from(
 def _collect_user_inputs(
     defaults: dict[str, str],
     input_func: typ.Callable[[str], str],
+    preset: dict[str, str],
+    *,
+    allow_prompt: bool,
 ) -> dict[str, str]:
     """Gather bucket, region, endpoint, and key values from the user."""
-    return {
-        "bucket": _prompt_with_default("Bucket", defaults["bucket"], input_func),
-        "region": _prompt_with_default("Region", defaults["region"], input_func),
-        "endpoint": _prompt_with_default("Endpoint", defaults["endpoint"], input_func),
-        "key_prefix": _prompt_with_default(
-            "Key prefix", defaults["key_prefix"], input_func
-        ),
-        "key_suffix": _prompt_with_default(
-            "Key suffix", defaults["key_suffix"], input_func
-        ),
+    labels = {
+        "bucket": "Bucket",
+        "region": "Region",
+        "endpoint": "Endpoint",
+        "key_prefix": "Key prefix",
+        "key_suffix": "Key suffix",
     }
+    responses: dict[str, str] = {}
+    for field, label in labels.items():
+        preset_value = preset.get(field, "").strip()
+        if preset_value:
+            responses[field] = preset_value
+            continue
+        default = defaults[field]
+        if not allow_prompt:
+            if default:
+                responses[field] = default
+                continue
+            raise PersistenceError(
+                f"{label} is required in non-interactive mode; provide a flag or "
+                f"environment variable."
+            )
+        responses[field] = _prompt_with_default(label, default, input_func)
+    return responses
 
 
 def _prompt_with_default(

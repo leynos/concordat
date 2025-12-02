@@ -193,6 +193,17 @@ Re-running the command refuses to replace existing backend files unless
 such as `AWS_SECRET_ACCESS_KEY` are validated in memory only and are never
 written to disk.
 
+Non-interactive use for automation:
+
+- Provide backend values via flags (`--bucket`, `--region`, `--endpoint`,
+  `--key-prefix`, `--key-suffix`) or the environment variables
+  `CONCORDAT_PERSIST_BUCKET`, `CONCORDAT_PERSIST_REGION`,
+  `CONCORDAT_PERSIST_ENDPOINT`, `CONCORDAT_PERSIST_KEY_PREFIX`, and
+  `CONCORDAT_PERSIST_KEY_SUFFIX`.
+- Pass `--no-input` to fail fast instead of prompting when any required value
+  is missing. Defaults from an existing `backend/persistence.yaml` are still
+  honoured in non-interactive mode.
+
 ### Configuring remote-state credentials
 
 Remote-state backends rely on environment variables; the CLI simply checks that

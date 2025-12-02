@@ -12,6 +12,7 @@ from botocore import exceptions as boto_exceptions
 
 import concordat.persistence.files as persistence_files
 import concordat.persistence.gitops as gitops
+import concordat.persistence.inputs as persistence_inputs
 import concordat.persistence.models as persistence_models
 import concordat.persistence.pr as persistence_pr
 import concordat.persistence.render as persistence_render
@@ -417,7 +418,7 @@ def test_bucket_versioning_status_wraps_errors(
     client = typ.cast("S3Client", Client())
     with pytest.raises(persistence.PersistenceError) as excinfo:
         persistence_validation._bucket_versioning_status(client, "bucket")
-    assert "Failed to query bucket versioning" in str(excinfo.value)
+    assert "Versioning check failed" in str(excinfo.value)
 
 
 @pytest.mark.parametrize(
@@ -698,3 +699,45 @@ class PersistTestContext:
     record: EstateRecord
     prompts: typ.Iterator[str]
     stub_s3: type[StubS3]
+
+
+def test_non_interactive_persist_uses_provided_values(
+    persist_test_context: PersistTestContext,
+) -> None:
+    """Non-interactive mode should bypass prompts when values are provided."""
+    ctx = persist_test_context
+    options = persistence.PersistenceOptions(
+        bucket="df12",
+        region="fr-par",
+        endpoint="https://s3.fr-par.scw.cloud",
+        key_prefix="estates/example/main",
+        key_suffix="terraform.tfstate",
+        no_input=True,
+        input_func=lambda _: (_ for _ in ()).throw(AssertionError("prompted")),
+        s3_client_factory=lambda *_args: ctx.stub_s3(),
+    )
+
+    result = persistence.persist_estate(ctx.record, options)
+
+    assert result.updated
+    assert result.backend_path.name == "core.tfbackend"
+
+
+def test_non_interactive_missing_value_errors() -> None:
+    """Non-interactive mode raises when required values are absent."""
+    defaults = {
+        "bucket": "",
+        "region": "",
+        "endpoint": "",
+        "key_prefix": "",
+        "key_suffix": "",
+    }
+    with pytest.raises(persistence.PersistenceError) as excinfo:
+        persistence_inputs._collect_user_inputs(
+            defaults,
+            lambda _: "",
+            preset={},
+            allow_prompt=False,
+        )
+
+    assert "Bucket is required in non-interactive mode" in str(excinfo.value)

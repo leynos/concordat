@@ -251,14 +251,31 @@ def persist(
     force: bool = False,
     github_token: str | None = None,
     allow_insecure_endpoint: bool = False,
+    bucket: str | None = None,
+    region: str | None = None,
+    endpoint: str | None = None,
+    key_prefix: str | None = None,
+    key_suffix: str | None = None,
+    no_input: bool = False,
 ) -> None:
     """Configure remote state persistence for an estate."""
     record = _resolve_estate_record(alias)
     token = github_token or os.getenv("GITHUB_TOKEN")
+    bucket_env = os.getenv("CONCORDAT_PERSIST_BUCKET")
+    region_env = os.getenv("CONCORDAT_PERSIST_REGION")
+    endpoint_env = os.getenv("CONCORDAT_PERSIST_ENDPOINT")
+    key_prefix_env = os.getenv("CONCORDAT_PERSIST_KEY_PREFIX")
+    key_suffix_env = os.getenv("CONCORDAT_PERSIST_KEY_SUFFIX")
     options = PersistenceOptions(
         force=force,
         github_token=token,
         allow_insecure_endpoint=allow_insecure_endpoint,
+        bucket=bucket or bucket_env,
+        region=region or region_env,
+        endpoint=endpoint or endpoint_env,
+        key_prefix=key_prefix or key_prefix_env,
+        key_suffix=key_suffix or key_suffix_env,
+        no_input=no_input,
     )
     result = persist_estate(record, options)
     print(result.render())
