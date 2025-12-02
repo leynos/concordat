@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import typing as typ
-from pathlib import Path
 
 import pytest
 
@@ -13,12 +12,13 @@ import concordat.persistence.render as persistence_render
 from concordat import persistence
 
 if typ.TYPE_CHECKING:
+    from pathlib import Path
+
     import tests.unit.conftest as persistence_conftest
 
 
 def test_write_if_changed_respects_force(tmp_path: Path) -> None:
     """Existing files are not overwritten unless --force is supplied."""
-    tmp_path = Path(tmp_path)
     path = tmp_path / "backend" / "core.tfbackend"
     path.parent.mkdir(parents=True)
     path.write_text("original", encoding="utf-8")
@@ -35,7 +35,6 @@ def test_write_if_changed_respects_force(tmp_path: Path) -> None:
 
 def test_write_if_changed_noop_when_contents_identical(tmp_path: Path) -> None:
     """Rewriting identical contents is a no-op."""
-    tmp_path = Path(tmp_path)
     path = tmp_path / "backend" / "core.tfbackend"
     path.parent.mkdir(parents=True)
     path.write_text("unchanged", encoding="utf-8")
@@ -47,7 +46,6 @@ def test_write_if_changed_noop_when_contents_identical(tmp_path: Path) -> None:
 
 def test_write_manifest_if_changed_noop(tmp_path: Path) -> None:
     """Manifest unchanged returns False without writing."""
-    tmp_path = Path(tmp_path)
     path = tmp_path / "backend" / "persistence.yaml"
     path.parent.mkdir(parents=True)
     path.write_text("a: 1\n", encoding="utf-8")
@@ -89,7 +87,6 @@ def test_write_files_handles_conflicts(
 
 def test_write_files_and_check_returns_unchanged_result(tmp_path: Path) -> None:
     """When files are identical, early result marks workflow unchanged."""
-    tmp_path = Path(tmp_path)
     backend_path = tmp_path / "backend.tfbackend"
     manifest_path = tmp_path / "backend" / "persistence.yaml"
     backend_path.parent.mkdir(parents=True, exist_ok=True)
@@ -129,7 +126,6 @@ def test_write_files_and_check_returns_none_when_files_updated(
     tmp_path: Path,
 ) -> None:
     """When files change, helper writes and returns None."""
-    tmp_path = Path(tmp_path)
     backend_path = tmp_path / "backend.tfbackend"
     manifest_path = tmp_path / "backend" / "persistence.yaml"
     backend_path.parent.mkdir(parents=True, exist_ok=True)

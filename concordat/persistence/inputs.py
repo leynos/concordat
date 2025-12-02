@@ -19,7 +19,7 @@ if typ.TYPE_CHECKING:
     from concordat.estate import EstateRecord
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class InputCollectionConfig:
     """Configuration for collecting user inputs."""
 

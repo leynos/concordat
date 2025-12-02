@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+import typing as typ
 
 import pytest
 
 import concordat.persistence.models as persistence_models
 from concordat import persistence
 
+if typ.TYPE_CHECKING:
+    from pathlib import Path
+
 
 def test_descriptor_round_trip_from_yaml(tmp_path: Path) -> None:
     """Descriptors load from YAML and round-trip via to_dict."""
-    tmp_path = Path(tmp_path)
     path = tmp_path / "persistence.yaml"
     descriptor = persistence.PersistenceDescriptor(
         schema_version=persistence.PERSISTENCE_SCHEMA_VERSION,
@@ -37,7 +39,6 @@ def test_descriptor_round_trip_from_yaml(tmp_path: Path) -> None:
 
 def test_descriptor_from_yaml_rejects_malformed(tmp_path: Path) -> None:
     """Non-mapping manifests are rejected."""
-    tmp_path = Path(tmp_path)
     path = tmp_path / "persistence.yaml"
     path.write_text("- not-a-mapping\n- still-not\n", encoding="utf-8")
 
@@ -49,7 +50,6 @@ def test_descriptor_from_yaml_rejects_malformed(tmp_path: Path) -> None:
 
 def test_descriptor_from_yaml_rejects_newer_schema_version(tmp_path: Path) -> None:
     """Newer schema versions are rejected with a clear message."""
-    tmp_path = Path(tmp_path)
     path = tmp_path / "persistence.yaml"
     newer_version = persistence.PERSISTENCE_SCHEMA_VERSION + 1
     manifest = {

@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import datetime as dt
-from pathlib import Path
+import typing as typ
 
 import concordat.persistence.gitops as gitops
 from tests.unit.conftest import _make_repo
 
+if typ.TYPE_CHECKING:
+    from pathlib import Path
+
 
 def test_commit_changes_creates_branch(tmp_path: Path) -> None:
     """_commit_changes creates and checks out a persistence branch."""
-    tmp_path = Path(tmp_path)
     repo = _make_repo(tmp_path)
     target_file = tmp_path / "file.txt"
     target_file.write_text("content", encoding="utf-8")

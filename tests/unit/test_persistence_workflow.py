@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+import typing as typ
 
 import pytest
 
@@ -12,12 +12,14 @@ from concordat import estate_execution, persistence
 from concordat.estate import EstateRecord
 from tests.unit.conftest import PersistTestContext, _make_repo
 
+if typ.TYPE_CHECKING:
+    from pathlib import Path
+
 
 def test_setup_persistence_environment_rejects_dirty(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Dirty cached estate raises a PersistenceError."""
-    tmp_path = Path(tmp_path)
     _make_repo(tmp_path)
     readme = tmp_path / "README.md"
     readme.write_text("dirty\n", encoding="utf-8")
