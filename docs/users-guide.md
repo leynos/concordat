@@ -239,6 +239,22 @@ stack using the appropriate credentials. The roadmap and design doc (§2.8)
 describe lock troubleshooting steps and disaster-recovery procedures that build
 on this environment setup.
 
+### Remote state FAQ (Scaleway-focused)
+
+- Versioning disabled error: In the Scaleway console, open Object Storage →
+  your bucket → Settings → **Object versioning** and set it to **Enabled**.
+  Re-run `concordat estate persist`.
+- Access denied when checking versioning: Confirm the access key/secret match
+  the correct project, the bucket name is spelled correctly, and the endpoint
+  matches the region (for example, `https://s3.fr-par.scw.cloud`). Retry after
+  updating credentials; network glitches also show the same message.
+- Wrong bucket or region: Ensure `--bucket` and `--region` (or the
+  `CONCORDAT_PERSIST_*` env vars) point to the intended bucket; the endpoint
+  must be in the same region.
+- Need to retry without prompts: Pass `--no-input` plus the required flags to
+  fail fast in automation; defaults from `backend/persistence.yaml` are still
+  honoured.
+
 ### Estate configuration file
 
 Concordat stores estate metadata in `$XDG_CONFIG_HOME/concordat/config.yaml`
