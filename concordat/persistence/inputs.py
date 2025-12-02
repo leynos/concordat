@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import typing as typ
 from pathlib import Path
 
@@ -16,6 +17,16 @@ from .models import (
 
 if typ.TYPE_CHECKING:
     from concordat.estate import EstateRecord
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class InputCollectionConfig:
+    """Configuration for collecting user inputs."""
+
+    preset: dict[str, str]
+    defaults: dict[str, str]
+    allow_prompt: bool
+    input_func: typ.Callable[[str], str]
 
 
 def _defaults_from(
@@ -37,19 +48,50 @@ def _defaults_from(
 def _collect_user_inputs(
     defaults: dict[str, str],
     input_func: typ.Callable[[str], str],
+    preset: dict[str, str],
+    *,
+    allow_prompt: bool,
 ) -> dict[str, str]:
     """Gather bucket, region, endpoint, and key values from the user."""
-    return {
-        "bucket": _prompt_with_default("Bucket", defaults["bucket"], input_func),
-        "region": _prompt_with_default("Region", defaults["region"], input_func),
-        "endpoint": _prompt_with_default("Endpoint", defaults["endpoint"], input_func),
-        "key_prefix": _prompt_with_default(
-            "Key prefix", defaults["key_prefix"], input_func
-        ),
-        "key_suffix": _prompt_with_default(
-            "Key suffix", defaults["key_suffix"], input_func
-        ),
+    config = InputCollectionConfig(
+        preset=preset,
+        defaults=defaults,
+        allow_prompt=allow_prompt,
+        input_func=input_func,
+    )
+    labels = {
+        "bucket": "Bucket",
+        "region": "Region",
+        "endpoint": "Endpoint",
+        "key_prefix": "Key prefix",
+        "key_suffix": "Key suffix",
     }
+    responses: dict[str, str] = {}
+    for field, label in labels.items():
+        responses[field] = _collect_single_input(field, label, config)
+    return responses
+
+
+def _collect_single_input(
+    field: str,
+    label: str,
+    config: InputCollectionConfig,
+) -> str:
+    """Return a single collected value honoring preset, prompt, and defaults."""
+    if value := config.preset.get(field, "").strip():
+        return value
+
+    default = config.defaults[field]
+    if config.allow_prompt:
+        return _prompt_with_default(label, default, config.input_func)
+
+    if default:
+        return default
+
+    raise PersistenceError(
+        f"{label} is required in non-interactive mode; provide a flag or "
+        "environment variable."
+    )
 
 
 def _prompt_with_default(

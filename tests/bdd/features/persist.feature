@@ -61,11 +61,11 @@ Feature: Persisting estate state remotely
     Given an isolated concordat config directory
     And an estate repository with alias "core"
     And pull requests are stubbed
-    And bucket versioning check fails
-    And persistence prompts "df12-tfstate, fr-par, https://s3.fr-par.scw.cloud, estates/example/main, terraform.tfstate"
-    And GITHUB_TOKEN is set to "test-token"
-    When I run concordat estate persist
-    Then the command fails with error containing "Failed to query bucket versioning"
+  And bucket versioning check fails
+  And persistence prompts "df12-tfstate, fr-par, https://s3.fr-par.scw.cloud, estates/example/main, terraform.tfstate"
+  And GITHUB_TOKEN is set to "test-token"
+  When I run concordat estate persist
+  Then the command fails with error containing "Versioning check failed"
 
   Scenario: Permission probe failure surfaces an error
     Given an isolated concordat config directory
@@ -84,10 +84,20 @@ Feature: Persisting estate state remotely
     And bucket versioning status is "Enabled"
     And persistence prompts "df12-tfstate, fr-par, https://s3.fr-par.scw.cloud, estates/example/main, terraform.tfstate"
     And GITHUB_TOKEN is set to "test-token"
-    When I run "concordat estate persist --alias demo-estate"
+  When I run "concordat estate persist --alias demo-estate"
+  Then the command succeeds
+  And backend file "backend/demo-estate.tfbackend" contains "df12-tfstate"
+  And persistence manifest records bucket "df12-tfstate"
+
+  Scenario: Persisting non-interactively with flags
+    Given an isolated concordat config directory
+    And an estate repository with alias "core"
+    And pull requests are stubbed
+    And bucket versioning status is "Enabled"
+    And GITHUB_TOKEN is set to "test-token"
+    When I run "concordat estate persist --bucket df12-tfstate --region fr-par --endpoint https://s3.fr-par.scw.cloud --key-prefix estates/example/main --key-suffix terraform.tfstate --no-input"
     Then the command succeeds
-    And backend file "backend/demo-estate.tfbackend" contains "df12-tfstate"
-    And persistence manifest records bucket "df12-tfstate"
+    And backend file "backend/core.tfbackend" contains "df12-tfstate"
 
   Scenario: Persisting with an unknown estate alias fails
     Given an isolated concordat config directory

@@ -108,10 +108,18 @@ def _bucket_versioning_status(client: S3Client, bucket: str) -> str | None:
     try:
         response = client.get_bucket_versioning(Bucket=bucket)
     except boto_exceptions.BotoCoreError as error:
-        message = f"Failed to query bucket versioning: {error}"
+        message = (
+            "Versioning check failed: unable to reach the bucket API. "
+            "Verify credentials, endpoint, and network connectivity, then retry. "
+            f"Details: {error}"
+        )
         raise PersistenceError(message) from error
     except boto_exceptions.ClientError as error:  # type: ignore[attr-defined]
-        message = f"Failed to query bucket versioning: {error}"
+        message = (
+            "Versioning check failed: the bucket API rejected the request. "
+            "Confirm the bucket exists and the provided credentials can query it. "
+            f"Details: {error}"
+        )
         raise PersistenceError(message) from error
     status = response.get("Status")
     return str(status) if status is not None else None

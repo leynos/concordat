@@ -58,7 +58,19 @@ def _prepare_and_validate_descriptor(
     input_func = opts.input_func or input
     existing_descriptor = PersistenceDescriptor.from_yaml(paths.manifest_path)
     defaults = _defaults_from(record, existing_descriptor)
-    prompts = _collect_user_inputs(defaults, input_func)
+    preset = {
+        "bucket": opts.bucket or "",
+        "region": opts.region or "",
+        "endpoint": opts.endpoint or "",
+        "key_prefix": opts.key_prefix or "",
+        "key_suffix": opts.key_suffix or "",
+    }
+    prompts = _collect_user_inputs(
+        defaults,
+        input_func,
+        preset,
+        allow_prompt=not opts.no_input,
+    )
     descriptor = _build_descriptor(prompts, paths.backend_path)
     persistence_validation._validate_inputs(
         descriptor,

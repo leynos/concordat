@@ -67,7 +67,7 @@ locking and rollbacks without adding DynamoDB or other AWS-only dependencies.
   directory, declaring the `s3` backend with no inline credentials. Acceptance:
   running `tofu init -backend-config backend/scaleway.tfbackend` succeeds
   locally and in CI, and the required OpenTofu version is pinned to `>= 1.12.0`.
-- [ ] Implement `concordat estate persist` as an interactive workflow that
+- [x] Implement `concordat estate persist` as an interactive workflow that
   prompts for bucket, region, endpoint, and key suffix, validates that the
   Scaleway bucket has versioning enabled, writes `backend/<alias>.tfbackend`
   plus `backend/persistence.yaml`, and opens a pull request with the change.

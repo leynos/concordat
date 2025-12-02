@@ -176,6 +176,12 @@ class PersistenceOptions:
     fmt_runner: typ.Callable[[Path], None] | None = None
     timestamp_factory: typ.Callable[[], dt.datetime] | None = None
     allow_insecure_endpoint: bool = False
+    bucket: str | None = None
+    region: str | None = None
+    endpoint: str | None = None
+    key_prefix: str | None = None
+    key_suffix: str | None = None
+    no_input: bool = False
 
 
 @dataclasses.dataclass(frozen=True)
