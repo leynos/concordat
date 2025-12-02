@@ -51,21 +51,41 @@ def _collect_user_inputs(
     }
     responses: dict[str, str] = {}
     for field, label in labels.items():
-        preset_value = preset.get(field, "").strip()
-        if preset_value:
-            responses[field] = preset_value
-            continue
-        default = defaults[field]
-        if not allow_prompt:
-            if default:
-                responses[field] = default
-                continue
-            raise PersistenceError(
-                f"{label} is required in non-interactive mode; provide a flag or "
-                f"environment variable."
-            )
-        responses[field] = _prompt_with_default(label, default, input_func)
+        responses[field] = _collect_single_input(
+            field,
+            label,
+            preset,
+            defaults,
+            allow_prompt=allow_prompt,
+            input_func=input_func,
+        )
     return responses
+
+
+def _collect_single_input(
+    field: str,
+    label: str,
+    preset: dict[str, str],
+    defaults: dict[str, str],
+    *,
+    allow_prompt: bool,
+    input_func: typ.Callable[[str], str],
+) -> str:
+    """Return a single collected value honoring preset, prompt, and defaults."""
+    if value := preset.get(field, "").strip():
+        return value
+
+    default = defaults[field]
+    if allow_prompt:
+        return _prompt_with_default(label, default, input_func)
+
+    if default:
+        return default
+
+    raise PersistenceError(
+        f"{label} is required in non-interactive mode; provide a flag or "
+        "environment variable."
+    )
 
 
 def _prompt_with_default(
