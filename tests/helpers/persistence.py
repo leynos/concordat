@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import typing as typ
 
 from concordat.persistence import models as persistence_models
@@ -10,20 +11,28 @@ if typ.TYPE_CHECKING:
     from pathlib import Path
 
 
+@dataclasses.dataclass
+class PersistenceTestConfig:
+    """Configuration for seeding persistence test fixtures."""
+
+    enabled: bool = True
+    backend_filename: str = "core.tfbackend"
+    backend_config_path: str | None = None
+    create_backend_file: bool = True
+
+
 def seed_persistence_files(
     repo_path: Path,
-    *,
-    enabled: bool = True,
-    backend_filename: str = "core.tfbackend",
-    backend_config_path: str | None = None,
-    create_backend_file: bool = True,
+    config: PersistenceTestConfig | None = None,
 ) -> Path:
     """Write backend config and manifest into a repository for tests."""
+    if config is None:
+        config = PersistenceTestConfig()
     backend_dir = repo_path / "backend"
     backend_dir.mkdir(parents=True, exist_ok=True)
 
-    backend_path = backend_dir / backend_filename
-    if create_backend_file:
+    backend_path = backend_dir / config.backend_filename
+    if config.create_backend_file:
         backend_path.write_text(
             'bucket = "df12-tfstate"\n'
             'key    = "estates/example/main/terraform.tfstate"\n'
@@ -33,13 +42,14 @@ def seed_persistence_files(
 
     manifest = {
         "schema_version": persistence_models.PERSISTENCE_SCHEMA_VERSION,
-        "enabled": enabled,
+        "enabled": config.enabled,
         "bucket": "df12-tfstate",
         "key_prefix": "estates/example/main",
         "key_suffix": "terraform.tfstate",
         "region": "fr-par",
         "endpoint": "https://s3.fr-par.scw.cloud",
-        "backend_config_path": backend_config_path or f"backend/{backend_path.name}",
+        "backend_config_path": config.backend_config_path
+        or f"backend/{backend_path.name}",
     }
 
     with (backend_dir / "persistence.yaml").open("w", encoding="utf-8") as handle:

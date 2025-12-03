@@ -121,46 +121,67 @@ def given_token_set(token: str, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GITHUB_TOKEN", token)
 
 
+def _set_backend_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+    credentials: dict[str, str],
+    remove: list[str],
+) -> None:
+    """Set backend-related environment variables and clear others."""
+    for key, value in credentials.items():
+        monkeypatch.setenv(key, value)
+    for variable in remove:
+        monkeypatch.delenv(variable, raising=False)
+
+
 @given("remote backend credentials are set")
 def given_remote_backend_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     """Provide S3-compatible credentials via Scaleway aliases."""
-    monkeypatch.setenv("SCW_ACCESS_KEY", "scw-access-key")
-    monkeypatch.setenv("SCW_SECRET_KEY", "scw-secret-key")
-    for variable in (
-        "AWS_ACCESS_KEY_ID",
-        "AWS_SECRET_ACCESS_KEY",
-        "SPACES_ACCESS_KEY_ID",
-        "SPACES_SECRET_ACCESS_KEY",
-    ):
-        monkeypatch.delenv(variable, raising=False)
+    _set_backend_credentials(
+        monkeypatch,
+        {"SCW_ACCESS_KEY": "scw-access-key", "SCW_SECRET_KEY": "scw-secret-key"},
+        [
+            "AWS_ACCESS_KEY_ID",
+            "AWS_SECRET_ACCESS_KEY",
+            "SPACES_ACCESS_KEY_ID",
+            "SPACES_SECRET_ACCESS_KEY",
+        ],
+    )
 
 
 @given("remote backend credentials are set via SPACES")
 def given_remote_backend_credentials_spaces(monkeypatch: pytest.MonkeyPatch) -> None:
     """Provide S3-compatible credentials via DigitalOcean Spaces aliases."""
-    monkeypatch.setenv("SPACES_ACCESS_KEY_ID", "spaces-access-key-id")
-    monkeypatch.setenv("SPACES_SECRET_ACCESS_KEY", "spaces-secret-access-key")
-    for variable in (
-        "AWS_ACCESS_KEY_ID",
-        "AWS_SECRET_ACCESS_KEY",
-        "SCW_ACCESS_KEY",
-        "SCW_SECRET_KEY",
-    ):
-        monkeypatch.delenv(variable, raising=False)
+    _set_backend_credentials(
+        monkeypatch,
+        {
+            "SPACES_ACCESS_KEY_ID": "spaces-access-key-id",
+            "SPACES_SECRET_ACCESS_KEY": "spaces-secret-access-key",
+        },
+        [
+            "AWS_ACCESS_KEY_ID",
+            "AWS_SECRET_ACCESS_KEY",
+            "SCW_ACCESS_KEY",
+            "SCW_SECRET_KEY",
+        ],
+    )
 
 
 @given("remote backend credentials are set via AWS")
 def given_remote_backend_credentials_aws(monkeypatch: pytest.MonkeyPatch) -> None:
     """Provide native AWS credentials."""
-    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "aws-access-key-id")
-    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "aws-secret-access-key")
-    for variable in (
-        "SCW_ACCESS_KEY",
-        "SCW_SECRET_KEY",
-        "SPACES_ACCESS_KEY_ID",
-        "SPACES_SECRET_ACCESS_KEY",
-    ):
-        monkeypatch.delenv(variable, raising=False)
+    _set_backend_credentials(
+        monkeypatch,
+        {
+            "AWS_ACCESS_KEY_ID": "aws-access-key-id",
+            "AWS_SECRET_ACCESS_KEY": "aws-secret-access-key",
+        },
+        [
+            "SCW_ACCESS_KEY",
+            "SCW_SECRET_KEY",
+            "SPACES_ACCESS_KEY_ID",
+            "SPACES_SECRET_ACCESS_KEY",
+        ],
+    )
 
 
 @given("remote backend credentials are missing")

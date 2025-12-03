@@ -13,8 +13,6 @@ import pytest
 
 from concordat.estate import EstateRecord
 from concordat.estate_execution import (
-    ERROR_BACKEND_CONFIG_MISSING,
-    ERROR_BACKEND_PATH_OUTSIDE,
     EstateExecutionError,
     ExecutionIO,
     ExecutionOptions,
@@ -24,7 +22,7 @@ from concordat.estate_execution import (
     estate_workspace,
     run_plan,
 )
-from tests.helpers.persistence import seed_persistence_files
+from tests.helpers.persistence import PersistenceTestConfig, seed_persistence_files
 
 if typ.TYPE_CHECKING:
     from pathlib import Path
@@ -313,15 +311,48 @@ def test_run_plan_requires_backend_credentials(
         run_plan(_make_record(git_repo.path), options, io_streams)
 
 
-def test_run_plan_backend_config_missing(
+@pytest.mark.parametrize(
+    (
+        "backend_config_path",
+        "create_backend_file",
+        "expected_error_fragments",
+    ),
+    [
+        pytest.param(
+            "backend/missing.tfbackend",
+            False,
+            [
+                "Remote backend config",
+                "backend/missing.tfbackend",
+            ],
+            id="missing_config_file",
+        ),
+        pytest.param(
+            "../outside.tfbackend",
+            False,
+            [
+                "Remote backend config must live inside the estate workspace",
+                "../outside.tfbackend",
+            ],
+            id="config_outside_workspace",
+        ),
+    ],
+)
+def test_run_plan_backend_config_validation(
     monkeypatch: pytest.MonkeyPatch,
     git_repo: GitRepo,
+    *,
+    backend_config_path: str,
+    create_backend_file: bool,
+    expected_error_fragments: list[str],
 ) -> None:
-    """Missing backend config file aborts before tofu initialises."""
+    """Backend config validation aborts before tofu initialises."""
     seed_persistence_files(
         git_repo.path,
-        backend_config_path="backend/missing.tfbackend",
-        create_backend_file=False,
+        PersistenceTestConfig(
+            backend_config_path=backend_config_path,
+            create_backend_file=create_backend_file,
+        ),
     )
     monkeypatch.setattr(
         "concordat.estate_execution.ensure_estate_cache",
@@ -331,7 +362,7 @@ def test_run_plan_backend_config_missing(
     monkeypatch.setenv("SCW_SECRET_KEY", "scw-secret")
 
     def _fail_init(*args: object, **kwargs: object) -> object:
-        pytest.fail("Tofu must not be initialised when backend config is missing")
+        pytest.fail("Tofu must not be initialised when backend config is invalid")
 
     monkeypatch.setattr("concordat.estate_execution.Tofu", _fail_init)
     options = ExecutionOptions(
@@ -344,43 +375,8 @@ def test_run_plan_backend_config_missing(
         run_plan(_make_record(git_repo.path), options, io_streams)
 
     message = str(excinfo.value)
-    assert "Remote backend config" in message
-    assert "backend/missing.tfbackend" in message
-
-
-def test_run_plan_backend_config_outside_workspace(
-    monkeypatch: pytest.MonkeyPatch,
-    git_repo: GitRepo,
-) -> None:
-    """Backend config paths escaping the workspace are rejected."""
-    seed_persistence_files(
-        git_repo.path,
-        backend_config_path="../outside.tfbackend",
-        create_backend_file=False,
-    )
-    monkeypatch.setattr(
-        "concordat.estate_execution.ensure_estate_cache",
-        lambda *_, **__: git_repo.path,
-    )
-    monkeypatch.setenv("SCW_ACCESS_KEY", "scw-access")
-    monkeypatch.setenv("SCW_SECRET_KEY", "scw-secret")
-
-    def _fail_init(*args: object, **kwargs: object) -> object:
-        pytest.fail("Tofu must not be initialised when backend path escapes")
-
-    monkeypatch.setattr("concordat.estate_execution.Tofu", _fail_init)
-    options = ExecutionOptions(
-        github_owner="example",
-        github_token="token",  # noqa: S106
-    )
-    io_streams = ExecutionIO(stdout=io.StringIO(), stderr=io.StringIO())
-
-    with pytest.raises(EstateExecutionError) as excinfo:
-        run_plan(_make_record(git_repo.path), options, io_streams)
-
-    message = str(excinfo.value)
-    assert "Remote backend config must live inside the estate workspace" in message
-    assert "../outside.tfbackend" in message
+    for fragment in expected_error_fragments:
+        assert fragment in message
 
 
 def test_run_plan_skips_disabled_persistence(
@@ -388,7 +384,7 @@ def test_run_plan_skips_disabled_persistence(
     git_repo: GitRepo,
 ) -> None:
     """Disabled persistence manifests fall back to local state handling."""
-    seed_persistence_files(git_repo.path, enabled=False)
+    seed_persistence_files(git_repo.path, PersistenceTestConfig(enabled=False))
     monkeypatch.setattr(
         "concordat.estate_execution.ensure_estate_cache",
         lambda *_, **__: git_repo.path,
