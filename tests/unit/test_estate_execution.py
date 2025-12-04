@@ -254,12 +254,46 @@ def test_run_plan_uses_persistence_backend_when_enabled(
     assert "scw-secret" not in stderr_buffer.getvalue()
 
 
-def test_run_plan_uses_spaces_credentials_when_present(
+@pytest.mark.parametrize(
+    (
+        "env_setup",
+        "options_environment",
+        "expected_access",
+        "expected_secret",
+    ),
+    [
+        pytest.param(
+            {
+                "SPACES_ACCESS_KEY_ID": "spaces-access",
+                "SPACES_SECRET_ACCESS_KEY": "spaces-secret",
+            },
+            None,
+            "spaces-access",
+            "spaces-secret",
+            id="spaces-env",
+        ),
+        pytest.param(
+            {},
+            {
+                "SCW_ACCESS_KEY": "options-access",
+                "SCW_SECRET_KEY": "options-secret",
+            },
+            "options-access",
+            "options-secret",
+            id="options-mapping",
+        ),
+    ],
+)
+def test_run_plan_backend_env_sources(
     monkeypatch: pytest.MonkeyPatch,
     git_repo: GitRepo,
     fake_tofu: list[typ.Any],
+    env_setup: dict[str, str],
+    options_environment: dict[str, str] | None,
+    expected_access: str,
+    expected_secret: str,
 ) -> None:
-    """SPACES_* credentials are mapped to AWS_* for tofu init."""
+    """run_plan maps backend credentials from env or options environment."""
     seed_persistence_files(git_repo.path)
     monkeypatch.setattr(
         "concordat.estate_execution.ensure_estate_cache",
@@ -270,16 +304,24 @@ def test_run_plan_uses_spaces_credentials_when_present(
         "AWS_SECRET_ACCESS_KEY",
         "SCW_ACCESS_KEY",
         "SCW_SECRET_KEY",
+        "SPACES_ACCESS_KEY_ID",
+        "SPACES_SECRET_ACCESS_KEY",
     ):
         monkeypatch.delenv(variable, raising=False)
-    monkeypatch.setenv("SPACES_ACCESS_KEY_ID", "spaces-access")
-    monkeypatch.setenv("SPACES_SECRET_ACCESS_KEY", "spaces-secret")
 
-    exit_code, _, tofu = _run_plan_test(git_repo, monkeypatch, fake_tofu)
+    for key, value in env_setup.items():
+        monkeypatch.setenv(key, value)
+
+    exit_code, _, tofu = _run_plan_test(
+        git_repo,
+        monkeypatch,
+        fake_tofu,
+        options_environment=options_environment,
+    )
 
     assert exit_code == 0
-    assert tofu.env["AWS_ACCESS_KEY_ID"] == "spaces-access"
-    assert tofu.env["AWS_SECRET_ACCESS_KEY"] == "spaces-secret"  # noqa: S105
+    assert tofu.env["AWS_ACCESS_KEY_ID"] == expected_access
+    assert tofu.env["AWS_SECRET_ACCESS_KEY"] == expected_secret
     assert [
         "init",
         "-input=false",
@@ -287,40 +329,58 @@ def test_run_plan_uses_spaces_credentials_when_present(
     ] in tofu.calls
 
 
-def test_resolve_backend_environment_prefers_aws(
+@pytest.mark.parametrize(
+    ("env_values", "expected"),
+    [
+        pytest.param(
+            {
+                "AWS_ACCESS_KEY_ID": "aws-access",
+                "AWS_SECRET_ACCESS_KEY": "aws-secret",
+                "SCW_ACCESS_KEY": "scw-access",
+                "SCW_SECRET_KEY": "scw-secret",
+                "SPACES_ACCESS_KEY_ID": "spaces-access",
+                "SPACES_SECRET_ACCESS_KEY": "spaces-secret",
+            },
+            {},
+            id="aws-takes-precedence",
+        ),
+        pytest.param(
+            {
+                "SCW_ACCESS_KEY": "scw-access",
+                "SCW_SECRET_KEY": "scw-secret",
+                "SPACES_ACCESS_KEY_ID": "spaces-access",
+                "SPACES_SECRET_ACCESS_KEY": "spaces-secret",
+            },
+            {
+                "AWS_ACCESS_KEY_ID": "scw-access",
+                "AWS_SECRET_ACCESS_KEY": "scw-secret",
+            },
+            id="scw-over-spaces",
+        ),
+    ],
+)
+def test_resolve_backend_environment_precedence(
     monkeypatch: pytest.MonkeyPatch,
+    env_values: dict[str, str],
+    expected: dict[str, str],
 ) -> None:
-    """Existing AWS_* values override SCW/SPACES aliases."""
-    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "aws-access")
-    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "aws-secret")
-    monkeypatch.setenv("SCW_ACCESS_KEY", "scw-access")
-    monkeypatch.setenv("SCW_SECRET_KEY", "scw-secret")
-    monkeypatch.setenv("SPACES_ACCESS_KEY_ID", "spaces-access")
-    monkeypatch.setenv("SPACES_SECRET_ACCESS_KEY", "spaces-secret")
+    """Credential precedence is AWS first, then SCW, then SPACES."""
+    for key in (
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "SCW_ACCESS_KEY",
+        "SCW_SECRET_KEY",
+        "SPACES_ACCESS_KEY_ID",
+        "SPACES_SECRET_ACCESS_KEY",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+    for key, value in env_values.items():
+        monkeypatch.setenv(key, value)
 
     resolved = _resolve_backend_environment(os.environ)
 
-    assert resolved == {}
-
-
-def test_resolve_backend_environment_scw_over_spaces(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """SCW_* values override SPACES_* values when AWS_* is absent."""
-    monkeypatch.delenv("AWS_ACCESS_KEY_ID", raising=False)
-    monkeypatch.delenv("AWS_SECRET_ACCESS_KEY", raising=False)
-
-    monkeypatch.setenv("SCW_ACCESS_KEY", "scw-access")
-    monkeypatch.setenv("SCW_SECRET_KEY", "scw-secret")
-    monkeypatch.setenv("SPACES_ACCESS_KEY_ID", "spaces-access")
-    monkeypatch.setenv("SPACES_SECRET_ACCESS_KEY", "spaces-secret")
-
-    resolved = _resolve_backend_environment(os.environ)
-
-    assert resolved == {
-        "AWS_ACCESS_KEY_ID": "scw-access",
-        "AWS_SECRET_ACCESS_KEY": "scw-secret",
-    }
+    assert resolved == expected
 
 
 def test_run_plan_requires_backend_credentials(
