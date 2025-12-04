@@ -14,6 +14,7 @@ import pytest
 
 from concordat.estate import EstateRecord
 from concordat.estate_execution import (
+    ALL_BACKEND_ENV_VARS,
     EstateExecutionError,
     ExecutionIO,
     ExecutionOptions,
@@ -259,9 +260,13 @@ def test_run_plan_uses_persistence_backend_when_enabled(
         "-input=false",
         "-backend-config=backend/core.tfbackend",
     ] in tofu.calls
-    assert "bucket=df12-tfstate" in stderr_buffer.getvalue()
-    assert "estates/example/main/terraform.tfstate" in stderr_buffer.getvalue()
-    assert "scw-secret" not in stderr_buffer.getvalue()
+    stderr_output = stderr_buffer.getvalue()
+    assert "bucket=df12-tfstate" in stderr_output
+    assert "estates/example/main/terraform.tfstate" in stderr_output
+    assert "scw-secret" not in stderr_output
+    assert "SCW_SECRET_KEY" not in stderr_output
+    assert "SCW_ACCESS_KEY" not in stderr_output
+    assert "scw-access" not in stderr_output
 
 
 @pytest.mark.parametrize(
@@ -305,14 +310,7 @@ def test_run_plan_backend_env_sources(
         "concordat.estate_execution.ensure_estate_cache",
         lambda *_, **__: git_repo.path,
     )
-    for variable in (
-        "AWS_ACCESS_KEY_ID",
-        "AWS_SECRET_ACCESS_KEY",
-        "SCW_ACCESS_KEY",
-        "SCW_SECRET_KEY",
-        "SPACES_ACCESS_KEY_ID",
-        "SPACES_SECRET_ACCESS_KEY",
-    ):
+    for variable in ALL_BACKEND_ENV_VARS:
         monkeypatch.delenv(variable, raising=False)
 
     for key, value in test_case.env_setup.items():
@@ -393,6 +391,42 @@ def test_resolve_backend_environment_precedence(
     assert resolved == expected_overrides
 
 
+def test_resolve_backend_environment_ignores_blank_scw_and_uses_spaces(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Blank SCW_* values fall back to SPACES_* credentials."""
+    for variable in ALL_BACKEND_ENV_VARS:
+        monkeypatch.delenv(variable, raising=False)
+
+    monkeypatch.setenv("SCW_ACCESS_KEY", "   ")
+    monkeypatch.setenv("SCW_SECRET_KEY", "")
+    monkeypatch.setenv("SPACES_ACCESS_KEY_ID", "spaces-access")
+    monkeypatch.setenv("SPACES_SECRET_ACCESS_KEY", "spaces-secret")
+
+    resolved = _resolve_backend_environment(os.environ)
+
+    assert resolved == {
+        "AWS_ACCESS_KEY_ID": "spaces-access",
+        "AWS_SECRET_ACCESS_KEY": "spaces-secret",
+    }
+
+
+def test_resolve_backend_environment_raises_when_all_aliases_blank(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Whitespace aliases without AWS_* raise an execution error."""
+    for variable in ALL_BACKEND_ENV_VARS:
+        monkeypatch.delenv(variable, raising=False)
+
+    monkeypatch.setenv("SCW_ACCESS_KEY", "   ")
+    monkeypatch.setenv("SCW_SECRET_KEY", "   ")
+    monkeypatch.setenv("SPACES_ACCESS_KEY_ID", "")
+    monkeypatch.setenv("SPACES_SECRET_ACCESS_KEY", "  ")
+
+    with pytest.raises(EstateExecutionError):
+        _resolve_backend_environment(os.environ)
+
+
 def test_run_plan_requires_backend_credentials(
     monkeypatch: pytest.MonkeyPatch,
     git_repo: GitRepo,
@@ -403,12 +437,7 @@ def test_run_plan_requires_backend_credentials(
         "concordat.estate_execution.ensure_estate_cache",
         lambda *_, **__: git_repo.path,
     )
-    for variable in (
-        "AWS_ACCESS_KEY_ID",
-        "AWS_SECRET_ACCESS_KEY",
-        "SCW_ACCESS_KEY",
-        "SCW_SECRET_KEY",
-    ):
+    for variable in ALL_BACKEND_ENV_VARS:
         monkeypatch.delenv(variable, raising=False)
 
     def _fail_init(*args: object, **kwargs: object) -> object:
@@ -540,12 +569,7 @@ def test_run_plan_respects_options_environment_mapping(
         "concordat.estate_execution.ensure_estate_cache",
         lambda *_, **__: git_repo.path,
     )
-    for variable in (
-        "AWS_ACCESS_KEY_ID",
-        "AWS_SECRET_ACCESS_KEY",
-        "SCW_ACCESS_KEY",
-        "SCW_SECRET_KEY",
-    ):
+    for variable in ALL_BACKEND_ENV_VARS:
         monkeypatch.delenv(variable, raising=False)
 
     env_mapping = {

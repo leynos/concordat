@@ -18,6 +18,12 @@ from pytest_bdd import given, parsers, scenarios, then, when
 from concordat import cli
 from concordat.errors import ConcordatError
 from concordat.estate import EstateRecord, register_estate
+from concordat.estate_execution import (
+    ALL_BACKEND_ENV_VARS,
+    AWS_BACKEND_ENV,
+    SCW_BACKEND_ENV,
+    SPACES_BACKEND_ENV,
+)
 from tests.helpers.persistence import seed_persistence_files
 
 from .conftest import RunResult
@@ -139,12 +145,7 @@ def given_remote_backend_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     _set_backend_credentials(
         monkeypatch,
         {"SCW_ACCESS_KEY": "scw-access-key", "SCW_SECRET_KEY": "scw-secret-key"},
-        [
-            "AWS_ACCESS_KEY_ID",
-            "AWS_SECRET_ACCESS_KEY",
-            "SPACES_ACCESS_KEY_ID",
-            "SPACES_SECRET_ACCESS_KEY",
-        ],
+        list(AWS_BACKEND_ENV + SPACES_BACKEND_ENV),
     )
 
 
@@ -157,12 +158,7 @@ def given_remote_backend_credentials_spaces(monkeypatch: pytest.MonkeyPatch) -> 
             "SPACES_ACCESS_KEY_ID": "spaces-access-key-id",
             "SPACES_SECRET_ACCESS_KEY": "spaces-secret-access-key",
         },
-        [
-            "AWS_ACCESS_KEY_ID",
-            "AWS_SECRET_ACCESS_KEY",
-            "SCW_ACCESS_KEY",
-            "SCW_SECRET_KEY",
-        ],
+        list(AWS_BACKEND_ENV + SCW_BACKEND_ENV),
     )
 
 
@@ -175,27 +171,14 @@ def given_remote_backend_credentials_aws(monkeypatch: pytest.MonkeyPatch) -> Non
             "AWS_ACCESS_KEY_ID": "aws-access-key-id",
             "AWS_SECRET_ACCESS_KEY": "aws-secret-access-key",
         },
-        [
-            "SCW_ACCESS_KEY",
-            "SCW_SECRET_KEY",
-            "SPACES_ACCESS_KEY_ID",
-            "SPACES_SECRET_ACCESS_KEY",
-        ],
+        list(SCW_BACKEND_ENV + SPACES_BACKEND_ENV),
     )
 
 
 @given("remote backend credentials are missing")
 def given_remote_backend_credentials_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ensure no backend credentials are present in the environment."""
-    for variable in (
-        "AWS_ACCESS_KEY_ID",
-        "AWS_SECRET_ACCESS_KEY",
-        "AWS_SESSION_TOKEN",
-        "SCW_ACCESS_KEY",
-        "SCW_SECRET_KEY",
-        "SPACES_ACCESS_KEY_ID",
-        "SPACES_SECRET_ACCESS_KEY",
-    ):
+    for variable in (*ALL_BACKEND_ENV_VARS, "AWS_SESSION_TOKEN"):
         monkeypatch.delenv(variable, raising=False)
 
 
@@ -370,16 +353,25 @@ def then_fake_tofu_commands(
     assert actual == expected
 
 
-@then(parsers.cfparse('the backend details mention bucket "{bucket}" and key "{key}"'))
+@then(
+    parsers.cfparse(
+        'the backend details mention bucket "{bucket}", key "{key}", '
+        'region "{region}" and config "{config_path}"'
+    )
+)
 def then_backend_details_logged(
     cli_invocation: dict[str, RunResult],
     bucket: str,
     key: str,
+    region: str,
+    config_path: str,
 ) -> None:
     """Ensure stderr includes backend metadata but not secrets."""
     stderr = cli_invocation["result"].stderr
     assert bucket in stderr
     assert key in stderr
+    assert region in stderr
+    assert config_path in stderr
 
 
 @then("no backend secrets are logged")

@@ -13,6 +13,8 @@ from tempfile import mkdtemp
 import pygit2
 from tofupy import Tofu
 
+from concordat.persistence import models as persistence_models
+
 from .errors import ConcordatError
 from .gitutils import build_remote_callbacks
 
@@ -46,6 +48,14 @@ ERROR_BACKEND_ENV_MISSING = (
 ERROR_BACKEND_PATH_OUTSIDE = (
     "Remote backend config must live inside the estate workspace (got {path})."
 )
+
+AWS_BACKEND_ENV = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY")
+SCW_BACKEND_ENV = ("SCW_ACCESS_KEY", "SCW_SECRET_KEY")
+SPACES_BACKEND_ENV = (
+    "SPACES_ACCESS_KEY_ID",
+    "SPACES_SECRET_ACCESS_KEY",
+)
+ALL_BACKEND_ENV_VARS = AWS_BACKEND_ENV + SCW_BACKEND_ENV + SPACES_BACKEND_ENV
 
 
 class EstateExecutionError(ConcordatError):
@@ -208,16 +218,16 @@ def _resolve_backend_environment(env: typ.Mapping[str, str]) -> dict[str, str]:
     def present(*names: str) -> bool:
         return all(env.get(name, "").strip() for name in names)
 
-    if present("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"):
+    if present(*AWS_BACKEND_ENV):
         return {}
 
-    if present("SCW_ACCESS_KEY", "SCW_SECRET_KEY"):
+    if present(*SCW_BACKEND_ENV):
         return {
             "AWS_ACCESS_KEY_ID": env["SCW_ACCESS_KEY"].strip(),
             "AWS_SECRET_ACCESS_KEY": env["SCW_SECRET_KEY"].strip(),
         }
 
-    if present("SPACES_ACCESS_KEY_ID", "SPACES_SECRET_ACCESS_KEY"):
+    if present(*SPACES_BACKEND_ENV):
         return {
             "AWS_ACCESS_KEY_ID": env["SPACES_ACCESS_KEY_ID"].strip(),
             "AWS_SECRET_ACCESS_KEY": env["SPACES_SECRET_ACCESS_KEY"].strip(),
@@ -226,11 +236,39 @@ def _resolve_backend_environment(env: typ.Mapping[str, str]) -> dict[str, str]:
     raise EstateExecutionError(ERROR_BACKEND_ENV_MISSING)
 
 
+def _validate_backend_path(workdir: Path, backend_config_path: str) -> Path:
+    """Validate backend config path is inside workspace and exists.
+
+    Returns the relative path to the backend config file. Raises
+    EstateExecutionError when the path escapes the workspace or is missing.
+    """
+    backend_path = (workdir / backend_config_path).resolve()
+    workdir_resolved = workdir.resolve()
+
+    try:
+        relative_backend = backend_path.relative_to(workdir_resolved)
+    except ValueError as error:
+        message = ERROR_BACKEND_PATH_OUTSIDE.format(path=backend_config_path)
+        raise EstateExecutionError(message) from error
+
+    if not backend_path.is_file():
+        message = ERROR_BACKEND_CONFIG_MISSING.format(path=backend_config_path)
+        raise EstateExecutionError(message)
+
+    return relative_backend
+
+
+def _build_object_key(descriptor: PersistenceDescriptor) -> str:
+    """Construct the full S3 object key from prefix and suffix."""
+    prefix = descriptor.key_prefix.rstrip("/")
+    suffix = descriptor.key_suffix.lstrip("/")
+    return f"{prefix}/{suffix}" if prefix else suffix
+
+
 def _get_persistence_runtime(
     workdir: Path, env: typ.Mapping[str, str]
 ) -> PersistenceRuntime | None:
-    from concordat.persistence import models as persistence_models
-
+    """Load the persistence manifest and derive backend runtime details."""
     manifest_path = workdir / persistence_models.MANIFEST_FILENAME
     try:
         descriptor = persistence_models.PersistenceDescriptor.from_yaml(manifest_path)
@@ -240,25 +278,9 @@ def _get_persistence_runtime(
     if descriptor is None or not descriptor.enabled:
         return None
 
-    backend_path = (workdir / descriptor.backend_config_path).resolve()
-    workdir_resolved = workdir.resolve()
-    try:
-        relative_backend = backend_path.relative_to(workdir_resolved)
-    except ValueError as error:
-        message = ERROR_BACKEND_PATH_OUTSIDE.format(path=descriptor.backend_config_path)
-        raise EstateExecutionError(message) from error
-
-    if not backend_path.exists():
-        message = ERROR_BACKEND_CONFIG_MISSING.format(
-            path=descriptor.backend_config_path
-        )
-        raise EstateExecutionError(message)
-
-    prefix = descriptor.key_prefix.rstrip("/")
-    suffix = descriptor.key_suffix.lstrip("/")
-    object_key = f"{prefix}/{suffix}" if prefix else suffix
-
+    relative_backend = _validate_backend_path(workdir, descriptor.backend_config_path)
     env_overrides = _resolve_backend_environment(env)
+    object_key = _build_object_key(descriptor)
 
     return PersistenceRuntime(
         descriptor=descriptor,
@@ -269,6 +291,7 @@ def _get_persistence_runtime(
 
 
 def _initialize_tofu(workdir: Path, env: typ.Mapping[str, str]) -> Tofu:
+    """Create a Tofu wrapper with mapped environment, surfacing friendly errors."""
     try:
         return Tofu(cwd=str(workdir), env=dict(env))
     except FileNotFoundError as error:  # pragma: no cover - depends on PATH
@@ -278,6 +301,7 @@ def _initialize_tofu(workdir: Path, env: typ.Mapping[str, str]) -> Tofu:
 
 
 def _invoke_tofu_command(tofu: Tofu, args: list[str], io: ExecutionIO) -> int:
+    """Run a tofu command, streaming stdout/stderr to the provided IO."""
     results = tofu._run(args, raise_on_error=False)
     if results.stdout:
         _write_stream_output(io.stdout, results.stdout)
@@ -293,11 +317,9 @@ def _run_estate_command(
     io: ExecutionIO,
 ) -> tuple[int, Path]:
     command = [verb, *options.extra_args]
-    env_source = (
-        dict(options.environment)
-        if options.environment is not None
-        else dict(os.environ)
-    )
+    env_source = dict(os.environ)
+    if options.environment is not None:
+        env_source.update(options.environment)
     with estate_workspace(
         record,
         cache_directory=options.cache_directory,
