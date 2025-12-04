@@ -330,57 +330,61 @@ def test_run_plan_backend_env_sources(
 
 
 @pytest.mark.parametrize(
-    ("env_values", "expected"),
+    ("env_setup", "expected_overrides", "test_id"),
     [
         pytest.param(
             {
-                "AWS_ACCESS_KEY_ID": "aws-access",
-                "AWS_SECRET_ACCESS_KEY": "aws-secret",
-                "SCW_ACCESS_KEY": "scw-access",
-                "SCW_SECRET_KEY": "scw-secret",
-                "SPACES_ACCESS_KEY_ID": "spaces-access",
-                "SPACES_SECRET_ACCESS_KEY": "spaces-secret",
+                "set": {
+                    "AWS_ACCESS_KEY_ID": "aws-access",
+                    "AWS_SECRET_ACCESS_KEY": "aws-secret",
+                    "SCW_ACCESS_KEY": "scw-access",
+                    "SCW_SECRET_KEY": "scw-secret",
+                    "SPACES_ACCESS_KEY_ID": "spaces-access",
+                    "SPACES_SECRET_ACCESS_KEY": "spaces-secret",
+                },
+                "delete": [],
             },
             {},
-            id="aws-takes-precedence",
+            "prefers_aws",
         ),
         pytest.param(
             {
-                "SCW_ACCESS_KEY": "scw-access",
-                "SCW_SECRET_KEY": "scw-secret",
-                "SPACES_ACCESS_KEY_ID": "spaces-access",
-                "SPACES_SECRET_ACCESS_KEY": "spaces-secret",
+                "set": {
+                    "SCW_ACCESS_KEY": "scw-access",
+                    "SCW_SECRET_KEY": "scw-secret",
+                    "SPACES_ACCESS_KEY_ID": "spaces-access",
+                    "SPACES_SECRET_ACCESS_KEY": "spaces-secret",
+                },
+                "delete": [
+                    "AWS_ACCESS_KEY_ID",
+                    "AWS_SECRET_ACCESS_KEY",
+                ],
             },
             {
                 "AWS_ACCESS_KEY_ID": "scw-access",
                 "AWS_SECRET_ACCESS_KEY": "scw-secret",
             },
-            id="scw-over-spaces",
+            "scw_over_spaces",
         ),
     ],
 )
 def test_resolve_backend_environment_precedence(
     monkeypatch: pytest.MonkeyPatch,
-    env_values: dict[str, str],
-    expected: dict[str, str],
+    env_setup: dict[str, dict[str, str] | list[str]],
+    expected_overrides: dict[str, str],
+    test_id: str,
 ) -> None:
-    """Credential precedence is AWS first, then SCW, then SPACES."""
-    for key in (
-        "AWS_ACCESS_KEY_ID",
-        "AWS_SECRET_ACCESS_KEY",
-        "SCW_ACCESS_KEY",
-        "SCW_SECRET_KEY",
-        "SPACES_ACCESS_KEY_ID",
-        "SPACES_SECRET_ACCESS_KEY",
-    ):
-        monkeypatch.delenv(key, raising=False)
-
-    for key, value in env_values.items():
+    """Backend environment resolution follows AWS > SCW > SPACES precedence."""
+    set_values = typ.cast(dict[str, str], env_setup["set"])
+    for key, value in set_values.items():
         monkeypatch.setenv(key, value)
+    delete_keys = typ.cast(list[str], env_setup["delete"])
+    for key in delete_keys:
+        monkeypatch.delenv(key, raising=False)
 
     resolved = _resolve_backend_environment(os.environ)
 
-    assert resolved == expected
+    assert resolved == expected_overrides
 
 
 def test_run_plan_requires_backend_credentials(
