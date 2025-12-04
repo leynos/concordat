@@ -202,13 +202,6 @@ def _write_stream_output(stream: typ.IO[str], content: str) -> None:
     stream.flush()
 
 
-def _object_key(descriptor: PersistenceDescriptor) -> str:
-    """Return the full state object key derived from the descriptor."""
-    prefix = descriptor.key_prefix.rstrip("/")
-    suffix = descriptor.key_suffix.lstrip("/")
-    return f"{prefix}/{suffix}" if prefix else suffix
-
-
 def _resolve_backend_environment(env: typ.Mapping[str, str]) -> dict[str, str]:
     """Return env overrides for tofu, erroring when credentials are missing."""
 
@@ -233,25 +226,6 @@ def _resolve_backend_environment(env: typ.Mapping[str, str]) -> dict[str, str]:
     raise EstateExecutionError(ERROR_BACKEND_ENV_MISSING)
 
 
-def _backend_config_argument(workdir: Path, descriptor: PersistenceDescriptor) -> str:
-    """Validate backend path and return a safe relative argument for tofu."""
-    backend_path = (workdir / descriptor.backend_config_path).resolve()
-    workdir_resolved = workdir.resolve()
-    try:
-        relative = backend_path.relative_to(workdir_resolved)
-    except ValueError as error:
-        message = ERROR_BACKEND_PATH_OUTSIDE.format(path=descriptor.backend_config_path)
-        raise EstateExecutionError(message) from error
-
-    if not backend_path.exists():
-        message = ERROR_BACKEND_CONFIG_MISSING.format(
-            path=descriptor.backend_config_path
-        )
-        raise EstateExecutionError(message)
-
-    return str(relative)
-
-
 def _get_persistence_runtime(
     workdir: Path, env: typ.Mapping[str, str]
 ) -> PersistenceRuntime | None:
@@ -266,13 +240,30 @@ def _get_persistence_runtime(
     if descriptor is None or not descriptor.enabled:
         return None
 
-    backend_config = _backend_config_argument(workdir, descriptor)
+    backend_path = (workdir / descriptor.backend_config_path).resolve()
+    workdir_resolved = workdir.resolve()
+    try:
+        relative_backend = backend_path.relative_to(workdir_resolved)
+    except ValueError as error:
+        message = ERROR_BACKEND_PATH_OUTSIDE.format(path=descriptor.backend_config_path)
+        raise EstateExecutionError(message) from error
+
+    if not backend_path.exists():
+        message = ERROR_BACKEND_CONFIG_MISSING.format(
+            path=descriptor.backend_config_path
+        )
+        raise EstateExecutionError(message)
+
+    prefix = descriptor.key_prefix.rstrip("/")
+    suffix = descriptor.key_suffix.lstrip("/")
+    object_key = f"{prefix}/{suffix}" if prefix else suffix
+
     env_overrides = _resolve_backend_environment(env)
 
     return PersistenceRuntime(
         descriptor=descriptor,
-        backend_config=backend_config,
-        object_key=_object_key(descriptor),
+        backend_config=str(relative_backend),
+        object_key=object_key,
         env_overrides=env_overrides,
     )
 

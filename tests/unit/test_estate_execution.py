@@ -51,6 +51,16 @@ class BackendConfigTestCase:
     expected_error_fragments: list[str]
 
 
+@dataclasses.dataclass
+class BackendEnvTestCase:
+    """Test case for backend environment sourcing."""
+
+    env_setup: dict[str, str]
+    options_environment: dict[str, str] | None
+    expected_access: str
+    expected_secret: str
+
+
 @pytest.fixture
 def fake_tofu(monkeypatch: pytest.MonkeyPatch) -> list[typ.Any]:
     """Provide a reusable FakeTofu stub and capture created instances."""
@@ -255,31 +265,30 @@ def test_run_plan_uses_persistence_backend_when_enabled(
 
 
 @pytest.mark.parametrize(
-    (
-        "env_setup",
-        "options_environment",
-        "expected_access",
-        "expected_secret",
-    ),
+    "test_case",
     [
         pytest.param(
-            {
-                "SPACES_ACCESS_KEY_ID": "spaces-access",
-                "SPACES_SECRET_ACCESS_KEY": "spaces-secret",
-            },
-            None,
-            "spaces-access",
-            "spaces-secret",
+            BackendEnvTestCase(
+                env_setup={
+                    "SPACES_ACCESS_KEY_ID": "spaces-access",
+                    "SPACES_SECRET_ACCESS_KEY": "spaces-secret",
+                },
+                options_environment=None,
+                expected_access="spaces-access",
+                expected_secret="spaces-secret",  # noqa: S106
+            ),
             id="spaces-env",
         ),
         pytest.param(
-            {},
-            {
-                "SCW_ACCESS_KEY": "options-access",
-                "SCW_SECRET_KEY": "options-secret",
-            },
-            "options-access",
-            "options-secret",
+            BackendEnvTestCase(
+                env_setup={},
+                options_environment={
+                    "SCW_ACCESS_KEY": "options-access",
+                    "SCW_SECRET_KEY": "options-secret",
+                },
+                expected_access="options-access",
+                expected_secret="options-secret",  # noqa: S106
+            ),
             id="options-mapping",
         ),
     ],
@@ -288,10 +297,7 @@ def test_run_plan_backend_env_sources(
     monkeypatch: pytest.MonkeyPatch,
     git_repo: GitRepo,
     fake_tofu: list[typ.Any],
-    env_setup: dict[str, str],
-    options_environment: dict[str, str] | None,
-    expected_access: str,
-    expected_secret: str,
+    test_case: BackendEnvTestCase,
 ) -> None:
     """run_plan maps backend credentials from env or options environment."""
     seed_persistence_files(git_repo.path)
@@ -309,19 +315,19 @@ def test_run_plan_backend_env_sources(
     ):
         monkeypatch.delenv(variable, raising=False)
 
-    for key, value in env_setup.items():
+    for key, value in test_case.env_setup.items():
         monkeypatch.setenv(key, value)
 
     exit_code, _, tofu = _run_plan_test(
         git_repo,
         monkeypatch,
         fake_tofu,
-        options_environment=options_environment,
+        options_environment=test_case.options_environment,
     )
 
     assert exit_code == 0
-    assert tofu.env["AWS_ACCESS_KEY_ID"] == expected_access
-    assert tofu.env["AWS_SECRET_ACCESS_KEY"] == expected_secret
+    assert tofu.env["AWS_ACCESS_KEY_ID"] == test_case.expected_access
+    assert tofu.env["AWS_SECRET_ACCESS_KEY"] == test_case.expected_secret
     assert [
         "init",
         "-input=false",
@@ -375,10 +381,10 @@ def test_resolve_backend_environment_precedence(
     test_id: str,
 ) -> None:
     """Backend environment resolution follows AWS > SCW > SPACES precedence."""
-    set_values = typ.cast(dict[str, str], env_setup["set"])
+    set_values = typ.cast("dict[str, str]", env_setup["set"])
     for key, value in set_values.items():
         monkeypatch.setenv(key, value)
-    delete_keys = typ.cast(list[str], env_setup["delete"])
+    delete_keys = typ.cast("list[str]", env_setup["delete"])
     for key in delete_keys:
         monkeypatch.delenv(key, raising=False)
 
