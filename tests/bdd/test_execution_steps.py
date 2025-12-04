@@ -99,6 +99,12 @@ def given_estate_persistence(execution_state: dict[str, typ.Any]) -> None:
     repository = pygit2.Repository(str(repo_path))
 
     seed_persistence_files(Path(repo_path))
+    execution_state["expected_backend"] = {
+        "bucket": "df12-tfstate",
+        "key": "estates/example/main/terraform.tfstate",
+        "region": "fr-par",
+        "config_path": "backend/core.tfbackend",
+    }
 
     index = repository.index
     index.add_all()
@@ -353,25 +359,31 @@ def then_fake_tofu_commands(
     assert actual == expected
 
 
-@then(
-    parsers.cfparse(
-        'the backend details mention bucket "{bucket}", key "{key}", '
-        'region "{region}" and config "{config_path}"'
-    )
-)
 def then_backend_details_logged(
     cli_invocation: dict[str, RunResult],
-    bucket: str,
-    key: str,
-    region: str,
-    config_path: str,
+    execution_state: dict[str, typ.Any],
 ) -> None:
     """Ensure stderr includes backend metadata but not secrets."""
     stderr = cli_invocation["result"].stderr
-    assert bucket in stderr
-    assert key in stderr
-    assert region in stderr
-    assert config_path in stderr
+    expected = execution_state["expected_backend"]
+    assert expected["bucket"] in stderr
+    assert expected["key"] in stderr
+    assert expected["region"] in stderr
+    assert expected["config_path"] in stderr
+
+
+@then("backend details are logged")
+def then_backend_details_logged(
+    cli_invocation: dict[str, RunResult],
+    execution_state: dict[str, typ.Any],
+) -> None:
+    """Ensure stderr includes backend metadata but not secrets."""
+    stderr = cli_invocation["result"].stderr
+    expected = execution_state["expected_backend"]
+    assert expected["bucket"] in stderr
+    assert expected["key"] in stderr
+    assert expected["region"] in stderr
+    assert expected["config_path"] in stderr
 
 
 @then("no backend secrets are logged")

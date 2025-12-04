@@ -53,7 +53,7 @@ Feature: Running estate execution commands
     When I run concordat plan
     Then the command exits with code 0
     And fake tofu commands were "version -json | init -input=false -backend-config=backend/core.tfbackend | plan"
-    And the backend details mention bucket "df12-tfstate", key "estates/example/main/terraform.tfstate", region "fr-par" and config "backend/core.tfbackend"
+    And backend details are logged
     And no backend secrets are logged
 
   Scenario: Plan uses the remote backend with SPACES credentials
@@ -63,7 +63,7 @@ Feature: Running estate execution commands
     When I run concordat plan
     Then the command exits with code 0
     And fake tofu commands were "version -json | init -input=false -backend-config=backend/core.tfbackend | plan"
-    And the backend details mention bucket "df12-tfstate", key "estates/example/main/terraform.tfstate", region "fr-par" and config "backend/core.tfbackend"
+    And backend details are logged
     And no backend secrets are logged
 
   Scenario: Plan uses the remote backend with AWS credentials
@@ -74,7 +74,7 @@ Feature: Running estate execution commands
     When I run concordat plan
     Then the command exits with code 0
     And fake tofu commands were "version -json | init -input=false -backend-config=backend/core.tfbackend | plan"
-    And the backend details mention bucket "df12-tfstate", key "estates/example/main/terraform.tfstate", region "fr-par" and config "backend/core.tfbackend"
+    And backend details are logged
     And no backend secrets are logged
 
   Scenario: Plan refuses to run without remote backend credentials
