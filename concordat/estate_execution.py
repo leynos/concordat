@@ -212,25 +212,22 @@ def _object_key(descriptor: PersistenceDescriptor) -> str:
 def _resolve_backend_environment(env: typ.Mapping[str, str]) -> dict[str, str]:
     """Return env overrides for tofu, erroring when credentials are missing."""
 
-    def _value(name: str) -> str:
-        return env.get(name, "").strip()
+    def present(*names: str) -> bool:
+        return all(env.get(name, "").strip() for name in names)
 
-    def _has_pair(first: str, second: str) -> bool:
-        return bool(_value(first) and _value(second))
-
-    if _has_pair("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"):
+    if present("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"):
         return {}
 
-    if _has_pair("SCW_ACCESS_KEY", "SCW_SECRET_KEY"):
+    if present("SCW_ACCESS_KEY", "SCW_SECRET_KEY"):
         return {
-            "AWS_ACCESS_KEY_ID": _value("SCW_ACCESS_KEY"),
-            "AWS_SECRET_ACCESS_KEY": _value("SCW_SECRET_KEY"),
+            "AWS_ACCESS_KEY_ID": env["SCW_ACCESS_KEY"].strip(),
+            "AWS_SECRET_ACCESS_KEY": env["SCW_SECRET_KEY"].strip(),
         }
 
-    if _has_pair("SPACES_ACCESS_KEY_ID", "SPACES_SECRET_ACCESS_KEY"):
+    if present("SPACES_ACCESS_KEY_ID", "SPACES_SECRET_ACCESS_KEY"):
         return {
-            "AWS_ACCESS_KEY_ID": _value("SPACES_ACCESS_KEY_ID"),
-            "AWS_SECRET_ACCESS_KEY": _value("SPACES_SECRET_ACCESS_KEY"),
+            "AWS_ACCESS_KEY_ID": env["SPACES_ACCESS_KEY_ID"].strip(),
+            "AWS_SECRET_ACCESS_KEY": env["SPACES_SECRET_ACCESS_KEY"].strip(),
         }
 
     raise EstateExecutionError(ERROR_BACKEND_ENV_MISSING)
@@ -242,7 +239,7 @@ def _backend_config_argument(workdir: Path, descriptor: PersistenceDescriptor) -
     workdir_resolved = workdir.resolve()
     try:
         relative = backend_path.relative_to(workdir_resolved)
-    except ValueError as error:  # pragma: no cover - defensive
+    except ValueError as error:
         message = ERROR_BACKEND_PATH_OUTSIDE.format(path=descriptor.backend_config_path)
         raise EstateExecutionError(message) from error
 
@@ -255,18 +252,21 @@ def _backend_config_argument(workdir: Path, descriptor: PersistenceDescriptor) -
     return str(relative)
 
 
-def _load_persistence_runtime(
-    workdir: Path, env: typ.Mapping[str, str]
-) -> PersistenceRuntime | None:
-    """Load persistence manifest and derive runtime backend settings."""
+def _load_persistence_descriptor(workdir: Path) -> PersistenceDescriptor | None:
     from concordat.persistence import models as persistence_models
 
     manifest_path = workdir / persistence_models.MANIFEST_FILENAME
     try:
-        descriptor = persistence_models.PersistenceDescriptor.from_yaml(manifest_path)
+        return persistence_models.PersistenceDescriptor.from_yaml(manifest_path)
     except persistence_models.PersistenceError as error:
         raise EstateExecutionError(str(error)) from error
 
+
+def _build_persistence_runtime(
+    workdir: Path,
+    descriptor: PersistenceDescriptor | None,
+    env: typ.Mapping[str, str],
+) -> PersistenceRuntime | None:
     if descriptor is None or not descriptor.enabled:
         return None
 
@@ -278,6 +278,13 @@ def _load_persistence_runtime(
         object_key=_object_key(descriptor),
         env_overrides=env_overrides,
     )
+
+
+def _load_persistence_runtime(
+    workdir: Path, env: typ.Mapping[str, str]
+) -> PersistenceRuntime | None:
+    descriptor = _load_persistence_descriptor(workdir)
+    return _build_persistence_runtime(workdir, descriptor, env)
 
 
 def _log_backend_details(io: ExecutionIO, runtime: PersistenceRuntime) -> None:
@@ -293,19 +300,21 @@ def _log_backend_details(io: ExecutionIO, runtime: PersistenceRuntime) -> None:
     _write_stream_output(io.stderr, message)
 
 
-def _initialize_tofu(
-    workdir: Path,
-    github_token: str,
-    *,
-    base_env: typ.Mapping[str, str] | None = None,
-    env_overrides: typ.Mapping[str, str] | None = None,
-) -> Tofu:
-    env = dict(base_env) if base_env is not None else dict(os.environ)
-    if env_overrides:
-        env |= env_overrides
-    env["GITHUB_TOKEN"] = github_token
+def _build_tofu_environment(
+    options: ExecutionOptions,
+    env_source: typ.Mapping[str, str],
+    persistence_runtime: PersistenceRuntime | None,
+) -> dict[str, str]:
+    env: dict[str, str] = dict(env_source)
+    if persistence_runtime is not None:
+        env.update(persistence_runtime.env_overrides)
+    env["GITHUB_TOKEN"] = options.github_token
+    return env
+
+
+def _initialize_tofu(workdir: Path, env: typ.Mapping[str, str]) -> Tofu:
     try:
-        return Tofu(cwd=str(workdir), env=env)
+        return Tofu(cwd=str(workdir), env=dict(env))
     except FileNotFoundError as error:  # pragma: no cover - depends on PATH
         raise EstateExecutionError(ERROR_MISSING_TOFU) from error
     except RuntimeError as error:  # pragma: no cover - tofu misconfiguration
@@ -349,18 +358,12 @@ def _run_estate_command(
 
         persistence_runtime = _load_persistence_runtime(workdir, env_source)
         backend_args: list[str] = []
-        env_overrides: dict[str, str] = {}
         if persistence_runtime is not None:
             backend_args.append(f"-backend-config={persistence_runtime.backend_config}")
-            env_overrides = persistence_runtime.env_overrides
             _log_backend_details(io, persistence_runtime)
 
-        tofu = _initialize_tofu(
-            workdir,
-            options.github_token,
-            base_env=env_source,
-            env_overrides=env_overrides,
-        )
+        env = _build_tofu_environment(options, env_source, persistence_runtime)
+        tofu = _initialize_tofu(workdir, env)
 
         init_args = ["init", "-input=false", *backend_args]
 

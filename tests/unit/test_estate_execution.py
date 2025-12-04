@@ -407,3 +407,74 @@ def test_run_plan_skips_disabled_persistence(
     assert all("-backend-config" not in call for call in tofu.calls), (
         "init should not receive backend config when disabled"
     )
+
+
+def test_run_plan_uses_local_state_when_persistence_manifest_missing(
+    monkeypatch: pytest.MonkeyPatch,
+    git_repo: GitRepo,
+    fake_tofu: list[typ.Any],
+) -> None:
+    """Missing persistence manifest falls back to local state."""
+    monkeypatch.setattr(
+        "concordat.estate_execution.ensure_estate_cache",
+        lambda *_, **__: git_repo.path,
+    )
+    monkeypatch.delenv("AWS_ACCESS_KEY_ID", raising=False)
+    monkeypatch.delenv("AWS_SECRET_ACCESS_KEY", raising=False)
+
+    options = ExecutionOptions(
+        github_owner="example",
+        github_token="token",  # noqa: S106
+    )
+    io_streams = ExecutionIO(stdout=io.StringIO(), stderr=io.StringIO())
+
+    exit_code, _ = run_plan(_make_record(git_repo.path), options, io_streams)
+
+    assert exit_code == 0
+    tofu = fake_tofu[-1]
+    init_calls = [call for call in tofu.calls if call and call[0] == "init"]
+    assert init_calls, "expected init to be invoked"
+    assert all("-backend-config" not in call for call in init_calls)
+
+
+def test_run_plan_respects_options_environment_mapping(
+    monkeypatch: pytest.MonkeyPatch,
+    git_repo: GitRepo,
+    fake_tofu: list[typ.Any],
+) -> None:
+    """ExecutionOptions.environment is used as the env source for tofu."""
+    seed_persistence_files(git_repo.path)
+    monkeypatch.setattr(
+        "concordat.estate_execution.ensure_estate_cache",
+        lambda *_, **__: git_repo.path,
+    )
+    for variable in (
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "SCW_ACCESS_KEY",
+        "SCW_SECRET_KEY",
+    ):
+        monkeypatch.delenv(variable, raising=False)
+
+    env_mapping = {
+        "SCW_ACCESS_KEY": "options-access",
+        "SCW_SECRET_KEY": "options-secret",
+    }
+    options = ExecutionOptions(
+        github_owner="example",
+        github_token="token",  # noqa: S106
+        environment=env_mapping,
+    )
+    io_streams = ExecutionIO(stdout=io.StringIO(), stderr=io.StringIO())
+
+    exit_code, _ = run_plan(_make_record(git_repo.path), options, io_streams)
+
+    assert exit_code == 0
+    tofu = fake_tofu[-1]
+    assert tofu.env["AWS_ACCESS_KEY_ID"] == "options-access"
+    assert tofu.env["AWS_SECRET_ACCESS_KEY"] == "options-secret"  # noqa: S105
+    assert [
+        "init",
+        "-input=false",
+        "-backend-config=backend/core.tfbackend",
+    ] in tofu.calls
