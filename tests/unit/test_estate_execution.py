@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import io
 import os
 import shutil
@@ -35,6 +36,35 @@ class GitRepo(typ.Protocol):
 
     path: Path
     repository: pygit2.Repository
+
+
+@dataclasses.dataclass
+class BackendConfigTestCase:
+    """Test case for backend config validation scenarios."""
+
+    backend_config_path: str
+    create_backend_file: bool
+    expected_error_fragments: list[str]
+
+
+@pytest.fixture
+def fake_tofu(monkeypatch: pytest.MonkeyPatch) -> list[typ.Any]:
+    """Provide a reusable FakeTofu stub and capture created instances."""
+    created: list[typ.Any] = []
+
+    class _FakeTofu:
+        def __init__(self, cwd: str, env: dict[str, str]) -> None:
+            self.cwd = cwd
+            self.env = env
+            self.calls: list[list[str]] = []
+            created.append(self)
+
+        def _run(self, args: list[str], *, raise_on_error: bool = False) -> object:
+            self.calls.append(args)
+            return SimpleNamespace(stdout="", stderr="", returncode=0)
+
+    monkeypatch.setattr("concordat.estate_execution.Tofu", _FakeTofu)
+    return created
 
 
 def _make_record(repo_path: Path, alias: str = "core") -> EstateRecord:
@@ -159,6 +189,7 @@ def test_estate_workspace_preserves_directory_when_requested(
 def test_run_plan_uses_persistence_backend_when_enabled(
     monkeypatch: pytest.MonkeyPatch,
     git_repo: GitRepo,
+    fake_tofu: list[typ.Any],
 ) -> None:
     """Plan passes backend config and maps SCW credentials to AWS env vars."""
     seed_persistence_files(git_repo.path)
@@ -171,21 +202,6 @@ def test_run_plan_uses_persistence_backend_when_enabled(
     monkeypatch.delenv("AWS_ACCESS_KEY_ID", raising=False)
     monkeypatch.delenv("AWS_SECRET_ACCESS_KEY", raising=False)
 
-    created: list[FakeTofu] = []
-
-    class FakeTofu:
-        def __init__(self, cwd: str, env: dict[str, str]) -> None:
-            self.cwd = cwd
-            self.env = env
-            self.calls: list[list[str]] = []
-            created.append(self)
-
-        def _run(self, args: list[str], *, raise_on_error: bool = False) -> object:
-            self.calls.append(args)
-            return SimpleNamespace(stdout="", stderr="", returncode=0)
-
-    monkeypatch.setattr("concordat.estate_execution.Tofu", FakeTofu)
-
     stdout_buffer = io.StringIO()
     stderr_buffer = io.StringIO()
     options = ExecutionOptions(
@@ -197,7 +213,7 @@ def test_run_plan_uses_persistence_backend_when_enabled(
     exit_code, _ = run_plan(_make_record(git_repo.path), options, io_streams)
 
     assert exit_code == 0
-    tofu = created[-1]
+    tofu = fake_tofu[-1]
     assert tofu.env["AWS_ACCESS_KEY_ID"] == "scw-access"
     assert tofu.env["AWS_SECRET_ACCESS_KEY"] == "scw-secret"  # noqa: S105
     assert [
@@ -213,6 +229,7 @@ def test_run_plan_uses_persistence_backend_when_enabled(
 def test_run_plan_uses_spaces_credentials_when_present(
     monkeypatch: pytest.MonkeyPatch,
     git_repo: GitRepo,
+    fake_tofu: list[typ.Any],
 ) -> None:
     """SPACES_* credentials are mapped to AWS_* for tofu init."""
     seed_persistence_files(git_repo.path)
@@ -230,20 +247,6 @@ def test_run_plan_uses_spaces_credentials_when_present(
     monkeypatch.setenv("SPACES_ACCESS_KEY_ID", "spaces-access")
     monkeypatch.setenv("SPACES_SECRET_ACCESS_KEY", "spaces-secret")
 
-    created: list[FakeTofu] = []
-
-    class FakeTofu:
-        def __init__(self, cwd: str, env: dict[str, str]) -> None:
-            self.env = env
-            self.calls: list[list[str]] = []
-            created.append(self)
-
-        def _run(self, args: list[str], *, raise_on_error: bool = False) -> object:
-            self.calls.append(args)
-            return SimpleNamespace(stdout="", stderr="", returncode=0)
-
-    monkeypatch.setattr("concordat.estate_execution.Tofu", FakeTofu)
-
     options = ExecutionOptions(
         github_owner="example",
         github_token="token",  # noqa: S106
@@ -253,7 +256,7 @@ def test_run_plan_uses_spaces_credentials_when_present(
     exit_code, _ = run_plan(_make_record(git_repo.path), options, io_streams)
 
     assert exit_code == 0
-    tofu = created[-1]
+    tofu = fake_tofu[-1]
     assert tofu.env["AWS_ACCESS_KEY_ID"] == "spaces-access"
     assert tofu.env["AWS_SECRET_ACCESS_KEY"] == "spaces-secret"  # noqa: S105
     assert [
@@ -312,28 +315,28 @@ def test_run_plan_requires_backend_credentials(
 
 
 @pytest.mark.parametrize(
-    (
-        "backend_config_path",
-        "create_backend_file",
-        "expected_error_fragments",
-    ),
+    "test_case",
     [
         pytest.param(
-            "backend/missing.tfbackend",
-            False,
-            [
-                "Remote backend config",
-                "backend/missing.tfbackend",
-            ],
+            BackendConfigTestCase(
+                backend_config_path="backend/missing.tfbackend",
+                create_backend_file=False,
+                expected_error_fragments=[
+                    "Remote backend config",
+                    "backend/missing.tfbackend",
+                ],
+            ),
             id="missing_config_file",
         ),
         pytest.param(
-            "../outside.tfbackend",
-            False,
-            [
-                "Remote backend config must live inside the estate workspace",
-                "../outside.tfbackend",
-            ],
+            BackendConfigTestCase(
+                backend_config_path="../outside.tfbackend",
+                create_backend_file=False,
+                expected_error_fragments=[
+                    "Remote backend config must live inside the estate workspace",
+                    "../outside.tfbackend",
+                ],
+            ),
             id="config_outside_workspace",
         ),
     ],
@@ -341,17 +344,14 @@ def test_run_plan_requires_backend_credentials(
 def test_run_plan_backend_config_validation(
     monkeypatch: pytest.MonkeyPatch,
     git_repo: GitRepo,
-    *,
-    backend_config_path: str,
-    create_backend_file: bool,
-    expected_error_fragments: list[str],
+    test_case: BackendConfigTestCase,
 ) -> None:
     """Backend config validation aborts before tofu initialises."""
     seed_persistence_files(
         git_repo.path,
         PersistenceTestConfig(
-            backend_config_path=backend_config_path,
-            create_backend_file=create_backend_file,
+            backend_config_path=test_case.backend_config_path,
+            create_backend_file=test_case.create_backend_file,
         ),
     )
     monkeypatch.setattr(
@@ -375,13 +375,14 @@ def test_run_plan_backend_config_validation(
         run_plan(_make_record(git_repo.path), options, io_streams)
 
     message = str(excinfo.value)
-    for fragment in expected_error_fragments:
+    for fragment in test_case.expected_error_fragments:
         assert fragment in message
 
 
 def test_run_plan_skips_disabled_persistence(
     monkeypatch: pytest.MonkeyPatch,
     git_repo: GitRepo,
+    fake_tofu: list[typ.Any],
 ) -> None:
     """Disabled persistence manifests fall back to local state handling."""
     seed_persistence_files(git_repo.path, PersistenceTestConfig(enabled=False))
@@ -392,20 +393,6 @@ def test_run_plan_skips_disabled_persistence(
     monkeypatch.delenv("AWS_ACCESS_KEY_ID", raising=False)
     monkeypatch.delenv("AWS_SECRET_ACCESS_KEY", raising=False)
 
-    created: list[FakeTofu] = []
-
-    class FakeTofu:
-        def __init__(self, cwd: str, env: dict[str, str]) -> None:
-            self.env = env
-            self.calls: list[list[str]] = []
-            created.append(self)
-
-        def _run(self, args: list[str], *, raise_on_error: bool = False) -> object:
-            self.calls.append(args)
-            return SimpleNamespace(stdout="", stderr="", returncode=0)
-
-    monkeypatch.setattr("concordat.estate_execution.Tofu", FakeTofu)
-
     options = ExecutionOptions(
         github_owner="example",
         github_token="token",  # noqa: S106
@@ -415,7 +402,7 @@ def test_run_plan_skips_disabled_persistence(
     exit_code, _ = run_plan(_make_record(git_repo.path), options, io_streams)
 
     assert exit_code == 0
-    tofu = created[-1]
+    tofu = fake_tofu[-1]
     assert ["init", "-input=false"] in tofu.calls
     assert all("-backend-config" not in call for call in tofu.calls), (
         "init should not receive backend config when disabled"
