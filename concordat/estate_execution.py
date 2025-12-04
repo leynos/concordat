@@ -59,7 +59,10 @@ SPACES_BACKEND_ENV = (
     "SPACES_ACCESS_KEY_ID",
     "SPACES_SECRET_ACCESS_KEY",
 )
-ALL_BACKEND_ENV_VARS = AWS_BACKEND_ENV + SCW_BACKEND_ENV + SPACES_BACKEND_ENV
+AWS_SESSION_TOKEN_VAR = "AWS_SESSION_TOKEN"  # noqa: S105
+ALL_BACKEND_ENV_VARS = (
+    AWS_BACKEND_ENV + SCW_BACKEND_ENV + SPACES_BACKEND_ENV + (AWS_SESSION_TOKEN_VAR,)
+)
 
 
 class EstateExecutionError(ConcordatError):
@@ -222,22 +225,29 @@ def _resolve_backend_environment(env: typ.Mapping[str, str]) -> dict[str, str]:
     def present(*names: str) -> bool:
         return all(env.get(name, "").strip() for name in names)
 
+    def _session_token() -> dict[str, str]:
+        token = env.get(AWS_SESSION_TOKEN_VAR, "").strip()
+        return {AWS_SESSION_TOKEN_VAR: token} if token else {}
+
     if present(*AWS_BACKEND_ENV):
         return {
             "AWS_ACCESS_KEY_ID": env["AWS_ACCESS_KEY_ID"].strip(),
             "AWS_SECRET_ACCESS_KEY": env["AWS_SECRET_ACCESS_KEY"].strip(),
+            **_session_token(),
         }
 
     if present(*SCW_BACKEND_ENV):
         return {
             "AWS_ACCESS_KEY_ID": env["SCW_ACCESS_KEY"].strip(),
             "AWS_SECRET_ACCESS_KEY": env["SCW_SECRET_KEY"].strip(),
+            **_session_token(),
         }
 
     if present(*SPACES_BACKEND_ENV):
         return {
             "AWS_ACCESS_KEY_ID": env["SPACES_ACCESS_KEY_ID"].strip(),
             "AWS_SECRET_ACCESS_KEY": env["SPACES_SECRET_ACCESS_KEY"].strip(),
+            **_session_token(),
         }
 
     raise EstateExecutionError(ERROR_BACKEND_ENV_MISSING)

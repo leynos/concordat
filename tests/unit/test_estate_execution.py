@@ -443,6 +443,42 @@ def test_resolve_backend_environment_precedence(
     assert resolved == expected_overrides
 
 
+def test_resolve_backend_environment_includes_session_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Session tokens are forwarded alongside mapped credentials."""
+    for variable in ALL_BACKEND_ENV_VARS:
+        monkeypatch.delenv(variable, raising=False)
+
+    monkeypatch.setenv("SCW_ACCESS_KEY", "scw-access")
+    monkeypatch.setenv("SCW_SECRET_KEY", "scw-secret")
+    monkeypatch.setenv("AWS_SESSION_TOKEN", "sts-session-token")
+
+    resolved = _resolve_backend_environment(os.environ)
+
+    assert resolved["AWS_ACCESS_KEY_ID"] == "scw-access"
+    assert resolved["AWS_SECRET_ACCESS_KEY"] == "scw-secret"  # noqa: S105
+    assert resolved["AWS_SESSION_TOKEN"] == "sts-session-token"  # noqa: S105
+
+
+def test_resolve_backend_environment_omits_blank_session_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Blank session tokens are ignored to avoid polluting the environment."""
+    for variable in ALL_BACKEND_ENV_VARS:
+        monkeypatch.delenv(variable, raising=False)
+
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "aws-access")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "aws-secret")
+    monkeypatch.setenv("AWS_SESSION_TOKEN", "   ")
+
+    resolved = _resolve_backend_environment(os.environ)
+
+    assert "AWS_SESSION_TOKEN" not in resolved
+    assert resolved["AWS_ACCESS_KEY_ID"] == "aws-access"
+    assert resolved["AWS_SECRET_ACCESS_KEY"] == "aws-secret"  # noqa: S105
+
+
 def test_resolve_backend_environment_ignores_blank_scw_and_uses_spaces(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -675,6 +711,29 @@ def test_run_plan_respects_options_environment_mapping(
         "-input=false",
         "-backend-config=backend/core.tfbackend",
     ] in tofu.calls
+
+
+def test_run_plan_forwards_session_token(
+    monkeypatch: pytest.MonkeyPatch,
+    git_repo: GitRepo,
+    fake_tofu: list[typ.Any],
+) -> None:
+    """Session tokens propagate to tofu when persistence is enabled."""
+    seed_persistence_files(git_repo.path)
+    monkeypatch.setattr(
+        "concordat.estate_execution.ensure_estate_cache",
+        lambda *_, **__: git_repo.path,
+    )
+    for variable in ALL_BACKEND_ENV_VARS:
+        monkeypatch.delenv(variable, raising=False)
+    monkeypatch.setenv("SCW_ACCESS_KEY", "scw-access")
+    monkeypatch.setenv("SCW_SECRET_KEY", "scw-secret")
+    monkeypatch.setenv("AWS_SESSION_TOKEN", "sts-session-token")
+
+    exit_code, _, tofu = _run_plan_test(git_repo, monkeypatch, fake_tofu)
+
+    assert exit_code == 0
+    assert tofu.env["AWS_SESSION_TOKEN"] == "sts-session-token"  # noqa: S105
 
 
 def test_run_plan_rejects_invalid_persistence_manifest(

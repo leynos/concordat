@@ -73,7 +73,7 @@ locking and rollbacks without adding DynamoDB or other AWS-only dependencies.
   plus `backend/persistence.yaml`, and opens a pull request with the change.
   Acceptance: pytest-bdd coverage exercises success, validation failure, and
   `--force` replacement flows without leaking credentials to disk.
-- [ ] Teach `concordat plan`/`concordat apply` to read `persistence.yaml`, pass
+- [x] Teach `concordat plan`/`concordat apply` to read `persistence.yaml`, pass
   `-backend-config` to `tofu init`, and refuse to run when the expected
   AWS/Scaleway environment variables are missing. Acceptance: integration tests
   confirm remote state is used when configured, local state remains untouched
