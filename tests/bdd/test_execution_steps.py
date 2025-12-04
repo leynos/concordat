@@ -363,11 +363,12 @@ def then_backend_details_logged(
     cli_invocation: dict[str, RunResult],
     bucket: str,
     key: str,
-    region: str,
-    config_path: str,
+    **backend: str,
 ) -> None:
     """Ensure stderr includes backend metadata but not secrets."""
     stderr = cli_invocation["result"].stderr
+    region = backend.get("region", "fr-par")
+    config_path = backend.get("config_path", "backend/core.tfbackend")
     assert bucket in stderr
     assert key in stderr
     assert region in stderr

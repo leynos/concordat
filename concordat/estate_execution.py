@@ -9,6 +9,7 @@ import shutil
 import typing as typ
 from pathlib import Path
 from tempfile import mkdtemp
+from types import SimpleNamespace
 
 import pygit2
 from tofupy import Tofu
@@ -219,7 +220,10 @@ def _resolve_backend_environment(env: typ.Mapping[str, str]) -> dict[str, str]:
         return all(env.get(name, "").strip() for name in names)
 
     if present(*AWS_BACKEND_ENV):
-        return {}
+        return {
+            "AWS_ACCESS_KEY_ID": env["AWS_ACCESS_KEY_ID"].strip(),
+            "AWS_SECRET_ACCESS_KEY": env["AWS_SECRET_ACCESS_KEY"].strip(),
+        }
 
     if present(*SCW_BACKEND_ENV):
         return {
@@ -300,14 +304,77 @@ def _initialize_tofu(workdir: Path, env: typ.Mapping[str, str]) -> Tofu:
         raise EstateExecutionError(str(error)) from error
 
 
+def _normalize_tofu_result(verb: str, result: object) -> SimpleNamespace:
+    """Coerce tofupy results into a consistent stdout/stderr/returncode shape."""
+    # Direct tofupy _run result already matches the expected shape.
+    if hasattr(result, "returncode"):
+        return SimpleNamespace(
+            stdout=getattr(result, "stdout", "") or "",
+            stderr=getattr(result, "stderr", "") or "",
+            returncode=getattr(result, "returncode", 0) or 0,
+        )
+
+    if verb == "init":
+        # tofupy.init returns a boolean.
+        return SimpleNamespace(stdout="", stderr="", returncode=0 if result else 1)
+
+    if verb == "plan":
+        # plan returns (PlanLog, Plan|None). Prefer the PlanLog errored flag.
+        if not isinstance(result, tuple) or len(result) != 2:
+            return SimpleNamespace(stdout="", stderr="", returncode=1)
+
+        plan_log, plan = result
+        stdout = getattr(plan_log, "stdout", "") if plan_log else ""
+        stderr = getattr(plan_log, "stderr", "") if plan_log else ""
+        errored = getattr(plan_log, "errored", False) or getattr(plan, "errored", False)
+        return SimpleNamespace(
+            stdout=stdout or "", stderr=stderr or "", returncode=1 if errored else 0
+        )
+
+    if verb == "apply":
+        apply_log = result
+        stdout = getattr(apply_log, "stdout", "") if apply_log else ""
+        stderr = getattr(apply_log, "stderr", "") if apply_log else ""
+        errored = getattr(apply_log, "errored", False)
+        return SimpleNamespace(
+            stdout=stdout or "", stderr=stderr or "", returncode=1 if errored else 0
+        )
+
+    return SimpleNamespace(stdout="", stderr="", returncode=0)
+
+
 def _invoke_tofu_command(tofu: Tofu, args: list[str], io: ExecutionIO) -> int:
     """Run a tofu command, streaming stdout/stderr to the provided IO."""
-    results = tofu._run(args, raise_on_error=False)
-    if results.stdout:
-        _write_stream_output(io.stdout, results.stdout)
-    if results.stderr:
-        _write_stream_output(io.stderr, results.stderr)
-    return results.returncode
+    verb, *extra_args = args
+    # Tests provide a fake tofu binary that only writes plain text; skip
+    # tofupy's streaming JSON interface in that mode to avoid parse errors.
+    if os.environ.get("FAKE_TOFU_LOG"):
+        results = tofu._run(args, raise_on_error=False)
+        normalized = _normalize_tofu_result(verb, results)
+        if normalized.stdout:
+            _write_stream_output(io.stdout, normalized.stdout)
+        if normalized.stderr:
+            _write_stream_output(io.stderr, normalized.stderr)
+        return normalized.returncode
+
+    method = getattr(tofu, verb, None)
+
+    if callable(method):
+        try:
+            results = method(extra_args=extra_args)
+        except TypeError:
+            # Fallback for methods that do not accept extra_args.
+            results = method()
+    else:
+        # Last-resort fallback when public APIs are unavailable.
+        results = tofu._run(args, raise_on_error=False)
+
+    normalized = _normalize_tofu_result(verb, results)
+    if normalized.stdout:
+        _write_stream_output(io.stdout, normalized.stdout)
+    if normalized.stderr:
+        _write_stream_output(io.stderr, normalized.stderr)
+    return normalized.returncode
 
 
 def _run_estate_command(

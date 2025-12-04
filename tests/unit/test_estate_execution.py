@@ -18,12 +18,14 @@ from concordat.estate_execution import (
     EstateExecutionError,
     ExecutionIO,
     ExecutionOptions,
+    _build_object_key,
     _resolve_backend_environment,
     cache_root,
     ensure_estate_cache,
     estate_workspace,
     run_plan,
 )
+from concordat.persistence.models import PersistenceDescriptor
 from tests.helpers.persistence import (
     PersistenceTestConfig,
     seed_invalid_persistence_manifest,
@@ -74,9 +76,56 @@ def fake_tofu(monkeypatch: pytest.MonkeyPatch) -> list[typ.Any]:
             self.calls: list[list[str]] = []
             created.append(self)
 
-        def _run(self, args: list[str], *, raise_on_error: bool = False) -> object:
+        def _record(self, verb: str, extra_args: list[str]) -> SimpleNamespace:
+            args = [verb, *extra_args]
             self.calls.append(args)
-            return SimpleNamespace(stdout="", stderr="", returncode=0)
+            return SimpleNamespace(stdout="", stderr="", returncode=0, errored=False)
+
+        def init(
+            self,
+            *,
+            backend_conf: str | None = None,
+            disable_backends: bool = False,
+            extra_args: list[str] | None = None,
+        ) -> bool:
+            args = list(extra_args or [])
+            if backend_conf:
+                args.append(f"-backend-config={backend_conf}")
+            self._record(
+                "init",
+                args
+                + (
+                    [f"--disable-backends={disable_backends}"]
+                    if disable_backends
+                    else []
+                ),
+            )
+            return True
+
+        def plan(
+            self, *, extra_args: list[str] | None = None
+        ) -> tuple[SimpleNamespace, SimpleNamespace]:
+            self._record("plan", list(extra_args or []))
+            plan_log = SimpleNamespace(stdout="", stderr="", errored=False)
+            plan = SimpleNamespace(errored=False)
+            return plan_log, plan
+
+        def apply(
+            self,
+            plan_file: str | None = None,
+            *,
+            extra_args: list[str] | None = None,
+        ) -> SimpleNamespace:
+            args = list(extra_args or [])
+            if plan_file:
+                args.append(plan_file)
+            result = self._record("apply", args)
+            result.plan_file = plan_file
+            return result
+
+        def _run(self, args: list[str], *, raise_on_error: bool = False) -> object:
+            # Fallback path when public methods are unavailable.
+            return self._record(args[0], args[1:])
 
     monkeypatch.setattr("concordat.estate_execution.Tofu", _FakeTofu)
     return created
@@ -348,7 +397,10 @@ def test_run_plan_backend_env_sources(
                 },
                 "delete": [],
             },
-            {},
+            {
+                "AWS_ACCESS_KEY_ID": "aws-access",
+                "AWS_SECRET_ACCESS_KEY": "aws-secret",
+            },
             "prefers_aws",
         ),
         pytest.param(
@@ -425,6 +477,38 @@ def test_resolve_backend_environment_raises_when_all_aliases_blank(
 
     with pytest.raises(EstateExecutionError):
         _resolve_backend_environment(os.environ)
+
+
+@pytest.mark.parametrize(
+    ("key_prefix", "key_suffix", "expected"),
+    [
+        ("prefix", "suffix", "prefix/suffix"),
+        ("prefix/", "suffix", "prefix/suffix"),
+        ("prefix", "/suffix", "prefix/suffix"),
+        ("prefix/", "/suffix", "prefix/suffix"),
+        ("", "suffix", "suffix"),
+        ("", "/suffix", "suffix"),
+        ("prefix", "", "prefix/"),
+        ("prefix/", "", "prefix/"),
+    ],
+)
+def test_build_object_key_handles_slashes(
+    key_prefix: str, key_suffix: str, expected: str
+) -> None:
+    """_build_object_key normalises leading/trailing slashes and empties."""
+    descriptor = PersistenceDescriptor(
+        schema_version=1,
+        enabled=True,
+        bucket="bucket",
+        key_prefix=key_prefix,
+        key_suffix=key_suffix,
+        region="region",
+        endpoint="endpoint",
+        backend_config_path="backend/core.tfbackend",
+        notification_topic=None,
+    )
+
+    assert _build_object_key(descriptor) == expected
 
 
 def test_run_plan_requires_backend_credentials(
