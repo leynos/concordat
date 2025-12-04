@@ -45,3 +45,41 @@ Feature: Running estate execution commands
     Given GITHUB_TOKEN is set to "placeholder-token"
     When I run concordat plan
     Then the command fails with message "No active estate configured"
+
+  Scenario: Plan uses the remote backend when persistence is enabled
+    Given a fake estate repository is registered
+    And the estate repository has remote state configured
+    And remote backend credentials are set
+    When I run concordat plan
+    Then the command exits with code 0
+    And fake tofu commands were "version -json | init -input=false -backend-config=backend/core.tfbackend | plan"
+    And backend details are logged
+    And no backend secrets are logged
+
+  Scenario: Plan uses the remote backend with SPACES credentials
+    Given a fake estate repository is registered
+    And the estate repository has remote state configured
+    And remote backend credentials are set via SPACES
+    When I run concordat plan
+    Then the command exits with code 0
+    And fake tofu commands were "version -json | init -input=false -backend-config=backend/core.tfbackend | plan"
+    And backend details are logged
+    And no backend secrets are logged
+
+  Scenario: Plan uses the remote backend with AWS credentials
+    Given a fake estate repository is registered
+    And the estate repository has remote state configured
+    And remote backend credentials are set via AWS
+    And aws-style backend secrets are present in the environment
+    When I run concordat plan
+    Then the command exits with code 0
+    And fake tofu commands were "version -json | init -input=false -backend-config=backend/core.tfbackend | plan"
+    And backend details are logged
+    And no backend secrets are logged
+
+  Scenario: Plan refuses to run without remote backend credentials
+    Given a fake estate repository is registered
+    And the estate repository has remote state configured
+    And remote backend credentials are missing
+    When I run concordat plan
+    Then the command fails with message "AWS_ACCESS_KEY_ID"

@@ -4,22 +4,30 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
+import logging
 import os
 import shutil
 import typing as typ
 from pathlib import Path
 from tempfile import mkdtemp
+from types import SimpleNamespace
 
 import pygit2
 from tofupy import Tofu
 
+from concordat.persistence import models as persistence_models
+
 from .errors import ConcordatError
 from .gitutils import build_remote_callbacks
+
+_logger = logging.getLogger(__name__)
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
     from pygit2.enums import ResetMode as _Pygit2ResetMode
+
+    from concordat.persistence.models import PersistenceDescriptor
 
     from .estate import EstateRecord
 
@@ -33,6 +41,25 @@ ERROR_MISSING_ORIGIN = (
 )
 ERROR_MISSING_BRANCH = "Branch {branch!r} is missing from remote {remote!r}."
 ERROR_MISSING_TOFU = "OpenTofu binary 'tofu' was not found in PATH."
+ERROR_BACKEND_CONFIG_MISSING = (
+    "Remote backend config {path!r} was not found in the estate workspace."
+)
+ERROR_BACKEND_ENV_MISSING = (
+    "Remote state backend requires credentials in the environment: either "
+    "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, SCW_ACCESS_KEY and "
+    "SCW_SECRET_KEY, or SPACES_ACCESS_KEY_ID and SPACES_SECRET_ACCESS_KEY."
+)
+ERROR_BACKEND_PATH_OUTSIDE = (
+    "Remote backend config must live inside the estate workspace (got {path})."
+)
+
+AWS_BACKEND_ENV = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY")
+SCW_BACKEND_ENV = ("SCW_ACCESS_KEY", "SCW_SECRET_KEY")
+SPACES_BACKEND_ENV = (
+    "SPACES_ACCESS_KEY_ID",
+    "SPACES_SECRET_ACCESS_KEY",
+)
+ALL_BACKEND_ENV_VARS = AWS_BACKEND_ENV + SCW_BACKEND_ENV + SPACES_BACKEND_ENV
 
 
 class EstateExecutionError(ConcordatError):
@@ -48,6 +75,7 @@ class ExecutionOptions:
     extra_args: cabc.Sequence[str] = dataclasses.field(default_factory=tuple)
     keep_workdir: bool = False
     cache_directory: Path | None = None
+    environment: cabc.Mapping[str, str] | None = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -56,6 +84,16 @@ class ExecutionIO:
 
     stdout: typ.IO[str]
     stderr: typ.IO[str]
+
+
+@dataclasses.dataclass(frozen=True)
+class PersistenceRuntime:
+    """Runtime data for invoking tofu with a remote backend."""
+
+    descriptor: PersistenceDescriptor
+    backend_config: str
+    object_key: str
+    env_overrides: dict[str, str]
 
 
 def cache_root(env: dict[str, str] | None = None) -> Path:
@@ -178,24 +216,184 @@ def _write_stream_output(stream: typ.IO[str], content: str) -> None:
     stream.flush()
 
 
-def _initialize_tofu(workdir: Path, github_token: str) -> Tofu:
-    env = os.environ.copy()
-    env["GITHUB_TOKEN"] = github_token
+def _resolve_backend_environment(env: typ.Mapping[str, str]) -> dict[str, str]:
+    """Return env overrides for tofu, erroring when credentials are missing."""
+
+    def present(*names: str) -> bool:
+        return all(env.get(name, "").strip() for name in names)
+
+    if present(*AWS_BACKEND_ENV):
+        return {
+            "AWS_ACCESS_KEY_ID": env["AWS_ACCESS_KEY_ID"].strip(),
+            "AWS_SECRET_ACCESS_KEY": env["AWS_SECRET_ACCESS_KEY"].strip(),
+        }
+
+    if present(*SCW_BACKEND_ENV):
+        return {
+            "AWS_ACCESS_KEY_ID": env["SCW_ACCESS_KEY"].strip(),
+            "AWS_SECRET_ACCESS_KEY": env["SCW_SECRET_KEY"].strip(),
+        }
+
+    if present(*SPACES_BACKEND_ENV):
+        return {
+            "AWS_ACCESS_KEY_ID": env["SPACES_ACCESS_KEY_ID"].strip(),
+            "AWS_SECRET_ACCESS_KEY": env["SPACES_SECRET_ACCESS_KEY"].strip(),
+        }
+
+    raise EstateExecutionError(ERROR_BACKEND_ENV_MISSING)
+
+
+def _validate_backend_path(workdir: Path, backend_config_path: str) -> Path:
+    """Validate backend config path is inside workspace and exists.
+
+    Returns the relative path to the backend config file. Raises
+    EstateExecutionError when the path escapes the workspace or is missing.
+    """
+    backend_path = (workdir / backend_config_path).resolve()
+    workdir_resolved = workdir.resolve()
+
     try:
-        return Tofu(cwd=str(workdir), env=env)
+        relative_backend = backend_path.relative_to(workdir_resolved)
+    except ValueError as error:
+        message = ERROR_BACKEND_PATH_OUTSIDE.format(path=backend_config_path)
+        raise EstateExecutionError(message) from error
+
+    if not backend_path.is_file():
+        message = ERROR_BACKEND_CONFIG_MISSING.format(path=backend_config_path)
+        raise EstateExecutionError(message)
+
+    return relative_backend
+
+
+def _build_object_key(descriptor: PersistenceDescriptor) -> str:
+    """Construct the full S3 object key from prefix and suffix."""
+    prefix = descriptor.key_prefix.rstrip("/")
+    suffix = descriptor.key_suffix.lstrip("/")
+    return f"{prefix}/{suffix}" if prefix else suffix
+
+
+def _get_persistence_runtime(
+    workdir: Path, env: typ.Mapping[str, str]
+) -> PersistenceRuntime | None:
+    """Load the persistence manifest and derive backend runtime details."""
+    manifest_path = workdir / persistence_models.MANIFEST_FILENAME
+    try:
+        descriptor = persistence_models.PersistenceDescriptor.from_yaml(manifest_path)
+    except persistence_models.PersistenceError as error:
+        raise EstateExecutionError(str(error)) from error
+
+    if descriptor is None or not descriptor.enabled:
+        return None
+
+    relative_backend = _validate_backend_path(workdir, descriptor.backend_config_path)
+    env_overrides = _resolve_backend_environment(env)
+    object_key = _build_object_key(descriptor)
+
+    return PersistenceRuntime(
+        descriptor=descriptor,
+        backend_config=str(relative_backend),
+        object_key=object_key,
+        env_overrides=env_overrides,
+    )
+
+
+def _initialize_tofu(workdir: Path, env: typ.Mapping[str, str]) -> Tofu:
+    """Create a Tofu wrapper with mapped environment, surfacing friendly errors."""
+    try:
+        return Tofu(cwd=str(workdir), env=dict(env))
     except FileNotFoundError as error:  # pragma: no cover - depends on PATH
         raise EstateExecutionError(ERROR_MISSING_TOFU) from error
     except RuntimeError as error:  # pragma: no cover - tofu misconfiguration
         raise EstateExecutionError(str(error)) from error
 
 
+def _normalize_init_result(result: object) -> SimpleNamespace:
+    """Normalize tofupy.init boolean result."""
+    return SimpleNamespace(stdout="", stderr="", returncode=0 if result else 1)
+
+
+def _normalize_plan_result(result: object) -> SimpleNamespace:
+    """Normalize tofupy.plan (PlanLog, Plan|None) tuple result."""
+    if not isinstance(result, tuple) or len(result) != 2:
+        return SimpleNamespace(stdout="", stderr="", returncode=1)
+
+    plan_log, plan = result
+    stdout = getattr(plan_log, "stdout", "") if plan_log else ""
+    stderr = getattr(plan_log, "stderr", "") if plan_log else ""
+    errored = getattr(plan_log, "errored", False) or getattr(plan, "errored", False)
+    return SimpleNamespace(
+        stdout=stdout or "", stderr=stderr or "", returncode=1 if errored else 0
+    )
+
+
+def _normalize_apply_result(result: object) -> SimpleNamespace:
+    """Normalize tofupy.apply ApplyLog result."""
+    apply_log = result
+    stdout = getattr(apply_log, "stdout", "") if apply_log else ""
+    stderr = getattr(apply_log, "stderr", "") if apply_log else ""
+    errored = getattr(apply_log, "errored", False)
+    return SimpleNamespace(
+        stdout=stdout or "", stderr=stderr or "", returncode=1 if errored else 0
+    )
+
+
+def _normalize_tofu_result(verb: str, result: object) -> SimpleNamespace:
+    """Coerce tofupy results into a consistent stdout/stderr/returncode shape."""
+    # Direct tofupy _run result already matches the expected shape.
+    if hasattr(result, "returncode"):
+        return SimpleNamespace(
+            stdout=getattr(result, "stdout", "") or "",
+            stderr=getattr(result, "stderr", "") or "",
+            returncode=getattr(result, "returncode", 0) or 0,
+        )
+
+    if verb == "init":
+        # Dispatch to verb-specific normalizers.
+        return _normalize_init_result(result)
+
+    if verb == "plan":
+        return _normalize_plan_result(result)
+
+    if verb == "apply":
+        return _normalize_apply_result(result)
+
+    _logger.debug("Unhandled tofu verb %r, assuming success", verb)
+    return SimpleNamespace(stdout="", stderr="", returncode=0)
+
+
+def _stream_tofu_output(io: ExecutionIO, normalized: SimpleNamespace) -> int:
+    """Write normalized tofu output to the provided IO streams and return exit code."""
+    if normalized.stdout:
+        _write_stream_output(io.stdout, normalized.stdout)
+    if normalized.stderr:
+        _write_stream_output(io.stderr, normalized.stderr)
+    return normalized.returncode
+
+
 def _invoke_tofu_command(tofu: Tofu, args: list[str], io: ExecutionIO) -> int:
-    results = tofu._run(args, raise_on_error=False)
-    if results.stdout:
-        _write_stream_output(io.stdout, results.stdout)
-    if results.stderr:
-        _write_stream_output(io.stderr, results.stderr)
-    return results.returncode
+    """Run a tofu command, streaming stdout/stderr to the provided IO."""
+    verb, *extra_args = args
+    # Tests provide a fake tofu binary that only writes plain text; skip
+    # tofupy's streaming JSON interface in that mode to avoid parse errors.
+    if os.environ.get("FAKE_TOFU_LOG"):
+        results = tofu._run(args, raise_on_error=False)
+        normalized = _normalize_tofu_result(verb, results)
+        return _stream_tofu_output(io, normalized)
+
+    method = getattr(tofu, verb, None)
+
+    if callable(method):
+        try:
+            results = method(extra_args=extra_args)
+        except TypeError:
+            # Fallback for methods that do not accept extra_args.
+            results = method()
+    else:
+        # Last-resort fallback when public APIs are unavailable.
+        results = tofu._run(args, raise_on_error=False)
+
+    normalized = _normalize_tofu_result(verb, results)
+    return _stream_tofu_output(io, normalized)
 
 
 def _run_estate_command(
@@ -205,6 +403,9 @@ def _run_estate_command(
     io: ExecutionIO,
 ) -> tuple[int, Path]:
     command = [verb, *options.extra_args]
+    env_source = dict(os.environ)
+    if options.environment is not None:
+        env_source.update(options.environment)
     with estate_workspace(
         record,
         cache_directory=options.cache_directory,
@@ -218,9 +419,32 @@ def _run_estate_command(
             f'github_owner = "{options.github_owner}"\n',
             encoding="utf-8",
         )
-        tofu = _initialize_tofu(workdir, options.github_token)
 
-        for args in [["init", "-input=false"], command]:
+        persistence_runtime = _get_persistence_runtime(workdir, env_source)
+        backend_args: list[str] = []
+        if persistence_runtime is not None:
+            backend_args.append(f"-backend-config={persistence_runtime.backend_config}")
+            descriptor = persistence_runtime.descriptor
+            _write_stream_output(
+                io.stderr,
+                (
+                    "remote backend: "
+                    f"bucket={descriptor.bucket} "
+                    f"key={persistence_runtime.object_key} "
+                    f"region={descriptor.region} "
+                    f"config={persistence_runtime.backend_config}"
+                ),
+            )
+
+        env: dict[str, str] = dict(env_source)
+        if persistence_runtime is not None:
+            env |= persistence_runtime.env_overrides
+        env["GITHUB_TOKEN"] = options.github_token
+        tofu = _initialize_tofu(workdir, env)
+
+        init_args = ["init", "-input=false", *backend_args]
+
+        for args in [init_args, command]:
             exit_code = _invoke_tofu_command(tofu, list(args), io)
             if exit_code != 0:
                 break

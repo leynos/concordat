@@ -18,6 +18,13 @@ from pytest_bdd import given, parsers, scenarios, then, when
 from concordat import cli
 from concordat.errors import ConcordatError
 from concordat.estate import EstateRecord, register_estate
+from concordat.estate_execution import (
+    ALL_BACKEND_ENV_VARS,
+    AWS_BACKEND_ENV,
+    SCW_BACKEND_ENV,
+    SPACES_BACKEND_ENV,
+)
+from tests.helpers.persistence import seed_persistence_files
 
 from .conftest import RunResult
 
@@ -54,6 +61,7 @@ def given_fake_estate(
     tmp_path: Path,
     config_dir: Path,
     monkeypatch: pytest.MonkeyPatch,
+    execution_state: dict[str, typ.Any],
 ) -> None:
     """Seed the config with a local estate repository."""
     repo_path = tmp_path / "estate-remote"
@@ -80,6 +88,37 @@ def given_fake_estate(
         set_active_if_missing=True,
     )
     monkeypatch.setenv("GITHUB_TOKEN", "placeholder-token")
+    execution_state["estate_repo_path"] = repo_path
+
+
+@given("the estate repository has remote state configured")
+def given_estate_persistence(execution_state: dict[str, typ.Any]) -> None:
+    """Add persistence manifest and backend config to the estate repo."""
+    repo_path = execution_state.get("estate_repo_path")
+    assert repo_path, "estate repo path missing"
+    repository = pygit2.Repository(str(repo_path))
+
+    seed_persistence_files(Path(repo_path))
+    execution_state["expected_backend"] = {
+        "bucket": "df12-tfstate",
+        "key": "estates/example/main/terraform.tfstate",
+        "region": "fr-par",
+        "config_path": "backend/core.tfbackend",
+    }
+
+    index = repository.index
+    index.add_all()
+    index.write()
+    tree_oid = index.write_tree()
+    sig = pygit2.Signature("Test", "test@example.com")
+    repository.create_commit(
+        "refs/heads/main",
+        sig,
+        sig,
+        "add persistence backend",
+        tree_oid,
+        [repository.head.target],
+    )
 
 
 @given("GITHUB_TOKEN is unset")
@@ -92,6 +131,71 @@ def given_token_unset(monkeypatch: pytest.MonkeyPatch) -> None:
 def given_token_set(token: str, monkeypatch: pytest.MonkeyPatch) -> None:
     """Force concordat to use the provided GitHub token."""
     monkeypatch.setenv("GITHUB_TOKEN", token)
+
+
+def _set_backend_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+    credentials: dict[str, str],
+    remove: list[str],
+) -> None:
+    """Set backend-related environment variables and clear others."""
+    for key, value in credentials.items():
+        monkeypatch.setenv(key, value)
+    for variable in remove:
+        monkeypatch.delenv(variable, raising=False)
+
+
+@given("remote backend credentials are set")
+def given_remote_backend_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Provide S3-compatible credentials via Scaleway aliases."""
+    _set_backend_credentials(
+        monkeypatch,
+        {"SCW_ACCESS_KEY": "scw-access-key", "SCW_SECRET_KEY": "scw-secret-key"},
+        list(AWS_BACKEND_ENV + SPACES_BACKEND_ENV),
+    )
+
+
+@given("remote backend credentials are set via SPACES")
+def given_remote_backend_credentials_spaces(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Provide S3-compatible credentials via DigitalOcean Spaces aliases."""
+    _set_backend_credentials(
+        monkeypatch,
+        {
+            "SPACES_ACCESS_KEY_ID": "spaces-access-key-id",
+            "SPACES_SECRET_ACCESS_KEY": "spaces-secret-access-key",
+        },
+        list(AWS_BACKEND_ENV + SCW_BACKEND_ENV),
+    )
+
+
+@given("remote backend credentials are set via AWS")
+def given_remote_backend_credentials_aws(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Provide native AWS credentials."""
+    _set_backend_credentials(
+        monkeypatch,
+        {
+            "AWS_ACCESS_KEY_ID": "aws-access-key-id",
+            "AWS_SECRET_ACCESS_KEY": "aws-secret-access-key",
+        },
+        list(SCW_BACKEND_ENV + SPACES_BACKEND_ENV),
+    )
+
+
+@given("remote backend credentials are missing")
+def given_remote_backend_credentials_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ensure no backend credentials are present in the environment."""
+    for variable in (*ALL_BACKEND_ENV_VARS, "AWS_SESSION_TOKEN"):
+        monkeypatch.delenv(variable, raising=False)
+
+
+@given("aws-style backend secrets are present in the environment")
+def given_aws_style_backend_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Seed representative AWS-like credentials for leak checks."""
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAFAKEACCESSKEYID1234")
+    monkeypatch.setenv(
+        "AWS_SECRET_ACCESS_KEY",
+        "wJalrXUtnFEMI/K7MDENG/bPxRfiCYFAKESECRET",
+    )
 
 
 @given("a fake tofu binary logs invocations")
@@ -253,3 +357,45 @@ def then_fake_tofu_commands(
     with Path(log_path).open("r", encoding="utf-8") as handle:
         actual = [line for raw_line in handle if (line := raw_line.strip())]
     assert actual == expected
+
+
+@then("backend details are logged")
+def then_backend_details_logged(
+    cli_invocation: dict[str, RunResult],
+    execution_state: dict[str, typ.Any],
+) -> None:
+    """Ensure stderr includes backend metadata but not secrets."""
+    stderr = cli_invocation["result"].stderr
+    expected = execution_state["expected_backend"]
+    assert expected["bucket"] in stderr
+    assert expected["key"] in stderr
+    assert expected["region"] in stderr
+    assert expected["config_path"] in stderr
+
+
+@then("no backend secrets are logged")
+def then_no_backend_secrets(cli_invocation: dict[str, RunResult]) -> None:
+    """Assert that secret-like values are absent from output."""
+    result = cli_invocation["result"]
+    secrets_to_check = [
+        "scw-access-key",
+        "scw-secret-key",
+        "SCW_ACCESS_KEY",
+        "SCW_SECRET_KEY",
+        "GITHUB_TOKEN",
+    ]
+    secrets_to_check.extend(
+        value
+        for env_var in (
+            "AWS_ACCESS_KEY_ID",
+            "AWS_SECRET_ACCESS_KEY",
+            "SPACES_ACCESS_KEY_ID",
+            "SPACES_SECRET_ACCESS_KEY",
+            "GITHUB_TOKEN",
+        )
+        if (value := os.environ.get(env_var))
+    )
+
+    for secret in secrets_to_check:
+        assert secret not in result.stderr
+        assert secret not in result.stdout
