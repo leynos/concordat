@@ -359,19 +359,6 @@ def then_fake_tofu_commands(
     assert actual == expected
 
 
-def then_backend_details_logged(
-    cli_invocation: dict[str, RunResult],
-    execution_state: dict[str, typ.Any],
-) -> None:
-    """Ensure stderr includes backend metadata but not secrets."""
-    stderr = cli_invocation["result"].stderr
-    expected = execution_state["expected_backend"]
-    assert expected["bucket"] in stderr
-    assert expected["key"] in stderr
-    assert expected["region"] in stderr
-    assert expected["config_path"] in stderr
-
-
 @then("backend details are logged")
 def then_backend_details_logged(
     cli_invocation: dict[str, RunResult],
