@@ -11,7 +11,7 @@ if typ.TYPE_CHECKING:
     from pathlib import Path
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(slots=True)
 class PersistenceTestConfig:
     """Configuration for seeding persistence test fixtures."""
 
