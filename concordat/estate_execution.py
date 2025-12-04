@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
+import logging
 import os
 import shutil
 import typing as typ
@@ -18,6 +19,8 @@ from concordat.persistence import models as persistence_models
 
 from .errors import ConcordatError
 from .gitutils import build_remote_callbacks
+
+_logger = logging.getLogger(__name__)
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -304,6 +307,36 @@ def _initialize_tofu(workdir: Path, env: typ.Mapping[str, str]) -> Tofu:
         raise EstateExecutionError(str(error)) from error
 
 
+def _normalize_init_result(result: object) -> SimpleNamespace:
+    """Normalize tofupy.init boolean result."""
+    return SimpleNamespace(stdout="", stderr="", returncode=0 if result else 1)
+
+
+def _normalize_plan_result(result: object) -> SimpleNamespace:
+    """Normalize tofupy.plan (PlanLog, Plan|None) tuple result."""
+    if not isinstance(result, tuple) or len(result) != 2:
+        return SimpleNamespace(stdout="", stderr="", returncode=1)
+
+    plan_log, plan = result
+    stdout = getattr(plan_log, "stdout", "") if plan_log else ""
+    stderr = getattr(plan_log, "stderr", "") if plan_log else ""
+    errored = getattr(plan_log, "errored", False) or getattr(plan, "errored", False)
+    return SimpleNamespace(
+        stdout=stdout or "", stderr=stderr or "", returncode=1 if errored else 0
+    )
+
+
+def _normalize_apply_result(result: object) -> SimpleNamespace:
+    """Normalize tofupy.apply ApplyLog result."""
+    apply_log = result
+    stdout = getattr(apply_log, "stdout", "") if apply_log else ""
+    stderr = getattr(apply_log, "stderr", "") if apply_log else ""
+    errored = getattr(apply_log, "errored", False)
+    return SimpleNamespace(
+        stdout=stdout or "", stderr=stderr or "", returncode=1 if errored else 0
+    )
+
+
 def _normalize_tofu_result(verb: str, result: object) -> SimpleNamespace:
     """Coerce tofupy results into a consistent stdout/stderr/returncode shape."""
     # Direct tofupy _run result already matches the expected shape.
@@ -315,32 +348,26 @@ def _normalize_tofu_result(verb: str, result: object) -> SimpleNamespace:
         )
 
     if verb == "init":
-        # tofupy.init returns a boolean.
-        return SimpleNamespace(stdout="", stderr="", returncode=0 if result else 1)
+        # Dispatch to verb-specific normalizers.
+        return _normalize_init_result(result)
 
     if verb == "plan":
-        # plan returns (PlanLog, Plan|None). Prefer the PlanLog errored flag.
-        if not isinstance(result, tuple) or len(result) != 2:
-            return SimpleNamespace(stdout="", stderr="", returncode=1)
-
-        plan_log, plan = result
-        stdout = getattr(plan_log, "stdout", "") if plan_log else ""
-        stderr = getattr(plan_log, "stderr", "") if plan_log else ""
-        errored = getattr(plan_log, "errored", False) or getattr(plan, "errored", False)
-        return SimpleNamespace(
-            stdout=stdout or "", stderr=stderr or "", returncode=1 if errored else 0
-        )
+        return _normalize_plan_result(result)
 
     if verb == "apply":
-        apply_log = result
-        stdout = getattr(apply_log, "stdout", "") if apply_log else ""
-        stderr = getattr(apply_log, "stderr", "") if apply_log else ""
-        errored = getattr(apply_log, "errored", False)
-        return SimpleNamespace(
-            stdout=stdout or "", stderr=stderr or "", returncode=1 if errored else 0
-        )
+        return _normalize_apply_result(result)
 
+    _logger.debug("Unhandled tofu verb %r, assuming success", verb)
     return SimpleNamespace(stdout="", stderr="", returncode=0)
+
+
+def _stream_tofu_output(io: ExecutionIO, normalized: SimpleNamespace) -> int:
+    """Write normalized tofu output to the provided IO streams and return exit code."""
+    if normalized.stdout:
+        _write_stream_output(io.stdout, normalized.stdout)
+    if normalized.stderr:
+        _write_stream_output(io.stderr, normalized.stderr)
+    return normalized.returncode
 
 
 def _invoke_tofu_command(tofu: Tofu, args: list[str], io: ExecutionIO) -> int:
@@ -351,11 +378,7 @@ def _invoke_tofu_command(tofu: Tofu, args: list[str], io: ExecutionIO) -> int:
     if os.environ.get("FAKE_TOFU_LOG"):
         results = tofu._run(args, raise_on_error=False)
         normalized = _normalize_tofu_result(verb, results)
-        if normalized.stdout:
-            _write_stream_output(io.stdout, normalized.stdout)
-        if normalized.stderr:
-            _write_stream_output(io.stderr, normalized.stderr)
-        return normalized.returncode
+        return _stream_tofu_output(io, normalized)
 
     method = getattr(tofu, verb, None)
 
@@ -370,11 +393,7 @@ def _invoke_tofu_command(tofu: Tofu, args: list[str], io: ExecutionIO) -> int:
         results = tofu._run(args, raise_on_error=False)
 
     normalized = _normalize_tofu_result(verb, results)
-    if normalized.stdout:
-        _write_stream_output(io.stdout, normalized.stdout)
-    if normalized.stderr:
-        _write_stream_output(io.stderr, normalized.stderr)
-    return normalized.returncode
+    return _stream_tofu_output(io, normalized)
 
 
 def _run_estate_command(

@@ -363,12 +363,11 @@ def then_backend_details_logged(
     cli_invocation: dict[str, RunResult],
     bucket: str,
     key: str,
-    **backend: str,
+    region: str,
+    config_path: str,
 ) -> None:
     """Ensure stderr includes backend metadata but not secrets."""
     stderr = cli_invocation["result"].stderr
-    region = backend.get("region", "fr-par")
-    config_path = backend.get("config_path", "backend/core.tfbackend")
     assert bucket in stderr
     assert key in stderr
     assert region in stderr
@@ -379,7 +378,13 @@ def then_backend_details_logged(
 def then_no_backend_secrets(cli_invocation: dict[str, RunResult]) -> None:
     """Assert that secret-like values are absent from output."""
     result = cli_invocation["result"]
-    secrets_to_check = ["scw-secret-key", "SCW_SECRET_KEY", "GITHUB_TOKEN"]
+    secrets_to_check = [
+        "scw-access-key",
+        "scw-secret-key",
+        "SCW_ACCESS_KEY",
+        "SCW_SECRET_KEY",
+        "GITHUB_TOKEN",
+    ]
     secrets_to_check.extend(
         value
         for env_var in (
