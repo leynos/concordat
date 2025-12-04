@@ -252,64 +252,29 @@ def _backend_config_argument(workdir: Path, descriptor: PersistenceDescriptor) -
     return str(relative)
 
 
-def _load_persistence_descriptor(workdir: Path) -> PersistenceDescriptor | None:
+def _get_persistence_runtime(
+    workdir: Path, env: typ.Mapping[str, str]
+) -> PersistenceRuntime | None:
     from concordat.persistence import models as persistence_models
 
     manifest_path = workdir / persistence_models.MANIFEST_FILENAME
     try:
-        return persistence_models.PersistenceDescriptor.from_yaml(manifest_path)
+        descriptor = persistence_models.PersistenceDescriptor.from_yaml(manifest_path)
     except persistence_models.PersistenceError as error:
         raise EstateExecutionError(str(error)) from error
 
-
-def _build_persistence_runtime(
-    workdir: Path,
-    descriptor: PersistenceDescriptor | None,
-    env: typ.Mapping[str, str],
-) -> PersistenceRuntime | None:
     if descriptor is None or not descriptor.enabled:
         return None
 
     backend_config = _backend_config_argument(workdir, descriptor)
     env_overrides = _resolve_backend_environment(env)
+
     return PersistenceRuntime(
         descriptor=descriptor,
         backend_config=backend_config,
         object_key=_object_key(descriptor),
         env_overrides=env_overrides,
     )
-
-
-def _load_persistence_runtime(
-    workdir: Path, env: typ.Mapping[str, str]
-) -> PersistenceRuntime | None:
-    descriptor = _load_persistence_descriptor(workdir)
-    return _build_persistence_runtime(workdir, descriptor, env)
-
-
-def _log_backend_details(io: ExecutionIO, runtime: PersistenceRuntime) -> None:
-    """Emit backend metadata without secrets for observability."""
-    descriptor = runtime.descriptor
-    message = (
-        "remote backend: "
-        f"bucket={descriptor.bucket} "
-        f"key={runtime.object_key} "
-        f"region={descriptor.region} "
-        f"config={runtime.backend_config}"
-    )
-    _write_stream_output(io.stderr, message)
-
-
-def _build_tofu_environment(
-    options: ExecutionOptions,
-    env_source: typ.Mapping[str, str],
-    persistence_runtime: PersistenceRuntime | None,
-) -> dict[str, str]:
-    env: dict[str, str] = dict(env_source)
-    if persistence_runtime is not None:
-        env.update(persistence_runtime.env_overrides)
-    env["GITHUB_TOKEN"] = options.github_token
-    return env
 
 
 def _initialize_tofu(workdir: Path, env: typ.Mapping[str, str]) -> Tofu:
@@ -356,13 +321,26 @@ def _run_estate_command(
             encoding="utf-8",
         )
 
-        persistence_runtime = _load_persistence_runtime(workdir, env_source)
+        persistence_runtime = _get_persistence_runtime(workdir, env_source)
         backend_args: list[str] = []
         if persistence_runtime is not None:
             backend_args.append(f"-backend-config={persistence_runtime.backend_config}")
-            _log_backend_details(io, persistence_runtime)
+            descriptor = persistence_runtime.descriptor
+            _write_stream_output(
+                io.stderr,
+                (
+                    "remote backend: "
+                    f"bucket={descriptor.bucket} "
+                    f"key={persistence_runtime.object_key} "
+                    f"region={descriptor.region} "
+                    f"config={persistence_runtime.backend_config}"
+                ),
+            )
 
-        env = _build_tofu_environment(options, env_source, persistence_runtime)
+        env: dict[str, str] = dict(env_source)
+        if persistence_runtime is not None:
+            env |= persistence_runtime.env_overrides
+        env["GITHUB_TOKEN"] = options.github_token
         tofu = _initialize_tofu(workdir, env)
 
         init_args = ["init", "-input=false", *backend_args]

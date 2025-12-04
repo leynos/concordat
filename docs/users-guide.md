@@ -166,9 +166,10 @@ without leaving the CLI. Both commands require `GITHUB_TOKEN` and the estate's
   `-backend-config=<path>` to `tofu init`, maps
   `SCW_ACCESS_KEY`/`SCW_SECRET_KEY` onto
   `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` when needed, and fails fast if
-  neither pair is present. Stderr logs echo the backend bucket, key, region,
-  and config path—never credentials—for traceability. If the manifest is absent
-  or `enabled: false`, `plan` and `apply` keep using the local state layout.
+  neither pair is present. Standard error (stderr) logs echo the backend
+  bucket, key, region, and config path—never credentials—for traceability. If
+  the manifest is absent or `enabled: false`, `plan` and `apply` keep using the
+  local state layout.
 
 - Reconcile the estate with `concordat apply`. The command requires an explicit
   `--auto-approve` to match OpenTofu's automation guard.

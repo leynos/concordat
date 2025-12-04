@@ -21,6 +21,19 @@ class PersistenceTestConfig:
     create_backend_file: bool = True
 
 
+def seed_invalid_persistence_manifest(
+    repo_path: Path, contents: str | None = None
+) -> Path:
+    """Write an intentionally malformed persistence manifest for tests."""
+    backend_dir = repo_path / "backend"
+    backend_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = backend_dir / "persistence.yaml"
+
+    manifest_contents = contents or "schema_version: 99\n"
+    manifest_path.write_text(manifest_contents, encoding="utf-8")
+    return manifest_path
+
+
 def seed_persistence_files(
     repo_path: Path,
     config: PersistenceTestConfig | None = None,

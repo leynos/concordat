@@ -386,7 +386,7 @@ def then_backend_details_logged(
 def then_no_backend_secrets(cli_invocation: dict[str, RunResult]) -> None:
     """Assert that secret-like values are absent from output."""
     result = cli_invocation["result"]
-    secrets_to_check = ["scw-secret-key", "SCW_SECRET_KEY"]
+    secrets_to_check = ["scw-secret-key", "SCW_SECRET_KEY", "GITHUB_TOKEN"]
     secrets_to_check.extend(
         value
         for env_var in (
@@ -394,6 +394,7 @@ def then_no_backend_secrets(cli_invocation: dict[str, RunResult]) -> None:
             "AWS_SECRET_ACCESS_KEY",
             "SPACES_ACCESS_KEY_ID",
             "SPACES_SECRET_ACCESS_KEY",
+            "GITHUB_TOKEN",
         )
         if (value := os.environ.get(env_var))
     )

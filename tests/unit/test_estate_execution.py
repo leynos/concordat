@@ -23,7 +23,11 @@ from concordat.estate_execution import (
     estate_workspace,
     run_plan,
 )
-from tests.helpers.persistence import PersistenceTestConfig, seed_persistence_files
+from tests.helpers.persistence import (
+    PersistenceTestConfig,
+    seed_invalid_persistence_manifest,
+    seed_persistence_files,
+)
 
 if typ.TYPE_CHECKING:
     from pathlib import Path
@@ -73,6 +77,30 @@ def _make_record(repo_path: Path, alias: str = "core") -> EstateRecord:
         repo_url=str(repo_path),
         github_owner="example",
     )
+
+
+def _run_plan_test(
+    git_repo: GitRepo,
+    monkeypatch: pytest.MonkeyPatch,
+    fake_tofu: list[typ.Any],
+    *,
+    options_environment: dict[str, str] | None = None,
+) -> tuple[int, ExecutionIO, typ.Any]:
+    """Execute run_plan with common test setup and return results."""
+    monkeypatch.setattr(
+        "concordat.estate_execution.ensure_estate_cache",
+        lambda *_, **__: git_repo.path,
+    )
+
+    options = ExecutionOptions(
+        github_owner="example",
+        github_token="token",  # noqa: S106
+        environment=options_environment,
+    )
+    io_streams = ExecutionIO(stdout=io.StringIO(), stderr=io.StringIO())
+
+    exit_code, _ = run_plan(_make_record(git_repo.path), options, io_streams)
+    return exit_code, io_streams, fake_tofu[-1]
 
 
 def test_cache_root_honours_xdg(
@@ -247,16 +275,9 @@ def test_run_plan_uses_spaces_credentials_when_present(
     monkeypatch.setenv("SPACES_ACCESS_KEY_ID", "spaces-access")
     monkeypatch.setenv("SPACES_SECRET_ACCESS_KEY", "spaces-secret")
 
-    options = ExecutionOptions(
-        github_owner="example",
-        github_token="token",  # noqa: S106
-    )
-    io_streams = ExecutionIO(stdout=io.StringIO(), stderr=io.StringIO())
-
-    exit_code, _ = run_plan(_make_record(git_repo.path), options, io_streams)
+    exit_code, _, tofu = _run_plan_test(git_repo, monkeypatch, fake_tofu)
 
     assert exit_code == 0
-    tofu = fake_tofu[-1]
     assert tofu.env["AWS_ACCESS_KEY_ID"] == "spaces-access"
     assert tofu.env["AWS_SECRET_ACCESS_KEY"] == "spaces-secret"  # noqa: S105
     assert [
@@ -280,6 +301,26 @@ def test_resolve_backend_environment_prefers_aws(
     resolved = _resolve_backend_environment(os.environ)
 
     assert resolved == {}
+
+
+def test_resolve_backend_environment_scw_over_spaces(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """SCW_* values override SPACES_* values when AWS_* is absent."""
+    monkeypatch.delenv("AWS_ACCESS_KEY_ID", raising=False)
+    monkeypatch.delenv("AWS_SECRET_ACCESS_KEY", raising=False)
+
+    monkeypatch.setenv("SCW_ACCESS_KEY", "scw-access")
+    monkeypatch.setenv("SCW_SECRET_KEY", "scw-secret")
+    monkeypatch.setenv("SPACES_ACCESS_KEY_ID", "spaces-access")
+    monkeypatch.setenv("SPACES_SECRET_ACCESS_KEY", "spaces-secret")
+
+    resolved = _resolve_backend_environment(os.environ)
+
+    assert resolved == {
+        "AWS_ACCESS_KEY_ID": "scw-access",
+        "AWS_SECRET_ACCESS_KEY": "scw-secret",
+    }
 
 
 def test_run_plan_requires_backend_credentials(
@@ -386,23 +427,11 @@ def test_run_plan_skips_disabled_persistence(
 ) -> None:
     """Disabled persistence manifests fall back to local state handling."""
     seed_persistence_files(git_repo.path, PersistenceTestConfig(enabled=False))
-    monkeypatch.setattr(
-        "concordat.estate_execution.ensure_estate_cache",
-        lambda *_, **__: git_repo.path,
-    )
     monkeypatch.delenv("AWS_ACCESS_KEY_ID", raising=False)
     monkeypatch.delenv("AWS_SECRET_ACCESS_KEY", raising=False)
-
-    options = ExecutionOptions(
-        github_owner="example",
-        github_token="token",  # noqa: S106
-    )
-    io_streams = ExecutionIO(stdout=io.StringIO(), stderr=io.StringIO())
-
-    exit_code, _ = run_plan(_make_record(git_repo.path), options, io_streams)
+    exit_code, _, tofu = _run_plan_test(git_repo, monkeypatch, fake_tofu)
 
     assert exit_code == 0
-    tofu = fake_tofu[-1]
     assert ["init", "-input=false"] in tofu.calls
     assert all("-backend-config" not in call for call in tofu.calls), (
         "init should not receive backend config when disabled"
@@ -422,16 +451,9 @@ def test_run_plan_uses_local_state_when_persistence_manifest_missing(
     monkeypatch.delenv("AWS_ACCESS_KEY_ID", raising=False)
     monkeypatch.delenv("AWS_SECRET_ACCESS_KEY", raising=False)
 
-    options = ExecutionOptions(
-        github_owner="example",
-        github_token="token",  # noqa: S106
-    )
-    io_streams = ExecutionIO(stdout=io.StringIO(), stderr=io.StringIO())
-
-    exit_code, _ = run_plan(_make_record(git_repo.path), options, io_streams)
+    exit_code, _, tofu = _run_plan_test(git_repo, monkeypatch, fake_tofu)
 
     assert exit_code == 0
-    tofu = fake_tofu[-1]
     init_calls = [call for call in tofu.calls if call and call[0] == "init"]
     assert init_calls, "expected init to be invoked"
     assert all("-backend-config" not in call for call in init_calls)
@@ -460,17 +482,14 @@ def test_run_plan_respects_options_environment_mapping(
         "SCW_ACCESS_KEY": "options-access",
         "SCW_SECRET_KEY": "options-secret",
     }
-    options = ExecutionOptions(
-        github_owner="example",
-        github_token="token",  # noqa: S106
-        environment=env_mapping,
+    exit_code, _, tofu = _run_plan_test(
+        git_repo,
+        monkeypatch,
+        fake_tofu,
+        options_environment=env_mapping,
     )
-    io_streams = ExecutionIO(stdout=io.StringIO(), stderr=io.StringIO())
-
-    exit_code, _ = run_plan(_make_record(git_repo.path), options, io_streams)
 
     assert exit_code == 0
-    tofu = fake_tofu[-1]
     assert tofu.env["AWS_ACCESS_KEY_ID"] == "options-access"
     assert tofu.env["AWS_SECRET_ACCESS_KEY"] == "options-secret"  # noqa: S105
     assert [
@@ -478,3 +497,19 @@ def test_run_plan_respects_options_environment_mapping(
         "-input=false",
         "-backend-config=backend/core.tfbackend",
     ] in tofu.calls
+
+
+def test_run_plan_rejects_invalid_persistence_manifest(
+    monkeypatch: pytest.MonkeyPatch,
+    git_repo: GitRepo,
+    fake_tofu: list[typ.Any],
+) -> None:
+    """Invalid persistence manifest surfaces as an execution error."""
+    seed_invalid_persistence_manifest(git_repo.path)
+    monkeypatch.setattr(
+        "concordat.estate_execution.ensure_estate_cache",
+        lambda *_, **__: git_repo.path,
+    )
+
+    with pytest.raises(EstateExecutionError):
+        _run_plan_test(git_repo, monkeypatch, fake_tofu)
