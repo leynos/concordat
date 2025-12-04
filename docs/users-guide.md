@@ -224,6 +224,10 @@ selected provider:
 | AWS S3 / Spaces         | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | `AWS_SESSION_TOKEN` (when using temporary credentials such as STS)       | Values are passed straight to OpenTofu's S3 backend.                       |
 | Scaleway Object Storage | `SCW_ACCESS_KEY`, `SCW_SECRET_KEY`           | `AWS_SESSION_TOKEN` (only when scaleway issues temporary AWS-style keys) | Concordat maps these onto the AWS variable names before invoking OpenTofu. |
 
+When `AWS_SESSION_TOKEN` is present, Concordat forwards it alongside whichever
+credential pair is selected so temporary AWS STS, Scaleway, or Spaces sessions
+work without additional flags.
+
 The stack declares an explicit `s3` backend in
 `platform-standards/tofu/backend.tf` and ships a Scaleway starter config at
 `platform-standards/tofu/backend/scaleway.tfbackend`. Initialise estates with

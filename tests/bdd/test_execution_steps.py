@@ -141,6 +141,7 @@ def _set_backend_credentials(
     """Set backend-related environment variables and clear others."""
     for key, value in credentials.items():
         monkeypatch.setenv(key, value)
+    monkeypatch.delenv("AWS_SESSION_TOKEN", raising=False)
     for variable in remove:
         monkeypatch.delenv(variable, raising=False)
 
@@ -184,8 +185,14 @@ def given_remote_backend_credentials_aws(monkeypatch: pytest.MonkeyPatch) -> Non
 @given("remote backend credentials are missing")
 def given_remote_backend_credentials_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ensure no backend credentials are present in the environment."""
-    for variable in (*ALL_BACKEND_ENV_VARS, "AWS_SESSION_TOKEN"):
+    for variable in ALL_BACKEND_ENV_VARS:
         monkeypatch.delenv(variable, raising=False)
+
+
+@given("an AWS session token is present")
+def given_aws_session_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Add an AWS session token used by temporary credentials."""
+    monkeypatch.setenv("AWS_SESSION_TOKEN", "sts-session-token")
 
 
 @given("aws-style backend secrets are present in the environment")
@@ -389,6 +396,7 @@ def then_no_backend_secrets(cli_invocation: dict[str, RunResult]) -> None:
         for env_var in (
             "AWS_ACCESS_KEY_ID",
             "AWS_SECRET_ACCESS_KEY",
+            "AWS_SESSION_TOKEN",
             "SPACES_ACCESS_KEY_ID",
             "SPACES_SECRET_ACCESS_KEY",
             "GITHUB_TOKEN",
