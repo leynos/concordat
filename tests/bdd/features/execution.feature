@@ -76,6 +76,20 @@ Feature: Running estate execution commands
     Then the command exits with code 0
     And fake tofu commands were "version -json | init -input=false -backend-config=backend/core.tfbackend | plan"
     And backend details are logged
+    And the tofu session token entries are all sts-session-token
+    And no backend secrets are logged
+
+  Scenario: Plan omits blank AWS session token
+    Given a fake estate repository is registered
+    And the estate repository has remote state configured
+    And remote backend credentials are set via AWS
+    And an AWS session token is blank
+    And aws-style backend secrets are present in the environment
+    When I run concordat plan
+    Then the command exits with code 0
+    And fake tofu commands were "version -json | init -input=false -backend-config=backend/core.tfbackend | plan"
+    And backend details are logged
+    And the tofu session token entries are all <absent>
     And no backend secrets are logged
 
   Scenario: Plan refuses to run without remote backend credentials
@@ -105,6 +119,7 @@ Feature: Running estate execution commands
     Then the command exits with code 0
     And fake tofu commands were "version -json | init -input=false -backend-config=backend/core.tfbackend | apply -auto-approve"
     And backend details are logged
+    And the tofu session token entries are all sts-session-token
     And no backend secrets are logged
 
   Scenario: Apply refuses to run without remote backend credentials

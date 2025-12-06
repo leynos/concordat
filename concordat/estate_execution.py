@@ -65,6 +65,19 @@ ALL_BACKEND_ENV_VARS = (
 )
 
 
+def _session_token_overrides(env: typ.Mapping[str, str]) -> dict[str, str]:
+    """Return a mapping containing AWS session token when present and non-empty."""
+    token = env.get(AWS_SESSION_TOKEN_VAR, "").strip()
+    return {AWS_SESSION_TOKEN_VAR: token} if token else {}
+
+
+def _remove_blank_session_token(env: dict[str, str]) -> None:
+    """Drop AWS session token when present but blank to avoid leaking empties."""
+    token = env.get(AWS_SESSION_TOKEN_VAR)
+    if token is not None and not token.strip():
+        env.pop(AWS_SESSION_TOKEN_VAR, None)
+
+
 class EstateExecutionError(ConcordatError):
     """Raised when preparing an estate workspace fails."""
 
@@ -225,29 +238,25 @@ def _resolve_backend_environment(env: typ.Mapping[str, str]) -> dict[str, str]:
     def present(*names: str) -> bool:
         return all(env.get(name, "").strip() for name in names)
 
-    def _session_token() -> dict[str, str]:
-        token = env.get(AWS_SESSION_TOKEN_VAR, "").strip()
-        return {AWS_SESSION_TOKEN_VAR: token} if token else {}
-
     if present(*AWS_BACKEND_ENV):
         return {
             "AWS_ACCESS_KEY_ID": env["AWS_ACCESS_KEY_ID"].strip(),
             "AWS_SECRET_ACCESS_KEY": env["AWS_SECRET_ACCESS_KEY"].strip(),
-            **_session_token(),
+            **_session_token_overrides(env),
         }
 
     if present(*SCW_BACKEND_ENV):
         return {
             "AWS_ACCESS_KEY_ID": env["SCW_ACCESS_KEY"].strip(),
             "AWS_SECRET_ACCESS_KEY": env["SCW_SECRET_KEY"].strip(),
-            **_session_token(),
+            **_session_token_overrides(env),
         }
 
     if present(*SPACES_BACKEND_ENV):
         return {
             "AWS_ACCESS_KEY_ID": env["SPACES_ACCESS_KEY_ID"].strip(),
             "AWS_SECRET_ACCESS_KEY": env["SPACES_SECRET_ACCESS_KEY"].strip(),
-            **_session_token(),
+            **_session_token_overrides(env),
         }
 
     raise EstateExecutionError(ERROR_BACKEND_ENV_MISSING)
@@ -412,10 +421,16 @@ def _run_estate_command(
     options: ExecutionOptions,
     io: ExecutionIO,
 ) -> tuple[int, Path]:
+    if (
+        AWS_SESSION_TOKEN_VAR in os.environ
+        and not os.environ[AWS_SESSION_TOKEN_VAR].strip()
+    ):
+        os.environ.pop(AWS_SESSION_TOKEN_VAR, None)
     command = [verb, *options.extra_args]
     env_source = dict(os.environ)
     if options.environment is not None:
         env_source.update(options.environment)
+    _remove_blank_session_token(env_source)
     with estate_workspace(
         record,
         cache_directory=options.cache_directory,
@@ -449,6 +464,11 @@ def _run_estate_command(
         env: dict[str, str] = dict(env_source)
         if persistence_runtime is not None:
             env |= persistence_runtime.env_overrides
+        token_value = env.get(AWS_SESSION_TOKEN_VAR, "")
+        if token_value and token_value.strip():
+            env[AWS_SESSION_TOKEN_VAR] = token_value.strip()
+        else:
+            env.pop(AWS_SESSION_TOKEN_VAR, None)
         env["GITHUB_TOKEN"] = options.github_token
         tofu = _initialize_tofu(workdir, env)
 

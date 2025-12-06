@@ -6,7 +6,6 @@ import io
 import os
 import shlex
 import sys
-import textwrap
 import typing as typ
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -21,6 +20,7 @@ from concordat.estate import EstateRecord, register_estate
 from concordat.estate_execution import (
     ALL_BACKEND_ENV_VARS,
     AWS_BACKEND_ENV,
+    AWS_SESSION_TOKEN_VAR,
     SCW_BACKEND_ENV,
     SPACES_BACKEND_ENV,
 )
@@ -141,7 +141,7 @@ def _set_backend_credentials(
     """Set backend-related environment variables and clear others."""
     for key, value in credentials.items():
         monkeypatch.setenv(key, value)
-    monkeypatch.delenv("AWS_SESSION_TOKEN", raising=False)
+    monkeypatch.delenv(AWS_SESSION_TOKEN_VAR, raising=False)
     for variable in remove:
         monkeypatch.delenv(variable, raising=False)
 
@@ -192,7 +192,13 @@ def given_remote_backend_credentials_missing(monkeypatch: pytest.MonkeyPatch) ->
 @given("an AWS session token is present")
 def given_aws_session_token(monkeypatch: pytest.MonkeyPatch) -> None:
     """Add an AWS session token used by temporary credentials."""
-    monkeypatch.setenv("AWS_SESSION_TOKEN", "sts-session-token")
+    monkeypatch.setenv(AWS_SESSION_TOKEN_VAR, "sts-session-token")
+
+
+@given("an AWS session token is blank")
+def given_blank_aws_session_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Record a whitespace-only AWS session token to exercise filtering."""
+    monkeypatch.setenv(AWS_SESSION_TOKEN_VAR, "   ")
 
 
 @given("aws-style backend secrets are present in the environment")
@@ -216,39 +222,46 @@ def given_fake_tofu(
     bin_dir.mkdir()
     script = bin_dir / "tofu"
     log_path = tmp_path / "fake-tofu.log"
+    env_log_path = tmp_path / "fake-tofu-env.log"
+    script_lines = [
+        "import json",
+        "import os",
+        "import sys",
+        "",
+        'LOG = os.environ.get("FAKE_TOFU_LOG")',
+        'ENV_LOG = os.environ.get("FAKE_TOFU_ENV_LOG")',
+        "ARGS = sys.argv[1:]",
+        "if LOG:",
+        '    with open(LOG, "a", encoding="utf-8") as handle:',
+        '        handle.write(" ".join(ARGS) + "\\n")',
+        "if ENV_LOG:",
+        '    session_token = os.environ.get("AWS_SESSION_TOKEN")',
+        '    marker = session_token if session_token is not None else "<absent>"',
+        "    try:",
+        "        os.makedirs(os.path.dirname(ENV_LOG), exist_ok=True)",
+        '        with open(ENV_LOG, "a", encoding="utf-8") as handle:',
+        '            handle.write(f"AWS_SESSION_TOKEN={marker}\\n")',
+        "    except OSError:",
+        "        pass",
+        'if len(ARGS) >= 2 and ARGS[0] == "version" and ARGS[1] == "-json":',
+        "    payload = {",
+        '        "terraform_version": "1.6.0",',
+        '        "platform": "linux_amd64",',
+        "    }",
+        "    print(json.dumps(payload))",
+        "    raise SystemExit(0)",
+        'command = ARGS[0] if ARGS else ""',
+        'if command == "plan":',
+        '    code = int(os.environ.get("FAKE_TOFU_PLAN_EXIT_CODE", "0"))',
+        'elif command == "apply":',
+        '    code = int(os.environ.get("FAKE_TOFU_APPLY_EXIT_CODE", "0"))',
+        "else:",
+        "    code = 0",
+        'print("fake-tofu", " ".join(ARGS))',
+        "raise SystemExit(code)",
+    ]
     script.write_text(
-        "#!"
-        + sys.executable
-        + "\n"
-        + textwrap.dedent(
-            """
-            import json
-            import os
-            import sys
-
-            LOG = os.environ.get("FAKE_TOFU_LOG")
-            ARGS = sys.argv[1:]
-            if LOG:
-                with open(LOG, "a", encoding="utf-8") as handle:
-                    handle.write(" ".join(ARGS) + "\\n")
-            if len(ARGS) >= 2 and ARGS[0] == "version" and ARGS[1] == "-json":
-                payload = {
-                    "terraform_version": "1.6.0",
-                    "platform": "linux_amd64",
-                }
-                print(json.dumps(payload))
-                raise SystemExit(0)
-            command = ARGS[0] if ARGS else ""
-            if command == "plan":
-                code = int(os.environ.get("FAKE_TOFU_PLAN_EXIT_CODE", "0"))
-            elif command == "apply":
-                code = int(os.environ.get("FAKE_TOFU_APPLY_EXIT_CODE", "0"))
-            else:
-                code = 0
-            print("fake-tofu", " ".join(ARGS))
-            raise SystemExit(code)
-            """
-        ),
+        "#!" + sys.executable + "\n" + "\n".join(script_lines) + "\n",
         encoding="utf-8",
     )
     script.chmod(0o755)
@@ -257,7 +270,9 @@ def given_fake_tofu(
         f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}",
     )
     monkeypatch.setenv("FAKE_TOFU_LOG", str(log_path))
+    monkeypatch.setenv("FAKE_TOFU_ENV_LOG", str(env_log_path))
     execution_state["tofu_log"] = log_path
+    execution_state["tofu_env_log"] = env_log_path
 
 
 def _run_cli(arguments: list[str]) -> RunResult:
@@ -380,6 +395,20 @@ def then_backend_details_logged(
     assert expected["config_path"] in stderr
 
 
+@then(parsers.cfparse("the tofu session token entries are all {expected}"))
+def then_session_token_logged(
+    cli_invocation: dict[str, RunResult],
+    execution_state: dict[str, typ.Any],
+    expected: str,
+) -> None:
+    """Ensure every tofu invocation logged the expected session token marker."""
+    env_log = execution_state.get("tofu_env_log")
+    assert env_log, "fake tofu env log path missing"
+    lines = Path(env_log).read_text(encoding="utf-8").splitlines()
+    assert lines, "expected at least one env log entry"
+    assert all(line.strip().endswith(f"={expected}") for line in lines)
+
+
 @then("no backend secrets are logged")
 def then_no_backend_secrets(cli_invocation: dict[str, RunResult]) -> None:
     """Assert that secret-like values are absent from output."""
@@ -396,7 +425,7 @@ def then_no_backend_secrets(cli_invocation: dict[str, RunResult]) -> None:
         for env_var in (
             "AWS_ACCESS_KEY_ID",
             "AWS_SECRET_ACCESS_KEY",
-            "AWS_SESSION_TOKEN",
+            AWS_SESSION_TOKEN_VAR,
             "SPACES_ACCESS_KEY_ID",
             "SPACES_SECRET_ACCESS_KEY",
             "GITHUB_TOKEN",
