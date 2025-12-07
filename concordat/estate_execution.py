@@ -72,10 +72,15 @@ def _session_token_overrides(env: typ.Mapping[str, str]) -> dict[str, str]:
 
 
 def _remove_blank_session_token(env: dict[str, str]) -> None:
-    """Drop AWS session token when present but blank to avoid leaking empties."""
+    """Normalize AWS session token, removing it when blank and trimming whitespace."""
     token = env.get(AWS_SESSION_TOKEN_VAR)
-    if token is not None and not token.strip():
-        env.pop(AWS_SESSION_TOKEN_VAR, None)
+    if token is None:
+        return
+    stripped = token.strip()
+    if stripped:
+        env[AWS_SESSION_TOKEN_VAR] = stripped
+        return
+    env.pop(AWS_SESSION_TOKEN_VAR, None)
 
 
 class EstateExecutionError(ConcordatError):
@@ -447,11 +452,7 @@ def _prepare_backend_configuration(
     env: dict[str, str] = dict(env_source)
     if persistence_runtime is not None:
         env |= persistence_runtime.env_overrides
-    token_value = env.get(AWS_SESSION_TOKEN_VAR, "")
-    if token_value and token_value.strip():
-        env[AWS_SESSION_TOKEN_VAR] = token_value.strip()
-    else:
-        env.pop(AWS_SESSION_TOKEN_VAR, None)
+    _remove_blank_session_token(env)
     return backend_args, env
 
 

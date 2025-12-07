@@ -46,7 +46,7 @@ class BackendEnvTestCase:
     expected_secret: str
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(slots=True)
 class SessionTokenForwardingTestCase:
     """Test case for session token forwarding behavior to tofu."""
 

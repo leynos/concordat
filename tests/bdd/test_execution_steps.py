@@ -237,7 +237,7 @@ def given_fake_tofu(
         "if ENV_LOG:",
         '    session_token = os.environ.get("AWS_SESSION_TOKEN")',
         (
-            '    marker = session_token if session_token and session_token.strip() '
+            "    marker = session_token if session_token and session_token.strip() "
             'else "<absent>"'
         ),
         "    try:",
