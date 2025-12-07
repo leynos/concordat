@@ -59,7 +59,28 @@ SPACES_BACKEND_ENV = (
     "SPACES_ACCESS_KEY_ID",
     "SPACES_SECRET_ACCESS_KEY",
 )
-ALL_BACKEND_ENV_VARS = AWS_BACKEND_ENV + SCW_BACKEND_ENV + SPACES_BACKEND_ENV
+AWS_SESSION_TOKEN_VAR = "AWS_SESSION_TOKEN"  # noqa: S105
+ALL_BACKEND_ENV_VARS = (
+    AWS_BACKEND_ENV + SCW_BACKEND_ENV + SPACES_BACKEND_ENV + (AWS_SESSION_TOKEN_VAR,)
+)
+
+
+def _session_token_overrides(env: typ.Mapping[str, str]) -> dict[str, str]:
+    """Return a mapping containing AWS session token when present and non-empty."""
+    token = env.get(AWS_SESSION_TOKEN_VAR, "").strip()
+    return {AWS_SESSION_TOKEN_VAR: token} if token else {}
+
+
+def _remove_blank_session_token(env: dict[str, str]) -> None:
+    """Normalize AWS session token, removing it when blank and trimming whitespace."""
+    token = env.get(AWS_SESSION_TOKEN_VAR)
+    if token is None:
+        return
+    stripped = token.strip()
+    if stripped:
+        env[AWS_SESSION_TOKEN_VAR] = stripped
+        return
+    env.pop(AWS_SESSION_TOKEN_VAR, None)
 
 
 class EstateExecutionError(ConcordatError):
@@ -226,18 +247,21 @@ def _resolve_backend_environment(env: typ.Mapping[str, str]) -> dict[str, str]:
         return {
             "AWS_ACCESS_KEY_ID": env["AWS_ACCESS_KEY_ID"].strip(),
             "AWS_SECRET_ACCESS_KEY": env["AWS_SECRET_ACCESS_KEY"].strip(),
+            **_session_token_overrides(env),
         }
 
     if present(*SCW_BACKEND_ENV):
         return {
             "AWS_ACCESS_KEY_ID": env["SCW_ACCESS_KEY"].strip(),
             "AWS_SECRET_ACCESS_KEY": env["SCW_SECRET_KEY"].strip(),
+            **_session_token_overrides(env),
         }
 
     if present(*SPACES_BACKEND_ENV):
         return {
             "AWS_ACCESS_KEY_ID": env["SPACES_ACCESS_KEY_ID"].strip(),
             "AWS_SECRET_ACCESS_KEY": env["SPACES_SECRET_ACCESS_KEY"].strip(),
+            **_session_token_overrides(env),
         }
 
     raise EstateExecutionError(ERROR_BACKEND_ENV_MISSING)
@@ -396,6 +420,42 @@ def _invoke_tofu_command(tofu: Tofu, args: list[str], io: ExecutionIO) -> int:
     return _stream_tofu_output(io, normalized)
 
 
+def _prepare_execution_environment(options: ExecutionOptions) -> dict[str, str]:
+    """Compose the base environment for tofu invocation."""
+    env_source = dict(os.environ)
+    if options.environment is not None:
+        env_source.update(options.environment)
+    _remove_blank_session_token(env_source)
+    return env_source
+
+
+def _prepare_backend_configuration(
+    workdir: Path, env_source: dict[str, str], io: ExecutionIO
+) -> tuple[list[str], dict[str, str]]:
+    """Derive backend args and environment overrides for tofu."""
+    persistence_runtime = _get_persistence_runtime(workdir, env_source)
+    backend_args: list[str] = []
+    if persistence_runtime is not None:
+        backend_args.append(f"-backend-config={persistence_runtime.backend_config}")
+        descriptor = persistence_runtime.descriptor
+        _write_stream_output(
+            io.stderr,
+            (
+                "remote backend: "
+                f"bucket={descriptor.bucket} "
+                f"key={persistence_runtime.object_key} "
+                f"region={descriptor.region} "
+                f"config={persistence_runtime.backend_config}"
+            ),
+        )
+
+    env: dict[str, str] = dict(env_source)
+    if persistence_runtime is not None:
+        env |= persistence_runtime.env_overrides
+    _remove_blank_session_token(env)
+    return backend_args, env
+
+
 def _run_estate_command(
     record: EstateRecord,
     verb: str,
@@ -403,9 +463,7 @@ def _run_estate_command(
     io: ExecutionIO,
 ) -> tuple[int, Path]:
     command = [verb, *options.extra_args]
-    env_source = dict(os.environ)
-    if options.environment is not None:
-        env_source.update(options.environment)
+    env_source = _prepare_execution_environment(options)
     with estate_workspace(
         record,
         cache_directory=options.cache_directory,
@@ -420,25 +478,7 @@ def _run_estate_command(
             encoding="utf-8",
         )
 
-        persistence_runtime = _get_persistence_runtime(workdir, env_source)
-        backend_args: list[str] = []
-        if persistence_runtime is not None:
-            backend_args.append(f"-backend-config={persistence_runtime.backend_config}")
-            descriptor = persistence_runtime.descriptor
-            _write_stream_output(
-                io.stderr,
-                (
-                    "remote backend: "
-                    f"bucket={descriptor.bucket} "
-                    f"key={persistence_runtime.object_key} "
-                    f"region={descriptor.region} "
-                    f"config={persistence_runtime.backend_config}"
-                ),
-            )
-
-        env: dict[str, str] = dict(env_source)
-        if persistence_runtime is not None:
-            env |= persistence_runtime.env_overrides
+        backend_args, env = _prepare_backend_configuration(workdir, env_source, io)
         env["GITHUB_TOKEN"] = options.github_token
         tofu = _initialize_tofu(workdir, env)
 
