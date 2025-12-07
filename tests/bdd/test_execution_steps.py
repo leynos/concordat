@@ -236,7 +236,10 @@ def given_fake_tofu(
         '        handle.write(" ".join(ARGS) + "\\n")',
         "if ENV_LOG:",
         '    session_token = os.environ.get("AWS_SESSION_TOKEN")',
-        '    marker = session_token if session_token is not None else "<absent>"',
+        (
+            '    marker = session_token if session_token and session_token.strip() '
+            'else "<absent>"'
+        ),
         "    try:",
         "        os.makedirs(os.path.dirname(ENV_LOG), exist_ok=True)",
         '        with open(ENV_LOG, "a", encoding="utf-8") as handle:',
