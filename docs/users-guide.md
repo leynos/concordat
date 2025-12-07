@@ -268,6 +268,96 @@ on this environment setup.
   fail fast in automation; defaults from `backend/persistence.yaml` are still
   honoured.
 
+### Lock troubleshooting
+
+OpenTofu's S3 backend supports native `.tflock` files when
+`use_lockfile = true` (the default for AWS and DigitalOcean backends generated
+by Concordat). Scaleway Object Storage does not implement Terraform locking, so
+Concordat omits the lockfile option for Scaleway backends and relies on
+single-writer discipline.
+
+- **Identifying lock contention:** When another process holds the lock,
+  `tofu apply` blocks and echoes the `.tflock` object key and metadata (holder
+  ID, timestamp) in its output. If the lock persists beyond 60 seconds and the
+  persistence manifest defines a `notification_topic`, Concordat emits a
+  structured JSON log line for downstream alerting pipelines.
+- **Stuck locks on AWS/DigitalOcean:** If a previous apply crashed without
+  releasing the lock, manually delete the `.tflock` object from the bucket
+  using the provider's CLI or console. Confirm no other apply is running before
+  removal.
+- **Scaleway single-writer discipline:** Because Scaleway lacks `.tflock`
+  support, coordinate applies externally (for example, via CI job serialization
+  or manual team communication). Concurrent applies may corrupt state.
+- **Planned `--check-lock` mode:** A future `concordat apply --check-lock` flag
+  will attempt to acquire the backend lock and report the blocking key when
+  contention persists. This flag is not yet implemented; operators currently
+  depend on the `.tflock` metadata echoed in apply logs.
+
+### Disaster recovery
+
+Concordat requires bucket versioning on all remote backends, so every state
+update preserves earlier versions. Use versioning to recover from corrupted or
+accidentally overwritten state files.
+
+**Locating version IDs:** Whenever `concordat apply` updates state, the CLI
+logs the bucket, key, and region to standard error (stderr). Combine this
+information with the provider's object-versioning API to list available
+versions.
+
+**Restoring a previous state version (Scaleway example):**
+
+1. List versions of the state object:
+
+   ```bash
+   aws s3api list-object-versions \
+     --bucket df12-tfstate \
+     --prefix estates/example/main/terraform.tfstate \
+     --endpoint-url https://s3.fr-par.scw.cloud
+   ```
+
+2. Identify the desired `VersionId` from the output and copy it over the current
+   object:
+
+   ```bash
+   aws s3api copy-object \
+     --bucket df12-tfstate \
+     --copy-source "df12-tfstate/estates/example/main/terraform.tfstate?versionId=VERSION_ID" \
+     --key estates/example/main/terraform.tfstate \
+     --endpoint-url https://s3.fr-par.scw.cloud
+   ```
+
+3. Run `concordat plan` to verify the restored state matches the expected
+   infrastructure. Investigate any unexpected drift before applying.
+
+**Object Lock compliance mode (Scaleway):** Enable Object Lock with a retention
+window that matches regulatory requirements to prevent accidental or malicious
+deletion of state versions. Object Lock is orthogonal to `.tflock` mutexes; it
+protects historical data, not concurrent access.
+
+**Important:** Concordat does not automate rollbacks. Operators are responsible
+for identifying the correct version and restoring it manually.
+
+### At-rest encryption
+
+State files often contain credentials and other sensitive data. Protect them
+with the following measures:
+
+- **Avoid storing secrets in state:** Mark sensitive attributes with
+  `sensitive = true` in OpenTofu configurations. Split secrets into external
+  vaults (for example, HashiCorp Vault, AWS Secrets Manager) or replace
+  cleartext values with references.
+- **Enforce strict bucket policies:** Limit access via IAM (AWS) or Scaleway
+  access policies. Grant the minimum permissions required for Concordat
+  operations (read/write/delete on the state prefix).
+- **Server-side encryption (AWS):** Enable SSE-S3 or SSE-KMS on the bucket.
+  OpenTofu's S3 backend automatically uses SSE when the bucket enforces it.
+- **Client-side encryption (Scaleway):** Scaleway Object Storage supports SSE-C
+  (customer-provided keys) but not SSE-S3. Wrap `tofu state`/`tofu plan` calls
+  with tooling that encrypts state files before upload, or use external
+  envelope-encryption workflows.
+- **Audit access logs:** Periodically review bucket access logs to detect
+  unauthorized reads or unexpected access patterns.
+
 ### Estate configuration file
 
 Concordat stores estate metadata in `$XDG_CONFIG_HOME/concordat/config.yaml`
