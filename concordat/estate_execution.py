@@ -415,22 +415,59 @@ def _invoke_tofu_command(tofu: Tofu, args: list[str], io: ExecutionIO) -> int:
     return _stream_tofu_output(io, normalized)
 
 
+def _prepare_execution_environment(options: ExecutionOptions) -> dict[str, str]:
+    """Compose the base environment for tofu invocation."""
+    if (
+        AWS_SESSION_TOKEN_VAR in os.environ
+        and not os.environ[AWS_SESSION_TOKEN_VAR].strip()
+    ):
+        os.environ.pop(AWS_SESSION_TOKEN_VAR, None)
+    env_source = dict(os.environ)
+    if options.environment is not None:
+        env_source.update(options.environment)
+    _remove_blank_session_token(env_source)
+    return env_source
+
+
+def _prepare_backend_configuration(
+    workdir: Path, env_source: dict[str, str], io: ExecutionIO
+) -> tuple[list[str], dict[str, str]]:
+    """Derive backend args and environment overrides for tofu."""
+    persistence_runtime = _get_persistence_runtime(workdir, env_source)
+    backend_args: list[str] = []
+    if persistence_runtime is not None:
+        backend_args.append(f"-backend-config={persistence_runtime.backend_config}")
+        descriptor = persistence_runtime.descriptor
+        _write_stream_output(
+            io.stderr,
+            (
+                "remote backend: "
+                f"bucket={descriptor.bucket} "
+                f"key={persistence_runtime.object_key} "
+                f"region={descriptor.region} "
+                f"config={persistence_runtime.backend_config}"
+            ),
+        )
+
+    env: dict[str, str] = dict(env_source)
+    if persistence_runtime is not None:
+        env |= persistence_runtime.env_overrides
+    token_value = env.get(AWS_SESSION_TOKEN_VAR, "")
+    if token_value and token_value.strip():
+        env[AWS_SESSION_TOKEN_VAR] = token_value.strip()
+    else:
+        env.pop(AWS_SESSION_TOKEN_VAR, None)
+    return backend_args, env
+
+
 def _run_estate_command(
     record: EstateRecord,
     verb: str,
     options: ExecutionOptions,
     io: ExecutionIO,
 ) -> tuple[int, Path]:
-    if (
-        AWS_SESSION_TOKEN_VAR in os.environ
-        and not os.environ[AWS_SESSION_TOKEN_VAR].strip()
-    ):
-        os.environ.pop(AWS_SESSION_TOKEN_VAR, None)
     command = [verb, *options.extra_args]
-    env_source = dict(os.environ)
-    if options.environment is not None:
-        env_source.update(options.environment)
-    _remove_blank_session_token(env_source)
+    env_source = _prepare_execution_environment(options)
     with estate_workspace(
         record,
         cache_directory=options.cache_directory,
@@ -445,30 +482,7 @@ def _run_estate_command(
             encoding="utf-8",
         )
 
-        persistence_runtime = _get_persistence_runtime(workdir, env_source)
-        backend_args: list[str] = []
-        if persistence_runtime is not None:
-            backend_args.append(f"-backend-config={persistence_runtime.backend_config}")
-            descriptor = persistence_runtime.descriptor
-            _write_stream_output(
-                io.stderr,
-                (
-                    "remote backend: "
-                    f"bucket={descriptor.bucket} "
-                    f"key={persistence_runtime.object_key} "
-                    f"region={descriptor.region} "
-                    f"config={persistence_runtime.backend_config}"
-                ),
-            )
-
-        env: dict[str, str] = dict(env_source)
-        if persistence_runtime is not None:
-            env |= persistence_runtime.env_overrides
-        token_value = env.get(AWS_SESSION_TOKEN_VAR, "")
-        if token_value and token_value.strip():
-            env[AWS_SESSION_TOKEN_VAR] = token_value.strip()
-        else:
-            env.pop(AWS_SESSION_TOKEN_VAR, None)
+        backend_args, env = _prepare_backend_configuration(workdir, env_source, io)
         env["GITHUB_TOKEN"] = options.github_token
         tofu = _initialize_tofu(workdir, env)
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import dataclasses
 import typing as typ
 from pathlib import Path
+from types import SimpleNamespace
 
 import pygit2
 import pytest
@@ -181,3 +182,79 @@ def conflict_test_setup(tmp_path: Path) -> tuple[Path, Path]:
 def expectation(request: pytest.FixtureRequest) -> ConflictExpectation:
     """Provide conflict scenarios for write handling."""
     return request.param
+
+
+def _make_record(repo_path: Path, alias: str = "core") -> EstateRecord:
+    """Create an EstateRecord pointing at the provided repository path."""
+    return EstateRecord(
+        alias=alias,
+        repo_url=str(repo_path),
+        github_owner="example",
+    )
+
+
+@pytest.fixture
+def fake_tofu(monkeypatch: pytest.MonkeyPatch) -> list[typ.Any]:
+    """Provide a reusable FakeTofu stub and capture created instances."""
+    created: list[typ.Any] = []
+
+    class _FakeTofu:
+        def __init__(self, cwd: str, env: dict[str, str]) -> None:
+            self.cwd = cwd
+            self.env = env
+            self.calls: list[list[str]] = []
+            created.append(self)
+
+        def _record(self, verb: str, extra_args: list[str]) -> SimpleNamespace:
+            args = [verb, *extra_args]
+            self.calls.append(args)
+            return SimpleNamespace(stdout="", stderr="", returncode=0, errored=False)
+
+        def init(
+            self,
+            *,
+            backend_conf: str | None = None,
+            disable_backends: bool = False,
+            extra_args: list[str] | None = None,
+        ) -> bool:
+            args = list(extra_args or [])
+            if backend_conf:
+                args.append(f"-backend-config={backend_conf}")
+            self._record(
+                "init",
+                args
+                + (
+                    [f"--disable-backends={disable_backends}"]
+                    if disable_backends
+                    else []
+                ),
+            )
+            return True
+
+        def plan(
+            self, *, extra_args: list[str] | None = None
+        ) -> tuple[SimpleNamespace, SimpleNamespace]:
+            self._record("plan", list(extra_args or []))
+            plan_log = SimpleNamespace(stdout="", stderr="", errored=False)
+            plan = SimpleNamespace(errored=False)
+            return plan_log, plan
+
+        def apply(
+            self,
+            plan_file: str | None = None,
+            *,
+            extra_args: list[str] | None = None,
+        ) -> SimpleNamespace:
+            args = list(extra_args or [])
+            if plan_file:
+                args.append(plan_file)
+            result = self._record("apply", args)
+            result.plan_file = plan_file
+            return result
+
+        def _run(self, args: list[str], *, raise_on_error: bool = False) -> object:
+            # Fallback path when public methods are unavailable.
+            return self._record(args[0], args[1:])
+
+    monkeypatch.setattr("concordat.estate_execution.Tofu", _FakeTofu)
+    return created
