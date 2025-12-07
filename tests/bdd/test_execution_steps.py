@@ -235,7 +235,7 @@ def given_fake_tofu(
         '    with open(LOG, "a", encoding="utf-8") as handle:',
         '        handle.write(" ".join(ARGS) + "\\n")',
         "if ENV_LOG:",
-        '    session_token = os.environ.get("AWS_SESSION_TOKEN")',
+        f'    session_token = os.environ.get("{AWS_SESSION_TOKEN_VAR}")',
         (
             "    marker = session_token if session_token and session_token.strip() "
             'else "<absent>"'
