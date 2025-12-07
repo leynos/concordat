@@ -433,7 +433,7 @@ def then_no_backend_secrets(cli_invocation: dict[str, RunResult]) -> None:
             "SPACES_SECRET_ACCESS_KEY",
             "GITHUB_TOKEN",
         )
-        if (value := os.environ.get(env_var))
+        if (value := os.environ.get(env_var)) and value.strip()
     )
 
     for secret in secrets_to_check:
