@@ -417,11 +417,6 @@ def _invoke_tofu_command(tofu: Tofu, args: list[str], io: ExecutionIO) -> int:
 
 def _prepare_execution_environment(options: ExecutionOptions) -> dict[str, str]:
     """Compose the base environment for tofu invocation."""
-    if (
-        AWS_SESSION_TOKEN_VAR in os.environ
-        and not os.environ[AWS_SESSION_TOKEN_VAR].strip()
-    ):
-        os.environ.pop(AWS_SESSION_TOKEN_VAR, None)
     env_source = dict(os.environ)
     if options.environment is not None:
         env_source.update(options.environment)

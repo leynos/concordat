@@ -46,6 +46,14 @@ class BackendEnvTestCase:
     expected_secret: str
 
 
+@dataclasses.dataclass
+class SessionTokenForwardingTestCase:
+    """Test case for session token forwarding behavior to tofu."""
+
+    session_token_value: str
+    expect_in_env: bool
+
+
 def _run_plan_test(
     git_repo: GitRepo,
     monkeypatch: pytest.MonkeyPatch,
@@ -345,19 +353,29 @@ def test_run_plan_respects_options_environment_mapping(
 
 
 @pytest.mark.parametrize(
-    ("session_token_value", "expect_in_env"),
+    "test_case",
     [
-        pytest.param("sts-session-token", True, id="forwards_token"),
-        pytest.param("   ", False, id="omits_blank"),
+        pytest.param(
+            SessionTokenForwardingTestCase(
+                session_token_value="sts-session-token",  # noqa: S106
+                expect_in_env=True,
+            ),
+            id="forwards_token",
+        ),
+        pytest.param(
+            SessionTokenForwardingTestCase(
+                session_token_value="   ",  # noqa: S106
+                expect_in_env=False,
+            ),
+            id="omits_blank",
+        ),
     ],
 )
 def test_run_plan_session_token_forwarding(
     monkeypatch: pytest.MonkeyPatch,
     git_repo: GitRepo,
     fake_tofu: list[typ.Any],
-    session_token_value: str,
-    *,
-    expect_in_env: bool,
+    test_case: SessionTokenForwardingTestCase,
 ) -> None:
     """Session token propagation to tofu matches blank/valued inputs."""
     seed_persistence_files(git_repo.path)
@@ -369,13 +387,13 @@ def test_run_plan_session_token_forwarding(
         monkeypatch.delenv(variable, raising=False)
     monkeypatch.setenv("SCW_ACCESS_KEY", "scw-access")
     monkeypatch.setenv("SCW_SECRET_KEY", "scw-secret")
-    monkeypatch.setenv(AWS_SESSION_TOKEN_VAR, session_token_value)
+    monkeypatch.setenv(AWS_SESSION_TOKEN_VAR, test_case.session_token_value)
 
     exit_code, _, tofu = _run_plan_test(git_repo, monkeypatch, fake_tofu)
 
     assert exit_code == 0
-    if expect_in_env:
-        assert tofu.env[AWS_SESSION_TOKEN_VAR] == session_token_value.strip()
+    if test_case.expect_in_env:
+        assert tofu.env[AWS_SESSION_TOKEN_VAR] == test_case.session_token_value.strip()
     else:
         assert AWS_SESSION_TOKEN_VAR not in tofu.env
 
