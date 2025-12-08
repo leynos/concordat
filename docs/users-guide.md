@@ -297,7 +297,9 @@ single-writer discipline.
 
 Concordat requires bucket versioning on all remote backends, so every state
 update preserves earlier versions. Use versioning to recover from corrupted or
-accidentally overwritten state files.
+accidentally overwritten state files. If versioning is not enabled,
+`concordat estate persist` fails with a blocking error and does not write any
+backend configuration files.
 
 **Locating version IDs:** Whenever `concordat apply` updates state, the CLI
 logs the bucket, key, and region to standard error (stderr). Combine this
@@ -352,9 +354,10 @@ with the following measures:
 - **Server-side encryption (AWS):** Enable SSE-S3 or SSE-KMS on the bucket.
   OpenTofu's S3 backend automatically uses SSE when the bucket enforces it.
 - **Client-side encryption (Scaleway):** Scaleway Object Storage supports SSE-C
-  (customer-provided keys) but not SSE-S3. Wrap `tofu state`/`tofu plan` calls
-  with tooling that encrypts state files before upload, or use external
-  envelope-encryption workflows.
+  (customer-provided keys) but not SSE-S3. OpenTofu's S3 backend does not
+  natively support SSE-C, so encryption must happen outside OpenTofu. Wrap
+  `tofu state`/`tofu plan` calls with tooling that encrypts state files before
+  upload, or use external envelope-encryption workflows.
 - **Audit access logs:** Periodically review bucket access logs to detect
   unauthorized reads or unexpected access patterns.
 
