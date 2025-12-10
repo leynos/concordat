@@ -78,7 +78,7 @@ locking and rollbacks without adding DynamoDB or other AWS-only dependencies.
   AWS/Scaleway environment variables are missing. Acceptance: integration tests
   confirm remote state is used when configured, local state remains untouched
   otherwise, and logs expose bucket/key details but no secrets.
-- [ ] Extend `docs/users-guide.md` with operator guidance (sourced from Section
+- [x] Extend `docs/users-guide.md` with operator guidance (sourced from Section
   2.8.4 of the design doc) that explicitly documents: (1) how to set required
   environment variables for AWS (`AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY`,
   plus optional `AWS_SESSION_TOKEN` for temporary credentials) and for Scaleway
