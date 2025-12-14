@@ -209,6 +209,9 @@ Non-interactive use for automation:
   `CONCORDAT_PERSIST_BUCKET`, `CONCORDAT_PERSIST_REGION`,
   `CONCORDAT_PERSIST_ENDPOINT`, `CONCORDAT_PERSIST_KEY_PREFIX`, and
   `CONCORDAT_PERSIST_KEY_SUFFIX`.
+- When `--endpoint` (or `CONCORDAT_PERSIST_ENDPOINT`) omits a scheme, Concordat
+  assumes `https://` (for example, `s3.fr-par.scw.cloud` becomes
+  `https://s3.fr-par.scw.cloud`).
 - Pass `--no-input` to fail fast instead of prompting when any required value
   is missing. Defaults from an existing `backend/persistence.yaml` are still
   honoured in non-interactive mode.

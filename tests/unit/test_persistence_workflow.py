@@ -123,3 +123,40 @@ def test_non_interactive_persist_uses_provided_values(
 
     assert result.updated
     assert result.backend_path.name == "core.tfbackend"
+
+
+def test_non_interactive_persist_defaults_endpoint_scheme_to_https(
+    persist_test_context: PersistTestContext,
+) -> None:
+    """Scheme-less endpoints default to HTTPS when persisting an estate."""
+    ctx = persist_test_context
+    captured_endpoint: dict[str, str] = {}
+
+    def s3_client_factory(region: str, endpoint: str) -> persistence.S3Client:
+        captured_endpoint["endpoint"] = endpoint
+        return ctx.stub_s3()
+
+    options = persistence.PersistenceOptions(
+        bucket="df12",
+        region="fr-par",
+        endpoint="s3.fr-par.scw.cloud",
+        key_prefix="estates/example/main",
+        key_suffix="terraform.tfstate",
+        no_input=True,
+        input_func=lambda _: (_ for _ in ()).throw(AssertionError("prompted")),
+        s3_client_factory=s3_client_factory,
+    )
+
+    result = persistence.persist_estate(ctx.record, options)
+
+    assert captured_endpoint["endpoint"] == "https://s3.fr-par.scw.cloud"
+
+    backend = result.backend_path.read_text(encoding="utf-8")
+    assert (
+        'endpoints                   = { s3 = "https://s3.fr-par.scw.cloud" }'
+        in backend
+    )
+
+    manifest = persistence.PersistenceDescriptor.from_yaml(result.manifest_path)
+    assert manifest is not None
+    assert manifest.endpoint == "https://s3.fr-par.scw.cloud"

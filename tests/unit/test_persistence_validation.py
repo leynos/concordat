@@ -22,12 +22,18 @@ from concordat.persistence import S3Client
             "df12",
             "fr-par",
             "s3.fr-par.scw.cloud",
-            "Endpoint must include an https:// scheme",
+            "",
         ),
         (
             "df12",
             "fr-par",
             "http://endpoint",
+            "Endpoint must use HTTPS",
+        ),
+        (
+            "df12",
+            "fr-par",
+            "ftp://endpoint",
             "Endpoint must use HTTPS",
         ),
         (
