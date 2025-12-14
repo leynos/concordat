@@ -12,6 +12,7 @@ from concordat import estate
 from concordat.errors import ConcordatError
 from concordat.estate import (
     EstateRecord,
+    GitHubOwnerConfirmationAbortedError,
     MissingGitHubOwnerError,
     RemoteProbe,
     _build_client,
@@ -229,6 +230,54 @@ def test_init_estate_allows_explicit_owner_override(
 
     assert record.github_owner == "sandbox"
     assert list_estates(config_path=config_path)[0].github_owner == "sandbox"
+
+
+def test_init_estate_prompts_to_confirm_inferred_owner(
+    tmp_path: pathlib.Path,
+    mocker: pytest_mock.MockFixture,
+) -> None:
+    """Prompt operators to confirm github_owner inferred from the repo slug."""
+    config_path = tmp_path / "config.yaml"
+    mocker.patch.object(
+        estate,
+        "_probe_remote",
+        return_value=RemoteProbe(reachable=True, exists=True, empty=True, error=None),
+    )
+    mocker.patch.object(estate, "_bootstrap_template")
+
+    confirm = mocker.Mock(return_value=True)
+    record = init_estate(
+        "core",
+        "git@github.com:example/platform-standards.git",
+        confirm=confirm,
+        config_path=config_path,
+    )
+
+    assert record.github_owner == "example"
+    assert confirm.call_count == 1
+    assert "github_owner" in confirm.call_args.args[0]
+
+
+def test_init_estate_aborts_when_inferred_owner_not_confirmed(
+    tmp_path: pathlib.Path,
+    mocker: pytest_mock.MockFixture,
+) -> None:
+    """Abort init_estate when the inferred owner is declined."""
+    config_path = tmp_path / "config.yaml"
+    mocker.patch.object(
+        estate,
+        "_probe_remote",
+        return_value=RemoteProbe(reachable=True, exists=True, empty=True, error=None),
+    )
+    mocker.patch.object(estate, "_bootstrap_template")
+
+    with pytest.raises(GitHubOwnerConfirmationAbortedError):
+        init_estate(
+            "core",
+            "git@github.com:example/platform-standards.git",
+            confirm=lambda _: False,
+            config_path=config_path,
+        )
 
 
 def test_init_estate_translates_authentication_errors(

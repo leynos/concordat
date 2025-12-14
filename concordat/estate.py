@@ -128,6 +128,17 @@ class EstateCreationAbortedError(EstateError):
         super().__init__("Estate creation aborted by user.")
 
 
+class GitHubOwnerConfirmationAbortedError(EstateError):
+    """Raised when the operator declines the inferred github_owner."""
+
+    def __init__(self) -> None:
+        """Initialise the error message."""
+        super().__init__(
+            "GitHub owner confirmation declined; re-run with --github-owner "
+            "to override."
+        )
+
+
 class RepositoryIdentityError(EstateError):
     """Raised when the owner/name pair cannot be derived for creation."""
 
@@ -391,9 +402,20 @@ def init_estate(
     if alias in records:
         raise DuplicateEstateAliasError(alias)
 
+    confirmer = confirm or _prompt_yes_no
     probe = _probe_remote(repo_url)
     slug = parse_github_slug(repo_url)
-    resolved_owner = _resolve_github_owner(slug, github_owner)
+    if github_owner is None:
+        inferred_owner = _owner_from_slug(slug)
+        if inferred_owner and not confirmer(
+            "Inferred github_owner "
+            f"{inferred_owner!r} from estate repo {slug!r}. "
+            "Use this? [y/N]: ",
+        ):
+            raise GitHubOwnerConfirmationAbortedError
+        resolved_owner = inferred_owner
+    else:
+        resolved_owner = _resolve_github_owner(slug, github_owner)
     needs_creation = not probe.exists
 
     client: github3.GitHub | None = None
@@ -417,9 +439,7 @@ def init_estate(
         if not slug:
             raise RepositorySlugUnknownError
         client = client or _build_client(github_token, client_factory)
-        if not confirm:
-            confirm = _prompt_yes_no
-        if not confirm(
+        if not confirmer(
             f"Create GitHub repository {slug}? [y/N]: ",
         ):
             raise EstateCreationAbortedError
