@@ -664,8 +664,8 @@ def _invoke_tofu_command_with_result(
     return normalized
 
 
-def _detect_missing_repo_imports(output: str) -> list[tuple[str, str]]:
-    """Return list of (resource address, import id) for repos that already exist.
+def _detect_missing_repo_imports(output: str) -> list[tuple[str, str, str]]:
+    """Return list of (resource address, slug, repo_name) for repos that exist.
 
     This is a best-effort heuristic based on common GitHub provider diagnostics.
     """
@@ -675,20 +675,21 @@ def _detect_missing_repo_imports(output: str) -> list[tuple[str, str]]:
     if _GITHUB_REPO_EXISTS_MARKER not in output.lower():
         return []
 
-    candidates: list[tuple[str, str]] = []
+    candidates: list[tuple[str, str, str]] = []
     for match in _GITHUB_REPO_ADDRESS_PATTERN.finditer(output):
         address = match.group("address").replace('\\"', '"')
         slug_match = _GITHUB_REPO_SLUG_FROM_ADDRESS_PATTERN.search(address)
         if not slug_match:
             continue
         slug = slug_match.group("slug")
-        if "/" not in slug:
+        owner, _, repo_name = slug.partition("/")
+        if not owner or not repo_name:
             continue
-        candidates.append((address, slug))
+        candidates.append((address, slug, repo_name))
 
     # De-duplicate while preserving order.
-    seen: set[tuple[str, str]] = set()
-    unique: list[tuple[str, str]] = []
+    seen: set[tuple[str, str, str]] = set()
+    unique: list[tuple[str, str, str]] = []
     for candidate in candidates:
         if candidate in seen:
             continue
@@ -697,8 +698,15 @@ def _detect_missing_repo_imports(output: str) -> list[tuple[str, str]]:
     return unique
 
 
-def _prompt_yes_no(message: str) -> bool:
-    response = input(message)
+def _prompt_yes_no(message: str, *, output: typ.IO[str] | None = None) -> bool:
+    """Prompt on a TTY and return True for yes-like responses."""
+    stream = output or sys.stderr
+    stream.write(message)
+    stream.flush()
+
+    response = sys.stdin.readline()
+    if not response:
+        return False
     return response.strip().lower() in {"y", "yes"}
 
 
@@ -805,7 +813,7 @@ def _run_estate_command(
                     combined_output = f"{result.stdout}\n{result.stderr}"
                     imports = _detect_missing_repo_imports(combined_output)
                     if imports:
-                        repos = ", ".join(import_id for _, import_id in imports)
+                        repos = ", ".join(slug for _, slug, _ in imports)
                         prompt = (
                             "One or more GitHub repositories already exist but are "
                             "missing from state.\n"
@@ -821,29 +829,44 @@ def _run_estate_command(
                                     "and import manually"
                                 ),
                             )
-                        elif _prompt_yes_no(prompt):
+                        elif _prompt_yes_no(prompt, output=io.stderr):
                             import_exit_code = 0
-                            for address, import_id in imports:
-                                _write_stream_output(
-                                    io.stderr,
-                                    (
+                            for address, slug, repo_name in imports:
+                                import_attempts = [repo_name, slug]
+                                imported = False
+                                for import_id in import_attempts:
+                                    _write_stream_output(
+                                        io.stderr,
                                         "running: tofu import "
-                                        f"{address} {import_id} (cwd={tofu_workdir})"
-                                    ),
-                                )
-                                import_result = _invoke_tofu_command_with_result(
-                                    tofu,
-                                    ["import", address, import_id],
-                                    io,
-                                )
-                                import_exit = int(import_result.returncode)
-                                if import_exit != 0:
-                                    import_exit_code = import_exit
+                                        f"{address} {import_id} "
+                                        f"(cwd={tofu_workdir})",
+                                    )
+                                    import_result = _invoke_tofu_command_with_result(
+                                        tofu,
+                                        ["import", address, import_id],
+                                        io,
+                                    )
+                                    import_exit = int(import_result.returncode)
+                                    if import_exit == 0:
+                                        _write_stream_output(
+                                            io.stderr,
+                                            f"completed: tofu import {import_id}",
+                                        )
+                                        imported = True
+                                        break
+
+                                    failed_detail = (
+                                        import_result.stderr.strip() or "import failed"
+                                    )
+                                    _write_stream_output(
+                                        io.stderr,
+                                        "failed: tofu import "
+                                        f"{import_id}: {failed_detail}",
+                                    )
+
+                                if not imported:
+                                    import_exit_code = 1
                                     break
-                                _write_stream_output(
-                                    io.stderr,
-                                    f"completed: tofu import {import_id}",
-                                )
 
                             if import_exit_code == 0:
                                 _write_stream_output(
