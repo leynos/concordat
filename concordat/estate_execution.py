@@ -34,6 +34,7 @@ if typ.TYPE_CHECKING:
 XDG_CACHE_HOME = "XDG_CACHE_HOME"
 CACHE_SEGMENT = ("concordat", "estates")
 TFVARS_FILENAME = "terraform.tfvars"
+TOFU_DIRNAME = "tofu"
 ERROR_ALIAS_REQUIRED = "Estate alias is required to cache the repository."
 ERROR_BARE_CACHE = "Cached estate {alias!r} is bare; remove {destination} and retry."
 ERROR_MISSING_ORIGIN = (
@@ -44,6 +45,10 @@ ERROR_MISSING_TOFU = "OpenTofu binary 'tofu' was not found in PATH."
 ERROR_BACKEND_CONFIG_MISSING = (
     "Remote backend config {path!r} was not found in the estate workspace."
 )
+_YAML_DIRECTIVE_PREFIX = "%YAML"
+_YAML_DOCUMENT_START = "---"
+_YAML_DOCUMENT_END = "..."
+_UTF8_BOM = "\ufeff"
 ERROR_BACKEND_ENV_MISSING = (
     "Remote state backend requires credentials in the environment: either "
     "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, SCW_ACCESS_KEY and "
@@ -289,6 +294,115 @@ def _validate_backend_path(workdir: Path, backend_config_path: str) -> Path:
     return relative_backend
 
 
+def _resolve_tofu_workdir(workspace_root: Path) -> Path:
+    """Return the directory containing the OpenTofu root module.
+
+    Estates are expected to carry OpenTofu configuration under `tofu/` (matching
+    the bundled `platform-standards` template). Some tests and legacy layouts
+    place configuration at the repository root, so we fall back to the root when
+    `tofu/` is absent or does not appear to contain OpenTofu files.
+    """
+    candidate = workspace_root / TOFU_DIRNAME
+    if not candidate.is_dir():
+        return workspace_root
+
+    has_config = any(candidate.glob("*.tofu")) or any(candidate.glob("*.tf"))
+    return candidate if has_config else workspace_root
+
+
+def _strip_yaml_directives_for_tofu(contents: str) -> tuple[str, bool]:
+    """Remove YAML directives and document markers unsupported by tofu yamldecode.
+
+    OpenTofu/Terraform `yamldecode()` uses a YAML parser that rejects some YAML
+    directives, in particular the `%YAML 1.2` header and explicit document
+    markers. Concordat historically wrote these into the inventory file, which
+    causes `plan`/`apply` to fail even though the YAML is valid in other tools.
+
+    This function performs a minimal, surgical rewrite that only strips markers
+    at the beginning/end of the file so we do not rewrite the entire document.
+    """
+    if not contents:
+        return contents, False
+
+    changed = False
+    text = contents
+    if text.startswith(_UTF8_BOM):
+        text = text.lstrip(_UTF8_BOM)
+        changed = True
+
+    lines = text.splitlines()
+    if not lines:
+        return text, changed
+
+    index = 0
+    while index < len(lines) and not lines[index].strip():
+        index += 1
+
+    while index < len(lines) and lines[index].lstrip().startswith(
+        _YAML_DIRECTIVE_PREFIX
+    ):
+        changed = True
+        index += 1
+        while index < len(lines) and not lines[index].strip():
+            index += 1
+
+    if index < len(lines) and lines[index].strip() == _YAML_DOCUMENT_START:
+        changed = True
+        index += 1
+
+    stripped_lines = lines[index:]
+
+    tail_index = len(stripped_lines) - 1
+    while tail_index >= 0 and not stripped_lines[tail_index].strip():
+        tail_index -= 1
+    if tail_index >= 0 and stripped_lines[tail_index].strip() == _YAML_DOCUMENT_END:
+        changed = True
+        stripped_lines = stripped_lines[:tail_index]
+
+    normalized = "\n".join(stripped_lines)
+    if normalized and not normalized.endswith("\n"):
+        normalized += "\n"
+
+    if normalized == contents:
+        return contents, False
+    return normalized, changed or normalized != contents
+
+
+def _sanitize_yaml_file_for_tofu(path: Path) -> bool:
+    """Strip tofu-incompatible YAML markers from the file at path."""
+    try:
+        contents = path.read_text(encoding="utf-8")
+    except OSError:
+        return False
+
+    sanitized, changed = _strip_yaml_directives_for_tofu(contents)
+    if not changed:
+        return False
+
+    path.write_text(sanitized, encoding="utf-8")
+    return True
+
+
+def _sanitize_inventory_for_tofu(
+    workspace_root: Path,
+    tofu_workdir: Path,
+    inventory_path: str,
+) -> bool:
+    """Sanitise the inventory YAML in-place for tofu consumption."""
+    candidates: list[Path] = [workspace_root / inventory_path]
+    if tofu_workdir.resolve() != workspace_root.resolve():
+        relative = Path(inventory_path)
+        if relative.parts and relative.parts[0] == TOFU_DIRNAME:
+            relative = Path(*relative.parts[1:])
+        candidates.append(tofu_workdir / relative)
+
+    changed = False
+    for candidate in candidates:
+        if candidate.is_file():
+            changed = _sanitize_yaml_file_for_tofu(candidate) or changed
+    return changed
+
+
 def _build_object_key(descriptor: PersistenceDescriptor) -> str:
     """Construct the full S3 object key from prefix and suffix."""
     prefix = descriptor.key_prefix.rstrip("/")
@@ -297,10 +411,12 @@ def _build_object_key(descriptor: PersistenceDescriptor) -> str:
 
 
 def _get_persistence_runtime(
-    workdir: Path, env: typ.Mapping[str, str]
+    workspace_root: Path,
+    tofu_workdir: Path,
+    env: typ.Mapping[str, str],
 ) -> PersistenceRuntime | None:
     """Load the persistence manifest and derive backend runtime details."""
-    manifest_path = workdir / persistence_models.MANIFEST_FILENAME
+    manifest_path = workspace_root / persistence_models.MANIFEST_FILENAME
     try:
         descriptor = persistence_models.PersistenceDescriptor.from_yaml(manifest_path)
     except persistence_models.PersistenceError as error:
@@ -309,13 +425,19 @@ def _get_persistence_runtime(
     if descriptor is None or not descriptor.enabled:
         return None
 
-    relative_backend = _validate_backend_path(workdir, descriptor.backend_config_path)
+    relative_backend = _validate_backend_path(
+        workspace_root,
+        descriptor.backend_config_path,
+    )
+    backend_path = (workspace_root / relative_backend).resolve()
+    tofu_root = tofu_workdir.resolve()
+    backend_config = os.path.relpath(backend_path, tofu_root)
     env_overrides = _resolve_backend_environment(env)
     object_key = _build_object_key(descriptor)
 
     return PersistenceRuntime(
         descriptor=descriptor,
-        backend_config=str(relative_backend),
+        backend_config=backend_config,
         object_key=object_key,
         env_overrides=env_overrides,
     )
@@ -342,23 +464,99 @@ def _normalize_plan_result(result: object) -> SimpleNamespace:
         return SimpleNamespace(stdout="", stderr="", returncode=1)
 
     plan_log, plan = result
-    stdout = getattr(plan_log, "stdout", "") if plan_log else ""
-    stderr = getattr(plan_log, "stderr", "") if plan_log else ""
-    errored = getattr(plan_log, "errored", False) or getattr(plan, "errored", False)
-    return SimpleNamespace(
-        stdout=stdout or "", stderr=stderr or "", returncode=1 if errored else 0
-    )
+    if plan_log is None:
+        return SimpleNamespace(stdout="", stderr="", returncode=1)
+
+    if hasattr(plan_log, "stdout") or hasattr(plan_log, "stderr"):
+        stdout = getattr(plan_log, "stdout", "") or ""
+        stderr = getattr(plan_log, "stderr", "") or ""
+        errored = bool(
+            getattr(plan_log, "errored", False) or getattr(plan, "errored", False)
+        )
+        return SimpleNamespace(
+            stdout=stdout, stderr=stderr, returncode=1 if errored else 0
+        )
+
+    stdout, stderr, errored = _summarize_tofu_log("plan", plan_log)
+    errored = bool(errored or getattr(plan, "errored", False))
+    return SimpleNamespace(stdout=stdout, stderr=stderr, returncode=1 if errored else 0)
 
 
 def _normalize_apply_result(result: object) -> SimpleNamespace:
     """Normalize tofupy.apply ApplyLog result."""
     apply_log = result
-    stdout = getattr(apply_log, "stdout", "") if apply_log else ""
-    stderr = getattr(apply_log, "stderr", "") if apply_log else ""
-    errored = getattr(apply_log, "errored", False)
-    return SimpleNamespace(
-        stdout=stdout or "", stderr=stderr or "", returncode=1 if errored else 0
+    if apply_log is None:
+        return SimpleNamespace(stdout="", stderr="", returncode=1)
+
+    if hasattr(apply_log, "stdout") or hasattr(apply_log, "stderr"):
+        stdout = getattr(apply_log, "stdout", "") or ""
+        stderr = getattr(apply_log, "stderr", "") or ""
+        errored = bool(getattr(apply_log, "errored", False))
+        return SimpleNamespace(
+            stdout=stdout, stderr=stderr, returncode=1 if errored else 0
+        )
+
+    stdout, stderr, errored = _summarize_tofu_log("apply", apply_log)
+    return SimpleNamespace(stdout=stdout, stderr=stderr, returncode=1 if errored else 0)
+
+
+def _summarize_tofu_log(
+    verb: str,
+    log: object,
+) -> tuple[str, str, bool]:
+    """Format a concise summary from tofupy PlanLog/ApplyLog structures.
+
+    `tofupy.plan()` and `tofupy.apply()` return dataclasses with structured fields
+    such as `added`, `changed`, and lists of diagnostics. Concordat previously
+    expected raw stdout/stderr fields (which do not exist on these dataclasses),
+    leading to confusingly silent output even when tofu ran successfully.
+    """
+    added = int(getattr(log, "added", 0) or 0)
+    changed = int(getattr(log, "changed", 0) or 0)
+    removed = int(getattr(log, "removed", 0) or 0)
+    imported = int(getattr(log, "imported", 0) or 0)
+    operation = str(getattr(log, "operation", verb) or verb)
+
+    has_changes = any([added, changed, removed, imported])
+    summary = (
+        f"{operation}: no changes."
+        if not has_changes
+        else (
+            f"{operation}: {added} to add, {changed} to change, "
+            f"{removed} to destroy, {imported} to import."
+        )
     )
+
+    errors = getattr(log, "errors", []) or []
+    warnings = getattr(log, "warnings", []) or []
+    diagnostics_text = _format_tofu_diagnostics(errors, warnings)
+    errored = bool(errors)
+
+    stdout = f"{summary}\n"
+    stderr = diagnostics_text
+    return stdout, stderr, errored
+
+
+def _format_tofu_diagnostics(errors: list[object], warnings: list[object]) -> str:
+    """Format structured tofu diagnostics for terminal display."""
+
+    def render(diagnostic: object) -> list[str]:
+        severity = str(getattr(diagnostic, "severity", "error") or "error").lower()
+        summary = str(getattr(diagnostic, "summary", "") or "").strip()
+        detail = str(getattr(diagnostic, "detail", "") or "").strip()
+        header = f"{severity}: {summary}" if summary else f"{severity}"
+        lines = [header]
+        if detail:
+            lines.append(detail)
+        return lines
+
+    lines: list[str] = []
+    for diagnostic in errors:
+        lines.extend(render(diagnostic))
+    for diagnostic in warnings:
+        lines.extend(render(diagnostic))
+
+    return "\n".join(lines) + ("\n" if lines else "")
 
 
 def _normalize_tofu_result(verb: str, result: object) -> SimpleNamespace:
@@ -430,10 +628,15 @@ def _prepare_execution_environment(options: ExecutionOptions) -> dict[str, str]:
 
 
 def _prepare_backend_configuration(
-    workdir: Path, env_source: dict[str, str], io: ExecutionIO
+    workspace_root: Path,
+    tofu_workdir: Path,
+    env_source: dict[str, str],
+    io: ExecutionIO,
 ) -> tuple[list[str], dict[str, str]]:
     """Derive backend args and environment overrides for tofu."""
-    persistence_runtime = _get_persistence_runtime(workdir, env_source)
+    persistence_runtime = _get_persistence_runtime(
+        workspace_root, tofu_workdir, env_source
+    )
     backend_args: list[str] = []
     if persistence_runtime is not None:
         backend_args.append(f"-backend-config={persistence_runtime.backend_config}")
@@ -472,21 +675,45 @@ def _run_estate_command(
     ) as workdir:
         io.stderr.write(f"execution workspace: {workdir}\n")
         io.stderr.flush()
-        tfvars = workdir / TFVARS_FILENAME
+
+        tofu_workdir = _resolve_tofu_workdir(workdir)
+        sanitized_inventory = _sanitize_inventory_for_tofu(
+            workdir,
+            tofu_workdir,
+            record.inventory_path,
+        )
+        if sanitized_inventory:
+            _write_stream_output(
+                io.stderr,
+                "inventory sanitized for tofu (removed YAML directives)",
+            )
+        tfvars = tofu_workdir / TFVARS_FILENAME
         tfvars.write_text(
             f'github_owner = "{options.github_owner}"\n',
             encoding="utf-8",
         )
 
-        backend_args, env = _prepare_backend_configuration(workdir, env_source, io)
+        backend_args, env = _prepare_backend_configuration(
+            workdir,
+            tofu_workdir,
+            env_source,
+            io,
+        )
         env["GITHUB_TOKEN"] = options.github_token
-        tofu = _initialize_tofu(workdir, env)
+        tofu = _initialize_tofu(tofu_workdir, env)
 
         init_args = ["init", "-input=false", *backend_args]
 
         for args in [init_args, command]:
+            _write_stream_output(
+                io.stderr,
+                f"running: tofu {' '.join(args)} (cwd={tofu_workdir})",
+            )
             exit_code = _invoke_tofu_command(tofu, list(args), io)
+            if exit_code == 0:
+                _write_stream_output(io.stderr, f"completed: tofu {args[0]}")
             if exit_code != 0:
+                _write_stream_output(io.stderr, f"failed: tofu {args[0]}")
                 break
         return exit_code, workdir
 

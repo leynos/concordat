@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import dataclasses
 import io
+import shutil
 import typing as typ
+from pathlib import Path
 
 import pytest
 
@@ -120,6 +122,175 @@ def test_run_plan_uses_persistence_backend_when_enabled(
     assert "SCW_SECRET_KEY" not in stderr_output
     assert "SCW_ACCESS_KEY" not in stderr_output
     assert "scw-access" not in stderr_output
+
+
+def test_run_plan_executes_from_tofu_directory_when_present(
+    monkeypatch: pytest.MonkeyPatch,
+    git_repo: GitRepo,
+    fake_tofu: list[typ.Any],
+) -> None:
+    """When a `tofu/` root module exists, run_plan executes from that directory."""
+    seed_persistence_files(git_repo.path)
+    tofu_root = git_repo.path / "tofu"
+    tofu_root.mkdir()
+    (tofu_root / "main.tofu").write_text("terraform {}\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        "concordat.estate_execution.ensure_estate_cache",
+        lambda *_, **__: git_repo.path,
+    )
+    monkeypatch.setenv("SCW_ACCESS_KEY", "scw-access")
+    monkeypatch.setenv("SCW_SECRET_KEY", "scw-secret")
+    monkeypatch.delenv("AWS_ACCESS_KEY_ID", raising=False)
+    monkeypatch.delenv("AWS_SECRET_ACCESS_KEY", raising=False)
+
+    options = ExecutionOptions(
+        github_owner="example",
+        github_token="token",  # noqa: S106
+    )
+    io_streams = ExecutionIO(stdout=io.StringIO(), stderr=io.StringIO())
+
+    exit_code, _ = run_plan(_make_record(git_repo.path), options, io_streams)
+
+    assert exit_code == 0
+    tofu = fake_tofu[-1]
+    assert Path(tofu.cwd).name == "tofu"
+    assert [
+        "init",
+        "-input=false",
+        "-backend-config=../backend/core.tfbackend",
+    ] in tofu.calls
+
+
+def test_run_plan_sanitizes_inventory_yaml_directives_for_tofu(
+    monkeypatch: pytest.MonkeyPatch,
+    git_repo: GitRepo,
+    fake_tofu: list[typ.Any],
+) -> None:
+    """Inventory YAML with directives is rewritten so tofu yamldecode can parse it."""
+    tofu_root = git_repo.path / "tofu"
+    tofu_root.mkdir()
+    (tofu_root / "main.tofu").write_text("terraform {}\n", encoding="utf-8")
+
+    inventory_path = tofu_root / "inventory" / "repositories.yaml"
+    inventory_path.parent.mkdir(parents=True, exist_ok=True)
+    inventory_path.write_text(
+        "\n".join(
+            [
+                "%YAML 1.2",
+                "---",
+                "schema_version: 1",
+                "repositories: []",
+                "...",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        "concordat.estate_execution.ensure_estate_cache",
+        lambda *_, **__: git_repo.path,
+    )
+
+    options = ExecutionOptions(
+        github_owner="example",
+        github_token="token",  # noqa: S106
+        keep_workdir=True,
+    )
+    io_streams = ExecutionIO(stdout=io.StringIO(), stderr=io.StringIO())
+
+    exit_code, workdir = run_plan(_make_record(git_repo.path), options, io_streams)
+
+    try:
+        assert exit_code == 0
+        sanitized = (workdir / "tofu" / "inventory" / "repositories.yaml").read_text(
+            encoding="utf-8"
+        )
+        stripped = sanitized.lstrip()
+        assert not stripped.startswith("%YAML")
+        assert not stripped.startswith("---")
+        assert not stripped.rstrip().endswith("...")
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+
+
+def test_run_plan_renders_a_plan_summary_when_tofupy_returns_structured_logs(
+    monkeypatch: pytest.MonkeyPatch,
+    git_repo: GitRepo,
+) -> None:
+    """Ensure real tofupy PlanLog output is surfaced to the user."""
+    tofu_root = git_repo.path / "tofu"
+    tofu_root.mkdir()
+    (tofu_root / "main.tofu").write_text("terraform {}\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        "concordat.estate_execution.ensure_estate_cache",
+        lambda *_, **__: git_repo.path,
+    )
+
+    created: list[typ.Any] = []
+
+    @dataclasses.dataclass(frozen=True, slots=True)
+    class _StructuredPlanLog:
+        data: list[dict[str, typ.Any]]
+        terraform_version: str
+        outputs: dict[str, typ.Any]
+        added: int
+        changed: int
+        removed: int
+        imported: int
+        operation: str
+        errors: list[typ.Any]
+        warnings: list[typ.Any]
+
+    class _SchemaTofu:
+        def __init__(self, cwd: str, env: dict[str, str]) -> None:
+            self.cwd = cwd
+            self.env = env
+            self.calls: list[list[str]] = []
+            created.append(self)
+
+        def init(self, *, extra_args: list[str] | None = None, **_: object) -> bool:
+            self.calls.append(["init", *list(extra_args or [])])
+            return True
+
+        def plan(
+            self,
+            *,
+            extra_args: list[str] | None = None,
+            **_: object,
+        ) -> tuple[object, object | None]:
+            self.calls.append(["plan", *list(extra_args or [])])
+            return (
+                _StructuredPlanLog(
+                    data=[],
+                    terraform_version="",
+                    outputs={},
+                    added=0,
+                    changed=0,
+                    removed=0,
+                    imported=0,
+                    operation="plan",
+                    errors=[],
+                    warnings=[],
+                ),
+                None,
+            )
+
+    monkeypatch.setattr("concordat.estate_execution.Tofu", _SchemaTofu)
+
+    stdout_buffer = io.StringIO()
+    io_streams = ExecutionIO(stdout=stdout_buffer, stderr=io.StringIO())
+    options = ExecutionOptions(
+        github_owner="example",
+        github_token="token",  # noqa: S106
+    )
+
+    exit_code, _ = run_plan(_make_record(git_repo.path), options, io_streams)
+
+    assert exit_code == 0
+    assert "plan: no changes." in stdout_buffer.getvalue()
 
 
 @pytest.mark.parametrize(

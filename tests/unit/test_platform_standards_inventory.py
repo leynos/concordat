@@ -19,6 +19,10 @@ def test_update_inventory_adds_entry(tmp_path: Path) -> None:
     assert added is True
     contents = inventory.read_text(encoding="utf-8")
     assert "example/repo" in contents
+    assert "%YAML" not in contents
+    assert "\n---" not in contents
+    assert contents.startswith("schema_version: 1\n")
+    assert "\nrepositories:\n" in contents
 
 
 def test_update_inventory_idempotent(tmp_path: Path) -> None:

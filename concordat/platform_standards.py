@@ -17,8 +17,11 @@ from .errors import ConcordatError
 from .gitutils import build_remote_callbacks
 
 _yaml = YAML(typ="safe")
-_yaml.version = (1, 2)
 _yaml.default_flow_style = False
+_yaml.explicit_start = False
+_yaml.explicit_end = False
+_yaml.indent(mapping=2, sequence=4, offset=2)
+_yaml.sort_base_mapping_type_on_output = False
 
 ERROR_MISSING_TOKEN = (
     "GITHUB_TOKEN is required to open the platform-standards pull request"  # noqa: S105
@@ -155,8 +158,17 @@ def _update_inventory(path: Path, repo_slug: str) -> bool:
         return False
     repos.append({"name": repo_slug})
     repos.sort(key=lambda entry: str(entry.get("name", "")))
+
+    schema_version = int(data.get("schema_version", 1) or 1)
+    canonical: dict[str, typ.Any] = {
+        "schema_version": schema_version,
+        "repositories": repos,
+    }
+    for key, value in data.items():
+        if key not in canonical:
+            canonical[key] = value
     with path.open("w", encoding="utf-8") as handle:
-        _yaml.dump(data, handle)
+        _yaml.dump(canonical, handle)
     return True
 
 
