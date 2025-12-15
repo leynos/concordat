@@ -27,6 +27,24 @@ from concordat.persistence import S3Client
         (
             "df12",
             "fr-par",
+            "//s3.fr-par.scw.cloud",
+            "",
+        ),
+        (
+            "df12",
+            "fr-par",
+            "  s3.fr-par.scw.cloud  ",
+            "",
+        ),
+        (
+            "df12",
+            "fr-par",
+            "  https://s3.fr-par.scw.cloud  ",
+            "",
+        ),
+        (
+            "df12",
+            "fr-par",
             "http://endpoint",
             "Endpoint must use HTTPS",
         ),
