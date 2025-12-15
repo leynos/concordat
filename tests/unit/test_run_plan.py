@@ -7,6 +7,7 @@ import io
 import shutil
 import typing as typ
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -215,11 +216,11 @@ def test_run_plan_sanitizes_inventory_yaml_directives_for_tofu(
         shutil.rmtree(workdir, ignore_errors=True)
 
 
-def test_run_plan_renders_a_plan_summary_when_tofupy_returns_structured_logs(
+def test_run_plan_surfaces_the_cli_plan_diff_output(
     monkeypatch: pytest.MonkeyPatch,
     git_repo: GitRepo,
 ) -> None:
-    """Ensure real tofupy PlanLog output is surfaced to the user."""
+    """Ensure the CLI-style plan diff is surfaced to the user."""
     tofu_root = git_repo.path / "tofu"
     tofu_root.mkdir()
     (tofu_root / "main.tofu").write_text("terraform {}\n", encoding="utf-8")
@@ -231,19 +232,6 @@ def test_run_plan_renders_a_plan_summary_when_tofupy_returns_structured_logs(
 
     created: list[typ.Any] = []
 
-    @dataclasses.dataclass(frozen=True, slots=True)
-    class _StructuredPlanLog:
-        data: list[dict[str, typ.Any]]
-        terraform_version: str
-        outputs: dict[str, typ.Any]
-        added: int
-        changed: int
-        removed: int
-        imported: int
-        operation: str
-        errors: list[typ.Any]
-        warnings: list[typ.Any]
-
     class _SchemaTofu:
         def __init__(self, cwd: str, env: dict[str, str]) -> None:
             self.cwd = cwd
@@ -251,32 +239,21 @@ def test_run_plan_renders_a_plan_summary_when_tofupy_returns_structured_logs(
             self.calls: list[list[str]] = []
             created.append(self)
 
-        def init(self, *, extra_args: list[str] | None = None, **_: object) -> bool:
-            self.calls.append(["init", *list(extra_args or [])])
-            return True
-
-        def plan(
-            self,
-            *,
-            extra_args: list[str] | None = None,
-            **_: object,
-        ) -> tuple[object, object | None]:
-            self.calls.append(["plan", *list(extra_args or [])])
-            return (
-                _StructuredPlanLog(
-                    data=[],
-                    terraform_version="",
-                    outputs={},
-                    added=0,
-                    changed=0,
-                    removed=0,
-                    imported=0,
-                    operation="plan",
-                    errors=[],
-                    warnings=[],
-                ),
-                None,
-            )
+        def _run(self, args: list[str], *, raise_on_error: bool = False) -> object:
+            self.calls.append(list(args))
+            if args and args[0] == "plan":
+                return SimpleNamespace(
+                    stdout=(
+                        "Terraform used the selected providers to generate the "
+                        "following execution plan.\n\n"
+                        "  # github_repository.example will be created\n"
+                        '  + resource "github_repository" "example" {}\n\n'
+                        "Plan: 1 to add, 0 to change, 0 to destroy.\n"
+                    ),
+                    stderr="",
+                    returncode=0,
+                )
+            return SimpleNamespace(stdout="", stderr="", returncode=0)
 
     monkeypatch.setattr("concordat.estate_execution.Tofu", _SchemaTofu)
 
@@ -290,7 +267,7 @@ def test_run_plan_renders_a_plan_summary_when_tofupy_returns_structured_logs(
     exit_code, _ = run_plan(_make_record(git_repo.path), options, io_streams)
 
     assert exit_code == 0
-    assert "plan: no changes." in stdout_buffer.getvalue()
+    assert "github_repository.example will be created" in stdout_buffer.getvalue()
 
 
 @pytest.mark.parametrize(

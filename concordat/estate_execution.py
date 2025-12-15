@@ -602,6 +602,14 @@ def _invoke_tofu_command(tofu: Tofu, args: list[str], io: ExecutionIO) -> int:
         normalized = _normalize_tofu_result(verb, results)
         return _stream_tofu_output(io, normalized)
 
+    if verb == "plan":
+        # Prefer the CLI output for human readability. `tofupy.plan()` returns a
+        # structured log/plan tuple, which is useful for automation but does not
+        # include the traditional plan diff output operators expect.
+        results = tofu._run(args, raise_on_error=False)
+        normalized = _normalize_tofu_result(verb, results)
+        return _stream_tofu_output(io, normalized)
+
     method = getattr(tofu, verb, None)
 
     if callable(method):
