@@ -6,7 +6,9 @@ import contextlib
 import dataclasses
 import logging
 import os
+import re
 import shutil
+import sys
 import typing as typ
 from pathlib import Path
 from tempfile import mkdtemp
@@ -67,6 +69,18 @@ SPACES_BACKEND_ENV = (
 AWS_SESSION_TOKEN_VAR = "AWS_SESSION_TOKEN"  # noqa: S105
 ALL_BACKEND_ENV_VARS = (
     AWS_BACKEND_ENV + SCW_BACKEND_ENV + SPACES_BACKEND_ENV + (AWS_SESSION_TOKEN_VAR,)
+)
+
+_GITHUB_REPO_EXISTS_MARKER = "name already exists on this account"
+_GITHUB_REPO_ADDRESS_PATTERN = re.compile(
+    (
+        r'vertex\s+"(?P<address>(?:\\\"|[^"])*)"\s+error:'
+        r".*name already exists on this account"
+    ),
+    re.IGNORECASE,
+)
+_GITHUB_REPO_SLUG_FROM_ADDRESS_PATTERN = re.compile(
+    r'module\.repository\["(?P<slug>[^"]+)"\]\.github_repository\.this'
 )
 
 
@@ -602,7 +616,7 @@ def _invoke_tofu_command(tofu: Tofu, args: list[str], io: ExecutionIO) -> int:
         normalized = _normalize_tofu_result(verb, results)
         return _stream_tofu_output(io, normalized)
 
-    if verb == "plan":
+    if verb in {"plan", "apply", "import"}:
         # Prefer the CLI output for human readability. `tofupy.plan()` returns a
         # structured log/plan tuple, which is useful for automation but does not
         # include the traditional plan diff output operators expect.
@@ -624,6 +638,73 @@ def _invoke_tofu_command(tofu: Tofu, args: list[str], io: ExecutionIO) -> int:
 
     normalized = _normalize_tofu_result(verb, results)
     return _stream_tofu_output(io, normalized)
+
+
+def _invoke_tofu_command_with_result(
+    tofu: Tofu,
+    args: list[str],
+    io: ExecutionIO,
+) -> SimpleNamespace:
+    """Run tofu and return normalized output, while still streaming it."""
+    verb = args[0] if args else ""
+    if os.environ.get("FAKE_TOFU_LOG") or verb in {"plan", "apply", "import"}:
+        results = tofu._run(args, raise_on_error=False)
+    else:
+        method = getattr(tofu, verb, None)
+        if callable(method):
+            try:
+                results = method(extra_args=args[1:])
+            except TypeError:
+                results = method()
+        else:
+            results = tofu._run(args, raise_on_error=False)
+
+    normalized = _normalize_tofu_result(verb, results)
+    _stream_tofu_output(io, normalized)
+    return normalized
+
+
+def _detect_missing_repo_imports(output: str) -> list[tuple[str, str]]:
+    """Return list of (resource address, import id) for repos that already exist.
+
+    This is a best-effort heuristic based on common GitHub provider diagnostics.
+    """
+    if not output:
+        return []
+
+    if _GITHUB_REPO_EXISTS_MARKER not in output.lower():
+        return []
+
+    candidates: list[tuple[str, str]] = []
+    for match in _GITHUB_REPO_ADDRESS_PATTERN.finditer(output):
+        address = match.group("address").replace('\\"', '"')
+        slug_match = _GITHUB_REPO_SLUG_FROM_ADDRESS_PATTERN.search(address)
+        if not slug_match:
+            continue
+        slug = slug_match.group("slug")
+        if "/" not in slug:
+            continue
+        candidates.append((address, slug))
+
+    # De-duplicate while preserving order.
+    seen: set[tuple[str, str]] = set()
+    unique: list[tuple[str, str]] = []
+    for candidate in candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        unique.append(candidate)
+    return unique
+
+
+def _prompt_yes_no(message: str) -> bool:
+    response = input(message)
+    return response.strip().lower() in {"y", "yes"}
+
+
+def _can_prompt() -> bool:
+    stream = sys.stdin
+    return bool(stream and stream.isatty())
 
 
 def _prepare_execution_environment(options: ExecutionOptions) -> dict[str, str]:
@@ -717,7 +798,68 @@ def _run_estate_command(
                 io.stderr,
                 f"running: tofu {' '.join(args)} (cwd={tofu_workdir})",
             )
-            exit_code = _invoke_tofu_command(tofu, list(args), io)
+            if args[0] == "apply":
+                result = _invoke_tofu_command_with_result(tofu, list(args), io)
+                exit_code = int(result.returncode)
+                if exit_code != 0:
+                    combined_output = f"{result.stdout}\n{result.stderr}"
+                    imports = _detect_missing_repo_imports(combined_output)
+                    if imports:
+                        repos = ", ".join(import_id for _, import_id in imports)
+                        prompt = (
+                            "One or more GitHub repositories already exist but are "
+                            "missing from state.\n"
+                            f"Import into state and retry apply? ({repos}) [y/N]: "
+                        )
+                        if not _can_prompt():
+                            _write_stream_output(
+                                io.stderr,
+                                (
+                                    "cannot prompt for auto-import in non-interactive "
+                                    "mode; "
+                                    "re-run with --keep-workdir "
+                                    "and import manually"
+                                ),
+                            )
+                        elif _prompt_yes_no(prompt):
+                            import_exit_code = 0
+                            for address, import_id in imports:
+                                _write_stream_output(
+                                    io.stderr,
+                                    (
+                                        "running: tofu import "
+                                        f"{address} {import_id} (cwd={tofu_workdir})"
+                                    ),
+                                )
+                                import_result = _invoke_tofu_command_with_result(
+                                    tofu,
+                                    ["import", address, import_id],
+                                    io,
+                                )
+                                import_exit = int(import_result.returncode)
+                                if import_exit != 0:
+                                    import_exit_code = import_exit
+                                    break
+                                _write_stream_output(
+                                    io.stderr,
+                                    f"completed: tofu import {import_id}",
+                                )
+
+                            if import_exit_code == 0:
+                                _write_stream_output(
+                                    io.stderr,
+                                    f"retrying: tofu apply (cwd={tofu_workdir})",
+                                )
+                                retry_result = _invoke_tofu_command_with_result(
+                                    tofu,
+                                    list(args),
+                                    io,
+                                )
+                                exit_code = int(retry_result.returncode)
+                            else:
+                                exit_code = import_exit_code
+            else:
+                exit_code = _invoke_tofu_command(tofu, list(args), io)
             if exit_code == 0:
                 _write_stream_output(io.stderr, f"completed: tofu {args[0]}")
             if exit_code != 0:
