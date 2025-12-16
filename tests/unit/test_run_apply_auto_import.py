@@ -29,7 +29,7 @@ def test_run_apply_offers_to_import_existing_github_repositories(
         lambda *_, **__: git_repo.path,
     )
     monkeypatch.setattr("concordat.estate_execution._can_prompt", lambda: True)
-    monkeypatch.setattr("concordat.estate_execution.sys.stdin", io.StringIO("y\n"))
+    monkeypatch.setattr("concordat.user_interaction.sys.stdin", io.StringIO("y\n"))
 
     calls: list[list[str]] = []
 
@@ -61,6 +61,7 @@ def test_run_apply_offers_to_import_existing_github_repositories(
             return SimpleNamespace(stdout="", stderr="", returncode=0)
 
     monkeypatch.setattr("concordat.estate_execution.Tofu", _TofuWithImport)
+    monkeypatch.setattr("concordat.tofu_runner.Tofu", _TofuWithImport)
 
     io_streams = ExecutionIO(stdout=io.StringIO(), stderr=io.StringIO())
     options = ExecutionOptions(
@@ -93,7 +94,7 @@ def test_run_apply_imports_existing_repo_with_fallback_id(
         lambda *_, **__: git_repo.path,
     )
     monkeypatch.setattr("concordat.estate_execution._can_prompt", lambda: True)
-    monkeypatch.setattr("concordat.estate_execution.sys.stdin", io.StringIO("y\n"))
+    monkeypatch.setattr("concordat.user_interaction.sys.stdin", io.StringIO("y\n"))
 
     calls: list[list[str]] = []
 
@@ -136,6 +137,7 @@ def test_run_apply_imports_existing_repo_with_fallback_id(
             return SimpleNamespace(stdout="", stderr="", returncode=0)
 
     monkeypatch.setattr("concordat.estate_execution.Tofu", _TofuWithImportFallback)
+    monkeypatch.setattr("concordat.tofu_runner.Tofu", _TofuWithImportFallback)
 
     io_streams = ExecutionIO(stdout=io.StringIO(), stderr=io.StringIO())
     options = ExecutionOptions(

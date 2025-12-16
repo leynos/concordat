@@ -256,6 +256,7 @@ def test_run_plan_surfaces_the_cli_plan_diff_output(
             return SimpleNamespace(stdout="", stderr="", returncode=0)
 
     monkeypatch.setattr("concordat.estate_execution.Tofu", _SchemaTofu)
+    monkeypatch.setattr("concordat.tofu_runner.Tofu", _SchemaTofu)
 
     stdout_buffer = io.StringIO()
     io_streams = ExecutionIO(stdout=stdout_buffer, stderr=io.StringIO())

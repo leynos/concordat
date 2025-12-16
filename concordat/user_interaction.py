@@ -10,7 +10,7 @@ import sys
 import typing as typ
 
 
-def prompt_yes_no(message: str, *, output: typ.IO[str] | None = None) -> bool:
+def prompt_yes_no(message: str, output: typ.IO[str] | None = None) -> bool:
     """Prompt on a TTY and return True for yes-like responses.
 
     Writes the prompt message to the output stream and reads a response from

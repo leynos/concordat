@@ -29,7 +29,7 @@ def test_run_apply_offers_to_forget_resources_on_prevent_destroy(
         lambda *_, **__: git_repo.path,
     )
     monkeypatch.setattr("concordat.estate_execution._can_prompt", lambda: True)
-    monkeypatch.setattr("concordat.estate_execution.sys.stdin", io.StringIO("y\n"))
+    monkeypatch.setattr("concordat.user_interaction.sys.stdin", io.StringIO("y\n"))
 
     calls: list[list[str]] = []
 
@@ -71,6 +71,7 @@ def test_run_apply_offers_to_forget_resources_on_prevent_destroy(
             return SimpleNamespace(stdout="", stderr="", returncode=0)
 
     monkeypatch.setattr("concordat.estate_execution.Tofu", _TofuWithStateRm)
+    monkeypatch.setattr("concordat.tofu_runner.Tofu", _TofuWithStateRm)
 
     io_streams = ExecutionIO(stdout=io.StringIO(), stderr=io.StringIO())
     options = ExecutionOptions(
