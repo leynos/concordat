@@ -131,6 +131,50 @@ def _render_platform_pr_result(result: PlatformStandardsResult) -> str:
     return f"platform PR skipped: {result.message}"
 
 
+def _build_status_parts(
+    base_message: str,
+    *,
+    committed: bool = False,
+    pushed: bool = False,
+    platform_pr: PlatformStandardsResult | None = None,
+) -> list[str]:
+    """Build list of status message parts from base message and optional flags.
+
+    Args:
+        base_message: The initial status message fragment.
+        committed: Whether to append "committed" to the parts.
+        pushed: Whether to append "pushed" to the parts.
+        platform_pr: Optional platform PR result to append.
+
+    Returns:
+        List of status message fragments ready for joining.
+
+    """
+    parts = [base_message]
+    if committed:
+        parts.append("committed")
+    if pushed:
+        parts.append("pushed")
+    if platform_pr:
+        parts.append(_render_platform_pr_result(platform_pr))
+    return parts
+
+
+def _format_outcome(repository: str, status_parts: list[str]) -> str:
+    """Format repository and status parts into a final outcome message.
+
+    Args:
+        repository: The repository specification.
+        status_parts: List of status message fragments.
+
+    Returns:
+        Formatted message: "{repository}: {joined parts}"
+
+    """
+    status = ", ".join(status_parts)
+    return f"{repository}: {status}"
+
+
 @dataclasses.dataclass(frozen=True)
 class EnrollmentOutcome:
     """Captured outcome for a processed repository."""
@@ -144,21 +188,14 @@ class EnrollmentOutcome:
 
     def render(self) -> str:
         """Return a concise human readable summary."""
-        if not self.created:
-            status_parts = ["already enrolled"]
-            if self.platform_pr:
-                status_parts.append(_render_platform_pr_result(self.platform_pr))
-            status = ", ".join(status_parts)
-            return f"{self.repository}: {status}"
-        status_parts = ["created .concordat"]
-        if self.committed:
-            status_parts.append("committed")
-        if self.pushed:
-            status_parts.append("pushed")
-        if self.platform_pr:
-            status_parts.append(_render_platform_pr_result(self.platform_pr))
-        status = ", ".join(status_parts)
-        return f"{self.repository}: {status}"
+        base_message = "already enrolled" if not self.created else "created .concordat"
+        status_parts = _build_status_parts(
+            base_message,
+            committed=self.committed if self.created else False,
+            pushed=self.pushed if self.created else False,
+            platform_pr=self.platform_pr,
+        )
+        return _format_outcome(self.repository, status_parts)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -176,27 +213,26 @@ class DisenrollmentOutcome:
     def render(self) -> str:
         """Return a concise human readable summary."""
         if self.missing_document:
-            status_parts = ["missing .concordat"]
-            if self.platform_pr:
-                status_parts.append(_render_platform_pr_result(self.platform_pr))
-            status = ", ".join(status_parts)
-            return f"{self.repository}: {status}"
-
-        if not self.updated:
-            status_parts = ["already disenrolled"]
-            if self.platform_pr:
-                status_parts.append(_render_platform_pr_result(self.platform_pr))
-            status = ", ".join(status_parts)
-            return f"{self.repository}: {status}"
-        status_parts = ["updated .concordat"]
-        if self.committed:
-            status_parts.append("committed")
-        if self.pushed:
-            status_parts.append("pushed")
-        if self.platform_pr:
-            status_parts.append(_render_platform_pr_result(self.platform_pr))
-        status = ", ".join(status_parts)
-        return f"{self.repository}: {status}"
+            base_message = "missing .concordat"
+            status_parts = _build_status_parts(
+                base_message,
+                platform_pr=self.platform_pr,
+            )
+        elif not self.updated:
+            base_message = "already disenrolled"
+            status_parts = _build_status_parts(
+                base_message,
+                platform_pr=self.platform_pr,
+            )
+        else:
+            base_message = "updated .concordat"
+            status_parts = _build_status_parts(
+                base_message,
+                committed=self.committed,
+                pushed=self.pushed,
+                platform_pr=self.platform_pr,
+            )
+        return _format_outcome(self.repository, status_parts)
 
 
 _yaml = YAML(typ="safe")

@@ -106,6 +106,37 @@ def sanitize_yaml_file_for_tofu(path: Path) -> bool:
     return True
 
 
+def _build_inventory_candidates(
+    workspace_root: Path,
+    tofu_workdir: Path,
+    inventory_path: str,
+) -> list[Path]:
+    """Build list of candidate inventory file paths to sanitize.
+
+    Returns paths in both workspace root and tofu working directory,
+    adjusting the inventory path if it starts with the tofu dirname.
+    """
+    candidates: list[Path] = [workspace_root / inventory_path]
+    if tofu_workdir.resolve() != workspace_root.resolve():
+        relative = Path(inventory_path)
+        if relative.parts and relative.parts[0] == TOFU_DIRNAME:
+            relative = Path(*relative.parts[1:])
+        candidates.append(tofu_workdir / relative)
+    return candidates
+
+
+def _sanitize_candidates(candidates: list[Path]) -> bool:
+    """Sanitize all existing inventory files in the candidates list.
+
+    Returns True if any file was modified, False otherwise.
+    """
+    changed = False
+    for candidate in candidates:
+        if candidate.is_file():
+            changed = sanitize_yaml_file_for_tofu(candidate) or changed
+    return changed
+
+
 def sanitize_inventory_for_tofu(
     workspace_root: Path,
     tofu_workdir: Path,
@@ -125,15 +156,7 @@ def sanitize_inventory_for_tofu(
         True if any inventory file was modified, False otherwise.
 
     """
-    candidates: list[Path] = [workspace_root / inventory_path]
-    if tofu_workdir.resolve() != workspace_root.resolve():
-        relative = Path(inventory_path)
-        if relative.parts and relative.parts[0] == TOFU_DIRNAME:
-            relative = Path(*relative.parts[1:])
-        candidates.append(tofu_workdir / relative)
-
-    changed = False
-    for candidate in candidates:
-        if candidate.is_file():
-            changed = sanitize_yaml_file_for_tofu(candidate) or changed
-    return changed
+    candidates = _build_inventory_candidates(
+        workspace_root, tofu_workdir, inventory_path
+    )
+    return _sanitize_candidates(candidates)

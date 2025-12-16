@@ -31,6 +31,48 @@ _GITHUB_REPO_SLUG_FROM_ADDRESS_PATTERN = re.compile(
 )
 
 
+def _parse_repo_import_candidate(match: re.Match[str]) -> tuple[str, str, str] | None:
+    """Parse a regex match into (address, slug, repo_name) or None if invalid.
+
+    Args:
+        match: A regex match object from _GITHUB_REPO_ADDRESS_PATTERN.
+
+    Returns:
+        Tuple of (address, slug, repo_name) if valid, None otherwise.
+
+    """
+    address = match.group("address").replace('\\"', '"')
+    slug_match = _GITHUB_REPO_SLUG_FROM_ADDRESS_PATTERN.search(address)
+    if not slug_match:
+        return None
+    slug = slug_match.group("slug")
+    owner, _, repo_name = slug.partition("/")
+    if not owner or not repo_name:
+        return None
+    return (address, slug, repo_name)
+
+
+def _deduplicate_preserving_order(
+    items: list[tuple[str, str, str]],
+) -> list[tuple[str, str, str]]:
+    """Remove duplicate tuples while preserving order.
+
+    Args:
+        items: List of tuples that may contain duplicates.
+
+    Returns:
+        List with duplicates removed, preserving first occurrence order.
+
+    """
+    seen: set[tuple[str, str, str]] = set()
+    unique: list[tuple[str, str, str]] = []
+    for item in items:
+        if item not in seen:
+            seen.add(item)
+            unique.append(item)
+    return unique
+
+
 def detect_missing_repo_imports(output: str) -> list[tuple[str, str, str]]:
     """Return list of (resource address, slug, repo_name) for repos that exist.
 
@@ -52,27 +94,13 @@ def detect_missing_repo_imports(output: str) -> list[tuple[str, str, str]]:
     if _GITHUB_REPO_EXISTS_MARKER not in output.lower():
         return []
 
-    candidates: list[tuple[str, str, str]] = []
-    for match in _GITHUB_REPO_ADDRESS_PATTERN.finditer(output):
-        address = match.group("address").replace('\\"', '"')
-        slug_match = _GITHUB_REPO_SLUG_FROM_ADDRESS_PATTERN.search(address)
-        if not slug_match:
-            continue
-        slug = slug_match.group("slug")
-        owner, _, repo_name = slug.partition("/")
-        if not owner or not repo_name:
-            continue
-        candidates.append((address, slug, repo_name))
+    candidates = [
+        candidate
+        for match in _GITHUB_REPO_ADDRESS_PATTERN.finditer(output)
+        if (candidate := _parse_repo_import_candidate(match)) is not None
+    ]
 
-    # De-duplicate while preserving order.
-    seen: set[tuple[str, str, str]] = set()
-    unique: list[tuple[str, str, str]] = []
-    for candidate in candidates:
-        if candidate in seen:
-            continue
-        seen.add(candidate)
-        unique.append(candidate)
-    return unique
+    return _deduplicate_preserving_order(candidates)
 
 
 def detect_state_forgets_for_prevent_destroy(output: str) -> list[str]:

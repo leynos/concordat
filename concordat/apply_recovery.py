@@ -110,6 +110,73 @@ def handle_apply_import_errors(
     return import_exit_code, latest_result
 
 
+def _find_matching_state_addresses(
+    state_output: str,
+    forget_slugs: list[str],
+) -> list[str]:
+    """Filter state list output to find addresses matching the given slugs."""
+    addresses: list[str] = []
+    for line in state_output.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        for slug in forget_slugs:
+            needle = f'module.repository["{slug}"].'
+            if stripped.startswith(needle):
+                addresses.append(stripped)
+                break
+    return addresses
+
+
+def _remove_state_entries(
+    tofu: Tofu,
+    addresses: list[str],
+    tofu_workdir: Path,
+    io: ExecutionIO,
+    invoke_tofu_with_result: typ.Callable[
+        [Tofu, list[str], ExecutionIO], SimpleNamespace
+    ],
+    write_stream_output: typ.Callable[[typ.IO[str], str], None],
+) -> int:
+    """Remove the given addresses from tofu state, returning exit code."""
+    for address in addresses:
+        write_stream_output(
+            io.stderr,
+            f"running: tofu state rm {address} (cwd={tofu_workdir})",
+        )
+        rm_result = invoke_tofu_with_result(
+            tofu,
+            ["state", "rm", address],
+            io,
+        )
+        rm_exit = int(rm_result.returncode)
+        if rm_exit != 0:
+            return rm_exit
+    return 0
+
+
+def _retry_apply_after_state_cleanup(
+    tofu: Tofu,
+    args: list[str],
+    tofu_workdir: Path,
+    io: ExecutionIO,
+    invoke_tofu_with_result: typ.Callable[
+        [Tofu, list[str], ExecutionIO], SimpleNamespace
+    ],
+    write_stream_output: typ.Callable[[typ.IO[str], str], None],
+) -> SimpleNamespace:
+    """Retry tofu apply after state cleanup."""
+    write_stream_output(
+        io.stderr,
+        f"retrying: tofu apply (cwd={tofu_workdir})",
+    )
+    return invoke_tofu_with_result(
+        tofu,
+        list(args),
+        io,
+    )
+
+
 def handle_apply_prevent_destroy_errors(
     tofu: Tofu,
     latest_result: SimpleNamespace,
@@ -175,16 +242,10 @@ def handle_apply_prevent_destroy_errors(
     if int(state_list.returncode) != 0:
         return int(state_list.returncode), latest_result
 
-    addresses: list[str] = []
-    for line in (state_list.stdout or "").splitlines():
-        stripped = line.strip()
-        if not stripped:
-            continue
-        for slug in forget_slugs:
-            needle = f'module.repository["{slug}"].'
-            if stripped.startswith(needle):
-                addresses.append(stripped)
-                break
+    addresses = _find_matching_state_addresses(
+        state_list.stdout or "",
+        forget_slugs,
+    )
 
     if not addresses:
         write_stream_output(
@@ -193,32 +254,24 @@ def handle_apply_prevent_destroy_errors(
         )
         return exit_code, latest_result
 
-    rm_exit_code = 0
-    for address in addresses:
-        write_stream_output(
-            io.stderr,
-            f"running: tofu state rm {address} (cwd={tofu_workdir})",
-        )
-        rm_result = invoke_tofu_with_result(
-            tofu,
-            ["state", "rm", address],
-            io,
-        )
-        rm_exit = int(rm_result.returncode)
-        if rm_exit != 0:
-            rm_exit_code = rm_exit
-            break
+    rm_exit_code = _remove_state_entries(
+        tofu,
+        addresses,
+        tofu_workdir,
+        io,
+        invoke_tofu_with_result,
+        write_stream_output,
+    )
 
     if rm_exit_code != 0:
         return rm_exit_code, latest_result
 
-    write_stream_output(
-        io.stderr,
-        f"retrying: tofu apply (cwd={tofu_workdir})",
-    )
-    retry_result = invoke_tofu_with_result(
+    retry_result = _retry_apply_after_state_cleanup(
         tofu,
-        list(args),
+        args,
+        tofu_workdir,
         io,
+        invoke_tofu_with_result,
+        write_stream_output,
     )
     return int(retry_result.returncode), retry_result
