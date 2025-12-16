@@ -161,6 +161,9 @@ without leaving the CLI. Both commands require `GITHUB_TOKEN` and the estate's
   directory, writes `terraform.tfvars` with the recorded owner, runs
   `tofu init -input=false`, and then `tofu plan`. Paths are echoed, so the
   workspace can be inspected; pass `--keep-workdir` to skip the cleanup step.
+  Concordat preserves OpenTofu's standard CLI plan output (including the
+  per-resource diff), so operators do not need to re-run `tofu plan` manually
+  just to see what would change.
 
   When `backend/persistence.yaml` exists with `enabled: true`, the CLI adds
   `-backend-config=<path>` to `tofu init`, maps
@@ -182,6 +185,31 @@ without leaving the CLI. Both commands require `GITHUB_TOKEN` and the estate's
 `-auto-approve` for OpenTofu, and returns the exit code from the underlying
 `tofu` invocation, so pipelines can gate on it. Pass `--keep-workdir` when you
 also want to retain the apply workspace for inspection.
+
+### Importing pre-existing GitHub repositories into state
+
+The GitHub provider rejects attempts to create a repository that already
+exists, even if the rest of the plan is valid. This typically shows up as a
+`422` response with a message such as "name already exists on this account".
+
+When Concordat detects this specific failure during `concordat apply`, it
+offers to import the affected repositories into state and retry the apply. The
+prompt defaults to "no" so automated runs cannot accidentally mutate state:
+
+```plaintext
+One or more GitHub repositories already exist but are missing from state.
+Import into state and retry apply? (example/repo-one, example/repo-two) [y/N]:
+```
+
+If you answer `y`, Concordat runs `tofu import` for each missing repository and
+then re-runs `tofu apply`. Import IDs are attempted in a resilient order:
+
+1. Repository name only (for example, `repo-one`).
+2. Full `owner/name` slug (for example, `example/repo-one`).
+
+When running without a TTY (for example, in CI), Concordat does not prompt and
+does not attempt imports. Re-run with `--keep-workdir`, then import manually in
+the printed workspace directory.
 
 ### Persisting estate state in object storage
 
