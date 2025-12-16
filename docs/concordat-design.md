@@ -186,7 +186,11 @@ false-positive rate is acceptable. Exemptions use the existing
 - `concordat enrol` clones the target repository, writes or updates the
   `.concordat` file, and—when `--push` is provided—commits and pushes the
   change via pygit2 (see `concordat/enrol.py`). This preserves the current
-  lightweight opt-in flow while keeping repository history intact.
+  lightweight opt-in flow while keeping repository history intact. When the
+  repository already contains `.concordat` with `enrolled: true`, enrolment is
+  idempotent by default. Passing `--force` keeps `.concordat` unchanged but
+  still runs the platform-standards inventory pull request step for the active
+  estate, ensuring the repository is tracked by OpenTofu.
 - `concordat disenrol` flips `enrolled: false` in the `.concordat` file and can
   open a matching platform-standards pull request that removes the repository
   from the OpenTofu inventory, so the estate stops targeting it.

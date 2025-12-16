@@ -129,7 +129,17 @@ class EnrollmentOutcome:
     def render(self) -> str:
         """Return a concise human readable summary."""
         if not self.created:
-            return f"{self.repository}: already enrolled"
+            status_parts = ["already enrolled"]
+            if self.platform_pr:
+                if self.platform_pr.created:
+                    message = "platform PR opened"
+                    if self.platform_pr.pr_url:
+                        message = f"{message}: {self.platform_pr.pr_url}"
+                else:
+                    message = f"platform PR skipped: {self.platform_pr.message}"
+                status_parts.append(message)
+            status = ", ".join(status_parts)
+            return f"{self.repository}: {status}"
         status_parts = ["created .concordat"]
         if self.committed:
             status_parts.append("committed")
@@ -216,6 +226,7 @@ def enrol_repositories(
     author_email: str | None = None,
     platform_standards: PlatformStandardsConfig | None = None,
     github_owner: str | None = None,
+    force: bool = False,
 ) -> list[EnrollmentOutcome]:
     """Enrol each repository and return the captured outcomes."""
     if not repositories:
@@ -230,6 +241,7 @@ def enrol_repositories(
             author_email=author_email,
             platform_standards=platform_standards,
             github_owner=github_owner,
+            force=force,
         )
         outcomes.append(outcome)
     return outcomes
@@ -337,6 +349,7 @@ def _enrol_repository(
     author_email: str | None,
     platform_standards: PlatformStandardsConfig | None,
     github_owner: str | None,
+    force: bool,
 ) -> EnrollmentOutcome:
     with _repository_context(specification) as context:
         repo_slug = _slug_with_owner_guard(
@@ -346,12 +359,16 @@ def _enrol_repository(
         )
         created = _ensure_concordat_document(context.location)
         if not created:
+            platform_result = None
+            if force:
+                platform_result = _platform_pr_result(repo_slug, platform_standards)
             return EnrollmentOutcome(
                 repository=specification,
                 location=context.location,
                 created=False,
                 committed=False,
                 pushed=False,
+                platform_pr=platform_result,
             )
 
         _stage_document(context.repository)

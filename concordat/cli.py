@@ -126,6 +126,7 @@ def _resolve_namespaces(namespaces: tuple[str, ...]) -> tuple[str, ...]:
 def enrol(
     *repositories: str,
     push: bool = False,
+    force: bool = False,
     author_name: str | None = None,
     author_email: str | None = None,
     platform_standards_url: str | None = None,
@@ -156,6 +157,7 @@ def enrol(
         author_email=author_email,
         platform_standards=platform_config,
         github_owner=owner_guard,
+        force=force,
     )
     for outcome in outcomes:
         print(outcome.render())

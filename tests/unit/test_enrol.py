@@ -114,6 +114,47 @@ def test_enrol_is_idempotent(git_repo: GitRepo) -> None:
     assert git_repo.repository.head.target == original_head
 
 
+def test_enrol_force_still_opens_platform_pr(
+    git_repo: GitRepo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Already-enrolled repos can still be added to the estate inventory via PR."""
+    enrol_repositories([str(git_repo.path)])
+    _set_origin(git_repo.repository, "git@github.com:test-owner/test-repo.git")
+
+    config = _platform_config()
+    expected = PlatformStandardsResult(
+        created=True,
+        branch="concordat/enrol/test-owner-test-repo",
+        pr_url="https://example.com/pr/1",
+        message="opened platform-standards PR",
+    )
+
+    called: list[tuple[str, PlatformStandardsConfig]] = []
+
+    def fake_ensure(
+        repo_slug: str,
+        *,
+        config: PlatformStandardsConfig,
+    ) -> PlatformStandardsResult:
+        called.append((repo_slug, config))
+        return expected
+
+    monkeypatch.setattr("concordat.enrol.ensure_repository_pr", fake_ensure)
+
+    outcome = enrol_repositories(
+        [str(git_repo.path)],
+        platform_standards=config,
+        github_owner="test-owner",
+        force=True,
+    )[0]
+
+    assert outcome.created is False
+    assert outcome.committed is False
+    assert outcome.pushed is False
+    assert outcome.platform_pr == expected
+    assert called == [("test-owner/test-repo", config)]
+
+
 def test_enrol_requires_repository() -> None:
     """The command requires at least one repository."""
     with pytest.raises(ConcordatError):

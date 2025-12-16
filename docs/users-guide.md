@@ -34,7 +34,10 @@ workflows read the same flag before applying changes.
   it cannot determine the slug from the repository or `origin` remote.
 
 - When the repository already contains a `.concordat` file with
-  `enrolled: true`, the CLI prints `already enrolled` and makes no changes.
+  `enrolled: true`, the CLI prints `already enrolled` and makes no changes
+  unless `--force` is supplied. With `--force`, concordat still opens (or
+  updates) the platform-standards pull request for the active estate so the
+  repository is present in the OpenTofu inventory.
 
 - The CLI commits the new file to the current branch. If the Git configuration
   does not define `user.name` and `user.email`, supply details explicitly:
