@@ -762,6 +762,278 @@ def _prepare_execution_environment(options: ExecutionOptions) -> dict[str, str]:
     return env_source
 
 
+def _setup_tofu_workspace(
+    workdir: Path,
+    tofu_workdir: Path,
+    record: EstateRecord,
+    env_source: dict[str, str],
+    options: ExecutionOptions,
+    io: ExecutionIO,
+) -> tuple[Path, list[str], dict[str, str], Tofu]:
+    """Prepare the workspace for tofu execution.
+
+    Sanitizes inventory, writes tfvars, configures backend, and initialises the
+    tofu wrapper. Returns the tfvars path, backend arguments, environment, and
+    tofu instance.
+    """
+    sanitized_inventory = _sanitize_inventory_for_tofu(
+        workdir,
+        tofu_workdir,
+        record.inventory_path,
+    )
+    if sanitized_inventory:
+        _write_stream_output(
+            io.stderr,
+            "inventory sanitized for tofu (removed YAML directives)",
+        )
+    tfvars = tofu_workdir / TFVARS_FILENAME
+    tfvars.write_text(
+        f'github_owner = "{options.github_owner}"\n',
+        encoding="utf-8",
+    )
+
+    backend_args, env = _prepare_backend_configuration(
+        workdir,
+        tofu_workdir,
+        env_source,
+        io,
+    )
+    env["GITHUB_TOKEN"] = options.github_token
+    tofu = _initialize_tofu(tofu_workdir, env)
+
+    return tfvars, backend_args, env, tofu
+
+
+def _handle_apply_import_errors(
+    tofu: Tofu,
+    latest_result: SimpleNamespace,
+    tofu_workdir: Path,
+    args: list[str],
+    io: ExecutionIO,
+) -> tuple[int, SimpleNamespace]:
+    """Handle apply failures due to repos existing but missing from state.
+
+    Detects GitHub repository existence errors, prompts for import, and retries
+    apply. Returns updated exit code and latest result.
+    """
+    exit_code = int(latest_result.returncode)
+    combined_output = f"{latest_result.stdout}\n{latest_result.stderr}"
+    imports = _detect_missing_repo_imports(combined_output)
+
+    if not imports:
+        return exit_code, latest_result
+
+    repos = ", ".join(slug for _, slug, _ in imports)
+    prompt = (
+        "One or more GitHub repositories already exist but are "
+        "missing from state.\n"
+        f"Import into state and retry apply? ({repos}) [y/N]: "
+    )
+
+    if not _can_prompt():
+        _write_stream_output(
+            io.stderr,
+            (
+                "cannot prompt for auto-import in non-interactive "
+                "mode; "
+                "re-run with --keep-workdir "
+                "and import manually"
+            ),
+        )
+        return exit_code, latest_result
+
+    if not _prompt_yes_no(prompt, output=io.stderr):
+        return exit_code, latest_result
+
+    import_exit_code = 0
+    for address, slug, repo_name in imports:
+        import_attempts = [repo_name, slug]
+        imported = False
+        for import_id in import_attempts:
+            _write_stream_output(
+                io.stderr,
+                f"running: tofu import {address} {import_id} (cwd={tofu_workdir})",
+            )
+            import_result = _invoke_tofu_command_with_result(
+                tofu,
+                ["import", address, import_id],
+                io,
+            )
+            import_exit = int(import_result.returncode)
+            if import_exit == 0:
+                _write_stream_output(
+                    io.stderr,
+                    f"completed: tofu import {import_id}",
+                )
+                imported = True
+                break
+
+            failed_detail = import_result.stderr.strip() or "import failed"
+            _write_stream_output(
+                io.stderr,
+                f"failed: tofu import {import_id}: {failed_detail}",
+            )
+
+        if not imported:
+            import_exit_code = 1
+            break
+
+    if import_exit_code == 0:
+        _write_stream_output(
+            io.stderr,
+            f"retrying: tofu apply (cwd={tofu_workdir})",
+        )
+        retry_result = _invoke_tofu_command_with_result(
+            tofu,
+            list(args),
+            io,
+        )
+        return int(retry_result.returncode), retry_result
+
+    return import_exit_code, latest_result
+
+
+def _handle_apply_prevent_destroy_errors(
+    tofu: Tofu,
+    latest_result: SimpleNamespace,
+    tofu_workdir: Path,
+    args: list[str],
+    io: ExecutionIO,
+) -> tuple[int, SimpleNamespace]:
+    """Handle apply failures due to lifecycle.prevent_destroy.
+
+    Detects resources blocked by prevent_destroy, prompts for state removal,
+    and retries apply. Returns updated exit code and latest result.
+    """
+    exit_code = int(latest_result.returncode)
+    combined_output = f"{latest_result.stdout}\n{latest_result.stderr}"
+    forget_slugs = _detect_state_forgets_for_prevent_destroy(combined_output)
+
+    if not forget_slugs:
+        return exit_code, latest_result
+
+    repos = ", ".join(forget_slugs)
+    prompt = (
+        "One or more resources are protected by "
+        "lifecycle.prevent_destroy.\n"
+        "This often happens when a repository is removed "
+        "from the inventory and should be disenrolled.\n"
+        "Remove these resources from state and retry apply? "
+        f"({repos}) [y/N]: "
+    )
+
+    if not _can_prompt():
+        _write_stream_output(
+            io.stderr,
+            (
+                "cannot prompt for state cleanup in "
+                "non-interactive mode; re-run with "
+                "--keep-workdir and remove resources with "
+                "`tofu state rm` manually"
+            ),
+        )
+        return exit_code, latest_result
+
+    if not _prompt_yes_no(prompt, output=io.stderr):
+        return exit_code, latest_result
+
+    _write_stream_output(
+        io.stderr,
+        f"running: tofu state list (cwd={tofu_workdir})",
+    )
+    state_list_raw = tofu._run(
+        ["state", "list"],
+        raise_on_error=False,
+    )
+    state_list = _normalize_tofu_result("state", state_list_raw)
+    if int(state_list.returncode) != 0:
+        return int(state_list.returncode), latest_result
+
+    addresses: list[str] = []
+    for line in (state_list.stdout or "").splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        for slug in forget_slugs:
+            needle = f'module.repository["{slug}"].'
+            if stripped.startswith(needle):
+                addresses.append(stripped)
+                break
+
+    if not addresses:
+        _write_stream_output(
+            io.stderr,
+            "no matching state entries found; nothing to remove",
+        )
+        return exit_code, latest_result
+
+    rm_exit_code = 0
+    for address in addresses:
+        _write_stream_output(
+            io.stderr,
+            f"running: tofu state rm {address} (cwd={tofu_workdir})",
+        )
+        rm_result = _invoke_tofu_command_with_result(
+            tofu,
+            ["state", "rm", address],
+            io,
+        )
+        rm_exit = int(rm_result.returncode)
+        if rm_exit != 0:
+            rm_exit_code = rm_exit
+            break
+
+    if rm_exit_code != 0:
+        return rm_exit_code, latest_result
+
+    _write_stream_output(
+        io.stderr,
+        f"retrying: tofu apply (cwd={tofu_workdir})",
+    )
+    retry_result = _invoke_tofu_command_with_result(
+        tofu,
+        list(args),
+        io,
+    )
+    return int(retry_result.returncode), retry_result
+
+
+def _execute_apply_command(
+    tofu: Tofu,
+    args: list[str],
+    tofu_workdir: Path,
+    io: ExecutionIO,
+) -> int:
+    """Execute tofu apply with automatic error recovery.
+
+    Runs apply, then handles import and prevent_destroy errors if they occur.
+    Returns the final exit code.
+    """
+    result = _invoke_tofu_command_with_result(tofu, list(args), io)
+    exit_code = int(result.returncode)
+    latest_result = result
+
+    if exit_code != 0:
+        exit_code, latest_result = _handle_apply_import_errors(
+            tofu,
+            latest_result,
+            tofu_workdir,
+            args,
+            io,
+        )
+
+    if exit_code != 0:
+        exit_code, latest_result = _handle_apply_prevent_destroy_errors(
+            tofu,
+            latest_result,
+            tofu_workdir,
+            args,
+            io,
+        )
+
+    return exit_code
+
+
 def _prepare_backend_configuration(
     workspace_root: Path,
     tofu_workdir: Path,
@@ -812,30 +1084,14 @@ def _run_estate_command(
         io.stderr.flush()
 
         tofu_workdir = _resolve_tofu_workdir(workdir)
-        sanitized_inventory = _sanitize_inventory_for_tofu(
+        _, backend_args, _, tofu = _setup_tofu_workspace(
             workdir,
             tofu_workdir,
-            record.inventory_path,
-        )
-        if sanitized_inventory:
-            _write_stream_output(
-                io.stderr,
-                "inventory sanitized for tofu (removed YAML directives)",
-            )
-        tfvars = tofu_workdir / TFVARS_FILENAME
-        tfvars.write_text(
-            f'github_owner = "{options.github_owner}"\n',
-            encoding="utf-8",
-        )
-
-        backend_args, env = _prepare_backend_configuration(
-            workdir,
-            tofu_workdir,
+            record,
             env_source,
+            options,
             io,
         )
-        env["GITHUB_TOKEN"] = options.github_token
-        tofu = _initialize_tofu(tofu_workdir, env)
 
         init_args = ["init", "-input=false", *backend_args]
 
@@ -845,178 +1101,7 @@ def _run_estate_command(
                 f"running: tofu {' '.join(args)} (cwd={tofu_workdir})",
             )
             if args[0] == "apply":
-                result = _invoke_tofu_command_with_result(tofu, list(args), io)
-                exit_code = int(result.returncode)
-                latest_result = result
-                if exit_code != 0:
-                    combined_output = f"{latest_result.stdout}\n{latest_result.stderr}"
-                    imports = _detect_missing_repo_imports(combined_output)
-                    if imports:
-                        repos = ", ".join(slug for _, slug, _ in imports)
-                        prompt = (
-                            "One or more GitHub repositories already exist but are "
-                            "missing from state.\n"
-                            f"Import into state and retry apply? ({repos}) [y/N]: "
-                        )
-                        if not _can_prompt():
-                            _write_stream_output(
-                                io.stderr,
-                                (
-                                    "cannot prompt for auto-import in non-interactive "
-                                    "mode; "
-                                    "re-run with --keep-workdir "
-                                    "and import manually"
-                                ),
-                            )
-                        elif _prompt_yes_no(prompt, output=io.stderr):
-                            import_exit_code = 0
-                            for address, slug, repo_name in imports:
-                                import_attempts = [repo_name, slug]
-                                imported = False
-                                for import_id in import_attempts:
-                                    _write_stream_output(
-                                        io.stderr,
-                                        "running: tofu import "
-                                        f"{address} {import_id} "
-                                        f"(cwd={tofu_workdir})",
-                                    )
-                                    import_result = _invoke_tofu_command_with_result(
-                                        tofu,
-                                        ["import", address, import_id],
-                                        io,
-                                    )
-                                    import_exit = int(import_result.returncode)
-                                    if import_exit == 0:
-                                        _write_stream_output(
-                                            io.stderr,
-                                            f"completed: tofu import {import_id}",
-                                        )
-                                        imported = True
-                                        break
-
-                                    failed_detail = (
-                                        import_result.stderr.strip() or "import failed"
-                                    )
-                                    _write_stream_output(
-                                        io.stderr,
-                                        "failed: tofu import "
-                                        f"{import_id}: {failed_detail}",
-                                    )
-
-                                if not imported:
-                                    import_exit_code = 1
-                                    break
-
-                            if import_exit_code == 0:
-                                _write_stream_output(
-                                    io.stderr,
-                                    f"retrying: tofu apply (cwd={tofu_workdir})",
-                                )
-                                retry_result = _invoke_tofu_command_with_result(
-                                    tofu,
-                                    list(args),
-                                    io,
-                                )
-                                latest_result = retry_result
-                                exit_code = int(latest_result.returncode)
-                            else:
-                                exit_code = import_exit_code
-
-                    if exit_code != 0:
-                        combined_output = (
-                            f"{latest_result.stdout}\n{latest_result.stderr}"
-                        )
-                        forget_slugs = _detect_state_forgets_for_prevent_destroy(
-                            combined_output
-                        )
-                        if forget_slugs:
-                            repos = ", ".join(forget_slugs)
-                            prompt = (
-                                "One or more resources are protected by "
-                                "lifecycle.prevent_destroy.\n"
-                                "This often happens when a repository is removed "
-                                "from the inventory and should be disenrolled.\n"
-                                "Remove these resources from state and retry apply? "
-                                f"({repos}) [y/N]: "
-                            )
-                            if not _can_prompt():
-                                _write_stream_output(
-                                    io.stderr,
-                                    (
-                                        "cannot prompt for state cleanup in "
-                                        "non-interactive mode; re-run with "
-                                        "--keep-workdir and remove resources with "
-                                        "`tofu state rm` manually"
-                                    ),
-                                )
-                            elif _prompt_yes_no(prompt, output=io.stderr):
-                                _write_stream_output(
-                                    io.stderr,
-                                    f"running: tofu state list (cwd={tofu_workdir})",
-                                )
-                                state_list_raw = tofu._run(
-                                    ["state", "list"],
-                                    raise_on_error=False,
-                                )
-                                state_list = _normalize_tofu_result(
-                                    "state",
-                                    state_list_raw,
-                                )
-                                if int(state_list.returncode) != 0:
-                                    exit_code = int(state_list.returncode)
-                                else:
-                                    addresses: list[str] = []
-                                    for line in (state_list.stdout or "").splitlines():
-                                        stripped = line.strip()
-                                        if not stripped:
-                                            continue
-                                        for slug in forget_slugs:
-                                            needle = f'module.repository["{slug}"].'
-                                            if stripped.startswith(needle):
-                                                addresses.append(stripped)
-                                                break
-
-                                    if not addresses:
-                                        _write_stream_output(
-                                            io.stderr,
-                                            "no matching state entries found; "
-                                            "nothing to remove",
-                                        )
-                                    else:
-                                        exit_code = 0
-                                        for address in addresses:
-                                            _write_stream_output(
-                                                io.stderr,
-                                                "running: tofu state rm "
-                                                f"{address} (cwd={tofu_workdir})",
-                                            )
-                                            rm_result = (
-                                                _invoke_tofu_command_with_result(
-                                                    tofu,
-                                                    ["state", "rm", address],
-                                                    io,
-                                                )
-                                            )
-                                            rm_exit = int(rm_result.returncode)
-                                            if rm_exit != 0:
-                                                exit_code = rm_exit
-                                                break
-
-                                        if exit_code == 0:
-                                            _write_stream_output(
-                                                io.stderr,
-                                                "retrying: tofu apply "
-                                                f"(cwd={tofu_workdir})",
-                                            )
-                                            retry_result = (
-                                                _invoke_tofu_command_with_result(
-                                                    tofu,
-                                                    list(args),
-                                                    io,
-                                                )
-                                            )
-                                            latest_result = retry_result
-                                            exit_code = int(latest_result.returncode)
+                exit_code = _execute_apply_command(tofu, list(args), tofu_workdir, io)
             else:
                 exit_code = _invoke_tofu_command(tofu, list(args), io)
             if exit_code == 0:
