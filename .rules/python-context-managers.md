@@ -1,12 +1,12 @@
 # Use context managers for cleanup and resource management
 
-Use context managers to encapsulate setup and teardown logic cleanly and safely.
-This reduces the risk of forgetting to release resources such as files, locks,
-and connections, and it simplifies error handling.
+Use context managers to encapsulate setup and teardown logic cleanly and
+safely. This reduces the risk of forgetting to release resources such as files,
+locks, and connections, and it simplifies error handling.
 
 Context managers can be written either with `contextlib.contextmanager` (for
-simple procedural control flow) or by implementing `__enter__` and `__exit__` in
-a class (for more complex or stateful use cases).
+simple procedural control flow) or by implementing `__enter__` and `__exit__`
+in a class (for more complex or stateful use cases).
 
 ## Why use context managers?
 

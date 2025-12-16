@@ -4,14 +4,14 @@
 > practices to improve clarity, correctness, and tooling support. Use these
 > features to write expressive, modern Python.
 
-This reference cites several Python Enhancement Proposals (PEPs) that define the
-underlying typing semantics.
+This reference cites several Python Enhancement Proposals (PEPs) that define
+the underlying typing semantics.
 
 ## `enum.Enum`, `enum.IntEnum`, `enum.StrEnum`
 
 Use `Enum` for fixed sets of related constants. Use `enum.auto()` to avoid
-repeating values manually. Use `IntEnum` or `StrEnum` when interoperability with
-integers or strings is required (e.g. for database or JSON serialization).
+repeating values manually. Use `IntEnum` or `StrEnum` when interoperability
+with integers or strings is required (e.g. for database or JSON serialization).
 
 ```python
 import enum
