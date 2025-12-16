@@ -16,6 +16,30 @@ from ruamel.yaml import YAML
 from .errors import ConcordatError
 from .gitutils import build_remote_callbacks
 
+
+class _PullRequest(typ.Protocol):
+    html_url: str
+
+
+class _PullRequestRepository(typ.Protocol):
+    def create_pull(
+        self,
+        title: str,
+        *,
+        base: str,
+        head: str,
+        body: str,
+    ) -> _PullRequest: ...
+
+    def pull_requests(
+        self,
+        *,
+        state: str,
+        head: str,
+        base: str,
+    ) -> typ.Iterable[_PullRequest]: ...
+
+
 _yaml = YAML(typ="safe")
 _yaml.default_flow_style = False
 _yaml.explicit_start = False
@@ -64,12 +88,20 @@ def ensure_repository_pr(
         )
 
         workdir = Path(repository.workdir or temp_root)
+        branch_name = _branch_name_for(repo_slug)
+        base_commit = _checkout_pr_branch(
+            repository,
+            callbacks=callbacks,
+            base_branch=config.base_branch,
+            branch_name=branch_name,
+        )
+
         inventory_path = workdir / config.inventory_path
         added = _update_inventory(inventory_path, repo_slug)
         if not added:
             return PlatformStandardsResult(
                 created=False,
-                branch=None,
+                branch=branch_name,
                 pr_url=None,
                 message="repository already enrolled in inventory",
             )
@@ -77,14 +109,6 @@ def ensure_repository_pr(
         rel_inventory = str(Path(config.inventory_path))
         repository.index.add(rel_inventory)
         repository.index.write()
-
-        base_branch = repository.branches[config.base_branch]
-        base_commit = base_branch.peel(pygit2.Commit)
-        branch_name = _branch_name_for(repo_slug)
-        if branch_name in repository.branches.local:
-            repository.branches.delete(branch_name)
-        new_branch = repository.create_branch(branch_name, base_commit)
-        repository.checkout(new_branch)
 
         try:
             signature = repository.default_signature
@@ -125,10 +149,12 @@ def ensure_repository_pr(
             - ran `tofu fmt`, `tflint`, and `tofu validate` locally
             """
         ).strip()
-        pr = gh_repo.create_pull(
-            pr_title,
+        pr = _open_or_fetch_pull_request(
+            gh_repo,
+            owner=owner,
+            title=pr_title,
             base=config.base_branch,
-            head=branch_name,
+            head_branch=branch_name,
             body=pr_body,
         )
 
@@ -155,12 +181,20 @@ def ensure_repository_removal_pr(
         )
 
         workdir = Path(repository.workdir or temp_root)
+        branch_name = _branch_name_for(repo_slug, verb="disenrol")
+        base_commit = _checkout_pr_branch(
+            repository,
+            callbacks=callbacks,
+            base_branch=config.base_branch,
+            branch_name=branch_name,
+        )
+
         inventory_path = workdir / config.inventory_path
         removed = _remove_inventory(inventory_path, repo_slug)
         if not removed:
             return PlatformStandardsResult(
                 created=False,
-                branch=None,
+                branch=branch_name,
                 pr_url=None,
                 message="repository already absent from inventory",
             )
@@ -168,14 +202,6 @@ def ensure_repository_removal_pr(
         rel_inventory = str(Path(config.inventory_path))
         repository.index.add(rel_inventory)
         repository.index.write()
-
-        base_branch = repository.branches[config.base_branch]
-        base_commit = base_branch.peel(pygit2.Commit)
-        branch_name = _branch_name_for(repo_slug, verb="disenrol")
-        if branch_name in repository.branches.local:
-            repository.branches.delete(branch_name)
-        new_branch = repository.create_branch(branch_name, base_commit)
-        repository.checkout(new_branch)
 
         try:
             signature = repository.default_signature
@@ -216,10 +242,12 @@ def ensure_repository_removal_pr(
             - ran `tofu fmt`, `tflint`, and `tofu validate` locally
             """
         ).strip()
-        pr = gh_repo.create_pull(
-            pr_title,
+        pr = _open_or_fetch_pull_request(
+            gh_repo,
+            owner=owner,
+            title=pr_title,
             base=config.base_branch,
-            head=branch_name,
+            head_branch=branch_name,
             body=pr_body,
         )
 
@@ -349,3 +377,65 @@ def parse_github_slug(url: str) -> str | None:
 def _branch_name_for(slug: str, *, verb: str = "enrol") -> str:
     safe = slug.replace("/", "-")
     return f"concordat/{verb}/{safe}"
+
+
+def _checkout_pr_branch(
+    repository: pygit2.Repository,
+    *,
+    callbacks: pygit2.RemoteCallbacks | None,
+    base_branch: str,
+    branch_name: str,
+) -> pygit2.Commit:
+    """Checkout a local work branch, reusing an existing remote branch if present.
+
+    When a prior concordat run already pushed the branch, recreating it from the
+    base branch can lead to non-fast-forward push failures. Reusing the remote
+    branch keeps the push linear and updates any existing PR.
+    """
+    remote = repository.remotes["origin"]
+    remote.fetch(callbacks=callbacks)
+
+    remote_branch_name = f"origin/{branch_name}"
+    try:
+        remote_branch = repository.branches.remote[remote_branch_name]
+    except KeyError:
+        remote_branch = None
+
+    if remote_branch is not None:
+        base_ref = remote_branch
+    else:
+        base_ref = repository.branches[base_branch]
+    base_commit = base_ref.peel(pygit2.Commit)
+
+    if branch_name in repository.branches.local:
+        repository.branches.delete(branch_name)
+    new_branch = repository.create_branch(branch_name, base_commit)
+    repository.checkout(new_branch)
+    return base_commit
+
+
+def _open_or_fetch_pull_request(
+    gh_repo: _PullRequestRepository,
+    *,
+    owner: str,
+    title: str,
+    base: str,
+    head_branch: str,
+    body: str,
+) -> _PullRequest:
+    """Create a pull request, or return the existing one for the same head."""
+    github3_exceptions = getattr(github3, "exceptions", None)
+    unprocessable = getattr(github3_exceptions, "UnprocessableEntity", Exception)
+
+    try:
+        return gh_repo.create_pull(
+            title,
+            base=base,
+            head=head_branch,
+            body=body,
+        )
+    except unprocessable:
+        head = f"{owner}:{head_branch}"
+        for pr in gh_repo.pull_requests(state="open", head=head, base=base):
+            return pr
+        raise
