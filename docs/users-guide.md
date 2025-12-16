@@ -75,6 +75,21 @@ workflows read the same flag before applying changes.
 - The CLI commits the change to the current branch and accepts the same
   `--push`, `--author-name`, and `--author-email` options as the enrol command.
 
+- When an active estate is configured, `concordat disenrol` also opens a pull
+  request against the platform-standards repository to remove the repository
+  slug from the OpenTofu inventory (the default is
+  `tofu/inventory/repositories.yaml`). Merge the pull request before the next
+  OpenTofu apply.
+
+  When `CONCORDAT_SKIP_PLATFORM_PR=1` is set, the inventory pull request step
+  is skipped, but the `.concordat` flag is still updated.
+
+- After removing a repository from the inventory, subsequent `concordat apply`
+  runs may fail with `prevent_destroy` because the repository module forbids
+  deletions. Concordat offers to remove the affected resources from OpenTofu
+  state (via `tofu state rm`) and retry the apply, which completes the
+  disenrolment without deleting the repository.
+
 ## Listing repositories
 
 - List every repository within one or more GitHub namespaces:

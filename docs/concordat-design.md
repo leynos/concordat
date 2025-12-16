@@ -187,6 +187,9 @@ false-positive rate is acceptable. Exemptions use the existing
   `.concordat` file, and—when `--push` is provided—commits and pushes the
   change via pygit2 (see `concordat/enrol.py`). This preserves the current
   lightweight opt-in flow while keeping repository history intact.
+- `concordat disenrol` flips `enrolled: false` in the `.concordat` file and can
+  open a matching platform-standards pull request that removes the repository
+  from the OpenTofu inventory, so the estate stops targeting it.
 - `concordat estate` bootstraps `platform-standards` repositories from the
   bundled template, persists aliases in `~/.config/concordat/config.yaml`, and
   exposes helpers to list, inspect, and select the active estate. The enrolment
@@ -266,6 +269,10 @@ template usage, satisfying the evaluate-mode acceptance criteria.
   error for a `github_repository`, Concordat can offer to import the existing
   repository into state and retry apply. This behaviour is gated behind an
   interactive prompt and is skipped in non-interactive environments.
+- When `tofu apply` fails because `lifecycle.prevent_destroy` blocks a planned
+  delete (a common outcome after removing a repository from the inventory),
+  Concordat can offer to remove the affected resources from state and retry the
+  apply. This enables safe disenrolment without deleting GitHub repositories.
 - Both commands emit the execution directory path (helpful for debugging) and
   remove it afterward unless `--keep-workdir` is provided.
 

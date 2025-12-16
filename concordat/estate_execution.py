@@ -72,6 +72,10 @@ ALL_BACKEND_ENV_VARS = (
 )
 
 _GITHUB_REPO_EXISTS_MARKER = "name already exists on this account"
+_GITHUB_PREVENT_DESTROY_MARKERS = (
+    "prevent_destroy",
+    "instance cannot be destroyed",
+)
 _GITHUB_REPO_ADDRESS_PATTERN = re.compile(
     (
         r'vertex\s+"(?P<address>(?:\\\"|[^"])*)"\s+error:'
@@ -698,6 +702,40 @@ def _detect_missing_repo_imports(output: str) -> list[tuple[str, str, str]]:
     return unique
 
 
+def _detect_state_forgets_for_prevent_destroy(output: str) -> list[str]:
+    """Return a list of slugs that look like they should be removed from state.
+
+    When a repository is removed from the inventory, OpenTofu plans to destroy
+    the corresponding `github_repository` resources. The module enforces
+    `prevent_destroy = true`, so the apply fails. For disenrolment, the desired
+    outcome is typically to *forget* the resource (remove it from state) while
+    leaving the GitHub repository intact.
+    """
+    if not output:
+        return []
+
+    lowered = output.lower()
+    if not any(marker in lowered for marker in _GITHUB_PREVENT_DESTROY_MARKERS):
+        return []
+
+    normalized_output = output.replace('\\"', '"')
+    candidates: list[str] = []
+    for match in _GITHUB_REPO_SLUG_FROM_ADDRESS_PATTERN.finditer(normalized_output):
+        slug = match.group("slug").strip()
+        if not slug:
+            continue
+        candidates.append(slug)
+
+    seen: set[str] = set()
+    unique: list[str] = []
+    for slug in candidates:
+        if slug in seen:
+            continue
+        seen.add(slug)
+        unique.append(slug)
+    return unique
+
+
 def _prompt_yes_no(message: str, *, output: typ.IO[str] | None = None) -> bool:
     """Prompt on a TTY and return True for yes-like responses."""
     stream = output or sys.stderr
@@ -809,8 +847,9 @@ def _run_estate_command(
             if args[0] == "apply":
                 result = _invoke_tofu_command_with_result(tofu, list(args), io)
                 exit_code = int(result.returncode)
+                latest_result = result
                 if exit_code != 0:
-                    combined_output = f"{result.stdout}\n{result.stderr}"
+                    combined_output = f"{latest_result.stdout}\n{latest_result.stderr}"
                     imports = _detect_missing_repo_imports(combined_output)
                     if imports:
                         repos = ", ".join(slug for _, slug, _ in imports)
@@ -878,9 +917,106 @@ def _run_estate_command(
                                     list(args),
                                     io,
                                 )
-                                exit_code = int(retry_result.returncode)
+                                latest_result = retry_result
+                                exit_code = int(latest_result.returncode)
                             else:
                                 exit_code = import_exit_code
+
+                    if exit_code != 0:
+                        combined_output = (
+                            f"{latest_result.stdout}\n{latest_result.stderr}"
+                        )
+                        forget_slugs = _detect_state_forgets_for_prevent_destroy(
+                            combined_output
+                        )
+                        if forget_slugs:
+                            repos = ", ".join(forget_slugs)
+                            prompt = (
+                                "One or more resources are protected by "
+                                "lifecycle.prevent_destroy.\n"
+                                "This often happens when a repository is removed "
+                                "from the inventory and should be disenrolled.\n"
+                                "Remove these resources from state and retry apply? "
+                                f"({repos}) [y/N]: "
+                            )
+                            if not _can_prompt():
+                                _write_stream_output(
+                                    io.stderr,
+                                    (
+                                        "cannot prompt for state cleanup in "
+                                        "non-interactive mode; re-run with "
+                                        "--keep-workdir and remove resources with "
+                                        "`tofu state rm` manually"
+                                    ),
+                                )
+                            elif _prompt_yes_no(prompt, output=io.stderr):
+                                _write_stream_output(
+                                    io.stderr,
+                                    f"running: tofu state list (cwd={tofu_workdir})",
+                                )
+                                state_list_raw = tofu._run(
+                                    ["state", "list"],
+                                    raise_on_error=False,
+                                )
+                                state_list = _normalize_tofu_result(
+                                    "state",
+                                    state_list_raw,
+                                )
+                                if int(state_list.returncode) != 0:
+                                    exit_code = int(state_list.returncode)
+                                else:
+                                    addresses: list[str] = []
+                                    for line in (state_list.stdout or "").splitlines():
+                                        stripped = line.strip()
+                                        if not stripped:
+                                            continue
+                                        for slug in forget_slugs:
+                                            needle = f'module.repository["{slug}"].'
+                                            if stripped.startswith(needle):
+                                                addresses.append(stripped)
+                                                break
+
+                                    if not addresses:
+                                        _write_stream_output(
+                                            io.stderr,
+                                            "no matching state entries found; "
+                                            "nothing to remove",
+                                        )
+                                    else:
+                                        exit_code = 0
+                                        for address in addresses:
+                                            _write_stream_output(
+                                                io.stderr,
+                                                "running: tofu state rm "
+                                                f"{address} (cwd={tofu_workdir})",
+                                            )
+                                            rm_result = (
+                                                _invoke_tofu_command_with_result(
+                                                    tofu,
+                                                    ["state", "rm", address],
+                                                    io,
+                                                )
+                                            )
+                                            rm_exit = int(rm_result.returncode)
+                                            if rm_exit != 0:
+                                                exit_code = rm_exit
+                                                break
+
+                                        if exit_code == 0:
+                                            _write_stream_output(
+                                                io.stderr,
+                                                "retrying: tofu apply "
+                                                f"(cwd={tofu_workdir})",
+                                            )
+                                            retry_result = (
+                                                _invoke_tofu_command_with_result(
+                                                    tofu,
+                                                    list(args),
+                                                    io,
+                                                )
+                                            )
+                                            latest_result = retry_result
+                                            exit_code = int(latest_result.returncode)
             else:
                 exit_code = _invoke_tofu_command(tofu, list(args), io)
             if exit_code == 0:

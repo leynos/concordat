@@ -18,6 +18,7 @@ from .platform_standards import (
     PlatformStandardsConfig,
     PlatformStandardsResult,
     ensure_repository_pr,
+    ensure_repository_removal_pr,
     parse_github_slug,
 )
 
@@ -153,18 +154,51 @@ class DisenrollmentOutcome:
     repository: str
     location: Path
     updated: bool
+    missing_document: bool
     committed: bool
     pushed: bool
+    platform_pr: PlatformStandardsResult | None = None
 
     def render(self) -> str:
         """Return a concise human readable summary."""
+        if self.missing_document:
+            status_parts = ["missing .concordat"]
+            if self.platform_pr:
+                if self.platform_pr.created:
+                    message = "platform PR opened"
+                    if self.platform_pr.pr_url:
+                        message = f"{message}: {self.platform_pr.pr_url}"
+                else:
+                    message = f"platform PR skipped: {self.platform_pr.message}"
+                status_parts.append(message)
+            status = ", ".join(status_parts)
+            return f"{self.repository}: {status}"
+
         if not self.updated:
-            return f"{self.repository}: already disenrolled"
+            status_parts = ["already disenrolled"]
+            if self.platform_pr:
+                if self.platform_pr.created:
+                    message = "platform PR opened"
+                    if self.platform_pr.pr_url:
+                        message = f"{message}: {self.platform_pr.pr_url}"
+                else:
+                    message = f"platform PR skipped: {self.platform_pr.message}"
+                status_parts.append(message)
+            status = ", ".join(status_parts)
+            return f"{self.repository}: {status}"
         status_parts = ["updated .concordat"]
         if self.committed:
             status_parts.append("committed")
         if self.pushed:
             status_parts.append("pushed")
+        if self.platform_pr:
+            if self.platform_pr.created:
+                message = "platform PR opened"
+                if self.platform_pr.pr_url:
+                    message = f"{message}: {self.platform_pr.pr_url}"
+            else:
+                message = f"platform PR skipped: {self.platform_pr.message}"
+            status_parts.append(message)
         status = ", ".join(status_parts)
         return f"{self.repository}: {status}"
 
@@ -207,6 +241,9 @@ def disenrol_repositories(
     push_remote: bool = False,
     author_name: str | None = None,
     author_email: str | None = None,
+    platform_standards: PlatformStandardsConfig | None = None,
+    github_owner: str | None = None,
+    allow_missing_document: bool = False,
 ) -> list[DisenrollmentOutcome]:
     """Disenrol each repository and return the captured outcomes."""
     if not repositories:
@@ -219,6 +256,9 @@ def disenrol_repositories(
             push_remote=push_remote,
             author_name=author_name,
             author_email=author_email,
+            platform_standards=platform_standards,
+            github_owner=github_owner,
+            allow_missing_document=allow_missing_document,
         )
         outcomes.append(outcome)
     return outcomes
@@ -230,20 +270,39 @@ def _disenrol_repository(
     push_remote: bool,
     author_name: str | None,
     author_email: str | None,
+    platform_standards: PlatformStandardsConfig | None,
+    github_owner: str | None,
+    allow_missing_document: bool,
 ) -> DisenrollmentOutcome:
     with _repository_context(specification) as context:
-        updated = _set_enrolled_value(
-            context.location,
-            value=False,
-            specification=specification,
+        repo_slug = _slug_with_owner_guard(
+            _repository_slug(context.repository, specification),
+            github_owner,
+            specification,
         )
+        concordat_path = context.location / CONCORDAT_FILENAME
+        missing_document = False
+        updated = False
+        if concordat_path.exists():
+            updated = _set_enrolled_value(
+                context.location,
+                value=False,
+                specification=specification,
+            )
+        else:
+            if not allow_missing_document:
+                raise _missing_document_error(specification)
+            missing_document = True
+
         if not updated:
             return DisenrollmentOutcome(
                 repository=specification,
                 location=context.location,
                 updated=False,
+                missing_document=missing_document,
                 committed=False,
                 pushed=False,
+                platform_pr=_platform_pr_removal_result(repo_slug, platform_standards),
             )
 
         _stage_document(context.repository)
@@ -263,8 +322,10 @@ def _disenrol_repository(
             repository=specification,
             location=context.location,
             updated=True,
+            missing_document=False,
             committed=commit_oid is not None,
             pushed=pushed,
+            platform_pr=_platform_pr_removal_result(repo_slug, platform_standards),
         )
 
 
@@ -348,6 +409,34 @@ def _platform_pr_result(
         )
     try:
         return ensure_repository_pr(
+            repo_slug,
+            config=platform_standards,
+        )
+    except ConcordatError as error:
+        return PlatformStandardsResult(
+            created=False,
+            branch=None,
+            pr_url=None,
+            message=str(error),
+        )
+
+
+def _platform_pr_removal_result(
+    repo_slug: str | None,
+    platform_standards: PlatformStandardsConfig | None,
+) -> PlatformStandardsResult | None:
+    """Encapsulate platform PR removal to keep disenrolment orchestration clear."""
+    if platform_standards is None:
+        return None
+    if not repo_slug:
+        return PlatformStandardsResult(
+            created=False,
+            branch=None,
+            pr_url=None,
+            message="unable to determine GitHub slug",
+        )
+    try:
+        return ensure_repository_removal_pr(
             repo_slug,
             config=platform_standards,
         )

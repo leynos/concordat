@@ -30,3 +30,20 @@ def test_update_inventory_idempotent(tmp_path: Path) -> None:
     inventory = tmp_path / "repositories.yaml"
     assert platform_standards._update_inventory(inventory, "example/repo") is True
     assert platform_standards._update_inventory(inventory, "example/repo") is False
+
+
+def test_remove_inventory_removes_entry(tmp_path: Path) -> None:
+    """Remove a repository when it is present."""
+    inventory = tmp_path / "repositories.yaml"
+    assert platform_standards._update_inventory(inventory, "example/repo") is True
+    assert platform_standards._remove_inventory(inventory, "example/repo") is True
+    contents = inventory.read_text(encoding="utf-8")
+    assert "example/repo" not in contents
+
+
+def test_remove_inventory_idempotent(tmp_path: Path) -> None:
+    """Second removal of the same repository becomes a no-op."""
+    inventory = tmp_path / "repositories.yaml"
+    assert platform_standards._update_inventory(inventory, "example/repo") is True
+    assert platform_standards._remove_inventory(inventory, "example/repo") is True
+    assert platform_standards._remove_inventory(inventory, "example/repo") is False

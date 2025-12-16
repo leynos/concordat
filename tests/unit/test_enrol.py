@@ -248,8 +248,10 @@ def test_disenrol_updates_document_and_commit(git_repo: GitRepo) -> None:
     outcome = outcomes[0]
 
     assert outcome.updated is True
+    assert outcome.missing_document is False
     assert outcome.committed is True
     assert outcome.pushed is False
+    assert outcome.platform_pr is None
 
     document_path = git_repo.path / CONCORDAT_FILENAME
     data = _load_yaml(document_path)
@@ -266,11 +268,13 @@ def test_disenrol_is_idempotent(git_repo: GitRepo) -> None:
 
     first_outcome = disenrol_repositories([str(git_repo.path)])[0]
     assert first_outcome.updated is True
+    assert first_outcome.missing_document is False
 
     original_head = git_repo.repository.head.target
     second_outcome = disenrol_repositories([str(git_repo.path)])[0]
 
     assert second_outcome.updated is False
+    assert second_outcome.missing_document is False
     assert second_outcome.committed is False
     assert second_outcome.pushed is False
     assert git_repo.repository.head.target == original_head
@@ -303,5 +307,38 @@ def test_disenrol_remote_repository_pushes(
     outcomes = disenrol_repositories(["git@github.com:example/repo.git"])
 
     assert outcomes[0].updated is True
+    assert outcomes[0].missing_document is False
     assert outcomes[0].pushed is True
     assert pushed == [True]
+
+
+def test_disenrol_can_open_platform_removal_pr(
+    git_repo: GitRepo,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Disenrolment can remove a repo from the platform inventory via PR."""
+    enrol_repositories([str(git_repo.path)])
+    _set_origin(git_repo.repository, "git@github.com:test-owner/sample.git")
+
+    expected = PlatformStandardsResult(
+        created=True,
+        branch="concordat/disenrol/test-owner-sample",
+        pr_url="https://example.com/pr/1",
+        message="opened platform-standards PR",
+    )
+
+    def fake_remove_pr(*args: object, **kwargs: object) -> PlatformStandardsResult:
+        return expected
+
+    monkeypatch.setattr(
+        "concordat.enrol.ensure_repository_removal_pr",
+        fake_remove_pr,
+    )
+
+    outcomes = disenrol_repositories(
+        [str(git_repo.path)],
+        platform_standards=_platform_config(),
+        github_owner="test-owner",
+    )
+
+    assert outcomes[0].platform_pr == expected
