@@ -153,6 +153,7 @@ def test_enrol_force_still_opens_platform_pr(
     assert outcome.pushed is False
     assert outcome.platform_pr == expected
     assert called == [("test-owner/test-repo", config)]
+    assert "merge" in outcome.render()
 
 
 def test_enrol_requires_repository() -> None:

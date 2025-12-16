@@ -115,6 +115,22 @@ def _owner_mismatch_error(
     return ConcordatError(detail)
 
 
+def _render_platform_pr_result(result: PlatformStandardsResult) -> str:
+    """Render the platform inventory PR outcome.
+
+    The active estate inventory (and therefore `concordat estate show`) reflects
+    the estate repository default branch. When concordat opens/updates a feature
+    branch PR in platform-standards, the repository will not appear in the
+    estate inventory until the PR is merged.
+    """
+    if result.created:
+        message = "platform PR opened"
+        if result.pr_url:
+            message = f"{message}: {result.pr_url}"
+        return f"{message} (merge to update estate inventory)"
+    return f"platform PR skipped: {result.message}"
+
+
 @dataclasses.dataclass(frozen=True)
 class EnrollmentOutcome:
     """Captured outcome for a processed repository."""
@@ -131,13 +147,7 @@ class EnrollmentOutcome:
         if not self.created:
             status_parts = ["already enrolled"]
             if self.platform_pr:
-                if self.platform_pr.created:
-                    message = "platform PR opened"
-                    if self.platform_pr.pr_url:
-                        message = f"{message}: {self.platform_pr.pr_url}"
-                else:
-                    message = f"platform PR skipped: {self.platform_pr.message}"
-                status_parts.append(message)
+                status_parts.append(_render_platform_pr_result(self.platform_pr))
             status = ", ".join(status_parts)
             return f"{self.repository}: {status}"
         status_parts = ["created .concordat"]
@@ -146,13 +156,7 @@ class EnrollmentOutcome:
         if self.pushed:
             status_parts.append("pushed")
         if self.platform_pr:
-            if self.platform_pr.created:
-                message = "platform PR opened"
-                if self.platform_pr.pr_url:
-                    message = f"{message}: {self.platform_pr.pr_url}"
-            else:
-                message = f"platform PR skipped: {self.platform_pr.message}"
-            status_parts.append(message)
+            status_parts.append(_render_platform_pr_result(self.platform_pr))
         status = ", ".join(status_parts)
         return f"{self.repository}: {status}"
 
@@ -174,26 +178,14 @@ class DisenrollmentOutcome:
         if self.missing_document:
             status_parts = ["missing .concordat"]
             if self.platform_pr:
-                if self.platform_pr.created:
-                    message = "platform PR opened"
-                    if self.platform_pr.pr_url:
-                        message = f"{message}: {self.platform_pr.pr_url}"
-                else:
-                    message = f"platform PR skipped: {self.platform_pr.message}"
-                status_parts.append(message)
+                status_parts.append(_render_platform_pr_result(self.platform_pr))
             status = ", ".join(status_parts)
             return f"{self.repository}: {status}"
 
         if not self.updated:
             status_parts = ["already disenrolled"]
             if self.platform_pr:
-                if self.platform_pr.created:
-                    message = "platform PR opened"
-                    if self.platform_pr.pr_url:
-                        message = f"{message}: {self.platform_pr.pr_url}"
-                else:
-                    message = f"platform PR skipped: {self.platform_pr.message}"
-                status_parts.append(message)
+                status_parts.append(_render_platform_pr_result(self.platform_pr))
             status = ", ".join(status_parts)
             return f"{self.repository}: {status}"
         status_parts = ["updated .concordat"]
@@ -202,13 +194,7 @@ class DisenrollmentOutcome:
         if self.pushed:
             status_parts.append("pushed")
         if self.platform_pr:
-            if self.platform_pr.created:
-                message = "platform PR opened"
-                if self.platform_pr.pr_url:
-                    message = f"{message}: {self.platform_pr.pr_url}"
-            else:
-                message = f"platform PR skipped: {self.platform_pr.message}"
-            status_parts.append(message)
+            status_parts.append(_render_platform_pr_result(self.platform_pr))
         status = ", ".join(status_parts)
         return f"{self.repository}: {status}"
 
