@@ -283,6 +283,16 @@ class RemoteProbe:
     error: str | None = None
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
+class RepositoryPlan:
+    """Describe the steps required to prepare an estate repository."""
+
+    needs_creation: bool
+    owner: str | None
+    name: str | None
+    client: github3.GitHub | None
+
+
 def default_template_root() -> Path:
     """Return the repository template bundled with concordat."""
     return Path(__file__).resolve().parents[1] / "platform-standards"
@@ -405,18 +415,18 @@ def init_estate(
     confirmer = confirm or _prompt_yes_no
     slug = parse_github_slug(repo_url)
     resolved_owner = _resolve_and_confirm_owner(slug, github_owner, confirmer)
-    needs_creation, owner, name, client = _prepare_repository(
+    repository_plan = _prepare_repository(
         repo_url,
         slug,
         github_token,
         client_factory,
     )
-    if needs_creation:
+    if repository_plan.needs_creation:
         _ensure_repository_exists(
             slug,
-            owner,
-            name,
-            client,
+            repository_plan.owner,
+            repository_plan.name,
+            repository_plan.client,
             github_token,
             client_factory,
             confirmer,
@@ -477,7 +487,7 @@ def _prepare_repository(
     slug: str | None,
     github_token: str | None,
     client_factory: typ.Callable[[str | None], github3.GitHub] | None,
-) -> tuple[bool, str | None, str | None, github3.GitHub | None]:
+) -> RepositoryPlan:
     """Probe the remote repository and decide whether provisioning is required."""
     probe = _probe_remote(repo_url)
     needs_creation = not probe.exists
@@ -500,7 +510,12 @@ def _prepare_repository(
             raise RepositoryInaccessibleError(repo_url)
         needs_creation = True
 
-    return needs_creation, owner, name, client
+    return RepositoryPlan(
+        needs_creation=needs_creation,
+        owner=owner,
+        name=name,
+        client=client,
+    )
 
 
 def _ensure_repository_exists(
