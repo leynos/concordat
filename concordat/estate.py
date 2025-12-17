@@ -415,13 +415,13 @@ def init_estate(
     confirmer = confirm or _prompt_yes_no
     slug = parse_github_slug(repo_url)
     resolved_owner = _resolve_and_confirm_owner(slug, github_owner, confirmer)
+    estate_owner = _require_owner(resolved_owner)
     repository_plan = _prepare_repository(
         repo_url,
         slug,
         github_token,
         client_factory,
     )
-    estate_owner = _require_owner(resolved_owner)
     if repository_plan.needs_creation:
         _ensure_repository_exists(
             slug,

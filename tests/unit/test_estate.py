@@ -18,7 +18,6 @@ from concordat.estate import (
     RemoteProbe,
     RepositoryIdentityError,
     RepositoryInaccessibleError,
-    RepositoryUnreachableError,
     _build_client,
     _resolve_and_confirm_owner,
     get_active_estate,
@@ -34,10 +33,6 @@ if typ.TYPE_CHECKING:
     import unittest.mock as mock
 
     import pytest_mock
-
-    MockType = mock.Mock
-else:
-    MockType = object
 
 
 @pytest.fixture
@@ -63,7 +58,7 @@ def init_estate_error_setup(
 @pytest.fixture
 def mock_remote_probe(
     mocker: pytest_mock.MockFixture,
-) -> typ.Callable[..., MockType]:
+) -> typ.Callable[..., mock.Mock]:
     """Return a factory for mocking estate remote probes."""
 
     def factory(
@@ -72,7 +67,7 @@ def mock_remote_probe(
         exists: bool,
         empty: bool,
         error: str | None = None,
-    ) -> MockType:
+    ) -> mock.Mock:
         probe = RemoteProbe(
             reachable=reachable,
             exists=exists,
@@ -85,7 +80,7 @@ def mock_remote_probe(
 
 
 @pytest.fixture
-def mock_bootstrap(mocker: pytest_mock.MockFixture) -> MockType:
+def mock_bootstrap(mocker: pytest_mock.MockFixture) -> mock.Mock:
     """Mock template bootstrapping during init_estate tests."""
     return mocker.patch.object(estate, "_bootstrap_template")
 
@@ -93,10 +88,10 @@ def mock_bootstrap(mocker: pytest_mock.MockFixture) -> MockType:
 @pytest.fixture
 def mock_client_factory(
     mocker: pytest_mock.MockFixture,
-) -> typ.Callable[..., MockType]:
+) -> typ.Callable[..., mock.Mock]:
     """Return a factory for GitHub client mocks."""
 
-    def factory(*, has_repo: bool | None = None) -> MockType:
+    def factory(*, has_repo: bool | None = None) -> mock.Mock:
         client = mocker.Mock()
         if has_repo is None:
             return client
@@ -350,7 +345,7 @@ def test_init_estate_aborts_when_inferred_owner_not_confirmed(
         "github_owner",
         "confirm_response",
         "expected_result",
-        "should_call_confirmer",
+        "confirmer_called",
         "should_raise",
     ),
     [
@@ -359,7 +354,7 @@ def test_init_estate_aborts_when_inferred_owner_not_confirmed(
             "sandbox",
             "yes",
             "sandbox",
-            "not-called",
+            False,
             None,
             id="explicit-owner-bypasses-confirmation",
         ),
@@ -368,7 +363,7 @@ def test_init_estate_aborts_when_inferred_owner_not_confirmed(
             None,
             "yes",
             "example",
-            "called",
+            True,
             None,
             id="inferred-owner-confirmed",
         ),
@@ -377,7 +372,7 @@ def test_init_estate_aborts_when_inferred_owner_not_confirmed(
             None,
             "no",
             None,
-            "called",
+            True,
             GitHubOwnerConfirmationAbortedError,
             id="inferred-owner-declined",
         ),
@@ -388,7 +383,8 @@ def test_resolve_and_confirm_owner_behavior(
     github_owner: str | None,
     confirm_response: str,
     expected_result: str | None,
-    should_call_confirmer: str,
+    *,
+    confirmer_called: bool,
     should_raise: type[Exception] | None,
     mocker: pytest_mock.MockFixture,
 ) -> None:
@@ -410,7 +406,7 @@ def test_resolve_and_confirm_owner_behavior(
         resolved = _resolve_and_confirm_owner(slug, github_owner, confirmer)
         assert resolved == expected_result
 
-    if should_call_confirmer == "called":
+    if confirmer_called:
         confirmer.assert_called_once()
     else:
         confirmer.assert_not_called()
@@ -466,9 +462,9 @@ def test_init_estate_does_not_prompt_when_owner_is_explicit(
             "{tmp_path}/estate.git",
             None,
             None,
-            RepositoryUnreachableError,
-            None,
-            id="unreachable-non-github-remote-raises",
+            MissingGitHubOwnerError,
+            r"github_owner",
+            id="non-github-remote-missing-owner-raises",
         ),
         pytest.param(
             {"reachable": True, "exists": True, "empty": False},
@@ -489,15 +485,15 @@ def test_init_estate_error_conditions(
     github_token: str | None,
     expected_error: type[Exception],
     match: str | None,
-    mock_remote_probe: typ.Callable[..., MockType],
-    mock_bootstrap: MockType,
+    mock_remote_probe: typ.Callable[..., mock.Mock],
+    mock_bootstrap: mock.Mock,
 ) -> None:
     """Cover init_estate error paths for remote and slug validation.
 
     Scenarios:
     - Reject non-empty remotes.
     - Reject malformed GitHub slugs that lack owner/name pairs.
-    - Reject unreachable remotes when no GitHub slug is available.
+    - Reject missing github_owner for non-GitHub remotes.
     """
     config_path = tmp_path / "config.yaml"
     mock_remote_probe(**probe_state)
