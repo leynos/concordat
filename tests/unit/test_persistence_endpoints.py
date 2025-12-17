@@ -43,3 +43,12 @@ def test_normalize_endpoint_url_preserves_existing_schemes() -> None:
         normalize_endpoint_url("ftp://s3.fr-par.scw.cloud")
         == "ftp://s3.fr-par.scw.cloud"
     )
+
+
+def test_normalize_endpoint_url_respects_custom_default_scheme() -> None:
+    """Custom default_scheme should be used for schemeless inputs."""
+    normalized = normalize_endpoint_url(
+        "s3.fr-par.scw.cloud",
+        default_scheme="http",
+    )
+    assert normalized == "http://s3.fr-par.scw.cloud"
