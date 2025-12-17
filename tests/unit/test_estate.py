@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import typing as typ
 
 import pygit2
@@ -339,53 +340,58 @@ def test_init_estate_aborts_when_inferred_owner_not_confirmed(
         )
 
 
+@dataclasses.dataclass
+class OwnerResolutionScenario:
+    """Test scenario for resolving github_owner."""
+
+    slug: str | None
+    github_owner: str | None
+    confirm_response: str
+    expected_result: str | None
+    confirmer_called: bool
+    should_raise: type[Exception] | None
+
+
 @pytest.mark.parametrize(
-    (
-        "slug",
-        "github_owner",
-        "confirm_response",
-        "expected_result",
-        "confirmer_called",
-        "should_raise",
-    ),
+    "scenario",
     [
         pytest.param(
-            "example/platform-standards",
-            "sandbox",
-            "yes",
-            "sandbox",
-            False,
-            None,
+            OwnerResolutionScenario(
+                slug="example/platform-standards",
+                github_owner="sandbox",
+                confirm_response="yes",
+                expected_result="sandbox",
+                confirmer_called=False,
+                should_raise=None,
+            ),
             id="explicit-owner-bypasses-confirmation",
         ),
         pytest.param(
-            "example/platform-standards",
-            None,
-            "yes",
-            "example",
-            True,
-            None,
+            OwnerResolutionScenario(
+                slug="example/platform-standards",
+                github_owner=None,
+                confirm_response="yes",
+                expected_result="example",
+                confirmer_called=True,
+                should_raise=None,
+            ),
             id="inferred-owner-confirmed",
         ),
         pytest.param(
-            "example/platform-standards",
-            None,
-            "no",
-            None,
-            True,
-            GitHubOwnerConfirmationAbortedError,
+            OwnerResolutionScenario(
+                slug="example/platform-standards",
+                github_owner=None,
+                confirm_response="no",
+                expected_result=None,
+                confirmer_called=True,
+                should_raise=GitHubOwnerConfirmationAbortedError,
+            ),
             id="inferred-owner-declined",
         ),
     ],
 )
 def test_resolve_and_confirm_owner_behavior(
-    slug: str | None,
-    github_owner: str | None,
-    confirm_response: str,
-    expected_result: str | None,
-    *,
-    confirmer_called: bool,
-    should_raise: type[Exception] | None,
+    scenario: OwnerResolutionScenario,
     mocker: pytest_mock.MockFixture,
 ) -> None:
     """Validate owner resolution with explicit and inferred values.
@@ -396,17 +402,21 @@ def test_resolve_and_confirm_owner_behavior(
       accepted.
     - Declining the inferred owner raises GitHubOwnerConfirmationAbortedError.
     """
-    confirm_bool = confirm_response == "yes"
+    confirm_bool = scenario.confirm_response == "yes"
     confirmer = mocker.Mock(return_value=confirm_bool)
 
-    if should_raise is not None:
-        with pytest.raises(should_raise):
-            _resolve_and_confirm_owner(slug, github_owner, confirmer)
+    if scenario.should_raise is not None:
+        with pytest.raises(scenario.should_raise):
+            _resolve_and_confirm_owner(scenario.slug, scenario.github_owner, confirmer)
     else:
-        resolved = _resolve_and_confirm_owner(slug, github_owner, confirmer)
-        assert resolved == expected_result
+        resolved = _resolve_and_confirm_owner(
+            scenario.slug,
+            scenario.github_owner,
+            confirmer,
+        )
+        assert resolved == scenario.expected_result
 
-    if confirmer_called:
+    if scenario.confirmer_called:
         confirmer.assert_called_once()
     else:
         confirmer.assert_not_called()
@@ -438,53 +448,57 @@ def test_init_estate_does_not_prompt_when_owner_is_explicit(
     confirm.assert_not_called()
 
 
+@dataclasses.dataclass
+class InitEstateErrorScenario:
+    """Test scenario for init_estate error conditions."""
+
+    probe_state: dict[str, bool]
+    repo_url: str
+    github_owner: str | None
+    github_token: str | None
+    expected_error: type[Exception]
+    match: str | None = None
+
+
 @pytest.mark.parametrize(
-    (
-        "probe_state",
-        "repo_url",
-        "github_owner",
-        "github_token",
-        "expected_error",
-        "match",
-    ),
+    "scenario",
     [
         pytest.param(
-            {"reachable": False, "exists": False, "empty": True},
-            "git@github.com:example.git",
-            None,
-            "token",
-            RepositoryIdentityError,
-            None,
+            InitEstateErrorScenario(
+                probe_state={"reachable": False, "exists": False, "empty": True},
+                repo_url="git@github.com:example.git",
+                github_owner=None,
+                github_token="token",  # noqa: S106
+                expected_error=RepositoryIdentityError,
+            ),
             id="malformed-slug-raises",
         ),
         pytest.param(
-            {"reachable": False, "exists": True, "empty": True},
-            "{tmp_path}/estate.git",
-            None,
-            None,
-            MissingGitHubOwnerError,
-            r"github_owner",
+            InitEstateErrorScenario(
+                probe_state={"reachable": False, "exists": True, "empty": True},
+                repo_url="{tmp_path}/estate.git",
+                github_owner=None,
+                github_token=None,
+                expected_error=MissingGitHubOwnerError,
+                match=r"github_owner",
+            ),
             id="non-github-remote-missing-owner-raises",
         ),
         pytest.param(
-            {"reachable": True, "exists": True, "empty": False},
-            "git@github.com:example/platform-standards.git",
-            None,
-            None,
-            NonEmptyRepositoryError,
-            None,
+            InitEstateErrorScenario(
+                probe_state={"reachable": True, "exists": True, "empty": False},
+                repo_url="git@github.com:example/platform-standards.git",
+                github_owner=None,
+                github_token=None,
+                expected_error=NonEmptyRepositoryError,
+            ),
             id="non-empty-remote-rejected",
         ),
     ],
 )
 def test_init_estate_error_conditions(
     tmp_path: pathlib.Path,
-    probe_state: dict[str, bool],
-    repo_url: str,
-    github_owner: str | None,
-    github_token: str | None,
-    expected_error: type[Exception],
-    match: str | None,
+    scenario: InitEstateErrorScenario,
     mock_remote_probe: typ.Callable[..., mock.Mock],
     mock_bootstrap: mock.Mock,
 ) -> None:
@@ -496,20 +510,20 @@ def test_init_estate_error_conditions(
     - Reject missing github_owner for non-GitHub remotes.
     """
     config_path = tmp_path / "config.yaml"
-    mock_remote_probe(**probe_state)
+    mock_remote_probe(**scenario.probe_state)
 
-    resolved_repo_url = repo_url.format(tmp_path=tmp_path)
-    if match:
-        error_context = pytest.raises(expected_error, match=match)
+    resolved_repo_url = scenario.repo_url.format(tmp_path=tmp_path)
+    if scenario.match:
+        error_context = pytest.raises(scenario.expected_error, match=scenario.match)
     else:
-        error_context = pytest.raises(expected_error)
+        error_context = pytest.raises(scenario.expected_error)
 
     with error_context:
         init_estate(
             "core",
             resolved_repo_url,
-            github_owner=github_owner,
-            github_token=github_token,
+            github_owner=scenario.github_owner,
+            github_token=scenario.github_token,
             confirm=lambda _: True,
             config_path=config_path,
         )
