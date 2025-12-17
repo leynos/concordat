@@ -14,8 +14,13 @@ from concordat.estate import (
     EstateRecord,
     GitHubOwnerConfirmationAbortedError,
     MissingGitHubOwnerError,
+    NonEmptyRepositoryError,
     RemoteProbe,
+    RepositoryIdentityError,
+    RepositoryInaccessibleError,
+    RepositoryUnreachableError,
     _build_client,
+    _resolve_and_confirm_owner,
     get_active_estate,
     init_estate,
     list_enrolled_repositories,
@@ -255,7 +260,12 @@ def test_init_estate_prompts_to_confirm_inferred_owner(
 
     assert record.github_owner == "example"
     assert confirm.call_count == 1
-    assert "github_owner" in confirm.call_args.args[0]
+    expected_prompt = (
+        "Inferred github_owner 'example' from estate repo "
+        "'example/platform-standards'. Use this? [y/N]: "
+    )
+    assert confirm.call_args.args[0] == expected_prompt
+    assert list_estates(config_path=config_path)[0].github_owner == "example"
 
 
 def test_init_estate_aborts_when_inferred_owner_not_confirmed(
@@ -271,13 +281,214 @@ def test_init_estate_aborts_when_inferred_owner_not_confirmed(
     )
     mocker.patch.object(estate, "_bootstrap_template")
 
-    with pytest.raises(GitHubOwnerConfirmationAbortedError):
+    with pytest.raises(
+        GitHubOwnerConfirmationAbortedError,
+        match=r"confirmation declined",
+    ):
         init_estate(
             "core",
             "git@github.com:example/platform-standards.git",
             confirm=lambda _: False,
             config_path=config_path,
         )
+
+
+def test_resolve_and_confirm_owner_prefers_explicit_owner(
+    mocker: pytest_mock.MockFixture,
+) -> None:
+    """Explicit github_owner values bypass the confirmer."""
+    confirmer = mocker.Mock(return_value=True)
+    assert (
+        _resolve_and_confirm_owner(
+            "example/platform-standards",
+            "sandbox",
+            confirmer,
+        )
+        == "sandbox"
+    )
+    confirmer.assert_not_called()
+
+
+def test_resolve_and_confirm_owner_returns_inferred_owner(
+    mocker: pytest_mock.MockFixture,
+) -> None:
+    """Slug owners are returned when confirmation succeeds."""
+    confirmer = mocker.Mock(return_value=True)
+    assert (
+        _resolve_and_confirm_owner(
+            "example/platform-standards",
+            None,
+            confirmer,
+        )
+        == "example"
+    )
+    confirmer.assert_called_once()
+
+
+def test_resolve_and_confirm_owner_aborts_when_declined(
+    mocker: pytest_mock.MockFixture,
+) -> None:
+    """Declining the inferred owner raises GitHubOwnerConfirmationAbortedError."""
+    confirmer = mocker.Mock(return_value=False)
+    with pytest.raises(GitHubOwnerConfirmationAbortedError):
+        _resolve_and_confirm_owner(
+            "example/platform-standards",
+            None,
+            confirmer,
+        )
+
+
+def test_init_estate_does_not_prompt_when_owner_is_explicit(
+    tmp_path: pathlib.Path,
+    mocker: pytest_mock.MockFixture,
+) -> None:
+    """Explicit github_owner skips the inferred-owner confirmation prompt."""
+    config_path = tmp_path / "config.yaml"
+    mocker.patch.object(
+        estate,
+        "_probe_remote",
+        return_value=RemoteProbe(reachable=True, exists=True, empty=True, error=None),
+    )
+    mocker.patch.object(estate, "_bootstrap_template")
+
+    confirm = mocker.Mock(return_value=True)
+    record = init_estate(
+        "core",
+        "git@github.com:example/platform-standards.git",
+        github_owner="sandbox",
+        confirm=confirm,
+        config_path=config_path,
+    )
+
+    assert record.github_owner == "sandbox"
+    confirm.assert_not_called()
+
+
+def test_init_estate_rejects_non_empty_remote(
+    tmp_path: pathlib.Path,
+    mocker: pytest_mock.MockFixture,
+) -> None:
+    """init_estate rejects repositories that already have commits."""
+    config_path = tmp_path / "config.yaml"
+    mocker.patch.object(
+        estate,
+        "_probe_remote",
+        return_value=RemoteProbe(reachable=True, exists=True, empty=False, error=None),
+    )
+
+    with pytest.raises(NonEmptyRepositoryError):
+        init_estate(
+            "core",
+            "git@github.com:example/platform-standards.git",
+            confirm=lambda _: True,
+            config_path=config_path,
+        )
+
+
+def test_init_estate_raises_when_slug_is_malformed(
+    tmp_path: pathlib.Path,
+    mocker: pytest_mock.MockFixture,
+) -> None:
+    """Malformed slugs that lack owner/name raise RepositoryIdentityError."""
+    config_path = tmp_path / "config.yaml"
+    mocker.patch.object(
+        estate,
+        "_probe_remote",
+        return_value=RemoteProbe(reachable=False, exists=False, empty=True, error=None),
+    )
+    mocker.patch.object(estate, "_bootstrap_template")
+
+    with pytest.raises(RepositoryIdentityError):
+        init_estate(
+            "core",
+            "git@github.com:example.git",
+            github_token="token",  # noqa: S106
+            confirm=lambda _: True,
+            config_path=config_path,
+        )
+
+
+def test_init_estate_raises_when_unreachable_remote_has_no_slug(
+    tmp_path: pathlib.Path,
+    mocker: pytest_mock.MockFixture,
+) -> None:
+    """Unreachable remotes without a slug raise RepositoryUnreachableError."""
+    config_path = tmp_path / "config.yaml"
+    mocker.patch.object(
+        estate,
+        "_probe_remote",
+        return_value=RemoteProbe(reachable=False, exists=True, empty=True, error=None),
+    )
+    mocker.patch.object(estate, "_bootstrap_template")
+
+    with pytest.raises(RepositoryUnreachableError):
+        init_estate(
+            "local",
+            str(tmp_path / "estate.git"),
+            confirm=lambda _: True,
+            config_path=config_path,
+        )
+
+
+def test_init_estate_raises_when_remote_is_inaccessible(
+    tmp_path: pathlib.Path,
+    mocker: pytest_mock.MockFixture,
+) -> None:
+    """Raise RepositoryInaccessibleError when GitHub reports an existing repo."""
+    config_path = tmp_path / "config.yaml"
+    mocker.patch.object(
+        estate,
+        "_probe_remote",
+        return_value=RemoteProbe(reachable=False, exists=True, empty=True, error=None),
+    )
+    mocker.patch.object(estate, "_bootstrap_template")
+
+    fake_client = mocker.Mock()
+    fake_client.repository.return_value = object()
+    mocker.patch.object(estate, "_build_client", return_value=fake_client)
+
+    with pytest.raises(RepositoryInaccessibleError):
+        init_estate(
+            "core",
+            "git@github.com:example/platform-standards.git",
+            github_token="token",  # noqa: S106
+            confirm=lambda _: True,
+            config_path=config_path,
+        )
+
+
+def test_init_estate_creates_repository_when_remote_unreachable_and_missing(
+    tmp_path: pathlib.Path,
+    mocker: pytest_mock.MockFixture,
+) -> None:
+    """Create a repo when GitHub reports it missing but SSH is unreachable."""
+    config_path = tmp_path / "config.yaml"
+    mocker.patch.object(
+        estate,
+        "_probe_remote",
+        return_value=RemoteProbe(reachable=False, exists=True, empty=True, error=None),
+    )
+    mocker.patch.object(estate, "_bootstrap_template")
+
+    fake_client = mocker.Mock()
+    fake_client.repository.return_value = None
+    fake_org = mocker.Mock()
+    fake_client.organization.return_value = fake_org
+    mocker.patch.object(estate, "_build_client", return_value=fake_client)
+
+    create_repo = mocker.patch.object(estate, "_create_repository")
+    confirm = mocker.Mock(return_value=True)
+
+    record = init_estate(
+        "core",
+        "git@github.com:example/platform-standards.git",
+        github_token="token",  # noqa: S106
+        confirm=confirm,
+        config_path=config_path,
+    )
+
+    assert record.github_owner == "example"
+    create_repo.assert_called_once_with(fake_client, "example", "platform-standards")
 
 
 def test_init_estate_translates_authentication_errors(

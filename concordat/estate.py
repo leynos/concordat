@@ -431,12 +431,13 @@ def init_estate(
         callbacks=callbacks,
     )
 
+    estate_owner = _require_owner(resolved_owner)
     record = EstateRecord(
         alias=alias,
         repo_url=repo_url,
         branch=branch,
         inventory_path=inventory_path,
-        github_owner=_require_owner(resolved_owner),
+        github_owner=estate_owner,
     )
     register_estate(record, config_path=config_path, set_active_if_missing=True)
     return record
@@ -461,6 +462,16 @@ def _resolve_and_confirm_owner(
     return inferred_owner
 
 
+def _split_slug(slug: str) -> tuple[str, str]:
+    """Return owner/name for a GitHub slug or raise when invalid."""
+    if "/" not in slug:
+        raise RepositoryIdentityError
+    owner, name = slug.split("/", 1)
+    if not owner or not name:
+        raise RepositoryIdentityError
+    return owner, name
+
+
 def _prepare_repository(
     repo_url: str,
     slug: str | None,
@@ -477,17 +488,14 @@ def _prepare_repository(
     if needs_creation:
         if not slug:
             raise UnsupportedRepositoryCreationError
-        owner, name = slug.split("/", 1)
-        return needs_creation, owner, name, client
-
-    if probe.reachable and not probe.empty:
+        owner, name = _split_slug(slug)
+    elif probe.reachable and not probe.empty:
         raise NonEmptyRepositoryError(repo_url)
-
-    if not probe.reachable:
+    elif not probe.reachable:
         if not slug:
             raise RepositoryUnreachableError(repo_url)
         client = _build_client(github_token, client_factory)
-        owner, name = slug.split("/", 1)
+        owner, name = _split_slug(slug)
         if client.repository(owner, name):
             raise RepositoryInaccessibleError(repo_url)
         needs_creation = True
