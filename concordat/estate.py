@@ -421,6 +421,7 @@ def init_estate(
         github_token,
         client_factory,
     )
+    estate_owner = _require_owner(resolved_owner)
     if repository_plan.needs_creation:
         _ensure_repository_exists(
             slug,
@@ -441,7 +442,6 @@ def init_estate(
         callbacks=callbacks,
     )
 
-    estate_owner = _require_owner(resolved_owner)
     record = EstateRecord(
         alias=alias,
         repo_url=repo_url,
@@ -474,7 +474,7 @@ def _resolve_and_confirm_owner(
 
 def _split_slug(slug: str) -> tuple[str, str]:
     """Return owner/name for a GitHub slug or raise when invalid."""
-    if "/" not in slug:
+    if slug.count("/") != 1:
         raise RepositoryIdentityError
     owner, name = slug.split("/", 1)
     if not owner or not name:
@@ -539,6 +539,7 @@ def _ensure_repository_exists(
     if not owner or not name:
         raise RepositoryIdentityError
     _create_repository(resolved_client, owner, name)
+    return
 
 
 def _probe_remote(repo_url: str) -> RemoteProbe:

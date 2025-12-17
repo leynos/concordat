@@ -227,22 +227,35 @@ def when_run_estate_ls(cli_invocation: dict[str, RunResult]) -> None:
     cli_invocation["result"] = _run_cli(["estate", "ls"])
 
 
+def _run_estate_init_cli(
+    cli_invocation: dict[str, RunResult],
+    *,
+    github_token: str | None = None,
+    yes: bool = False,
+) -> None:
+    args = [
+        "estate",
+        "init",
+        "core",
+        "git@github.com:example/platform-estate.git",
+    ]
+    if github_token is not None:
+        args.extend(["--github-token", github_token])
+    if yes:
+        args.append("--yes")
+    cli_invocation["result"] = _run_cli(args)
+
+
 @when(
     "I run concordat estate init core "
     "git@github.com:example/platform-estate.git with confirmation"
 )
 def when_run_estate_init(cli_invocation: dict[str, RunResult]) -> None:
     """Initialise an estate remote via CLI."""
-    cli_invocation["result"] = _run_cli(
-        [
-            "estate",
-            "init",
-            "core",
-            "git@github.com:example/platform-estate.git",
-            "--github-token",
-            "betamax-token",
-            "--yes",
-        ]
+    _run_estate_init_cli(
+        cli_invocation,
+        github_token="betamax-token",  # noqa: S106
+        yes=True,
     )
 
 
@@ -252,14 +265,7 @@ def when_run_estate_init(cli_invocation: dict[str, RunResult]) -> None:
 )
 def when_run_estate_init_interactively(cli_invocation: dict[str, RunResult]) -> None:
     """Initialise an estate remote without `--yes` to exercise prompts."""
-    cli_invocation["result"] = _run_cli(
-        [
-            "estate",
-            "init",
-            "core",
-            "git@github.com:example/platform-estate.git",
-        ]
-    )
+    _run_estate_init_cli(cli_invocation)
 
 
 @when(
@@ -268,15 +274,9 @@ def when_run_estate_init_interactively(cli_invocation: dict[str, RunResult]) -> 
 )
 def when_run_estate_init_with_token(cli_invocation: dict[str, RunResult]) -> None:
     """Initialise an estate remote with a token but without `--yes`."""
-    cli_invocation["result"] = _run_cli(
-        [
-            "estate",
-            "init",
-            "core",
-            "git@github.com:example/platform-estate.git",
-            "--github-token",
-            "betamax-token",
-        ]
+    _run_estate_init_cli(
+        cli_invocation,
+        github_token="betamax-token",  # noqa: S106
     )
 
 
