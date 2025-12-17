@@ -7,8 +7,8 @@ commands like `uv init`, `uv sync` or `uv run` will prompt `uv` to:
 
 1. Look for a `pyproject.toml` in the project root and keep a lockfile
    (`uv.lock`) in sync with it.
-1. Create a virtual environment (`.venv`) if one does not already exist.
-1. Read dependency specifications (and any build-system directives) to install
+2. Create a virtual environment (`.venv`) if one does not already exist.
+3. Read dependency specifications (and any build-system directives) to install
    or update packages accordingly. (Astral Docs[^1], RidgeRun.ai[^2])
 
 In other words, the project's `pyproject.toml` drives everything—from metadata
@@ -236,18 +236,18 @@ package = true
    - `dependencies`: runtime requirements, expressed in Python Enhancement
      Proposal 508 syntax. (Astral Docs[^1], RidgeRun.ai[^2])
 
-1. **Optional Dependencies (`[project.optional-dependencies]`):**
+2. **Optional Dependencies (`[project.optional-dependencies]`):**
 
    - Grouped as `dev` (for testing + linting) and `docs` (for documentation).
      Installing them is as simple as `uv add --group dev` or
      `uv sync --include dev`. (Python Packaging[^4], DevsJC[^6])
 
-1. **Entry Points (`[project.scripts]`):**
+3. **Entry Points (`[project.scripts]`):**
 
    - Defines a console command `mycli` that maps to `my_project/cli.py:main`.
      Invoking `uv run mycli` runs the `main()` function. (Astral Docs[^8])
 
-1. **Build System:**
+4. **Build System:**
 
    - `setuptools>=61.0` plus `wheel` ensures both legacy and editable installs
      work. ✱ Newer versions of setuptools support Python Enhancement Proposal
@@ -256,7 +256,7 @@ package = true
    - `build-backend = "setuptools.build_meta"` tells `uv` how to compile the
      package. (Python Packaging[^4], Astral Docs[^8])
 
-1. **`[tool.uv]`:**
+5. **`[tool.uv]`:**
 
    - `package = true` ensures that `uv sync` will build and install the project
      (in editable mode) every time dependencies change. Otherwise, `uv` treats
@@ -272,24 +272,24 @@ ______________________________________________________________________
    Language syntax highlighting and Python Enhancement Proposal 621
    autocompletion. (Python Packaging[^4])
 
-1. **Lockfile Discipline:** After modifying `dependencies` or any `[project]`
+2. **Lockfile Discipline:** After modifying `dependencies` or any `[project]`
    fields, always run `uv sync` (or `uv lock`) to update `uv.lock`. This
    guarantees reproducible environments. (Astral Docs[^1])
 
-1. **Semantic Versioning:** Follow [semver](https://semver.org/) for `version`
+3. **Semantic Versioning:** Follow [semver](https://semver.org/) for `version`
    values (e.g., `1.2.3`). Bump patch versions for bug fixes, minor for
    backward-compatible changes, and major for breaking changes. (Python
    Packaging[^4])
 
-1. **Keep Build Constraints Minimal:** When editable installs are unnecessary,
+4. **Keep Build Constraints Minimal:** When editable installs are unnecessary,
    omit `[build-system]` (but note that `uv` will then skip building the package
    and only install dependencies). To override, set `tool.uv.package = true`.
    (Astral Docs[^8])
 
-1. **Use Exact or Bounded Ranges for Dependencies:** Rather than `requests`, use
+5. **Use Exact or Bounded Ranges for Dependencies:** Rather than `requests`, use
    `requests>=2.25, <3.0` to avoid unexpected major bumps. (DevsJC[^6])
 
-1. **Consider Dynamic Fields Sparingly:** Declare fields like
+6. **Consider Dynamic Fields Sparingly:** Declare fields like
    `dynamic = ["version"]` only when the version is computed at build time (e.g.
    via `setuptools_scm`). Ensure the build backend supports dynamic metadata.
    (Python Packaging[^4])

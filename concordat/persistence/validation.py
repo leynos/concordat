@@ -9,6 +9,7 @@ import boto3
 from botocore import exceptions as boto_exceptions
 from botocore.config import Config as BotoConfig
 
+from .endpoints import normalize_endpoint_url
 from .models import (
     PERSISTENCE_CHECK_SUFFIX,
     PersistenceDescriptor,
@@ -79,6 +80,7 @@ def _validate_endpoint_protocol(
     """Ensure endpoints use HTTPS unless explicitly allowed for dev use."""
     if not (endpoint := endpoint.strip()):
         raise PersistenceError("Endpoint is required.")
+    endpoint = normalize_endpoint_url(endpoint)
     _check_endpoint_scheme(endpoint, allow_insecure=allow_insecure_endpoint)
 
 
@@ -154,6 +156,7 @@ def _exercise_write_permissions(client: S3Client, bucket: str, key: str) -> None
 
 def _default_s3_client_factory(region: str, endpoint: str) -> S3Client:
     """Create a boto3 S3 client configured for path-style endpoints."""
+    endpoint = normalize_endpoint_url(endpoint)
     config = BotoConfig(s3={"addressing_style": "path"})
     return typ.cast(
         "S3Client",

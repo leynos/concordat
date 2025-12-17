@@ -7,6 +7,7 @@ import dataclasses
 import typing as typ
 from pathlib import Path
 
+from .endpoints import normalize_endpoint_url
 from .models import (
     BACKEND_DIRNAME,
     DEFAULT_KEY_FILENAME,
@@ -120,6 +121,6 @@ def _build_descriptor(
         key_prefix=prompts["key_prefix"],
         key_suffix=prompts["key_suffix"],
         region=prompts["region"],
-        endpoint=prompts["endpoint"],
+        endpoint=normalize_endpoint_url(prompts["endpoint"]),
         backend_config_path=str(Path(BACKEND_DIRNAME) / backend_path.name),
     )
