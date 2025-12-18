@@ -37,10 +37,14 @@ _GITHUB_REPO_SLUG_FROM_ADDRESS_PATTERN = re.compile(
 def _parse_repo_import_candidate(match: re.Match[str]) -> tuple[str, str, str] | None:
     """Parse a regex match into (address, slug, repo_name) or None if invalid.
 
-    Args:
-        match: A regex match object from _GITHUB_REPO_ADDRESS_PATTERN.
+    Parameters
+    ----------
+    match : re.Match[str]
+        A regex match object from _GITHUB_REPO_ADDRESS_PATTERN.
 
-    Returns:
+    Returns
+    -------
+    tuple[str, str, str] | None
         Tuple of (address, slug, repo_name) if valid, None otherwise.
 
     """
@@ -56,22 +60,8 @@ def _parse_repo_import_candidate(match: re.Match[str]) -> tuple[str, str, str] |
 
 
 def _deduplicate_preserving_order(items: list[_T]) -> list[_T]:
-    """Remove duplicate items while preserving order.
-
-    Args:
-        items: List of hashable items that may contain duplicates.
-
-    Returns:
-        List with duplicates removed, preserving first occurrence order.
-
-    """
-    seen: set[_T] = set()
-    unique: list[_T] = []
-    for item in items:
-        if item not in seen:
-            seen.add(item)
-            unique.append(item)
-    return unique
+    """Remove duplicate items while preserving first occurrence order."""
+    return list(dict.fromkeys(items))
 
 
 def detect_missing_repo_imports(output: str) -> list[tuple[str, str, str]]:
@@ -81,10 +71,14 @@ def detect_missing_repo_imports(output: str) -> list[tuple[str, str, str]]:
     When GitHub returns a "name already exists" error during apply, this
     typically means the repository exists but isn't tracked in state.
 
-    Args:
-        output: Combined stdout/stderr output from a tofu command.
+    Parameters
+    ----------
+    output : str
+        Combined stdout/stderr output from a tofu command.
 
-    Returns:
+    Returns
+    -------
+    list[tuple[str, str, str]]
         List of tuples containing (resource_address, slug, repo_name) for each
         repository that appears to need importing.
 
@@ -107,10 +101,14 @@ def detect_missing_repo_imports(output: str) -> list[tuple[str, str, str]]:
 def _parse_slugs_from_matches(normalized_output: str) -> list[str]:
     """Extract repository slugs from regex matches in normalized output.
 
-    Args:
-        normalized_output: Output string with escaped quotes normalized.
+    Parameters
+    ----------
+    normalized_output : str
+        Output string with escaped quotes normalized.
 
-    Returns:
+    Returns
+    -------
+    list[str]
         List of non-empty slugs found in the output.
 
     """
@@ -131,10 +129,14 @@ def detect_state_forgets_for_prevent_destroy(output: str) -> list[str]:
     outcome is typically to *forget* the resource (remove it from state) while
     leaving the GitHub repository intact.
 
-    Args:
-        output: Combined stdout/stderr output from a tofu command.
+    Parameters
+    ----------
+    output : str
+        Combined stdout/stderr output from a tofu command.
 
-    Returns:
+    Returns
+    -------
+    list[str]
         List of repository slugs that should be removed from state.
 
     """

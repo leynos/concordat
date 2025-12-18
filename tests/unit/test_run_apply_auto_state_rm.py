@@ -16,7 +16,7 @@ from concordat.estate_execution import ExecutionIO, ExecutionOptions, run_apply
 from tests.unit.conftest import _make_record
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(slots=True)
 class _TofuMockResponses:
     """Configuration for Tofu mock responses."""
 
@@ -94,6 +94,15 @@ class TofuMockBuilder:
         self._state_list_response: SimpleNamespace | None = None
         self._state_rm_response: SimpleNamespace | None = None
 
+    def _make_response(
+        self,
+        stdout: str,
+        stderr: str,
+        returncode: int,
+    ) -> SimpleNamespace:
+        """Create a SimpleNamespace response object."""
+        return SimpleNamespace(stdout=stdout, stderr=stderr, returncode=returncode)
+
     def with_apply_response(
         self,
         stdout: str = "",
@@ -101,9 +110,7 @@ class TofuMockBuilder:
         returncode: int = 0,
     ) -> TofuMockBuilder:
         """Add an apply response (called in sequence for multiple applies)."""
-        self._apply_responses.append(
-            SimpleNamespace(stdout=stdout, stderr=stderr, returncode=returncode)
-        )
+        self._apply_responses.append(self._make_response(stdout, stderr, returncode))
         return self
 
     def with_state_list_response(
@@ -113,11 +120,7 @@ class TofuMockBuilder:
         returncode: int = 0,
     ) -> TofuMockBuilder:
         """Set the state list response."""
-        self._state_list_response = SimpleNamespace(
-            stdout=stdout,
-            stderr=stderr,
-            returncode=returncode,
-        )
+        self._state_list_response = self._make_response(stdout, stderr, returncode)
         return self
 
     def with_state_rm_response(
@@ -127,11 +130,7 @@ class TofuMockBuilder:
         returncode: int = 0,
     ) -> TofuMockBuilder:
         """Set the state rm response."""
-        self._state_rm_response = SimpleNamespace(
-            stdout=stdout,
-            stderr=stderr,
-            returncode=returncode,
-        )
+        self._state_rm_response = self._make_response(stdout, stderr, returncode)
         return self
 
     def build(self, calls: list[list[str]]) -> type:

@@ -119,8 +119,6 @@ def test_inventory_preserves_extra_top_level_keys_on_update_and_remove(
 
 def test_update_inventory_sorts_repositories_by_name(tmp_path: Path) -> None:
     """Repositories are deterministically sorted by name after update."""
-    from ruamel.yaml import YAML
-
     inventory = tmp_path / "repositories.yaml"
     original_contents = """\
 schema_version: 1
@@ -133,8 +131,7 @@ repositories:
 
     platform_standards._update_inventory(inventory, "example/repo")
 
-    yaml = YAML(typ="safe")
-    data = yaml.load(inventory.read_text(encoding="utf-8"))
+    data = _load_inventory(inventory)
 
     repo_names = [r["name"] for r in data["repositories"]]
     assert repo_names == sorted(repo_names)

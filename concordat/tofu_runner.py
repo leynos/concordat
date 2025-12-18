@@ -14,6 +14,8 @@ if typ.TYPE_CHECKING:
     from pathlib import Path
     from types import SimpleNamespace
 
+    from tofupy.tofu import CommandResults
+
     from .estate_execution import ExecutionIO
 
 ERROR_MISSING_TOFU = "OpenTofu binary 'tofu' was not found in PATH."
@@ -64,36 +66,57 @@ def stream_tofu_output(io: ExecutionIO, normalized: SimpleNamespace) -> int:
     return normalized.returncode
 
 
-def invoke_tofu_command(tofu: Tofu, args: list[str], io: ExecutionIO) -> int:
-    """Run a tofu command, streaming stdout/stderr to the provided IO."""
-    verb, *extra_args = args
+def _run_tofu(tofu: Tofu, args: list[str]) -> CommandResults:
+    """Execute tofu command and return raw result.
+
+    This is the single primitive through which all tofu commands are executed.
+    It handles the dispatch logic between direct `_run()` calls and tofupy's
+    public method APIs.
+
+    Parameters
+    ----------
+    tofu : Tofu
+        The tofupy Tofu instance.
+    args : list[str]
+        The command arguments (e.g., ["apply", "-auto-approve"]).
+
+    Returns
+    -------
+    CommandResults
+        The raw result from tofu execution.
+
+    """
+    verb = args[0] if args else ""
+    extra_args = args[1:] if args else []
+
     # Tests provide a fake tofu binary that only writes plain text; skip
     # tofupy's streaming JSON interface in that mode to avoid parse errors.
     if os.environ.get("FAKE_TOFU_LOG"):
-        results = tofu._run(args, raise_on_error=False)
-        normalized = normalize_tofu_result(verb, results)
-        return stream_tofu_output(io, normalized)
+        return tofu._run(args, raise_on_error=False)
 
+    # Prefer the CLI output for human readability. `tofupy.plan()` returns a
+    # structured log/plan tuple, which is useful for automation but does not
+    # include the traditional plan diff output operators expect.
     if verb in {"plan", "apply", "import"}:
-        # Prefer the CLI output for human readability. `tofupy.plan()` returns a
-        # structured log/plan tuple, which is useful for automation but does not
-        # include the traditional plan diff output operators expect.
-        results = tofu._run(args, raise_on_error=False)
-        normalized = normalize_tofu_result(verb, results)
-        return stream_tofu_output(io, normalized)
+        return tofu._run(args, raise_on_error=False)
 
     method = getattr(tofu, verb, None)
 
     if callable(method):
         try:
-            results = method(extra_args=extra_args)
+            return method(extra_args=extra_args)
         except TypeError:
             # Fallback for methods that do not accept extra_args.
-            results = method()
-    else:
-        # Last-resort fallback when public APIs are unavailable.
-        results = tofu._run(args, raise_on_error=False)
+            return method()
 
+    # Last-resort fallback when public APIs are unavailable.
+    return tofu._run(args, raise_on_error=False)
+
+
+def invoke_tofu_command(tofu: Tofu, args: list[str], io: ExecutionIO) -> int:
+    """Run a tofu command, streaming stdout/stderr to the provided IO."""
+    verb = args[0] if args else ""
+    results = _run_tofu(tofu, args)
     normalized = normalize_tofu_result(verb, results)
     return stream_tofu_output(io, normalized)
 
@@ -105,18 +128,7 @@ def invoke_tofu_command_with_result(
 ) -> SimpleNamespace:
     """Run tofu and return normalized output, while still streaming it."""
     verb = args[0] if args else ""
-    if os.environ.get("FAKE_TOFU_LOG") or verb in {"plan", "apply", "import"}:
-        results = tofu._run(args, raise_on_error=False)
-    else:
-        method = getattr(tofu, verb, None)
-        if callable(method):
-            try:
-                results = method(extra_args=args[1:])
-            except TypeError:
-                results = method()
-        else:
-            results = tofu._run(args, raise_on_error=False)
-
+    results = _run_tofu(tofu, args)
     normalized = normalize_tofu_result(verb, results)
     stream_tofu_output(io, normalized)
     return normalized

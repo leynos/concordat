@@ -39,6 +39,69 @@ class RecoveryCallbacks:
     detect_prevent_destroy_forgets: typ.Callable[[str], list[str]] | None = None
 
 
+def _combined_output(result: SimpleNamespace) -> str:
+    """Combine stdout and stderr from a result into a single string."""
+    return f"{result.stdout}\n{result.stderr}"
+
+
+def _collect_missing_repo_imports(
+    latest_result: SimpleNamespace,
+    callbacks: RecoveryCallbacks,
+) -> list[tuple[str, str, str]]:
+    """Collect missing repository imports from the latest result."""
+    if callbacks.detect_missing_repo_imports is None:
+        return []
+    return callbacks.detect_missing_repo_imports(_combined_output(latest_result))
+
+
+def _collect_prevent_destroy_forgets(
+    latest_result: SimpleNamespace,
+    callbacks: RecoveryCallbacks,
+) -> list[str]:
+    """Collect slugs for resources blocked by prevent_destroy."""
+    if callbacks.detect_prevent_destroy_forgets is None:
+        return []
+    return callbacks.detect_prevent_destroy_forgets(_combined_output(latest_result))
+
+
+def _attempt_one_import(
+    context: RecoveryContext,
+    callbacks: RecoveryCallbacks,
+    address: str,
+    repo_name: str,
+    slug: str,
+) -> bool:
+    """Attempt to import a single repository, trying repo_name then slug.
+
+    Returns True if import succeeded, False otherwise.
+    """
+    import_attempts = [repo_name, slug]
+    for import_id in import_attempts:
+        callbacks.write_stream_output(
+            context.io.stderr,
+            f"running: tofu import {address} {import_id} (cwd={context.tofu_workdir})",
+        )
+        import_result = callbacks.invoke_tofu_with_result(
+            context.tofu,
+            ["import", address, import_id],
+            context.io,
+        )
+        if int(import_result.returncode) == 0:
+            callbacks.write_stream_output(
+                context.io.stderr,
+                f"completed: tofu import {import_id}",
+            )
+            return True
+
+        failed_detail = import_result.stderr.strip() or "import failed"
+        callbacks.write_stream_output(
+            context.io.stderr,
+            f"failed: tofu import {import_id}: {failed_detail}",
+        )
+
+    return False
+
+
 def _prompt_for_recovery_action(
     prompt_message: str,
     non_interactive_message: str,
@@ -79,47 +142,24 @@ def _execute_repository_imports(
 ) -> int:
     """Execute repository imports with fallback IDs, returning exit code.
 
-    Args:
-        imports: List of (address, slug, repo_name) tuples to import.
-        context: Recovery execution context.
-        callbacks: Recovery callback functions.
+    Parameters
+    ----------
+    imports : list[tuple[str, str, str]]
+        List of (address, slug, repo_name) tuples to import.
+    context : RecoveryContext
+        Recovery execution context.
+    callbacks : RecoveryCallbacks
+        Recovery callback functions.
 
-    Returns:
+    Returns
+    -------
+    int
         0 if all imports succeeded, 1 if any import failed.
 
     """
     for address, slug, repo_name in imports:
-        import_attempts = [repo_name, slug]
-        imported = False
-        for import_id in import_attempts:
-            callbacks.write_stream_output(
-                context.io.stderr,
-                f"running: tofu import {address} {import_id} "
-                f"(cwd={context.tofu_workdir})",
-            )
-            import_result = callbacks.invoke_tofu_with_result(
-                context.tofu,
-                ["import", address, import_id],
-                context.io,
-            )
-            import_exit = int(import_result.returncode)
-            if import_exit == 0:
-                callbacks.write_stream_output(
-                    context.io.stderr,
-                    f"completed: tofu import {import_id}",
-                )
-                imported = True
-                break
-
-            failed_detail = import_result.stderr.strip() or "import failed"
-            callbacks.write_stream_output(
-                context.io.stderr,
-                f"failed: tofu import {import_id}: {failed_detail}",
-            )
-
-        if not imported:
+        if not _attempt_one_import(context, callbacks, address, repo_name, slug):
             return 1
-
     return 0
 
 
@@ -135,13 +175,8 @@ def handle_apply_import_errors(
     apply. Returns updated exit code and latest result.
     """
     exit_code = int(latest_result.returncode)
-    combined_output = f"{latest_result.stdout}\n{latest_result.stderr}"
 
-    if callbacks.detect_missing_repo_imports is None:
-        return exit_code, latest_result
-
-    imports = callbacks.detect_missing_repo_imports(combined_output)
-
+    imports = _collect_missing_repo_imports(latest_result, callbacks)
     if not imports:
         return exit_code, latest_result
 
@@ -168,20 +203,19 @@ def handle_apply_import_errors(
         return exit_code, latest_result
 
     import_exit_code = _execute_repository_imports(imports, context, callbacks)
+    if import_exit_code != 0:
+        return import_exit_code, latest_result
 
-    if import_exit_code == 0:
-        callbacks.write_stream_output(
-            context.io.stderr,
-            f"retrying: tofu apply (cwd={context.tofu_workdir})",
-        )
-        retry_result = callbacks.invoke_tofu_with_result(
-            context.tofu,
-            list(args),
-            context.io,
-        )
-        return int(retry_result.returncode), retry_result
-
-    return import_exit_code, latest_result
+    callbacks.write_stream_output(
+        context.io.stderr,
+        f"retrying: tofu apply (cwd={context.tofu_workdir})",
+    )
+    retry_result = callbacks.invoke_tofu_with_result(
+        context.tofu,
+        list(args),
+        context.io,
+    )
+    return int(retry_result.returncode), retry_result
 
 
 def _line_matches_any_slug(line: str, slugs: list[str]) -> str | None:
@@ -258,6 +292,22 @@ def _retry_apply_after_state_cleanup(
     )
 
 
+def _execute_state_list_command(
+    context: RecoveryContext,
+    callbacks: RecoveryCallbacks,
+) -> SimpleNamespace:
+    """Execute tofu state list and return the result."""
+    callbacks.write_stream_output(
+        context.io.stderr,
+        f"running: tofu state list (cwd={context.tofu_workdir})",
+    )
+    return callbacks.invoke_tofu_with_result(
+        context.tofu,
+        ["state", "list"],
+        context.io,
+    )
+
+
 def handle_apply_prevent_destroy_errors(
     context: RecoveryContext,
     latest_result: SimpleNamespace,
@@ -270,13 +320,8 @@ def handle_apply_prevent_destroy_errors(
     and retries apply. Returns updated exit code and latest result.
     """
     exit_code = int(latest_result.returncode)
-    combined_output = f"{latest_result.stdout}\n{latest_result.stderr}"
 
-    if callbacks.detect_prevent_destroy_forgets is None:
-        return exit_code, latest_result
-
-    forget_slugs = callbacks.detect_prevent_destroy_forgets(combined_output)
-
+    forget_slugs = _collect_prevent_destroy_forgets(latest_result, callbacks)
     if not forget_slugs:
         return exit_code, latest_result
 
@@ -306,24 +351,11 @@ def handle_apply_prevent_destroy_errors(
     if not should_proceed:
         return exit_code, latest_result
 
-    callbacks.write_stream_output(
-        context.io.stderr,
-        f"running: tofu state list (cwd={context.tofu_workdir})",
-    )
-
-    state_list = callbacks.invoke_tofu_with_result(
-        context.tofu,
-        ["state", "list"],
-        context.io,
-    )
+    state_list = _execute_state_list_command(context, callbacks)
     if int(state_list.returncode) != 0:
         return int(state_list.returncode), latest_result
 
-    addresses = _find_matching_state_addresses(
-        state_list.stdout or "",
-        forget_slugs,
-    )
-
+    addresses = _find_matching_state_addresses(state_list.stdout or "", forget_slugs)
     if not addresses:
         callbacks.write_stream_output(
             context.io.stderr,
@@ -331,18 +363,9 @@ def handle_apply_prevent_destroy_errors(
         )
         return exit_code, latest_result
 
-    rm_exit_code = _remove_state_entries(
-        context,
-        addresses,
-        callbacks,
-    )
-
+    rm_exit_code = _remove_state_entries(context, addresses, callbacks)
     if rm_exit_code != 0:
         return rm_exit_code, latest_result
 
-    retry_result = _retry_apply_after_state_cleanup(
-        context,
-        args,
-        callbacks,
-    )
+    retry_result = _retry_apply_after_state_cleanup(context, args, callbacks)
     return int(retry_result.returncode), retry_result
