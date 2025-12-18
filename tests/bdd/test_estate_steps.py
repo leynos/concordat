@@ -183,6 +183,36 @@ def given_missing_remote(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(estate, "_bootstrap_template", lambda *args, **kwargs: None)
 
 
+@given("the estate remote probe reports an empty existing repository")
+def given_empty_existing_remote(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pretend the remote exists, is empty, and can be reached."""
+    monkeypatch.setattr(
+        estate,
+        "_probe_remote",
+        lambda url: RemoteProbe(reachable=True, exists=True, empty=True, error=None),
+    )
+    monkeypatch.setattr(estate, "_bootstrap_template", lambda *args, **kwargs: None)
+
+
+@given(
+    parsers.cfparse('the operator responds "{response}" to prompts'),
+    target_fixture="prompt_log",
+)
+def given_prompt_responder(
+    response: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> list[str]:
+    """Capture input prompts and return the configured response."""
+    prompts: list[str] = []
+
+    def fake_input(message: str = "") -> str:
+        prompts.append(message)
+        return response
+
+    monkeypatch.setattr("builtins.input", fake_input)
+    return prompts
+
+
 @given("a local estate remote", target_fixture="local_remote_path")
 def given_local_estate_remote(tmp_path: Path) -> Path:
     """Expose a bare local Git repository for estate testing."""
@@ -197,22 +227,56 @@ def when_run_estate_ls(cli_invocation: dict[str, RunResult]) -> None:
     cli_invocation["result"] = _run_cli(["estate", "ls"])
 
 
+def _run_estate_init_cli(
+    cli_invocation: dict[str, RunResult],
+    *,
+    github_token: str | None = None,
+    yes: bool = False,
+) -> None:
+    args = [
+        "estate",
+        "init",
+        "core",
+        "git@github.com:example/platform-estate.git",
+    ]
+    if github_token is not None:
+        args.extend(["--github-token", github_token])
+    if yes:
+        args.append("--yes")
+    cli_invocation["result"] = _run_cli(args)
+
+
 @when(
     "I run concordat estate init core "
     "git@github.com:example/platform-estate.git with confirmation"
 )
 def when_run_estate_init(cli_invocation: dict[str, RunResult]) -> None:
     """Initialise an estate remote via CLI."""
-    cli_invocation["result"] = _run_cli(
-        [
-            "estate",
-            "init",
-            "core",
-            "git@github.com:example/platform-estate.git",
-            "--github-token",
-            "betamax-token",
-            "--yes",
-        ]
+    _run_estate_init_cli(
+        cli_invocation,
+        github_token="betamax-token",  # noqa: S106
+        yes=True,
+    )
+
+
+@when(
+    "I run concordat estate init core "
+    "git@github.com:example/platform-estate.git interactively"
+)
+def when_run_estate_init_interactively(cli_invocation: dict[str, RunResult]) -> None:
+    """Initialise an estate remote without `--yes` to exercise prompts."""
+    _run_estate_init_cli(cli_invocation)
+
+
+@when(
+    "I run concordat estate init core "
+    "git@github.com:example/platform-estate.git with token"
+)
+def when_run_estate_init_with_token(cli_invocation: dict[str, RunResult]) -> None:
+    """Initialise an estate remote with a token but without `--yes`."""
+    _run_estate_init_cli(
+        cli_invocation,
+        github_token="betamax-token",  # noqa: S106
     )
 
 
@@ -262,11 +326,39 @@ def then_command_succeeds(cli_invocation: dict[str, RunResult]) -> None:
     assert result.returncode == 0, result.stderr or result.stdout
 
 
+@then(parsers.cfparse('the command fails with "{message}"'))
+def then_command_fails_with(
+    cli_invocation: dict[str, RunResult],
+    message: str,
+) -> None:
+    """Ensure the previous CLI call returned a failure with the expected message."""
+    result = cli_invocation["result"]
+    assert result.returncode != 0
+    assert message in result.stderr
+
+
 @then(parsers.cfparse('estate "{alias}" is recorded in the config'))
 def then_estate_recorded(alias: str) -> None:
     """Confirm that the provided estate alias exists in config."""
     aliases = [record.alias for record in list_estates()]
     assert alias in aliases
+
+
+@then(parsers.cfparse('estate "{alias}" is not recorded in the config'))
+def then_estate_not_recorded(alias: str) -> None:
+    """Confirm that the provided estate alias does not exist in config."""
+    aliases = [record.alias for record in list_estates()]
+    assert alias not in aliases
+
+
+@then("the CLI prompts")
+def then_cli_prompts(prompt_log: list[str], docstring: str) -> None:
+    """Assert the captured prompts match the expected docstring."""
+    expected = [
+        line.rstrip() for line in docstring.strip().splitlines() if line.strip()
+    ]
+    actual = [prompt.rstrip() for prompt in prompt_log]
+    assert actual == expected
 
 
 @then("the estate inventory contains no sample repositories")

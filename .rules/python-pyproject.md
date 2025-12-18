@@ -282,17 +282,17 @@ ______________________________________________________________________
    Packaging[^4])
 
 4. **Keep Build Constraints Minimal:** When editable installs are unnecessary,
-   omit `[build-system]` (but note that `uv` will then skip building the
-   package and only install dependencies). To override, set
-   `tool.uv.package = true`. (Astral Docs[^8])
+   omit `[build-system]` (but note that `uv` will then skip building the package
+   and only install dependencies). To override, set `tool.uv.package = true`.
+   (Astral Docs[^8])
 
 5. **Use Exact or Bounded Ranges for Dependencies:** Rather than `requests`, use
    `requests>=2.25, <3.0` to avoid unexpected major bumps. (DevsJC[^6])
 
 6. **Consider Dynamic Fields Sparingly:** Declare fields like
-   `dynamic = ["version"]` only when the version is computed at build time
-   (e.g. via `setuptools_scm`). Ensure the build backend supports dynamic
-   metadata. (Python Packaging[^4])
+   `dynamic = ["version"]` only when the version is computed at build time (e.g.
+   via `setuptools_scm`). Ensure the build backend supports dynamic metadata.
+   (Python Packaging[^4])
 
 ______________________________________________________________________
 

@@ -50,8 +50,8 @@ configuration and inventory. Bootstrap one with:
 
 ```shell
 uv run concordat estate init core git@github.com:example/platform-standards.git \
-  --github-owner example \
   --github-token "$GITHUB_TOKEN"
+# concordat infers github_owner from the repo and prompts for confirmation.
 ```
 
 ### 2. Enrol a repository

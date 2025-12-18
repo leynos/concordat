@@ -134,11 +134,12 @@ enrolment PRs should be opened.
   - The CLI copies the `platform-standards` directory into a temporary Git repo,
     commits the initial contents, and pushes to the provided remote.
   - `--github-owner` is required when the remote URL is not hosted on GitHub.
-    When omitted, the CLI infers the owner from the repository slug and stores
-    it so `concordat enrol` can enforce the namespace guard.
+    When omitted, the CLI infers the owner from the repository slug, prompts
+    for confirmation, and stores it so `concordat enrol` can enforce the
+    namespace guard.
   - When the target repository does not exist, Concordat prompts before using
-    the GitHub API (via `github3.py`) to create it. Pass `--yes` to skip the
-    prompt in scripted environments.
+    the GitHub API (via `github3.py`) to create it. Pass `--yes` to skip all
+    prompts in scripted environments.
   - Initialization aborts if the repository already contains commits.
 
 - List the configured estates and their remotes:
@@ -255,6 +256,9 @@ Non-interactive use for automation:
   `CONCORDAT_PERSIST_BUCKET`, `CONCORDAT_PERSIST_REGION`,
   `CONCORDAT_PERSIST_ENDPOINT`, `CONCORDAT_PERSIST_KEY_PREFIX`, and
   `CONCORDAT_PERSIST_KEY_SUFFIX`.
+- When `--endpoint` (or `CONCORDAT_PERSIST_ENDPOINT`) omits a scheme, Concordat
+  assumes `https://` (for example, `s3.fr-par.scw.cloud` becomes
+  `https://s3.fr-par.scw.cloud`).
 - Pass `--no-input` to fail fast instead of prompting when any required value
   is missing. Defaults from an existing `backend/persistence.yaml` are still
   honoured in non-interactive mode.

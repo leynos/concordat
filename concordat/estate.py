@@ -131,6 +131,17 @@ class EstateCreationAbortedError(EstateError):
         super().__init__("Estate creation aborted by user.")
 
 
+class GitHubOwnerConfirmationAbortedError(EstateError):
+    """Raised when the operator declines the inferred github_owner."""
+
+    def __init__(self) -> None:
+        """Initialise the error message."""
+        super().__init__(
+            "GitHub owner confirmation declined; re-run with --github-owner "
+            "to override."
+        )
+
+
 class RepositoryIdentityError(EstateError):
     """Raised when the owner/name pair cannot be derived for creation."""
 
@@ -275,6 +286,16 @@ class RemoteProbe:
     error: str | None = None
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
+class RepositoryPlan:
+    """Describe the steps required to prepare an estate repository."""
+
+    needs_creation: bool
+    owner: str | None
+    name: str | None
+    client: github3.GitHub | None
+
+
 def default_template_root() -> Path:
     """Return the repository template bundled with concordat."""
     return Path(__file__).resolve().parents[1] / "platform-standards"
@@ -394,41 +415,26 @@ def init_estate(
     if alias in records:
         raise DuplicateEstateAliasError(alias)
 
-    probe = _probe_remote(repo_url)
+    confirmer = confirm or _prompt_yes_no
     slug = parse_github_slug(repo_url)
-    resolved_owner = _resolve_github_owner(slug, github_owner)
-    needs_creation = not probe.exists
-
-    client: github3.GitHub | None = None
-    owner = name = None
-    if needs_creation:
-        if not slug:
-            raise UnsupportedRepositoryCreationError
-        owner, name = slug.split("/", 1)
-    elif probe.reachable and not probe.empty:
-        raise NonEmptyRepositoryError(repo_url)
-    elif not probe.reachable:
-        if not slug:
-            raise RepositoryUnreachableError(repo_url)
-        client = _build_client(github_token, client_factory)
-        owner, name = slug.split("/", 1)
-        if client.repository(owner, name):
-            raise RepositoryInaccessibleError(repo_url)
-        needs_creation = True
-
-    if needs_creation:
-        if not slug:
-            raise RepositorySlugUnknownError
-        client = client or _build_client(github_token, client_factory)
-        if not confirm:
-            confirm = _prompt_yes_no
-        if not confirm(
-            f"Create GitHub repository {slug}? [y/N]: ",
-        ):
-            raise EstateCreationAbortedError
-        if not owner or not name:
-            raise RepositoryIdentityError
-        _create_repository(client, owner, name)
+    resolved_owner = _resolve_and_confirm_owner(slug, github_owner, confirmer)
+    estate_owner = _require_owner(resolved_owner)
+    repository_plan = _prepare_repository(
+        repo_url,
+        slug,
+        github_token,
+        client_factory,
+    )
+    if repository_plan.needs_creation:
+        _ensure_repository_exists(
+            slug,
+            repository_plan.owner,
+            repository_plan.name,
+            repository_plan.client,
+            github_token,
+            client_factory,
+            confirmer,
+        )
 
     callbacks = build_remote_callbacks(repo_url)
     _bootstrap_template(
@@ -444,10 +450,99 @@ def init_estate(
         repo_url=repo_url,
         branch=branch,
         inventory_path=inventory_path,
-        github_owner=_require_owner(resolved_owner),
+        github_owner=estate_owner,
     )
     register_estate(record, config_path=config_path, set_active_if_missing=True)
     return record
+
+
+def _resolve_and_confirm_owner(
+    slug: str | None,
+    github_owner: str | None,
+    confirmer: typ.Callable[[str], bool],
+) -> str | None:
+    """Resolve github_owner and prompt when inferred from the estate slug."""
+    if github_owner is not None:
+        return _resolve_github_owner(slug, github_owner)
+
+    inferred_owner = _owner_from_slug(slug)
+    if inferred_owner and not confirmer(
+        "Inferred github_owner "
+        f"{inferred_owner!r} from estate repo {slug!r}. "
+        "Use this? [y/N]: ",
+    ):
+        raise GitHubOwnerConfirmationAbortedError
+    return inferred_owner
+
+
+def _split_slug(slug: str) -> tuple[str, str]:
+    """Return owner/name for a GitHub slug or raise when invalid."""
+    if slug.count("/") != 1:
+        raise RepositoryIdentityError
+    owner, name = slug.split("/", 1)
+    if not owner or not name:
+        raise RepositoryIdentityError
+    return owner, name
+
+
+def _prepare_repository(
+    repo_url: str,
+    slug: str | None,
+    github_token: str | None,
+    client_factory: typ.Callable[[str | None], github3.GitHub] | None,
+) -> RepositoryPlan:
+    """Probe the remote repository and decide whether provisioning is required."""
+    probe = _probe_remote(repo_url)
+    needs_creation = not probe.exists
+
+    client: github3.GitHub | None = None
+    owner = name = None
+
+    if needs_creation:
+        if not slug:
+            raise UnsupportedRepositoryCreationError
+        owner, name = _split_slug(slug)
+    elif probe.reachable and not probe.empty:
+        raise NonEmptyRepositoryError(repo_url)
+    elif not probe.reachable:
+        if not slug:
+            raise RepositoryUnreachableError(repo_url)
+        client = _build_client(github_token, client_factory)
+        owner, name = _split_slug(slug)
+        if client.repository(owner, name):
+            raise RepositoryInaccessibleError(repo_url)
+        needs_creation = True
+
+    return RepositoryPlan(
+        needs_creation=needs_creation,
+        owner=owner,
+        name=name,
+        client=client,
+    )
+
+
+def _ensure_repository_exists(
+    slug: str | None,
+    owner: str | None,
+    name: str | None,
+    client: github3.GitHub | None,
+    github_token: str | None,
+    client_factory: typ.Callable[[str | None], github3.GitHub] | None,
+    confirmer: typ.Callable[[str], bool],
+) -> None:
+    """Create the GitHub repository when it does not yet exist."""
+    if not slug:
+        raise RepositorySlugUnknownError
+
+    resolved_client = client or _build_client(github_token, client_factory)
+    if not confirmer(
+        f"Create GitHub repository {slug}? [y/N]: ",
+    ):
+        raise EstateCreationAbortedError
+    if not owner or not name:
+        raise RepositoryIdentityError
+    _create_repository(resolved_client, owner, name)
+    return
 
 
 def _probe_remote(repo_url: str) -> RemoteProbe:
