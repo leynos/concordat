@@ -264,7 +264,7 @@ def _validate_tofu_changes(workdir: Path) -> None:
     _run_cmd(["tofu", "fmt", "-recursive", "tofu"], cwd=workdir)
     _run_cmd(["tofu", "fmt", "-recursive", "-check", "tofu"], cwd=workdir)
     _run_tflint(workdir)
-    _run_tofo_validate(workdir)
+    _run_tofu_validate(workdir)
 
 
 def _ensure_inventory_pr(
@@ -339,11 +339,11 @@ def _ensure_inventory_pr(
         _commit_inventory_changes(repository, config, repo_slug, base_commit, verb=verb)
         _validate_tofu_changes(workdir)
 
-        refspec = f"refs/heads/{branch_name}:refs/heads/{branch_name}"
-        remote.push([refspec], callbacks=callbacks)
-
         if not config.github_token:
             raise ConcordatError(ERROR_MISSING_TOKEN)
+
+        refspec = f"refs/heads/{branch_name}:refs/heads/{branch_name}"
+        remote.push([refspec], callbacks=callbacks)
 
         pr_url, _ = _create_pr_for_inventory_change(
             config, repo_slug, branch_name, verb=verb
@@ -529,7 +529,7 @@ def _run_tflint(workdir: Path) -> None:
         _run_cmd(["tflint", f"--chdir={module}"], cwd=workdir)
 
 
-def _run_tofo_validate(workdir: Path) -> None:
+def _run_tofu_validate(workdir: Path) -> None:
     modules_dir = workdir / "tofu" / "modules"
     if not modules_dir.exists():
         return
@@ -566,12 +566,21 @@ def _branch_name_for(slug: str, *, verb: str = "enrol") -> str:
 def _resolve_branch_commit(
     repository: pygit2.Repository, branch_name: str
 ) -> pygit2.Commit:
-    """Return the commit for either a local or remote branch reference."""
+    """Return the commit for either a local or remote branch reference.
+
+    Raises:
+        KeyError: If branch exists neither locally nor as origin/{branch_name}.
+
+    """
     try:
         branch = repository.branches[branch_name]
     except KeyError:
         remote_name = f"origin/{branch_name}"
-        branch = repository.branches.remote[remote_name]
+        try:
+            branch = repository.branches.remote[remote_name]
+        except KeyError:
+            msg = f"Branch '{branch_name}' not found locally or as '{remote_name}'"
+            raise KeyError(msg) from None
     return branch.peel(pygit2.Commit)
 
 
@@ -661,9 +670,18 @@ def _open_or_fetch_pull_request(
     head_branch: str,
     body: str,
 ) -> _PullRequest:
-    """Create a pull request, or return the existing one for the same head."""
+    """Create a pull request, or return the existing one for the same head.
+
+    Raises:
+        github3.exceptions.UnprocessableEntity: If PR creation fails and no
+            existing PR is found for the same head branch.
+
+    """
     github3_exceptions = getattr(github3, "exceptions", None)
-    unprocessable = getattr(github3_exceptions, "UnprocessableEntity", Exception)
+    unprocessable = getattr(github3_exceptions, "UnprocessableEntity", None)
+    if unprocessable is None:
+        msg = "github3.exceptions.UnprocessableEntity not available"
+        raise ImportError(msg)
 
     try:
         return gh_repo.create_pull(

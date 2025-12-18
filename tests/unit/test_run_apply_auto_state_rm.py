@@ -76,6 +76,34 @@ class TofuMockBuilder:
                 self.env = env
                 self._apply_count = 0
 
+            def _handle_apply(self) -> SimpleNamespace:
+                """Handle apply command with sequential response tracking."""
+                if self._apply_count < len(apply_responses):
+                    response = apply_responses[self._apply_count]
+                    self._apply_count += 1
+                    return response
+                return SimpleNamespace(stdout="", stderr="", returncode=0)
+
+            def _handle_state_list(self) -> SimpleNamespace:
+                """Handle state list command."""
+                if state_list_response is not None:
+                    return state_list_response
+                return SimpleNamespace(stdout="", stderr="", returncode=0)
+
+            def _handle_state_rm(self) -> SimpleNamespace:
+                """Handle state rm command."""
+                if state_rm_response is not None:
+                    return state_rm_response
+                return SimpleNamespace(stdout="", stderr="", returncode=0)
+
+            def _is_state_list(self, args: list[str]) -> bool:
+                """Check if args represent a 'state list' command."""
+                return len(args) >= 2 and args[0] == "state" and args[1] == "list"
+
+            def _is_state_rm(self, args: list[str]) -> bool:
+                """Check if args represent a 'state rm' command."""
+                return len(args) >= 2 and args[0] == "state" and args[1] == "rm"
+
             def _run(
                 self,
                 args: list[str],
@@ -86,21 +114,13 @@ class TofuMockBuilder:
                 verb = args[0] if args else ""
 
                 if verb == "apply":
-                    if self._apply_count < len(apply_responses):
-                        response = apply_responses[self._apply_count]
-                        self._apply_count += 1
-                        return response
-                    return SimpleNamespace(stdout="", stderr="", returncode=0)
+                    return self._handle_apply()
 
-                if verb == "state" and args[1:] == ["list"]:
-                    if state_list_response is not None:
-                        return state_list_response
-                    return SimpleNamespace(stdout="", stderr="", returncode=0)
+                if self._is_state_list(args):
+                    return self._handle_state_list()
 
-                if verb == "state" and len(args) > 1 and args[1] == "rm":
-                    if state_rm_response is not None:
-                        return state_rm_response
-                    return SimpleNamespace(stdout="", stderr="", returncode=0)
+                if self._is_state_rm(args):
+                    return self._handle_state_rm()
 
                 return SimpleNamespace(stdout="", stderr="", returncode=0)
 

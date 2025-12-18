@@ -114,7 +114,7 @@ def test_ensure_repository_pr_updates_existing_remote_branch_without_non_fast_fo
         "concordat.platform_standards._run_tflint", lambda *a, **k: None
     )
     monkeypatch.setattr(
-        "concordat.platform_standards._run_tofo_validate",
+        "concordat.platform_standards._run_tofu_validate",
         lambda *a, **k: None,
     )
 

@@ -105,6 +105,40 @@ repositories:
     assert repo_names == sorted(repo_names)
 
 
+def test_remove_inventory_preserves_extra_top_level_keys(tmp_path: Path) -> None:
+    """Extra top-level keys in inventory are preserved after removal."""
+    from ruamel.yaml import YAML
+
+    inventory = tmp_path / "repositories.yaml"
+    original_contents = """\
+schema_version: 1
+metadata:
+  owner: team-a
+  environment: production
+labels:
+  - backend
+  - critical
+repositories:
+  - name: existing/repo
+  - name: to-remove/repo
+"""
+    inventory.write_text(original_contents, encoding="utf-8")
+
+    removed = platform_standards._remove_inventory(inventory, "to-remove/repo")
+    assert removed is True
+
+    yaml = YAML(typ="safe")
+    data = yaml.load(inventory.read_text(encoding="utf-8"))
+
+    assert data["schema_version"] == 1
+    assert data["metadata"] == {"owner": "team-a", "environment": "production"}
+    assert data["labels"] == ["backend", "critical"]
+
+    repo_names = [r["name"] for r in data["repositories"]]
+    assert "existing/repo" in repo_names
+    assert "to-remove/repo" not in repo_names
+
+
 def test_parse_github_slug_preserves_repo_names_ending_in_git_chars() -> None:
     """Slug parsing must only remove the literal `.git` suffix."""
     assert (
