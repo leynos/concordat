@@ -8,6 +8,9 @@ from state, or resources protected by lifecycle.prevent_destroy.
 from __future__ import annotations
 
 import re
+import typing as typ
+
+_T = typ.TypeVar("_T")
 
 # Markers for detecting GitHub repository existence errors.
 _GITHUB_REPO_EXISTS_MARKER = "name already exists on this account"
@@ -52,20 +55,18 @@ def _parse_repo_import_candidate(match: re.Match[str]) -> tuple[str, str, str] |
     return (address, slug, repo_name)
 
 
-def _deduplicate_preserving_order(
-    items: list[tuple[str, str, str]],
-) -> list[tuple[str, str, str]]:
-    """Remove duplicate tuples while preserving order.
+def _deduplicate_preserving_order(items: list[_T]) -> list[_T]:
+    """Remove duplicate items while preserving order.
 
     Args:
-        items: List of tuples that may contain duplicates.
+        items: List of hashable items that may contain duplicates.
 
     Returns:
         List with duplicates removed, preserving first occurrence order.
 
     """
-    seen: set[tuple[str, str, str]] = set()
-    unique: list[tuple[str, str, str]] = []
+    seen: set[_T] = set()
+    unique: list[_T] = []
     for item in items:
         if item not in seen:
             seen.add(item)
@@ -121,25 +122,6 @@ def _parse_slugs_from_matches(normalized_output: str) -> list[str]:
     return candidates
 
 
-def _deduplicate_strings(items: list[str]) -> list[str]:
-    """Remove duplicate strings while preserving order.
-
-    Args:
-        items: List of strings that may contain duplicates.
-
-    Returns:
-        List with duplicates removed, preserving first occurrence order.
-
-    """
-    seen: set[str] = set()
-    unique: list[str] = []
-    for item in items:
-        if item not in seen:
-            seen.add(item)
-            unique.append(item)
-    return unique
-
-
 def detect_state_forgets_for_prevent_destroy(output: str) -> list[str]:
     """Return a list of slugs that look like they should be removed from state.
 
@@ -165,4 +147,4 @@ def detect_state_forgets_for_prevent_destroy(output: str) -> list[str]:
 
     normalized_output = output.replace('\\"', '"')
     candidates = _parse_slugs_from_matches(normalized_output)
-    return _deduplicate_strings(candidates)
+    return _deduplicate_preserving_order(candidates)

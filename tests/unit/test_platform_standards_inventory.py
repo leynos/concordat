@@ -4,12 +4,43 @@ from __future__ import annotations
 
 import typing as typ
 
+import pytest
+from ruamel.yaml import YAML
+
 from concordat import platform_standards
 
 if typ.TYPE_CHECKING:
     from pathlib import Path
-else:  # pragma: no cover - runtime fallback
-    Path = typ.Any
+
+
+def _seed_inventory_with_metadata(inventory: Path, repos: list[str]) -> None:
+    """Write an inventory file with schema_version, metadata, labels, and repos."""
+    repo_entries = "\n".join(f"  - name: {slug}" for slug in repos)
+    contents = f"""\
+schema_version: 1
+metadata:
+  owner: team-a
+  environment: production
+labels:
+  - backend
+  - critical
+repositories:
+{repo_entries}
+"""
+    inventory.write_text(contents, encoding="utf-8")
+
+
+def _load_inventory(inventory: Path) -> dict[str, typ.Any]:
+    """Load inventory YAML file."""
+    yaml = YAML(typ="safe")
+    return yaml.load(inventory.read_text(encoding="utf-8"))
+
+
+def _assert_metadata_preserved(data: dict[str, typ.Any]) -> None:
+    """Assert that seeded metadata keys are preserved."""
+    assert data["schema_version"] == 1
+    assert data["metadata"] == {"owner": "team-a", "environment": "production"}
+    assert data["labels"] == ["backend", "critical"]
 
 
 def test_update_inventory_adds_entry(tmp_path: Path) -> None:
@@ -49,37 +80,41 @@ def test_remove_inventory_idempotent(tmp_path: Path) -> None:
     assert platform_standards._remove_inventory(inventory, "example/repo") is False
 
 
-def test_update_inventory_preserves_extra_top_level_keys(tmp_path: Path) -> None:
-    """Extra top-level keys in inventory are preserved after update."""
-    from ruamel.yaml import YAML
-
+@pytest.mark.parametrize(
+    ("initial_repos", "mutate", "expected_repos"),
+    [
+        pytest.param(
+            ["existing/repo"],
+            lambda inv: platform_standards._update_inventory(inv, "example/repo"),
+            {"existing/repo", "example/repo"},
+            id="update_adds_repo",
+        ),
+        pytest.param(
+            ["existing/repo", "example/repo"],
+            lambda inv: platform_standards._remove_inventory(inv, "example/repo"),
+            {"existing/repo"},
+            id="remove_deletes_repo",
+        ),
+    ],
+)
+def test_inventory_preserves_extra_top_level_keys_on_update_and_remove(
+    tmp_path: Path,
+    initial_repos: list[str],
+    mutate: typ.Callable[[Path], bool],
+    expected_repos: set[str],
+) -> None:
+    """Extra top-level keys in inventory are preserved after update or removal."""
     inventory = tmp_path / "repositories.yaml"
-    original_contents = """\
-schema_version: 1
-metadata:
-  owner: team-a
-  environment: production
-labels:
-  - backend
-  - critical
-repositories:
-  - name: existing/repo
-"""
-    inventory.write_text(original_contents, encoding="utf-8")
+    _seed_inventory_with_metadata(inventory, initial_repos)
 
-    added = platform_standards._update_inventory(inventory, "example/repo")
-    assert added is True
+    result = mutate(inventory)
+    assert result is True
 
-    yaml = YAML(typ="safe")
-    data = yaml.load(inventory.read_text(encoding="utf-8"))
+    data = _load_inventory(inventory)
+    _assert_metadata_preserved(data)
 
-    assert data["schema_version"] == 1
-    assert data["metadata"] == {"owner": "team-a", "environment": "production"}
-    assert data["labels"] == ["backend", "critical"]
-
-    repo_names = [r["name"] for r in data["repositories"]]
-    assert "existing/repo" in repo_names
-    assert "example/repo" in repo_names
+    repo_names = {r["name"] for r in data["repositories"]}
+    assert repo_names == expected_repos
 
 
 def test_update_inventory_sorts_repositories_by_name(tmp_path: Path) -> None:
@@ -103,40 +138,6 @@ repositories:
 
     repo_names = [r["name"] for r in data["repositories"]]
     assert repo_names == sorted(repo_names)
-
-
-def test_remove_inventory_preserves_extra_top_level_keys(tmp_path: Path) -> None:
-    """Extra top-level keys in inventory are preserved after removal."""
-    from ruamel.yaml import YAML
-
-    inventory = tmp_path / "repositories.yaml"
-    original_contents = """\
-schema_version: 1
-metadata:
-  owner: team-a
-  environment: production
-labels:
-  - backend
-  - critical
-repositories:
-  - name: existing/repo
-  - name: to-remove/repo
-"""
-    inventory.write_text(original_contents, encoding="utf-8")
-
-    removed = platform_standards._remove_inventory(inventory, "to-remove/repo")
-    assert removed is True
-
-    yaml = YAML(typ="safe")
-    data = yaml.load(inventory.read_text(encoding="utf-8"))
-
-    assert data["schema_version"] == 1
-    assert data["metadata"] == {"owner": "team-a", "environment": "production"}
-    assert data["labels"] == ["backend", "critical"]
-
-    repo_names = [r["name"] for r in data["repositories"]]
-    assert "existing/repo" in repo_names
-    assert "to-remove/repo" not in repo_names
 
 
 def test_parse_github_slug_preserves_repo_names_ending_in_git_chars() -> None:

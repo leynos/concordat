@@ -14,7 +14,7 @@ if typ.TYPE_CHECKING:
     from .estate_execution import ExecutionIO
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(slots=True)
 class RecoveryContext:
     """Encapsulates the execution context for recovery operations."""
 
@@ -23,7 +23,7 @@ class RecoveryContext:
     io: ExecutionIO
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(slots=True)
 class RecoveryCallbacks:
     """Encapsulates dependency-injected callbacks for recovery operations."""
 
@@ -37,7 +37,39 @@ class RecoveryCallbacks:
         typ.Callable[[str], list[tuple[str, str, str]]] | None
     ) = None
     detect_prevent_destroy_forgets: typ.Callable[[str], list[str]] | None = None
-    normalize_tofu_result: typ.Callable[[str, object], SimpleNamespace] | None = None
+
+
+def _prompt_for_recovery_action(
+    prompt_message: str,
+    non_interactive_message: str,
+    context: RecoveryContext,
+    callbacks: RecoveryCallbacks,
+    exit_code: int,
+    latest_result: SimpleNamespace,
+) -> tuple[bool, int, SimpleNamespace]:
+    """Prompt user for recovery action approval.
+
+    Args:
+        prompt_message: The message to display to the user.
+        non_interactive_message: Message to show when prompting is not possible.
+        context: Recovery execution context.
+        callbacks: Recovery callback functions.
+        exit_code: Current exit code to return if prompting fails.
+        latest_result: Latest result to return if prompting fails.
+
+    Returns:
+        Tuple of (should_proceed, exit_code, latest_result).
+        If should_proceed is False, caller should return (exit_code, latest_result).
+
+    """
+    if not callbacks.can_prompt():
+        callbacks.write_stream_output(context.io.stderr, non_interactive_message)
+        return False, exit_code, latest_result
+
+    if not callbacks.prompt_yes_no(prompt_message, context.io.stderr):
+        return False, exit_code, latest_result
+
+    return True, exit_code, latest_result
 
 
 def _execute_repository_imports(
@@ -119,20 +151,20 @@ def handle_apply_import_errors(
         "missing from state.\n"
         f"Import into state and retry apply? ({repos}) [y/N]: "
     )
+    non_interactive_msg = (
+        "cannot prompt for auto-import in non-interactive mode; "
+        "re-run with --keep-workdir and import manually"
+    )
 
-    if not callbacks.can_prompt():
-        callbacks.write_stream_output(
-            context.io.stderr,
-            (
-                "cannot prompt for auto-import in non-interactive "
-                "mode; "
-                "re-run with --keep-workdir "
-                "and import manually"
-            ),
-        )
-        return exit_code, latest_result
-
-    if not callbacks.prompt_yes_no(prompt_msg, context.io.stderr):
+    should_proceed, exit_code, latest_result = _prompt_for_recovery_action(
+        prompt_msg,
+        non_interactive_msg,
+        context,
+        callbacks,
+        exit_code,
+        latest_result,
+    )
+    if not should_proceed:
         return exit_code, latest_result
 
     import_exit_code = _execute_repository_imports(imports, context, callbacks)
@@ -257,20 +289,21 @@ def handle_apply_prevent_destroy_errors(
         "Remove these resources from state and retry apply? "
         f"({repos}) [y/N]: "
     )
+    non_interactive_msg = (
+        "cannot prompt for state cleanup in non-interactive mode; "
+        "re-run with --keep-workdir and remove resources with "
+        "`tofu state rm` manually"
+    )
 
-    if not callbacks.can_prompt():
-        callbacks.write_stream_output(
-            context.io.stderr,
-            (
-                "cannot prompt for state cleanup in "
-                "non-interactive mode; re-run with "
-                "--keep-workdir and remove resources with "
-                "`tofu state rm` manually"
-            ),
-        )
-        return exit_code, latest_result
-
-    if not callbacks.prompt_yes_no(prompt_msg, context.io.stderr):
+    should_proceed, exit_code, latest_result = _prompt_for_recovery_action(
+        prompt_msg,
+        non_interactive_msg,
+        context,
+        callbacks,
+        exit_code,
+        latest_result,
+    )
+    if not should_proceed:
         return exit_code, latest_result
 
     callbacks.write_stream_output(
@@ -278,14 +311,11 @@ def handle_apply_prevent_destroy_errors(
         f"running: tofu state list (cwd={context.tofu_workdir})",
     )
 
-    if callbacks.normalize_tofu_result is None:
-        return exit_code, latest_result
-
-    state_list_raw = context.tofu._run(
+    state_list = callbacks.invoke_tofu_with_result(
+        context.tofu,
         ["state", "list"],
-        raise_on_error=False,
+        context.io,
     )
-    state_list = callbacks.normalize_tofu_result("state", state_list_raw)
     if int(state_list.returncode) != 0:
         return int(state_list.returncode), latest_result
 

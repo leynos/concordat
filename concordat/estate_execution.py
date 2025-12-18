@@ -29,7 +29,6 @@ from .tofu_github_errors import (
 from .tofu_github_errors import (
     detect_state_forgets_for_prevent_destroy as _detect_prevent_destroy_forgets,
 )
-from .tofu_output import normalize_tofu_result as _normalize_tofu_result
 from .tofu_runner import (
     initialize_tofu,
     invoke_tofu_command,
@@ -302,7 +301,6 @@ def _execute_apply_command(
         can_prompt=_can_prompt,
         prompt_yes_no=_prompt_yes_no,
         detect_prevent_destroy_forgets=_detect_prevent_destroy_forgets,
-        normalize_tofu_result=_normalize_tofu_result,
     )
 
     if exit_code != 0:

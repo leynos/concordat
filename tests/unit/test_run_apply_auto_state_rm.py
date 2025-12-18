@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import io
 import typing as typ
 from types import SimpleNamespace
@@ -13,6 +14,75 @@ if typ.TYPE_CHECKING:  # pragma: no cover
 
 from concordat.estate_execution import ExecutionIO, ExecutionOptions, run_apply
 from tests.unit.conftest import _make_record
+
+
+@dataclasses.dataclass
+class _TofuMockResponses:
+    """Configuration for Tofu mock responses."""
+
+    apply_responses: list[SimpleNamespace]
+    state_list_response: SimpleNamespace | None
+    state_rm_response: SimpleNamespace | None
+
+
+class _BaseTofuMock:
+    """Base mock class for Tofu with configurable responses."""
+
+    responses: _TofuMockResponses
+    calls: list[list[str]]
+
+    def __init__(self, cwd: str, env: dict[str, str]) -> None:
+        self.cwd = cwd
+        self.env = env
+        self._apply_count = 0
+
+    def _handle_apply(self) -> SimpleNamespace:
+        """Handle apply command with sequential response tracking."""
+        if self._apply_count < len(self.responses.apply_responses):
+            response = self.responses.apply_responses[self._apply_count]
+            self._apply_count += 1
+            return response
+        return SimpleNamespace(stdout="", stderr="", returncode=0)
+
+    def _handle_state_list(self) -> SimpleNamespace:
+        """Handle state list command."""
+        if self.responses.state_list_response is not None:
+            return self.responses.state_list_response
+        return SimpleNamespace(stdout="", stderr="", returncode=0)
+
+    def _handle_state_rm(self) -> SimpleNamespace:
+        """Handle state rm command."""
+        if self.responses.state_rm_response is not None:
+            return self.responses.state_rm_response
+        return SimpleNamespace(stdout="", stderr="", returncode=0)
+
+    def _is_state_list(self, args: list[str]) -> bool:
+        """Check if args represent a 'state list' command."""
+        return len(args) >= 2 and args[0] == "state" and args[1] == "list"
+
+    def _is_state_rm(self, args: list[str]) -> bool:
+        """Check if args represent a 'state rm' command."""
+        return len(args) >= 2 and args[0] == "state" and args[1] == "rm"
+
+    def _run(
+        self,
+        args: list[str],
+        *,
+        raise_on_error: bool = False,
+    ) -> SimpleNamespace:
+        self.calls.append(list(args))
+        verb = args[0] if args else ""
+
+        if verb == "apply":
+            return self._handle_apply()
+
+        if self._is_state_list(args):
+            return self._handle_state_list()
+
+        if self._is_state_rm(args):
+            return self._handle_state_rm()
+
+        return SimpleNamespace(stdout="", stderr="", returncode=0)
 
 
 class TofuMockBuilder:
@@ -66,65 +136,16 @@ class TofuMockBuilder:
 
     def build(self, calls: list[list[str]]) -> type:
         """Build the Tofu mock class."""
-        apply_responses = list(self._apply_responses)
-        state_list_response = self._state_list_response
-        state_rm_response = self._state_rm_response
-
-        class _MockTofu:
-            def __init__(self, cwd: str, env: dict[str, str]) -> None:
-                self.cwd = cwd
-                self.env = env
-                self._apply_count = 0
-
-            def _handle_apply(self) -> SimpleNamespace:
-                """Handle apply command with sequential response tracking."""
-                if self._apply_count < len(apply_responses):
-                    response = apply_responses[self._apply_count]
-                    self._apply_count += 1
-                    return response
-                return SimpleNamespace(stdout="", stderr="", returncode=0)
-
-            def _handle_state_list(self) -> SimpleNamespace:
-                """Handle state list command."""
-                if state_list_response is not None:
-                    return state_list_response
-                return SimpleNamespace(stdout="", stderr="", returncode=0)
-
-            def _handle_state_rm(self) -> SimpleNamespace:
-                """Handle state rm command."""
-                if state_rm_response is not None:
-                    return state_rm_response
-                return SimpleNamespace(stdout="", stderr="", returncode=0)
-
-            def _is_state_list(self, args: list[str]) -> bool:
-                """Check if args represent a 'state list' command."""
-                return len(args) >= 2 and args[0] == "state" and args[1] == "list"
-
-            def _is_state_rm(self, args: list[str]) -> bool:
-                """Check if args represent a 'state rm' command."""
-                return len(args) >= 2 and args[0] == "state" and args[1] == "rm"
-
-            def _run(
-                self,
-                args: list[str],
-                *,
-                raise_on_error: bool = False,
-            ) -> SimpleNamespace:
-                calls.append(list(args))
-                verb = args[0] if args else ""
-
-                if verb == "apply":
-                    return self._handle_apply()
-
-                if self._is_state_list(args):
-                    return self._handle_state_list()
-
-                if self._is_state_rm(args):
-                    return self._handle_state_rm()
-
-                return SimpleNamespace(stdout="", stderr="", returncode=0)
-
-        return _MockTofu
+        responses = _TofuMockResponses(
+            apply_responses=list(self._apply_responses),
+            state_list_response=self._state_list_response,
+            state_rm_response=self._state_rm_response,
+        )
+        return type(
+            "_MockTofu",
+            (_BaseTofuMock,),
+            {"responses": responses, "calls": calls},
+        )
 
 
 def _setup_test_environment(
