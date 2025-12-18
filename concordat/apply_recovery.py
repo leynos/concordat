@@ -40,6 +40,57 @@ class RecoveryCallbacks:
     normalize_tofu_result: typ.Callable[[str, object], SimpleNamespace] | None = None
 
 
+def _execute_repository_imports(
+    imports: list[tuple[str, str, str]],
+    context: RecoveryContext,
+    callbacks: RecoveryCallbacks,
+) -> int:
+    """Execute repository imports with fallback IDs, returning exit code.
+
+    Args:
+        imports: List of (address, slug, repo_name) tuples to import.
+        context: Recovery execution context.
+        callbacks: Recovery callback functions.
+
+    Returns:
+        0 if all imports succeeded, 1 if any import failed.
+
+    """
+    for address, slug, repo_name in imports:
+        import_attempts = [repo_name, slug]
+        imported = False
+        for import_id in import_attempts:
+            callbacks.write_stream_output(
+                context.io.stderr,
+                f"running: tofu import {address} {import_id} "
+                f"(cwd={context.tofu_workdir})",
+            )
+            import_result = callbacks.invoke_tofu_with_result(
+                context.tofu,
+                ["import", address, import_id],
+                context.io,
+            )
+            import_exit = int(import_result.returncode)
+            if import_exit == 0:
+                callbacks.write_stream_output(
+                    context.io.stderr,
+                    f"completed: tofu import {import_id}",
+                )
+                imported = True
+                break
+
+            failed_detail = import_result.stderr.strip() or "import failed"
+            callbacks.write_stream_output(
+                context.io.stderr,
+                f"failed: tofu import {import_id}: {failed_detail}",
+            )
+
+        if not imported:
+            return 1
+
+    return 0
+
+
 def handle_apply_import_errors(
     context: RecoveryContext,
     latest_result: SimpleNamespace,
@@ -84,39 +135,7 @@ def handle_apply_import_errors(
     if not callbacks.prompt_yes_no(prompt_msg, context.io.stderr):
         return exit_code, latest_result
 
-    import_exit_code = 0
-    for address, slug, repo_name in imports:
-        import_attempts = [repo_name, slug]
-        imported = False
-        for import_id in import_attempts:
-            callbacks.write_stream_output(
-                context.io.stderr,
-                f"running: tofu import {address} {import_id} "
-                f"(cwd={context.tofu_workdir})",
-            )
-            import_result = callbacks.invoke_tofu_with_result(
-                context.tofu,
-                ["import", address, import_id],
-                context.io,
-            )
-            import_exit = int(import_result.returncode)
-            if import_exit == 0:
-                callbacks.write_stream_output(
-                    context.io.stderr,
-                    f"completed: tofu import {import_id}",
-                )
-                imported = True
-                break
-
-            failed_detail = import_result.stderr.strip() or "import failed"
-            callbacks.write_stream_output(
-                context.io.stderr,
-                f"failed: tofu import {import_id}: {failed_detail}",
-            )
-
-        if not imported:
-            import_exit_code = 1
-            break
+    import_exit_code = _execute_repository_imports(imports, context, callbacks)
 
     if import_exit_code == 0:
         callbacks.write_stream_output(

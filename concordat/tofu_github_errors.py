@@ -103,6 +103,43 @@ def detect_missing_repo_imports(output: str) -> list[tuple[str, str, str]]:
     return _deduplicate_preserving_order(candidates)
 
 
+def _parse_slugs_from_matches(normalized_output: str) -> list[str]:
+    """Extract repository slugs from regex matches in normalized output.
+
+    Args:
+        normalized_output: Output string with escaped quotes normalized.
+
+    Returns:
+        List of non-empty slugs found in the output.
+
+    """
+    candidates: list[str] = []
+    for match in _GITHUB_REPO_SLUG_FROM_ADDRESS_PATTERN.finditer(normalized_output):
+        slug = match.group("slug").strip()
+        if slug:
+            candidates.append(slug)
+    return candidates
+
+
+def _deduplicate_strings(items: list[str]) -> list[str]:
+    """Remove duplicate strings while preserving order.
+
+    Args:
+        items: List of strings that may contain duplicates.
+
+    Returns:
+        List with duplicates removed, preserving first occurrence order.
+
+    """
+    seen: set[str] = set()
+    unique: list[str] = []
+    for item in items:
+        if item not in seen:
+            seen.add(item)
+            unique.append(item)
+    return unique
+
+
 def detect_state_forgets_for_prevent_destroy(output: str) -> list[str]:
     """Return a list of slugs that look like they should be removed from state.
 
@@ -127,18 +164,5 @@ def detect_state_forgets_for_prevent_destroy(output: str) -> list[str]:
         return []
 
     normalized_output = output.replace('\\"', '"')
-    candidates: list[str] = []
-    for match in _GITHUB_REPO_SLUG_FROM_ADDRESS_PATTERN.finditer(normalized_output):
-        slug = match.group("slug").strip()
-        if not slug:
-            continue
-        candidates.append(slug)
-
-    seen: set[str] = set()
-    unique: list[str] = []
-    for slug in candidates:
-        if slug in seen:
-            continue
-        seen.add(slug)
-        unique.append(slug)
-    return unique
+    candidates = _parse_slugs_from_matches(normalized_output)
+    return _deduplicate_strings(candidates)
