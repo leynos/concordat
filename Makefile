@@ -1,4 +1,4 @@
-MDLINT ?= $(shell which markdownlint-cli2)
+MDLINT ?= $(shell command -v markdownlint-cli2 2>/dev/null || echo "$(HOME)/.bun/bin/markdownlint-cli2")
 NIXIE ?= $(shell which nixie)
 MDFORMAT_ALL ?= $(shell which mdformat-all)
 VALE ?= $(shell which vale)
