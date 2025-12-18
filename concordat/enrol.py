@@ -432,11 +432,22 @@ def _slug_with_owner_guard(
     return _require_allowed_owner(slug, github_owner, specification)
 
 
-def _platform_pr_result(
+def _execute_platform_pr_operation(
     repo_slug: str | None,
     platform_standards: PlatformStandardsConfig | None,
+    operation: typ.Callable[[str, PlatformStandardsConfig], PlatformStandardsResult],
 ) -> PlatformStandardsResult | None:
-    """Encapsulate platform PR creation to keep enrolment orchestration clear."""
+    """Execute a platform PR operation with common validation and error handling.
+
+    Args:
+        repo_slug: GitHub repository slug (owner/repo) or None.
+        platform_standards: Platform configuration or None.
+        operation: The platform operation to execute (e.g., ensure_repository_pr).
+
+    Returns:
+        PlatformStandardsResult if operation was attempted, None if config missing.
+
+    """
     if platform_standards is None:
         return None
     if not repo_slug:
@@ -447,10 +458,7 @@ def _platform_pr_result(
             message="unable to determine GitHub slug",
         )
     try:
-        return ensure_repository_pr(
-            repo_slug,
-            config=platform_standards,
-        )
+        return operation(repo_slug, platform_standards)
     except ConcordatError as error:
         return PlatformStandardsResult(
             created=False,
@@ -458,6 +466,18 @@ def _platform_pr_result(
             pr_url=None,
             message=str(error),
         )
+
+
+def _platform_pr_result(
+    repo_slug: str | None,
+    platform_standards: PlatformStandardsConfig | None,
+) -> PlatformStandardsResult | None:
+    """Encapsulate platform PR creation to keep enrolment orchestration clear."""
+    return _execute_platform_pr_operation(
+        repo_slug,
+        platform_standards,
+        lambda slug, config: ensure_repository_pr(slug, config=config),
+    )
 
 
 def _platform_pr_removal_result(
@@ -465,27 +485,11 @@ def _platform_pr_removal_result(
     platform_standards: PlatformStandardsConfig | None,
 ) -> PlatformStandardsResult | None:
     """Encapsulate platform PR removal to keep disenrolment orchestration clear."""
-    if platform_standards is None:
-        return None
-    if not repo_slug:
-        return PlatformStandardsResult(
-            created=False,
-            branch=None,
-            pr_url=None,
-            message="unable to determine GitHub slug",
-        )
-    try:
-        return ensure_repository_removal_pr(
-            repo_slug,
-            config=platform_standards,
-        )
-    except ConcordatError as error:
-        return PlatformStandardsResult(
-            created=False,
-            branch=None,
-            pr_url=None,
-            message=str(error),
-        )
+    return _execute_platform_pr_operation(
+        repo_slug,
+        platform_standards,
+        lambda slug, config: ensure_repository_removal_pr(slug, config=config),
+    )
 
 
 @dataclasses.dataclass

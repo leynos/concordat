@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import typing as typ
 
 if typ.TYPE_CHECKING:
@@ -13,20 +14,37 @@ if typ.TYPE_CHECKING:
     from .estate_execution import ExecutionIO
 
 
-def handle_apply_import_errors(
-    tofu: Tofu,
-    latest_result: SimpleNamespace,
-    tofu_workdir: Path,
-    args: list[str],
-    io: ExecutionIO,
-    *,
+@dataclasses.dataclass
+class RecoveryContext:
+    """Encapsulates the execution context for recovery operations."""
+
+    tofu: Tofu
+    tofu_workdir: Path
+    io: ExecutionIO
+
+
+@dataclasses.dataclass
+class RecoveryCallbacks:
+    """Encapsulates dependency-injected callbacks for recovery operations."""
+
     invoke_tofu_with_result: typ.Callable[
         [Tofu, list[str], ExecutionIO], SimpleNamespace
-    ],
-    detect_missing_repo_imports: typ.Callable[[str], list[tuple[str, str, str]]],
-    can_prompt: typ.Callable[[], bool],
-    prompt_yes_no: typ.Callable[[str, typ.IO[str]], bool],
-    write_stream_output: typ.Callable[[typ.IO[str], str], None],
+    ]
+    write_stream_output: typ.Callable[[typ.IO[str], str], None]
+    can_prompt: typ.Callable[[], bool]
+    prompt_yes_no: typ.Callable[[str, typ.IO[str]], bool]
+    detect_missing_repo_imports: (
+        typ.Callable[[str], list[tuple[str, str, str]]] | None
+    ) = None
+    detect_prevent_destroy_forgets: typ.Callable[[str], list[str]] | None = None
+    normalize_tofu_result: typ.Callable[[str, object], SimpleNamespace] | None = None
+
+
+def handle_apply_import_errors(
+    context: RecoveryContext,
+    latest_result: SimpleNamespace,
+    args: list[str],
+    callbacks: RecoveryCallbacks,
 ) -> tuple[int, SimpleNamespace]:
     """Handle apply failures due to repos existing but missing from state.
 
@@ -35,7 +53,11 @@ def handle_apply_import_errors(
     """
     exit_code = int(latest_result.returncode)
     combined_output = f"{latest_result.stdout}\n{latest_result.stderr}"
-    imports = detect_missing_repo_imports(combined_output)
+
+    if callbacks.detect_missing_repo_imports is None:
+        return exit_code, latest_result
+
+    imports = callbacks.detect_missing_repo_imports(combined_output)
 
     if not imports:
         return exit_code, latest_result
@@ -47,9 +69,9 @@ def handle_apply_import_errors(
         f"Import into state and retry apply? ({repos}) [y/N]: "
     )
 
-    if not can_prompt():
-        write_stream_output(
-            io.stderr,
+    if not callbacks.can_prompt():
+        callbacks.write_stream_output(
+            context.io.stderr,
             (
                 "cannot prompt for auto-import in non-interactive "
                 "mode; "
@@ -59,7 +81,7 @@ def handle_apply_import_errors(
         )
         return exit_code, latest_result
 
-    if not prompt_yes_no(prompt_msg, io.stderr):
+    if not callbacks.prompt_yes_no(prompt_msg, context.io.stderr):
         return exit_code, latest_result
 
     import_exit_code = 0
@@ -67,27 +89,28 @@ def handle_apply_import_errors(
         import_attempts = [repo_name, slug]
         imported = False
         for import_id in import_attempts:
-            write_stream_output(
-                io.stderr,
-                f"running: tofu import {address} {import_id} (cwd={tofu_workdir})",
+            callbacks.write_stream_output(
+                context.io.stderr,
+                f"running: tofu import {address} {import_id} "
+                f"(cwd={context.tofu_workdir})",
             )
-            import_result = invoke_tofu_with_result(
-                tofu,
+            import_result = callbacks.invoke_tofu_with_result(
+                context.tofu,
                 ["import", address, import_id],
-                io,
+                context.io,
             )
             import_exit = int(import_result.returncode)
             if import_exit == 0:
-                write_stream_output(
-                    io.stderr,
+                callbacks.write_stream_output(
+                    context.io.stderr,
                     f"completed: tofu import {import_id}",
                 )
                 imported = True
                 break
 
             failed_detail = import_result.stderr.strip() or "import failed"
-            write_stream_output(
-                io.stderr,
+            callbacks.write_stream_output(
+                context.io.stderr,
                 f"failed: tofu import {import_id}: {failed_detail}",
             )
 
@@ -96,14 +119,14 @@ def handle_apply_import_errors(
             break
 
     if import_exit_code == 0:
-        write_stream_output(
-            io.stderr,
-            f"retrying: tofu apply (cwd={tofu_workdir})",
+        callbacks.write_stream_output(
+            context.io.stderr,
+            f"retrying: tofu apply (cwd={context.tofu_workdir})",
         )
-        retry_result = invoke_tofu_with_result(
-            tofu,
+        retry_result = callbacks.invoke_tofu_with_result(
+            context.tofu,
             list(args),
-            io,
+            context.io,
         )
         return int(retry_result.returncode), retry_result
 
@@ -146,25 +169,20 @@ def _find_matching_state_addresses(
 
 
 def _remove_state_entries(
-    tofu: Tofu,
+    context: RecoveryContext,
     addresses: list[str],
-    tofu_workdir: Path,
-    io: ExecutionIO,
-    invoke_tofu_with_result: typ.Callable[
-        [Tofu, list[str], ExecutionIO], SimpleNamespace
-    ],
-    write_stream_output: typ.Callable[[typ.IO[str], str], None],
+    callbacks: RecoveryCallbacks,
 ) -> int:
     """Remove the given addresses from tofu state, returning exit code."""
     for address in addresses:
-        write_stream_output(
-            io.stderr,
-            f"running: tofu state rm {address} (cwd={tofu_workdir})",
+        callbacks.write_stream_output(
+            context.io.stderr,
+            f"running: tofu state rm {address} (cwd={context.tofu_workdir})",
         )
-        rm_result = invoke_tofu_with_result(
-            tofu,
+        rm_result = callbacks.invoke_tofu_with_result(
+            context.tofu,
             ["state", "rm", address],
-            io,
+            context.io,
         )
         rm_exit = int(rm_result.returncode)
         if rm_exit != 0:
@@ -173,42 +191,27 @@ def _remove_state_entries(
 
 
 def _retry_apply_after_state_cleanup(
-    tofu: Tofu,
+    context: RecoveryContext,
     args: list[str],
-    tofu_workdir: Path,
-    io: ExecutionIO,
-    invoke_tofu_with_result: typ.Callable[
-        [Tofu, list[str], ExecutionIO], SimpleNamespace
-    ],
-    write_stream_output: typ.Callable[[typ.IO[str], str], None],
+    callbacks: RecoveryCallbacks,
 ) -> SimpleNamespace:
     """Retry tofu apply after state cleanup."""
-    write_stream_output(
-        io.stderr,
-        f"retrying: tofu apply (cwd={tofu_workdir})",
+    callbacks.write_stream_output(
+        context.io.stderr,
+        f"retrying: tofu apply (cwd={context.tofu_workdir})",
     )
-    return invoke_tofu_with_result(
-        tofu,
+    return callbacks.invoke_tofu_with_result(
+        context.tofu,
         list(args),
-        io,
+        context.io,
     )
 
 
 def handle_apply_prevent_destroy_errors(
-    tofu: Tofu,
+    context: RecoveryContext,
     latest_result: SimpleNamespace,
-    tofu_workdir: Path,
     args: list[str],
-    io: ExecutionIO,
-    *,
-    invoke_tofu_with_result: typ.Callable[
-        [Tofu, list[str], ExecutionIO], SimpleNamespace
-    ],
-    detect_prevent_destroy_forgets: typ.Callable[[str], list[str]],
-    normalize_tofu_result: typ.Callable[[str, object], SimpleNamespace],
-    can_prompt: typ.Callable[[], bool],
-    prompt_yes_no: typ.Callable[[str, typ.IO[str]], bool],
-    write_stream_output: typ.Callable[[typ.IO[str], str], None],
+    callbacks: RecoveryCallbacks,
 ) -> tuple[int, SimpleNamespace]:
     """Handle apply failures due to lifecycle.prevent_destroy.
 
@@ -217,7 +220,11 @@ def handle_apply_prevent_destroy_errors(
     """
     exit_code = int(latest_result.returncode)
     combined_output = f"{latest_result.stdout}\n{latest_result.stderr}"
-    forget_slugs = detect_prevent_destroy_forgets(combined_output)
+
+    if callbacks.detect_prevent_destroy_forgets is None:
+        return exit_code, latest_result
+
+    forget_slugs = callbacks.detect_prevent_destroy_forgets(combined_output)
 
     if not forget_slugs:
         return exit_code, latest_result
@@ -232,9 +239,9 @@ def handle_apply_prevent_destroy_errors(
         f"({repos}) [y/N]: "
     )
 
-    if not can_prompt():
-        write_stream_output(
-            io.stderr,
+    if not callbacks.can_prompt():
+        callbacks.write_stream_output(
+            context.io.stderr,
             (
                 "cannot prompt for state cleanup in "
                 "non-interactive mode; re-run with "
@@ -244,18 +251,22 @@ def handle_apply_prevent_destroy_errors(
         )
         return exit_code, latest_result
 
-    if not prompt_yes_no(prompt_msg, io.stderr):
+    if not callbacks.prompt_yes_no(prompt_msg, context.io.stderr):
         return exit_code, latest_result
 
-    write_stream_output(
-        io.stderr,
-        f"running: tofu state list (cwd={tofu_workdir})",
+    callbacks.write_stream_output(
+        context.io.stderr,
+        f"running: tofu state list (cwd={context.tofu_workdir})",
     )
-    state_list_raw = tofu._run(
+
+    if callbacks.normalize_tofu_result is None:
+        return exit_code, latest_result
+
+    state_list_raw = context.tofu._run(
         ["state", "list"],
         raise_on_error=False,
     )
-    state_list = normalize_tofu_result("state", state_list_raw)
+    state_list = callbacks.normalize_tofu_result("state", state_list_raw)
     if int(state_list.returncode) != 0:
         return int(state_list.returncode), latest_result
 
@@ -265,30 +276,24 @@ def handle_apply_prevent_destroy_errors(
     )
 
     if not addresses:
-        write_stream_output(
-            io.stderr,
+        callbacks.write_stream_output(
+            context.io.stderr,
             "no matching state entries found; nothing to remove",
         )
         return exit_code, latest_result
 
     rm_exit_code = _remove_state_entries(
-        tofu,
+        context,
         addresses,
-        tofu_workdir,
-        io,
-        invoke_tofu_with_result,
-        write_stream_output,
+        callbacks,
     )
 
     if rm_exit_code != 0:
         return rm_exit_code, latest_result
 
     retry_result = _retry_apply_after_state_cleanup(
-        tofu,
+        context,
         args,
-        tofu_workdir,
-        io,
-        invoke_tofu_with_result,
-        write_stream_output,
+        callbacks,
     )
     return int(retry_result.returncode), retry_result

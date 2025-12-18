@@ -15,6 +15,7 @@ from concordat.persistence import backend as persistence_backend
 from concordat.persistence import models as persistence_models
 
 from . import apply_recovery
+from .apply_recovery import RecoveryCallbacks, RecoveryContext
 from .errors import ConcordatError
 from .estate_cache import (
     EstateCacheError,
@@ -116,6 +117,23 @@ class ExecutionIO:
 
 
 @dataclasses.dataclass(frozen=True)
+class WorkspaceContext:
+    """Workspace directory paths for tofu operations."""
+
+    root: Path
+    tofu_dir: Path
+
+
+@dataclasses.dataclass(frozen=True)
+class ExecutionContext:
+    """Execution environment for tofu commands."""
+
+    options: ExecutionOptions
+    io: ExecutionIO
+    env: dict[str, str]
+
+
+@dataclasses.dataclass(frozen=True)
 class PersistenceRuntime:
     """Runtime data for invoking tofu with a remote backend."""
 
@@ -208,12 +226,9 @@ def _prepare_execution_environment(options: ExecutionOptions) -> dict[str, str]:
 
 
 def _setup_tofu_workspace(
-    workdir: Path,
-    tofu_workdir: Path,
+    workspace: WorkspaceContext,
     record: EstateRecord,
-    env_source: dict[str, str],
-    options: ExecutionOptions,
-    io: ExecutionIO,
+    execution: ExecutionContext,
 ) -> tuple[Path, list[str], dict[str, str], Tofu]:
     """Prepare the workspace for tofu execution.
 
@@ -222,29 +237,29 @@ def _setup_tofu_workspace(
     tofu instance.
     """
     sanitized_inventory = _sanitize_inventory_for_tofu(
-        workdir,
-        tofu_workdir,
+        workspace.root,
+        workspace.tofu_dir,
         record.inventory_path,
     )
     if sanitized_inventory:
         write_stream_output(
-            io.stderr,
+            execution.io.stderr,
             "inventory sanitized for tofu (removed YAML directives)",
         )
-    tfvars = tofu_workdir / TFVARS_FILENAME
+    tfvars = workspace.tofu_dir / TFVARS_FILENAME
     tfvars.write_text(
-        f'github_owner = "{options.github_owner}"\n',
+        f'github_owner = "{execution.options.github_owner}"\n',
         encoding="utf-8",
     )
 
     backend_args, env = _prepare_backend_configuration(
-        workdir,
-        tofu_workdir,
-        env_source,
-        io,
+        workspace.root,
+        workspace.tofu_dir,
+        execution.env,
+        execution.io,
     )
-    env["GITHUB_TOKEN"] = options.github_token
-    tofu = _initialize_tofu(tofu_workdir, env)
+    env["GITHUB_TOKEN"] = execution.options.github_token
+    tofu = _initialize_tofu(workspace.tofu_dir, env)
 
     return tfvars, backend_args, env, tofu
 
@@ -264,33 +279,38 @@ def _execute_apply_command(
     exit_code = int(result.returncode)
     latest_result = result
 
+    context = RecoveryContext(tofu=tofu, tofu_workdir=tofu_workdir, io=io)
+    import_callbacks = RecoveryCallbacks(
+        invoke_tofu_with_result=invoke_tofu_command_with_result,
+        write_stream_output=write_stream_output,
+        can_prompt=_can_prompt,
+        prompt_yes_no=_prompt_yes_no,
+        detect_missing_repo_imports=_detect_missing_repo_imports,
+    )
+
     if exit_code != 0:
         exit_code, latest_result = apply_recovery.handle_apply_import_errors(
-            tofu,
+            context,
             latest_result,
-            tofu_workdir,
             args,
-            io,
-            invoke_tofu_with_result=invoke_tofu_command_with_result,
-            detect_missing_repo_imports=_detect_missing_repo_imports,
-            can_prompt=_can_prompt,
-            prompt_yes_no=_prompt_yes_no,
-            write_stream_output=write_stream_output,
+            import_callbacks,
         )
+
+    prevent_destroy_callbacks = RecoveryCallbacks(
+        invoke_tofu_with_result=invoke_tofu_command_with_result,
+        write_stream_output=write_stream_output,
+        can_prompt=_can_prompt,
+        prompt_yes_no=_prompt_yes_no,
+        detect_prevent_destroy_forgets=_detect_prevent_destroy_forgets,
+        normalize_tofu_result=_normalize_tofu_result,
+    )
 
     if exit_code != 0:
         exit_code, latest_result = apply_recovery.handle_apply_prevent_destroy_errors(
-            tofu,
+            context,
             latest_result,
-            tofu_workdir,
             args,
-            io,
-            invoke_tofu_with_result=invoke_tofu_command_with_result,
-            detect_prevent_destroy_forgets=_detect_prevent_destroy_forgets,
-            normalize_tofu_result=_normalize_tofu_result,
-            can_prompt=_can_prompt,
-            prompt_yes_no=_prompt_yes_no,
-            write_stream_output=write_stream_output,
+            prevent_destroy_callbacks,
         )
 
     return exit_code
@@ -346,13 +366,12 @@ def _run_estate_command(
         io.stderr.flush()
 
         tofu_workdir = resolve_tofu_workdir(workdir)
+        workspace = WorkspaceContext(root=workdir, tofu_dir=tofu_workdir)
+        execution = ExecutionContext(options=options, io=io, env=env_source)
         _, backend_args, _, tofu = _setup_tofu_workspace(
-            workdir,
-            tofu_workdir,
+            workspace,
             record,
-            env_source,
-            options,
-            io,
+            execution,
         )
 
         init_args = ["init", "-input=false", *backend_args]
