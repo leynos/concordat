@@ -377,70 +377,124 @@ def ensure_repository_removal_pr(
         )
 
 
+def _load_inventory_data(path: Path) -> dict[str, typ.Any]:
+    """Load inventory data from file, returning a normalized dict structure.
+
+    Always returns a dict with at least schema_version and repositories keys,
+    even if the file doesn't exist or contains invalid data.
+
+    """
+    if not path.exists():
+        return {"schema_version": 1, "repositories": []}
+
+    loaded = _yaml.load(path.read_text(encoding="utf-8")) or {}
+    if isinstance(loaded, dict):
+        return dict(loaded)
+
+    return {"schema_version": 1, "repositories": []}
+
+
+def _build_canonical_inventory(
+    data: dict[str, typ.Any],
+    repos: list[dict[str, typ.Any]],
+) -> dict[str, typ.Any]:
+    """Build canonical inventory dict with schema_version and repositories first.
+
+    Preserves any extra keys from the original data that aren't in the base structure.
+
+    """
+    schema_version = int(data.get("schema_version", 1) or 1)
+    canonical: dict[str, typ.Any] = {
+        "schema_version": schema_version,
+        "repositories": repos,
+    }
+    for key, value in data.items():
+        if key not in canonical:
+            canonical[key] = value
+    return canonical
+
+
 def _update_inventory(path: Path, repo_slug: str) -> bool:
     path.parent.mkdir(parents=True, exist_ok=True)
-    data: dict[str, typ.Any]
-    if path.exists():
-        loaded = _yaml.load(path.read_text(encoding="utf-8")) or {}
-        if isinstance(loaded, dict):
-            data = dict(loaded)
-        else:
-            data = {"schema_version": 1, "repositories": []}
-    else:
-        data = {"schema_version": 1, "repositories": []}
+
+    data = _load_inventory_data(path)
 
     repos: list[dict[str, typ.Any]] = data.setdefault("repositories", [])
     names = {entry.get("name") for entry in repos}
     if repo_slug in names:
         return False
+
     repos.append({"name": repo_slug})
     repos.sort(key=lambda entry: str(entry.get("name", "")))
 
-    schema_version = int(data.get("schema_version", 1) or 1)
-    canonical: dict[str, typ.Any] = {
-        "schema_version": schema_version,
-        "repositories": repos,
-    }
-    for key, value in data.items():
-        if key not in canonical:
-            canonical[key] = value
+    canonical = _build_canonical_inventory(data, repos)
+
     with path.open("w", encoding="utf-8") as handle:
         _yaml.dump(canonical, handle)
     return True
 
 
-def _remove_inventory(path: Path, repo_slug: str) -> bool:
-    """Remove a repository from the inventory file, returning True on change."""
+def _load_and_validate_inventory_data(path: Path) -> dict[str, typ.Any] | None:
+    """Load and validate inventory file structure, returning data or None.
+
+    Returns:
+        Dictionary with inventory data if valid, None if file missing or invalid.
+
+    """
     if not path.exists():
-        return False
+        return None
 
     loaded = _yaml.load(path.read_text(encoding="utf-8")) or {}
     if not isinstance(loaded, dict):
-        return False
+        return None
 
-    data: dict[str, typ.Any] = dict(loaded)
-    repos_raw = data.get("repositories") or []
+    return dict(loaded)
+
+
+def _filter_repository_entries(
+    repos_raw: object,
+    repo_slug: str,
+) -> tuple[list[dict[str, typ.Any]], bool]:
+    """Filter repository list to remove the target slug.
+
+    Args:
+        repos_raw: Raw repositories value from YAML (may be any type).
+        repo_slug: Repository slug to remove.
+
+    Returns:
+        Tuple of (filtered_list, changed) where changed is True if removed.
+
+    """
     if not isinstance(repos_raw, list):
-        return False
+        return ([], False)
 
     repos: list[dict[str, typ.Any]] = [
         entry for entry in repos_raw if isinstance(entry, dict)
-    ]
+    ]  # type: ignore[misc]
     before = len(repos)
     repos = [entry for entry in repos if entry.get("name") != repo_slug]
-    if len(repos) == before:
-        return False
+    changed = len(repos) < before
+
+    if not changed:
+        return (repos, False)
 
     repos.sort(key=lambda entry: str(entry.get("name", "")))
+    return (repos, True)
 
-    schema_version = int(data.get("schema_version", 1) or 1)
-    canonical: dict[str, typ.Any] = {
-        "schema_version": schema_version,
-        "repositories": repos,
-    }
-    for key, value in data.items():
-        if key not in canonical:
-            canonical[key] = value
+
+def _remove_inventory(path: Path, repo_slug: str) -> bool:
+    """Remove a repository from the inventory file, returning True on change."""
+    data = _load_and_validate_inventory_data(path)
+    if data is None:
+        return False
+
+    repos_raw = data.get("repositories") or []
+    repos, changed = _filter_repository_entries(repos_raw, repo_slug)
+    if not changed:
+        return False
+
+    canonical = _build_canonical_inventory(data, repos)
+
     with path.open("w", encoding="utf-8") as handle:
         _yaml.dump(canonical, handle)
     return True

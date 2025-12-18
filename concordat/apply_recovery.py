@@ -110,22 +110,39 @@ def handle_apply_import_errors(
     return import_exit_code, latest_result
 
 
+def _line_matches_any_slug(line: str, slugs: list[str]) -> str | None:
+    """Check if a non-empty line matches any slug pattern.
+
+    Args:
+        line: A line from tofu state list output.
+        slugs: List of repository slugs to match against.
+
+    Returns:
+        The line itself if it matches any slug pattern, None otherwise.
+
+    """
+    stripped = line.strip()
+    if not stripped:
+        return None
+
+    for slug in slugs:
+        needle = f'module.repository["{slug}"].'
+        if stripped.startswith(needle):
+            return stripped
+
+    return None
+
+
 def _find_matching_state_addresses(
     state_output: str,
     forget_slugs: list[str],
 ) -> list[str]:
     """Filter state list output to find addresses matching the given slugs."""
-    addresses: list[str] = []
-    for line in state_output.splitlines():
-        stripped = line.strip()
-        if not stripped:
-            continue
-        for slug in forget_slugs:
-            needle = f'module.repository["{slug}"].'
-            if stripped.startswith(needle):
-                addresses.append(stripped)
-                break
-    return addresses
+    return [
+        matched
+        for line in state_output.splitlines()
+        if (matched := _line_matches_any_slug(line, forget_slugs)) is not None
+    ]
 
 
 def _remove_state_entries(
