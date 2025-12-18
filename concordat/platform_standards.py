@@ -336,9 +336,7 @@ def _ensure_inventory_pr(
                 message=already_message,
             )
 
-        _commit_inventory_changes(
-            repository, config, repo_slug, base_commit, verb=verb
-        )
+        _commit_inventory_changes(repository, config, repo_slug, base_commit, verb=verb)
         _validate_tofu_changes(workdir)
 
         refspec = f"refs/heads/{branch_name}:refs/heads/{branch_name}"

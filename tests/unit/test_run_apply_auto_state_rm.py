@@ -6,20 +6,120 @@ import io
 import typing as typ
 from types import SimpleNamespace
 
-from concordat.estate_execution import ExecutionIO, ExecutionOptions, run_apply
-from tests.unit.conftest import _make_record
-
 if typ.TYPE_CHECKING:  # pragma: no cover
     import pytest
 
     from tests.conftest import GitRepo
 
+from concordat.estate_execution import ExecutionIO, ExecutionOptions, run_apply
+from tests.unit.conftest import _make_record
 
-def test_run_apply_offers_to_forget_resources_on_prevent_destroy(
+
+class TofuMockBuilder:
+    """Builder for creating Tofu mock classes with configurable behavior."""
+
+    def __init__(self) -> None:
+        """Initialize an empty builder."""
+        self._apply_responses: list[SimpleNamespace] = []
+        self._state_list_response: SimpleNamespace | None = None
+        self._state_rm_response: SimpleNamespace | None = None
+
+    def with_apply_response(
+        self,
+        stdout: str = "",
+        stderr: str = "",
+        returncode: int = 0,
+    ) -> TofuMockBuilder:
+        """Add an apply response (called in sequence for multiple applies)."""
+        self._apply_responses.append(
+            SimpleNamespace(stdout=stdout, stderr=stderr, returncode=returncode)
+        )
+        return self
+
+    def with_state_list_response(
+        self,
+        stdout: str = "",
+        stderr: str = "",
+        returncode: int = 0,
+    ) -> TofuMockBuilder:
+        """Set the state list response."""
+        self._state_list_response = SimpleNamespace(
+            stdout=stdout,
+            stderr=stderr,
+            returncode=returncode,
+        )
+        return self
+
+    def with_state_rm_response(
+        self,
+        stdout: str = "",
+        stderr: str = "",
+        returncode: int = 0,
+    ) -> TofuMockBuilder:
+        """Set the state rm response."""
+        self._state_rm_response = SimpleNamespace(
+            stdout=stdout,
+            stderr=stderr,
+            returncode=returncode,
+        )
+        return self
+
+    def build(self, calls: list[list[str]]) -> type:
+        """Build the Tofu mock class."""
+        apply_responses = list(self._apply_responses)
+        state_list_response = self._state_list_response
+        state_rm_response = self._state_rm_response
+
+        class _MockTofu:
+            def __init__(self, cwd: str, env: dict[str, str]) -> None:
+                self.cwd = cwd
+                self.env = env
+                self._apply_count = 0
+
+            def _run(
+                self,
+                args: list[str],
+                *,
+                raise_on_error: bool = False,
+            ) -> SimpleNamespace:
+                calls.append(list(args))
+                verb = args[0] if args else ""
+
+                if verb == "apply":
+                    if self._apply_count < len(apply_responses):
+                        response = apply_responses[self._apply_count]
+                        self._apply_count += 1
+                        return response
+                    return SimpleNamespace(stdout="", stderr="", returncode=0)
+
+                if verb == "state" and args[1:] == ["list"]:
+                    if state_list_response is not None:
+                        return state_list_response
+                    return SimpleNamespace(stdout="", stderr="", returncode=0)
+
+                if verb == "state" and len(args) > 1 and args[1] == "rm":
+                    if state_rm_response is not None:
+                        return state_rm_response
+                    return SimpleNamespace(stdout="", stderr="", returncode=0)
+
+                return SimpleNamespace(stdout="", stderr="", returncode=0)
+
+        return _MockTofu
+
+
+def _setup_test_environment(
     monkeypatch: pytest.MonkeyPatch,
     git_repo: GitRepo,
-) -> None:
-    """When prevent_destroy blocks deletes, concordat offers `tofu state rm`."""
+    *,
+    can_prompt: bool,
+    stdin_input: str,
+) -> tuple[list[list[str]], TofuMockBuilder, ExecutionIO, ExecutionOptions]:
+    """Set up common test environment for run_apply tests.
+
+    Returns:
+        Tuple of (calls list, mock_builder, io_streams, options).
+
+    """
     tofu_root = git_repo.path / "tofu"
     tofu_root.mkdir()
     (tofu_root / "main.tofu").write_text("terraform {}\n", encoding="utf-8")
@@ -28,50 +128,16 @@ def test_run_apply_offers_to_forget_resources_on_prevent_destroy(
         "concordat.estate_execution.ensure_estate_cache",
         lambda *_, **__: git_repo.path,
     )
-    monkeypatch.setattr("concordat.estate_execution._can_prompt", lambda: True)
-    monkeypatch.setattr("concordat.user_interaction.sys.stdin", io.StringIO("y\n"))
+    monkeypatch.setattr(
+        "concordat.estate_execution._can_prompt",
+        lambda: can_prompt,
+    )
+    monkeypatch.setattr(
+        "concordat.user_interaction.sys.stdin", io.StringIO(stdin_input)
+    )
 
     calls: list[list[str]] = []
-
-    class _TofuWithStateRm:
-        def __init__(self, cwd: str, env: dict[str, str]) -> None:
-            self.cwd = cwd
-            self.env = env
-
-        applied_once = False
-
-        def _run(self, args: list[str], *, raise_on_error: bool = False) -> object:
-            calls.append(list(args))
-            verb = args[0] if args else ""
-
-            if verb == "apply" and not self.applied_once:
-                self.applied_once = True
-                return SimpleNamespace(
-                    stdout="",
-                    stderr=(
-                        "Error: Instance cannot be destroyed\n"
-                        'Resource module.repository[\\"leynos/test-repo\\"].'
-                        "github_repository.this has lifecycle.prevent_destroy set\n"
-                    ),
-                    returncode=1,
-                )
-
-            if verb == "state" and args[1:] == ["list"]:
-                return SimpleNamespace(
-                    stdout=(
-                        'module.repository["leynos/test-repo"].github_repository.this\n'
-                    ),
-                    stderr="",
-                    returncode=0,
-                )
-
-            if verb == "state" and args[1] == "rm":
-                return SimpleNamespace(stdout="", stderr="", returncode=0)
-
-            return SimpleNamespace(stdout="", stderr="", returncode=0)
-
-    monkeypatch.setattr("concordat.estate_execution.Tofu", _TofuWithStateRm)
-    monkeypatch.setattr("concordat.tofu_runner.Tofu", _TofuWithStateRm)
+    mock_builder = TofuMockBuilder()
 
     io_streams = ExecutionIO(stdout=io.StringIO(), stderr=io.StringIO())
     options = ExecutionOptions(
@@ -79,6 +145,39 @@ def test_run_apply_offers_to_forget_resources_on_prevent_destroy(
         github_token="token",  # noqa: S106
         extra_args=("-auto-approve",),
     )
+
+    return calls, mock_builder, io_streams, options
+
+
+# Common error message used across tests
+_PREVENT_DESTROY_ERROR = (
+    "Error: Instance cannot be destroyed\n"
+    'Resource module.repository[\\"leynos/test-repo\\"].'
+    "github_repository.this has lifecycle.prevent_destroy set\n"
+)
+
+_STATE_LIST_OUTPUT = 'module.repository["leynos/test-repo"].github_repository.this\n'
+
+
+def test_run_apply_offers_to_forget_resources_on_prevent_destroy(
+    monkeypatch: pytest.MonkeyPatch,
+    git_repo: GitRepo,
+) -> None:
+    """When prevent_destroy blocks deletes, concordat offers `tofu state rm`."""
+    calls, builder, io_streams, options = _setup_test_environment(
+        monkeypatch, git_repo, can_prompt=True, stdin_input="y\n"
+    )
+
+    tofu_mock = (
+        builder.with_apply_response(stderr=_PREVENT_DESTROY_ERROR, returncode=1)
+        .with_apply_response(returncode=0)
+        .with_state_list_response(stdout=_STATE_LIST_OUTPUT)
+        .with_state_rm_response(returncode=0)
+        .build(calls)
+    )
+
+    monkeypatch.setattr("concordat.estate_execution.Tofu", tofu_mock)
+    monkeypatch.setattr("concordat.tofu_runner.Tofu", tofu_mock)
 
     exit_code, _ = run_apply(_make_record(git_repo.path), options, io_streams)
 
@@ -97,57 +196,24 @@ def test_run_apply_prevent_destroy_non_interactive_no_state_rm(
     git_repo: GitRepo,
 ) -> None:
     """Non-interactive runs should not invoke state list/rm, but show suggestion."""
-    tofu_root = git_repo.path / "tofu"
-    tofu_root.mkdir()
-    (tofu_root / "main.tofu").write_text("terraform {}\n", encoding="utf-8")
-
-    monkeypatch.setattr(
-        "concordat.estate_execution.ensure_estate_cache",
-        lambda *_, **__: git_repo.path,
+    calls, builder, _, options = _setup_test_environment(
+        monkeypatch, git_repo, can_prompt=False, stdin_input=""
     )
-    monkeypatch.setattr("concordat.estate_execution._can_prompt", lambda: False)
 
-    calls: list[list[str]] = []
+    tofu_mock = builder.with_apply_response(
+        stderr=_PREVENT_DESTROY_ERROR, returncode=1
+    ).build(calls)
 
-    class _TofuPreventDestroy:
-        def __init__(self, cwd: str, env: dict[str, str]) -> None:
-            self.cwd = cwd
-            self.env = env
-
-        def _run(self, args: list[str], *, raise_on_error: bool = False) -> object:
-            calls.append(list(args))
-            verb = args[0] if args else ""
-
-            if verb == "apply":
-                return SimpleNamespace(
-                    stdout="",
-                    stderr=(
-                        "Error: Instance cannot be destroyed\n"
-                        'Resource module.repository[\\"leynos/test-repo\\"].'
-                        "github_repository.this has lifecycle.prevent_destroy set\n"
-                    ),
-                    returncode=1,
-                )
-
-            return SimpleNamespace(stdout="", stderr="", returncode=0)
-
-    monkeypatch.setattr("concordat.estate_execution.Tofu", _TofuPreventDestroy)
-    monkeypatch.setattr("concordat.tofu_runner.Tofu", _TofuPreventDestroy)
+    monkeypatch.setattr("concordat.estate_execution.Tofu", tofu_mock)
+    monkeypatch.setattr("concordat.tofu_runner.Tofu", tofu_mock)
 
     stderr_buffer = io.StringIO()
     io_streams = ExecutionIO(stdout=io.StringIO(), stderr=stderr_buffer)
-    options = ExecutionOptions(
-        github_owner="leynos",
-        github_token="token",  # noqa: S106
-        extra_args=("-auto-approve",),
-    )
-
     exit_code, _ = run_apply(_make_record(git_repo.path), options, io_streams)
 
     assert exit_code != 0
     assert not any(call[0] == "state" for call in calls)
-    stderr_output = stderr_buffer.getvalue()
-    assert "tofu state rm" in stderr_output
+    assert "tofu state rm" in stderr_buffer.getvalue()
 
 
 def test_run_apply_prevent_destroy_user_answers_no(
@@ -155,50 +221,16 @@ def test_run_apply_prevent_destroy_user_answers_no(
     git_repo: GitRepo,
 ) -> None:
     """User declining state removal preserves failure and skips state commands."""
-    tofu_root = git_repo.path / "tofu"
-    tofu_root.mkdir()
-    (tofu_root / "main.tofu").write_text("terraform {}\n", encoding="utf-8")
-
-    monkeypatch.setattr(
-        "concordat.estate_execution.ensure_estate_cache",
-        lambda *_, **__: git_repo.path,
+    calls, builder, io_streams, options = _setup_test_environment(
+        monkeypatch, git_repo, can_prompt=True, stdin_input="n\n"
     )
-    monkeypatch.setattr("concordat.estate_execution._can_prompt", lambda: True)
-    monkeypatch.setattr("concordat.user_interaction.sys.stdin", io.StringIO("n\n"))
 
-    calls: list[list[str]] = []
+    tofu_mock = builder.with_apply_response(
+        stderr=_PREVENT_DESTROY_ERROR, returncode=1
+    ).build(calls)
 
-    class _TofuPreventDestroy:
-        def __init__(self, cwd: str, env: dict[str, str]) -> None:
-            self.cwd = cwd
-            self.env = env
-
-        def _run(self, args: list[str], *, raise_on_error: bool = False) -> object:
-            calls.append(list(args))
-            verb = args[0] if args else ""
-
-            if verb == "apply":
-                return SimpleNamespace(
-                    stdout="",
-                    stderr=(
-                        "Error: Instance cannot be destroyed\n"
-                        'Resource module.repository[\\"leynos/test-repo\\"].'
-                        "github_repository.this has lifecycle.prevent_destroy set\n"
-                    ),
-                    returncode=1,
-                )
-
-            return SimpleNamespace(stdout="", stderr="", returncode=0)
-
-    monkeypatch.setattr("concordat.estate_execution.Tofu", _TofuPreventDestroy)
-    monkeypatch.setattr("concordat.tofu_runner.Tofu", _TofuPreventDestroy)
-
-    io_streams = ExecutionIO(stdout=io.StringIO(), stderr=io.StringIO())
-    options = ExecutionOptions(
-        github_owner="leynos",
-        github_token="token",  # noqa: S106
-        extra_args=("-auto-approve",),
-    )
+    monkeypatch.setattr("concordat.estate_execution.Tofu", tofu_mock)
+    monkeypatch.setattr("concordat.tofu_runner.Tofu", tofu_mock)
 
     exit_code, _ = run_apply(_make_record(git_repo.path), options, io_streams)
 
@@ -212,59 +244,18 @@ def test_run_apply_prevent_destroy_state_list_no_matches(
     git_repo: GitRepo,
 ) -> None:
     """When state list finds no matching addresses, no state rm and no retry."""
-    tofu_root = git_repo.path / "tofu"
-    tofu_root.mkdir()
-    (tofu_root / "main.tofu").write_text("terraform {}\n", encoding="utf-8")
-
-    monkeypatch.setattr(
-        "concordat.estate_execution.ensure_estate_cache",
-        lambda *_, **__: git_repo.path,
+    calls, builder, io_streams, options = _setup_test_environment(
+        monkeypatch, git_repo, can_prompt=True, stdin_input="y\n"
     )
-    monkeypatch.setattr("concordat.estate_execution._can_prompt", lambda: True)
-    monkeypatch.setattr("concordat.user_interaction.sys.stdin", io.StringIO("y\n"))
 
-    calls: list[list[str]] = []
-
-    class _TofuStateListNoMatch:
-        def __init__(self, cwd: str, env: dict[str, str]) -> None:
-            self.cwd = cwd
-            self.env = env
-
-        def _run(self, args: list[str], *, raise_on_error: bool = False) -> object:
-            calls.append(list(args))
-            verb = args[0] if args else ""
-
-            if verb == "apply":
-                return SimpleNamespace(
-                    stdout="",
-                    stderr=(
-                        "Error: Instance cannot be destroyed\n"
-                        'Resource module.repository[\\"leynos/test-repo\\"].'
-                        "github_repository.this has lifecycle.prevent_destroy set\n"
-                    ),
-                    returncode=1,
-                )
-
-            if verb == "state" and args[1:] == ["list"]:
-                # Return empty state list - no matching addresses
-                return SimpleNamespace(stdout="", stderr="", returncode=0)
-
-            if verb == "state" and args[1] == "rm":
-                msg = "state rm should not be called with no matches"
-                raise AssertionError(msg)
-
-            return SimpleNamespace(stdout="", stderr="", returncode=0)
-
-    monkeypatch.setattr("concordat.estate_execution.Tofu", _TofuStateListNoMatch)
-    monkeypatch.setattr("concordat.tofu_runner.Tofu", _TofuStateListNoMatch)
-
-    stderr_buffer = io.StringIO()
-    io_streams = ExecutionIO(stdout=io.StringIO(), stderr=stderr_buffer)
-    options = ExecutionOptions(
-        github_owner="leynos",
-        github_token="token",  # noqa: S106
-        extra_args=("-auto-approve",),
+    tofu_mock = (
+        builder.with_apply_response(stderr=_PREVENT_DESTROY_ERROR, returncode=1)
+        .with_state_list_response(stdout="")  # Empty state list
+        .build(calls)
     )
+
+    monkeypatch.setattr("concordat.estate_execution.Tofu", tofu_mock)
+    monkeypatch.setattr("concordat.tofu_runner.Tofu", tofu_mock)
 
     exit_code, _ = run_apply(_make_record(git_repo.path), options, io_streams)
 
@@ -278,66 +269,21 @@ def test_run_apply_prevent_destroy_state_rm_failure(
     git_repo: GitRepo,
 ) -> None:
     """When state rm fails, the overall exit code should be non-zero."""
-    tofu_root = git_repo.path / "tofu"
-    tofu_root.mkdir()
-    (tofu_root / "main.tofu").write_text("terraform {}\n", encoding="utf-8")
-
-    monkeypatch.setattr(
-        "concordat.estate_execution.ensure_estate_cache",
-        lambda *_, **__: git_repo.path,
+    calls, builder, io_streams, options = _setup_test_environment(
+        monkeypatch, git_repo, can_prompt=True, stdin_input="y\n"
     )
-    monkeypatch.setattr("concordat.estate_execution._can_prompt", lambda: True)
-    monkeypatch.setattr("concordat.user_interaction.sys.stdin", io.StringIO("y\n"))
 
-    calls: list[list[str]] = []
-
-    class _TofuStateRmFails:
-        def __init__(self, cwd: str, env: dict[str, str]) -> None:
-            self.cwd = cwd
-            self.env = env
-
-        def _run(self, args: list[str], *, raise_on_error: bool = False) -> object:
-            calls.append(list(args))
-            verb = args[0] if args else ""
-
-            if verb == "apply":
-                return SimpleNamespace(
-                    stdout="",
-                    stderr=(
-                        "Error: Instance cannot be destroyed\n"
-                        'Resource module.repository[\\"leynos/test-repo\\"].'
-                        "github_repository.this has lifecycle.prevent_destroy set\n"
-                    ),
-                    returncode=1,
-                )
-
-            if verb == "state" and args[1:] == ["list"]:
-                return SimpleNamespace(
-                    stdout=(
-                        'module.repository["leynos/test-repo"].github_repository.this\n'
-                    ),
-                    stderr="",
-                    returncode=0,
-                )
-
-            if verb == "state" and args[1] == "rm":
-                return SimpleNamespace(
-                    stdout="",
-                    stderr="Error: failed to remove state entry",
-                    returncode=1,
-                )
-
-            return SimpleNamespace(stdout="", stderr="", returncode=0)
-
-    monkeypatch.setattr("concordat.estate_execution.Tofu", _TofuStateRmFails)
-    monkeypatch.setattr("concordat.tofu_runner.Tofu", _TofuStateRmFails)
-
-    io_streams = ExecutionIO(stdout=io.StringIO(), stderr=io.StringIO())
-    options = ExecutionOptions(
-        github_owner="leynos",
-        github_token="token",  # noqa: S106
-        extra_args=("-auto-approve",),
+    tofu_mock = (
+        builder.with_apply_response(stderr=_PREVENT_DESTROY_ERROR, returncode=1)
+        .with_state_list_response(stdout=_STATE_LIST_OUTPUT)
+        .with_state_rm_response(
+            stderr="Error: failed to remove state entry", returncode=1
+        )
+        .build(calls)
     )
+
+    monkeypatch.setattr("concordat.estate_execution.Tofu", tofu_mock)
+    monkeypatch.setattr("concordat.tofu_runner.Tofu", tofu_mock)
 
     exit_code, _ = run_apply(_make_record(git_repo.path), options, io_streams)
 
@@ -351,61 +297,18 @@ def test_run_apply_state_list_returns_nonzero(
     git_repo: GitRepo,
 ) -> None:
     """When state list itself fails, no state rm should be attempted."""
-    tofu_root = git_repo.path / "tofu"
-    tofu_root.mkdir()
-    (tofu_root / "main.tofu").write_text("terraform {}\n", encoding="utf-8")
-
-    monkeypatch.setattr(
-        "concordat.estate_execution.ensure_estate_cache",
-        lambda *_, **__: git_repo.path,
+    calls, builder, io_streams, options = _setup_test_environment(
+        monkeypatch, git_repo, can_prompt=True, stdin_input="y\n"
     )
-    monkeypatch.setattr("concordat.estate_execution._can_prompt", lambda: True)
-    monkeypatch.setattr("concordat.user_interaction.sys.stdin", io.StringIO("y\n"))
 
-    calls: list[list[str]] = []
-
-    class _TofuStateListFails:
-        def __init__(self, cwd: str, env: dict[str, str]) -> None:
-            self.cwd = cwd
-            self.env = env
-
-        def _run(self, args: list[str], *, raise_on_error: bool = False) -> object:
-            calls.append(list(args))
-            verb = args[0] if args else ""
-
-            if verb == "apply":
-                return SimpleNamespace(
-                    stdout="",
-                    stderr=(
-                        "Error: Instance cannot be destroyed\n"
-                        'Resource module.repository[\\"leynos/test-repo\\"].'
-                        "github_repository.this has lifecycle.prevent_destroy set\n"
-                    ),
-                    returncode=1,
-                )
-
-            if verb == "state" and args[1:] == ["list"]:
-                return SimpleNamespace(
-                    stdout="",
-                    stderr="Error: failed to list state",
-                    returncode=1,
-                )
-
-            if verb == "state" and args[1] == "rm":
-                msg = "state rm should not be called if state list fails"
-                raise AssertionError(msg)
-
-            return SimpleNamespace(stdout="", stderr="", returncode=0)
-
-    monkeypatch.setattr("concordat.estate_execution.Tofu", _TofuStateListFails)
-    monkeypatch.setattr("concordat.tofu_runner.Tofu", _TofuStateListFails)
-
-    io_streams = ExecutionIO(stdout=io.StringIO(), stderr=io.StringIO())
-    options = ExecutionOptions(
-        github_owner="leynos",
-        github_token="token",  # noqa: S106
-        extra_args=("-auto-approve",),
+    tofu_mock = (
+        builder.with_apply_response(stderr=_PREVENT_DESTROY_ERROR, returncode=1)
+        .with_state_list_response(stderr="Error: failed to list state", returncode=1)
+        .build(calls)
     )
+
+    monkeypatch.setattr("concordat.estate_execution.Tofu", tofu_mock)
+    monkeypatch.setattr("concordat.tofu_runner.Tofu", tofu_mock)
 
     exit_code, _ = run_apply(_make_record(git_repo.path), options, io_streams)
 
