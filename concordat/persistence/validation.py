@@ -10,6 +10,12 @@ import boto3
 from botocore import exceptions as boto_exceptions
 from botocore.config import Config as BotoConfig
 
+from .backend import (
+    AWS_BACKEND_ENV,
+    AWS_SESSION_TOKEN_VAR,
+    SCW_BACKEND_ENV,
+    SPACES_BACKEND_ENV,
+)
 from .endpoints import normalize_endpoint_url
 from .models import (
     PERSISTENCE_CHECK_SUFFIX,
@@ -17,14 +23,6 @@ from .models import (
     PersistenceError,
     S3Client,
 )
-
-AWS_BACKEND_ENV = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY")
-SCW_BACKEND_ENV = ("SCW_ACCESS_KEY", "SCW_SECRET_KEY")
-SPACES_BACKEND_ENV = (
-    "SPACES_ACCESS_KEY_ID",
-    "SPACES_SECRET_ACCESS_KEY",
-)
-AWS_SESSION_TOKEN_VAR = "AWS_SESSION_TOKEN"  # noqa: S105
 
 
 def _validate_inputs(

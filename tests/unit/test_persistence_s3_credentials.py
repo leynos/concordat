@@ -125,6 +125,31 @@ def test_default_s3_client_factory_omits_session_token_when_blank(
     assert "aws_session_token" not in kwargs
 
 
+def test_default_s3_client_factory_forwards_session_token_when_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Non-blank AWS_SESSION_TOKEN should be forwarded to boto3."""
+    monkeypatch.setenv("SCW_ACCESS_KEY", "scw-access")
+    monkeypatch.setenv("SCW_SECRET_KEY", "scw-secret")
+    monkeypatch.setenv("AWS_SESSION_TOKEN", "session-token")
+
+    captured: dict[str, typ.Any] = {}
+
+    def fake_client(service_name: str, **kwargs: object) -> object:
+        captured["kwargs"] = kwargs
+        return object()
+
+    monkeypatch.setattr(persistence_validation.boto3, "client", fake_client)
+
+    persistence_validation._default_s3_client_factory(
+        "fr-par",
+        "https://s3.fr-par.scw.cloud",
+    )
+
+    kwargs = typ.cast("dict[str, object]", captured["kwargs"])
+    assert kwargs["aws_session_token"] == "session-token"  # noqa: S105
+
+
 def test_default_s3_client_factory_leaves_credentials_unset_when_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

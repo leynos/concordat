@@ -267,12 +267,29 @@ def _validate_tofu_changes(workdir: Path) -> None:
     _run_tofo_validate(workdir)
 
 
-def ensure_repository_pr(
+def _ensure_inventory_pr(
     repo_slug: str,
     *,
     config: PlatformStandardsConfig,
+    verb: str,
+    mutate_inventory: typ.Callable[[Path, str], bool],
+    expect_present: bool,
+    already_message: str,
 ) -> PlatformStandardsResult:
-    """Clone platform-standards, add the repo to the inventory, and open a PR."""
+    """Shared implementation for inventory PR creation (enrol/disenrol).
+
+    Args:
+        repo_slug: Repository slug to add/remove from inventory.
+        config: Platform standards configuration.
+        verb: Action verb ("enrol" or "disenrol").
+        mutate_inventory: Function to modify inventory (returns True if changed).
+        expect_present: Whether slug should be present on base branch for early-out.
+        already_message: Message when inventory mutation returns no change.
+
+    Returns:
+        PlatformStandardsResult with PR details or early-out explanation.
+
+    """
     callbacks = build_remote_callbacks(config.repo_url)
     with TemporaryDirectory(prefix="concordat-platform-") as temp_root:
         repository = pygit2.clone_repository(
@@ -285,10 +302,10 @@ def ensure_repository_pr(
         remote = repository.remotes["origin"]
         remote.fetch(callbacks=callbacks)
 
-        branch_name = _branch_name_for(repo_slug)
+        branch_name = _branch_name_for(repo_slug, verb=verb)
 
         if result := _check_base_branch_enrollment(
-            repository, config, repo_slug, branch_name, expect_present=True
+            repository, config, repo_slug, branch_name, expect_present=expect_present
         ):
             return result
 
@@ -297,8 +314,8 @@ def ensure_repository_pr(
             config,
             repo_slug,
             branch_name,
-            expect_present=True,
-            verb="enrol",
+            expect_present=expect_present,
+            verb=verb,
         ):
             return result
 
@@ -310,17 +327,17 @@ def ensure_repository_pr(
         )
 
         inventory_path = workdir / config.inventory_path
-        added = _update_inventory(inventory_path, repo_slug)
-        if not added:
+        changed = mutate_inventory(inventory_path, repo_slug)
+        if not changed:
             return PlatformStandardsResult(
                 created=False,
                 branch=branch_name,
                 pr_url=None,
-                message="repository already enrolled in inventory",
+                message=already_message,
             )
 
         _commit_inventory_changes(
-            repository, config, repo_slug, base_commit, verb="enrol"
+            repository, config, repo_slug, base_commit, verb=verb
         )
         _validate_tofu_changes(workdir)
 
@@ -331,7 +348,7 @@ def ensure_repository_pr(
             raise ConcordatError(ERROR_MISSING_TOKEN)
 
         pr_url, _ = _create_pr_for_inventory_change(
-            config, repo_slug, branch_name, verb="enrol"
+            config, repo_slug, branch_name, verb=verb
         )
 
         return PlatformStandardsResult(
@@ -340,6 +357,22 @@ def ensure_repository_pr(
             pr_url=pr_url,
             message="opened platform-standards PR",
         )
+
+
+def ensure_repository_pr(
+    repo_slug: str,
+    *,
+    config: PlatformStandardsConfig,
+) -> PlatformStandardsResult:
+    """Clone platform-standards, add the repo to the inventory, and open a PR."""
+    return _ensure_inventory_pr(
+        repo_slug,
+        config=config,
+        verb="enrol",
+        mutate_inventory=_update_inventory,
+        expect_present=True,
+        already_message="repository already enrolled in inventory",
+    )
 
 
 def ensure_repository_removal_pr(
@@ -348,73 +381,14 @@ def ensure_repository_removal_pr(
     config: PlatformStandardsConfig,
 ) -> PlatformStandardsResult:
     """Clone platform-standards, remove the repo from inventory, and open a PR."""
-    callbacks = build_remote_callbacks(config.repo_url)
-    with TemporaryDirectory(prefix="concordat-platform-") as temp_root:
-        repository = pygit2.clone_repository(
-            config.repo_url,
-            temp_root,
-            callbacks=callbacks,
-        )
-
-        workdir = Path(repository.workdir or temp_root)
-        remote = repository.remotes["origin"]
-        remote.fetch(callbacks=callbacks)
-
-        branch_name = _branch_name_for(repo_slug, verb="disenrol")
-
-        if result := _check_base_branch_enrollment(
-            repository, config, repo_slug, branch_name, expect_present=False
-        ):
-            return result
-
-        if result := _handle_existing_remote_branch(
-            repository,
-            config,
-            repo_slug,
-            branch_name,
-            expect_present=False,
-            verb="disenrol",
-        ):
-            return result
-
-        base_commit = _checkout_pr_branch(
-            repository,
-            callbacks=callbacks,
-            base_branch=config.base_branch,
-            branch_name=branch_name,
-        )
-
-        inventory_path = workdir / config.inventory_path
-        removed = _remove_inventory(inventory_path, repo_slug)
-        if not removed:
-            return PlatformStandardsResult(
-                created=False,
-                branch=branch_name,
-                pr_url=None,
-                message="repository already absent from inventory",
-            )
-
-        _commit_inventory_changes(
-            repository, config, repo_slug, base_commit, verb="disenrol"
-        )
-        _validate_tofu_changes(workdir)
-
-        refspec = f"refs/heads/{branch_name}:refs/heads/{branch_name}"
-        remote.push([refspec], callbacks=callbacks)
-
-        if not config.github_token:
-            raise ConcordatError(ERROR_MISSING_TOKEN)
-
-        pr_url, _ = _create_pr_for_inventory_change(
-            config, repo_slug, branch_name, verb="disenrol"
-        )
-
-        return PlatformStandardsResult(
-            created=True,
-            branch=branch_name,
-            pr_url=pr_url,
-            message="opened platform-standards PR",
-        )
+    return _ensure_inventory_pr(
+        repo_slug,
+        config=config,
+        verb="disenrol",
+        mutate_inventory=_remove_inventory,
+        expect_present=False,
+        already_message="repository already absent from inventory",
+    )
 
 
 def _load_inventory_data(path: Path) -> dict[str, typ.Any]:

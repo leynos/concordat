@@ -220,15 +220,16 @@ One or more GitHub repositories already exist but are missing from state.
 Import into state and retry apply? (example/repo-one, example/repo-two) [y/N]:
 ```
 
-If you answer `y`, Concordat runs `tofu import` for each missing repository and
-then re-runs `tofu apply`. Import IDs are attempted in a resilient order:
+If the operator answers `y`, Concordat runs `tofu import` for each missing
+repository and then re-runs `tofu apply`. Import IDs are attempted in a
+resilient order:
 
 1. Repository name only (for example, `repo-one`).
 2. Full `owner/name` slug (for example, `example/repo-one`).
 
-When running without a TTY (for example, in CI), Concordat does not prompt and
-does not attempt imports. Re-run with `--keep-workdir`, then import manually in
-the printed workspace directory.
+When running without a TTY (teletype; an interactive terminal session), for
+example in CI, Concordat does not prompt and does not attempt imports. Re-run
+with `--keep-workdir`, then import manually in the printed workspace directory.
 
 ### Persisting estate state in object storage
 

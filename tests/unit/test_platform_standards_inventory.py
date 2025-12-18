@@ -49,6 +49,62 @@ def test_remove_inventory_idempotent(tmp_path: Path) -> None:
     assert platform_standards._remove_inventory(inventory, "example/repo") is False
 
 
+def test_update_inventory_preserves_extra_top_level_keys(tmp_path: Path) -> None:
+    """Extra top-level keys in inventory are preserved after update."""
+    from ruamel.yaml import YAML
+
+    inventory = tmp_path / "repositories.yaml"
+    original_contents = """\
+schema_version: 1
+metadata:
+  owner: team-a
+  environment: production
+labels:
+  - backend
+  - critical
+repositories:
+  - name: existing/repo
+"""
+    inventory.write_text(original_contents, encoding="utf-8")
+
+    added = platform_standards._update_inventory(inventory, "example/repo")
+    assert added is True
+
+    yaml = YAML(typ="safe")
+    data = yaml.load(inventory.read_text(encoding="utf-8"))
+
+    assert data["schema_version"] == 1
+    assert data["metadata"] == {"owner": "team-a", "environment": "production"}
+    assert data["labels"] == ["backend", "critical"]
+
+    repo_names = [r["name"] for r in data["repositories"]]
+    assert "existing/repo" in repo_names
+    assert "example/repo" in repo_names
+
+
+def test_update_inventory_sorts_repositories_by_name(tmp_path: Path) -> None:
+    """Repositories are deterministically sorted by name after update."""
+    from ruamel.yaml import YAML
+
+    inventory = tmp_path / "repositories.yaml"
+    original_contents = """\
+schema_version: 1
+repositories:
+  - name: z-repo/last
+  - name: m-repo/middle
+  - name: a-repo/first
+"""
+    inventory.write_text(original_contents, encoding="utf-8")
+
+    platform_standards._update_inventory(inventory, "example/repo")
+
+    yaml = YAML(typ="safe")
+    data = yaml.load(inventory.read_text(encoding="utf-8"))
+
+    repo_names = [r["name"] for r in data["repositories"]]
+    assert repo_names == sorted(repo_names)
+
+
 def test_parse_github_slug_preserves_repo_names_ending_in_git_chars() -> None:
     """Slug parsing must only remove the literal `.git` suffix."""
     assert (

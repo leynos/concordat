@@ -384,3 +384,108 @@ def test_disenrol_can_open_platform_removal_pr(
     )
 
     assert outcomes[0].platform_pr == expected
+
+
+def test_disenrollment_outcome_render_missing_document_without_platform_pr() -> None:
+    """Render output for missing-document disenrolment without platform PR."""
+    from concordat.enrol import DisenrollmentOutcome
+
+    outcome = DisenrollmentOutcome(
+        repository="git@github.com:test-owner/sample.git",
+        location=pathlib.Path("/tmp/sample"),  # noqa: S108
+        updated=False,
+        missing_document=True,
+        committed=False,
+        pushed=False,
+        platform_pr=None,
+    )
+
+    rendered = outcome.render()
+    assert isinstance(rendered, str)
+    assert "missing .concordat" in rendered
+
+
+def test_disenrollment_outcome_render_missing_document_with_platform_pr() -> None:
+    """Render output for missing-document disenrolment with platform PR."""
+    from concordat.enrol import DisenrollmentOutcome
+
+    expected_pr = PlatformStandardsResult(
+        created=True,
+        branch="concordat/disenrol/test-owner-sample",
+        pr_url="https://github.example.com/pr/1",
+        message="opened platform-standards PR",
+    )
+
+    outcome = DisenrollmentOutcome(
+        repository="git@github.com:test-owner/sample.git",
+        location=pathlib.Path("/tmp/sample"),  # noqa: S108
+        updated=False,
+        missing_document=True,
+        committed=False,
+        pushed=False,
+        platform_pr=expected_pr,
+    )
+
+    rendered = outcome.render()
+    assert isinstance(rendered, str)
+    assert "missing .concordat" in rendered
+    assert expected_pr.pr_url is not None
+    assert expected_pr.pr_url in rendered
+
+
+def test_disenrollment_outcome_render_already_disenrolled_with_platform_pr() -> None:
+    """Render output for an already-disenrolled repo that still has a platform PR."""
+    from concordat.enrol import DisenrollmentOutcome
+
+    expected_pr = PlatformStandardsResult(
+        created=True,
+        branch="concordat/disenrol/test-owner-sample",
+        pr_url="https://github.example.com/pr/1",
+        message="opened platform-standards PR",
+    )
+
+    outcome = DisenrollmentOutcome(
+        repository="git@github.com:test-owner/sample.git",
+        location=pathlib.Path("/tmp/sample"),  # noqa: S108
+        updated=False,
+        missing_document=False,
+        committed=False,
+        pushed=False,
+        platform_pr=expected_pr,
+    )
+
+    rendered = outcome.render()
+    assert isinstance(rendered, str)
+    assert "already disenrolled" in rendered
+    assert expected_pr.pr_url is not None
+    assert expected_pr.pr_url in rendered
+
+
+def test_disenrollment_outcome_render_normal_disenrolment_with_platform_pr() -> None:
+    """Render output for a normal disenrolment that also opens a platform PR."""
+    from concordat.enrol import DisenrollmentOutcome
+
+    expected_pr = PlatformStandardsResult(
+        created=True,
+        branch="concordat/disenrol/test-owner-sample",
+        pr_url="https://github.example.com/pr/1",
+        message="opened platform-standards PR",
+    )
+
+    outcome = DisenrollmentOutcome(
+        repository="git@github.com:test-owner/sample.git",
+        location=pathlib.Path("/tmp/sample"),  # noqa: S108
+        updated=True,
+        missing_document=False,
+        committed=True,
+        pushed=True,
+        platform_pr=expected_pr,
+    )
+
+    rendered = outcome.render()
+    assert isinstance(rendered, str)
+    assert "updated .concordat" in rendered
+    assert expected_pr.pr_url is not None
+    assert expected_pr.pr_url in rendered
+    assert "committed" in rendered
+    assert "pushed" in rendered
