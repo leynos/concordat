@@ -68,6 +68,8 @@ class EstateExecutionError(ConcordatError):
 
 
 # Make EstateCacheError raise as EstateExecutionError for backward compatibility.
+# Store original function reference before wrapping.
+_ensure_estate_cache_original = ensure_estate_cache
 
 
 def _wrap_cache_error[T, **P](func: typ.Callable[P, T]) -> typ.Callable[P, T]:
@@ -82,7 +84,9 @@ def _wrap_cache_error[T, **P](func: typ.Callable[P, T]) -> typ.Callable[P, T]:
     return wrapper
 
 
-ensure_estate_cache = _wrap_cache_error(ensure_estate_cache)  # type: ignore[assignment]
+ensure_estate_cache: typ.Callable[..., Path] = _wrap_cache_error(
+    _ensure_estate_cache_original,
+)
 
 
 def _resolve_backend_environment(env: typ.Mapping[str, str]) -> dict[str, str]:
@@ -194,9 +198,12 @@ def _get_persistence_runtime(
     if descriptor is None:
         return None
 
-    assert backend_config is not None  # noqa: S101
-    assert object_key is not None  # noqa: S101
-    assert env_overrides is not None  # noqa: S101
+    if backend_config is None:
+        raise EstateExecutionError("missing backend_config")  # noqa: TRY003
+    if object_key is None:
+        raise EstateExecutionError("missing object_key")  # noqa: TRY003
+    if env_overrides is None:
+        raise EstateExecutionError("missing env_overrides")  # noqa: TRY003
     return PersistenceRuntime(
         descriptor=descriptor,
         backend_config=backend_config,
