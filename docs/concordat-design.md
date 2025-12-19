@@ -972,6 +972,258 @@ This workflow requires explicit separation between:
   the existing git and pull request helpers in `concordat` would enable a
   complete “status → branch → commit → pull request” workflow.
 
+#### 2.1.3. `concordat artefact` CLI design
+
+The spike tooling lives in `scripts/canon_artifacts.py` and
+`scripts/canon_artifacts_tui.py`. A full implementation should be integrated
+into the primary CLI as `concordat artefact`, providing a stable interface for
+operators and automation.
+
+The goals of the `artefact` sub-command are:
+
+- Surface a consistent catalogue view of canonical artefacts and lint rules.
+- Provide an operator-friendly upgrade experience using semantic versions.
+- Manage estate-specific configuration and deployment safely.
+- Support both interactive (Textual) and non-interactive (CI) workflows.
+- Integrate with git operations and pull request creation.
+
+##### Command surface
+
+The `concordat artefact` command is designed as a hierarchy.
+
+At the top level, artefacts refer to any entry in the canonical manifest
+(workflows, lint configs, documentation templates, and lint rule packages).
+Lint rules are artefacts with additional structure (`rule.yaml`, parameters,
+and mutations).
+
+The command shape is:
+
+```plaintext
+concordat artefact <group> <command> [options]
+```
+
+Groups:
+
+- `catalogue`: inspect and validate the canonical catalogue.
+- `estate`: inspect and deploy catalogue entries to a platform-standards estate.
+- `rule`: work with lint rule packages, their configuration, and mutations.
+
+###### `catalogue` commands
+
+The `catalogue` group operates on the template tree bundled with Concordat.
+
+```plaintext
+concordat artefact catalogue list
+concordat artefact catalogue show <id>
+concordat artefact catalogue validate
+```
+
+Expected behaviour:
+
+- `list` prints a concise list of `id`, `type`, and `path`.
+- `show` prints the manifest entry plus derived metadata (for example, computed
+  integrity digest, resolved package contents when the artefact is a directory,
+  and lint rule metadata when `rule.yaml` exists).
+- `validate` verifies manifest schema, path existence, and integrity metadata.
+
+###### `estate` commands
+
+The `estate` group compares and deploys artefacts into a platform-standards
+repository.
+
+```plaintext
+concordat artefact estate status <published-root>
+concordat artefact estate diff <published-root> <id>
+concordat artefact estate sync <published-root> [<id>...]
+concordat artefact estate tui <published-root>
+concordat artefact estate pr <published-root>
+```
+
+Expected behaviour:
+
+- `status` prints a table of template versus published versions, highlighting
+  missing, out-of-date, and drifted entries.
+- `diff` prints a file-level summary for an artefact, with an optional
+  machine-readable mode (`--format json`) to support automation.
+- `sync` stages updates in the published checkout, respecting a policy for
+  platform-owned versus estate-owned files.
+- `tui` provides an interactive menu for bulk sync operations, with filters and
+  multi-select.
+- `pr` creates a branch, commits the staged changes, and opens a pull request.
+
+The default path input is explicit (`<published-root>`) to support local
+operations. An additional integration should permit running against the active
+estate cache without an explicit path:
+
+```plaintext
+concordat artefact estate status --use-active-estate
+```
+
+In this mode the command would:
+
+- clone or refresh the estate platform-standards repository via the existing
+  estate cache machinery, and
+- run operations inside a temporary workspace, consistent with `plan` and
+  `apply`.
+
+###### `rule` commands
+
+The `rule` group targets lint rule packages and their configuration.
+
+```plaintext
+concordat artefact rule list
+concordat artefact rule show <rule-id>
+concordat artefact rule validate <rule-id>
+
+concordat artefact rule config show <rule-id> --estate <alias>
+concordat artefact rule config set <rule-id> <key>=<value> --estate <alias>
+concordat artefact rule config reset <rule-id> [<key>...] --estate <alias>
+
+concordat artefact rule run <rule-id> --repo <path>
+concordat artefact rule mutate <rule-id> --repo <path>
+```
+
+Expected behaviour:
+
+- `rule list/show` operate on the template rule packages.
+- `rule validate` verifies `rule.yaml`, validates parameter schema, and runs
+  rule policy tests (where present).
+- `rule config` operates on estate configuration and supports a “defaults plus
+  overrides” model.
+- `rule run` evaluates the sensor for a target repository and produces findings
+  without changes.
+- `rule mutate` produces deterministic edits (patches) for remediation tooling.
+
+##### Output formats
+
+All `artefact` commands should support:
+
+- `--format table` for operator-friendly output (default), and
+- `--format json` for automation.
+
+Table output should use stable columns and predictable ordering.
+
+##### Exit codes
+
+Commands must return stable exit codes for CI integration.
+
+#### Table 3: Exit codes for `concordat artefact`
+
+| Exit code | Meaning                                                                  |
+| --------- | ------------------------------------------------------------------------ |
+| 0         | Success                                                                  |
+| 1         | Invocation error (invalid arguments, missing prerequisites)              |
+| 2         | Out of date or missing artefacts detected (`status` in CI mode)          |
+| 3         | Catalogue integrity failure (template manifest mismatch, invalid schema) |
+| 4         | Mutations planned or applied failed (patch application or policy errors) |
+
+##### Configuration and locking
+
+Semantic versions require a lock model to describe what is deployed in an
+estate and how it is configured.
+
+Two files are required:
+
+- a catalogue manifest in the template tree
+  (`platform-standards/canon/manifest.yaml`), and
+- an estate lockfile in the published platform-standards repository.
+
+The estate lockfile pins versions and records configuration overrides, enabling
+status reporting and safe upgrades without inferring versions from content.
+
+A proposed lockfile location is:
+
+- `canon/artefacts.lock.yaml`
+
+An example shape follows:
+
+```yaml
+schema_version: 1
+locked_at: 2025-12-19T00:00:00Z
+artefacts:
+  - id: python-ruff-config
+    version: 1.4.0
+    configured: {}
+  - id: ci-001
+    version: 2.0.0
+    configured:
+      workflow_path: .github/workflows/ci.yml
+```
+
+The lockfile is the estate-owned source of truth for deployment state.
+Integrity digests remain useful for detecting local edits that do not update
+the lockfile.
+
+##### User workflows
+
+The following workflows describe expected operator usage.
+
+###### Workflow: estate operator upgrades canonical artefacts
+
+1. Operator pulls the latest Concordat template changes.
+2. Operator checks status for a local checkout:
+
+   ```shell
+   uv run concordat artefact estate status path/to/platform-standards
+   ```
+
+3. Operator uses `sync` to stage updates (optionally filtered by type):
+
+   ```shell
+   uv run concordat artefact estate sync path/to/platform-standards --types lint-config
+   ```
+
+4. Operator reviews the diff using standard git tooling.
+5. Operator opens a pull request:
+
+   ```shell
+   uv run concordat artefact estate pr path/to/platform-standards
+   ```
+
+###### Workflow: CI blocks when an estate is behind
+
+1. A platform-standards repository workflow runs:
+
+   ```shell
+   uv run concordat artefact estate status . --format json --fail-on-outdated
+   ```
+
+2. The workflow fails with exit code `2` when missing or out-of-date artefacts
+   exist, preventing drift from accumulating unnoticed.
+
+###### Workflow: introduce a new lint rule package
+
+1. Platform maintainer adds a new rule package under
+   `platform-standards/canon/lint-rules/<rule-id>/`.
+2. Platform maintainer registers it in the template manifest with `version:
+   0.1.0` and adds documentation to the package `README.md`.
+3. Estate operator syncs the package and pins it in the estate lockfile.
+
+##### Capabilities, limitations, and future directions
+
+The `artefact` CLI is expected to evolve iteratively.
+
+Capabilities:
+
+- Catalogue inspection, validation, and documentation surfacing.
+- Estate status reporting, syncing, and pull request creation.
+- Lint rule validation, configuration management, and mutation planning.
+
+Limitations (initially):
+
+- Mutations are expected to be deterministic, but not necessarily merge-aware.
+  Operators remain responsible for reviewing and resolving conflicts.
+- Rule execution against target repositories requires a well-defined input model
+  (for example, how OpenTofu and Conftest inputs are materialized and pinned).
+
+Future directions:
+
+- Replace copy-based sync with a three-way merge for platform-owned files.
+- Add “upgrade plans” that compute SemVer deltas, risk categories, and required
+  operator actions.
+- Integrate `rule mutate` with the OpenTofu remediation provider to route all
+  changes through pull requests with comment preservation where applicable.
+
 ### 2.2. The `.concordat` manifest: a formal schema definition
 
 The `.concordat` file, located at the root of each target repository, is the
