@@ -11,8 +11,9 @@ from __future__ import annotations
 
 import dataclasses
 from pathlib import Path  # noqa: TC003
+from typing import Annotated  # noqa: ICN003
 
-from cyclopts import App
+from cyclopts import App, Parameter
 
 from concordat.canon_artifacts import (
     DEFAULT_MANIFEST_RELATIVE,
@@ -41,10 +42,10 @@ class StatusConfig:
     """Configuration for the status command."""
 
     published_root: Path
-    template_root: Path | None
-    ids: tuple[str, ...]
-    types: tuple[str, ...]
-    outdated_only: bool
+    template_root: Path | None = None
+    ids: tuple[str, ...] = ()
+    types: tuple[str, ...] = ()
+    outdated_only: bool = False
     fail_on_outdated: bool = False
     fail_on_missing: bool = False
 
@@ -80,25 +81,9 @@ def list_artifacts(
 
 @app.command()
 def status(
-    published_root: Path,
-    *,
-    template_root: Path | None = None,
-    ids: tuple[str, ...] = (),
-    types: tuple[str, ...] = (),
-    outdated_only: bool = False,
-    fail_on_outdated: bool = False,
-    fail_on_missing: bool = False,
+    config: Annotated[StatusConfig, Parameter(name="*")],
 ) -> int:
     """Print a table comparing published artifacts against the template."""
-    config = StatusConfig(
-        published_root=published_root,
-        template_root=template_root,
-        ids=ids,
-        types=types,
-        outdated_only=outdated_only,
-        fail_on_outdated=fail_on_outdated,
-        fail_on_missing=fail_on_missing,
-    )
     return _render_status(config)
 
 
