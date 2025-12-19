@@ -121,6 +121,17 @@ class SyncAction:
     copied: bool
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
+class SyncConfig:
+    """Configuration for syncing artifacts."""
+
+    template_root: Path
+    published_root: Path
+    ids: set[str] | None = None
+    dry_run: bool = False
+    include_unchanged: bool = False
+
+
 def resolve_concordat_root(start: Path | None = None) -> Path:
     """Find the Concordat checkout root by locating the canonical manifest."""
     cursor = (start or Path.cwd()).resolve()
@@ -134,51 +145,73 @@ def resolve_concordat_root(start: Path | None = None) -> Path:
     )
 
 
-def load_manifest(manifest_path: Path) -> CanonManifest:
-    """Load and validate the canonical artifact manifest."""
-    if not manifest_path.exists():
-        raise CanonArtifactsError(f"Manifest not found: {manifest_path}")
-    data = _yaml.load(manifest_path.read_text(encoding="utf-8"))
+def _validate_manifest_structure(
+    data: object, manifest_path: Path
+) -> dict[str, object]:
+    """Validate basic manifest structure."""
     if not isinstance(data, dict):
         raise CanonArtifactsError(
             f"Manifest content must be a mapping: {manifest_path}"
         )
+    return typ.cast("dict[str, object]", data)
+
+
+def _validate_schema_version(data: dict[str, object], manifest_path: Path) -> int:
+    """Validate and return schema version."""
     schema_version = data.get("schema_version")
     if schema_version != 1:
         raise CanonArtifactsError(
             f"Unsupported manifest schema_version={schema_version!r} "
             f"(expected 1): {manifest_path}"
         )
-    artifacts_raw = data.get("artifacts", [])
+    return 1
+
+
+def _parse_artifacts(
+    artifacts_raw: object,
+    manifest_path: Path,
+) -> tuple[CanonArtifact, ...]:
+    """Parse and validate artifact entries."""
     if not isinstance(artifacts_raw, list) or not artifacts_raw:
         raise CanonArtifactsError(
             f"Manifest artifacts must be a non-empty list: {manifest_path}"
         )
 
     artifacts: list[CanonArtifact] = []
-    for entry in artifacts_raw:
+    for entry in typ.cast("list[object]", artifacts_raw):
         if not isinstance(entry, dict):
             raise CanonArtifactsError(
                 f"Manifest artifact entries must be mappings: {manifest_path}"
             )
+        entry_map = typ.cast("dict[str, object]", entry)
         try:
             artifacts.append(
                 CanonArtifact(
-                    id=str(entry["id"]),
-                    type=str(entry["type"]),
-                    path=Path(str(entry["path"])),
-                    description=str(entry["description"]),
-                    sha256=str(entry["sha256"]),
+                    id=str(entry_map["id"]),
+                    type=str(entry_map["type"]),
+                    path=Path(str(entry_map["path"])),
+                    description=str(entry_map["description"]),
+                    sha256=str(entry_map["sha256"]),
                 )
             )
         except KeyError as exc:
             raise CanonArtifactsError(
                 f"Manifest artifact missing key {exc.args[0]!r}: {manifest_path}"
             ) from exc
+    return tuple(artifacts)
 
+
+def load_manifest(manifest_path: Path) -> CanonManifest:
+    """Load and validate the canonical artifact manifest."""
+    if not manifest_path.exists():
+        raise CanonArtifactsError(f"Manifest not found: {manifest_path}")
+    data = _yaml.load(manifest_path.read_text(encoding="utf-8"))
+    manifest_data = _validate_manifest_structure(data, manifest_path)
+    schema_version = _validate_schema_version(manifest_data, manifest_path)
+    artifacts = _parse_artifacts(manifest_data.get("artifacts", []), manifest_path)
     return CanonManifest(
         schema_version=schema_version,
-        artifacts=tuple(artifacts),
+        artifacts=artifacts,
         manifest_path=manifest_path,
     )
 
@@ -256,36 +289,56 @@ def _resolve_status(
     return ArtifactStatus.OK
 
 
+def _should_sync_artifact(
+    comparison: ArtifactComparison,
+    *,
+    ids: set[str] | None,
+    include_unchanged: bool,
+) -> bool:
+    """Return True when the comparison should be synced."""
+    if ids is not None and comparison.id not in ids:
+        return False
+    if comparison.status == ArtifactStatus.OK and not include_unchanged:
+        return False
+    return comparison.status != ArtifactStatus.TEMPLATE_MANIFEST_MISMATCH
+
+
+def _copy_artifact(source: Path, destination: Path, *, dry_run: bool) -> bool:
+    """Copy artifact from source to destination."""
+    if dry_run:
+        return False
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if source.is_dir():
+        shutil.copytree(source, destination, dirs_exist_ok=True)
+    else:
+        shutil.copy2(source, destination)
+    return True
+
+
 def sync_artifacts(
     comparisons: typ.Iterable[ArtifactComparison],
-    *,
-    template_root: Path,
-    published_root: Path,
-    ids: set[str] | None = None,
-    dry_run: bool = False,
-    include_unchanged: bool = False,
+    config: SyncConfig,
 ) -> tuple[SyncAction, ...]:
-    """Copy template artifacts into the published checkout."""
-    published_root = published_root.resolve()
+    """Copy template artifacts into the published checkout.
+
+    Args:
+        comparisons: The artifact comparisons to consider for syncing.
+        config: Sync configuration (roots, filters, and dry-run behaviour).
+
+    """
     actions: list[SyncAction] = []
     for comparison in comparisons:
-        if ids is not None and comparison.id not in ids:
-            continue
-        if comparison.status == ArtifactStatus.OK and not include_unchanged:
-            continue
-        if comparison.status == ArtifactStatus.TEMPLATE_MANIFEST_MISMATCH:
+        if not _should_sync_artifact(
+            comparison,
+            ids=config.ids,
+            include_unchanged=config.include_unchanged,
+        ):
             continue
 
-        source = template_root / comparison.template_relpath
+        source = config.template_root / comparison.template_relpath
         destination = comparison.published_path
-        copied = False
-        if not dry_run:
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            if source.is_dir():
-                shutil.copytree(source, destination, dirs_exist_ok=True)
-            else:
-                shutil.copy2(source, destination)
-            copied = True
+        copied = _copy_artifact(source, destination, dry_run=config.dry_run)
         actions.append(
             SyncAction(
                 artifact_id=comparison.id,
@@ -298,24 +351,27 @@ def sync_artifacts(
     return tuple(actions)
 
 
+def _format_comparison_row(comparison: ArtifactComparison) -> tuple[str, ...]:
+    """Format a single comparison as a table row."""
+    template = comparison.template_sha256[:12]
+    published = (comparison.published_sha256 or "-")[:12]
+    return (
+        comparison.id,
+        comparison.type,
+        str(comparison.status),
+        template,
+        published,
+        comparison.artifact.published_relpath().as_posix(),
+    )
+
+
 def render_status_table(comparisons: typ.Sequence[ArtifactComparison]) -> str:
     """Render a fixed-width table for comparisons."""
     headers = ("id", "type", "status", "template", "published", "path")
-    rows: list[tuple[str, ...]] = [headers]
-
-    for comparison in comparisons:
-        template = comparison.template_sha256[:12]
-        published = (comparison.published_sha256 or "-")[:12]
-        rows.append(
-            (
-                comparison.id,
-                comparison.type,
-                str(comparison.status),
-                template,
-                published,
-                comparison.artifact.published_relpath().as_posix(),
-            )
-        )
+    rows = [
+        headers,
+        *(_format_comparison_row(comparison) for comparison in comparisons),
+    ]
 
     widths = [max(len(row[i]) for row in rows) for i in range(len(headers))]
     lines: list[str] = []

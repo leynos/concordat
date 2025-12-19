@@ -16,8 +16,10 @@ from cyclopts import App
 
 from concordat.canon_artifacts import (
     DEFAULT_MANIFEST_RELATIVE,
+    ArtifactComparison,
     ArtifactStatus,
     CanonArtifactsError,
+    SyncConfig,
     compare_manifest_to_published,
     load_manifest,
     render_status_table,
@@ -32,6 +34,17 @@ app = App()
 class _Filter:
     ids: set[str] | None
     types: set[str] | None
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class StatusConfig:
+    """Configuration for the status command."""
+
+    published_root: Path
+    template_root: Path | None
+    ids: tuple[str, ...]
+    types: tuple[str, ...]
+    outdated_only: bool
 
 
 def _build_filter(*, ids: tuple[str, ...], types: tuple[str, ...]) -> _Filter:
@@ -75,22 +88,56 @@ def status(
     fail_on_missing: bool = False,
 ) -> int:
     """Print a table comparing published artifacts against the template."""
-    manifest_path = _resolve_manifest_path(template_root)
+    config = StatusConfig(
+        published_root=published_root,
+        template_root=template_root,
+        ids=ids,
+        types=types,
+        outdated_only=outdated_only,
+    )
+    return _render_status(
+        config,
+        fail_on_outdated=fail_on_outdated,
+        fail_on_missing=fail_on_missing,
+    )
+
+
+def _render_status(
+    config: StatusConfig,
+    *,
+    fail_on_outdated: bool,
+    fail_on_missing: bool,
+) -> int:
+    """Render status table and return the appropriate exit code."""
+    manifest_path = _resolve_manifest_path(config.template_root)
     manifest = load_manifest(manifest_path)
-    filters = _build_filter(ids=ids, types=types)
+    filters = _build_filter(ids=config.ids, types=config.types)
     comparisons = list(
         compare_manifest_to_published(
             manifest,
-            published_root=published_root,
+            published_root=config.published_root,
             ids=filters.ids,
             types=filters.types,
         )
     )
-    if outdated_only:
+    if config.outdated_only:
         comparisons = [c for c in comparisons if c.status != ArtifactStatus.OK]
 
     print(render_status_table(comparisons))
+    return _compute_status_exit_code(
+        comparisons,
+        fail_on_outdated=fail_on_outdated,
+        fail_on_missing=fail_on_missing,
+    )
 
+
+def _compute_status_exit_code(
+    comparisons: list[ArtifactComparison],
+    *,
+    fail_on_outdated: bool,
+    fail_on_missing: bool,
+) -> int:
+    """Compute exit code based on comparison results."""
     if any(c.status == ArtifactStatus.TEMPLATE_MANIFEST_MISMATCH for c in comparisons):
         return 3
 
@@ -140,11 +187,13 @@ def sync(
 
     actions = sync_artifacts(
         comparisons,
-        template_root=manifest.template_root,
-        published_root=published_root,
-        ids=selected_ids,
-        dry_run=dry_run,
-        include_unchanged=include_unchanged,
+        SyncConfig(
+            template_root=manifest.template_root,
+            published_root=published_root,
+            ids=selected_ids,
+            dry_run=dry_run,
+            include_unchanged=include_unchanged,
+        ),
     )
     for action in actions:
         verb = "would copy" if dry_run else "copied"

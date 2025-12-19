@@ -7,6 +7,7 @@ from pathlib import Path  # noqa: TC003
 
 from concordat.canon_artifacts import (
     ArtifactStatus,
+    SyncConfig,
     compare_manifest_to_published,
     load_manifest,
     sync_artifacts,
@@ -151,9 +152,11 @@ def test_sync_updates_published(tmp_path: Path) -> None:
 
     actions = sync_artifacts(
         comparisons,
-        template_root=manifest.template_root,
-        published_root=published_root,
-        ids={"python-ruff-config"},
+        SyncConfig(
+            template_root=manifest.template_root,
+            published_root=published_root,
+            ids={"python-ruff-config"},
+        ),
     )
     assert actions[0].copied is True
     assert published_file.read_text(encoding="utf-8") == "rule = 1\n"

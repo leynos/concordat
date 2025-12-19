@@ -13,6 +13,7 @@ from concordat.canon_artifacts import (
     ArtifactComparison,
     ArtifactStatus,
     CanonManifest,
+    SyncConfig,
     compare_manifest_to_published,
     sync_artifacts,
 )
@@ -73,9 +74,11 @@ class CanonArtifactsApp(App[None]):
             return
         sync_artifacts(
             [comparison],
-            template_root=self._manifest.template_root,
-            published_root=self._published_root,
-            ids={comparison.id},
+            SyncConfig(
+                template_root=self._manifest.template_root,
+                published_root=self._published_root,
+                ids={comparison.id},
+            ),
         )
         self._refresh()
 
@@ -90,9 +93,11 @@ class CanonArtifactsApp(App[None]):
             return
         sync_artifacts(
             self._comparisons,
-            template_root=self._manifest.template_root,
-            published_root=self._published_root,
-            ids=outdated_ids,
+            SyncConfig(
+                template_root=self._manifest.template_root,
+                published_root=self._published_root,
+                ids=outdated_ids,
+            ),
         )
         self._refresh()
 
