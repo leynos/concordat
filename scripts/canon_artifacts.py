@@ -135,16 +135,36 @@ def _compute_status_exit_code(
     fail_on_missing: bool,
 ) -> int:
     """Compute exit code based on comparison results."""
-    if any(c.status == ArtifactStatus.TEMPLATE_MANIFEST_MISMATCH for c in comparisons):
+    if _has_manifest_mismatch(comparisons):
         return 3
 
-    if fail_on_missing and any(c.status == ArtifactStatus.MISSING for c in comparisons):
+    if fail_on_missing and _has_missing_artifacts(comparisons):
         return 2
-    if fail_on_outdated and any(
-        c.status == ArtifactStatus.OUTDATED for c in comparisons
-    ):
+    if fail_on_outdated and _has_outdated_artifacts(comparisons):
         return 2
     return 0
+
+
+def _has_manifest_mismatch(comparisons: list[ArtifactComparison]) -> bool:
+    """Return True when comparisons include a template manifest mismatch."""
+    return any(
+        comparison.status == ArtifactStatus.TEMPLATE_MANIFEST_MISMATCH
+        for comparison in comparisons
+    )
+
+
+def _has_missing_artifacts(comparisons: list[ArtifactComparison]) -> bool:
+    """Return True when comparisons include missing artifacts."""
+    return any(
+        comparison.status == ArtifactStatus.MISSING for comparison in comparisons
+    )
+
+
+def _has_outdated_artifacts(comparisons: list[ArtifactComparison]) -> bool:
+    """Return True when comparisons include outdated artifacts."""
+    return any(
+        comparison.status == ArtifactStatus.OUTDATED for comparison in comparisons
+    )
 
 
 @app.command()

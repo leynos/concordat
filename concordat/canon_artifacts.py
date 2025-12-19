@@ -172,33 +172,41 @@ def _parse_artifacts(
     manifest_path: Path,
 ) -> tuple[CanonArtifact, ...]:
     """Parse and validate artifact entries."""
+    entries = _validate_artifacts_list(artifacts_raw, manifest_path)
+    return tuple(_parse_single_artifact(entry, manifest_path) for entry in entries)
+
+
+def _validate_artifacts_list(
+    artifacts_raw: object, manifest_path: Path
+) -> list[object]:
+    """Validate and return the artifacts list."""
     if not isinstance(artifacts_raw, list) or not artifacts_raw:
         raise CanonArtifactsError(
             f"Manifest artifacts must be a non-empty list: {manifest_path}"
         )
+    return typ.cast("list[object]", artifacts_raw)
 
-    artifacts: list[CanonArtifact] = []
-    for entry in typ.cast("list[object]", artifacts_raw):
-        if not isinstance(entry, dict):
-            raise CanonArtifactsError(
-                f"Manifest artifact entries must be mappings: {manifest_path}"
-            )
-        entry_map = typ.cast("dict[str, object]", entry)
-        try:
-            artifacts.append(
-                CanonArtifact(
-                    id=str(entry_map["id"]),
-                    type=str(entry_map["type"]),
-                    path=Path(str(entry_map["path"])),
-                    description=str(entry_map["description"]),
-                    sha256=str(entry_map["sha256"]),
-                )
-            )
-        except KeyError as exc:
-            raise CanonArtifactsError(
-                f"Manifest artifact missing key {exc.args[0]!r}: {manifest_path}"
-            ) from exc
-    return tuple(artifacts)
+
+def _parse_single_artifact(entry: object, manifest_path: Path) -> CanonArtifact:
+    """Parse a single artifact mapping into a CanonArtifact."""
+    if not isinstance(entry, dict):
+        raise CanonArtifactsError(
+            f"Manifest artifact entries must be mappings: {manifest_path}"
+        )
+
+    entry_map = typ.cast("dict[str, object]", entry)
+    try:
+        return CanonArtifact(
+            id=str(entry_map["id"]),
+            type=str(entry_map["type"]),
+            path=Path(str(entry_map["path"])),
+            description=str(entry_map["description"]),
+            sha256=str(entry_map["sha256"]),
+        )
+    except KeyError as exc:
+        raise CanonArtifactsError(
+            f"Manifest artifact missing key {exc.args[0]!r}: {manifest_path}"
+        ) from exc
 
 
 def load_manifest(manifest_path: Path) -> CanonManifest:
