@@ -45,6 +45,8 @@ class StatusConfig:
     ids: tuple[str, ...]
     types: tuple[str, ...]
     outdated_only: bool
+    fail_on_outdated: bool = False
+    fail_on_missing: bool = False
 
 
 def _build_filter(*, ids: tuple[str, ...], types: tuple[str, ...]) -> _Filter:
@@ -94,19 +96,14 @@ def status(
         ids=ids,
         types=types,
         outdated_only=outdated_only,
-    )
-    return _render_status(
-        config,
         fail_on_outdated=fail_on_outdated,
         fail_on_missing=fail_on_missing,
     )
+    return _render_status(config)
 
 
 def _render_status(
     config: StatusConfig,
-    *,
-    fail_on_outdated: bool,
-    fail_on_missing: bool,
 ) -> int:
     """Render status table and return the appropriate exit code."""
     manifest_path = _resolve_manifest_path(config.template_root)
@@ -126,8 +123,8 @@ def _render_status(
     print(render_status_table(comparisons))
     return _compute_status_exit_code(
         comparisons,
-        fail_on_outdated=fail_on_outdated,
-        fail_on_missing=fail_on_missing,
+        fail_on_outdated=config.fail_on_outdated,
+        fail_on_missing=config.fail_on_missing,
     )
 
 
