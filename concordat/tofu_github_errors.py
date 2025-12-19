@@ -8,9 +8,6 @@ from state, or resources protected by lifecycle.prevent_destroy.
 from __future__ import annotations
 
 import re
-import typing as typ
-
-_T = typ.TypeVar("_T")
 
 # Markers for detecting GitHub repository existence errors.
 _GITHUB_REPO_EXISTS_MARKER = "name already exists on this account"
@@ -59,7 +56,7 @@ def _parse_repo_import_candidate(match: re.Match[str]) -> tuple[str, str, str] |
     return (address, slug, repo_name)
 
 
-def _deduplicate_preserving_order(items: list[_T]) -> list[_T]:
+def _deduplicate_preserving_order[T](items: list[T]) -> list[T]:
     """Remove duplicate items while preserving first occurrence order."""
     return list(dict.fromkeys(items))
 

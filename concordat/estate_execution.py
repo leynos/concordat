@@ -68,14 +68,12 @@ class EstateExecutionError(ConcordatError):
 
 
 # Make EstateCacheError raise as EstateExecutionError for backward compatibility.
-_T = typ.TypeVar("_T")
-_P = typ.ParamSpec("_P")
 
 
-def _wrap_cache_error(func: typ.Callable[_P, _T]) -> typ.Callable[_P, _T]:
+def _wrap_cache_error[T, **P](func: typ.Callable[P, T]) -> typ.Callable[P, T]:
     """Wrap a function to convert EstateCacheError to EstateExecutionError."""
 
-    def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _T:
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
         try:
             return func(*args, **kwargs)
         except EstateCacheError as error:

@@ -120,7 +120,7 @@ def _commit_changes(
 
 
 def _branch_name(timestamp_factory: typ.Callable[[], dt.datetime] | None = None) -> str:
-    now = timestamp_factory() if timestamp_factory else dt.datetime.now(dt.timezone.utc)
+    now = timestamp_factory() if timestamp_factory else dt.datetime.now(dt.UTC)
     return f"estate/persist-{now.strftime('%Y%m%d%H%M%S')}"
 
 

@@ -77,7 +77,7 @@ class SarifBuilder:
             "invocations": [
                 {
                     "executionSuccessful": True,
-                    "endTimeUtc": dt.datetime.now(tz=dt.timezone.utc).isoformat(),
+                    "endTimeUtc": dt.datetime.now(tz=dt.UTC).isoformat(),
                 }
             ],
         }
