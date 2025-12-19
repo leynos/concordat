@@ -37,6 +37,40 @@ automation assets.
   with it; invoking `concordat ls` without namespaces defaults to the recorded
   owner.
 
+### Step: Introduce canonical artefact management
+
+Provide a first-class workflow for comparing and deploying canonical
+platform-standards artefacts (including lint rule packages) from the Concordat
+template tree into published platform-standards repositories.
+
+- [x] Ship a manifest-driven artefact status and sync tool with both table and
+  interactive user interfaces. Acceptance:
+  `python -m scripts.canon_artifacts status <published-root>` prints a stable
+  table; `python -m scripts.canon_artifacts tui <published-root>` launches a
+  Textual menu when dev dependencies are installed; unit tests cover
+  missing/out-of-date cases.
+- [x] Document the canonical artefact synchronisation workflow in the users'
+  guide and design documentation. Acceptance: operators can follow the docs to
+  identify drift and deploy updates into a local platform-standards checkout.
+- [ ] Integrate the artefact tooling into the main CLI as `concordat artefact`
+  with `catalogue`, `estate`, and `rule` command groups. Acceptance:
+  `concordat artefact catalogue list` and `concordat artefact estate status`
+  behave consistently with the spike tooling and support `--format json` for
+  automation.
+- [ ] Define a semantic versioned canonical manifest schema (for example
+  `schema_version: 2`) that adds `version` while retaining integrity metadata
+  (sha256). Acceptance: concordat can read both schema versions and reports
+  “template vs published version” in `concordat artefact estate status`.
+- [ ] Introduce a lockfile for published estates (for example
+  `canon/artefacts.lock.yaml`) that records deployed versions and estate-owned
+  configuration overrides. Acceptance: status commands rely on the lockfile for
+  version reporting; sync operations update the lockfile deterministically.
+- [ ] Define a lint rule package format under `canon/lint-rules/<rule-id>/`
+  with a `rule.yaml` entrypoint describing sensor inputs, parameters, and
+  mutations. Acceptance: `concordat artefact rule validate <rule-id>` validates
+  the rule schema, runs policy tests where present, and surfaces parameter
+  defaults and allowed overrides.
+
 ### Step: Ship the estate execution CLI
 
 Connect the estate configuration template to OpenTofu execution to let
