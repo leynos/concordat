@@ -12,12 +12,14 @@ from types import SimpleNamespace
 import pytest
 
 from concordat.estate_execution import (
-    ALL_BACKEND_ENV_VARS,
-    AWS_SESSION_TOKEN_VAR,
     EstateExecutionError,
     ExecutionIO,
     ExecutionOptions,
     run_plan,
+)
+from concordat.persistence.backend import (
+    ALL_BACKEND_ENV_VARS,
+    AWS_SESSION_TOKEN_VAR,
 )
 from tests.helpers.persistence import (
     PersistenceTestConfig,

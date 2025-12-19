@@ -6,8 +6,8 @@ import contextlib
 import dataclasses
 import os
 import shutil
-import sys  # noqa: F401 - Required for test patching of sys.stdin
 import typing as typ
+import warnings
 
 from tofupy import Tofu  # noqa: TC002 - Used at runtime
 
@@ -19,9 +19,11 @@ from .apply_recovery import RecoveryCallbacks, RecoveryContext
 from .errors import ConcordatError
 from .estate_cache import (
     EstateCacheError,
-    cache_root,
     clone_into_temp,
     ensure_estate_cache,
+)
+from .estate_cache import (
+    cache_root as _cache_root_original,
 )
 from .tofu_github_errors import (
     detect_missing_repo_imports as _detect_missing_repo_imports,
@@ -46,19 +48,48 @@ if typ.TYPE_CHECKING:
 
     from .estate import EstateRecord
 
-# Re-export constants for backward compatibility.
-AWS_BACKEND_ENV = persistence_backend.AWS_BACKEND_ENV
-SCW_BACKEND_ENV = persistence_backend.SCW_BACKEND_ENV
-SPACES_BACKEND_ENV = persistence_backend.SPACES_BACKEND_ENV
-AWS_SESSION_TOKEN_VAR = persistence_backend.AWS_SESSION_TOKEN_VAR
-ALL_BACKEND_ENV_VARS = persistence_backend.ALL_BACKEND_ENV_VARS
+# Deprecated re-exports: import directly from the canonical modules.
+_DEPRECATED_EXPORTS: dict[str, tuple[str, object]] = {
+    "AWS_BACKEND_ENV": (
+        "concordat.persistence.backend",
+        persistence_backend.AWS_BACKEND_ENV,
+    ),
+    "SCW_BACKEND_ENV": (
+        "concordat.persistence.backend",
+        persistence_backend.SCW_BACKEND_ENV,
+    ),
+    "SPACES_BACKEND_ENV": (
+        "concordat.persistence.backend",
+        persistence_backend.SPACES_BACKEND_ENV,
+    ),
+    "AWS_SESSION_TOKEN_VAR": (
+        "concordat.persistence.backend",
+        persistence_backend.AWS_SESSION_TOKEN_VAR,
+    ),
+    "ALL_BACKEND_ENV_VARS": (
+        "concordat.persistence.backend",
+        persistence_backend.ALL_BACKEND_ENV_VARS,
+    ),
+    "_build_object_key": (
+        "concordat.persistence.backend (as build_object_key)",
+        persistence_backend.build_object_key,
+    ),
+    "cache_root": ("concordat.estate_cache", _cache_root_original),
+}
 
-# Re-export functions for backward compatibility with tests.
-_build_object_key = persistence_backend.build_object_key
 
-# Re-export cache functions for backward compatibility.
-cache_root = cache_root
-ensure_estate_cache = ensure_estate_cache
+def __getattr__(name: str) -> object:
+    """Emit deprecation warnings for backward-compatibility re-exports."""
+    if name in _DEPRECATED_EXPORTS:
+        canonical, value = _DEPRECATED_EXPORTS[name]
+        warnings.warn(
+            f"{name} is deprecated; import from {canonical} instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return value
+    msg = f"module {__name__!r} has no attribute {name!r}"
+    raise AttributeError(msg)
 
 TFVARS_FILENAME = "terraform.tfvars"
 
@@ -198,17 +229,12 @@ def _get_persistence_runtime(
     if descriptor is None:
         return None
 
-    if backend_config is None:
-        raise EstateExecutionError("missing backend_config")  # noqa: TRY003
-    if object_key is None:
-        raise EstateExecutionError("missing object_key")  # noqa: TRY003
-    if env_overrides is None:
-        raise EstateExecutionError("missing env_overrides")  # noqa: TRY003
+    # Backend guarantees all values are non-None when descriptor is present.
     return PersistenceRuntime(
         descriptor=descriptor,
-        backend_config=backend_config,
-        object_key=object_key,
-        env_overrides=env_overrides,
+        backend_config=typ.cast("str", backend_config),
+        object_key=typ.cast("str", object_key),
+        env_overrides=typ.cast("dict[str, str]", env_overrides),
     )
 
 
@@ -233,12 +259,11 @@ def _setup_tofu_workspace(
     workspace: WorkspaceContext,
     record: EstateRecord,
     execution: ExecutionContext,
-) -> tuple[Path, list[str], dict[str, str], Tofu]:
+) -> tuple[list[str], Tofu]:
     """Prepare the workspace for tofu execution.
 
     Sanitizes inventory, writes tfvars, configures backend, and initialises the
-    tofu wrapper. Returns the tfvars path, backend arguments, environment, and
-    tofu instance.
+    tofu wrapper. Returns backend arguments and tofu instance.
     """
     sanitized_inventory = _sanitize_inventory_for_tofu(
         workspace.root,
@@ -265,7 +290,7 @@ def _setup_tofu_workspace(
     env["GITHUB_TOKEN"] = execution.options.github_token
     tofu = _initialize_tofu(workspace.tofu_dir, env)
 
-    return tfvars, backend_args, env, tofu
+    return backend_args, tofu
 
 
 def _execute_apply_command(
@@ -371,7 +396,7 @@ def _run_estate_command(
         tofu_workdir = resolve_tofu_workdir(workdir)
         workspace = WorkspaceContext(root=workdir, tofu_dir=tofu_workdir)
         execution = ExecutionContext(options=options, io=io, env=env_source)
-        _, backend_args, _, tofu = _setup_tofu_workspace(
+        backend_args, tofu = _setup_tofu_workspace(
             workspace,
             record,
             execution,
@@ -390,7 +415,7 @@ def _run_estate_command(
                 exit_code = invoke_tofu_command(tofu, list(args), io)
             if exit_code == 0:
                 write_stream_output(io.stderr, f"completed: tofu {args[0]}")
-            if exit_code != 0:
+            else:
                 write_stream_output(io.stderr, f"failed: tofu {args[0]}")
                 break
         return exit_code, workdir

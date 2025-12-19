@@ -7,11 +7,8 @@ import typing as typ
 import pygit2
 import pytest
 
-from concordat.estate_execution import (
-    EstateExecutionError,
-    cache_root,
-    ensure_estate_cache,
-)
+from concordat.estate_cache import cache_root
+from concordat.estate_execution import EstateExecutionError, ensure_estate_cache
 from tests.unit.conftest import _make_record
 
 if typ.TYPE_CHECKING:  # pragma: no cover - type checking only
