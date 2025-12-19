@@ -18,6 +18,7 @@ from .platform_standards import (
     PlatformStandardsConfig,
     PlatformStandardsResult,
     ensure_repository_pr,
+    ensure_repository_removal_pr,
     parse_github_slug,
 )
 
@@ -114,6 +115,66 @@ def _owner_mismatch_error(
     return ConcordatError(detail)
 
 
+def _render_platform_pr_result(result: PlatformStandardsResult) -> str:
+    """Render the platform inventory PR outcome.
+
+    The active estate inventory (and therefore `concordat estate show`) reflects
+    the estate repository default branch. When concordat opens/updates a feature
+    branch PR in platform-standards, the repository will not appear in the
+    estate inventory until the PR is merged.
+    """
+    if result.created:
+        message = "platform PR opened"
+        if result.pr_url:
+            message = f"{message}: {result.pr_url}"
+        return f"{message} (merge to update estate inventory)"
+    return f"platform PR skipped: {result.message}"
+
+
+def _build_status_parts(
+    base_message: str,
+    *,
+    committed: bool = False,
+    pushed: bool = False,
+    platform_pr: PlatformStandardsResult | None = None,
+) -> list[str]:
+    """Build list of status message parts from base message and optional flags.
+
+    Args:
+        base_message: The initial status message fragment.
+        committed: Whether to append "committed" to the parts.
+        pushed: Whether to append "pushed" to the parts.
+        platform_pr: Optional platform PR result to append.
+
+    Returns:
+        List of status message fragments ready for joining.
+
+    """
+    parts = [base_message]
+    if committed:
+        parts.append("committed")
+    if pushed:
+        parts.append("pushed")
+    if platform_pr:
+        parts.append(_render_platform_pr_result(platform_pr))
+    return parts
+
+
+def _format_outcome(repository: str, status_parts: list[str]) -> str:
+    """Format repository and status parts into a final outcome message.
+
+    Args:
+        repository: The repository specification.
+        status_parts: List of status message fragments.
+
+    Returns:
+        Formatted message: "{repository}: {joined parts}"
+
+    """
+    status = ", ".join(status_parts)
+    return f"{repository}: {status}"
+
+
 @dataclasses.dataclass(frozen=True)
 class EnrollmentOutcome:
     """Captured outcome for a processed repository."""
@@ -127,23 +188,14 @@ class EnrollmentOutcome:
 
     def render(self) -> str:
         """Return a concise human readable summary."""
-        if not self.created:
-            return f"{self.repository}: already enrolled"
-        status_parts = ["created .concordat"]
-        if self.committed:
-            status_parts.append("committed")
-        if self.pushed:
-            status_parts.append("pushed")
-        if self.platform_pr:
-            if self.platform_pr.created:
-                message = "platform PR opened"
-                if self.platform_pr.pr_url:
-                    message = f"{message}: {self.platform_pr.pr_url}"
-            else:
-                message = f"platform PR skipped: {self.platform_pr.message}"
-            status_parts.append(message)
-        status = ", ".join(status_parts)
-        return f"{self.repository}: {status}"
+        base_message = "already enrolled" if not self.created else "created .concordat"
+        status_parts = _build_status_parts(
+            base_message,
+            committed=self.committed if self.created else False,
+            pushed=self.pushed if self.created else False,
+            platform_pr=self.platform_pr,
+        )
+        return _format_outcome(self.repository, status_parts)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -153,20 +205,34 @@ class DisenrollmentOutcome:
     repository: str
     location: Path
     updated: bool
+    missing_document: bool
     committed: bool
     pushed: bool
+    platform_pr: PlatformStandardsResult | None = None
 
     def render(self) -> str:
         """Return a concise human readable summary."""
-        if not self.updated:
-            return f"{self.repository}: already disenrolled"
-        status_parts = ["updated .concordat"]
-        if self.committed:
-            status_parts.append("committed")
-        if self.pushed:
-            status_parts.append("pushed")
-        status = ", ".join(status_parts)
-        return f"{self.repository}: {status}"
+        if self.missing_document:
+            base_message = "missing .concordat"
+            status_parts = _build_status_parts(
+                base_message,
+                platform_pr=self.platform_pr,
+            )
+        elif not self.updated:
+            base_message = "already disenrolled"
+            status_parts = _build_status_parts(
+                base_message,
+                platform_pr=self.platform_pr,
+            )
+        else:
+            base_message = "updated .concordat"
+            status_parts = _build_status_parts(
+                base_message,
+                committed=self.committed,
+                pushed=self.pushed,
+                platform_pr=self.platform_pr,
+            )
+        return _format_outcome(self.repository, status_parts)
 
 
 _yaml = YAML(typ="safe")
@@ -182,6 +248,7 @@ def enrol_repositories(
     author_email: str | None = None,
     platform_standards: PlatformStandardsConfig | None = None,
     github_owner: str | None = None,
+    force: bool = False,
 ) -> list[EnrollmentOutcome]:
     """Enrol each repository and return the captured outcomes."""
     if not repositories:
@@ -196,6 +263,7 @@ def enrol_repositories(
             author_email=author_email,
             platform_standards=platform_standards,
             github_owner=github_owner,
+            force=force,
         )
         outcomes.append(outcome)
     return outcomes
@@ -207,6 +275,9 @@ def disenrol_repositories(
     push_remote: bool = False,
     author_name: str | None = None,
     author_email: str | None = None,
+    platform_standards: PlatformStandardsConfig | None = None,
+    github_owner: str | None = None,
+    allow_missing_document: bool = False,
 ) -> list[DisenrollmentOutcome]:
     """Disenrol each repository and return the captured outcomes."""
     if not repositories:
@@ -219,6 +290,9 @@ def disenrol_repositories(
             push_remote=push_remote,
             author_name=author_name,
             author_email=author_email,
+            platform_standards=platform_standards,
+            github_owner=github_owner,
+            allow_missing_document=allow_missing_document,
         )
         outcomes.append(outcome)
     return outcomes
@@ -230,20 +304,39 @@ def _disenrol_repository(
     push_remote: bool,
     author_name: str | None,
     author_email: str | None,
+    platform_standards: PlatformStandardsConfig | None,
+    github_owner: str | None,
+    allow_missing_document: bool,
 ) -> DisenrollmentOutcome:
     with _repository_context(specification) as context:
-        updated = _set_enrolled_value(
-            context.location,
-            value=False,
-            specification=specification,
+        repo_slug = _slug_with_owner_guard(
+            _repository_slug(context.repository, specification),
+            github_owner,
+            specification,
         )
+        concordat_path = context.location / CONCORDAT_FILENAME
+        missing_document = False
+        updated = False
+        if concordat_path.exists():
+            updated = _set_enrolled_value(
+                context.location,
+                value=False,
+                specification=specification,
+            )
+        else:
+            if not allow_missing_document:
+                raise _missing_document_error(specification)
+            missing_document = True
+
         if not updated:
             return DisenrollmentOutcome(
                 repository=specification,
                 location=context.location,
                 updated=False,
+                missing_document=missing_document,
                 committed=False,
                 pushed=False,
+                platform_pr=_platform_pr_removal_result(repo_slug, platform_standards),
             )
 
         _stage_document(context.repository)
@@ -263,8 +356,10 @@ def _disenrol_repository(
             repository=specification,
             location=context.location,
             updated=True,
+            missing_document=False,
             committed=commit_oid is not None,
             pushed=pushed,
+            platform_pr=_platform_pr_removal_result(repo_slug, platform_standards),
         )
 
 
@@ -276,6 +371,7 @@ def _enrol_repository(
     author_email: str | None,
     platform_standards: PlatformStandardsConfig | None,
     github_owner: str | None,
+    force: bool,
 ) -> EnrollmentOutcome:
     with _repository_context(specification) as context:
         repo_slug = _slug_with_owner_guard(
@@ -285,12 +381,16 @@ def _enrol_repository(
         )
         created = _ensure_concordat_document(context.location)
         if not created:
+            platform_result = None
+            if force:
+                platform_result = _platform_pr_result(repo_slug, platform_standards)
             return EnrollmentOutcome(
                 repository=specification,
                 location=context.location,
                 created=False,
                 committed=False,
                 pushed=False,
+                platform_pr=platform_result,
             )
 
         _stage_document(context.repository)
@@ -332,11 +432,22 @@ def _slug_with_owner_guard(
     return _require_allowed_owner(slug, github_owner, specification)
 
 
-def _platform_pr_result(
+def _execute_platform_pr_operation(
     repo_slug: str | None,
     platform_standards: PlatformStandardsConfig | None,
+    operation: typ.Callable[[str, PlatformStandardsConfig], PlatformStandardsResult],
 ) -> PlatformStandardsResult | None:
-    """Encapsulate platform PR creation to keep enrolment orchestration clear."""
+    """Execute a platform PR operation with common validation and error handling.
+
+    Args:
+        repo_slug: GitHub repository slug (owner/repo) or None.
+        platform_standards: Platform configuration or None.
+        operation: The platform operation to execute (e.g., ensure_repository_pr).
+
+    Returns:
+        PlatformStandardsResult if operation was attempted, None if config missing.
+
+    """
     if platform_standards is None:
         return None
     if not repo_slug:
@@ -347,10 +458,7 @@ def _platform_pr_result(
             message="unable to determine GitHub slug",
         )
     try:
-        return ensure_repository_pr(
-            repo_slug,
-            config=platform_standards,
-        )
+        return operation(repo_slug, platform_standards)
     except ConcordatError as error:
         return PlatformStandardsResult(
             created=False,
@@ -358,6 +466,30 @@ def _platform_pr_result(
             pr_url=None,
             message=str(error),
         )
+
+
+def _platform_pr_result(
+    repo_slug: str | None,
+    platform_standards: PlatformStandardsConfig | None,
+) -> PlatformStandardsResult | None:
+    """Encapsulate platform PR creation to keep enrolment orchestration clear."""
+    return _execute_platform_pr_operation(
+        repo_slug,
+        platform_standards,
+        lambda slug, config: ensure_repository_pr(slug, config=config),
+    )
+
+
+def _platform_pr_removal_result(
+    repo_slug: str | None,
+    platform_standards: PlatformStandardsConfig | None,
+) -> PlatformStandardsResult | None:
+    """Encapsulate platform PR removal to keep disenrolment orchestration clear."""
+    return _execute_platform_pr_operation(
+        repo_slug,
+        platform_standards,
+        lambda slug, config: ensure_repository_removal_pr(slug, config=config),
+    )
 
 
 @dataclasses.dataclass

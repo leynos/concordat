@@ -186,17 +186,25 @@ false-positive rate is acceptable. Exemptions use the existing
 - `concordat enrol` clones the target repository, writes or updates the
   `.concordat` file, and—when `--push` is provided—commits and pushes the
   change via pygit2 (see `concordat/enrol.py`). This preserves the current
-  lightweight opt-in flow while keeping repository history intact.
+  lightweight opt-in flow while keeping repository history intact. When the
+  repository already contains `.concordat` with `enrolled: true`, enrolment is
+  idempotent by default. Passing `--force` keeps `.concordat` unchanged but
+  still runs the platform-standards inventory pull request step for the active
+  estate, ensuring the repository is tracked by OpenTofu.
+- `concordat disenrol` flips `enrolled: false` in the `.concordat` file and can
+  open a matching platform-standards pull request that removes the repository
+  from the OpenTofu inventory, so the estate stops targeting it.
 - `concordat estate` bootstraps `platform-standards` repositories from the
   bundled template, persists aliases in `~/.config/concordat/config.yaml`, and
   exposes helpers to list, inspect, and select the active estate. The enrolment
   workflow automatically targets the active estate unless the operator passes
   `--platform-standards-url`.
 - `concordat plan` clones the active estate into a temporary workspace, renders
-  the OpenTofu variable file from estate metadata, and invokes tofupy's `plan`
-  entrypoint, so operators can preview drift without leaving the CLI.
-- `concordat apply` reuses the same machinery but calls tofupy's `apply`,
-  allowing auditable changes to estates directly from concordat.
+  the OpenTofu variable file from estate metadata, and invokes OpenTofu via the
+  tofupy wrapper. The command preserves OpenTofu's standard CLI plan output
+  (including the diff), so operators can review drift without leaving the CLI.
+- `concordat apply` reuses the same machinery but runs OpenTofu apply via the
+  tofupy wrapper, allowing auditable changes to estates directly from Concordat.
 - When the `--platform-standards-url` (or `CONCORDAT_PLATFORM_STANDARDS_URL`)
   option is provided, `concordat enrol` also clones the `platform-standards`
   repository, updates `tofu/inventory/repositories.yaml`, runs `tofu fmt`,
@@ -254,11 +262,21 @@ template usage, satisfying the evaluate-mode acceptance criteria.
   which provides a Python API mirroring OpenTofu's UX. This keeps error
   handling and output capture in-process.
 - `concordat plan` resolves the active estate, prepares the workspace and tfvars
-  file, ensures `GITHUB_TOKEN` is exported, then calls tofupy's plan API. The
-  CLI streams stdout/stderr and returns a non-zero exit code if the plan fails.
-- `concordat apply` performs the identical setup but calls the apply API. It
-  passes through approval prompts or accepts `--auto-approve` if the user needs
-  unattended applies.
+  file, ensures `GITHUB_TOKEN` is exported, and runs `tofu plan` via tofupy.
+  The CLI preserves OpenTofu's CLI output (diff, summary, diagnostics) rather
+  than only tofupy's structured logs, because the structured mode can be silent
+  or hard to interpret for operators.
+- `concordat apply` performs the identical setup but runs `tofu apply` via
+  tofupy. It passes through approval prompts or accepts `--auto-approve` if the
+  user needs unattended applies.
+- When `tofu apply` fails with GitHub's "name already exists on this account"
+  error for a `github_repository`, Concordat can offer to import the existing
+  repository into state and retry apply. This behaviour is gated behind an
+  interactive prompt and is skipped in non-interactive environments.
+- When `tofu apply` fails because `lifecycle.prevent_destroy` blocks a planned
+  delete (a common outcome after removing a repository from the inventory),
+  Concordat can offer to remove the affected resources from state and retry the
+  apply. This enables safe disenrolment without deleting GitHub repositories.
 - Both commands emit the execution directory path (helpful for debugging) and
   remove it afterward unless `--keep-workdir` is provided.
 

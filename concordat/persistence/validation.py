@@ -3,12 +3,19 @@
 
 from __future__ import annotations
 
+import os
 import typing as typ
 
 import boto3
 from botocore import exceptions as boto_exceptions
 from botocore.config import Config as BotoConfig
 
+from .backend import (
+    AWS_BACKEND_ENV,
+    AWS_SESSION_TOKEN_VAR,
+    SCW_BACKEND_ENV,
+    SPACES_BACKEND_ENV,
+)
 from .endpoints import normalize_endpoint_url
 from .models import (
     PERSISTENCE_CHECK_SUFFIX,
@@ -110,6 +117,15 @@ def _bucket_versioning_status(client: S3Client, bucket: str) -> str | None:
     try:
         response = client.get_bucket_versioning(Bucket=bucket)
     except boto_exceptions.BotoCoreError as error:
+        if isinstance(error, boto_exceptions.NoCredentialsError):
+            message = (
+                "Versioning check failed: unable to locate S3 credentials. "
+                "Export AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY, "
+                "SCW_ACCESS_KEY/SCW_SECRET_KEY, or "
+                "SPACES_ACCESS_KEY_ID/SPACES_SECRET_ACCESS_KEY, then retry. "
+                f"Details: {error}"
+            )
+            raise PersistenceError(message) from error
         message = (
             "Versioning check failed: unable to reach the bucket API. "
             "Verify credentials, endpoint, and network connectivity, then retry. "
@@ -154,10 +170,50 @@ def _exercise_write_permissions(client: S3Client, bucket: str, key: str) -> None
     )
 
 
+def _session_token_from_environment(env: typ.Mapping[str, str]) -> str | None:
+    token = env.get(AWS_SESSION_TOKEN_VAR, "").strip()
+    return token if token else None
+
+
+def _credentials_from_environment(env: typ.Mapping[str, str]) -> dict[str, str]:
+    """Resolve S3 credentials from supported environment variables.
+
+    Boto3 recognises the AWS_* variables. Concordat also supports alternative
+    names for S3-compatible vendors (Scaleway/Spaces) and maps those to the
+    boto3 client arguments.
+    """
+
+    def present(*names: str) -> bool:
+        return all(env.get(name, "").strip() for name in names)
+
+    if present(*AWS_BACKEND_ENV):
+        resolved = {
+            "aws_access_key_id": env["AWS_ACCESS_KEY_ID"].strip(),
+            "aws_secret_access_key": env["AWS_SECRET_ACCESS_KEY"].strip(),
+        }
+    elif present(*SCW_BACKEND_ENV):
+        resolved = {
+            "aws_access_key_id": env["SCW_ACCESS_KEY"].strip(),
+            "aws_secret_access_key": env["SCW_SECRET_KEY"].strip(),
+        }
+    elif present(*SPACES_BACKEND_ENV):
+        resolved = {
+            "aws_access_key_id": env["SPACES_ACCESS_KEY_ID"].strip(),
+            "aws_secret_access_key": env["SPACES_SECRET_ACCESS_KEY"].strip(),
+        }
+    else:
+        return {}
+
+    if token := _session_token_from_environment(env):
+        resolved["aws_session_token"] = token
+    return resolved
+
+
 def _default_s3_client_factory(region: str, endpoint: str) -> S3Client:
     """Create a boto3 S3 client configured for path-style endpoints."""
     endpoint = normalize_endpoint_url(endpoint)
     config = BotoConfig(s3={"addressing_style": "path"})
+    credentials = _credentials_from_environment(os.environ)
     return typ.cast(
         "S3Client",
         boto3.client(
@@ -165,5 +221,6 @@ def _default_s3_client_factory(region: str, endpoint: str) -> S3Client:
             region_name=region,
             endpoint_url=endpoint,
             config=config,
+            **credentials,
         ),
     )

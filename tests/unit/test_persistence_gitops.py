@@ -21,7 +21,7 @@ def test_commit_changes_creates_branch(tmp_path: Path) -> None:
         repo,
         "main",
         [target_file],
-        timestamp_factory=lambda: dt.datetime(2020, 1, 1, tzinfo=dt.timezone.utc),
+        timestamp_factory=lambda: dt.datetime(2020, 1, 1, tzinfo=dt.UTC),
     )
     assert branch_name.startswith("estate/persist-")
     assert branch_name in repo.branches.local

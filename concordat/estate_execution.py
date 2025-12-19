@@ -4,87 +4,129 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
-import logging
 import os
 import shutil
 import typing as typ
-from pathlib import Path
-from tempfile import mkdtemp
-from types import SimpleNamespace
+import warnings
 
-import pygit2
-from tofupy import Tofu
+from tofupy import Tofu  # noqa: TC002 - Used at runtime
 
+from concordat.persistence import backend as persistence_backend
 from concordat.persistence import models as persistence_models
 
+from . import apply_recovery
+from .apply_recovery import RecoveryCallbacks, RecoveryContext
 from .errors import ConcordatError
-from .gitutils import build_remote_callbacks
-
-_logger = logging.getLogger(__name__)
+from .estate_cache import (
+    EstateCacheError,
+    clone_into_temp,
+    ensure_estate_cache,
+)
+from .estate_cache import (
+    cache_root as _cache_root_original,
+)
+from .tofu_github_errors import (
+    detect_missing_repo_imports as _detect_missing_repo_imports,
+)
+from .tofu_github_errors import (
+    detect_state_forgets_for_prevent_destroy as _detect_prevent_destroy_forgets,
+)
+from .tofu_runner import (
+    initialize_tofu,
+    invoke_tofu_command,
+    invoke_tofu_command_with_result,
+    resolve_tofu_workdir,
+    write_stream_output,
+)
+from .tofu_yaml import sanitize_inventory_for_tofu as _sanitize_inventory_for_tofu
+from .user_interaction import can_prompt as _can_prompt
+from .user_interaction import prompt_yes_no as _prompt_yes_no
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
-
-    from pygit2.enums import ResetMode as _Pygit2ResetMode
-
-    from concordat.persistence.models import PersistenceDescriptor
+    from pathlib import Path
 
     from .estate import EstateRecord
 
-XDG_CACHE_HOME = "XDG_CACHE_HOME"
-CACHE_SEGMENT = ("concordat", "estates")
+# Deprecated re-exports: import directly from the canonical modules.
+_DEPRECATED_EXPORTS: dict[str, tuple[str, object]] = {
+    "AWS_BACKEND_ENV": (
+        "concordat.persistence.backend",
+        persistence_backend.AWS_BACKEND_ENV,
+    ),
+    "SCW_BACKEND_ENV": (
+        "concordat.persistence.backend",
+        persistence_backend.SCW_BACKEND_ENV,
+    ),
+    "SPACES_BACKEND_ENV": (
+        "concordat.persistence.backend",
+        persistence_backend.SPACES_BACKEND_ENV,
+    ),
+    "AWS_SESSION_TOKEN_VAR": (
+        "concordat.persistence.backend",
+        persistence_backend.AWS_SESSION_TOKEN_VAR,
+    ),
+    "ALL_BACKEND_ENV_VARS": (
+        "concordat.persistence.backend",
+        persistence_backend.ALL_BACKEND_ENV_VARS,
+    ),
+    "_build_object_key": (
+        "concordat.persistence.backend (as build_object_key)",
+        persistence_backend.build_object_key,
+    ),
+    "cache_root": ("concordat.estate_cache", _cache_root_original),
+}
+
+
+def __getattr__(name: str) -> object:
+    """Emit deprecation warnings for backward-compatibility re-exports."""
+    if name in _DEPRECATED_EXPORTS:
+        canonical, value = _DEPRECATED_EXPORTS[name]
+        warnings.warn(
+            f"{name} is deprecated; import from {canonical} instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return value
+    msg = f"module {__name__!r} has no attribute {name!r}"
+    raise AttributeError(msg)
+
+
 TFVARS_FILENAME = "terraform.tfvars"
-ERROR_ALIAS_REQUIRED = "Estate alias is required to cache the repository."
-ERROR_BARE_CACHE = "Cached estate {alias!r} is bare; remove {destination} and retry."
-ERROR_MISSING_ORIGIN = (
-    "Cached estate is missing the 'origin' remote; remove it and retry."
-)
-ERROR_MISSING_BRANCH = "Branch {branch!r} is missing from remote {remote!r}."
-ERROR_MISSING_TOFU = "OpenTofu binary 'tofu' was not found in PATH."
-ERROR_BACKEND_CONFIG_MISSING = (
-    "Remote backend config {path!r} was not found in the estate workspace."
-)
-ERROR_BACKEND_ENV_MISSING = (
-    "Remote state backend requires credentials in the environment: either "
-    "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, SCW_ACCESS_KEY and "
-    "SCW_SECRET_KEY, or SPACES_ACCESS_KEY_ID and SPACES_SECRET_ACCESS_KEY."
-)
-ERROR_BACKEND_PATH_OUTSIDE = (
-    "Remote backend config must live inside the estate workspace (got {path})."
-)
-
-AWS_BACKEND_ENV = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY")
-SCW_BACKEND_ENV = ("SCW_ACCESS_KEY", "SCW_SECRET_KEY")
-SPACES_BACKEND_ENV = (
-    "SPACES_ACCESS_KEY_ID",
-    "SPACES_SECRET_ACCESS_KEY",
-)
-AWS_SESSION_TOKEN_VAR = "AWS_SESSION_TOKEN"  # noqa: S105
-ALL_BACKEND_ENV_VARS = (
-    AWS_BACKEND_ENV + SCW_BACKEND_ENV + SPACES_BACKEND_ENV + (AWS_SESSION_TOKEN_VAR,)
-)
-
-
-def _session_token_overrides(env: typ.Mapping[str, str]) -> dict[str, str]:
-    """Return a mapping containing AWS session token when present and non-empty."""
-    token = env.get(AWS_SESSION_TOKEN_VAR, "").strip()
-    return {AWS_SESSION_TOKEN_VAR: token} if token else {}
-
-
-def _remove_blank_session_token(env: dict[str, str]) -> None:
-    """Normalize AWS session token, removing it when blank and trimming whitespace."""
-    token = env.get(AWS_SESSION_TOKEN_VAR)
-    if token is None:
-        return
-    stripped = token.strip()
-    if stripped:
-        env[AWS_SESSION_TOKEN_VAR] = stripped
-        return
-    env.pop(AWS_SESSION_TOKEN_VAR, None)
 
 
 class EstateExecutionError(ConcordatError):
     """Raised when preparing an estate workspace fails."""
+
+
+# Make EstateCacheError raise as EstateExecutionError for backward compatibility.
+# Store original function reference before wrapping.
+_ensure_estate_cache_original = ensure_estate_cache
+
+
+def _wrap_cache_error[T, **P](func: typ.Callable[P, T]) -> typ.Callable[P, T]:
+    """Wrap a function to convert EstateCacheError to EstateExecutionError."""
+
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
+        try:
+            return func(*args, **kwargs)
+        except EstateCacheError as error:
+            raise EstateExecutionError(str(error)) from error
+
+    return wrapper
+
+
+ensure_estate_cache: typ.Callable[..., Path] = _wrap_cache_error(
+    _ensure_estate_cache_original,
+)
+
+
+def _resolve_backend_environment(env: typ.Mapping[str, str]) -> dict[str, str]:
+    """Resolve backend environment with EstateExecutionError on failure."""
+    try:
+        return persistence_backend.resolve_backend_environment(env)
+    except persistence_backend.BackendConfigurationError as error:
+        raise EstateExecutionError(str(error)) from error
 
 
 @dataclasses.dataclass(frozen=True)
@@ -108,90 +150,30 @@ class ExecutionIO:
 
 
 @dataclasses.dataclass(frozen=True)
+class WorkspaceContext:
+    """Workspace directory paths for tofu operations."""
+
+    root: Path
+    tofu_dir: Path
+
+
+@dataclasses.dataclass(frozen=True)
+class ExecutionContext:
+    """Execution environment for tofu commands."""
+
+    options: ExecutionOptions
+    io: ExecutionIO
+    env: dict[str, str]
+
+
+@dataclasses.dataclass(frozen=True)
 class PersistenceRuntime:
     """Runtime data for invoking tofu with a remote backend."""
 
-    descriptor: PersistenceDescriptor
+    descriptor: persistence_models.PersistenceDescriptor
     backend_config: str
     object_key: str
     env_overrides: dict[str, str]
-
-
-def cache_root(env: dict[str, str] | None = None) -> Path:
-    """Return the directory used for caching estate repositories."""
-    source = env if env is not None else os.environ
-    root = source.get(XDG_CACHE_HOME)
-    base = Path(root).expanduser() if root else Path.home() / ".cache"
-    path = base
-    for segment in CACHE_SEGMENT:
-        path /= segment
-    path.mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def ensure_estate_cache(
-    record: EstateRecord,
-    *,
-    cache_directory: Path | None = None,
-) -> Path:
-    """Ensure the estate repository is cloned and fresh in the cache."""
-    if not record.alias:
-        raise EstateExecutionError(ERROR_ALIAS_REQUIRED)
-
-    destination = _cache_destination(record.alias, cache_directory)
-    callbacks = build_remote_callbacks(record.repo_url)
-    repository = _open_or_clone_cache(
-        record,
-        destination=destination,
-        callbacks=callbacks,
-    )
-    return _workdir_from_repository(record.alias, destination, repository)
-
-
-def _cache_destination(alias: str, cache_directory: Path | None) -> Path:
-    root = cache_directory or cache_root()
-    return root / alias
-
-
-def _open_or_clone_cache(
-    record: EstateRecord,
-    *,
-    destination: Path,
-    callbacks: pygit2.RemoteCallbacks | None,
-) -> pygit2.Repository:
-    try:
-        if destination.exists():
-            repository = pygit2.Repository(str(destination))
-            if repository.is_bare:
-                detail = ERROR_BARE_CACHE.format(
-                    alias=record.alias,
-                    destination=destination,
-                )
-                raise EstateExecutionError(detail)
-            _refresh_cache(repository, record.branch, callbacks)
-            return repository
-
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        return pygit2.clone_repository(
-            record.repo_url,
-            str(destination),
-            checkout_branch=record.branch,
-            callbacks=callbacks,
-        )
-    except pygit2.GitError as error:  # pragma: no cover - pygit2 raises opaque errors
-        detail = f"Failed to sync estate {record.alias!r}: {error}"
-        raise EstateExecutionError(detail) from error
-
-
-def _workdir_from_repository(
-    alias: str,
-    destination: Path,
-    repository: pygit2.Repository,
-) -> Path:
-    if workdir := repository.workdir:
-        return Path(workdir)
-    detail = ERROR_BARE_CACHE.format(alias=alias, destination=destination)
-    raise EstateExecutionError(detail)
 
 
 @contextlib.contextmanager
@@ -204,7 +186,7 @@ def estate_workspace(
 ) -> cabc.Iterator[Path]:
     """Yield a throwaway working tree populated from the estate cache."""
     cache_path = ensure_estate_cache(record, cache_directory=cache_directory)
-    workdir = _clone_into_temp(cache_path, prefix)
+    workdir = clone_into_temp(cache_path, prefix)
     try:
         yield workdir
     finally:
@@ -230,194 +212,39 @@ def run_apply(
     return _run_estate_command(record, "apply", options, io)
 
 
-def _write_stream_output(stream: typ.IO[str], content: str) -> None:
-    stream.write(content)
-    if not content.endswith("\n"):
-        stream.write("\n")
-    stream.flush()
-
-
-def _resolve_backend_environment(env: typ.Mapping[str, str]) -> dict[str, str]:
-    """Return env overrides for tofu, erroring when credentials are missing."""
-
-    def present(*names: str) -> bool:
-        return all(env.get(name, "").strip() for name in names)
-
-    if present(*AWS_BACKEND_ENV):
-        return {
-            "AWS_ACCESS_KEY_ID": env["AWS_ACCESS_KEY_ID"].strip(),
-            "AWS_SECRET_ACCESS_KEY": env["AWS_SECRET_ACCESS_KEY"].strip(),
-            **_session_token_overrides(env),
-        }
-
-    if present(*SCW_BACKEND_ENV):
-        return {
-            "AWS_ACCESS_KEY_ID": env["SCW_ACCESS_KEY"].strip(),
-            "AWS_SECRET_ACCESS_KEY": env["SCW_SECRET_KEY"].strip(),
-            **_session_token_overrides(env),
-        }
-
-    if present(*SPACES_BACKEND_ENV):
-        return {
-            "AWS_ACCESS_KEY_ID": env["SPACES_ACCESS_KEY_ID"].strip(),
-            "AWS_SECRET_ACCESS_KEY": env["SPACES_SECRET_ACCESS_KEY"].strip(),
-            **_session_token_overrides(env),
-        }
-
-    raise EstateExecutionError(ERROR_BACKEND_ENV_MISSING)
-
-
-def _validate_backend_path(workdir: Path, backend_config_path: str) -> Path:
-    """Validate backend config path is inside workspace and exists.
-
-    Returns the relative path to the backend config file. Raises
-    EstateExecutionError when the path escapes the workspace or is missing.
-    """
-    backend_path = (workdir / backend_config_path).resolve()
-    workdir_resolved = workdir.resolve()
-
-    try:
-        relative_backend = backend_path.relative_to(workdir_resolved)
-    except ValueError as error:
-        message = ERROR_BACKEND_PATH_OUTSIDE.format(path=backend_config_path)
-        raise EstateExecutionError(message) from error
-
-    if not backend_path.is_file():
-        message = ERROR_BACKEND_CONFIG_MISSING.format(path=backend_config_path)
-        raise EstateExecutionError(message)
-
-    return relative_backend
-
-
-def _build_object_key(descriptor: PersistenceDescriptor) -> str:
-    """Construct the full S3 object key from prefix and suffix."""
-    prefix = descriptor.key_prefix.rstrip("/")
-    suffix = descriptor.key_suffix.lstrip("/")
-    return f"{prefix}/{suffix}" if prefix else suffix
-
-
 def _get_persistence_runtime(
-    workdir: Path, env: typ.Mapping[str, str]
+    workspace_root: Path,
+    tofu_workdir: Path,
+    env: typ.Mapping[str, str],
 ) -> PersistenceRuntime | None:
     """Load the persistence manifest and derive backend runtime details."""
-    manifest_path = workdir / persistence_models.MANIFEST_FILENAME
     try:
-        descriptor = persistence_models.PersistenceDescriptor.from_yaml(manifest_path)
-    except persistence_models.PersistenceError as error:
+        descriptor, backend_config, object_key, env_overrides = (
+            persistence_backend.get_persistence_runtime(
+                workspace_root, tofu_workdir, env
+            )
+        )
+    except persistence_backend.BackendConfigurationError as error:
         raise EstateExecutionError(str(error)) from error
 
-    if descriptor is None or not descriptor.enabled:
+    if descriptor is None:
         return None
 
-    relative_backend = _validate_backend_path(workdir, descriptor.backend_config_path)
-    env_overrides = _resolve_backend_environment(env)
-    object_key = _build_object_key(descriptor)
-
+    # Backend guarantees all values are non-None when descriptor is present.
     return PersistenceRuntime(
         descriptor=descriptor,
-        backend_config=str(relative_backend),
-        object_key=object_key,
-        env_overrides=env_overrides,
+        backend_config=typ.cast("str", backend_config),
+        object_key=typ.cast("str", object_key),
+        env_overrides=typ.cast("dict[str, str]", env_overrides),
     )
 
 
 def _initialize_tofu(workdir: Path, env: typ.Mapping[str, str]) -> Tofu:
-    """Create a Tofu wrapper with mapped environment, surfacing friendly errors."""
+    """Create a Tofu wrapper, converting errors to EstateExecutionError."""
     try:
-        return Tofu(cwd=str(workdir), env=dict(env))
-    except FileNotFoundError as error:  # pragma: no cover - depends on PATH
-        raise EstateExecutionError(ERROR_MISSING_TOFU) from error
-    except RuntimeError as error:  # pragma: no cover - tofu misconfiguration
+        return initialize_tofu(workdir, env)
+    except ConcordatError as error:
         raise EstateExecutionError(str(error)) from error
-
-
-def _normalize_init_result(result: object) -> SimpleNamespace:
-    """Normalize tofupy.init boolean result."""
-    return SimpleNamespace(stdout="", stderr="", returncode=0 if result else 1)
-
-
-def _normalize_plan_result(result: object) -> SimpleNamespace:
-    """Normalize tofupy.plan (PlanLog, Plan|None) tuple result."""
-    if not isinstance(result, tuple) or len(result) != 2:
-        return SimpleNamespace(stdout="", stderr="", returncode=1)
-
-    plan_log, plan = result
-    stdout = getattr(plan_log, "stdout", "") if plan_log else ""
-    stderr = getattr(plan_log, "stderr", "") if plan_log else ""
-    errored = getattr(plan_log, "errored", False) or getattr(plan, "errored", False)
-    return SimpleNamespace(
-        stdout=stdout or "", stderr=stderr or "", returncode=1 if errored else 0
-    )
-
-
-def _normalize_apply_result(result: object) -> SimpleNamespace:
-    """Normalize tofupy.apply ApplyLog result."""
-    apply_log = result
-    stdout = getattr(apply_log, "stdout", "") if apply_log else ""
-    stderr = getattr(apply_log, "stderr", "") if apply_log else ""
-    errored = getattr(apply_log, "errored", False)
-    return SimpleNamespace(
-        stdout=stdout or "", stderr=stderr or "", returncode=1 if errored else 0
-    )
-
-
-def _normalize_tofu_result(verb: str, result: object) -> SimpleNamespace:
-    """Coerce tofupy results into a consistent stdout/stderr/returncode shape."""
-    # Direct tofupy _run result already matches the expected shape.
-    if hasattr(result, "returncode"):
-        return SimpleNamespace(
-            stdout=getattr(result, "stdout", "") or "",
-            stderr=getattr(result, "stderr", "") or "",
-            returncode=getattr(result, "returncode", 0) or 0,
-        )
-
-    if verb == "init":
-        # Dispatch to verb-specific normalizers.
-        return _normalize_init_result(result)
-
-    if verb == "plan":
-        return _normalize_plan_result(result)
-
-    if verb == "apply":
-        return _normalize_apply_result(result)
-
-    _logger.debug("Unhandled tofu verb %r, assuming success", verb)
-    return SimpleNamespace(stdout="", stderr="", returncode=0)
-
-
-def _stream_tofu_output(io: ExecutionIO, normalized: SimpleNamespace) -> int:
-    """Write normalized tofu output to the provided IO streams and return exit code."""
-    if normalized.stdout:
-        _write_stream_output(io.stdout, normalized.stdout)
-    if normalized.stderr:
-        _write_stream_output(io.stderr, normalized.stderr)
-    return normalized.returncode
-
-
-def _invoke_tofu_command(tofu: Tofu, args: list[str], io: ExecutionIO) -> int:
-    """Run a tofu command, streaming stdout/stderr to the provided IO."""
-    verb, *extra_args = args
-    # Tests provide a fake tofu binary that only writes plain text; skip
-    # tofupy's streaming JSON interface in that mode to avoid parse errors.
-    if os.environ.get("FAKE_TOFU_LOG"):
-        results = tofu._run(args, raise_on_error=False)
-        normalized = _normalize_tofu_result(verb, results)
-        return _stream_tofu_output(io, normalized)
-
-    method = getattr(tofu, verb, None)
-
-    if callable(method):
-        try:
-            results = method(extra_args=extra_args)
-        except TypeError:
-            # Fallback for methods that do not accept extra_args.
-            results = method()
-    else:
-        # Last-resort fallback when public APIs are unavailable.
-        results = tofu._run(args, raise_on_error=False)
-
-    normalized = _normalize_tofu_result(verb, results)
-    return _stream_tofu_output(io, normalized)
 
 
 def _prepare_execution_environment(options: ExecutionOptions) -> dict[str, str]:
@@ -425,20 +252,114 @@ def _prepare_execution_environment(options: ExecutionOptions) -> dict[str, str]:
     env_source = dict(os.environ)
     if options.environment is not None:
         env_source.update(options.environment)
-    _remove_blank_session_token(env_source)
+    persistence_backend.remove_blank_session_token(env_source)
     return env_source
 
 
+def _setup_tofu_workspace(
+    workspace: WorkspaceContext,
+    record: EstateRecord,
+    execution: ExecutionContext,
+) -> tuple[list[str], Tofu]:
+    """Prepare the workspace for tofu execution.
+
+    Sanitizes inventory, writes tfvars, configures backend, and initialises the
+    tofu wrapper. Returns backend arguments and tofu instance.
+    """
+    sanitized_inventory = _sanitize_inventory_for_tofu(
+        workspace.root,
+        workspace.tofu_dir,
+        record.inventory_path,
+    )
+    if sanitized_inventory:
+        write_stream_output(
+            execution.io.stderr,
+            "inventory sanitized for tofu (removed YAML directives)",
+        )
+    tfvars = workspace.tofu_dir / TFVARS_FILENAME
+    tfvars.write_text(
+        f'github_owner = "{execution.options.github_owner}"\n',
+        encoding="utf-8",
+    )
+
+    backend_args, env = _prepare_backend_configuration(
+        workspace.root,
+        workspace.tofu_dir,
+        execution.env,
+        execution.io,
+    )
+    env["GITHUB_TOKEN"] = execution.options.github_token
+    tofu = _initialize_tofu(workspace.tofu_dir, env)
+
+    return backend_args, tofu
+
+
+def _execute_apply_command(
+    tofu: Tofu,
+    args: list[str],
+    tofu_workdir: Path,
+    io: ExecutionIO,
+) -> int:
+    """Execute tofu apply with automatic error recovery.
+
+    Runs apply, then handles import and prevent_destroy errors if they occur.
+    Returns the final exit code.
+    """
+    result = invoke_tofu_command_with_result(tofu, list(args), io)
+    exit_code = int(result.returncode)
+    latest_result = result
+
+    context = RecoveryContext(tofu=tofu, tofu_workdir=tofu_workdir, io=io)
+    import_callbacks = RecoveryCallbacks(
+        invoke_tofu_with_result=invoke_tofu_command_with_result,
+        write_stream_output=write_stream_output,
+        can_prompt=_can_prompt,
+        prompt_yes_no=_prompt_yes_no,
+        detect_missing_repo_imports=_detect_missing_repo_imports,
+    )
+
+    if exit_code != 0:
+        exit_code, latest_result = apply_recovery.handle_apply_import_errors(
+            context,
+            latest_result,
+            args,
+            import_callbacks,
+        )
+
+    prevent_destroy_callbacks = RecoveryCallbacks(
+        invoke_tofu_with_result=invoke_tofu_command_with_result,
+        write_stream_output=write_stream_output,
+        can_prompt=_can_prompt,
+        prompt_yes_no=_prompt_yes_no,
+        detect_prevent_destroy_forgets=_detect_prevent_destroy_forgets,
+    )
+
+    if exit_code != 0:
+        exit_code, latest_result = apply_recovery.handle_apply_prevent_destroy_errors(
+            context,
+            latest_result,
+            args,
+            prevent_destroy_callbacks,
+        )
+
+    return exit_code
+
+
 def _prepare_backend_configuration(
-    workdir: Path, env_source: dict[str, str], io: ExecutionIO
+    workspace_root: Path,
+    tofu_workdir: Path,
+    env_source: dict[str, str],
+    io: ExecutionIO,
 ) -> tuple[list[str], dict[str, str]]:
     """Derive backend args and environment overrides for tofu."""
-    persistence_runtime = _get_persistence_runtime(workdir, env_source)
+    persistence_runtime = _get_persistence_runtime(
+        workspace_root, tofu_workdir, env_source
+    )
     backend_args: list[str] = []
     if persistence_runtime is not None:
         backend_args.append(f"-backend-config={persistence_runtime.backend_config}")
         descriptor = persistence_runtime.descriptor
-        _write_stream_output(
+        write_stream_output(
             io.stderr,
             (
                 "remote backend: "
@@ -452,7 +373,7 @@ def _prepare_backend_configuration(
     env: dict[str, str] = dict(env_source)
     if persistence_runtime is not None:
         env |= persistence_runtime.env_overrides
-    _remove_blank_session_token(env)
+    persistence_backend.remove_blank_session_token(env)
     return backend_args, env
 
 
@@ -472,91 +393,30 @@ def _run_estate_command(
     ) as workdir:
         io.stderr.write(f"execution workspace: {workdir}\n")
         io.stderr.flush()
-        tfvars = workdir / TFVARS_FILENAME
-        tfvars.write_text(
-            f'github_owner = "{options.github_owner}"\n',
-            encoding="utf-8",
-        )
 
-        backend_args, env = _prepare_backend_configuration(workdir, env_source, io)
-        env["GITHUB_TOKEN"] = options.github_token
-        tofu = _initialize_tofu(workdir, env)
+        tofu_workdir = resolve_tofu_workdir(workdir)
+        workspace = WorkspaceContext(root=workdir, tofu_dir=tofu_workdir)
+        execution = ExecutionContext(options=options, io=io, env=env_source)
+        backend_args, tofu = _setup_tofu_workspace(
+            workspace,
+            record,
+            execution,
+        )
 
         init_args = ["init", "-input=false", *backend_args]
 
         for args in [init_args, command]:
-            exit_code = _invoke_tofu_command(tofu, list(args), io)
-            if exit_code != 0:
+            write_stream_output(
+                io.stderr,
+                f"running: tofu {' '.join(args)} (cwd={tofu_workdir})",
+            )
+            if args[0] == "apply":
+                exit_code = _execute_apply_command(tofu, list(args), tofu_workdir, io)
+            else:
+                exit_code = invoke_tofu_command(tofu, list(args), io)
+            if exit_code == 0:
+                write_stream_output(io.stderr, f"completed: tofu {args[0]}")
+            else:
+                write_stream_output(io.stderr, f"failed: tofu {args[0]}")
                 break
         return exit_code, workdir
-
-
-def _clone_into_temp(cache_path: Path, prefix: str) -> Path:
-    """Copy the cached repository into an isolated temporary directory."""
-    temp_root = Path(mkdtemp(prefix=f"concordat-{prefix}-"))
-    shutil.rmtree(temp_root)
-    shutil.copytree(cache_path, temp_root, symlinks=True)
-    return temp_root
-
-
-def _refresh_cache(
-    repository: pygit2.Repository,
-    branch: str,
-    callbacks: pygit2.RemoteCallbacks | None,
-) -> None:
-    """Fetch and reset the cached repository to the remote branch."""
-    remote = _fetch_origin_remote(repository, callbacks)
-    commit = _resolve_remote_commit(repository, remote, branch)
-    _sync_local_branch(repository, branch, commit)
-    _reset_to_commit(repository, commit)
-
-
-def _fetch_origin_remote(
-    repository: pygit2.Repository,
-    callbacks: pygit2.RemoteCallbacks | None,
-) -> pygit2.Remote:
-    try:
-        remote = repository.remotes["origin"]
-    except KeyError as error:  # pragma: no cover - defensive guard
-        raise EstateExecutionError(ERROR_MISSING_ORIGIN) from error
-    remote.fetch(callbacks=callbacks)
-    return remote
-
-
-def _resolve_remote_commit(
-    repository: pygit2.Repository,
-    remote: pygit2.Remote,
-    branch: str,
-) -> pygit2.Commit:
-    ref_name = f"refs/remotes/{remote.name}/{branch}"
-    try:
-        remote_ref = repository.lookup_reference(ref_name)
-    except KeyError as error:
-        remote_name = remote.name or remote.url or "origin"
-        detail = ERROR_MISSING_BRANCH.format(branch=branch, remote=remote_name)
-        raise EstateExecutionError(detail) from error
-
-    commit = repository.get(remote_ref.target)
-    if isinstance(commit, pygit2.Commit):
-        return commit
-
-    resolved = repository[commit]  # type: ignore[index]
-    return typ.cast("pygit2.Commit", resolved)
-
-
-def _sync_local_branch(
-    repository: pygit2.Repository,
-    branch: str,
-    commit: pygit2.Commit,
-) -> None:
-    local_branch = repository.lookup_branch(branch)
-    if local_branch is None:
-        repository.create_branch(branch, commit)
-        return
-    repository.lookup_reference(local_branch.name).set_target(commit.id)
-
-
-def _reset_to_commit(repository: pygit2.Repository, commit: pygit2.Commit) -> None:
-    reset_mode = typ.cast("_Pygit2ResetMode", pygit2.GIT_RESET_HARD)
-    repository.reset(commit.id, reset_mode)
-    repository.checkout_head(strategy=pygit2.GIT_CHECKOUT_FORCE)

@@ -3,8 +3,11 @@ name = "concordat"
 version = "0.1.0"
 description = "concordat package"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.13"
 license = { text = "MIT" }
+authors = [
+    { name = "Payton McIntosh", email = "pmcintosh@df12.net" },
+]
 dependencies = [
     "boto3>=1.35",
     "cyclopts",

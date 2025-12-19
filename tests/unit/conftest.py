@@ -257,4 +257,5 @@ def fake_tofu(monkeypatch: pytest.MonkeyPatch) -> list[typ.Any]:
             return self._record(args[0], args[1:])
 
     monkeypatch.setattr("concordat.estate_execution.Tofu", _FakeTofu)
+    monkeypatch.setattr("concordat.tofu_runner.Tofu", _FakeTofu)
     return created

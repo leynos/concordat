@@ -32,8 +32,11 @@ ERROR_OWNER_REQUIRED = (
 )
 
 _yaml = YAML(typ="safe")
-_yaml.version = (1, 2)
 _yaml.default_flow_style = False
+_yaml.explicit_start = False
+_yaml.explicit_end = False
+_yaml.indent(mapping=2, sequence=4, offset=2)
+_yaml.sort_base_mapping_type_on_output = False
 
 
 class EstateError(ConcordatError):

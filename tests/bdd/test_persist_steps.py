@@ -24,7 +24,7 @@ import concordat.persistence.validation as persistence_validation
 from concordat import cli
 from concordat.errors import ConcordatError
 from concordat.estate import EstateRecord, register_estate
-from concordat.estate_execution import cache_root
+from concordat.estate_cache import cache_root
 
 from .conftest import RunResult
 

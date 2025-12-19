@@ -126,6 +126,7 @@ def _resolve_namespaces(namespaces: tuple[str, ...]) -> tuple[str, ...]:
 def enrol(
     *repositories: str,
     push: bool = False,
+    force: bool = False,
     author_name: str | None = None,
     author_email: str | None = None,
     platform_standards_url: str | None = None,
@@ -156,6 +157,7 @@ def enrol(
         author_email=author_email,
         platform_standards=platform_config,
         github_owner=owner_guard,
+        force=force,
     )
     for outcome in outcomes:
         print(outcome.render())
@@ -181,13 +183,35 @@ def disenrol(
     push: bool = False,
     author_name: str | None = None,
     author_email: str | None = None,
+    platform_standards_url: str | None = None,
+    platform_standards_branch: str = "main",
+    platform_standards_inventory: str = "tofu/inventory/repositories.yaml",
+    github_token: str | None = None,
 ) -> None:
     """Mark repositories as no longer enrolled in concordat."""
+    estate = _require_active_estate()
+    token = github_token or os.getenv("GITHUB_TOKEN")
+
+    owner_guard = estate.github_owner
+    if not owner_guard:
+        raise ConcordatError(ERROR_ACTIVE_ESTATE_OWNER.format(alias=estate.alias))
+
+    platform_config = _resolve_platform_config(
+        estate=estate,
+        explicit_url=platform_standards_url,
+        branch=platform_standards_branch,
+        inventory=platform_standards_inventory,
+        token=token,
+    )
+
     outcomes = disenrol_repositories(
         repositories,
         push_remote=push,
         author_name=author_name,
         author_email=author_email,
+        platform_standards=platform_config,
+        github_owner=owner_guard,
+        allow_missing_document=True,
     )
     for outcome in outcomes:
         print(outcome.render())

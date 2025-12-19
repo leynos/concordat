@@ -34,7 +34,10 @@ workflows read the same flag before applying changes.
   it cannot determine the slug from the repository or `origin` remote.
 
 - When the repository already contains a `.concordat` file with
-  `enrolled: true`, the CLI prints `already enrolled` and makes no changes.
+  `enrolled: true`, the CLI prints `already enrolled` and makes no changes
+  unless `--force` is supplied. With `--force`, concordat still opens (or
+  updates) the platform-standards pull request for the active estate so the
+  repository is present in the OpenTofu inventory.
 
 - The CLI commits the new file to the current branch. If the Git configuration
   does not define `user.name` and `user.email`, supply details explicitly:
@@ -74,6 +77,21 @@ workflows read the same flag before applying changes.
 
 - The CLI commits the change to the current branch and accepts the same
   `--push`, `--author-name`, and `--author-email` options as the enrol command.
+
+- When an active estate is configured, `concordat disenrol` also opens a pull
+  request against the platform-standards repository to remove the repository
+  slug from the OpenTofu inventory (the default is
+  `tofu/inventory/repositories.yaml`). Merge the pull request before the next
+  OpenTofu apply.
+
+  When `CONCORDAT_SKIP_PLATFORM_PR=1` is set, the inventory pull request step
+  is skipped, but the `.concordat` flag is still updated.
+
+- After removing a repository from the inventory, subsequent `concordat apply`
+  runs may fail with `prevent_destroy` because the repository module forbids
+  deletions. Concordat offers to remove the affected resources from OpenTofu
+  state (via `tofu state rm`) and retry the apply, which completes the
+  disenrolment without deleting the repository.
 
 ## Listing repositories
 
@@ -162,6 +180,9 @@ without leaving the CLI. Both commands require `GITHUB_TOKEN` and the estate's
   directory, writes `terraform.tfvars` with the recorded owner, runs
   `tofu init -input=false`, and then `tofu plan`. Paths are echoed, so the
   workspace can be inspected; pass `--keep-workdir` to skip the cleanup step.
+  Concordat preserves OpenTofu's standard CLI plan output (including the
+  per-resource diff), so operators do not need to re-run `tofu plan` manually
+  just to see what would change.
 
   When `backend/persistence.yaml` exists with `enabled: true`, the CLI adds
   `-backend-config=<path>` to `tofu init`, maps
@@ -181,8 +202,34 @@ without leaving the CLI. Both commands require `GITHUB_TOKEN` and the estate's
 
 `concordat apply` uses the same workspace preparation as `plan`, adds
 `-auto-approve` for OpenTofu, and returns the exit code from the underlying
-`tofu` invocation, so pipelines can gate on it. Pass `--keep-workdir` when you
-also want to retain the apply workspace for inspection.
+`tofu` invocation, so pipelines can gate on it. Pass `--keep-workdir` to retain
+the apply workspace for inspection.
+
+### Importing pre-existing GitHub repositories into state
+
+The GitHub provider rejects attempts to create a repository that already
+exists, even if the rest of the plan is valid. This typically shows up as a
+`422` response with a message such as "name already exists on this account".
+
+When Concordat detects this specific failure during `concordat apply`, it
+offers to import the affected repositories into state and retry the apply. The
+prompt defaults to "no" so automated runs cannot accidentally mutate state:
+
+```plaintext
+One or more GitHub repositories already exist but are missing from state.
+Import into state and retry apply? (example/repo-one, example/repo-two) [y/N]:
+```
+
+If the operator answers `y`, Concordat runs `tofu import` for each missing
+repository and then re-runs `tofu apply`. Import IDs are attempted in a
+resilient order:
+
+1. Repository name only (for example, `repo-one`).
+2. Full `owner/name` slug (for example, `example/repo-one`).
+
+When running without a TTY (teletype; an interactive terminal session), for
+example in CI, Concordat does not prompt and does not attempt imports. Re-run
+with `--keep-workdir`, then import manually in the printed workspace directory.
 
 ### Persisting estate state in object storage
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from concordat.estate_execution import _build_object_key
+from concordat.persistence.backend import build_object_key as _build_object_key
 from concordat.persistence.models import PersistenceDescriptor
 
 
