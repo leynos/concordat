@@ -93,11 +93,13 @@ def _setup_multi_artifact_scenario(
     root = tmp_path / "concordat"
     published_root = tmp_path / "platform-standards-published"
     manifest_path = root / "platform-standards" / "canon" / "manifest.yaml"
+    root.mkdir(parents=True, exist_ok=True)
+    published_root.mkdir(parents=True, exist_ok=True)
 
     entries: list[dict[str, str]] = []
     for artifact_id, relative_path, template_content, published_content in artifacts:
-        template_file = _write_template_file(root, relative_path, template_content)
-        sha = hashlib.sha256(template_file.read_bytes()).hexdigest()
+        _write_template_file(root, relative_path, template_content)
+        sha = hashlib.sha256(template_content.encode("utf-8")).hexdigest()
         entries.append(
             {
                 "id": artifact_id,
@@ -113,7 +115,7 @@ def _setup_multi_artifact_scenario(
 
         published_relpath = Path(relative_path)
         if published_relpath.parts[:1] == ("platform-standards",):
-            published_relpath = Path(*published_relpath.parts[1:])
+            published_relpath = published_relpath.relative_to("platform-standards")
         published_file = published_root / published_relpath
         published_file.parent.mkdir(parents=True, exist_ok=True)
         published_file.write_text(published_content, encoding="utf-8")
