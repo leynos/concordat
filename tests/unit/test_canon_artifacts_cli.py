@@ -14,7 +14,9 @@ from concordat.canon_artifacts import compare_manifest_to_published, load_manife
 from scripts import canon_artifacts
 
 if typ.TYPE_CHECKING:
-    import types
+    from collections.abc import Sequence  # noqa: ICN003
+    from importlib.machinery import ModuleSpec
+    from types import ModuleType
 
 
 def _write_template_and_manifest(
@@ -401,10 +403,16 @@ class _BlockModuleFinder:
 
     prefix: str
 
-    def find_spec(self, fullname: str, path: object, target: object) -> None:
+    def find_spec(
+        self,
+        fullname: str,
+        path: Sequence[str] | None,
+        target: ModuleType | None,
+    ) -> ModuleSpec | None:
         """Raise ModuleNotFoundError for the configured prefix."""
         if fullname.startswith(self.prefix):
             raise ModuleNotFoundError(fullname)
+        return None
 
 
 def test_tui_raises_when_textual_is_unavailable(
@@ -417,7 +425,7 @@ def test_tui_raises_when_textual_is_unavailable(
 
     finder = _BlockModuleFinder(prefix="textual")
     monkeypatch.setattr(sys, "meta_path", [finder, *sys.meta_path])
-    removed: dict[str, types.ModuleType] = {}
+    removed: dict[str, ModuleType] = {}
     for name in list(sys.modules):
         if name == "scripts.canon_artifacts_tui" or name.startswith("textual"):
             removed[name] = sys.modules.pop(name)
