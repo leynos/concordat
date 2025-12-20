@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import hashlib
-from pathlib import Path  # noqa: TC003
+import typing as typ
+from pathlib import Path
+from typing import NamedTuple  # noqa: ICN003
 
 import pytest
 
 from concordat.canon_artifacts import (
     ArtifactStatus,
     CanonArtifactsError,
+    CanonManifest,
     SyncConfig,
     compare_manifest_to_published,
     load_manifest,
@@ -17,6 +20,17 @@ from concordat.canon_artifacts import (
     sha256_digest,
     sync_artifacts,
 )
+
+
+class ManifestFixture(NamedTuple):
+    """Fixture return type for manifest setup."""
+
+    root: Path
+    manifest: CanonManifest
+    template_file: Path
+    published_root: Path
+    artifact_id: str
+    template_sha: str
 
 
 def _write_manifest_via_yaml(
@@ -72,204 +86,225 @@ def _write_template_file(root: Path, relative_path: str, content: str) -> Path:
     return path
 
 
-def test_compare_ok(tmp_path: Path) -> None:
-    """Published files matching the template are marked ok."""
+def _setup_multi_artifact_scenario(
+    tmp_path: Path,
+    artifacts: list[tuple[str, str, str, str | None]],
+) -> tuple[CanonManifest, Path]:
     root = tmp_path / "concordat"
-    template_file = (
-        root / "platform-standards" / "canon" / "lint" / "python" / "ruff.toml"
-    )
-    template_file.parent.mkdir(parents=True, exist_ok=True)
-    template_file.write_text("rule = 1\n", encoding="utf-8")
-    template_sha = hashlib.sha256(template_file.read_bytes()).hexdigest()
-
-    manifest_path = root / "platform-standards" / "canon" / "manifest.yaml"
-    _write_manifest_via_yaml(
-        manifest_path=manifest_path,
-        artifact_id="python-ruff-config",
-        artifact_path="platform-standards/canon/lint/python/ruff.toml",
-        sha256=template_sha,
-    )
-    manifest = load_manifest(manifest_path)
-
     published_root = tmp_path / "platform-standards-published"
-    published_file = published_root / "canon" / "lint" / "python" / "ruff.toml"
-    published_file.parent.mkdir(parents=True, exist_ok=True)
-    published_file.write_text("rule = 1\n", encoding="utf-8")
+    manifest_path = root / "platform-standards" / "canon" / "manifest.yaml"
 
-    comparisons = compare_manifest_to_published(manifest, published_root=published_root)
+    entries: list[dict[str, str]] = []
+    for artifact_id, relative_path, template_content, published_content in artifacts:
+        template_file = _write_template_file(root, relative_path, template_content)
+        sha = hashlib.sha256(template_file.read_bytes()).hexdigest()
+        entries.append(
+            {
+                "id": artifact_id,
+                "type": "lint-config",
+                "path": relative_path,
+                "description": artifact_id,
+                "sha256": sha,
+            }
+        )
+
+        if published_content is None:
+            continue
+
+        published_relpath = Path(relative_path)
+        if published_relpath.parts[:1] == ("platform-standards",):
+            published_relpath = Path(*published_relpath.parts[1:])
+        published_file = published_root / published_relpath
+        published_file.parent.mkdir(parents=True, exist_ok=True)
+        published_file.write_text(published_content, encoding="utf-8")
+
+    _write_manifest_entries(manifest_path=manifest_path, artifacts=entries)
+    return load_manifest(manifest_path), published_root
+
+
+@pytest.fixture
+def single_artifact_manifest(tmp_path: Path) -> typ.Callable[..., ManifestFixture]:
+    """Create a single-artifact manifest scenario."""
+    counter = 0
+
+    def factory(
+        *,
+        artifact_id: str = "python-ruff-config",
+        template_content: str = "rule = 1\n",
+        template_relpath: str = "platform-standards/canon/lint/python/ruff.toml",
+        use_correct_sha: bool = True,
+    ) -> ManifestFixture:
+        nonlocal counter
+        counter += 1
+
+        root = tmp_path / f"concordat-{counter}"
+        template_file = _write_template_file(root, template_relpath, template_content)
+        template_sha = hashlib.sha256(template_file.read_bytes()).hexdigest()
+
+        manifest_path = root / "platform-standards" / "canon" / "manifest.yaml"
+        manifest_sha = template_sha if use_correct_sha else "0" * 64
+        _write_manifest_via_yaml(
+            manifest_path=manifest_path,
+            artifact_id=artifact_id,
+            artifact_path=template_relpath,
+            sha256=manifest_sha,
+        )
+        manifest = load_manifest(manifest_path)
+
+        published_root = tmp_path / f"platform-standards-published-{counter}"
+        published_root.mkdir(parents=True, exist_ok=True)
+
+        return ManifestFixture(
+            root=root,
+            manifest=manifest,
+            template_file=template_file,
+            published_root=published_root,
+            artifact_id=artifact_id,
+            template_sha=template_sha,
+        )
+
+    return factory
+
+
+def _create_published_file(
+    published_root: Path, artifact_relpath: str, content: str
+) -> Path:
+    relpath = Path(artifact_relpath)
+    if relpath.parts[:1] == ("platform-standards",):
+        relpath = Path(*relpath.parts[1:])
+    published_file = published_root / relpath
+    published_file.parent.mkdir(parents=True, exist_ok=True)
+    published_file.write_text(content, encoding="utf-8")
+    return published_file
+
+
+def test_compare_ok(
+    single_artifact_manifest: typ.Callable[..., ManifestFixture],
+) -> None:
+    """Published files matching the template are marked ok."""
+    setup = single_artifact_manifest()
+    _create_published_file(
+        setup.published_root,
+        setup.template_file.relative_to(setup.root).as_posix(),
+        "rule = 1\n",
+    )
+
+    comparisons = compare_manifest_to_published(
+        setup.manifest, published_root=setup.published_root
+    )
     assert len(comparisons) == 1
     assert comparisons[0].status == ArtifactStatus.OK
 
 
-def test_compare_outdated(tmp_path: Path) -> None:
+def test_compare_outdated(
+    single_artifact_manifest: typ.Callable[..., ManifestFixture],
+) -> None:
     """Published files differing from the template are marked outdated."""
-    root = tmp_path / "concordat"
-    template_file = (
-        root / "platform-standards" / "canon" / "lint" / "python" / "ruff.toml"
+    setup = single_artifact_manifest()
+    _create_published_file(
+        setup.published_root,
+        setup.template_file.relative_to(setup.root).as_posix(),
+        "rule = 2\n",
     )
-    template_file.parent.mkdir(parents=True, exist_ok=True)
-    template_file.write_text("rule = 1\n", encoding="utf-8")
-    template_sha = hashlib.sha256(template_file.read_bytes()).hexdigest()
 
-    manifest_path = root / "platform-standards" / "canon" / "manifest.yaml"
-    _write_manifest_via_yaml(
-        manifest_path=manifest_path,
-        artifact_id="python-ruff-config",
-        artifact_path="platform-standards/canon/lint/python/ruff.toml",
-        sha256=template_sha,
+    comparisons = compare_manifest_to_published(
+        setup.manifest, published_root=setup.published_root
     )
-    manifest = load_manifest(manifest_path)
-
-    published_root = tmp_path / "platform-standards-published"
-    published_file = published_root / "canon" / "lint" / "python" / "ruff.toml"
-    published_file.parent.mkdir(parents=True, exist_ok=True)
-    published_file.write_text("rule = 2\n", encoding="utf-8")
-
-    comparisons = compare_manifest_to_published(manifest, published_root=published_root)
     assert comparisons[0].status == ArtifactStatus.OUTDATED
 
 
-def test_compare_missing(tmp_path: Path) -> None:
+def test_compare_missing(
+    single_artifact_manifest: typ.Callable[..., ManifestFixture],
+) -> None:
     """Missing published files are surfaced as missing."""
-    root = tmp_path / "concordat"
-    template_file = (
-        root / "platform-standards" / "canon" / "lint" / "python" / "ruff.toml"
+    setup = single_artifact_manifest()
+    comparisons = compare_manifest_to_published(
+        setup.manifest, published_root=setup.published_root
     )
-    template_file.parent.mkdir(parents=True, exist_ok=True)
-    template_file.write_text("rule = 1\n", encoding="utf-8")
-    template_sha = hashlib.sha256(template_file.read_bytes()).hexdigest()
-
-    manifest_path = root / "platform-standards" / "canon" / "manifest.yaml"
-    _write_manifest_via_yaml(
-        manifest_path=manifest_path,
-        artifact_id="python-ruff-config",
-        artifact_path="platform-standards/canon/lint/python/ruff.toml",
-        sha256=template_sha,
-    )
-    manifest = load_manifest(manifest_path)
-
-    published_root = tmp_path / "platform-standards-published"
-
-    comparisons = compare_manifest_to_published(manifest, published_root=published_root)
     assert comparisons[0].status == ArtifactStatus.MISSING
 
 
-def test_sync_updates_published(tmp_path: Path) -> None:
+def test_sync_updates_published(
+    single_artifact_manifest: typ.Callable[..., ManifestFixture],
+) -> None:
     """Sync copies the template content into the published checkout."""
-    root = tmp_path / "concordat"
-    template_file = (
-        root / "platform-standards" / "canon" / "lint" / "python" / "ruff.toml"
+    setup = single_artifact_manifest()
+    published_file = _create_published_file(
+        setup.published_root,
+        setup.template_file.relative_to(setup.root).as_posix(),
+        "rule = 2\n",
     )
-    template_file.parent.mkdir(parents=True, exist_ok=True)
-    template_file.write_text("rule = 1\n", encoding="utf-8")
-    template_sha = hashlib.sha256(template_file.read_bytes()).hexdigest()
-
-    manifest_path = root / "platform-standards" / "canon" / "manifest.yaml"
-    _write_manifest_via_yaml(
-        manifest_path=manifest_path,
-        artifact_id="python-ruff-config",
-        artifact_path="platform-standards/canon/lint/python/ruff.toml",
-        sha256=template_sha,
-    )
-    manifest = load_manifest(manifest_path)
-
-    published_root = tmp_path / "platform-standards-published"
-    published_file = published_root / "canon" / "lint" / "python" / "ruff.toml"
-    published_file.parent.mkdir(parents=True, exist_ok=True)
-    published_file.write_text("rule = 2\n", encoding="utf-8")
 
     comparisons = list(
-        compare_manifest_to_published(manifest, published_root=published_root)
+        compare_manifest_to_published(
+            setup.manifest, published_root=setup.published_root
+        )
     )
     assert comparisons[0].status == ArtifactStatus.OUTDATED
 
     actions = sync_artifacts(
         comparisons,
         SyncConfig(
-            template_root=manifest.template_root,
-            published_root=published_root,
-            ids={"python-ruff-config"},
+            template_root=setup.manifest.template_root,
+            published_root=setup.published_root,
+            ids={setup.artifact_id},
         ),
     )
     assert actions[0].copied is True
     assert published_file.read_text(encoding="utf-8") == "rule = 1\n"
 
 
-def test_sync_missing_artifact_creates_destination(tmp_path: Path) -> None:
+def test_sync_missing_artifact_creates_destination(
+    single_artifact_manifest: typ.Callable[..., ManifestFixture],
+) -> None:
     """sync_artifacts recreates a missing artifact and its path."""
-    root = tmp_path / "concordat"
-    template_file = (
-        root / "platform-standards" / "canon" / "lint" / "python" / "ruff.toml"
-    )
-    template_file.parent.mkdir(parents=True, exist_ok=True)
-    template_file.write_text("rule = 1\n", encoding="utf-8")
-    template_sha = hashlib.sha256(template_file.read_bytes()).hexdigest()
-
-    manifest_path = root / "platform-standards" / "canon" / "manifest.yaml"
-    _write_manifest_via_yaml(
-        manifest_path=manifest_path,
-        artifact_id="python-ruff-config",
-        artifact_path="platform-standards/canon/lint/python/ruff.toml",
-        sha256=template_sha,
-    )
-    manifest = load_manifest(manifest_path)
-    published_root = tmp_path / "platform-standards-published"
-
+    setup = single_artifact_manifest()
     comparisons = list(
-        compare_manifest_to_published(manifest, published_root=published_root)
+        compare_manifest_to_published(
+            setup.manifest, published_root=setup.published_root
+        )
     )
     assert comparisons[0].status == ArtifactStatus.MISSING
 
     actions = sync_artifacts(
         comparisons,
         SyncConfig(
-            template_root=manifest.template_root,
-            published_root=published_root,
-            ids={"python-ruff-config"},
+            template_root=setup.manifest.template_root,
+            published_root=setup.published_root,
+            ids={setup.artifact_id},
         ),
     )
     assert actions
-    published_file = published_root / "canon" / "lint" / "python" / "ruff.toml"
+    published_file = setup.published_root / "canon" / "lint" / "python" / "ruff.toml"
     assert published_file.is_file()
     assert published_file.read_text(encoding="utf-8") == "rule = 1\n"
 
 
-def test_sync_dry_run_does_not_modify_published(tmp_path: Path) -> None:
+def test_sync_dry_run_does_not_modify_published(
+    single_artifact_manifest: typ.Callable[..., ManifestFixture],
+) -> None:
     """dry_run=True returns planned actions but does not modify destination files."""
-    root = tmp_path / "concordat"
-    template_file = (
-        root / "platform-standards" / "canon" / "lint" / "python" / "ruff.toml"
+    setup = single_artifact_manifest(template_content="rule = 2\n")
+    published_file = _create_published_file(
+        setup.published_root,
+        setup.template_file.relative_to(setup.root).as_posix(),
+        "rule = 1\n",
     )
-    template_file.parent.mkdir(parents=True, exist_ok=True)
-    template_file.write_text("rule = 2\n", encoding="utf-8")
-    template_sha = hashlib.sha256(template_file.read_bytes()).hexdigest()
-
-    manifest_path = root / "platform-standards" / "canon" / "manifest.yaml"
-    _write_manifest_via_yaml(
-        manifest_path=manifest_path,
-        artifact_id="python-ruff-config",
-        artifact_path="platform-standards/canon/lint/python/ruff.toml",
-        sha256=template_sha,
-    )
-    manifest = load_manifest(manifest_path)
-
-    published_root = tmp_path / "platform-standards-published"
-    published_file = published_root / "canon" / "lint" / "python" / "ruff.toml"
-    published_file.parent.mkdir(parents=True, exist_ok=True)
-    published_file.write_text("rule = 1\n", encoding="utf-8")
     original = published_file.read_text(encoding="utf-8")
 
     comparisons = list(
-        compare_manifest_to_published(manifest, published_root=published_root)
+        compare_manifest_to_published(
+            setup.manifest, published_root=setup.published_root
+        )
     )
     assert comparisons[0].status == ArtifactStatus.OUTDATED
 
     actions = sync_artifacts(
         comparisons,
         SyncConfig(
-            template_root=manifest.template_root,
-            published_root=published_root,
-            ids={"python-ruff-config"},
+            template_root=setup.manifest.template_root,
+            published_root=setup.published_root,
+            ids={setup.artifact_id},
             dry_run=True,
         ),
     )
@@ -280,47 +315,23 @@ def test_sync_dry_run_does_not_modify_published(tmp_path: Path) -> None:
 
 def test_sync_include_unchanged_controls_ok_inclusion(tmp_path: Path) -> None:
     """include_unchanged controls whether OK artifacts are included in sync."""
-    root = tmp_path / "concordat"
-    template_outdated = _write_template_file(
-        root,
-        "platform-standards/canon/lint/python/outdated.toml",
-        "rule = 2\n",
-    )
-    template_ok = _write_template_file(
-        root,
-        "platform-standards/canon/lint/python/ok.toml",
-        "rule = 3\n",
-    )
-    sha_outdated = hashlib.sha256(template_outdated.read_bytes()).hexdigest()
-    sha_ok = hashlib.sha256(template_ok.read_bytes()).hexdigest()
-
-    manifest_path = root / "platform-standards" / "canon" / "manifest.yaml"
-    _write_manifest_entries(
-        manifest_path=manifest_path,
-        artifacts=[
-            {
-                "id": "outdated",
-                "type": "lint-config",
-                "path": "platform-standards/canon/lint/python/outdated.toml",
-                "description": "outdated",
-                "sha256": sha_outdated,
-            },
-            {
-                "id": "ok",
-                "type": "lint-config",
-                "path": "platform-standards/canon/lint/python/ok.toml",
-                "description": "ok",
-                "sha256": sha_ok,
-            },
+    manifest, published_root = _setup_multi_artifact_scenario(
+        tmp_path,
+        [
+            (
+                "outdated",
+                "platform-standards/canon/lint/python/outdated.toml",
+                "rule = 2\n",
+                "rule = 1\n",
+            ),
+            (
+                "ok",
+                "platform-standards/canon/lint/python/ok.toml",
+                "rule = 3\n",
+                "rule = 3\n",
+            ),
         ],
     )
-    manifest = load_manifest(manifest_path)
-    published_root = tmp_path / "platform-standards-published"
-    published_outdated = published_root / "canon" / "lint" / "python" / "outdated.toml"
-    published_ok = published_root / "canon" / "lint" / "python" / "ok.toml"
-    published_outdated.parent.mkdir(parents=True, exist_ok=True)
-    published_outdated.write_text("rule = 1\n", encoding="utf-8")
-    published_ok.write_text("rule = 3\n", encoding="utf-8")
 
     comparisons = list(
         compare_manifest_to_published(manifest, published_root=published_root)
@@ -355,40 +366,29 @@ def test_sync_include_unchanged_controls_ok_inclusion(tmp_path: Path) -> None:
 
 
 def test_compare_template_manifest_mismatch_is_reported_and_skipped_by_sync(
-    tmp_path: Path,
+    single_artifact_manifest: typ.Callable[..., ManifestFixture],
 ) -> None:
     """TEMPLATE_MANIFEST_MISMATCH is reported and prevents sync."""
-    root = tmp_path / "concordat"
-    template_file = (
-        root / "platform-standards" / "canon" / "lint" / "python" / "ruff.toml"
+    setup = single_artifact_manifest(use_correct_sha=False)
+    published_file = _create_published_file(
+        setup.published_root,
+        setup.template_file.relative_to(setup.root).as_posix(),
+        "rule = 2\n",
     )
-    template_file.parent.mkdir(parents=True, exist_ok=True)
-    template_file.write_text("rule = 1\n", encoding="utf-8")
-
-    manifest_path = root / "platform-standards" / "canon" / "manifest.yaml"
-    _write_manifest_via_yaml(
-        manifest_path=manifest_path,
-        artifact_id="python-ruff-config",
-        artifact_path="platform-standards/canon/lint/python/ruff.toml",
-        sha256="0" * 64,
-    )
-    manifest = load_manifest(manifest_path)
-    published_root = tmp_path / "platform-standards-published"
-    published_file = published_root / "canon" / "lint" / "python" / "ruff.toml"
-    published_file.parent.mkdir(parents=True, exist_ok=True)
-    published_file.write_text("rule = 2\n", encoding="utf-8")
 
     comparisons = list(
-        compare_manifest_to_published(manifest, published_root=published_root)
+        compare_manifest_to_published(
+            setup.manifest, published_root=setup.published_root
+        )
     )
     assert comparisons[0].status == ArtifactStatus.TEMPLATE_MANIFEST_MISMATCH
 
     actions = sync_artifacts(
         comparisons,
         SyncConfig(
-            template_root=manifest.template_root,
-            published_root=published_root,
-            ids={"python-ruff-config"},
+            template_root=setup.manifest.template_root,
+            published_root=setup.published_root,
+            ids={setup.artifact_id},
         ),
     )
     assert actions == ()
@@ -566,28 +566,15 @@ def test_sha256_digest_directory_is_order_invariant(tmp_path: Path) -> None:
     assert first == second
 
 
-def test_render_status_table_contains_expected_cells(tmp_path: Path) -> None:
+def test_render_status_table_contains_expected_cells(
+    single_artifact_manifest: typ.Callable[..., ManifestFixture],
+) -> None:
     """render_status_table includes a header and comparison row values."""
-    root = tmp_path / "concordat"
-    template_file = (
-        root / "platform-standards" / "canon" / "lint" / "python" / "ruff.toml"
-    )
-    template_file.parent.mkdir(parents=True, exist_ok=True)
-    template_file.write_text("rule = 1\n", encoding="utf-8")
-    template_sha = hashlib.sha256(template_file.read_bytes()).hexdigest()
-
-    manifest_path = root / "platform-standards" / "canon" / "manifest.yaml"
-    _write_manifest_via_yaml(
-        manifest_path=manifest_path,
-        artifact_id="python-ruff-config",
-        artifact_path="platform-standards/canon/lint/python/ruff.toml",
-        sha256=template_sha,
-    )
-    manifest = load_manifest(manifest_path)
-
-    published_root = tmp_path / "platform-standards-published"
+    setup = single_artifact_manifest()
     comparisons = list(
-        compare_manifest_to_published(manifest, published_root=published_root)
+        compare_manifest_to_published(
+            setup.manifest, published_root=setup.published_root
+        )
     )
     table = render_status_table(comparisons)
     assert "id" in table.splitlines()[0]

@@ -77,35 +77,55 @@ def _write_template_file(template_root: Path, relative_path: str, content: str) 
     return path
 
 
-def test_status_via_app_reports_missing_and_exit_code(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """Status prints a table and returns exit codes based on flags."""
+@pytest.fixture
+def template_root_with_simple_manifest(tmp_path: Path) -> Path:
+    """Provide a template root with a single artifact manifest."""
     template_root = tmp_path / "concordat"
     _write_template_and_manifest(template_root=template_root, content="rule = 1\n")
+    return template_root
 
-    published_root = tmp_path / "platform-standards-published"
-    exit_code = int(
-        canon_artifacts.app(
-            [
-                "status",
-                str(published_root),
-                "--template-root",
-                str(template_root),
-                "--fail-on-missing",
-            ],
-            result_action="return_value",
-        )
-        or 0
-    )
+
+@pytest.fixture
+def published_root(tmp_path: Path) -> Path:
+    """Provide an empty published root directory."""
+    return tmp_path / "platform-standards-published"
+
+
+def _invoke_app_and_capture(
+    args: list[str],
+    capsys: pytest.CaptureFixture[str],
+) -> tuple[int, str]:
+    """Invoke the canon_artifacts app and return (exit_code, output)."""
+    exit_code = int(canon_artifacts.app(args, result_action="return_value") or 0)
     output = capsys.readouterr().out
+    return exit_code, output
+
+
+def test_status_via_app_reports_missing_and_exit_code(
+    template_root_with_simple_manifest: Path,
+    published_root: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Status prints a table and returns exit codes based on flags."""
+    exit_code, output = _invoke_app_and_capture(
+        [
+            "status",
+            str(published_root),
+            "--template-root",
+            str(template_root_with_simple_manifest),
+            "--fail-on-missing",
+        ],
+        capsys,
+    )
     assert "python-ruff-config" in output
     assert "missing" in output
     assert exit_code == 2
 
 
 def test_status_via_app_outdated_only_filters_ok(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    published_root: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """--outdated-only omits OK rows from the status output."""
     template_root = tmp_path / "concordat"
@@ -140,32 +160,29 @@ def test_status_via_app_outdated_only_filters_ok(
         ],
     )
 
-    published_root = tmp_path / "platform-standards-published"
     published_ok = published_root / "canon" / "lint" / "python" / "ok.toml"
     published_ok.parent.mkdir(parents=True, exist_ok=True)
     published_ok.write_text("ok = true\n", encoding="utf-8")
 
-    exit_code = int(
-        canon_artifacts.app(
-            [
-                "status",
-                str(published_root),
-                "--template-root",
-                str(template_root),
-                "--outdated-only",
-            ],
-            result_action="return_value",
-        )
-        or 0
+    exit_code, output = _invoke_app_and_capture(
+        [
+            "status",
+            str(published_root),
+            "--template-root",
+            str(template_root),
+            "--outdated-only",
+        ],
+        capsys,
     )
-    output = capsys.readouterr().out
     assert "missing" in output
     assert "ok" not in output
     assert exit_code == 0
 
 
 def test_status_via_app_exit_code_3_on_template_manifest_mismatch(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    published_root: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Status returns exit code 3 when the template manifest is stale."""
     template_root = tmp_path / "concordat"
@@ -174,27 +191,24 @@ def test_status_via_app_exit_code_3_on_template_manifest_mismatch(
         content="rule = 1\n",
         sha_override="0" * 64,
     )
-    published_root = tmp_path / "platform-standards-published"
 
-    exit_code = int(
-        canon_artifacts.app(
-            [
-                "status",
-                str(published_root),
-                "--template-root",
-                str(template_root),
-            ],
-            result_action="return_value",
-        )
-        or 0
+    exit_code, output = _invoke_app_and_capture(
+        [
+            "status",
+            str(published_root),
+            "--template-root",
+            str(template_root),
+        ],
+        capsys,
     )
-    output = capsys.readouterr().out
     assert "template-manifest-mismatch" in output
     assert exit_code == 3
 
 
 def test_status_via_app_respects_types_filter(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    published_root: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Status honours the --types filter."""
     template_root = tmp_path / "concordat"
@@ -230,47 +244,39 @@ def test_status_via_app_respects_types_filter(
         ],
     )
 
-    published_root = tmp_path / "platform-standards-published"
-    exit_code = int(
-        canon_artifacts.app(
-            [
-                "status",
-                str(published_root),
-                "--template-root",
-                str(template_root),
-                "--types",
-                "opa-policy",
-            ],
-            result_action="return_value",
-        )
-        or 0
+    exit_code, output = _invoke_app_and_capture(
+        [
+            "status",
+            str(published_root),
+            "--template-root",
+            str(template_root),
+            "--types",
+            "opa-policy",
+        ],
+        capsys,
     )
-    output = capsys.readouterr().out
     assert "policy" in output
     assert "lint" not in output
     assert exit_code == 0
 
 
 def test_sync_via_app_copies_file(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    template_root_with_simple_manifest: Path,
+    published_root: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Sync copies missing artifacts into the published checkout."""
-    template_root = tmp_path / "concordat"
-    _write_template_and_manifest(template_root=template_root, content="rule = 1\n")
-
-    published_root = tmp_path / "platform-standards-published"
-    result = canon_artifacts.app(
+    exit_code, output = _invoke_app_and_capture(
         [
             "sync",
             str(published_root),
             "python-ruff-config",
             "--template-root",
-            str(template_root),
+            str(template_root_with_simple_manifest),
         ],
-        result_action="return_value",
+        capsys,
     )
-    assert int(result or 0) == 0
-    output = capsys.readouterr().out
+    assert exit_code == 0
     assert "copied" in output
 
     published_file = published_root / "canon" / "lint" / "python" / "ruff.toml"
@@ -278,28 +284,26 @@ def test_sync_via_app_copies_file(
 
 
 def test_sync_via_app_accepts_relative_published_root(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    template_root_with_simple_manifest: Path,
+    published_root: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Sync accepts a relative published-root path without crashing."""
-    template_root = tmp_path / "concordat"
-    _write_template_and_manifest(template_root=template_root, content="rule = 1\n")
-
-    published_root = tmp_path / "platform-standards-published"
-    monkeypatch.chdir(tmp_path)
+    monkeypatch.chdir(published_root.parent)
     relative_published_root = Path("platform-standards-published")
 
-    result = canon_artifacts.app(
+    exit_code, output = _invoke_app_and_capture(
         [
             "sync",
             str(relative_published_root),
             "python-ruff-config",
             "--template-root",
-            str(template_root),
+            str(template_root_with_simple_manifest),
         ],
-        result_action="return_value",
+        capsys,
     )
-    assert int(result or 0) == 0
-    output = capsys.readouterr().out
+    assert exit_code == 0
     assert "copied" in output
 
     published_file = published_root / "canon" / "lint" / "python" / "ruff.toml"
@@ -307,26 +311,23 @@ def test_sync_via_app_accepts_relative_published_root(
 
 
 def test_sync_dry_run_does_not_create_file(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    template_root_with_simple_manifest: Path,
+    published_root: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """--dry-run reports actions but does not write to disk."""
-    template_root = tmp_path / "concordat"
-    _write_template_and_manifest(template_root=template_root, content="rule = 1\n")
-
-    published_root = tmp_path / "platform-standards-published"
-    result = canon_artifacts.app(
+    exit_code, output = _invoke_app_and_capture(
         [
             "sync",
             str(published_root),
             "python-ruff-config",
             "--template-root",
-            str(template_root),
+            str(template_root_with_simple_manifest),
             "--dry-run",
         ],
-        result_action="return_value",
+        capsys,
     )
-    assert int(result or 0) == 0
-    output = capsys.readouterr().out
+    assert exit_code == 0
     assert "would copy" in output
 
     published_file = published_root / "canon" / "lint" / "python" / "ruff.toml"
