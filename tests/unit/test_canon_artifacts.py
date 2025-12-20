@@ -180,50 +180,35 @@ def _create_published_file(
     return published_file
 
 
-def test_compare_ok(
+@pytest.mark.parametrize(
+    ("published_content", "expected_status"),
+    [
+        ("rule = 1\n", ArtifactStatus.OK),
+        ("rule = 2\n", ArtifactStatus.OUTDATED),
+        (None, ArtifactStatus.MISSING),
+    ],
+    ids=["ok", "outdated", "missing"],
+)
+def test_compare_status_detection(
     single_artifact_manifest: typ.Callable[..., ManifestFixture],
+    published_content: str | None,
+    expected_status: ArtifactStatus,
 ) -> None:
-    """Published files matching the template are marked ok."""
+    """Comparison correctly detects artifact status (OK, OUTDATED, MISSING)."""
     setup = single_artifact_manifest()
-    _create_published_file(
-        setup.published_root,
-        setup.template_file.relative_to(setup.root).as_posix(),
-        "rule = 1\n",
-    )
+
+    if published_content is not None:
+        _create_published_file(
+            setup.published_root,
+            setup.template_file.relative_to(setup.root).as_posix(),
+            published_content,
+        )
 
     comparisons = compare_manifest_to_published(
         setup.manifest, published_root=setup.published_root
     )
     assert len(comparisons) == 1
-    assert comparisons[0].status == ArtifactStatus.OK
-
-
-def test_compare_outdated(
-    single_artifact_manifest: typ.Callable[..., ManifestFixture],
-) -> None:
-    """Published files differing from the template are marked outdated."""
-    setup = single_artifact_manifest()
-    _create_published_file(
-        setup.published_root,
-        setup.template_file.relative_to(setup.root).as_posix(),
-        "rule = 2\n",
-    )
-
-    comparisons = compare_manifest_to_published(
-        setup.manifest, published_root=setup.published_root
-    )
-    assert comparisons[0].status == ArtifactStatus.OUTDATED
-
-
-def test_compare_missing(
-    single_artifact_manifest: typ.Callable[..., ManifestFixture],
-) -> None:
-    """Missing published files are surfaced as missing."""
-    setup = single_artifact_manifest()
-    comparisons = compare_manifest_to_published(
-        setup.manifest, published_root=setup.published_root
-    )
-    assert comparisons[0].status == ArtifactStatus.MISSING
+    assert comparisons[0].status == expected_status
 
 
 def test_sync_updates_published(

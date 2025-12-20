@@ -77,6 +77,50 @@ def _write_template_file(template_root: Path, relative_path: str, content: str) 
     return path
 
 
+def _setup_multi_artifact_cli_scenario(
+    tmp_path: Path,
+    artifacts: list[tuple[str, str, str, str, str | None]],
+) -> tuple[Path, Path]:
+    template_root = tmp_path / "concordat"
+    published_root = tmp_path / "platform-standards-published"
+    manifest_path = template_root / "platform-standards" / "canon" / "manifest.yaml"
+
+    entries: list[dict[str, str]] = []
+    for (
+        artifact_id,
+        artifact_type,
+        relative_path,
+        template_content,
+        published_content,
+    ) in artifacts:
+        template_file = _write_template_file(
+            template_root, relative_path, template_content
+        )
+        sha = hashlib.sha256(template_file.read_bytes()).hexdigest()
+        entries.append(
+            {
+                "id": artifact_id,
+                "type": artifact_type,
+                "path": relative_path,
+                "description": artifact_id,
+                "sha256": sha,
+            }
+        )
+
+        if published_content is None:
+            continue
+
+        published_relpath = Path(relative_path)
+        if published_relpath.parts[:1] == ("platform-standards",):
+            published_relpath = published_relpath.relative_to("platform-standards")
+        published_file = published_root / published_relpath
+        published_file.parent.mkdir(parents=True, exist_ok=True)
+        published_file.write_text(published_content, encoding="utf-8")
+
+    _write_manifest_entries(manifest_path=manifest_path, entries=entries)
+    return template_root, published_root
+
+
 @pytest.fixture
 def template_root_with_simple_manifest(tmp_path: Path) -> Path:
     """Provide a template root with a single artifact manifest."""
@@ -124,45 +168,28 @@ def test_status_via_app_reports_missing_and_exit_code(
 
 def test_status_via_app_outdated_only_filters_ok(
     tmp_path: Path,
-    published_root: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """--outdated-only omits OK rows from the status output."""
-    template_root = tmp_path / "concordat"
-    ok_template = _write_template_file(
-        template_root,
-        "platform-standards/canon/lint/python/ok.toml",
-        "ok = true\n",
-    )
-    missing_template = _write_template_file(
-        template_root,
-        "platform-standards/canon/lint/python/missing.toml",
-        "missing = true\n",
-    )
-    manifest_path = template_root / "platform-standards" / "canon" / "manifest.yaml"
-    _write_manifest_entries(
-        manifest_path=manifest_path,
-        entries=[
-            {
-                "id": "ok",
-                "type": "lint-config",
-                "path": "platform-standards/canon/lint/python/ok.toml",
-                "description": "ok",
-                "sha256": hashlib.sha256(ok_template.read_bytes()).hexdigest(),
-            },
-            {
-                "id": "missing",
-                "type": "lint-config",
-                "path": "platform-standards/canon/lint/python/missing.toml",
-                "description": "missing",
-                "sha256": hashlib.sha256(missing_template.read_bytes()).hexdigest(),
-            },
+    template_root, published_root = _setup_multi_artifact_cli_scenario(
+        tmp_path,
+        [
+            (
+                "ok",
+                "lint-config",
+                "platform-standards/canon/lint/python/ok.toml",
+                "ok = true\n",
+                "ok = true\n",
+            ),
+            (
+                "missing",
+                "lint-config",
+                "platform-standards/canon/lint/python/missing.toml",
+                "missing = true\n",
+                None,
+            ),
         ],
     )
-
-    published_ok = published_root / "canon" / "lint" / "python" / "ok.toml"
-    published_ok.parent.mkdir(parents=True, exist_ok=True)
-    published_ok.write_text("ok = true\n", encoding="utf-8")
 
     exit_code, output = _invoke_app_and_capture(
         [
@@ -207,40 +234,26 @@ def test_status_via_app_exit_code_3_on_template_manifest_mismatch(
 
 def test_status_via_app_respects_types_filter(
     tmp_path: Path,
-    published_root: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Status honours the --types filter."""
-    template_root = tmp_path / "concordat"
-    lint_template = _write_template_file(
-        template_root,
-        "platform-standards/canon/lint/python/ruff.toml",
-        "rule = 1\n",
-    )
-    policy_template = _write_template_file(
-        template_root,
-        "platform-standards/canon/policies/workflows/test.rego",
-        "package test\n",
-    )
-
-    manifest_path = template_root / "platform-standards" / "canon" / "manifest.yaml"
-    _write_manifest_entries(
-        manifest_path=manifest_path,
-        entries=[
-            {
-                "id": "lint",
-                "type": "lint-config",
-                "path": "platform-standards/canon/lint/python/ruff.toml",
-                "description": "lint",
-                "sha256": hashlib.sha256(lint_template.read_bytes()).hexdigest(),
-            },
-            {
-                "id": "policy",
-                "type": "opa-policy",
-                "path": "platform-standards/canon/policies/workflows/test.rego",
-                "description": "policy",
-                "sha256": hashlib.sha256(policy_template.read_bytes()).hexdigest(),
-            },
+    template_root, published_root = _setup_multi_artifact_cli_scenario(
+        tmp_path,
+        [
+            (
+                "lint",
+                "lint-config",
+                "platform-standards/canon/lint/python/ruff.toml",
+                "rule = 1\n",
+                None,
+            ),
+            (
+                "policy",
+                "opa-policy",
+                "platform-standards/canon/policies/workflows/test.rego",
+                "package test\n",
+                None,
+            ),
         ],
     )
 
