@@ -433,14 +433,37 @@ def test_compare_filters_ids_and_types(tmp_path: Path) -> None:
     assert {c.id for c in by_type} == {"b"}
 
 
-def test_load_manifest_rejects_non_mapping(tmp_path: Path) -> None:
-    """load_manifest rejects non-mapping YAML roots."""
+@pytest.mark.parametrize(
+    ("yaml_content", "error_pattern_template"),
+    [
+        (
+            "- not-a-map\n",
+            "Manifest content must be a mapping: {path}",
+        ),
+        (
+            "schema_version: 2\nartifacts: []\n",
+            "Unsupported manifest schema_version=2 (expected 1): {path}",
+        ),
+        (
+            "schema_version: 1\nartifacts: []\n",
+            "Manifest artifacts must be a non-empty list: {path}",
+        ),
+    ],
+    ids=["non_mapping", "wrong_schema_version", "empty_artifacts_list"],
+)
+def test_load_manifest_validation_errors(
+    tmp_path: Path,
+    yaml_content: str,
+    error_pattern_template: str,
+) -> None:
+    """load_manifest rejects invalid manifests with appropriate errors."""
     manifest_path = tmp_path / "manifest.yaml"
-    manifest_path.write_text("- not-a-map\n", encoding="utf-8")
+    manifest_path.write_text(yaml_content, encoding="utf-8")
 
+    expected_error = error_pattern_template.format(path=manifest_path)
     with pytest.raises(
         CanonArtifactsError,
-        match=re.escape(f"Manifest content must be a mapping: {manifest_path}"),
+        match=re.escape(expected_error),
     ):
         load_manifest(manifest_path)
 
@@ -452,34 +475,6 @@ def test_load_manifest_rejects_missing_file(tmp_path: Path) -> None:
     with pytest.raises(
         CanonArtifactsError,
         match=re.escape(f"Manifest not found: {manifest_path}"),
-    ):
-        load_manifest(manifest_path)
-
-
-def test_load_manifest_rejects_wrong_schema_version(tmp_path: Path) -> None:
-    """load_manifest rejects unexpected schema versions."""
-    manifest_path = tmp_path / "manifest.yaml"
-    manifest_path.write_text("schema_version: 2\nartifacts: []\n", encoding="utf-8")
-
-    with pytest.raises(
-        CanonArtifactsError,
-        match=re.escape(
-            f"Unsupported manifest schema_version=2 (expected 1): {manifest_path}"
-        ),
-    ):
-        load_manifest(manifest_path)
-
-
-def test_load_manifest_rejects_empty_artifacts_list(tmp_path: Path) -> None:
-    """load_manifest rejects empty artifact lists."""
-    manifest_path = tmp_path / "manifest.yaml"
-    manifest_path.write_text("schema_version: 1\nartifacts: []\n", encoding="utf-8")
-
-    with pytest.raises(
-        CanonArtifactsError,
-        match=re.escape(
-            f"Manifest artifacts must be a non-empty list: {manifest_path}"
-        ),
     ):
         load_manifest(manifest_path)
 
