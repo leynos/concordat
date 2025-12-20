@@ -205,7 +205,7 @@ dev = [
     { name = "pytest-timeout" },
     { name = "pytest-xdist" },
     { name = "ruff" },
-    { name = "textual", specifier = ">=6.0" },
+    { name = "textual", specifier = ">=6.0,<7.0" },
 ]
 
 [[package]]

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import re
 import typing as typ
 from pathlib import Path
-from typing import NamedTuple  # noqa: ICN003
 
 import pytest
 
@@ -23,7 +23,7 @@ from concordat.canon_artifacts import (
 )
 
 
-class ManifestFixture(NamedTuple):
+class ManifestFixture(typ.NamedTuple):
     """Fixture return type for manifest setup."""
 
     root: Path
@@ -438,20 +438,22 @@ def test_load_manifest_rejects_non_mapping(tmp_path: Path) -> None:
     manifest_path = tmp_path / "manifest.yaml"
     manifest_path.write_text("- not-a-map\n", encoding="utf-8")
 
-    with pytest.raises(CanonArtifactsError) as excinfo:
+    with pytest.raises(
+        CanonArtifactsError,
+        match=re.escape(f"Manifest content must be a mapping: {manifest_path}"),
+    ):
         load_manifest(manifest_path)
-
-    assert str(excinfo.value) == f"Manifest content must be a mapping: {manifest_path}"
 
 
 def test_load_manifest_rejects_missing_file(tmp_path: Path) -> None:
     """load_manifest rejects missing manifest files."""
     manifest_path = tmp_path / "missing.yaml"
 
-    with pytest.raises(CanonArtifactsError) as excinfo:
+    with pytest.raises(
+        CanonArtifactsError,
+        match=re.escape(f"Manifest not found: {manifest_path}"),
+    ):
         load_manifest(manifest_path)
-
-    assert str(excinfo.value) == f"Manifest not found: {manifest_path}"
 
 
 def test_load_manifest_rejects_wrong_schema_version(tmp_path: Path) -> None:
@@ -459,12 +461,13 @@ def test_load_manifest_rejects_wrong_schema_version(tmp_path: Path) -> None:
     manifest_path = tmp_path / "manifest.yaml"
     manifest_path.write_text("schema_version: 2\nartifacts: []\n", encoding="utf-8")
 
-    with pytest.raises(CanonArtifactsError) as excinfo:
+    with pytest.raises(
+        CanonArtifactsError,
+        match=re.escape(
+            f"Unsupported manifest schema_version=2 (expected 1): {manifest_path}"
+        ),
+    ):
         load_manifest(manifest_path)
-
-    assert str(excinfo.value) == (
-        f"Unsupported manifest schema_version=2 (expected 1): {manifest_path}"
-    )
 
 
 def test_load_manifest_rejects_empty_artifacts_list(tmp_path: Path) -> None:
@@ -472,12 +475,13 @@ def test_load_manifest_rejects_empty_artifacts_list(tmp_path: Path) -> None:
     manifest_path = tmp_path / "manifest.yaml"
     manifest_path.write_text("schema_version: 1\nartifacts: []\n", encoding="utf-8")
 
-    with pytest.raises(CanonArtifactsError) as excinfo:
+    with pytest.raises(
+        CanonArtifactsError,
+        match=re.escape(
+            f"Manifest artifacts must be a non-empty list: {manifest_path}"
+        ),
+    ):
         load_manifest(manifest_path)
-
-    assert str(excinfo.value) == (
-        f"Manifest artifacts must be a non-empty list: {manifest_path}"
-    )
 
 
 def test_load_manifest_rejects_non_mapping_artifact_entry(tmp_path: Path) -> None:
@@ -495,12 +499,11 @@ def test_load_manifest_rejects_non_mapping_artifact_entry(tmp_path: Path) -> Non
         encoding="utf-8",
     )
 
-    with pytest.raises(CanonArtifactsError) as excinfo:
+    with pytest.raises(
+        CanonArtifactsError,
+        match=re.escape(f"Manifest artifact entries must be mappings: {manifest_path}"),
+    ):
         load_manifest(manifest_path)
-
-    assert str(excinfo.value) == (
-        f"Manifest artifact entries must be mappings: {manifest_path}"
-    )
 
 
 def test_load_manifest_rejects_missing_artifact_key(tmp_path: Path) -> None:
@@ -521,12 +524,11 @@ def test_load_manifest_rejects_missing_artifact_key(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    with pytest.raises(CanonArtifactsError) as excinfo:
+    with pytest.raises(
+        CanonArtifactsError,
+        match=re.escape(f"Manifest artifact missing key 'sha256': {manifest_path}"),
+    ):
         load_manifest(manifest_path)
-
-    assert str(excinfo.value) == (
-        f"Manifest artifact missing key 'sha256': {manifest_path}"
-    )
 
 
 def test_sha256_digest_file_matches_hashlib(tmp_path: Path) -> None:
