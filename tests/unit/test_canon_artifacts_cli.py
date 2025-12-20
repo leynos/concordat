@@ -273,12 +273,24 @@ def test_status_via_app_respects_types_filter(
     assert exit_code == 0
 
 
-def test_sync_via_app_copies_file(
+@pytest.mark.parametrize(
+    ("dry_run_flag", "expected_verb", "expect_file_created"),
+    [
+        ([], "copied", True),
+        (["--dry-run"], "would copy", False),
+    ],
+    ids=["normal_sync", "dry_run"],
+)
+def test_sync_via_app_behavior(
     template_root_with_simple_manifest: Path,
     published_root: Path,
     capsys: pytest.CaptureFixture[str],
+    dry_run_flag: list[str],
+    expected_verb: str,
+    *,
+    expect_file_created: bool,
 ) -> None:
-    """Sync copies missing artifacts into the published checkout."""
+    """Sync command copies files (or reports intent with --dry-run)."""
     exit_code, output = _invoke_app_and_capture(
         [
             "sync",
@@ -286,14 +298,18 @@ def test_sync_via_app_copies_file(
             "python-ruff-config",
             "--template-root",
             str(template_root_with_simple_manifest),
+            *dry_run_flag,
         ],
         capsys,
     )
     assert exit_code == 0
-    assert "copied" in output
+    assert expected_verb in output
 
     published_file = published_root / "canon" / "lint" / "python" / "ruff.toml"
-    assert published_file.read_text(encoding="utf-8") == "rule = 1\n"
+    assert published_file.exists() is expect_file_created
+
+    if expect_file_created:
+        assert published_file.read_text(encoding="utf-8") == "rule = 1\n"
 
 
 def test_sync_via_app_accepts_relative_published_root(
@@ -321,30 +337,6 @@ def test_sync_via_app_accepts_relative_published_root(
 
     published_file = published_root / "canon" / "lint" / "python" / "ruff.toml"
     assert published_file.read_text(encoding="utf-8") == "rule = 1\n"
-
-
-def test_sync_dry_run_does_not_create_file(
-    template_root_with_simple_manifest: Path,
-    published_root: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """--dry-run reports actions but does not write to disk."""
-    exit_code, output = _invoke_app_and_capture(
-        [
-            "sync",
-            str(published_root),
-            "python-ruff-config",
-            "--template-root",
-            str(template_root_with_simple_manifest),
-            "--dry-run",
-        ],
-        capsys,
-    )
-    assert exit_code == 0
-    assert "would copy" in output
-
-    published_file = published_root / "canon" / "lint" / "python" / "ruff.toml"
-    assert published_file.exists() is False
 
 
 def test_list_artifacts_prints_registered_rows(
