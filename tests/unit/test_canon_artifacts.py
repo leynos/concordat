@@ -211,15 +211,75 @@ def test_compare_status_detection(
     assert comparisons[0].status == expected_status
 
 
-def test_sync_updates_published(
+@pytest.mark.parametrize(
+    (
+        "template_content",
+        "published_content",
+        "use_correct_sha",
+        "dry_run",
+        "expected_status",
+        "expected_copied",
+        "expected_actions_count",
+        "expected_final_content",
+    ),
+    [
+        # Normal sync: outdated file gets updated
+        (
+            "rule = 1\n",
+            "rule = 2\n",
+            True,
+            False,
+            ArtifactStatus.OUTDATED,
+            True,
+            1,
+            "rule = 1\n",
+        ),
+        # Dry-run: outdated file remains unchanged
+        (
+            "rule = 2\n",
+            "rule = 1\n",
+            True,
+            True,
+            ArtifactStatus.OUTDATED,
+            False,
+            1,
+            "rule = 1\n",
+        ),
+        # Manifest mismatch: sync is skipped entirely
+        (
+            "rule = 1\n",
+            "rule = 2\n",
+            False,
+            False,
+            ArtifactStatus.TEMPLATE_MANIFEST_MISMATCH,
+            None,
+            0,
+            "rule = 2\n",
+        ),
+    ],
+    ids=["updates_published", "dry_run_does_not_modify", "manifest_mismatch_skipped"],
+)
+def test_sync_behavior_scenarios(
     single_artifact_manifest: typ.Callable[..., ManifestFixture],
+    template_content: str,
+    published_content: str,
+    *,
+    use_correct_sha: bool,
+    dry_run: bool,
+    expected_status: ArtifactStatus,
+    expected_copied: bool | None,
+    expected_actions_count: int,
+    expected_final_content: str,
 ) -> None:
-    """Sync copies the template content into the published checkout."""
-    setup = single_artifact_manifest()
+    """Sync handles various scenarios: normal updates, dry-run, and mismatch."""
+    setup = single_artifact_manifest(
+        template_content=template_content,
+        use_correct_sha=use_correct_sha,
+    )
     published_file = _create_published_file(
         setup.published_root,
         setup.template_file.relative_to(setup.root).as_posix(),
-        "rule = 2\n",
+        published_content,
     )
 
     comparisons = list(
@@ -227,7 +287,7 @@ def test_sync_updates_published(
             setup.manifest, published_root=setup.published_root
         )
     )
-    assert comparisons[0].status == ArtifactStatus.OUTDATED
+    assert comparisons[0].status == expected_status
 
     actions = sync_artifacts(
         comparisons,
@@ -235,10 +295,19 @@ def test_sync_updates_published(
             template_root=setup.manifest.template_root,
             published_root=setup.published_root,
             ids={setup.artifact_id},
+            dry_run=dry_run,
         ),
     )
-    assert actions[0].copied is True
-    assert published_file.read_text(encoding="utf-8") == "rule = 1\n"
+
+    # Check actions count
+    assert len(actions) == expected_actions_count
+
+    # Check copied flag if actions were returned
+    if expected_actions_count > 0 and expected_copied is not None:
+        assert actions[0].copied is expected_copied
+
+    # Verify final file state
+    assert published_file.read_text(encoding="utf-8") == expected_final_content
 
 
 def test_sync_missing_artifact_creates_destination(
@@ -265,39 +334,6 @@ def test_sync_missing_artifact_creates_destination(
     published_file = setup.published_root / "canon" / "lint" / "python" / "ruff.toml"
     assert published_file.is_file()
     assert published_file.read_text(encoding="utf-8") == "rule = 1\n"
-
-
-def test_sync_dry_run_does_not_modify_published(
-    single_artifact_manifest: typ.Callable[..., ManifestFixture],
-) -> None:
-    """dry_run=True returns planned actions but does not modify destination files."""
-    setup = single_artifact_manifest(template_content="rule = 2\n")
-    published_file = _create_published_file(
-        setup.published_root,
-        setup.template_file.relative_to(setup.root).as_posix(),
-        "rule = 1\n",
-    )
-    original = published_file.read_text(encoding="utf-8")
-
-    comparisons = list(
-        compare_manifest_to_published(
-            setup.manifest, published_root=setup.published_root
-        )
-    )
-    assert comparisons[0].status == ArtifactStatus.OUTDATED
-
-    actions = sync_artifacts(
-        comparisons,
-        SyncConfig(
-            template_root=setup.manifest.template_root,
-            published_root=setup.published_root,
-            ids={setup.artifact_id},
-            dry_run=True,
-        ),
-    )
-    assert actions
-    assert actions[0].copied is False
-    assert published_file.read_text(encoding="utf-8") == original
 
 
 def test_sync_include_unchanged_controls_ok_inclusion(tmp_path: Path) -> None:
@@ -350,36 +386,6 @@ def test_sync_include_unchanged_controls_ok_inclusion(tmp_path: Path) -> None:
         ArtifactStatus.OK,
         ArtifactStatus.OUTDATED,
     }
-
-
-def test_compare_template_manifest_mismatch_is_reported_and_skipped_by_sync(
-    single_artifact_manifest: typ.Callable[..., ManifestFixture],
-) -> None:
-    """TEMPLATE_MANIFEST_MISMATCH is reported and prevents sync."""
-    setup = single_artifact_manifest(use_correct_sha=False)
-    published_file = _create_published_file(
-        setup.published_root,
-        setup.template_file.relative_to(setup.root).as_posix(),
-        "rule = 2\n",
-    )
-
-    comparisons = list(
-        compare_manifest_to_published(
-            setup.manifest, published_root=setup.published_root
-        )
-    )
-    assert comparisons[0].status == ArtifactStatus.TEMPLATE_MANIFEST_MISMATCH
-
-    actions = sync_artifacts(
-        comparisons,
-        SyncConfig(
-            template_root=setup.manifest.template_root,
-            published_root=setup.published_root,
-            ids={setup.artifact_id},
-        ),
-    )
-    assert actions == ()
-    assert published_file.read_text(encoding="utf-8") == "rule = 2\n"
 
 
 def test_compare_filters_ids_and_types(tmp_path: Path) -> None:
