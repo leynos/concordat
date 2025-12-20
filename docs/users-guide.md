@@ -162,7 +162,7 @@ enrolment PRs should be opened.
   uv run concordat estate use sandbox
   ```
 
-## Syncing canonical platform-standards artifacts
+## Syncing canonical platform-standards artefacts
 
 Concordat ships a `platform-standards/` template tree. The canonical files
 under `platform-standards/canon/` are tracked in
@@ -170,7 +170,7 @@ under `platform-standards/canon/` are tracked in
 sha256 digest (a content-derived version).
 
 Use `scripts/canon_artifacts.py` to compare a published platform-standards
-checkout against the template and optionally copy missing/outdated artifacts.
+checkout against the template and optionally copy missing/outdated artefacts.
 
 - Show status for a checkout:
 
@@ -178,14 +178,14 @@ checkout against the template and optionally copy missing/outdated artifacts.
   uv run python -m scripts.canon_artifacts status path/to/platform-standards
   ```
 
-- Filter to just lint configuration artifacts:
+- Filter to just lint configuration artefacts:
 
   ```shell
   uv run python -m scripts.canon_artifacts status path/to/platform-standards \
     --types lint-config
   ```
 
-- Copy all missing/outdated artifacts into the checkout:
+- Copy all missing/outdated artefacts into the checkout:
 
   ```shell
   uv run python -m scripts.canon_artifacts sync path/to/platform-standards \

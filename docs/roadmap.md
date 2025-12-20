@@ -57,7 +57,7 @@ template tree into published platform-standards repositories.
   `concordat artefact catalogue list` and `concordat artefact estate status`
   behave consistently with the spike tooling and support `--format json` for
   automation.
-- [ ] Define a semantic versioned canonical manifest schema (for example
+- [ ] Define a semantically versioned canonical manifest schema (for example
   `schema_version: 2`) that adds `version` while retaining integrity metadata
   (sha256). Acceptance: concordat can read both schema versions and reports
   “template vs published version” in `concordat artefact estate status`.

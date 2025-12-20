@@ -126,23 +126,6 @@ def _render_status(
     )
 
 
-def _compute_status_exit_code(
-    comparisons: list[ArtifactComparison],
-    *,
-    fail_on_outdated: bool,
-    fail_on_missing: bool,
-) -> int:
-    """Compute exit code based on comparison results."""
-    if _has_manifest_mismatch(comparisons):
-        return 3
-
-    if fail_on_missing and _has_missing_artifacts(comparisons):
-        return 2
-    if fail_on_outdated and _has_outdated_artifacts(comparisons):
-        return 2
-    return 0
-
-
 def _has_manifest_mismatch(comparisons: list[ArtifactComparison]) -> bool:
     """Return True when comparisons include a template manifest mismatch."""
     return any(
@@ -165,12 +148,36 @@ def _has_outdated_artifacts(comparisons: list[ArtifactComparison]) -> bool:
     )
 
 
+def _compute_status_exit_code(
+    comparisons: list[ArtifactComparison],
+    *,
+    fail_on_outdated: bool,
+    fail_on_missing: bool,
+) -> int:
+    """Compute exit code based on comparison results."""
+    if _has_manifest_mismatch(comparisons):
+        return 3
+
+    if fail_on_missing and _has_missing_artifacts(comparisons):
+        return 2
+    if fail_on_outdated and _has_outdated_artifacts(comparisons):
+        return 2
+    return 0
+
+
 def _determine_sync_ids(
     config: CliSyncConfig,
     comparisons: list[ArtifactComparison],
 ) -> set[str]:
-    """Determine which artifact IDs to sync based on configuration."""
+    """Determine which artifact IDs to sync based on configuration.
+
+    When `all_outdated` is set but no artifacts match the caller's filters (for
+    example, `--types` yields an empty comparison set), this returns an empty
+    set to indicate a no-op rather than raising.
+    """
     if config.all_outdated:
+        if not comparisons:
+            return set()
         return {
             comparison.id
             for comparison in comparisons
@@ -188,6 +195,7 @@ def sync(
     config: Annotated[CliSyncConfig, Parameter(name="*")],
 ) -> int:
     """Copy template artifacts into the published checkout."""
+    published_root = config.published_root.resolve()
     manifest_path = _resolve_manifest_path(config.template_root)
     manifest = load_manifest(manifest_path)
     filters = _build_filter(ids=config.artifact_ids, types=config.types)
@@ -195,7 +203,7 @@ def sync(
     comparisons = list(
         compare_manifest_to_published(
             manifest,
-            published_root=config.published_root,
+            published_root=published_root,
             ids=filters.ids,
             types=filters.types,
         )
@@ -206,7 +214,7 @@ def sync(
         comparisons,
         SyncConfig(
             template_root=manifest.template_root,
-            published_root=config.published_root,
+            published_root=published_root,
             ids=selected_ids,
             dry_run=config.dry_run,
             include_unchanged=config.include_unchanged,
@@ -217,7 +225,7 @@ def sync(
         print(
             f"{verb}\t{action.status}\t{action.artifact_id}\t"
             f"{action.source.relative_to(manifest.template_root)}\t"
-            f"{action.destination.relative_to(config.published_root)}"
+            f"{action.destination.relative_to(published_root)}"
         )
     return 0
 
