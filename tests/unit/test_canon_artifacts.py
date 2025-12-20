@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import typing as typ
 from pathlib import Path
@@ -211,75 +212,69 @@ def test_compare_status_detection(
     assert comparisons[0].status == expected_status
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
+class SyncScenario:
+    """Test scenario for sync behavior tests."""
+
+    template_content: str
+    published_content: str
+    use_correct_sha: bool
+    dry_run: bool
+    expected_status: ArtifactStatus
+    expected_copied: bool | None
+    expected_actions_count: int
+    expected_final_content: str
+
+
 @pytest.mark.parametrize(
-    (
-        "template_content",
-        "published_content",
-        "use_correct_sha",
-        "dry_run",
-        "expected_status",
-        "expected_copied",
-        "expected_actions_count",
-        "expected_final_content",
-    ),
+    "scenario",
     [
-        # Normal sync: outdated file gets updated
-        (
-            "rule = 1\n",
-            "rule = 2\n",
-            True,
-            False,
-            ArtifactStatus.OUTDATED,
-            True,
-            1,
-            "rule = 1\n",
+        SyncScenario(
+            template_content="rule = 1\n",
+            published_content="rule = 2\n",
+            use_correct_sha=True,
+            dry_run=False,
+            expected_status=ArtifactStatus.OUTDATED,
+            expected_copied=True,
+            expected_actions_count=1,
+            expected_final_content="rule = 1\n",
         ),
-        # Dry-run: outdated file remains unchanged
-        (
-            "rule = 2\n",
-            "rule = 1\n",
-            True,
-            True,
-            ArtifactStatus.OUTDATED,
-            False,
-            1,
-            "rule = 1\n",
+        SyncScenario(
+            template_content="rule = 2\n",
+            published_content="rule = 1\n",
+            use_correct_sha=True,
+            dry_run=True,
+            expected_status=ArtifactStatus.OUTDATED,
+            expected_copied=False,
+            expected_actions_count=1,
+            expected_final_content="rule = 1\n",
         ),
-        # Manifest mismatch: sync is skipped entirely
-        (
-            "rule = 1\n",
-            "rule = 2\n",
-            False,
-            False,
-            ArtifactStatus.TEMPLATE_MANIFEST_MISMATCH,
-            None,
-            0,
-            "rule = 2\n",
+        SyncScenario(
+            template_content="rule = 1\n",
+            published_content="rule = 2\n",
+            use_correct_sha=False,
+            dry_run=False,
+            expected_status=ArtifactStatus.TEMPLATE_MANIFEST_MISMATCH,
+            expected_copied=None,
+            expected_actions_count=0,
+            expected_final_content="rule = 2\n",
         ),
     ],
     ids=["updates_published", "dry_run_does_not_modify", "manifest_mismatch_skipped"],
 )
 def test_sync_behavior_scenarios(
     single_artifact_manifest: typ.Callable[..., ManifestFixture],
-    template_content: str,
-    published_content: str,
-    *,
-    use_correct_sha: bool,
-    dry_run: bool,
-    expected_status: ArtifactStatus,
-    expected_copied: bool | None,
-    expected_actions_count: int,
-    expected_final_content: str,
+    scenario: SyncScenario,
 ) -> None:
     """Sync handles various scenarios: normal updates, dry-run, and mismatch."""
     setup = single_artifact_manifest(
-        template_content=template_content,
-        use_correct_sha=use_correct_sha,
+        template_content=scenario.template_content,
+        use_correct_sha=scenario.use_correct_sha,
     )
     published_file = _create_published_file(
         setup.published_root,
         setup.template_file.relative_to(setup.root).as_posix(),
-        published_content,
+        scenario.published_content,
     )
 
     comparisons = list(
@@ -287,7 +282,7 @@ def test_sync_behavior_scenarios(
             setup.manifest, published_root=setup.published_root
         )
     )
-    assert comparisons[0].status == expected_status
+    assert comparisons[0].status == scenario.expected_status
 
     actions = sync_artifacts(
         comparisons,
@@ -295,19 +290,19 @@ def test_sync_behavior_scenarios(
             template_root=setup.manifest.template_root,
             published_root=setup.published_root,
             ids={setup.artifact_id},
-            dry_run=dry_run,
+            dry_run=scenario.dry_run,
         ),
     )
 
     # Check actions count
-    assert len(actions) == expected_actions_count
+    assert len(actions) == scenario.expected_actions_count
 
     # Check copied flag if actions were returned
-    if expected_actions_count > 0 and expected_copied is not None:
-        assert actions[0].copied is expected_copied
+    if scenario.expected_actions_count > 0 and scenario.expected_copied is not None:
+        assert actions[0].copied is scenario.expected_copied
 
     # Verify final file state
-    assert published_file.read_text(encoding="utf-8") == expected_final_content
+    assert published_file.read_text(encoding="utf-8") == scenario.expected_final_content
 
 
 def test_sync_missing_artifact_creates_destination(
