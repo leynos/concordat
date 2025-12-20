@@ -166,29 +166,65 @@ def test_status_via_app_reports_missing_and_exit_code(
     assert exit_code == 2
 
 
-def test_status_via_app_outdated_only_filters_ok(
+@pytest.mark.parametrize(
+    ("artifacts", "status_flags", "expected_in_output", "expected_not_in_output"),
+    [
+        (
+            [
+                (
+                    "ok",
+                    "lint-config",
+                    "platform-standards/canon/lint/python/ok.toml",
+                    "ok = true\n",
+                    "ok = true\n",
+                ),
+                (
+                    "missing",
+                    "lint-config",
+                    "platform-standards/canon/lint/python/missing.toml",
+                    "missing = true\n",
+                    None,
+                ),
+            ],
+            ["--outdated-only"],
+            "missing",
+            "ok",
+        ),
+        (
+            [
+                (
+                    "lint",
+                    "lint-config",
+                    "platform-standards/canon/lint/python/ruff.toml",
+                    "rule = 1\n",
+                    None,
+                ),
+                (
+                    "policy",
+                    "opa-policy",
+                    "platform-standards/canon/policies/workflows/test.rego",
+                    "package test\n",
+                    None,
+                ),
+            ],
+            ["--types", "opa-policy"],
+            "policy",
+            "lint",
+        ),
+    ],
+    ids=["outdated_only_filter", "types_filter"],
+)
+def test_status_via_app_filtering(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
+    artifacts: list[tuple[str, str, str, str, str | None]],
+    status_flags: list[str],
+    expected_in_output: str,
+    expected_not_in_output: str,
 ) -> None:
-    """--outdated-only omits OK rows from the status output."""
+    """Status command respects filtering flags (--outdated-only, --types)."""
     template_root, published_root = _setup_multi_artifact_cli_scenario(
-        tmp_path,
-        [
-            (
-                "ok",
-                "lint-config",
-                "platform-standards/canon/lint/python/ok.toml",
-                "ok = true\n",
-                "ok = true\n",
-            ),
-            (
-                "missing",
-                "lint-config",
-                "platform-standards/canon/lint/python/missing.toml",
-                "missing = true\n",
-                None,
-            ),
-        ],
+        tmp_path, artifacts
     )
 
     exit_code, output = _invoke_app_and_capture(
@@ -197,12 +233,12 @@ def test_status_via_app_outdated_only_filters_ok(
             str(published_root),
             "--template-root",
             str(template_root),
-            "--outdated-only",
+            *status_flags,
         ],
         capsys,
     )
-    assert "missing" in output
-    assert "ok" not in output
+    assert expected_in_output in output
+    assert expected_not_in_output not in output
     assert exit_code == 0
 
 
@@ -232,52 +268,28 @@ def test_status_via_app_exit_code_3_on_template_manifest_mismatch(
     assert exit_code == 3
 
 
-def test_status_via_app_respects_types_filter(
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """Status honours the --types filter."""
-    template_root, published_root = _setup_multi_artifact_cli_scenario(
-        tmp_path,
-        [
-            (
-                "lint",
-                "lint-config",
-                "platform-standards/canon/lint/python/ruff.toml",
-                "rule = 1\n",
-                None,
-            ),
-            (
-                "policy",
-                "opa-policy",
-                "platform-standards/canon/policies/workflows/test.rego",
-                "package test\n",
-                None,
-            ),
-        ],
-    )
+@dataclasses.dataclass(frozen=True, slots=True)
+class SyncBehaviorScenario:
+    """Test scenario for CLI sync behavior tests."""
 
-    exit_code, output = _invoke_app_and_capture(
-        [
-            "status",
-            str(published_root),
-            "--template-root",
-            str(template_root),
-            "--types",
-            "opa-policy",
-        ],
-        capsys,
-    )
-    assert "policy" in output
-    assert "lint" not in output
-    assert exit_code == 0
+    dry_run_flag: list[str]
+    expected_verb: str
+    expect_file_created: bool
 
 
 @pytest.mark.parametrize(
-    ("dry_run_flag", "expected_verb", "expect_file_created"),
+    "scenario",
     [
-        ([], "copied", True),
-        (["--dry-run"], "would copy", False),
+        SyncBehaviorScenario(
+            dry_run_flag=[],
+            expected_verb="copied",
+            expect_file_created=True,
+        ),
+        SyncBehaviorScenario(
+            dry_run_flag=["--dry-run"],
+            expected_verb="would copy",
+            expect_file_created=False,
+        ),
     ],
     ids=["normal_sync", "dry_run"],
 )
@@ -285,10 +297,7 @@ def test_sync_via_app_behavior(
     template_root_with_simple_manifest: Path,
     published_root: Path,
     capsys: pytest.CaptureFixture[str],
-    dry_run_flag: list[str],
-    expected_verb: str,
-    *,
-    expect_file_created: bool,
+    scenario: SyncBehaviorScenario,
 ) -> None:
     """Sync command copies files (or reports intent with --dry-run)."""
     exit_code, output = _invoke_app_and_capture(
@@ -298,17 +307,17 @@ def test_sync_via_app_behavior(
             "python-ruff-config",
             "--template-root",
             str(template_root_with_simple_manifest),
-            *dry_run_flag,
+            *scenario.dry_run_flag,
         ],
         capsys,
     )
     assert exit_code == 0
-    assert expected_verb in output
+    assert scenario.expected_verb in output
 
     published_file = published_root / "canon" / "lint" / "python" / "ruff.toml"
-    assert published_file.exists() is expect_file_created
+    assert published_file.exists() is scenario.expect_file_created
 
-    if expect_file_created:
+    if scenario.expect_file_created:
         assert published_file.read_text(encoding="utf-8") == "rule = 1\n"
 
 
