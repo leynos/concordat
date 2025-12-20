@@ -166,11 +166,22 @@ def test_status_via_app_reports_missing_and_exit_code(
     assert exit_code == 2
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
+class StatusFilteringScenario:
+    """Test scenario for CLI status filtering tests."""
+
+    artifacts: list[tuple[str, str, str, str, str | None]]
+    status_flags: list[str]
+    expected_in_output: str
+    expected_not_in_output: str
+
+
 @pytest.mark.parametrize(
-    ("artifacts", "status_flags", "expected_in_output", "expected_not_in_output"),
+    "scenario",
     [
-        (
-            [
+        # Test --outdated-only flag filters out OK artifacts
+        StatusFilteringScenario(
+            artifacts=[
                 (
                     "ok",
                     "lint-config",
@@ -186,12 +197,13 @@ def test_status_via_app_reports_missing_and_exit_code(
                     None,
                 ),
             ],
-            ["--outdated-only"],
-            "missing",
-            "ok",
+            status_flags=["--outdated-only"],
+            expected_in_output="missing",
+            expected_not_in_output="ok",
         ),
-        (
-            [
+        # Test --types flag filters by artifact type
+        StatusFilteringScenario(
+            artifacts=[
                 (
                     "lint",
                     "lint-config",
@@ -207,9 +219,9 @@ def test_status_via_app_reports_missing_and_exit_code(
                     None,
                 ),
             ],
-            ["--types", "opa-policy"],
-            "policy",
-            "lint",
+            status_flags=["--types", "opa-policy"],
+            expected_in_output="policy",
+            expected_not_in_output="lint",
         ),
     ],
     ids=["outdated_only_filter", "types_filter"],
@@ -217,14 +229,11 @@ def test_status_via_app_reports_missing_and_exit_code(
 def test_status_via_app_filtering(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
-    artifacts: list[tuple[str, str, str, str, str | None]],
-    status_flags: list[str],
-    expected_in_output: str,
-    expected_not_in_output: str,
+    scenario: StatusFilteringScenario,
 ) -> None:
     """Status command respects filtering flags (--outdated-only, --types)."""
     template_root, published_root = _setup_multi_artifact_cli_scenario(
-        tmp_path, artifacts
+        tmp_path, scenario.artifacts
     )
 
     exit_code, output = _invoke_app_and_capture(
@@ -233,12 +242,12 @@ def test_status_via_app_filtering(
             str(published_root),
             "--template-root",
             str(template_root),
-            *status_flags,
+            *scenario.status_flags,
         ],
         capsys,
     )
-    assert expected_in_output in output
-    assert expected_not_in_output not in output
+    assert scenario.expected_in_output in output
+    assert scenario.expected_not_in_output not in output
     assert exit_code == 0
 
 
