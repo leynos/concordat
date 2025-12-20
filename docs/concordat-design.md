@@ -723,16 +723,506 @@ The mandated directory structure is as follows:
   (`action.yml`).
 
 - `manifest.yaml`: The machine-readable index that enumerates every published
-  canonical artefact (path, SHA-256 checksum, and descriptive metadata). The
-  Auditor and `concordat` tooling resolve canonical resources exclusively via
-  this manifest located at `platform-standards/canon/manifest.yaml`, ensuring
-  deterministic pinning even when the repository grows.
+  canonical artefact (stable identifier, path, integrity checksum, and
+  descriptive information). The Auditor and `concordat` tooling resolve
+  canonical resources exclusively via this manifest located at
+  `platform-standards/canon/manifest.yaml`, ensuring deterministic pinning even
+  when the repository grows. A future manifest schema revision is expected to
+  add semantic versions for operator-friendly upgrade planning.
 
 The repository also provides the `scripts/canon_workflows.py` driver, which
 invokes [nektos/act](https://github.com/nektos/act) to execute workflow
 dispatch events against the canonical workflows. This enables local smoke tests
 and is itself covered by `pytest` + `cmd_mox` fixtures so that CI can verify
 the expected `act` invocation without contacting GitHub Actions.
+
+#### 2.1.1. Canonical artefact packages and synchronisation
+
+Canonical artefacts are the distribution unit for platform standards. They are
+published in the `platform-standards` repository and consumed by:
+
+- the Auditor (for detection and reporting), and
+- remediation tooling (for generating patches and pull requests).
+
+The spike implementation introduces a local management workflow that compares a
+published platform-standards checkout against the template tree bundled in the
+Concordat repository and surfaces a tabular status view plus a Textual menu for
+sync operations:
+
+- `scripts/canon_artifacts.py` provides `list`, `status`, `sync`, and `tui`
+  commands.
+- `scripts/canon_artifacts_tui.py` provides an interactive `textual` user
+  interface for reviewing and syncing artefacts.
+- `concordat/canon_artifacts.py` provides the comparison and copy primitives.
+
+The purpose of this tooling is to make canonical updates (including new lint
+rules) routine to deploy across multiple estates without relying on ad-hoc Git
+diffs or bespoke scripts.
+
+##### Canonical artefact package format
+
+Each canonical artefact is either:
+
+- a single file (for example `canon/lint/python/ruff.toml`), or
+- a directory package (for example a lint rule bundle containing policy,
+  configuration defaults, and tests).
+
+Directory packages are treated as a unit. Integrity and change detection should
+be calculated over:
+
+- relative file paths within the package, and
+- the byte content of each file.
+
+This permits packages to contain multiple policy files, tests, and supporting
+fixtures without requiring extra manifest entries per file.
+
+##### Path mapping between template and published trees
+
+The Concordat repository bundles a template tree under `platform-standards/`.
+Published platform-standards repositories have the same content at their
+repository root. Tooling therefore maps template paths into published paths by
+stripping the `platform-standards/` prefix.
+
+For example:
+
+- template: `platform-standards/canon/lint/python/ruff.toml`
+- published: `canon/lint/python/ruff.toml`
+
+##### Capabilities
+
+- Produce a friendly, fixed-width status table for a published checkout,
+  highlighting missing and out-of-date artefacts.
+- Filter by artefact identifier or artefact type.
+- Sync missing/out-of-date artefacts into a published checkout (copy-based
+  deployment).
+- Provide a Textual menu for selecting and deploying updates interactively.
+
+##### Limitations
+
+- The spike compares file content, but does not reason about semantic
+  compatibility between versions (for example, “safe minor update” versus
+  “breaking update”).
+- Sync is copy-based and does not attempt three-way merges. Local modifications
+  in the published checkout can be overwritten.
+- Sync does not currently integrate with pull request creation or git
+  operations. It is designed as a local operator tool to be wrapped by existing
+  platform-standards workflows.
+- The spike tracks freshness using content digests. This is precise but not
+  human-friendly for release planning and is not sufficient for expressing rule
+  compatibility policy.
+
+##### Future direction
+
+The intended end state is a package manager-like experience for platform
+standards, where artefacts (including lint rules) have:
+
+- stable identifiers,
+- semantic versions,
+- explicit compatibility policy, and
+- machine-readable configuration and mutation metadata.
+
+The next section proposes a manifest format evolution to support this.
+
+#### 2.1.2. Proposed manifest format for lint rules (semantic versioning)
+
+The current `platform-standards/canon/manifest.yaml` schema enumerates
+artefacts with a SHA-256 digest. This spike used that digest as a
+content-derived version signal. The proposed next step is to move to semantic
+versioning (SemVer) for artefacts that are intended to be deployed and
+configured independently.
+
+The manifest should evolve to:
+
+- use SemVer for operator-facing status reporting and upgrade planning, and
+- optionally retain an integrity digest for detecting tampering or drift.
+
+This suggests a schema change (for example `schema_version: 2`) which adds a
+`version` field and nests integrity information:
+
+```yaml
+schema_version: 2
+artifacts:
+  - id: python-ruff-config
+    type: lint-config
+    path: platform-standards/canon/lint/python/ruff.toml
+    version: 1.4.0
+    integrity:
+      sha256: 8ed7b7057afc93a72478285b92ae90c3749652a5ea1c78c2defaafc2809fd933
+    description: Canonical Ruff configuration consumed by Python repositories.
+```
+
+The status model becomes “template version versus published version”, where the
+published version is read from the published manifest (or, for rule packages,
+from the package metadata file described below). The integrity digest remains
+available to detect local edits that preserve the SemVer value.
+
+##### Lint rule package format
+
+A “lint rule” in Concordat is a sensor plus mutation logic:
+
+- sensor: an OpenTofu/Conftest (Open Policy Agent, OPA) evaluation over
+  structured inputs,
+- configuration: parameters that allow the same rule logic to be reused with
+  different baselines, and
+- mutation: deterministic edits that bring the target into compliance.
+
+To support this, each lint rule should be packaged as a directory:
+
+- `platform-standards/canon/lint-rules/<rule-id>/`
+
+Each rule package should contain a single machine-readable entrypoint file that
+describes rule semantics and configuration:
+
+- `rule.yaml`
+
+The remainder of the directory is conventional and supports the rule:
+
+- `policy/` containing Rego policy and tests
+- `mutations/` containing patch templates or OpenTofu modules
+- `fixtures/` containing example inputs for tests and documentation
+- `README.md` containing operator-facing documentation
+
+An example `rule.yaml` shape follows:
+
+```yaml
+schema_version: 1
+id: ci-001
+name: reusable CI workflow
+version: 2.0.0
+description: Enforce that the repository uses the canonical CI workflow.
+
+sensor:
+  type: conftest
+  policy: policy/ci_policy.rego
+  tests:
+    - policy/ci_policy_test.rego
+
+parameters:
+  schema: parameters.schema.json
+  defaults:
+    workflow_path: .github/workflows/ci.yml
+
+mutations:
+  - type: file-copy
+    from: ../../.github/workflows/ci.yml
+    to: .github/workflows/ci.yml
+```
+
+In this model:
+
+- `version` is the SemVer version of the rule package.
+- `parameters` defines the configuration surface area and defaults.
+- `mutations` defines deterministic actions that can be executed by
+  remediation tooling.
+
+##### Expected use cases and workflows
+
+The following use cases motivate the SemVer-based package approach.
+
+###### Use case: deploy a new canonical lint rule to an estate
+
+1. Add a new rule package under
+   `platform-standards/canon/lint-rules/<rule-id>/` in the Concordat repository.
+2. Register the package in `platform-standards/canon/manifest.yaml` with an
+   initial `version: 0.1.0` or `1.0.0` depending on stability expectations.
+3. Run the status command against a local checkout of the published
+   platform-standards repository:
+
+   ```shell
+   uv run python -m scripts.canon_artifacts status path/to/platform-standards
+   ```
+
+4. Use the Textual menu to sync the new package into the checkout:
+
+   ```shell
+   uv run python -m scripts.canon_artifacts tui path/to/platform-standards
+   ```
+
+5. Commit the changes and open a pull request using the platform-standards
+   repository workflow.
+
+###### Use case: upgrade an existing rule while preserving local configuration
+
+1. Bump the rule package `version` in `rule.yaml`.
+2. Update rule package content (policy, tests, or mutation templates).
+3. Update the template manifest to reference the new version.
+4. In the published repository, store overrides separately from the package
+   directory (for example in `tofu/` or a dedicated lockfile). The sync tool
+   should treat overrides as user-owned data and avoid overwriting them.
+5. Run `status` to identify which estates are behind and use `sync` or `tui` to
+   deploy the new package version.
+
+This workflow requires explicit separation between:
+
+- package content (owned by the platform standards template), and
+- configuration overrides (owned by the estate).
+
+##### Learnings from the spike and improvements
+
+- A content digest is a robust drift signal, but it is unsuitable as the
+  primary operator-facing version identifier. SemVer should be the primary
+  coordinate for status and planning, with digests used as integrity metadata.
+- The Textual user interface is effective for a small number of artefacts, but
+  it should evolve towards bulk operations (filter, multi-select, and staged
+  changes) as the catalogue grows.
+- Syncing by direct copy is a useful baseline, but rule packages should declare
+  which files are platform-owned versus estate-owned. Without this, the tool
+  cannot protect local configuration.
+- The current tooling focuses on local filesystem operations. Integrating with
+  the existing git and pull request helpers in `concordat` would enable a
+  complete “status → branch → commit → pull request” workflow.
+
+#### 2.1.3. `concordat artefact` CLI design
+
+The spike tooling lives in `scripts/canon_artifacts.py` and
+`scripts/canon_artifacts_tui.py`. A full implementation should be integrated
+into the primary CLI as `concordat artefact`, providing a stable interface for
+operators and automation.
+
+The goals of the `artefact` sub-command are:
+
+- Surface a consistent catalogue view of canonical artefacts and lint rules.
+- Provide an operator-friendly upgrade experience using semantic versions.
+- Manage estate-specific configuration and deployment safely.
+- Support both interactive (Textual) and non-interactive (CI) workflows.
+- Integrate with git operations and pull request creation.
+
+##### Command surface
+
+The `concordat artefact` command is designed as a hierarchy.
+
+At the top level, artefacts refer to any entry in the canonical manifest
+(workflows, lint configs, documentation templates, and lint rule packages).
+Lint rules are artefacts with additional structure (`rule.yaml`, parameters,
+and mutations).
+
+The command shape is:
+
+```plaintext
+concordat artefact <group> <command> [options]
+```
+
+Groups:
+
+- `catalogue`: inspect and validate the canonical catalogue.
+- `estate`: inspect and deploy catalogue entries to a platform-standards estate.
+- `rule`: work with lint rule packages, their configuration, and mutations.
+
+###### `catalogue` commands
+
+The `catalogue` group operates on the template tree bundled with Concordat.
+
+```plaintext
+concordat artefact catalogue list
+concordat artefact catalogue show <id>
+concordat artefact catalogue validate
+```
+
+Expected behaviour:
+
+- `list` prints a concise list of `id`, `type`, and `path`.
+- `show` prints the manifest entry plus derived metadata (for example, computed
+  integrity digest, resolved package contents when the artefact is a directory,
+  and lint rule metadata when `rule.yaml` exists).
+- `validate` verifies manifest schema, path existence, and integrity metadata.
+
+###### `estate` commands
+
+The `estate` group compares and deploys artefacts into a platform-standards
+repository.
+
+```plaintext
+concordat artefact estate status <published-root>
+concordat artefact estate diff <published-root> <id>
+concordat artefact estate sync <published-root> [<id>...]
+concordat artefact estate tui <published-root>
+concordat artefact estate pr <published-root>
+```
+
+Expected behaviour:
+
+- `status` prints a table of template versus published versions, highlighting
+  missing, out-of-date, and drifted entries.
+- `diff` prints a file-level summary for an artefact, with an optional
+  machine-readable mode (`--format json`) to support automation.
+- `sync` stages updates in the published checkout, respecting a policy for
+  platform-owned versus estate-owned files.
+- `tui` provides an interactive menu for bulk sync operations, with filters and
+  multi-select.
+- `pr` creates a branch, commits the staged changes, and opens a pull request.
+
+The default path input is explicit (`<published-root>`) to support local
+operations. An additional integration should permit running against the active
+estate cache without an explicit path:
+
+```plaintext
+concordat artefact estate status --use-active-estate
+```
+
+In this mode the command would:
+
+- clone or refresh the estate platform-standards repository via the existing
+  estate cache machinery, and
+- run operations inside a temporary workspace, consistent with `plan` and
+  `apply`.
+
+###### `rule` commands
+
+The `rule` group targets lint rule packages and their configuration.
+
+```plaintext
+concordat artefact rule list
+concordat artefact rule show <rule-id>
+concordat artefact rule validate <rule-id>
+
+concordat artefact rule config show <rule-id> --estate <alias>
+concordat artefact rule config set <rule-id> <key>=<value> --estate <alias>
+concordat artefact rule config reset <rule-id> [<key>...] --estate <alias>
+
+concordat artefact rule run <rule-id> --repo <path>
+concordat artefact rule mutate <rule-id> --repo <path>
+```
+
+Expected behaviour:
+
+- `rule list/show` operate on the template rule packages.
+- `rule validate` verifies `rule.yaml`, validates parameter schema, and runs
+  rule policy tests (where present).
+- `rule config` operates on estate configuration and supports a “defaults plus
+  overrides” model.
+- `rule run` evaluates the sensor for a target repository and produces findings
+  without changes.
+- `rule mutate` produces deterministic edits (patches) for remediation tooling.
+
+##### Output formats
+
+All `artefact` commands should support:
+
+- `--format table` for operator-friendly output (default), and
+- `--format json` for automation.
+
+Table output should use stable columns and predictable ordering.
+
+##### Exit codes
+
+Commands must return stable exit codes for CI integration.
+
+#### Table 3: Exit codes for `concordat artefact`
+
+| Exit code | Meaning                                                                  |
+| --------- | ------------------------------------------------------------------------ |
+| 0         | Success                                                                  |
+| 1         | Invocation error (invalid arguments, missing prerequisites)              |
+| 2         | Out of date or missing artefacts detected (`status` in CI mode)          |
+| 3         | Catalogue integrity failure (template manifest mismatch, invalid schema) |
+| 4         | Mutations planned or applied failed (patch application or policy errors) |
+
+##### Configuration and locking
+
+Semantic versions require a lock model to describe what is deployed in an
+estate and how it is configured.
+
+Two files are required:
+
+- a catalogue manifest in the template tree
+  (`platform-standards/canon/manifest.yaml`), and
+- an estate lockfile in the published platform-standards repository.
+
+The estate lockfile pins versions and records configuration overrides, enabling
+status reporting and safe upgrades without inferring versions from content.
+
+A proposed lockfile location is:
+
+- `canon/artefacts.lock.yaml`
+
+An example shape follows:
+
+```yaml
+schema_version: 1
+locked_at: 2025-12-19T00:00:00Z
+artefacts:
+  - id: python-ruff-config
+    version: 1.4.0
+    configured: {}
+  - id: ci-001
+    version: 2.0.0
+    configured:
+      workflow_path: .github/workflows/ci.yml
+```
+
+The lockfile is the estate-owned source of truth for deployment state.
+Integrity digests remain useful for detecting local edits that do not update
+the lockfile.
+
+##### User workflows
+
+The following workflows describe expected operator usage.
+
+###### Workflow: estate operator upgrades canonical artefacts
+
+1. Operator pulls the latest Concordat template changes.
+2. Operator checks status for a local checkout:
+
+   ```shell
+   uv run concordat artefact estate status path/to/platform-standards
+   ```
+
+3. Operator uses `sync` to stage updates (optionally filtered by type):
+
+   ```shell
+   uv run concordat artefact estate sync path/to/platform-standards --types lint-config
+   ```
+
+4. Operator reviews the diff using standard git tooling.
+5. Operator opens a pull request:
+
+   ```shell
+   uv run concordat artefact estate pr path/to/platform-standards
+   ```
+
+###### Workflow: CI blocks when an estate is behind
+
+1. A platform-standards repository workflow runs:
+
+   ```shell
+   uv run concordat artefact estate status . --format json --fail-on-outdated
+   ```
+
+2. The workflow fails with exit code `2` when missing or out-of-date artefacts
+   exist, preventing drift from accumulating unnoticed.
+
+###### Workflow: introduce a new lint rule package
+
+1. Platform maintainer adds a new rule package under
+   `platform-standards/canon/lint-rules/<rule-id>/`.
+2. Platform maintainer registers it in the template manifest with `version:
+   0.1.0` and adds documentation to the package `README.md`.
+3. Estate operator syncs the package and pins it in the estate lockfile.
+
+##### Capabilities, limitations, and future directions
+
+The `artefact` CLI is expected to evolve iteratively.
+
+Capabilities:
+
+- Catalogue inspection, validation, and documentation surfacing.
+- Estate status reporting, syncing, and pull request creation.
+- Lint rule validation, configuration management, and mutation planning.
+
+Limitations (initially):
+
+- Mutations are expected to be deterministic, but not necessarily merge-aware.
+  Operators remain responsible for reviewing and resolving conflicts.
+- Rule execution against target repositories requires a well-defined input model
+  (for example, how OpenTofu and Conftest inputs are materialized and pinned).
+
+Future directions:
+
+- Replace copy-based sync with a three-way merge for platform-owned files.
+- Add “upgrade plans” that compute SemVer deltas, risk categories, and required
+  operator actions.
+- Integrate `rule mutate` with the OpenTofu remediation provider to route all
+  changes through pull requests with comment preservation where applicable.
 
 ### 2.2. The `.concordat` manifest: a formal schema definition
 

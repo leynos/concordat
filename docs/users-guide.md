@@ -162,6 +162,43 @@ enrolment PRs should be opened.
   uv run concordat estate use sandbox
   ```
 
+## Syncing canonical platform-standards artefacts
+
+Concordat ships a `platform-standards/` template tree. The canonical files
+under `platform-standards/canon/` are tracked in
+`platform-standards/canon/manifest.yaml` by a stable `id`, a `path`, and a
+sha256 digest (a content-derived version).
+
+Use `scripts/canon_artifacts.py` to compare a published platform-standards
+checkout against the template and optionally copy missing/outdated artefacts.
+
+- Show status for a checkout:
+
+  ```shell
+  uv run python -m scripts.canon_artifacts status path/to/platform-standards
+  ```
+
+- Filter to just lint configuration artefacts:
+
+  ```shell
+  uv run python -m scripts.canon_artifacts status path/to/platform-standards \
+    --types lint-config
+  ```
+
+- Copy all missing/outdated artefacts into the checkout:
+
+  ```shell
+  uv run python -m scripts.canon_artifacts sync path/to/platform-standards \
+    --all-outdated
+  ```
+
+- Launch an interactive menu for reviewing and syncing (requires `textual`,
+  installed with dev dependencies via `uv sync --group dev`):
+
+  ```shell
+  uv run python -m scripts.canon_artifacts tui path/to/platform-standards
+  ```
+
 ## Previewing and applying estate changes
 
 Use the `plan` and `apply` commands to run OpenTofu against the active estate
