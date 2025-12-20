@@ -412,16 +412,18 @@ def test_tui_raises_when_textual_is_unavailable(
         if name == "scripts.canon_artifacts_tui" or name.startswith("textual"):
             removed[name] = sys.modules.pop(name)
 
-    with pytest.raises(canon_artifacts.CanonArtifactsError) as excinfo:
-        canon_artifacts.tui(
-            published_root,
-            template_root=template_root,
-            ids=(),
-            types=(),
-        )
+    try:
+        with pytest.raises(canon_artifacts.CanonArtifactsError) as excinfo:
+            canon_artifacts.tui(
+                published_root,
+                template_root=template_root,
+                ids=(),
+                types=(),
+            )
 
-    assert "Textual is required for `tui`" in str(excinfo.value)
-    sys.modules.update(removed)
+        assert "Textual is required for `tui`" in str(excinfo.value)
+    finally:
+        sys.modules.update(removed)
 
 
 def test_compute_status_exit_code_matrix(tmp_path: Path) -> None:

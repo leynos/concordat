@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import typing as typ
-from pathlib import Path  # noqa: TC003
+
+if typ.TYPE_CHECKING:
+    from pathlib import Path
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
