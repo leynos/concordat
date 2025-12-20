@@ -50,6 +50,19 @@ class StatusConfig:
     fail_on_missing: bool = False
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
+class CliSyncConfig:
+    """Configuration for the sync command."""
+
+    published_root: Path
+    artifact_ids: tuple[str, ...] = ()  # Variadic positional
+    template_root: Path | None = None
+    types: tuple[str, ...] = ()
+    dry_run: bool = False
+    all_outdated: bool = False
+    include_unchanged: bool = False
+
+
 def _build_filter(*, ids: tuple[str, ...], types: tuple[str, ...]) -> _Filter:
     ids_filter = set(ids) if ids else None
     types_filter = set(types) if types else None
@@ -152,57 +165,59 @@ def _has_outdated_artifacts(comparisons: list[ArtifactComparison]) -> bool:
     )
 
 
+def _determine_sync_ids(
+    config: CliSyncConfig,
+    comparisons: list[ArtifactComparison],
+) -> set[str]:
+    """Determine which artifact IDs to sync based on configuration."""
+    if config.all_outdated:
+        return {
+            comparison.id
+            for comparison in comparisons
+            if comparison.status in {ArtifactStatus.MISSING, ArtifactStatus.OUTDATED}
+        }
+    if config.artifact_ids:
+        return set(config.artifact_ids)
+    raise CanonArtifactsError(
+        "No artifacts selected for sync. Pass explicit IDs or use --all-outdated."
+    )
+
+
 @app.command()
 def sync(
-    published_root: Path,
-    *artifact_ids: str,
-    template_root: Path | None = None,
-    types: tuple[str, ...] = (),
-    dry_run: bool = False,
-    all_outdated: bool = False,
-    include_unchanged: bool = False,
+    config: Annotated[CliSyncConfig, Parameter(name="*")],
 ) -> int:
     """Copy template artifacts into the published checkout."""
-    manifest_path = _resolve_manifest_path(template_root)
+    manifest_path = _resolve_manifest_path(config.template_root)
     manifest = load_manifest(manifest_path)
-    filters = _build_filter(ids=tuple(artifact_ids), types=types)
+    filters = _build_filter(ids=config.artifact_ids, types=config.types)
 
     comparisons = list(
         compare_manifest_to_published(
             manifest,
-            published_root=published_root,
+            published_root=config.published_root,
             ids=filters.ids,
             types=filters.types,
         )
     )
-    selected_ids = filters.ids
-    if all_outdated:
-        selected_ids = {
-            c.id
-            for c in comparisons
-            if c.status in {ArtifactStatus.MISSING, ArtifactStatus.OUTDATED}
-        }
-    if not selected_ids:
-        raise CanonArtifactsError(
-            "No artifacts selected for sync. Pass explicit IDs or use --all-outdated."
-        )
+    selected_ids = _determine_sync_ids(config, comparisons)
 
     actions = sync_artifacts(
         comparisons,
         SyncConfig(
             template_root=manifest.template_root,
-            published_root=published_root,
+            published_root=config.published_root,
             ids=selected_ids,
-            dry_run=dry_run,
-            include_unchanged=include_unchanged,
+            dry_run=config.dry_run,
+            include_unchanged=config.include_unchanged,
         ),
     )
     for action in actions:
-        verb = "would copy" if dry_run else "copied"
+        verb = "would copy" if config.dry_run else "copied"
         print(
             f"{verb}\t{action.status}\t{action.artifact_id}\t"
             f"{action.source.relative_to(manifest.template_root)}\t"
-            f"{action.destination.relative_to(published_root)}"
+            f"{action.destination.relative_to(config.published_root)}"
         )
     return 0
 
