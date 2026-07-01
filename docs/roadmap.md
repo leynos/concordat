@@ -5,12 +5,12 @@ management suite. Work prioritizes configuration health and consistency,
 focusing on merge behaviour, branch governance, and issue prioritization.
 Phases build cumulatively; each phase depends on completion of preceding steps.
 
-## Phase 1 – Audit foundations for the GitHub estate
+## 1. Audit foundations for the GitHub estate
 
 Phase 1 establishes authoritative configuration sources, telemetry, and audit
 visibility without altering production behaviour.
 
-### Step: Bootstrap the platform-standards repository
+### 1.1. Bootstrap the platform-standards repository
 
 Define the single source of truth for desired organization state and reusable
 automation assets.
@@ -37,7 +37,7 @@ automation assets.
   with it; invoking `concordat ls` without namespaces defaults to the recorded
   owner.
 
-### Step: Introduce canonical artefact management
+### 1.2. Introduce canonical artefact management
 
 Provide a first-class workflow for comparing and deploying canonical
 platform-standards artefacts (including lint rule packages) from the Concordat
@@ -71,7 +71,7 @@ template tree into published platform-standards repositories.
   the rule schema, runs policy tests where present, and surfaces parameter
   defaults and allowed overrides.
 
-### Step: Ship the estate execution CLI
+### 1.3. Ship the estate execution CLI
 
 Connect the estate configuration template to OpenTofu execution to let
 operators preview and apply changes from concordat.
@@ -91,7 +91,7 @@ operators preview and apply changes from concordat.
   command reconciles the estate against the cached repository and reports
   success/failure without leaving temporary files behind.
 
-### Step: Persist estate tfstate in Scaleway Object Storage
+### 1.4. Persist estate tfstate in Scaleway Object Storage
 
 Move OpenTofu state into a shared, versioned backend so operators and
 Continuous Integration (CI) jobs never diverge. Remote persistence also unlocks
@@ -123,7 +123,7 @@ locking and rollbacks without adding DynamoDB or other AWS-only dependencies.
   `make markdownlint`, `make fmt`, and `make nixie` continue to pass after the
   documentation changes.
 
-### Step: Stand up non-blocking audit execution
+### 1.5. Stand up non-blocking audit execution
 
 Surface configuration drift and compliance gaps while keeping enforcement in
 evaluate mode.
@@ -143,12 +143,12 @@ evaluate mode.
   `Cargo.toml`). Acceptance: nightly `tofu plan` consumes the data source and
   fails with a descriptive summary when `patch_count > 0`.
 
-## Phase 2 – Enforce merge and branch governance
+## 2. Enforce merge and branch governance
 
 Phase 2 activates enforced guardrails for pull requests and branch hygiene,
 raising the quality bar while providing remediation tooling.
 
-### Step: Promote merge policy to an enforced ruleset
+### 2.1. Promote merge policy to an enforced ruleset
 
 Enable merge gating based on Auditor status and standardized repository flags.
 
@@ -163,7 +163,7 @@ Enable merge gating based on Auditor status and standardized repository flags.
   manifest opts into rebase). Acceptance: Auditor reports no repositories
   exposing disallowed merge modes.
 
-### Step: Standardize branch protections
+### 2.2. Standardize branch protections
 
 Codify consistent branch rules with measurable compliance.
 
@@ -184,12 +184,12 @@ Codify consistent branch rules with measurable compliance.
   a PR touching `Cargo.toml` without altering comments or the default branch
   directly.
 
-## Phase 3 – Institutionalize issue prioritization
+## 3. Institutionalize issue prioritization
 
 Phase 3 introduces the canonical priority taxonomy, aligns GitHub Projects with
 it, and enforces the standard via automated sync and audit pipelines.
 
-### Step: Publish the canonical priority model
+### 3.1. Publish the canonical priority model
 
 Create the single source of truth for priority semantics and expose it to all
 downstream automation.
@@ -205,7 +205,7 @@ downstream automation.
   playbook for interpreting the new priority names. Acceptance: feedback survey
   records >80 per cent comprehension among pilot teams.
 
-### Step: Apply labels and Projects fields declaratively
+### 3.2. Apply labels and Projects fields declaratively
 
 Roll out the canonical state across the estate using OpenTofu.
 
@@ -221,7 +221,7 @@ Roll out the canonical state across the estate using OpenTofu.
   Projects boards. Acceptance: Auditor drift reports confirm no unexpected
   changes, and affected teams sign off on the new labels.
 
-### Step: Wire synchronization and audit enforcement
+### 3.3. Wire synchronization and audit enforcement
 
 Keep labels and project fields consistent and make the configuration
 non-optional.
@@ -238,11 +238,11 @@ non-optional.
   five per cent. Acceptance: Code Scanning gates block merges that violate the
   canonical model after the enforcement switch.
 
-## Phase 4 – Sustain and expand automation
+## 4. Sustain and expand automation
 
 Phase 4 reduces manual effort and broadens coverage once governance is stable.
 
-### Step: Automate safe remediations and onboarding
+### 4.1. Automate safe remediations and onboarding
 
 Scale Concordat with self-service and targeted automation.
 
