@@ -11,6 +11,8 @@ import typing as typ
 if typ.TYPE_CHECKING:
     from .models import CheckDefinition, Finding
 
+type JsonObject = dict[str, object]
+
 
 class SarifBuilder:
     """Helper for constructing SARIF 2.1.0 payloads."""
@@ -29,7 +31,7 @@ class SarifBuilder:
             "https://github.com/leynos/concordat"
         )
         self._rules: dict[str, CheckDefinition] = {}
-        self._results: list[dict[str, object]] = []
+        self._results: list[JsonObject] = []
 
     def register_rules(self, rules: typ.Iterable[CheckDefinition]) -> None:
         """Register rules prior to emitting findings."""
@@ -47,7 +49,7 @@ class SarifBuilder:
             fingerprint_source = f"{finding.rule_id}-{finding.message}"
             fingerprint = hashlib.sha256(fingerprint_source.encode()).hexdigest()
             location_uri = finding.resource or resource_fallback
-            serialized = {
+            serialized: JsonObject = {
                 "ruleId": finding.rule_id,
                 "level": finding.level,
                 "message": {"text": finding.message},

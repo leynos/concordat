@@ -19,6 +19,15 @@ from .errors import ConcordatError
 ERROR_NO_NAMESPACES = "Specify at least one namespace to list."
 
 
+class _RepositoryClient(typ.Protocol):
+    def repositories_by(
+        self,
+        username: str,
+        /,
+        **kwargs: object,
+    ) -> typ.Iterable[object]: ...
+
+
 def _no_namespaces_error() -> ConcordatError:
     return ConcordatError(ERROR_NO_NAMESPACES)
 
@@ -65,13 +74,15 @@ def list_namespace_repositories(
     namespaces: typ.Sequence[str],
     *,
     token: str | None = None,
-    client_factory: typ.Callable[[], GitHub] | None = None,
+    client_factory: typ.Callable[[], _RepositoryClient] | None = None,
 ) -> list[str]:
     """Return SSH URLs for repositories across the provided namespaces."""
     if not namespaces:
         raise _no_namespaces_error()
 
-    factory = client_factory or (lambda: GitHub(token=token))
+    factory = client_factory or (
+        lambda: typ.cast("_RepositoryClient", GitHub(token=token))
+    )
     client = factory()
     try:
         combined: list[str] = []
@@ -84,7 +95,7 @@ def list_namespace_repositories(
             session.close()
 
 
-def _fetch_namespace(client: GitHub, namespace: str) -> list[str]:
+def _fetch_namespace(client: _RepositoryClient, namespace: str) -> list[str]:
     try:
         generator = client.repositories_by(namespace, type="owner", number=-1)
         ssh_urls: list[str] = []

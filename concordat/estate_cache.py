@@ -159,8 +159,14 @@ def _resolve_remote_commit(
     if isinstance(commit, pygit2.Commit):
         return commit
 
-    resolved = repository[commit]  # type: ignore[index]
-    return typ.cast("pygit2.Commit", resolved)
+    if commit is None:
+        detail = ERROR_MISSING_BRANCH.format(
+            branch=branch,
+            remote=remote.name or remote.url or "origin",
+        )
+        raise EstateCacheError(detail)
+
+    return commit.peel(pygit2.Commit)
 
 
 def _sync_local_branch(

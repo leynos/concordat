@@ -7,18 +7,14 @@
 
 from __future__ import annotations
 
+import importlib
 import sys
 from pathlib import Path
-
-from concordat_vale.acronym_allowlist import (  # type: ignore[unresolved-import]
-    AcronymAllowlistError,
-    load_project_acronyms,
-    update_allow_map,
-)
 
 
 def main() -> int:
     """Sync custom acronyms into the downloaded Concordat style."""
+    acronym_allowlist = importlib.import_module("concordat_vale.acronym_allowlist")
     repo_root = Path(__file__).resolve().parents[1]
     source = repo_root / ".config" / "common-acronyms"
     target = (
@@ -26,9 +22,9 @@ def main() -> int:
     )
 
     try:
-        acronyms = load_project_acronyms(source)
-        result = update_allow_map(target, acronyms)
-    except (FileNotFoundError, AcronymAllowlistError) as exc:
+        acronyms = acronym_allowlist.load_project_acronyms(source)
+        result = acronym_allowlist.update_allow_map(target, acronyms)
+    except (FileNotFoundError, acronym_allowlist.AcronymAllowlistError) as exc:
         print(exc, file=sys.stderr)
         return 1
 

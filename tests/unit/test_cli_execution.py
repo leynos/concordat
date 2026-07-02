@@ -35,7 +35,7 @@ def _estate_record() -> EstateRecord:
 
 def _apply_and_capture(
     monkeypatch: pytest.MonkeyPatch,
-    *args: object,
+    *args: str,
     **kwargs: object,
 ) -> dict[str, object]:
     """Run cli.apply with a fake executor and capture forwarded kwargs."""
@@ -56,13 +56,14 @@ def _apply_and_capture(
         return 0, Path("dummy-workdir")
 
     monkeypatch.setattr(cli, "run_apply", fake_run_apply)
-    cli.apply(*args, **kwargs)
+    apply = typ.cast("typ.Callable[..., None]", cli.apply)
+    apply(*args, **kwargs)
     return captured
 
 
 def _get_applied_args(
     monkeypatch: pytest.MonkeyPatch,
-    *args: object,
+    *args: str,
     **kwargs: object,
 ) -> tuple[str, ...]:
     """Return the extra_args tuple captured from cli.apply."""
