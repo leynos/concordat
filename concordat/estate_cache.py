@@ -172,7 +172,10 @@ def _resolve_remote_commit(
     if commit is None:
         raise _missing_branch_error(branch, remote)
 
-    return commit.peel(pygit2.Commit)
+    try:
+        return commit.peel(pygit2.Commit)
+    except pygit2.InvalidSpecError as error:
+        raise _missing_branch_error(branch, remote) from error
 
 
 def _sync_local_branch(
