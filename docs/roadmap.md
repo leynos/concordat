@@ -221,7 +221,7 @@ Roll out the canonical state across the estate using OpenTofu.
   Projects boards. Acceptance: Auditor drift reports confirm no unexpected
   changes, and affected teams sign off on the new labels.
 
-### 3.3. Wire synchronization and audit enforcement
+### 3.3. Wire synchronisation and audit enforcement
 
 Keep labels and project fields consistent and make the configuration
 non-optional.
