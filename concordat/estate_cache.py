@@ -142,6 +142,18 @@ def _fetch_origin_remote(
     return remote
 
 
+def _remote_display_name(remote: pygit2.Remote) -> str:
+    return remote.name or remote.url or "origin"
+
+
+def _missing_branch_error(branch: str, remote: pygit2.Remote) -> EstateCacheError:
+    detail = ERROR_MISSING_BRANCH.format(
+        branch=branch,
+        remote=_remote_display_name(remote),
+    )
+    return EstateCacheError(detail)
+
+
 def _resolve_remote_commit(
     repository: pygit2.Repository,
     remote: pygit2.Remote,
@@ -151,16 +163,19 @@ def _resolve_remote_commit(
     try:
         remote_ref = repository.lookup_reference(ref_name)
     except KeyError as error:
-        remote_name = remote.name or remote.url or "origin"
-        detail = ERROR_MISSING_BRANCH.format(branch=branch, remote=remote_name)
-        raise EstateCacheError(detail) from error
+        raise _missing_branch_error(branch, remote) from error
 
     commit = repository.get(remote_ref.target)
     if isinstance(commit, pygit2.Commit):
         return commit
 
-    resolved = repository[commit]  # type: ignore[index]
-    return typ.cast("pygit2.Commit", resolved)
+    if commit is None:
+        raise _missing_branch_error(branch, remote)
+
+    try:
+        return commit.peel(pygit2.Commit)
+    except pygit2.InvalidSpecError as error:
+        raise _missing_branch_error(branch, remote) from error
 
 
 def _sync_local_branch(

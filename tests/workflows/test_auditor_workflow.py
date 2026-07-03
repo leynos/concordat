@@ -18,9 +18,9 @@ WORKFLOW = Path(".github/workflows/auditor.yml")
 def test_auditor_workflow_produces_sarif(tmp_path: Path) -> None:
     """Smoke test that runs the workflow via act when explicitly enabled."""
     if os.getenv("CONCORDAT_RUN_ACT_TESTS") != "1":
-        pytest.skip("set CONCORDAT_RUN_ACT_TESTS=1 to run act-based workflow tests.")
+        pytest.skip()
     if shutil.which("act") is None:
-        pytest.skip("act CLI is not installed.")
+        pytest.skip()
 
     artifact_dir = tmp_path / "artifacts"
     command = [

@@ -481,8 +481,10 @@ def _filter_repository_entries(
         return ([], False)
 
     repos: list[dict[str, typ.Any]] = [
-        entry for entry in repos_raw if isinstance(entry, dict)
-    ]  # type: ignore[misc]
+        typ.cast("dict[str, typ.Any]", entry)
+        for entry in repos_raw
+        if isinstance(entry, dict)
+    ]
     before = len(repos)
     repos = [entry for entry in repos if entry.get("name") != repo_slug]
     changed = len(repos) < before

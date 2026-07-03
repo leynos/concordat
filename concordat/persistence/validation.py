@@ -172,7 +172,7 @@ def _exercise_write_permissions(client: S3Client, bucket: str, key: str) -> None
 
 def _session_token_from_environment(env: typ.Mapping[str, str]) -> str | None:
     token = env.get(AWS_SESSION_TOKEN_VAR, "").strip()
-    return token if token else None
+    return token or None
 
 
 def _credentials_from_environment(env: typ.Mapping[str, str]) -> dict[str, str]:

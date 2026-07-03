@@ -32,6 +32,10 @@ if typ.TYPE_CHECKING:  # pragma: no cover - type checking only
     from tests.conftest import GitRepo
 
 
+class UnexpectedTofuInitialisationError(AssertionError):
+    """Raised when a test path initialises Tofu unexpectedly."""
+
+
 @dataclasses.dataclass
 class BackendConfigTestCase:
     """Test case for backend config validation scenarios."""
@@ -321,7 +325,7 @@ def test_run_plan_backend_config_validation(
     monkeypatch.setenv("SCW_SECRET_KEY", "scw-secret")
 
     def _fail_init(*args: object, **kwargs: object) -> object:
-        pytest.fail("Tofu must not be initialised when backend config is invalid")
+        raise UnexpectedTofuInitialisationError
 
     monkeypatch.setattr("concordat.estate_execution.Tofu", _fail_init)
     options = ExecutionOptions(
@@ -416,7 +420,7 @@ def test_run_plan_requires_backend_credentials(
         monkeypatch.delenv(variable, raising=False)
 
     def _fail_init(*args: object, **kwargs: object) -> object:
-        pytest.fail("Tofu should not be initialised without credentials")
+        raise UnexpectedTofuInitialisationError
 
     monkeypatch.setattr("concordat.estate_execution.Tofu", _fail_init)
     options = ExecutionOptions(

@@ -35,7 +35,7 @@ def _looks_like_local_path(specification: str) -> bool:
     if specification.startswith("git@") or specification.startswith("ssh://"):
         return False
     parsed = urlparse(specification)
-    if parsed.scheme and parsed.scheme not in {"file"}:
+    if parsed.scheme and parsed.scheme != "file":
         return False
     # Treat strings without a scheme but pointing at filesystem locations as local
     candidate = Path(specification)
