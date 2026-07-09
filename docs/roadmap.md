@@ -28,14 +28,13 @@ automation assets.
 - [x] Extend `concordat enrol` so that, in addition to writing `.concordat`, it
   opens a pull request in `platform-standards` adding the repository to the
   OpenTofu inventory. Acceptance: enrolling a repository produces both the
-  `.concordat` commit (optional push) and a passing IaC PR that runs
-  `tofu fmt`, `tflint`, and `tofu validate`.
+  `.concordat` commit (optional push) and a passing IaC PR that runs `tofu fmt`,
+  `tflint`, and `tofu validate`.
 - [x] Teach estates about the GitHub namespace they govern by persisting
   `github_owner` in the concordat config file and rejecting enrolments that
-  target other owners. Acceptance: `concordat estate init` records the owner
-  and `concordat enrol` refuses to add repositories whose slug does not begin
-  with it; invoking `concordat ls` without namespaces defaults to the recorded
-  owner.
+  target other owners. Acceptance: `concordat estate init` records the owner and
+  `concordat enrol` refuses to add repositories whose slug does not begin with
+  it; invoking `concordat ls` without namespaces defaults to the recorded owner.
 
 ### 1.2. Introduce canonical artefact management
 
@@ -257,3 +256,51 @@ Scale Concordat with self-service and targeted automation.
   retire redundant checks and capture new governance requirements. Acceptance:
   each quarter concludes with an action list approved by the platform steering
   group.
+
+### 4.2. Enforce quality-gate integrity
+
+Deliver the Quality-Gate Integrity audit domain (design document Section
+3.1.1): sensors that detect quality gates which cannot fail or never run, and
+actuators that remediate them. Each check ships as a lint rule package under
+`canon/lint-rules/` per the Section 2.1.2 format.
+
+- [ ] Ship the lint-gate binding rule packages (QG-001 to QG-003): Makefile
+  sensors for soft-skipped or environment-overridable lint targets, workflow
+  sensors for the hardened pinned-release install step (version-keyed cache,
+  shell-variable indirection, `--locked`, binstall-or-build fallback, Cranelift
+  preservation), and a rolling-release detector with a suite-ref-pin mutation.
+  Acceptance: fixtures reproducing the Whitaker rollout defects (soft-skip
+  Makefile, `WHITAKER=true` no-op, git-rev install with stale cache key) each
+  raise the intended finding, and the mutations produce the canonical forms.
+- [ ] Ship the test-runner completeness rule package (QG-004): sensors for
+  nextest-only suites lacking a doctest target, unlocked test-tool installs,
+  and missing `TEST_CMD` fallback; mutations patch the Makefile with
+  `TEST_CMD`, a `test-doc` target, and aggregate wiring. Acceptance: a fixture
+  whose doctests are never executed is detected, and the mutated Makefile runs
+  doctests under `make test`.
+- [ ] Ship the coverage-pipeline rule packages (CV-001, CV-002, CV-004):
+  pull-request jobs must gate via `cs-coverage check` with `fetch-depth: 0`, a
+  `project-url`, and `*.info` LCOV naming; a main-only push workflow must
+  upload; exactly one ratcheting invocation per job with the baseline written
+  on main. Acceptance: fixtures for upload-from-PR, missing main workflow,
+  summary-only pins, and PR-scoped baselines each raise findings; mutations
+  emit the canonical coverage-main workflow and job patches.
+- [ ] Implement the dual-store secret sensor (CV-003) in the Auditor:
+  enumerate secret names in the Actions and Dependabot stores via the GitHub
+  API and cross-reference every `if: env.X != ''` workflow guard. Acceptance: a
+  repository whose guard secret exists in only one store is reported with the
+  absent store named; `concordat` gains a provisioning command that sets an
+  operator-supplied token in both stores.
+- [ ] Implement the automerge-jam and workflow-health sensors (AM-001,
+  AM-002) as scheduled Auditor sweeps: open Dependabot pull requests `BLOCKED`
+  with all required checks green, and workflows whose recent runs uniformly
+  conclude `startup_failure`. Acceptance: the AM-001 actuator comments
+  `@dependabot rebase` on jammed pull requests and the AM-002 actuator opens a
+  tracking issue, both idempotently.
+- [ ] Implement the dependency-pin actionability sensors (DP-001, DP-002):
+  cross-reference open Dependabot alerts' first patched versions against
+  manifest requirements, and detect git-revision pins lacking a
+  `TODO(<issue-url>)` resolving to an open issue. Acceptance: a fixture
+  manifest pinning below a patched version raises DP-001 with the blocked alert
+  numbers; the DP-002 actuator inserts the `TODO` via the comment-preserving
+  TOML remediation provider and raises the tracking issue.
