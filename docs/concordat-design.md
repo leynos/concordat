@@ -1361,8 +1361,9 @@ The primary audit domains are:
    execute every test class (including doctests), automerge machinery that
    cannot jam on stale third-party checks, and dependency pins that stay
    actionable. The checks in this domain were distilled from the 2026 Whitaker
-   and CodeScene estate rollouts, where each defect class below was observed in
-   production repositories.
+   lint, CodeScene coverage, Dependabot auto-merge, and mutation-testing estate
+   rollouts, where each defect class below was observed in production
+   repositories.
 
 The following table serves as the master list of requirements for the Auditor.
 It defines the scope of work for implementation, and provides an itemized
@@ -1400,6 +1401,11 @@ breakdown of what constitutes "compliance" within the framework.
 | AM-002       | No workflow's recent runs all conclude `startup_failure` (an unloadable workflow file failing silently on every trigger).                                                                                                                            | Quality-Gate Integrity          | Python/GitHub API                         | error                | 4                        |
 | DP-001       | Open Dependabot security alerts are actionable: no manifest requirement pins a dependency below the first patched version of an open alert.                                                                                                          | Quality-Gate Integrity          | Python/GitHub API + manifest parse        | error                | 4                        |
 | DP-002       | Git-revision dependency pins carry a `TODO(<issue-url>)` comment and an open tracking issue.                                                                                                                                                         | Quality-Gate Integrity          | OPA/Conftest + Python/GitHub API          | warning              | 4                        |
+| DB-001       | `dependabot.yml` covers every package ecosystem and directory in the repository (each Cargo workspace member, Python project, and `github-actions`).                                                                                                 | Quality-Gate Integrity          | Python/manifest scan                      | error                | 4                        |
+| DB-002       | Dependabot cooldown configuration matches estate policy: tiered cooldowns for semver ecosystems, `default-days` only for non-semver ecosystems.                                                                                                      | Quality-Gate Integrity          | OPA/Conftest                              | warning              | 4                        |
+| DB-003       | Dependabot auto-merge is wired through the pinned shared reusable workflow with the prescribed `pull_request_target` permissions.                                                                                                                    | Quality-Gate Integrity          | OPA/Conftest                              | warning              | 4                        |
+| DB-004       | Lockfile-wide dependency audits do not gate Dependabot pull requests, and a scheduled audit workflow exists to cover the gap.                                                                                                                        | Quality-Gate Integrity          | OPA/Conftest                              | warning              | 4                        |
+| MT-001       | A scheduled mutation-testing workflow exists and calls the pinned shared mutation-testing workflow; mutation testing is scheduled, not merge-blocking.                                                                                               | Quality-Gate Integrity          | OPA/Conftest + file presence              | warning              | 4                        |
 
 #### 3.1.1 Quality-gate integrity: sensors and actuators
 
@@ -1504,6 +1510,43 @@ git-revision pin on a dependency awaiting a release.
 - **Actuators:** open a migration tracking issue enumerating the blocked
   alerts; insert the `TODO` comment and raise the tracking issue via the
   comment-preserving TOML remediation provider (Section 2.3).
+
+##### Dependabot governance (DB-001 through DB-004)
+
+The estate rollouts repeatedly found Dependabot blind spots: adding a new
+workspace crate without a matching `dependabot.yml` directory silently excluded
+it from updates (one repository guards this with a repo-layout test — the
+sensor generalizes that guard); cooldown configuration drifted between
+ecosystems until policy fixed tiered cooldowns for semver ecosystems and
+`default-days` for non-semver ones; and lockfile-wide `cargo audit` gates
+deadlocked auto-merge, because a newly published advisory fails every open
+Dependabot pull request regardless of its content.
+
+- **Sensors:** enumerate package roots (Cargo workspace members, Python
+  projects, workflow directories) and diff them against `dependabot.yml` update
+  entries; policy-check cooldown blocks per ecosystem; verify the auto-merge
+  workflow calls the pinned shared reusable workflow with the prescribed
+  `pull_request_target` permission set; detect audit steps that run for the
+  Dependabot actor, paired with a presence check for the scheduled audit
+  workflow that covers merged results instead.
+- **Actuators:** comment-preserving patches adding missing `dependabot.yml`
+  directories and cooldown blocks, and file-copies of the canonical auto-merge
+  and scheduled-audit workflows.
+
+##### Mutation-testing coverage (MT-001)
+
+Mutation testing was rolled out estate-wide as a scheduled job calling a shared
+reusable workflow. It is deliberately not merge-blocking — mutation runs are
+long and their findings are advisory — so the defect class is absence:
+repositories that never run it accumulate assertion-free tests that coverage
+metrics cannot expose (the doctests-never-ran incident in QG-004 being the
+degenerate case).
+
+- **Sensors:** file presence and policy checks that a scheduled workflow
+  exists, calls the pinned shared mutation-testing workflow, and is not wired
+  into required pull-request checks.
+- **Actuators:** file-copy of the canonical scheduled mutation-testing
+  workflow from `canon/`.
 
 ### 3.2. Implementation design and execution model
 

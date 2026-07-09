@@ -304,3 +304,16 @@ actuators that remediate them. Each check ships as a lint rule package under
   manifest pinning below a patched version raises DP-001 with the blocked alert
   numbers; the DP-002 actuator inserts the `TODO` via the comment-preserving
   TOML remediation provider and raises the tracking issue.
+- [ ] Ship the Dependabot governance rule packages (DB-001 to DB-004):
+  manifest-scan sensor diffing package roots against `dependabot.yml` entries,
+  cooldown policy checks (tiered for semver ecosystems, `default-days` for
+  non-semver), pinned shared auto-merge workflow verification, and detection of
+  lockfile-wide audit steps gating Dependabot pull requests paired with a
+  scheduled-audit presence check. Acceptance: fixtures reproducing the estate
+  defects (uncovered workspace member, deadlocking audit gate) raise findings,
+  and mutations patch `dependabot.yml` and deploy the canonical workflows.
+- [ ] Ship the mutation-testing rule package (MT-001): sensors for the
+  scheduled workflow calling the pinned shared mutation-testing workflow
+  without being merge-blocking; the mutation deploys the canonical workflow.
+  Acceptance: a repository without mutation testing raises the finding and the
+  deployed workflow passes `act` validation.
