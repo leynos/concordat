@@ -1470,6 +1470,14 @@ The primary audit domains are:
    Foundation Scorecard tool. The numeric score and specific findings from
    Scorecard are incorporated into the Auditor's overall report, providing a
    consistent, organization-wide security baseline.
+6. **Quality-Gate Integrity:** Verifies that the quality gates a repository
+   claims to run actually execute and bind: lint suites that cannot be silently
+   skipped, coverage pipelines that reach their consumers, test runners that
+   execute every test class (including doctests), automerge machinery that
+   cannot jam on stale third-party checks, and dependency pins that stay
+   actionable. The checks in this domain were distilled from the 2026 Whitaker
+   and CodeScene estate rollouts, where each defect class below was observed in
+   production repositories.
 
 The following table serves as the master list of requirements for the Auditor.
 It defines the scope of work for implementation, and provides an itemized
@@ -1492,10 +1500,131 @@ breakdown of what constitutes "compliance" within the framework.
 | FP-002       | An `AGENTS.md` file must exist and contain required sections.                                                                                                                                                                                                                                                                                                                      | File and Content Presence       | Python/Content Check                               | error                | 1                        |
 | FP-003       | A root `Makefile` must exist and contain canonical targets (`lint`, `test`, `build`).                                                                                                                                                                                                                                                                                              | File and Content Presence       | makeutil + OPA/Conftest (`rust-makefile-baseline`) | error                | 2                        |
 | FP-004       | For Python projects, a `ruff.toml` file must exist.                                                                                                                                                                                                                                                                                                                                | File and Content Presence       | OPA/Conftest                                       | error                | 1                        |
-| QG-001       | The `Makefile` lint gate must be binding: no ignore-errors or soft-skip lint recipes, and gate delegation provable within one prerequisite hop. The gate variable's `?=` assignment (`WHITAKER ?= whitaker`) is the sanctioned estate pattern and is not a finding. Unprovable constructs (includes, recovered parses, ambiguous `lint` definitions) fail closed as indeterminate. | Quality Gate Integrity          | makeutil + OPA/Conftest (`rust-makefile-baseline`) | error                | 2                        |
+| QG-001       | The `Makefile` lint gate must be binding: no ignore-errors or soft-skip lint recipes, and gate delegation provable within one prerequisite hop. The gate variable's `?=` assignment (`WHITAKER ?= whitaker`) is the sanctioned estate pattern and is not a finding. Unprovable constructs (includes, recovered parses, ambiguous `lint` definitions) fail closed as indeterminate. | Quality-Gate Integrity          | makeutil + OPA/Conftest (`rust-makefile-baseline`) | error                | 2                        |
 | PD-001       | All Markdown files must pass Vale linting against the house style guide.                                                                                                                                                                                                                                                                                                           | Prose and Documentation Quality | Vale                                               | warning              | 2                        |
 | SP-001       | The Open Source Security Foundation Scorecard must achieve a minimum score of 7.0.                                                                                                                                                                                                                                                                                                 | Security Posture                | Open Source Security Foundation Scorecard          | warning              | 1                        |
 | LG-001       | The `docs/library-users-guide.md` file must match the canonical version from the consumed library tag.                                                                                                                                                                                                                                                                             | File and Content Presence       | Python/Content Check                               | error                | 4                        |
+| QG-002       | Lint tooling is installed from a pinned release via the hardened step: version-keyed cache, shell-variable indirection in `run:` blocks, `--locked`, binstall-or-build fallback, `--cranelift` preserved where the repository builds with Cranelift. | Quality-Gate Integrity          | OPA/Conftest                              | error                | 4                        |
+| QG-003       | The lint suite itself is pinned (e.g. `whitaker-installer --ref <tag>`), not floating on a rolling release.                                                                                                                                          | Quality-Gate Integrity          | OPA/Conftest                              | warning              | 4                        |
+| QG-004       | Test invocation uses the canonical `TEST_CMD` nextest fallback, test-tool installs pass `--locked`, and doctests are executed by a dedicated target (nextest does not run them).                                                                     | Quality-Gate Integrity          | OPA/Conftest + Makefile parse             | warning              | 4                        |
+| CV-001       | The pull-request coverage job drives the CodeScene gate with `cs-coverage check` (`mode: check`, `project-url`, `fetch-depth: 0`, LCOV named `*.info`); `upload` is never attempted from pull requests.                                              | Quality-Gate Integrity          | OPA/Conftest                              | error                | 4                        |
+| CV-002       | A push-to-main (and only main) workflow uploads coverage to CodeScene (`mode: upload`).                                                                                                                                                              | Quality-Gate Integrity          | OPA/Conftest + file presence              | error                | 4                        |
+| CV-003       | Every secret referenced by a guarded workflow step exists in BOTH the Actions and Dependabot secret stores (guards silently skip when the secret is absent).                                                                                         | Quality-Gate Integrity          | Python/GitHub API                         | error                | 4                        |
+| CV-004       | The coverage ratchet is enabled: exactly one ratcheting `generate-coverage` invocation per job, with the authoritative baseline written by the main-branch workflow.                                                                                 | Quality-Gate Integrity          | OPA/Conftest                              | warning              | 4                        |
+| AM-001       | No open Dependabot pull request sits `BLOCKED` while all required checks pass (a stale or timed-out third-party check is poisoning the status rollup).                                                                                               | Quality-Gate Integrity          | Python/GitHub API                         | warning              | 4                        |
+| AM-002       | No workflow's recent runs all conclude `startup_failure` (an unloadable workflow file failing silently on every trigger).                                                                                                                            | Quality-Gate Integrity          | Python/GitHub API                         | error                | 4                        |
+| DP-001       | Open Dependabot security alerts are actionable: no manifest requirement pins a dependency below the first patched version of an open alert.                                                                                                          | Quality-Gate Integrity          | Python/GitHub API + manifest parse        | error                | 4                        |
+| DP-002       | Git-revision dependency pins carry a `TODO(<issue-url>)` comment and an open tracking issue.                                                                                                                                                         | Quality-Gate Integrity          | OPA/Conftest + Python/GitHub API          | warning              | 4                        |
+
+
+#### 3.1.1 Quality-gate integrity: sensors and actuators
+
+Each check in the Quality-Gate Integrity domain is delivered as a lint rule
+package (Section 2.1.2): a sensor that detects the defect, parameters that
+adapt it per repository, and a mutation (actuator) that remediates it. The
+motivating incidents come from the 2026 Whitaker lint rollout (30+
+repositories) and the CodeScene coverage rollout; every rule below corresponds
+to a defect actually found in the estate.
+
+
+##### Lint-gate binding (QG-001, QG-002, QG-003)
+
+Several repositories carried lint steps that could not fail: Makefiles ran the
+Whitaker suite only `if command -v whitaker` succeeded, an exported
+`WHITAKER=true` in a developer shell silently turned the gate into the `true`
+binary via `WHITAKER ?=`, and CI installed the linter from a stale git revision
+whose cache key never rotated.
+
+- **Sensors:** parse the Makefile for conditional lint invocation and
+  overridable tool variables in gate-critical targets; evaluate workflow YAML
+  for the hardened install step (release-pinned installer, cache keyed by the
+  version variable, plain shell variables rather than inline `${{ env }}`
+  interpolation in `run:` blocks — a zizmor template-injection finding —
+  `--locked` on binstall and its fallback, `--cranelift` retained where
+  `.cargo/config.toml` selects the Cranelift backend); flag installs that track
+  a rolling release once ref-pinning is available upstream.
+- **Actuators:** comment-preserving patches replacing soft-skip recipes
+  with the canonical mandatory form, and file patches replacing bespoke install
+  steps with the canonical hardened step from `canon/`.
+
+
+##### Test-runner completeness (QG-004)
+
+nextest does not execute doctests. A repository whose Makefile and CI both
+invoked `cargo nextest run` had never executed its doctests at all; they were
+discovered only when a dedicated `test-doc` target was added. Tool installs
+without `--locked` also began hard-failing when cargo-nextest 0.9.140
+introduced its locked-build tripwire.
+
+- **Sensors:** detect nextest-only test targets with no accompanying
+  `cargo test --doc` invocation; detect `cargo binstall`/`cargo install` of
+  test tooling without `--locked`; verify the Makefile uses the canonical
+  `TEST_CMD` fallback so machines without nextest degrade to `cargo test`
+  rather than failing.
+- **Actuators:** Makefile patches adding the `TEST_CMD` variable, a
+  `test-doc` target, and the aggregate-target wiring.
+
+
+##### Coverage pipeline reach (CV-001 through CV-004)
+
+The CodeScene rollout found repositories that generated coverage and then
+discarded it, uploads keyed to synthetic merge commits, an upload verb that the
+provider rejects outside analysed branches ("CodeScene only analyse the
+following branches: (main)"), reports stripped of per-line records by
+`--summary-only`, and guard conditions that skipped uploads forever because the
+secret was set in only one of GitHub's two secret stores (Actions and
+Dependabot runs read different stores).
+
+- **Sensors:** workflow policies asserting the PR coverage job runs
+  `cs-coverage check` with a `fetch-depth: 0` checkout, a `project-url`, and an
+  `*.info`-named LCOV report; a push-to-main workflow exists whose only trigger
+  is `main` and whose final step is `mode: upload`; the coverage-action pin is
+  at or after the shared-actions revision that preserves line records; exactly
+  one `with-ratchet` invocation per job with the baseline written by the main
+  workflow (Actions caches saved on a pull-request branch are invisible to
+  other branches, so a PR-only ratchet compares against nothing). The
+  secret-store sensor lists secret names via the GitHub API for both stores and
+  cross-references every `if: env.X != ''` guard in the repository's workflows.
+- **Actuators:** canonical `coverage-main.yml` file-copy, coverage-job
+  patches, and a `concordat`-driven secret provisioning command that sets an
+  operator-supplied token in both stores; where the token is not available to
+  automation, the actuator degrades to opening a tracking issue naming the
+  absent store.
+
+
+##### Automerge and workflow health (AM-001, AM-002)
+
+Dependabot pull requests sat `BLOCKED` for months with every required check
+green because a timed-out third-party check poisoned the status rollup that the
+automerge gate reads; separately, a release dry-run workflow had concluded
+`startup_failure` on every trigger since May without anyone noticing, because
+load-time failures post no check to any pull request.
+
+- **Sensors:** scheduled GitHub API sweeps comparing each open Dependabot
+  pull request's `mergeStateStatus` against the required-check contexts
+  actually configured in rulesets; a run-history scan flagging workflows whose
+  recent runs uniformly conclude `startup_failure`.
+- **Actuators:** commenting `@dependabot rebase` on jammed pull requests
+  (safe and idempotent — a stale check is immutable for a given head commit, so
+  only a fresh head can recover); opening a tracking issue for unloadable
+  workflows.
+
+
+##### Dependency-pin actionability (DP-001, DP-002)
+
+Thirteen security alerts accumulated against one repository because its
+manifest pinned `diesel-async = "0.7"` while the fixes lived in 0.9 —
+Dependabot's lockfile-only bumps could never apply, and its pull requests
+failed CI indefinitely. The eventual migration also required a temporary
+git-revision pin on a dependency awaiting a release.
+
+- **Sensors:** cross-reference open Dependabot alerts' first patched
+  versions against manifest version requirements to find pins that make an
+  alert unactionable; parse manifests for git-revision dependencies lacking a
+  `TODO(<issue-url>)` comment that resolves to an open issue.
+- **Actuators:** open a migration tracking issue enumerating the blocked
+  alerts; insert the `TODO` comment and raise the tracking issue via the
+  comment-preserving TOML remediation provider (Section 2.3).
 
 ### 3.2. Implementation design and execution model
 
