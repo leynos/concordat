@@ -1,10 +1,10 @@
 module github.com/leynos/concordat/platform-standards/tofu/terratest
 
-go 1.26
+go 1.26.0
 
 require (
 	github.com/aws/aws-sdk-go v1.55.8
-	github.com/gruntwork-io/terratest v1.0.0
+	github.com/gruntwork-io/terratest v1.0.1
 	github.com/hashicorp/hcl/v2 v2.24.0
 	github.com/johannesboyne/gofakes3 v0.0.0-20250916175020-ebf3e50324d3
 )
