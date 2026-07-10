@@ -159,12 +159,17 @@ Makefile targets:
 | `make typecheck` | Run pyright type checker                 |
 | `make test`      | Run the test suite                       |
 | `make check-fmt` | Verify formatting without changing files |
+| `make spelling`  | Enforce shared en-GB-oxendict spelling   |
 
 Run all quality gates before committing:
 
 ```shell
 make fmt && make lint && make typecheck && make test
 ```
+
+The lint and Markdown gates generate `typos.toml` from the shared estate
+dictionary plus `typos.local.toml`, then run a pinned `typos` release. A valid
+committed configuration remains usable in a clean network-restricted checkout.
 
 ## Licence
 

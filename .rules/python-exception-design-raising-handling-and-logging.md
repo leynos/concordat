@@ -91,7 +91,7 @@ def reciprocal(n: float) -> float:
         return result
 ```
 
-`else` emphasises the happy path and avoids odd control‑flow within `try`
+`else` emphasizes the happy path and avoids odd control‑flow within `try`
 blocks.
 
 ## 4) Message construction for raises (flake8-errmsg EM101/EM102) and logging practice (flake8-logging LOG004/LOG007/LOG009/LOG014/LOG015, Ruff Tryceratops TRY401)
@@ -111,7 +111,7 @@ raise RuntimeError(msg)
 Flake8-errmsg rules EM101/EM102 prefer a single message object; this reduces
 duplication and clarifies intent.
 
-### Logging: parameterised messages, module loggers, correct APIs
+### Logging: parameterized messages, module loggers, correct APIs
 
 ```python
 import logging

@@ -46,7 +46,7 @@ coverage with an efficient feedback loop.8
 
 Static analysis is the first, and most fundamental layer of testing, performed
 on the code itself without executing it or deploying any infrastructure.9 This
-layer acts as a rapid, low-cost first line of defense, catching a wide range of
+layer acts as a rapid, low-cost first line of defence, catching a wide range of
 issues before they enter the main development branch or a continuous
 integration (CI) / continuous delivery (CD) pipeline.
 
@@ -982,8 +982,8 @@ it.16
 However, with the advent of robust native testing in OpenTofu/Terraform, and
 the widespread adoption of the more flexible Terratest framework,
 Kitchen-Terraform is now largely considered a legacy tool. The project itself
-has been deprecated in favor of the native test framework, and while it was a
-valuable part of the ecosystem's history, new projects should favor `tofu test`
+has been deprecated in favour of the native test framework, and while it was a
+valuable part of the ecosystem's history, new projects should favour `tofu test`
 or Terratest for their testing needs.54
 
 ## Part 5: architectural best practices for testable OpenTofu modules
@@ -1399,7 +1399,7 @@ infrastructure changes while optimizing for developer productivity.8
 The emergence of powerful, native testing frameworks like `tofu test` and
 sophisticated third-party libraries like Terratest marks a significant
 maturation point for Infrastructure as Code. IaC is no longer just a scripting
-practice; it is a formal engineering discipline that demands the same rigor and
+practice; it is a formal engineering discipline that demands the same rigour and
 quality assurance as application development.
 
 The future of IaC testing will likely see this trend continue, and accelerate.

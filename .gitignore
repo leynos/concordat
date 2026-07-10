@@ -216,3 +216,7 @@ platform-standards/**/.terraform/
 *.tfvars
 
 .vale
+
+# Untracked shared spelling-policy cache and freshness metadata.
+.typos-oxendict-base.json
+.typos-oxendict-base.toml

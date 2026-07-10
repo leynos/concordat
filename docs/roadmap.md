@@ -49,7 +49,7 @@ template tree into published platform-standards repositories.
   table; `python -m scripts.canon_artifacts tui <published-root>` launches a
   Textual menu when dev dependencies are installed; unit tests cover
   missing/out-of-date cases.
-- [x] Document the canonical artefact synchronisation workflow in the users'
+- [x] Document the canonical artefact synchronization workflow in the users'
   guide and design documentation. Acceptance: operators can follow the docs to
   identify drift and deploy updates into a local platform-standards checkout.
 - [ ] Integrate the artefact tooling into the main CLI as `concordat artefact`
@@ -221,7 +221,7 @@ Roll out the canonical state across the estate using OpenTofu.
   Projects boards. Acceptance: Auditor drift reports confirm no unexpected
   changes, and affected teams sign off on the new labels.
 
-### 3.3. Wire synchronisation and audit enforcement
+### 3.3. Wire synchronization and audit enforcement
 
 Keep labels and project fields consistent and make the configuration
 non-optional.

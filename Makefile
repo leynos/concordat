@@ -2,13 +2,16 @@ MDLINT ?= $(shell command -v markdownlint-cli2 2>/dev/null || echo "$(HOME)/.bun
 NIXIE ?= $(shell which nixie)
 MDFORMAT_ALL ?= $(shell which mdformat-all)
 VALE ?= $(shell which vale)
-TOOLS = $(MDFORMAT_ALL) ruff ty $(MDLINT) $(NIXIE) uv
+TOOLS = $(MDFORMAT_ALL) ty $(MDLINT) $(NIXIE) uv
 VENV_TOOLS = pytest
 ACRONYM_SCRIPT ?= scripts/update_acronym_allowlist.py
 UV_ENV = UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools
+RUFF := $(UV_ENV) uv run ruff
+TYPOS_VERSION ?= 1.48.0
+TYPOS := uv tool run typos@$(TYPOS_VERSION)
 
 .PHONY: help all clean build build-release lint fmt check-fmt \
-        markdownlint nixie test typecheck vale $(TOOLS) $(VENV_TOOLS)
+        markdownlint nixie spelling test typecheck vale $(TOOLS) $(VENV_TOOLS)
 
 .DEFAULT_GOAL := all
 
@@ -27,6 +30,7 @@ clean: ## Remove build artifacts
 	rm -rf build dist *.egg-info \
 	  .mypy_cache .pytest_cache .coverage coverage.* \
 	  lcov.info htmlcov .venv
+	rm -f .typos-oxendict-base.json .typos-oxendict-base.toml
 	find . -type d -name '__pycache__' -print0 | xargs -0 -r rm -rf
 
 define ensure_tool
@@ -55,24 +59,32 @@ $(VENV_TOOLS): ## Verify required CLI tools in venv
 	$(call ensure_tool_venv,$@)
 endif
 
-fmt: ruff $(MDFORMAT_ALL) ## Format sources
-	ruff format
-	ruff check --select I --fix
+fmt: build $(MDFORMAT_ALL) ## Format sources
+	$(RUFF) format
+	$(RUFF) check --select I --fix
 	$(MDFORMAT_ALL)
 
-check-fmt: ruff ## Verify formatting
-	ruff format --check
+check-fmt: build ## Verify formatting
+	$(RUFF) format --check
 	# mdformat-all doesn't currently do checking
 
-lint: ruff ## Run linters
-	ruff check
+lint: build ## Run linters
+	$(RUFF) check
+	+$(MAKE) spelling
 
 typecheck: build ty ## Run typechecking
 	ty --version
-	ty check
+	ty check concordat tests
+	PYTHONPATH=scripts ty check scripts
 
 markdownlint: $(MDLINT) ## Lint Markdown files
 	$(MDLINT) '**/*.md'
+	+$(MAKE) spelling
+
+spelling: ## Enforce en-GB-oxendict spelling in Markdown prose
+	@uv run scripts/generate_typos_config.py
+	@find . -type f -name '*.md' -not -path './.venv/*' -print0 | \
+		xargs -0 -r $(TYPOS) --config typos.toml --force-exclude
 
 nixie: $(NIXIE) ## Validate Mermaid diagrams
 	$(NIXIE) --no-sandbox
