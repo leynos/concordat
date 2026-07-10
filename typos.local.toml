@@ -14,4 +14,4 @@ accepted = ["Hashi"] # HashiCorp product-name prefix.
 ignore = []
 
 [files]
-exclude = []
+exclude = [".terraform"] # Shared policy also excludes generated OpenTofu output.
