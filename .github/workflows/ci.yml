@@ -10,8 +10,6 @@ jobs:
   lint-test:
     runs-on: ubuntu-latest
     env:
-      CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
-      CODESCENE_CLI_SHA256: ${{ vars.CODESCENE_CLI_SHA256 }}
       TOFU_VERSION: "1.10.7"
     steps:
       - name: Check out repository
@@ -90,41 +88,24 @@ jobs:
       - name: Run typechecker
         run: make typecheck
 
-      - name: Run tests with coverage
-        run: |
-          uv pip install slipcover pytest-forked
-          uv run python -m slipcover \
-            --source=./concordat \
-            --omit="*/unittests/*,*/.venv/*" \
-            --branch \
-            --out coverage.xml \
-            -m pytest --forked -v tests
-
-      - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
+      - name: Generate coverage
+        # Coverage is generated only on pull requests here; main-branch
+        # coverage (which CodeScene requires for its "upload" mode) is
+        # generated and uploaded by coverage-main.yml on push, so this
+        # step is skipped there to avoid generating it twice.
+        if: github.event_name == 'pull_request'
+        uses: leynos/shared-actions/.github/actions/generate-coverage@927edd45ae77be4251a8a18ca9eb5613a2e32cbd
         with:
-          name: coverage
-          path: coverage.xml
-
-      - name: Install CodeScene Coverage CLI
-        if: env.CS_ACCESS_TOKEN != ''
-        run: |
-          codescene_url="https://downloads.codescene.io/enterprise/cli"
-          codescene_url="${codescene_url}/install-cs-coverage-tool.sh"
-          curl -fsSL "${codescene_url}" | bash -s -- -y
-          if [ -n "${CODESCENE_CLI_SHA256:-}" ]; then
-            echo "${CODESCENE_CLI_SHA256}  install-cs-coverage-tool.sh" \
-              | sha256sum -c -
-          fi
-
-      - name: Upload coverage to CodeScene
-        if: env.CS_ACCESS_TOKEN != ''
-        run: |
-          if [ ! -f coverage.xml ]; then
-            echo "coverage.xml not found!"
-            exit 1
-          fi
-          cs-coverage upload \
-            --format "cobertura" \
-            --metric "line-coverage" \
-            coverage.xml
+          output-path: coverage.xml
+          format: cobertura
+          pytest-workers: ''
+          with-ratchet: 'true'
+      # The `mode: check` step is deliberately not wired in yet: until a
+      # repo's CodeScene project has a coverage-gates configuration,
+      # `cs-coverage check` fails every run with "HTTP call succeeded,
+      # but the received project-config isn't valid. Lacks the gates
+      # configuration." — a CodeScene-side per-project setting, not a CI
+      # defect. Add the check step in a fast-follow PR once
+      # coverage-main.yml has uploaded to main at least once and the
+      # gate is confirmed to resolve, or once CodeScene confirms the
+      # project's coverage gate is enabled.
