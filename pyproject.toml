@@ -9,7 +9,7 @@ authors = [
     { name = "Payton McIntosh", email = "pmcintosh@df12.net" },
 ]
 dependencies = [
-    "boto3>=1.35",
+    "boto3>=1.43.40",
     "cyclopts",
     "github3.py",
     "pygit2",
