@@ -211,7 +211,7 @@ The `concordat` repository wires these patterns into
 `tests/workflows/test_auditor_workflow.py`. The test drives
 `.github/workflows/auditor.yml` via `act` with the following conventions:
 
-- Set `CONCORDAT_RUN_ACT_TESTS=1` to opt into the containerised run (the default
+- Set `CONCORDAT_RUN_ACT_TESTS=1` to opt into the containerized run (the default
   suite skips it to avoid Docker requirements).
 - Provide a JSON snapshot via the `snapshot_path` workflow input so the Auditor
   CLI operates deterministically without reaching the GitHub API.

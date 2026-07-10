@@ -98,7 +98,7 @@ reliability while obscuring metrics. To align priority management with the
 priority model defined once in `platform-standards`. OpenTofu applies the
 model, and the Auditor alongside GitHub rulesets enforces it. The `concordat`
 command-line interface (CLI) remains the entry point for estate inventory and
-enrollment but continues to defer all mutation to declarative automation.
+enrolment but continues to defer all mutation to declarative automation.
 
 ### 2.2 Canonical priority model contract
 
@@ -278,7 +278,7 @@ template usage, satisfying the evaluate-mode acceptance criteria.
   Concordat can offer to remove the affected resources from state and retry the
   apply. This enables safe disenrolment without deleting GitHub repositories.
 - Both commands emit the execution directory path (helpful for debugging) and
-  remove it afterward unless `--keep-workdir` is provided.
+  remove it afterwards unless `--keep-workdir` is provided.
 
 To bring repositories under OpenTofu management automatically,
 `concordat enrol` will also prepare a pull request against the
@@ -311,7 +311,7 @@ The delivered CLI follows the workflow above:
 
 - Active estates are refreshed into `$XDG_CACHE_HOME/concordat/estates/<alias>`
   and copied into a per-run temporary directory. The CLI prints the workspace
-  path at the start of every execution and removes it afterward unless
+  path at the start of every execution and removes it afterwards unless
   `--keep-workdir` is passed for debugging.
 - `terraform.tfvars` is synthesized with the estate's `github_owner` before
   invoking OpenTofu. Commands refuse to run without `GITHUB_TOKEN`, so the
@@ -356,7 +356,7 @@ DigitalOcean state without DynamoDB because Terraform/OpenTofu ≥ 1.10 added
 native `.tflock` locks when `use_lockfile = true`; Concordat pins the stack to
 ≥ 1.12.0 to pick up the stability fixes in the later release. Scaleway
 explicitly documents that its Object Storage does not implement Terraform
-locking, so Concordat serialises applies there (single-writer discipline plus
+locking, so Concordat serializes applies there (single-writer discipline plus
 warnings). Credentials ride in the environment, as with `GITHUB_TOKEN`, and
 never land in Git history.
 
@@ -372,7 +372,7 @@ terraform {
 }
 ```
 
-`concordat estate persist` materialises the user-supplied settings into a
+`concordat estate persist` materializes the user-supplied settings into a
 checked-in `.tfbackend` file (for example,
 `platform-standards/tofu/backend/<provider>.tfbackend`). Concordat renders the
 file differently per provider so the semantics stay accurate:
@@ -521,18 +521,18 @@ acknowledge the state migration impact.
   `SPACES_ACCESS_KEY_ID`/`SPACES_SECRET_ACCESS_KEY`, and aborts when none are
   set. When the descriptor is absent, both commands retain the current
   local-state default.
-- The initialisation log echoes the bucket, key, and region (never secrets) so
+- The initialization log echoes the bucket, key, and region (never secrets) so
   operators have traceability in Continuous Integration (CI) logs.
 - The backend config path in the manifest must resolve inside the estate
   workspace; missing or external paths abort execution to avoid mixing state
   files from other locations.
-- Backends remain immutable once initialised; the command-line interface (CLI)
+- Backends remain immutable once initialized; the command-line interface (CLI)
   refuses to mix local and remote state in the same workspace unless the
   operator wipes `.terraform` explicitly. This protects estates from partial
   migrations.
 
 Because the backend lockfile feature landed in Terraform/OpenTofu 1.10 and
-stabilised in 1.12 (the enforced minimum for this stack), the command-line
+stabilized in 1.12 (the enforced minimum for this stack), the command-line
 interface (CLI) no longer needs DynamoDB when targeting AWS or DigitalOcean.
 Those providers honour the conditional writes behind native `.tflock` objects,
 so secondary applies surface the standard "state locked" message with the
@@ -572,7 +572,7 @@ single-writer discipline to keep state consistent.
   - Periodically audit access logs for the bucket to detect unauthorized reads.
 - Disaster recovery: operators can leverage Scaleway's bucket versioning to roll
   back a corrupted state by copying the previous version over the active
-  object. The design doc emphasises that Concordat will not automate rollbacks;
+  object. The design doc emphasizes that Concordat will not automate rollbacks;
   it simply guarantees that version IDs appear in the CLI output whenever an
   apply updates state.
   - Scaleway: enable Object Lock's compliance mode with retention windows that
@@ -736,7 +736,7 @@ dispatch events against the canonical workflows. This enables local smoke tests
 and is itself covered by `pytest` + `cmd_mox` fixtures so that CI can verify
 the expected `act` invocation without contacting GitHub Actions.
 
-#### 2.1.1. Canonical artefact packages and synchronisation
+#### 2.1.1. Canonical artefact packages and synchronization
 
 Canonical artefacts are the distribution unit for platform standards. They are
 published in the `platform-standards` repository and consumed by:
@@ -1358,10 +1358,10 @@ The primary audit domains are:
    consistent, organization-wide security baseline.
 
 The following table serves as the master list of requirements for the Auditor.
-It defines the scope of work for implementation, and provides an itemised
+It defines the scope of work for implementation, and provides an itemized
 breakdown of what constitutes "compliance" within the framework.
 
-#### Table 3: Auditor check catalog
+#### Table 3: Auditor check catalogue
 
 | **Check ID** | **Description**                                                                                                                      | **Audit Domain**                | **Implementation Tool**                   | **Default Severity** | **Implementation Phase** |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------- | ----------------------------------------- | -------------------- | ------------------------ |

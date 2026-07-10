@@ -318,7 +318,7 @@ work without additional flags.
 
 The stack declares an explicit `s3` backend in
 `platform-standards/tofu/backend.tf` and ships a Scaleway starter config at
-`platform-standards/tofu/backend/scaleway.tfbackend`. Initialise estates with
+`platform-standards/tofu/backend/scaleway.tfbackend`. Initialize estates with
 OpenTofu 1.12 or newer using:
 
 ```bash
@@ -560,7 +560,7 @@ demonstrating the guardrails to stakeholders:
   GITHUB_TOKEN=placeholder tofu -chdir=platform-standards/tofu apply plan.tfplan
   ```
 
-  Always delete the workspace or discard the generated state file afterward.
+  Always delete the workspace or discard the generated state file afterwards.
 
 - Exercise the module’s native unit tests (plan and apply):
 

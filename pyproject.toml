@@ -115,6 +115,7 @@ typing = "typ"
 asyncio_default_fixture_loop_scope = "function"
 # Tests automatically killed after seconds elapsed
 timeout = 30
+testpaths = ["scripts/tests", "tests"]
 markers = [
     "integration: marks tests that rely on act or external tooling",
 ]

@@ -88,6 +88,8 @@ When implementing changes, adhere to the following testing procedures:
     - **Typechecking:** Passes type checking (`make typecheck`).
   - For Markdown files (`.md` only):
     - **Linting:** Passes lint checks (`make markdownlint`).
+    - **Spelling:** Passes the en-GB-oxendict `typos` gate included in
+      `make markdownlint` and `make lint`.
     - **Mermaid diagrams:** Passes validation using nixie (`make nixie`)
 - **Committing:**
   - Only changes that meet all the quality gates above should be committed.
@@ -139,6 +141,10 @@ When implementing changes, adhere to the following testing procedures:
 ## Markdown guidance
 
 - Validate Markdown files using `make markdownlint`.
+- Put narrow repository-only terms in `typos.local.toml`; never edit the
+  generated `typos.toml` entries by hand. The generator refreshes its untracked
+  shared-base cache only when the authority is newer and retains the reviewed
+  tracked configuration when a clean checkout cannot reach that authority.
 - Run `make fmt` after any documentation changes to format all Markdown files
   and fix table markup.
 - Validate Mermaid diagrams in Markdown files by running `make nixie`.

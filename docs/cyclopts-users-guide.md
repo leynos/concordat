@@ -393,7 +393,7 @@ ______________________________________________________________________
 
 Use the rich defaults for most apps, then opt‑in to plain text for TTYs that
 dislike ANSI or for accessibility. Per‑group `help_formatter` is ideal for
-emphasising “Required” vs “Optional” panels.
+emphasizing “Required” vs “Optional” panels.
 
 ______________________________________________________________________
 

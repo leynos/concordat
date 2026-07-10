@@ -14,5 +14,5 @@
 - **Onboarding Runbook:** Link to `docs/onboarding.md`
 - **Service Links:** Production dashboards, alerting policies, synthetic tests.
 
-Keep entries short, actionable, and up to date. The canonical template favors
+Keep entries short, actionable, and up to date. The canonical template favours
 human readability while staying machine diffable.
