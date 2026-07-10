@@ -191,7 +191,7 @@ requires-dist = [
     { name = "pygit2" },
     { name = "requests" },
     { name = "ruamel-yaml" },
-    { name = "tofupy", specifier = ">=1.1.1,<2.0" },
+    { name = "tofupy", specifier = ">=1.1.2,<2.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -849,11 +849,11 @@ wheels = [
 
 [[package]]
 name = "tofupy"
-version = "1.1.1"
+version = "1.1.2"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/29/b4/bdd31c991b13b51467dcee8e6781606f474d1aeced9f229a23584e0059fb/tofupy-1.1.1.tar.gz", hash = "sha256:01e604df8ca9e9669ae4a78726aff63a48024fbf3649585246180941a213fb1b", size = 27362, upload-time = "2025-08-03T01:41:01.665Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/56/f3/3883e921dce7e339b7883eea74f989a81a7d4a05bf88fbee0847d8f35be6/tofupy-1.1.2.tar.gz", hash = "sha256:b5858773b71ca8371edc86e7cb2ebf46c5451318e681fe6465254f1c94516969", size = 27425, upload-time = "2025-12-05T17:58:33.716Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3c/e9/b22b89de1c7af431399c72fd642efe01b03515481eb8b511053ea46a769d/tofupy-1.1.1-py3-none-any.whl", hash = "sha256:b12a75f9bcfede6b521486f2c91a9e6f5d2a68967e7623d9f67f2e236a0c000c", size = 22524, upload-time = "2025-08-03T01:41:00.099Z" },
+    { url = "https://files.pythonhosted.org/packages/0b/66/19ec715043ab3753f3a36252d72d5d492cbdf7fda67e69637a38774d45f6/tofupy-1.1.2-py3-none-any.whl", hash = "sha256:facdb343d9ab39ec6e408cbf3562ed5b1553032a9043d9c97c9901ba88fac1a7", size = 22595, upload-time = "2025-12-05T17:58:32.674Z" },
 ]
 
 [[package]]

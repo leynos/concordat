@@ -15,7 +15,7 @@ dependencies = [
     "pygit2",
     "requests",
     "ruamel.yaml",
-    "tofupy>=1.1.1,<2.0",
+    "tofupy>=1.1.2,<2.0",
 ]
 
 [project.scripts]
