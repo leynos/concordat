@@ -32,7 +32,7 @@ dev = [
     "pyright",
     "pytest-timeout",
     "betamax",
-    "textual>=8.2.7,<9.0",
+    "textual>=8.2.8,<9.0",
 ]
 
 [tool.pyright]
