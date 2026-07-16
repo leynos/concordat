@@ -15,6 +15,8 @@ jobs:
       - name: Check out repository
         # v4
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          fetch-depth: 0
 
       - name: Set up Go
         # v5
@@ -100,12 +102,15 @@ jobs:
           format: cobertura
           pytest-workers: ''
           with-ratchet: 'true'
-      # The `mode: check` step is deliberately not wired in yet: until a
-      # repo's CodeScene project has a coverage-gates configuration,
-      # `cs-coverage check` fails every run with "HTTP call succeeded,
-      # but the received project-config isn't valid. Lacks the gates
-      # configuration." — a CodeScene-side per-project setting, not a CI
-      # defect. Add the check step in a fast-follow PR once
-      # coverage-main.yml has uploaded to main at least once and the
-      # gate is confirmed to resolve, or once CodeScene confirms the
-      # project's coverage gate is enabled.
+
+      - name: Check coverage against CodeScene gates
+        env:
+          CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
+        if: env.CS_ACCESS_TOKEN != '' && github.event_name == 'pull_request'
+        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@29eea2635ee0f92e42c05f4cd360b7f1a2f00b12
+        with:
+          format: cobertura
+          mode: check
+          project-url: https://api.codescene.io/v2/projects/73480
+          access-token: ${{ env.CS_ACCESS_TOKEN }}
+          installer-checksum: ${{ vars.CODESCENE_CLI_SHA256 }}
