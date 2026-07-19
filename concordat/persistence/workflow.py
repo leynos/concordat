@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import os
 import typing as typ
 
 import pygit2
 
-from concordat import estate_execution
+from concordat import credentials, estate_execution
 
 from . import gitops
 from . import validation as persistence_validation
@@ -151,7 +150,7 @@ def persist_estate(
     github_token = (
         opts.github_token
         if opts.github_token is not None
-        else os.getenv("GITHUB_TOKEN")
+        else credentials.github_token()
     )
 
     workspace, paths = _setup_persistence_environment(record)
