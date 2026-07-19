@@ -1,5 +1,8 @@
 # concordat
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](
+https://deepwiki.com/leynos/concordat)
+
 **Keep your GitHub repositories in line, without the hassle.**
 
 Concordat is a command-line interface (CLI) that helps you enforce consistent
