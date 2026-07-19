@@ -1257,18 +1257,87 @@ The formal schema for this file is defined below.
 
 #### Table 2: Schema for `.concordat`
 
-| **Field Path**              | **Data Type** | **Requirement**                      | **Description**                                                                                                                                                                                  |
-| --------------------------- | ------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `enrolled`                  | Boolean       | Required                             | Must be set to `true` to signal that the repository is under Concordat/OpenTofu management.                                                                                                      |
-| `language.primary`          | String        | Required                             | The primary programming language of the repository. Must be a lowercase string (e.g., `python`, `go`, `typescript`). This value drives the selection of language-specific linting, and CI rules. |
-| `language.others`           | Array         | Optional                             | A list of other significant languages present in the repository (e.g., `shell`, `make`).                                                                                                         |
-| `infrastructure.opentofu`   | Boolean       | Optional                             | Set to `true` if the repository contains OpenTofu/Terraform code. This enables checks for `Makefile` targets like `tf-plan`. Defaults to `false`.                                                |
-| `infrastructure.kubernetes` | Boolean       | Optional                             | Set to `true` if the repository contains Kubernetes manifests. This enables Kubernetes-specific validation rules. Defaults to `false`.                                                           |
-| `docs.style`                | String        | Optional                             | The name of the Vale style to apply. Must correspond to a directory name in `platform-standards/canon/docs/Styles/`. Example: `your-house`.                                                      |
-| `libraries`                 | Array[Object] | Optional                             | A list of critical internal libraries consumed by this repository, used for guide parity checks.                                                                                                 |
-| `libraries.name`            | String        | Required (if `libraries` is present) | The name of the consumed library repository (e.g., `acme-lib`).                                                                                                                                  |
-| `libraries.version_tag`     | String        | Required (if `libraries` is present) | The Git tag of the library version being used (e.g., `v2.4.1`). The Auditor uses this to fetch the correct version of the library's user guide for comparison.                                   |
-| `ci.needs_release_workflow` | Boolean       | Optional                             | Set to `true` if the repository should be configured with the canonical release workflow. Defaults to `false`.                                                                                   |
+| **Field Path**              | **Data Type** | **Requirement**                      | **Description**                                                                                                                                                                                                                                                                                     |
+| --------------------------- | ------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enrolled`                  | Boolean       | Required                             | Must be set to `true` to signal that the repository is under Concordat/OpenTofu management.                                                                                                                                                                                                         |
+| `language.primary`          | String        | Required                             | The primary programming language of the repository. Must be a lowercase string (e.g., `python`, `go`, `typescript`). This value drives the selection of language-specific linting, and CI rules.                                                                                                    |
+| `language.others`           | Array         | Optional                             | A list of other significant languages present in the repository (e.g., `shell`, `make`).                                                                                                                                                                                                            |
+| `language.rust.surfaces`    | Array[Object] | Optional                             | Governed Rust surfaces as `{path, role}` entries (`path` names a `Cargo.toml` relative to the repository root; `role` is `workspace` or `crate`). Authoritative when present, including the empty list ("no governed Rust"). Absent: a root `Cargo.toml` implies a single root surface. See §2.2.1. |
+| `infrastructure.opentofu`   | Boolean       | Optional                             | Set to `true` if the repository contains OpenTofu/Terraform code. This enables checks for `Makefile` targets like `tf-plan`. Defaults to `false`.                                                                                                                                                   |
+| `infrastructure.kubernetes` | Boolean       | Optional                             | Set to `true` if the repository contains Kubernetes manifests. This enables Kubernetes-specific validation rules. Defaults to `false`.                                                                                                                                                              |
+| `docs.style`                | String        | Optional                             | The name of the Vale style to apply. Must correspond to a directory name in `platform-standards/canon/docs/Styles/`. Example: `your-house`.                                                                                                                                                         |
+| `libraries`                 | Array[Object] | Optional                             | A list of critical internal libraries consumed by this repository, used for guide parity checks.                                                                                                                                                                                                    |
+| `libraries.name`            | String        | Required (if `libraries` is present) | The name of the consumed library repository (e.g., `acme-lib`).                                                                                                                                                                                                                                     |
+| `libraries.version_tag`     | String        | Required (if `libraries` is present) | The Git tag of the library version being used (e.g., `v2.4.1`). The Auditor uses this to fetch the correct version of the library's user guide for comparison.                                                                                                                                      |
+| `ci.needs_release_workflow` | Boolean       | Optional                             | Set to `true` if the repository should be configured with the canonical release workflow. Defaults to `false`.                                                                                                                                                                                      |
+
+#### 2.2.1. Nested Rust surfaces and gate reachability
+
+The Parabellum baseline showed that root-`Cargo.toml` sniffing under-covers the
+estate: six repositories carry their Rust in subdirectories (`rust/` workspaces
+in cuprum and prosidy-darn; single crates in femtologging's `rust_extension/`,
+msgspec-crockford's `pycrockford_rs/`, and shared-actions' `rust-toy-app/`;
+agent-template-rust holds only Jinja templates with no live crate). It also
+showed that the "one prerequisite hop" bound on lint-gate delegation is too
+conservative: wildside reaches its gate through two literal `$(MAKE)` hops, and
+whitaker's `lint` never reaches its own suite at all — a fact the one-hop model
+could only report as indeterminate.
+
+Two schema and policy extensions close both gaps.
+
+**Declared Rust surfaces.** The `.concordat` manifest gains an optional
+`language.rust.surfaces` list; each entry names a `Cargo.toml` path relative to
+the repository root and an optional `role` (`workspace` or `crate`):
+
+```yaml
+enrolled: true
+language:
+  primary: python
+  others: [rust]
+  rust:
+    surfaces:
+      - path: rust/Cargo.toml
+        role: workspace
+```
+
+Resolution order: a declared list is authoritative, including the empty list,
+which states "no governed Rust here" (agent-template-rust's case — its
+Jinja-templated crate is governed by template rules, not by the Rust baseline).
+When the block is absent, a root `Cargo.toml` implies a single root surface
+(today's behaviour), and its absence remains an AP-001 finding — which thereby
+becomes an onboarding prompt to declare surfaces rather than a dead end.
+Discovery may propose a surfaces list from observed `**/Cargo.toml` paths
+(excluding fixture and template directories) during bootstrap, but only an
+accepted manifest makes it authoritative. The policy-input envelope carries the
+resolved list additively as `cargo.surfaces[] = {path, parsed}` alongside the
+existing root fields, so the envelope stays at `schema_version: 1`.
+
+**Transitive gate reachability.** QG-001's delegation proof widens from one
+prerequisite hop to a full static closure over the parsed Makefile: the
+reachability graph's edges are a rule's prerequisites plus any recipe line that
+invokes `$(MAKE) <literal-target>` in the same file. The closure is cycle-safe
+and needs no depth bound because every edge is a fact from the single parsed
+file. Dynamic edges (`$(MAKE) $(VAR)`, `$(MAKE) -C`, recursive make into other
+files) stay indeterminate, as do includes. A gate invocation is a reachable
+recipe referencing the gate variable or executable; where surfaces are
+declared, the invocation must be qualified to a surface — a `cd <dir> &&`
+prefix, a `--manifest-path <path>` flag, or a `make -C <dir>` matching the
+surface's directory — and QG-001 requires every declared surface's gate to be
+reachable from `lint`.
+
+Consequences across the seven repositories that motivated the change: cuprum,
+femtologging, msgspec-crockford, and shared-actions become governable and their
+existing `cd`/`--manifest-path` delegation is recognized; wildside's two-hop
+`$(MAKE)` chain becomes provably compliant; prosidy-darn's disconnected
+`lint-rust` target becomes a true QG-001 finding (its gate is not reachable from
+`lint`); and whitaker's `lint` becomes a true noncompliant finding rather than
+an indeterminate one, since no reachable recipe invokes the suite.
+agent-template-rust exits the Rust estate by declaring an empty surfaces list.
+The rule package implements this as v0.3.0, updating the `two_hop` fixture's
+expectation from indeterminate to compliant and adding surface-qualified
+fixtures; the same revision should extend the gate-variable check to flag `!=`
+(shell-at-read-time) assignments, which the sanctioned `?=` decision does not
+cover.
 
 ### 2.3 Comment-preserving remediation provider
 

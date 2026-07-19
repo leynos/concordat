@@ -309,8 +309,10 @@ because the fixtures already encoded the estate's real patterns — which is the
 point.
 
 Follow-ups deliberately left open: `rule validate`, the mutation vocabulary and
-remediation wave, a tagged makeutil release with binstall assets, and
-nested-Cargo applicability doctrine.
+remediation wave, and a tagged makeutil release with binstall assets.
+Nested-Cargo applicability and transitive gate reachability are now designed
+(design document §2.2.1, `language.rust.surfaces` plus static `$(MAKE)`
+closure); implementation is scoped as rule package v0.3.0.
 
 Resolved after completion (2026-07-19, user decision): the `?=` question.
 `WHITAKER ?= whitaker` is the sanctioned estate pattern — local override
