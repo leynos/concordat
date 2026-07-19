@@ -26,7 +26,7 @@
       "parser_version": "0.3.40"
     },
     "source": {
-      "path": "/home/leynos/Projects/concordat.worktrees/parabellum-vertical-slice/platform-standards/canon/lint-rules/rust-makefile-baseline/fixtures/makefiles/duplicate-lint.mk",
+      "path": "duplicate-lint.mk",
       "sha256": "bcd3796eebcbfd2edb98174ab674e5d9b5aa52f8ab31353be68a4eef8ba61b76",
       "byte_length": 185
     },

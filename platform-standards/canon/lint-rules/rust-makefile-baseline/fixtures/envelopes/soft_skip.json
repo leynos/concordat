@@ -26,7 +26,7 @@
       "parser_version": "0.3.40"
     },
     "source": {
-      "path": "/home/leynos/Projects/concordat.worktrees/parabellum-vertical-slice/platform-standards/canon/lint-rules/rust-makefile-baseline/fixtures/makefiles/soft-skip.mk",
+      "path": "soft-skip.mk",
       "sha256": "644802c1e21c976ff68805f91c335ead683f44baad9a361151db9ca80c78ae60",
       "byte_length": 172
     },

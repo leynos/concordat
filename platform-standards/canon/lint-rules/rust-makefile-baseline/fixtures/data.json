@@ -65,7 +65,7 @@
           "parser_version": "0.3.40"
         },
         "source": {
-          "path": "/home/leynos/Projects/concordat.worktrees/parabellum-vertical-slice/platform-standards/canon/lint-rules/rust-makefile-baseline/fixtures/makefiles/compliant.mk",
+          "path": "compliant.mk",
           "sha256": "49ce593cba8a16a53dcc560de15b3addcd9e6b7e56384a21adbfb3f9c5e2b371",
           "byte_length": 232
         },
@@ -265,7 +265,7 @@
           "parser_version": "0.3.40"
         },
         "source": {
-          "path": "/home/leynos/Projects/concordat.worktrees/parabellum-vertical-slice/platform-standards/canon/lint-rules/rust-makefile-baseline/fixtures/makefiles/conditional-lint.mk",
+          "path": "conditional-lint.mk",
           "sha256": "b5f8ff39baeb332e7f8829647be4075d163969b40ae88b28b14cc0ae96389b7e",
           "byte_length": 148
         },
@@ -464,7 +464,7 @@
           "parser_version": "0.3.40"
         },
         "source": {
-          "path": "/home/leynos/Projects/concordat.worktrees/parabellum-vertical-slice/platform-standards/canon/lint-rules/rust-makefile-baseline/fixtures/makefiles/duplicate-lint.mk",
+          "path": "duplicate-lint.mk",
           "sha256": "bcd3796eebcbfd2edb98174ab674e5d9b5aa52f8ab31353be68a4eef8ba61b76",
           "byte_length": 185
         },
@@ -683,7 +683,7 @@
           "parser_version": "0.3.40"
         },
         "source": {
-          "path": "/home/leynos/Projects/concordat.worktrees/parabellum-vertical-slice/platform-standards/canon/lint-rules/rust-makefile-baseline/fixtures/makefiles/missing-target.mk",
+          "path": "missing-target.mk",
           "sha256": "e4661eff10d0cb3da5f2c51c36385643b4161eb18ff2d192d1a7c670a3f84e66",
           "byte_length": 80
         },
@@ -814,7 +814,7 @@
           "parser_version": "0.3.40"
         },
         "source": {
-          "path": "/home/leynos/Projects/concordat.worktrees/parabellum-vertical-slice/platform-standards/canon/lint-rules/rust-makefile-baseline/fixtures/makefiles/one-hop.mk",
+          "path": "one-hop.mk",
           "sha256": "ff7e86a8b5547d5958d9d26715ee640798e80ab9dadca580fd0458f761772307",
           "byte_length": 314
         },
@@ -1056,7 +1056,7 @@
           "parser_version": "0.3.40"
         },
         "source": {
-          "path": "/home/leynos/Projects/concordat.worktrees/parabellum-vertical-slice/platform-standards/canon/lint-rules/rust-makefile-baseline/fixtures/makefiles/overridable-gate.mk",
+          "path": "overridable-gate.mk",
           "sha256": "457765b7f64e02b1aec114d55e12f4321aa949bdd8a2e57cb37184a7a525cd68",
           "byte_length": 232
         },
@@ -1256,7 +1256,7 @@
           "parser_version": "0.3.40"
         },
         "source": {
-          "path": "/home/leynos/Projects/concordat.worktrees/parabellum-vertical-slice/platform-standards/canon/lint-rules/rust-makefile-baseline/fixtures/makefiles/recovered.mk",
+          "path": "recovered.mk",
           "sha256": "6328c35107a66d557e3a4ca64feb04002153210d2d8dd348bb38d3bbf5635c4a",
           "byte_length": 107
         },
@@ -1416,7 +1416,7 @@
           "parser_version": "0.3.40"
         },
         "source": {
-          "path": "/home/leynos/Projects/concordat.worktrees/parabellum-vertical-slice/platform-standards/canon/lint-rules/rust-makefile-baseline/fixtures/makefiles/soft-skip.mk",
+          "path": "soft-skip.mk",
           "sha256": "644802c1e21c976ff68805f91c335ead683f44baad9a361151db9ca80c78ae60",
           "byte_length": 172
         },
@@ -1601,7 +1601,7 @@
           "parser_version": "0.3.40"
         },
         "source": {
-          "path": "/home/leynos/Projects/concordat.worktrees/parabellum-vertical-slice/platform-standards/canon/lint-rules/rust-makefile-baseline/fixtures/makefiles/suppressed.mk",
+          "path": "suppressed.mk",
           "sha256": "600c66d0a597a85c8b55c6b333655ced76159b337d23909e3b59630d58d215dd",
           "byte_length": 161
         },
@@ -1801,7 +1801,7 @@
           "parser_version": "0.3.40"
         },
         "source": {
-          "path": "/home/leynos/Projects/concordat.worktrees/parabellum-vertical-slice/platform-standards/canon/lint-rules/rust-makefile-baseline/fixtures/makefiles/two-hop.mk",
+          "path": "two-hop.mk",
           "sha256": "b2df4b58faa3f5893ad85e880c6a23edb4c112adf73a3c2d21f7714960784a79",
           "byte_length": 197
         },
@@ -2028,7 +2028,7 @@
           "parser_version": "0.3.40"
         },
         "source": {
-          "path": "/home/leynos/Projects/concordat.worktrees/parabellum-vertical-slice/platform-standards/canon/lint-rules/rust-makefile-baseline/fixtures/makefiles/with-include.mk",
+          "path": "with-include.mk",
           "sha256": "04453ab5a0ddbd2585ae489833a54f466811938130d9e92635de0b59d5901e32",
           "byte_length": 148
         },

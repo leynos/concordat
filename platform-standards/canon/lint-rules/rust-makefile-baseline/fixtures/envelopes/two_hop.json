@@ -26,7 +26,7 @@
       "parser_version": "0.3.40"
     },
     "source": {
-      "path": "/home/leynos/Projects/concordat.worktrees/parabellum-vertical-slice/platform-standards/canon/lint-rules/rust-makefile-baseline/fixtures/makefiles/two-hop.mk",
+      "path": "two-hop.mk",
       "sha256": "b2df4b58faa3f5893ad85e880c6a23edb4c112adf73a3c2d21f7714960784a79",
       "byte_length": 197
     },

@@ -26,7 +26,7 @@
       "parser_version": "0.3.40"
     },
     "source": {
-      "path": "/home/leynos/Projects/concordat.worktrees/parabellum-vertical-slice/platform-standards/canon/lint-rules/rust-makefile-baseline/fixtures/makefiles/missing-target.mk",
+      "path": "missing-target.mk",
       "sha256": "e4661eff10d0cb3da5f2c51c36385643b4161eb18ff2d192d1a7c670a3f84e66",
       "byte_length": 80
     },

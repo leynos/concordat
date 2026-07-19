@@ -26,7 +26,7 @@
       "parser_version": "0.3.40"
     },
     "source": {
-      "path": "/home/leynos/Projects/concordat.worktrees/parabellum-vertical-slice/platform-standards/canon/lint-rules/rust-makefile-baseline/fixtures/makefiles/overridable-gate.mk",
+      "path": "overridable-gate.mk",
       "sha256": "457765b7f64e02b1aec114d55e12f4321aa949bdd8a2e57cb37184a7a525cd68",
       "byte_length": 232
     },
