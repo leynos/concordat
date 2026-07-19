@@ -264,6 +264,15 @@ Deliver the Quality-Gate Integrity audit domain (design document Section
 actuators that remediate them. Each check ships as a lint rule package under
 `canon/lint-rules/` per the Section 2.1.2 format.
 
+- [ ] Add the `github-api` sensor and actuator types to the lint rule package
+  contract (Section 2.1.2) before shipping any API-backed check. The `conftest`
+  sensor over a static input tree cannot express checks that read live
+  repository state, and deterministic-edit mutations cannot post comments or
+  open issues. Acceptance: `concordat artefact rule validate` accepts a package
+  declaring `sensor.type: github-api` and `github-api` actuators (`comment`,
+  `issue`); `rule run` executes an authenticated query against a recorded
+  fixture and `rule mutate` performs the side effect against a mocked API. This
+  item is a prerequisite for CV-003, AM-001, AM-002, DP-001, and DP-002.
 - [ ] Ship the lint-gate binding rule packages (QG-001 to QG-003): Makefile
   sensors for soft-skipped or environment-overridable lint targets, workflow
   sensors for the hardened pinned-release install step (version-keyed cache,
@@ -292,11 +301,13 @@ actuators that remediate them. Each check ships as a lint rule package under
   absent store named; `concordat` gains a provisioning command that sets an
   operator-supplied token in both stores.
 - [ ] Implement the automerge-jam and workflow-health sensors (AM-001,
-  AM-002) as scheduled Auditor sweeps: open Dependabot pull requests `BLOCKED`
-  with all required checks green, and workflows whose recent runs uniformly
-  conclude `startup_failure`. Acceptance: the AM-001 actuator comments
-  `@dependabot rebase` on jammed pull requests and the AM-002 actuator opens a
-  tracking issue, both idempotently.
+  AM-002) as scheduled Auditor sweeps: Dependabot pull requests `BLOCKED`
+  specifically by a stale or timed-out required status check (with all other
+  merge requirements satisfied), and workflows whose recent runs uniformly
+  conclude `startup_failure`. Acceptance: the AM-001 sensor classifies the
+  block cause and comments `@dependabot rebase` only on stale-check jams,
+  leaving a fixture blocked by a missing approval untouched; the AM-002
+  actuator opens a tracking issue; both actuators are idempotent.
 - [ ] Implement the dependency-pin actionability sensors (DP-001, DP-002):
   cross-reference open Dependabot alerts' first patched versions against
   manifest requirements, and detect git-revision pins lacking a
@@ -352,11 +363,13 @@ under `canon/lint-rules/` per the Section 2.1.2 format.
   without disturbing comments.
 - [ ] Ship the Python documentation, version-floor, and tooling rule packages
   (PY-006 to PY-010): interrogate at `fail-under = 100`, a `requires-python`
-  floor of at least 3.12, consistent version declarations across manifests,
-  scripts, CI, and prose guides, and pytest-xdist and ty wiring with the
-  exemption path honoured. Acceptance: a fixture declaring 3.11 in CI against a
-  3.12 manifest floor raises PY-008 naming the divergent file; an exempted
-  fixture downgrades PY-009 to `note`.
+  floor of at least 3.12, version declarations reconciled against that floor
+  (scalar declarations equal the floor; matrices keep their minimum at the
+  floor with no lower entry), and pytest-xdist and ty wiring with the exemption
+  path honoured. Acceptance: a fixture declaring 3.11 in CI against a 3.12
+  manifest floor raises PY-008 naming the divergent file, while a fixture whose
+  CI matrix tests 3.12 and 3.13 against a 3.12 floor raises nothing; an
+  exempted fixture downgrades PY-009 to `note`.
 - [ ] Ship the Rust formatting and linting rule packages (RT-001 to RT-005):
   rustfmt wiring and template-matched configuration, clippy presence with
   `[lints]` entries at the template level or stricter, and Whitaker presence
