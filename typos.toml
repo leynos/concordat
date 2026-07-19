@@ -17,6 +17,7 @@ extend-exclude = [
     "bun.lock",
     "data/typos-oxendict-base.toml",
     "dist",
+    "docs/parabellum/baseline-report.md",
     "node_modules",
     "package-lock.json",
     "pnpm-lock.yaml",

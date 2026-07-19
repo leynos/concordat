@@ -68,7 +68,13 @@ template tree into published platform-standards repositories.
   with a `rule.yaml` entrypoint describing sensor inputs, parameters, and
   mutations. Acceptance: `concordat artefact rule validate <rule-id>` validates
   the rule schema, runs policy tests where present, and surfaces parameter
-  defaults and allowed overrides.
+  defaults and allowed overrides. Progress: the first rule package
+  (`rust-makefile-baseline`, audit-only) exists with `rule.yaml`, a Rego
+  sensor, fixtures, and policy tests, and
+  `concordat artefact rule run <rule-id> --repo PATH --format {table,json}`
+  evaluates it against a local checkout (Operation Parabellum vertical slice;
+  `docs/execplans/parabellum-vertical-slice.md`). `rule validate` and the
+  mutation vocabulary remain open.
 
 ### 1.3. Ship the estate execution CLI
 

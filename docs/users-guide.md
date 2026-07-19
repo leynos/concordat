@@ -199,6 +199,54 @@ checkout against the template and optionally copy missing/outdated artefacts.
   uv run python -m scripts.canon_artifacts tui path/to/platform-standards
   ```
 
+## Auditing a checkout against a lint rule package
+
+`concordat artefact rule run` evaluates one canon lint rule package against a
+local checkout and reports structured findings. The first package,
+`rust-makefile-baseline`, audits a Rust repository's root `Makefile` for the
+canonical `build`, `test`, and `lint` targets (FP-003) and for a binding
+Whitaker lint gate (QG-001):
+
+```shell
+concordat artefact rule run rust-makefile-baseline --repo /path/to/checkout
+```
+
+Options:
+
+- `--repo PATH` — the checkout to audit (defaults to the current
+  directory).
+- `--format {table,json}` — output format (defaults to `table`).
+
+Verdicts are three-valued. `compliant` means the finding set is empty;
+`noncompliant` means the policy proved a violation; `indeterminate` means the
+policy could not prove compliance and fails closed (for example, the `Makefile`
+includes other files, or the parse had to recover from syntax errors).
+
+Exit codes: `0` compliant; `1` at least one finding, including indeterminate
+verdicts; `2` operational failure (for example, the pinned `makeutil` or
+`conftest` executable is missing), reported on standard error.
+
+The command requires two external tools on `PATH`: `conftest` and the pinned
+`makeutil` (see
+`platform-standards/canon/lint-rules/rust-makefile-baseline/README.md` for the
+pin and regeneration workflow).
+
+### Sweeping the Rust estate
+
+`scripts/parabellum_sweep.py` audits every repository listed in
+`docs/parabellum/estate.yaml` and appends one record per repository to the
+append-only campaign ledger `docs/parabellum/ledger.jsonl`:
+
+```shell
+uv run python -m scripts.parabellum_sweep [--only a,b] [--limit N] [--force]
+uv run python -m scripts.parabellum_sweep report
+```
+
+A repository already ledgered at its current head commit is skipped unless
+`--force` is given, so an interrupted sweep resumes by re-running the same
+command. The `report` subcommand regenerates
+`docs/parabellum/baseline-report.md` from the ledger.
+
 ## Previewing and applying estate changes
 
 Use the `plan` and `apply` commands to run OpenTofu against the active estate
