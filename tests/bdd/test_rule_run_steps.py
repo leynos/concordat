@@ -100,15 +100,14 @@ def given_conftest_clean(cmd_mox: CmdMox) -> None:
     cmd_mox.mock("conftest").returns(exit_code=0, stdout=_conftest_result([]))
 
 
-@given("conftest reports the overridable-gate failure")
-def given_conftest_overridable(cmd_mox: CmdMox) -> None:
-    """Program the fake conftest with the QG-001 `?=` failure."""
+@given("conftest reports the soft-skip failure")
+def given_conftest_soft_skip(cmd_mox: CmdMox) -> None:
+    """Program the fake conftest with the QG-001 soft-skip failure."""
     failure = _failure(
         "QG-001",
         "noncompliant",
-        1,
-        'gate-critical variable "WHITAKER" uses the environment-overridable '
-        '"?=" assignment',
+        12,
+        'lint-path recipe soft-skips the gate ("command -v")',
     )
     cmd_mox.mock("conftest").returns(exit_code=1, stdout=_conftest_result([failure]))
 
@@ -195,13 +194,13 @@ def then_zero_findings(cli_invocation: dict[str, RunResult]) -> None:
     assert "FP-003" not in stdout
 
 
-@then("the output contains a QG-001 finding citing Makefile line 1")
+@then("the output contains a QG-001 finding citing Makefile line 12")
 def then_qg001_with_line(cli_invocation: dict[str, RunResult]) -> None:
     """Assert the QG-001 finding carries its source location."""
     stdout = cli_invocation["result"].stdout
     assert "QG-001" in stdout
-    assert "Makefile:1" in stdout
-    assert "?=" in stdout
+    assert "Makefile:12" in stdout
+    assert "command -v" in stdout
 
 
 @then("the output reports QG-001 as indeterminate")

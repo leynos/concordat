@@ -182,19 +182,10 @@ deny contains f if {
 	)
 }
 
-deny contains f if {
-	gate_provable
-	some variable in input.makefile.variables
-	variable.name == gate_variable
-	variable.operator == "?="
-	f := finding(
-		"QG-001", "noncompliant", variable.location.start_line,
-		sprintf(
-			"gate-critical variable %q uses the environment-overridable \"?=\" assignment",
-			[gate_variable],
-		),
-	)
-}
+# The gate variable's `?=` assignment (e.g. `WHITAKER ?= whitaker`) is the
+# sanctioned estate pattern — local override permitted, CI installs the
+# real binary — so it is deliberately NOT a finding (doctrine decision,
+# 2026-07-19; see the Parabellum ExecPlan decision log).
 
 deny contains f if {
 	gate_provable

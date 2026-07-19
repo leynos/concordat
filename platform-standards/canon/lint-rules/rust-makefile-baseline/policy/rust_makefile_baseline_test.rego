@@ -50,22 +50,21 @@ test_conditional_lint_target_is_fp003 if {
 
 # -- QG-001 noncompliant ---------------------------------------------------
 
-test_overridable_gate_is_qg001_with_line if {
+# `WHITAKER ?= whitaker` is the sanctioned estate pattern (rollout
+# convention: local override permitted, CI installs the real binary), so
+# the gate variable's `?=` assignment is not a finding.
+test_overridable_gate_is_compliant if {
 	findings := policy.deny with input as data.fixtures.overridable_gate
-	count(findings) == 1
-	some f in findings
-	f.rule_id == "QG-001"
-	f.verdict == "noncompliant"
-	f.line == 1
-	contains(f.msg, "?=")
+	count(findings) == 0
 }
 
-test_soft_skip_guard_is_qg001 if {
+test_soft_skip_guard_is_qg001_with_line if {
 	findings := policy.deny with input as data.fixtures.soft_skip
 	count(findings) == 1
 	profile(findings) == {["QG-001", "noncompliant"]}
 	some f in findings
 	contains(f.msg, "command -v")
+	f.line == 12
 }
 
 test_suppressed_recipes_are_two_qg001_findings if {
