@@ -7,7 +7,8 @@ import typing as typ
 import pygit2
 import pytest
 
-from concordat.estate_cache import cache_root
+from concordat import xdg
+from concordat.estate_cache import cache_destination
 from concordat.estate_execution import EstateExecutionError, ensure_estate_cache
 from tests.unit.conftest import _make_record
 
@@ -17,17 +18,24 @@ if typ.TYPE_CHECKING:  # pragma: no cover - type checking only
     from tests.conftest import GitRepo
 
 
-def test_cache_root_honours_xdg(
+def test_cache_destination_honours_xdg(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """The cache path is derived from XDG_CACHE_HOME when provided."""
+    """The cache path derives from XDG_CACHE_HOME, namespaced by owner.
+
+    The record's own github_owner outranks the headline active owner.
+    """
     cache_home = tmp_path / "xdg-cache"
     monkeypatch.setenv("XDG_CACHE_HOME", str(cache_home))
+    xdg.set_active_owner("acme")
+    record = _make_record(tmp_path / "estate.git")
+    assert record.github_owner == "example"
 
-    root = cache_root()
+    destination = cache_destination(record)
 
-    assert root == cache_home / "concordat" / "estates"
-    assert root.exists()
+    expected_root = cache_home / "concordat" / "owners" / "example" / "estates"
+    assert destination == expected_root / record.alias
+    assert expected_root.exists()
 
 
 def test_ensure_estate_cache_clones_repository(

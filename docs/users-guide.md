@@ -114,14 +114,42 @@ workflows read the same flag before applying changes.
   uv run concordat ls --token "$GITHUB_TOKEN" my-org
   ```
 
+## Configuration, credentials, cache, and state locations
+
+Everything concordat persists lives under the XDG base directories, namespaced
+by GitHub owner:
+
+- `$XDG_CONFIG_HOME/concordat/config.yaml` — the **headline** config; its
+  `github_owner` key names the active owner. Manage it with
+  `concordat owner use <owner>` and inspect it with `concordat owner show`.
+- `$XDG_CONFIG_HOME/concordat/owners/<owner>/config.yaml` — that owner's
+  estates and active estate.
+- `$XDG_CONFIG_HOME/concordat/owners/<owner>/credentials.yaml` — optional
+  credential fallbacks, mapping credential environment-variable names
+  (`GITHUB_TOKEN`, `SCW_ACCESS_KEY`, `SCW_SECRET_KEY`, `AWS_*`, `SPACES_*`) to
+  values. Environment variables always win; keep the file `chmod 600`.
+  Concordat never writes this file.
+- `$XDG_CACHE_HOME/concordat/owners/<owner>/estates/<alias>` — estate
+  repository caches.
+- `$XDG_CACHE_HOME/concordat/tofu/plugin-cache` — the shared OpenTofu
+  provider plugin cache (exported as `TF_PLUGIN_CACHE_DIR` unless already set).
+- `$XDG_STATE_HOME/concordat/owners/<owner>/runs/` — throwaway OpenTofu
+  working trees; removed after each run unless `--keep-workdir` is given.
+
+Remote OpenTofu state stored in the configured S3 backend (for example Scaleway
+Object Storage) is unaffected by this layout. A legacy flat
+`$XDG_CONFIG_HOME/concordat/config.yaml` containing an `estate` section is
+migrated into the owner-namespaced layout automatically the first time the
+owner can be derived from its records.
+
 ## Managing estates
 
 Concordat tracks platform-standards repositories, referred to as *estates*, in
-`$XDG_CONFIG_HOME/concordat/config.yaml` (`~/.config/concordat/config.yaml` on
-most systems). Each estate entry records an alias, the managed `github_owner`,
-the Git URL for the platform-standards repository, the OpenTofu inventory path,
-and the default branch. The CLI uses the **active estate** to determine where
-enrolment PRs should be opened.
+the active owner's configuration file (see the locations section above). Each
+estate entry records an alias, the managed `github_owner`, the Git URL for the
+platform-standards repository, the OpenTofu inventory path, and the default
+branch. The CLI uses the **active estate** to determine where enrolment PRs
+should be opened.
 
 - Bootstrap a new estate from the bundled template:
 
@@ -261,13 +289,14 @@ without leaving the CLI. Both commands require `GITHUB_TOKEN` and the estate's
   ```
 
   The CLI refreshes the cached estate under
-  `$XDG_CACHE_HOME/concordat/estates/<alias>`, clones it into a temporary
-  directory, writes `terraform.tfvars` with the recorded owner, runs
-  `tofu init -input=false`, and then `tofu plan`. Paths are echoed, so the
-  workspace can be inspected; pass `--keep-workdir` to skip the cleanup step.
-  Concordat preserves OpenTofu's standard CLI plan output (including the
-  per-resource diff), so operators do not need to re-run `tofu plan` manually
-  just to see what would change.
+  `$XDG_CACHE_HOME/concordat/owners/<owner>/estates/<alias>`, clones it into a
+  run directory under `$XDG_STATE_HOME/concordat/owners/<owner>/runs/`, writes
+  `terraform.tfvars` with the recorded owner, runs `tofu init -input=false`,
+  and then `tofu plan`. Paths are echoed, so the workspace can be inspected;
+  pass `--keep-workdir` to skip the cleanup step. Concordat preserves
+  OpenTofu's standard CLI plan output (including the per-resource diff), so
+  operators do not need to re-run `tofu plan` manually just to see what would
+  change.
 
   When `backend/persistence.yaml` exists with `enabled: true`, the CLI adds
   `-backend-config=<path>` to `tofu init`, maps `SCW_ACCESS_KEY`/
@@ -498,9 +527,10 @@ with the following measures:
 
 ### Estate configuration file
 
-Concordat stores estate metadata in `$XDG_CONFIG_HOME/concordat/config.yaml`
-(`~/.config/concordat/config.yaml` when the environment variable is unset). The
-file is regular YAML 1.2 with an `estate` section:
+Concordat stores estate metadata in
+`$XDG_CONFIG_HOME/concordat/owners/<owner>/config.yaml`, where `<owner>` is the
+active GitHub owner from the headline configuration. The file is regular YAML
+1.2 with an `estate` section:
 
 ```yaml
 estate:

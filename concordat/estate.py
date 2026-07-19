@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import dataclasses
-import os
 import shutil
 import typing as typ
 from pathlib import Path
@@ -16,6 +15,7 @@ from github3 import exceptions as github3_exceptions
 from pygit2 import RemoteCallbacks
 from ruamel.yaml import YAML
 
+from . import xdg
 from .errors import ConcordatError
 from .gitutils import build_remote_callbacks
 from .platform_standards import parse_github_slug
@@ -302,10 +302,59 @@ def default_template_root() -> Path:
 
 
 def default_config_path() -> Path:
-    """Return the path to the concordat configuration file."""
-    root = os.environ.get("XDG_CONFIG_HOME")
-    base = Path(root).expanduser() if root else Path.home() / ".config"
-    return base / "concordat" / CONFIG_FILENAME
+    """Return the path to the estates configuration file.
+
+    Estates live under the active owner's namespace
+    (``$XDG_CONFIG_HOME/concordat/owners/<owner>/config.yaml``). A legacy
+    flat configuration is migrated into that layout the first time the
+    owner is derivable; until then the flat path keeps working.
+    """
+    _migrate_legacy_config()
+    if owner := xdg.get_active_owner():
+        return xdg.owner_config_path(owner)
+    return xdg.config_root() / CONFIG_FILENAME
+
+
+def _migrate_legacy_config() -> None:
+    """Move a legacy flat estates config into the owner-namespaced layout."""
+    if xdg.get_active_owner() is not None:
+        return
+    legacy = xdg.config_root() / CONFIG_FILENAME
+    if not legacy.is_file():
+        return
+    data = _yaml.load(legacy.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        return
+    estate_section = data.get(ESTATE_SECTION)
+    if not isinstance(estate_section, dict):
+        return
+    owner = _derive_owner_from_estates(estate_section)
+    if owner is None:
+        return
+
+    owner_path = xdg.owner_config_path(owner)
+    owner_path.parent.mkdir(parents=True, exist_ok=True)
+    with owner_path.open("w", encoding="utf-8") as handle:
+        _yaml.dump({ESTATE_SECTION: estate_section}, handle)
+
+    remaining = {key: value for key, value in data.items() if key != ESTATE_SECTION}
+    if remaining:
+        with legacy.open("w", encoding="utf-8") as handle:
+            _yaml.dump(remaining, handle)
+    else:
+        legacy.unlink()
+    xdg.set_active_owner(owner)
+
+
+def _derive_owner_from_estates(estate_section: dict[str, typ.Any]) -> str | None:
+    """Return the first github_owner recorded in a legacy estate section."""
+    estates = estate_section.get(ESTATE_COLLECTION_KEY)
+    if not isinstance(estates, dict):
+        return None
+    for entry in estates.values():
+        if isinstance(entry, dict) and (owner := entry.get("github_owner")):
+            return str(owner)
+    return None
 
 
 def list_estates(config_path: Path | None = None) -> list[EstateRecord]:
@@ -411,14 +460,19 @@ def init_estate(
     """Initialise an estate repository from the bundled template."""
     if not alias:
         raise MissingEstateAliasError
-    records = _load_estates(config_path)
-    if alias in records:
-        raise DuplicateEstateAliasError(alias)
 
     confirmer = confirm or _prompt_yes_no
     slug = parse_github_slug(repo_url)
     resolved_owner = _resolve_and_confirm_owner(slug, github_owner, confirmer)
     estate_owner = _require_owner(resolved_owner)
+    # Record the headline owner before touching estate config so the
+    # duplicate check and the eventual registration read the same
+    # owner-namespaced file.
+    if config_path is None and xdg.get_active_owner() is None:
+        xdg.set_active_owner(estate_owner)
+    records = _load_estates(config_path)
+    if alias in records:
+        raise DuplicateEstateAliasError(alias)
     repository_plan = _prepare_repository(
         repo_url,
         slug,

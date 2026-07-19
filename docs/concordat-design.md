@@ -195,9 +195,11 @@ false-positive rate is acceptable. Exemptions use the existing
   open a matching platform-standards pull request that removes the repository
   from the OpenTofu inventory, so the estate stops targeting it.
 - `concordat estate` bootstraps `platform-standards` repositories from the
-  bundled template, persists aliases in `~/.config/concordat/config.yaml`, and
-  exposes helpers to list, inspect, and select the active estate. The enrolment
-  workflow automatically targets the active estate unless the operator passes
+  bundled template, persists aliases in the owner-namespaced configuration
+  (`$XDG_CONFIG_HOME/concordat/owners/<owner>/config.yaml`, selected by the
+  headline `config.yaml`'s `github_owner`), and exposes helpers to list,
+  inspect, and select the active estate. The enrolment workflow automatically
+  targets the active estate unless the operator passes
   `--platform-standards-url`.
 - `concordat plan` clones the active estate into a temporary workspace, renders
   the OpenTofu variable file from estate metadata, and invokes OpenTofu via the
@@ -246,8 +248,8 @@ template usage, satisfying the evaluate-mode acceptance criteria.
 #### 2.7.2 Workspace management
 
 - Estate repositories are cached under
-  `$XDG_CACHE_HOME/concordat/estates/<alias>`. `plan`/`apply` issue a fetch and
-  hard reset against this cache before every run.
+  `$XDG_CACHE_HOME/concordat/owners/<owner>/estates/<alias>`. `plan`/`apply`
+  issue a fetch and hard reset against this cache before every run.
 - Each execution clones the cached workspace into a temporary directory (e.g.
   `/tmp/concordat-plan-XXXX`). This keeps the cache clean and makes it easy to
   tear down state after completion.
@@ -309,7 +311,8 @@ touching module logic.
 
 The delivered CLI follows the workflow above:
 
-- Active estates are refreshed into `$XDG_CACHE_HOME/concordat/estates/<alias>`
+- Active estates are refreshed into
+  `$XDG_CACHE_HOME/concordat/owners/<owner>/estates/<alias>`
   and copied into a per-run temporary directory. The CLI prints the workspace
   path at the start of every execution and removes it afterwards unless
   `--keep-workdir` is passed for debugging.

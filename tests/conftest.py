@@ -164,6 +164,23 @@ class CmdMoxBuilder:
         return self._harness
 
 
+@pytest.fixture(autouse=True)
+def _isolated_xdg_bases(
+    tmp_path_factory: pytest.TempPathFactory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Redirect the XDG base directories away from the real home.
+
+    Every test gets throwaway config/cache/state roots so nothing can read
+    or write the operator's actual ``~/.config/concordat`` (or cache/state)
+    by accident. Tests that need specific locations still override these.
+    """
+    base = tmp_path_factory.mktemp("xdg")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(base / "config"))
+    monkeypatch.setenv("XDG_CACHE_HOME", str(base / "cache"))
+    monkeypatch.setenv("XDG_STATE_HOME", str(base / "state"))
+
+
 @pytest.fixture
 def cmd_mox(monkeypatch: pytest.MonkeyPatch) -> CmdMox:
     """Expose the command mocking harness to tests."""
