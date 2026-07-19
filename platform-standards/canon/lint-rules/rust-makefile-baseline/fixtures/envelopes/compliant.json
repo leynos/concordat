@@ -1,0 +1,200 @@
+{
+  "schema_version": 1,
+  "kind": "policy-input/rust-makefile-baseline",
+  "repository": {
+    "path": ".",
+    "name": null
+  },
+  "applicability": {
+    "root_cargo_toml": true,
+    "root_makefile": true
+  },
+  "cargo": {
+    "parsed": {
+      "package": {
+        "name": "fixture",
+        "version": "0.1.0"
+      }
+    }
+  },
+  "makefile": {
+    "schema_version": 1,
+    "tool": {
+      "name": "makeutil",
+      "version": "0.1.0",
+      "parser": "makefile-lossless",
+      "parser_version": "0.3.40"
+    },
+    "source": {
+      "path": "/home/leynos/Projects/concordat.worktrees/parabellum-vertical-slice/platform-standards/canon/lint-rules/rust-makefile-baseline/fixtures/makefiles/compliant.mk",
+      "sha256": "49ce593cba8a16a53dcc560de15b3addcd9e6b7e56384a21adbfb3f9c5e2b371",
+      "byte_length": 232
+    },
+    "parse": {
+      "status": "complete",
+      "diagnostics": []
+    },
+    "rules": [
+      {
+        "ordinal": 1,
+        "targets": [
+          ".PHONY"
+        ],
+        "prerequisites": [
+          "build",
+          "test",
+          "lint"
+        ],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [],
+        "location": {
+          "start_byte": 22,
+          "end_byte": 47,
+          "start_line": 3,
+          "start_column": 1,
+          "end_line": 5,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 2,
+        "targets": [
+          "build"
+        ],
+        "prerequisites": [],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "cargo build --all-targets",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 54,
+              "end_byte": 81,
+              "start_line": 6,
+              "start_column": 1,
+              "end_line": 7,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 47,
+          "end_byte": 82,
+          "start_line": 5,
+          "start_column": 1,
+          "end_line": 8,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 3,
+        "targets": [
+          "test"
+        ],
+        "prerequisites": [],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "cargo nextest run",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 88,
+              "end_byte": 107,
+              "start_line": 9,
+              "start_column": 1,
+              "end_line": 10,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 82,
+          "end_byte": 108,
+          "start_line": 8,
+          "start_column": 1,
+          "end_line": 11,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 4,
+        "targets": [
+          "lint"
+        ],
+        "prerequisites": [],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "cargo clippy --all-targets -- -D warnings",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 114,
+              "end_byte": 157,
+              "start_line": 12,
+              "start_column": 1,
+              "end_line": 13,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "text": "RUSTFLAGS=\"-D warnings\" $(WHITAKER) --all -- --all-targets --all-features",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 157,
+              "end_byte": 232,
+              "start_line": 13,
+              "start_column": 1,
+              "end_line": 14,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 108,
+          "end_byte": 232,
+          "start_line": 11,
+          "start_column": 1,
+          "end_line": 14,
+          "end_column": 1
+        }
+      }
+    ],
+    "variables": [
+      {
+        "ordinal": 0,
+        "name": "WHITAKER",
+        "operator": ":=",
+        "raw_value": "whitaker",
+        "exported": false,
+        "overridden": false,
+        "define_block": false,
+        "conditions": [],
+        "location": {
+          "start_byte": 0,
+          "end_byte": 21,
+          "start_line": 1,
+          "start_column": 1,
+          "end_line": 2,
+          "end_column": 1
+        }
+      }
+    ],
+    "includes": []
+  }
+}

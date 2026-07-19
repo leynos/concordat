@@ -1,0 +1,34 @@
+schema_version: 1
+id: rust-makefile-baseline
+name: Rust Makefile baseline
+description: >-
+  Audits a Rust repository's root Makefile for the canonical build, test,
+  and lint targets (FP-003) and for a binding Whitaker lint gate (QG-001).
+  Audit-only: this rule declares no mutations.
+version: 0.1.0
+sensor:
+  type: conftest
+  policy: policy/
+  tests:
+    - policy/
+  data:
+    - fixtures/data.json
+parameters:
+  schema:
+    type: object
+    additionalProperties: false
+    properties:
+      gate_variable:
+        type: string
+        description: Make variable naming the gate-critical lint executable.
+      required_targets:
+        type: array
+        items:
+          type: string
+        description: Targets the root Makefile must define unconditionally.
+  defaults:
+    gate_variable: WHITAKER
+    required_targets:
+      - build
+      - test
+      - lint
