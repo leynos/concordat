@@ -252,6 +252,103 @@ def run_sweep(
     return appended
 
 
+DEFAULT_REPORT_PATH: typ.Final = (
+    REPO_ROOT / "docs" / "parabellum" / "baseline-report.md"
+)
+
+VERDICT_ORDER: typ.Final = (
+    "noncompliant",
+    "indeterminate",
+    "error",
+    "compliant",
+    "excluded",
+)
+
+
+def _latest_records(
+    ledger: list[dict[str, typ.Any]],
+) -> dict[str, dict[str, typ.Any]]:
+    latest: dict[str, dict[str, typ.Any]] = {}
+    for record in ledger:
+        latest[record["repository"]] = record
+    return latest
+
+
+def _finding_summary(record: dict[str, typ.Any]) -> str:
+    if record["verdict"] == "excluded":
+        return record.get("exclusion_reason", "")
+    if record["verdict"] == "error":
+        return record.get("error_detail", "")
+    parts = [
+        f"{finding['rule_id']} ({finding['verdict']}) {finding['message']}"
+        for finding in record["findings"]
+    ]
+    return "; ".join(parts)
+
+
+def render_report(ledger_path: pathlib.Path = DEFAULT_LEDGER_PATH) -> str:
+    """Render the campaign baseline report from the ledger."""
+    latest = _latest_records(_load_ledger(ledger_path))
+    counts: dict[str, int] = {}
+    rule_counts: dict[str, int] = {}
+    for record in latest.values():
+        counts[record["verdict"]] = counts.get(record["verdict"], 0) + 1
+        for finding in record["findings"]:
+            rule_id = finding["rule_id"]
+            rule_counts[rule_id] = rule_counts.get(rule_id, 0) + 1
+
+    lines = [
+        "# Operation Parabellum baseline report",
+        "",
+        "Generated from `docs/parabellum/ledger.jsonl` by",
+        "`python -m scripts.parabellum_sweep report`. Do not edit by hand.",
+        "",
+        f"Rule package: `{RULE_PACKAGE}` v{RULE_VERSION}; "
+        f"makeutil `{MAKEUTIL_REV[:12]}`.",
+        "",
+        "## Summary",
+        "",
+    ]
+    lines.extend(
+        f"- {verdict}: {counts[verdict]}"
+        for verdict in VERDICT_ORDER
+        if verdict in counts
+    )
+    lines.extend(["", "Findings by rule:", ""])
+    lines.extend(
+        f"- {rule_id}: {rule_counts[rule_id]}" for rule_id in sorted(rule_counts)
+    )
+    lines.extend(
+        [
+            "",
+            "## Repositories",
+            "",
+            "| Repository | Verdict | Commit | Findings |",
+            "| ---------- | ------- | ------ | -------- |",
+        ]
+    )
+    for repository in sorted(latest):
+        record = latest[repository]
+        commit = (record["commit_sha"] or "")[:12]
+        summary = _finding_summary(record)
+        lines.append(f"| {repository} | {record['verdict']} | {commit} | {summary} |")
+    lines.append("")
+    return "\n".join(lines)
+
+
+@app.command(name="report")
+def report_command(
+    *,
+    ledger: pathlib.Path = DEFAULT_LEDGER_PATH,
+    output: pathlib.Path = DEFAULT_REPORT_PATH,
+) -> int:
+    """Regenerate the baseline report from the campaign ledger."""
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(render_report(ledger), encoding="utf-8")
+    print(f"wrote {output}")
+    return 0
+
+
 @app.default
 def sweep_command(
     *,
