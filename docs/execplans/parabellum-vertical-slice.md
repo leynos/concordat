@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections
 `Decision log`, and `Outcomes & retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT
+Status: IN PROGRESS
 
 ## Purpose / big picture
 
@@ -133,8 +133,10 @@ Hard invariants. Violation requires escalation, not workarounds.
   the `makeutil` branch; confirmed `makeutil parse` is complete with a v1
   schema, and that concordat has no artefact command group yet.
 - [x] (2026-07-19 12:30Z) ExecPlan drafted.
-- [ ] Milestone A: pin and install `makeutil`; smoke-test against this
-  repository's own `Makefile`.
+- [x] (2026-07-19 14:10Z) Milestone A: pinned `makeutil` at
+  `29fc5a1634ffbaa18a773eed9dff1b2838a45d9c`, installed via
+  `cargo install --git`, smoke-tested against this repository's `Makefile`
+  (exit 0, `schema_version: 1`, status `complete`).
 - [ ] Milestone B: rule package `rust-makefile-baseline` under
   `platform-standards/canon/lint-rules/` with fixtures and red policy tests.
 - [ ] Milestone C: green Rego policy; conftest tests pass; package registered
@@ -216,6 +218,21 @@ Hard invariants. Violation requires escalation, not workarounds.
   minimal and is within existing repository conventions (`scripts/` already
   hosts operational tooling with tests under `scripts/tests/`).
   Date/Author: 2026-07-19, Fable (planning).
+
+- Decision: pin `makeutil` at commit
+  `29fc5a1634ffbaa18a773eed9dff1b2838a45d9c` (head of
+  `adr-0001-single-file-gnu-make-parse` on 2026-07-19).
+  Rationale: Milestone A requires an exact, reproducible pin; this SHA is
+  recorded in every ledger record.
+  Date/Author: 2026-07-19, Fable (Milestone A).
+- Decision: develop the Rego policy against the locally installed conftest
+  0.68.2 (OPA 1.15.2) while CI pins v0.52.0; the policy restricts itself to
+  `import rego.v1` semantics supported by both.
+  Rationale: the constraint pins the CI version, which stays untouched; the
+  local binary predates this work and reinstalling downward would disturb
+  other projects on this machine. If a syntax incompatibility surfaces in
+  CI, escalate rather than diverge the policy.
+  Date/Author: 2026-07-19, Fable (Milestone A).
 
 ## Outcomes & retrospective
 
