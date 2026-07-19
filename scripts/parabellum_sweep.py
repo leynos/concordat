@@ -283,7 +283,10 @@ def _finding_summary(record: dict[str, typ.Any]) -> str:
         f"{finding['rule_id']} ({finding['verdict']}) {finding['message']}"
         for finding in record["findings"]
     ]
-    return "; ".join(parts)
+    # A visible placeholder keeps every table row at the full column count;
+    # Markdown formatters collapse empty trailing cells, which then trips
+    # MD056 (table-column-count).
+    return "; ".join(parts) or "none"
 
 
 def render_report(ledger_path: pathlib.Path = DEFAULT_LEDGER_PATH) -> str:
