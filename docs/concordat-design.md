@@ -1364,6 +1364,19 @@ The primary audit domains are:
    lint, CodeScene coverage, Dependabot auto-merge, and mutation-testing estate
    rollouts, where each defect class below was observed in production
    repositories.
+7. **Licensing Integrity:** Verifies that every repository carries a
+   `LICENSE` file at its root, that the copyright year tracks the most recent
+   commit, and that licence declarations in manifests and the README agree with
+   the `LICENSE` text that governs them (the file at the same level, or the
+   nearest ancestor).
+8. **Toolchain Baseline:** Verifies that each language's formatting,
+   linting, documentation-coverage, typechecking, and test-runner tooling is
+   present and configured at least as strictly as the estate templates
+   (`leynos/agent-template-python` and `leynos/agent-template-rust`). The
+   domain applies wherever the language appears, including incidental use:
+   helper scripts inside a Rust repository, GitHub Actions implemented in
+   Python, and Ansible modules all bring a repository into scope for the Python
+   checks.
 
 The following table serves as the master list of requirements for the Auditor.
 It defines the scope of work for implementation, and provides an itemized
@@ -1406,6 +1419,30 @@ breakdown of what constitutes "compliance" within the framework.
 | DB-003       | Dependabot auto-merge is wired through the pinned shared reusable workflow with the prescribed `pull_request_target` permissions.                                                                                                                    | Quality-Gate Integrity          | OPA/Conftest                              | warning              | 4                        |
 | DB-004       | Lockfile-wide dependency audits do not gate Dependabot pull requests, and a scheduled audit workflow exists to cover the gap.                                                                                                                        | Quality-Gate Integrity          | OPA/Conftest                              | warning              | 4                        |
 | MT-001       | A scheduled mutation-testing workflow exists and calls the pinned shared mutation-testing workflow; mutation testing is scheduled, not merge-blocking.                                                                                               | Quality-Gate Integrity          | OPA/Conftest + file presence              | warning              | 4                        |
+| LC-001       | A `LICENSE` file exists at the repository root.                                                                                                                                                                                                      | Licensing Integrity             | Python/file presence                      | error                | 4                        |
+| LC-002       | The `LICENSE` copyright year matches the year of the most recent commit.                                                                                                                                                                             | Licensing Integrity             | Python/git + content check                | warning              | 4                        |
+| LC-003       | Licence declarations in manifests (`Cargo.toml`, `pyproject.toml`, `package.json`) and the README match the SPDX identity of the `LICENSE` file at the same level or the nearest ancestor level.                                                     | Licensing Integrity             | Python/SPDX match + manifest parse        | error                | 4                        |
+| PY-001       | Python formatting is enforced by ruff: `ruff format` is wired into the format and format-check targets and runs in CI.                                                                                                                               | Toolchain Baseline              | OPA/Conftest + Makefile parse             | error                | 4                        |
+| PY-002       | Ruff linting is present: a ruff configuration exists and `ruff check` runs in the lint gate.                                                                                                                                                         | Toolchain Baseline              | OPA/Conftest + Makefile parse             | error                | 4                        |
+| PY-003       | Ruff lint standards match or exceed `leynos/agent-template-python`: the template's enabled rules are a subset of the repository's, and per-file ignores are no broader.                                                                              | Toolchain Baseline              | OPA/Conftest + TOML parse                 | error                | 4                        |
+| PY-004       | Pylint linting is present via `pylint-pypy-shim` and runs in the lint gate.                                                                                                                                                                          | Toolchain Baseline              | OPA/Conftest + Makefile parse             | error                | 4                        |
+| PY-005       | Pylint standards match or exceed `leynos/agent-template-python`: every check the template enables is enabled, and the disable list is no broader.                                                                                                    | Toolchain Baseline              | OPA/Conftest + TOML parse                 | error                | 4                        |
+| PY-006       | Interrogate is present and requires 100 per cent documentation coverage (`fail-under = 100`).                                                                                                                                                        | Toolchain Baseline              | OPA/Conftest + TOML parse                 | error                | 4                        |
+| PY-007       | The minimum supported Python version is at least 3.12 (`requires-python = ">=3.12"`).                                                                                                                                                                | Toolchain Baseline              | OPA/Conftest + TOML parse                 | error                | 4                        |
+| PY-008       | The minimum Python version is declared consistently across manifests, scripts, CI configuration, the README, and the users' and developers' guides.                                                                                                  | Toolchain Baseline              | Python/multi-file scan                    | error                | 4                        |
+| PY-009       | pytest-xdist multiplexes the test suite unless the repository holds a recorded exemption.                                                                                                                                                            | Toolchain Baseline              | OPA/Conftest + TOML parse                 | warning              | 4                        |
+| PY-010       | ty performs typechecking unless the repository holds a recorded exemption.                                                                                                                                                                           | Toolchain Baseline              | OPA/Conftest + Makefile parse             | error                | 4                        |
+| RT-001       | Rust formatting is enforced by rustfmt: format and format-check targets exist and run in CI.                                                                                                                                                         | Toolchain Baseline              | OPA/Conftest + Makefile parse             | error                | 4                        |
+| RT-002       | The rustfmt configuration matches `leynos/agent-template-rust`.                                                                                                                                                                                      | Toolchain Baseline              | Python/Checksum + TOML parse              | error                | 4                        |
+| RT-003       | Clippy linting is present and runs in the lint gate.                                                                                                                                                                                                 | Toolchain Baseline              | OPA/Conftest + Makefile parse             | error                | 4                        |
+| RT-004       | Clippy standards match or exceed `leynos/agent-template-rust`: every `[lints]` entry the template sets is present at the same or a stricter level.                                                                                                   | Toolchain Baseline              | OPA/Conftest + TOML parse                 | error                | 4                        |
+| RT-005       | Whitaker linting is present, integrated per the `rust-makefile-baseline` rule package.                                                                                                                                                               | Toolchain Baseline              | OPA/Conftest + Makefile parse             | error                | 4                        |
+| RT-006       | A nightly channel pinned in `rust-toolchain.toml` is dated within the last year.                                                                                                                                                                     | Toolchain Baseline              | Python/TOML parse + date check            | warning              | 4                        |
+| RT-007       | The pinned toolchain includes the `clippy`, `rustfmt`, and `rust-analyzer` components.                                                                                                                                                               | Toolchain Baseline              | OPA/Conftest + TOML parse                 | error                | 4                        |
+| RT-008       | The mold linker is configured for development builds unless the repository holds a recorded exemption.                                                                                                                                               | Toolchain Baseline              | OPA/Conftest + TOML parse                 | warning              | 4                        |
+| RT-009       | The Cranelift codegen backend is configured for development builds unless the repository holds a recorded exemption.                                                                                                                                 | Toolchain Baseline              | OPA/Conftest + TOML parse                 | warning              | 4                        |
+| RT-010       | The Polonius-next borrow checker is enabled when the repository exposes only application targets (no publishable library targets).                                                                                                                   | Toolchain Baseline              | OPA/Conftest + manifest parse             | warning              | 4                        |
+| RT-011       | nextest runs the test suite unless the repository holds a recorded exemption.                                                                                                                                                                        | Toolchain Baseline              | OPA/Conftest + Makefile parse             | error                | 4                        |
 
 #### 3.1.1 Quality-gate integrity: sensors and actuators
 
@@ -1547,6 +1584,159 @@ degenerate case).
   into required pull-request checks.
 - **Actuators:** file-copy of the canonical scheduled mutation-testing
   workflow from `canon/`.
+
+#### 3.1.2 Licensing integrity: sensors and actuators
+
+The licensing checks generalize routine estate findings rather than a single
+rollout: `LICENSE` copyright lines frozen at the year a repository was created,
+and manifests whose `license` field disagreed with the `LICENSE` text they
+shipped beside. Both defects are invisible to CI — nothing fails when a licence
+declaration drifts — so they accumulate until an external consumer notices. As
+elsewhere in the domain catalogue, each check ships as a lint rule package
+(Section 2.1.2) with a sensor, parameters, and a mutation.
+
+##### Licence presence and currency (LC-001, LC-002)
+
+Every repository must carry a `LICENSE` file at its root, and its copyright
+statement must not lag the repository's activity.
+
+- **Sensors:** file presence for `LICENSE` at the repository root
+  (LC-001); for LC-002, parse the copyright line's year (or the upper bound of
+  a year range) and compare it against the commit year of the most recent
+  commit on the default branch — the committer date, not the author date, since
+  rebases update only the former.
+- **Actuators:** the LC-002 mutation is a textual patch extending the
+  year or year range to the latest commit year. The LC-001 actuator is a
+  file-copy of the canonical licence text only when the intended licence
+  identity can be established from manifest metadata (a `license` field naming
+  a known SPDX identifier); where the identity cannot be established, choosing
+  a licence is a legal decision that automation must not make, so the actuator
+  degrades to opening a tracking issue.
+
+##### Declared-licence consistency (LC-003)
+
+A licence declaration is only as good as its agreement with the licence text
+that governs it. In a repository with nested packages, the governing text is the
+`LICENSE` file at the package's own level if one exists, otherwise the nearest
+ancestor's.
+
+- **Sensors:** identify each `LICENSE` file's SPDX identity by matching
+  its text against the SPDX licence templates; collect declarations from
+  `Cargo.toml` (`license`), `pyproject.toml` (`license` and the licence
+  classifiers), `package.json` (`license`), and README licence statements and
+  badges; resolve each declaration against the governing `LICENSE` per the
+  nearest-ancestor rule and flag disagreements.
+- **Actuators:** manifest corrections apply through the
+  comment-preserving remediation providers (Section 2.3). README statements are
+  prose, and prose edits are not mechanically safe, so README mismatches
+  degrade to a tracking issue quoting the conflicting statements.
+
+#### 3.1.3 Toolchain baseline: sensors and actuators
+
+The toolchain checks encode the estate templates —
+`leynos/agent-template-python` and `leynos/agent-template-rust` — as auditable
+floors. Two design decisions shape the whole domain:
+
+- **Applicability is content-driven, not manifest-driven.** The Python
+  checks apply wherever Python exists, including incidental use: helper scripts
+  inside a primarily-Rust repository (`leynos/wildside`), GitHub Actions
+  implemented in Python (`leynos/whitaker`, `leynos/shared-actions`), and
+  Ansible modules (`leynos/dev-env-rocky`). The applicability sensor enumerates
+  `*.py` files, `pyproject.toml` manifests, workflow steps invoking Python, and
+  Ansible plugin directories; a repository matching any of these is in scope.
+- **"Match or exceed" compares against vendored template data, not the
+  live template.** Each comparison rule pins the template repository at a tag
+  and vendors the extracted baseline (rule selections, disable lists, rustfmt
+  keys, `[lints]` tables) as rule-package data, the same pattern
+  `rust-makefile-baseline` uses for its fixture envelopes. The sensor therefore
+  never fetches the template at audit time, and a template change becomes a
+  versioned rule-package release that estates adopt deliberately.
+
+Repositories opt out of the "unless specifically excepted" checks (PY-009,
+PY-010, RT-008, RT-009, RT-011) through `standards-exemptions.yaml`; a
+recorded, unexpired exemption downgrades the finding to `note`, per the
+existing exemption contract.
+
+##### Python formatting and linting (PY-001 to PY-005)
+
+- **Sensors:** Makefile and workflow policies verify that `ruff format`
+  backs the format target, that `ruff format --check` (or equivalent) runs in
+  CI, and that `ruff check` and pylint (via `pylint-pypy-shim`) both run in the
+  lint gate — binding, per the QG-001 discipline, not soft-skipped.
+  Configuration policies compare the repository's ruff and pylint configuration
+  against the vendored template baseline: the template's enabled rules must be
+  a subset of the repository's, and ignore or disable lists must be no broader.
+- **Actuators:** comment-preserving TOML patches enable missing rules
+  and narrow over-broad ignore lists; Makefile patches add missing format and
+  lint wiring in the canonical form. Where a repository has no Python tooling
+  at all, the mutation seeds the canonical `ruff.toml` and pylint configuration
+  from `canon/lint/python/`.
+
+##### Python documentation and version-floor consistency (PY-006 to PY-008)
+
+- **Sensors:** configuration policies verify interrogate is configured
+  with `fail-under = 100` and runs in the lint gate (PY-006), and that
+  `requires-python` declares at least 3.12 (PY-007). The PY-008 sensor is a
+  multi-file scan collecting every Python version declaration —
+  `requires-python`, tool-specific `target-version` keys, script version
+  guards, CI matrix entries and `setup-python` inputs, and version statements
+  in the README and the users' and developers' guides — and flagging any
+  declaration that disagrees with the manifest's floor.
+- **Actuators:** TOML patches for the manifest-held declarations;
+  CI-workflow patches aligning matrix entries. Prose version statements degrade
+  to a tracking issue listing each divergent location, since the correct fix
+  may be either the prose or the floor.
+
+##### Python test and typecheck tooling (PY-009, PY-010)
+
+- **Sensors:** verify pytest-xdist is a test dependency and the test
+  target passes worker options (for example `-n auto`) unless an exemption is
+  recorded (PY-009); verify ty is present and wired into a typecheck target
+  that runs in CI (PY-010).
+- **Actuators:** dependency-group and Makefile patches adding the
+  missing wiring in the canonical form.
+
+##### Rust formatting and linting (RT-001 to RT-005)
+
+- **Sensors:** Makefile and workflow policies verify rustfmt backs the
+  format targets and a format check runs in CI (RT-001), and that clippy and
+  the Whitaker suite run in the lint gate (RT-003, RT-005 — the latter
+  delegating bindingness to the `rust-makefile-baseline` package, which already
+  owns QG-001). Configuration policies compare `rustfmt.toml` against the
+  vendored template copy key by key (RT-002), and require every `[lints]` entry
+  the template sets to be present at the same or a stricter level (RT-004).
+- **Actuators:** comment-preserving TOML patches for `rustfmt.toml` and
+  `[lints]` drift; Makefile patches adding missing format and lint wiring;
+  file-copy of the canonical Whitaker install step from `canon/` where absent.
+
+##### Rust toolchain currency (RT-006, RT-007)
+
+Nightly pins rot silently: nothing fails when a `rust-toolchain.toml` nightly
+date ages past the point where current tooling supports it.
+
+- **Sensors:** parse `rust-toolchain.toml`; when the channel is a dated
+  nightly, compare the date against the audit date and flag pins older than one
+  year (RT-006); verify the `components` list includes `clippy`, `rustfmt`, and
+  `rust-analyzer` (RT-007).
+- **Actuators:** RT-007 is a comment-preserving TOML patch adding the
+  missing components. RT-006 degrades to a tracking issue: advancing a nightly
+  pin can change lint and borrow-checker behaviour, so the bump needs a human
+  to shepherd the fallout.
+
+##### Rust build and test acceleration (RT-008 to RT-011)
+
+- **Sensors:** parse `.cargo/config.toml` for the mold linker (RT-008)
+  and the Cranelift codegen backend on the development profile (RT-009),
+  honouring recorded exemptions; determine target exposure from `Cargo.toml` —
+  a repository whose crates expose no publishable library targets
+  (`publish = false` or binary-only) must enable the Polonius-next borrow
+  checker, since nightly flags are safe when no downstream consumer builds the
+  crates on stable (RT-010); verify the test target uses nextest, via the
+  canonical `TEST_CMD` fallback that QG-004 already prescribes (RT-011).
+- **Actuators:** comment-preserving TOML patches to
+  `.cargo/config.toml` adding the linker, codegen, and borrow-checker
+  configuration in the canonical form; the RT-011 mutation reuses the QG-004
+  Makefile patch.
 
 ### 3.2. Implementation design and execution model
 

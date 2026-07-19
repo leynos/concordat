@@ -317,3 +317,57 @@ actuators that remediate them. Each check ships as a lint rule package under
   without being merge-blocking; the mutation deploys the canonical workflow.
   Acceptance: a repository without mutation testing raises the finding and the
   deployed workflow passes `act` validation.
+
+### 4.3. Enforce licensing integrity and toolchain baselines
+
+Deliver the Licensing Integrity and Toolchain Baseline audit domains (design
+document Sections 3.1.2 and 3.1.3): licence presence, currency, and
+declared-licence consistency for every repository, and language toolchain
+floors pinned to the `leynos/agent-template-python` and
+`leynos/agent-template-rust` templates. Each check ships as a lint rule package
+under `canon/lint-rules/` per the Section 2.1.2 format.
+
+- [ ] Ship the licensing rule packages (LC-001 to LC-003): root `LICENSE`
+  presence, copyright year matched against the latest commit's committer year,
+  and SPDX identity of each `LICENSE` cross-referenced against manifest and
+  README declarations under the nearest-ancestor rule. Acceptance: fixtures for
+  a missing `LICENSE`, a stale year range, and a manifest declaring a different
+  licence from its governing `LICENSE` each raise the intended finding; the
+  LC-002 mutation extends the year range, and LC-001 degrades to a tracking
+  issue when no manifest names a licence.
+- [ ] Build the Python applicability sensor and vendor the
+  `agent-template-python` baseline: enumerate `*.py` files, `pyproject.toml`
+  manifests, Python-invoking workflow steps, and Ansible plugin directories;
+  extract the template's ruff and pylint baselines at a pinned tag into
+  rule-package data. Acceptance: fixtures modelling incidental Python (a Rust
+  repository with helper scripts, a Python-implemented GitHub Action, an
+  Ansible collection) are all detected as in scope, and the vendored baseline
+  regenerates deterministically from the pinned tag.
+- [ ] Ship the Python formatting and linting rule packages (PY-001 to
+  PY-005): ruff format and check wiring bound into the format and lint gates,
+  pylint present via `pylint-pypy-shim`, and both configurations matching or
+  exceeding the vendored template baseline. Acceptance: fixtures with a missing
+  format target, a soft-skipped lint step, a disabled template rule, and an
+  over-broad ignore list each raise findings; mutations patch the configuration
+  without disturbing comments.
+- [ ] Ship the Python documentation, version-floor, and tooling rule packages
+  (PY-006 to PY-010): interrogate at `fail-under = 100`, a `requires-python`
+  floor of at least 3.12, consistent version declarations across manifests,
+  scripts, CI, and prose guides, and pytest-xdist and ty wiring with the
+  exemption path honoured. Acceptance: a fixture declaring 3.11 in CI against a
+  3.12 manifest floor raises PY-008 naming the divergent file; an exempted
+  fixture downgrades PY-009 to `note`.
+- [ ] Ship the Rust formatting and linting rule packages (RT-001 to RT-005):
+  rustfmt wiring and template-matched configuration, clippy presence with
+  `[lints]` entries at the template level or stricter, and Whitaker presence
+  delegating gate bindingness to `rust-makefile-baseline`. Acceptance: fixtures
+  with drifted `rustfmt.toml` keys and a downgraded `[lints]` entry each raise
+  findings; mutations restore the canonical values comment-preservingly.
+- [ ] Ship the Rust toolchain and acceleration rule packages (RT-006 to
+  RT-011): nightly pins no older than one year, required toolchain components,
+  mold and Cranelift development configuration, Polonius-next for
+  application-only repositories, and nextest via the canonical `TEST_CMD`
+  fallback. Acceptance: fixtures for a stale nightly, a missing `rust-analyzer`
+  component, and a binary-only crate without Polonius-next each raise findings;
+  RT-006 opens a tracking issue rather than patching the pin, and the RT-011
+  mutation reuses the QG-004 Makefile patch.
