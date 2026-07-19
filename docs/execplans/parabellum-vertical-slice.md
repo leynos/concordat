@@ -147,8 +147,13 @@ Hard invariants. Violation requires escalation, not workarounds.
   codes (this repo → AP-001/exit 1; synthetic compliant checkout → exit 0; `?=`
   checkout → QG-001 JSON/exit 1). `OperationalRuleError` maps to exit 2 on
   stderr via an additive branch in `cli.main`.
-- [ ] Milestone E: sweep driver and campaign ledger; canary run over five
-  repositories.
+- [x] (2026-07-19 16:20Z) Milestone E: `scripts/parabellum_sweep.py` with
+  eight red-then-green tests, `docs/parabellum/estate.yaml` (52
+  repositories), and the append-only ledger. Canary over wireframe,
+  netsuke, weaver, statelet, and fingermouse: all five `noncompliant` with
+  exactly one finding each — QG-001 on `WHITAKER ?=` — matching a human
+  reading (the Whitaker rollout recipe itself standardized `?=`); line
+  citations spot-checked against wireframe `Makefile:13`.
 - [ ] Milestone F: estate sweep in batches; baseline report committed; design
   document and roadmap updated.
 
@@ -196,6 +201,16 @@ Hard invariants. Violation requires escalation, not workarounds.
   namespace is derived from the rule id in `concordat/rules/runner.py`; worth a
   fixture-backed regression test if a second rule package ever changes the
   convention.
+- Observation: the canary shows the estate's reference pattern itself
+  violates QG-001 — `WHITAKER ?= whitaker` is what the Whitaker rollout
+  recipe installed everywhere, so near-uniform `noncompliant` verdicts on
+  that single finding are the expected estate baseline, not a policy bug.
+  Evidence: all five canary repositories produced exactly one QG-001 `?=`
+  finding; wireframe `Makefile:13` verified by hand.
+  Impact: the eventual remediation wave will be estate-wide and mechanical
+  (replace `?=` with `:=` or delegate to a canonical runner); the doctrine
+  question of whether `?=` should remain permitted belongs to the
+  retrospective, not to mid-campaign adjustment.
 
 ## Decision log
 

@@ -1,0 +1,66 @@
+---
+# Operation Parabellum: the Rust estate swept by scripts/parabellum_sweep.py.
+# Source: the Whitaker rollout inventory (cargo-ecosystem repositories).
+# Excluded entries carry a reason and receive an `excluded` ledger record.
+schema_version: 1
+owner: leynos
+repositories:
+  # Reference adopters
+  - name: wireframe
+  - name: netsuke
+  - name: weaver
+  - name: whitaker
+  # Tier 1
+  - name: limela
+  - name: jmap-wasm
+  - name: ytmusic-wasm
+  - name: dbar
+  - name: mdast-check
+  - name: rentaneko
+  - name: rstest-xfail
+  - name: statelet
+  - name: evert
+  - name: mpsc-log
+  - name: prosidy-darn
+  - name: agent-template-rust
+  - name: msgspec-crockford
+  # Tier 2
+  - name: monotony
+  - name: agentland
+  - name: cuprum
+  - name: shared-actions
+  - name: catnap
+  - name: rustxt
+  - name: diesel-cte-ext
+  - name: fingermouse
+  # Tier 3
+  - name: lag-complexity
+  - name: dear-diary
+  - name: skyjoust
+  - name: comenq
+  - name: actix-v2a
+  - name: mriya
+  - name: mapsplice
+  - name: repovec-appliance
+  - name: stilyagi
+  # Tier 4
+  - name: lille
+  - name: zamburak
+  - name: wildside-engine
+  - name: spycatcher-harness
+  - name: pg-embed-setup-unpriv
+  - name: tei-rapporteur
+  - name: ddlint
+  - name: femtologging
+  - name: podbot
+  - name: mxd
+  # Tier 5
+  - name: ortho-config
+  - name: chutoro
+  - name: gauss
+  - name: frankie
+  - name: rstest-bdd
+  - name: corbusier
+  - name: wildside
+  # End-of-game boss
+  - name: axinite
