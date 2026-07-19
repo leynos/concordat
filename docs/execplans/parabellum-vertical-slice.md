@@ -137,10 +137,14 @@ Hard invariants. Violation requires escalation, not workarounds.
   `29fc5a1634ffbaa18a773eed9dff1b2838a45d9c`, installed via
   `cargo install --git`, smoke-tested against this repository's `Makefile`
   (exit 0, `schema_version: 1`, status `complete`).
-- [ ] Milestone B: rule package `rust-makefile-baseline` under
-  `platform-standards/canon/lint-rules/` with fixtures and red policy tests.
-- [ ] Milestone C: green Rego policy; conftest tests pass; package registered
-  in `platform-standards/canon/manifest.yaml`.
+- [x] (2026-07-19 14:40Z) Milestone B: rule package skeleton, eleven fixture
+  Makefiles plus two synthetic envelopes, a checked-in generator
+  (`fixtures/generate.py`), and fourteen red policy tests (red run recorded:
+  14 tests, 14 failures, missing policy package).
+- [x] (2026-07-19 14:55Z) Milestone C: `rust_makefile_baseline.rego` green
+  (14/14 via `conftest verify --data fixtures/data.json`); registered in
+  `canon/manifest.yaml` as `lint-rule-rust-makefile-baseline` (policy) and
+  `...-manifest` (rule.yaml).
 - [ ] Milestone D: `concordat artefact rule run` command with unit and BDD
   coverage.
 - [ ] Milestone E: sweep driver and campaign ledger; canary run over five
@@ -171,6 +175,19 @@ Hard invariants. Violation requires escalation, not workarounds.
   Evidence: repository survey, 2026-07-19.
   Impact: this plan introduces QG-001 and must add it to the §3.1 check
   catalogue (Milestone F) so the design document remains the source of truth.
+- Observation: referencing rule parameters with `object.get(data, [...])`
+  makes OPA treat the whole `data` document as a dependency, which is
+  circular once the test package (also under `data`) references the policy.
+  Evidence: `rego_recursion_error` from the first green attempt.
+  Impact: parameters are read with `default` rules plus scoped
+  `data.parameters.<name>` references instead; a pattern to reuse in future
+  rule packages.
+- Observation: the fixture generator became a kept artefact
+  (`fixtures/generate.py`) rather than the throwaway script the plan
+  imagined, because envelopes must be regenerated whenever the `makeutil`
+  pin moves.
+  Evidence: Milestone B implementation.
+  Impact: minor scope addition, recorded here; the script is stdlib-only.
 
 ## Decision log
 
