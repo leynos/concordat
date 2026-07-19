@@ -10,11 +10,13 @@ built by `concordat artefact rule run`; Makefile facts come from the pinned
 - **FP-003** (error): the root `Makefile` must exist and define each of
   the required targets (`build`, `test`, `lint` by default) unconditionally — a
   target wrapped entirely in `ifdef`/`ifeq` blocks does not count.
-- **QG-001** (error): the lint gate must be binding. Noncompliant when
-  the gate variable (`WHITAKER` by default) is assigned with the
-  environment-overridable `?=` operator, when a lint-path recipe ignores errors
-  (`-` prefix), carries a `command -v`/`which` existence guard, or suppresses
-  failure with `|| true`, or when no recipe anywhere invokes the gate.
+- **QG-001** (error): the lint gate must be binding. Noncompliant when a
+  lint-path recipe ignores errors (`-` prefix), carries a `command -v`/`which`
+  existence guard, or suppresses failure with `|| true`, or when no recipe
+  anywhere invokes the gate. The gate variable's `?=` assignment
+  (`WHITAKER ?= whitaker`) is the sanctioned estate pattern — local override
+  permitted, CI installs the real binary — and is deliberately not a finding
+  (doctrine decision, 2026-07-19).
 - **AP-001** (error, indeterminate): the checkout has no root
   `Cargo.toml`, so Rust applicability cannot be established.
 - **EN-001** (error, indeterminate): the policy-input envelope has an

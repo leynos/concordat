@@ -5,7 +5,7 @@ description: >-
   Audits a Rust repository's root Makefile for the canonical build, test,
   and lint targets (FP-003) and for a binding Whitaker lint gate (QG-001).
   Audit-only: this rule declares no mutations.
-version: 0.1.0
+version: 0.2.0
 sensor:
   type: conftest
   policy: policy/

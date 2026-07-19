@@ -309,9 +309,16 @@ because the fixtures already encoded the estate's real patterns — which is the
 point.
 
 Follow-ups deliberately left open: `rule validate`, the mutation vocabulary and
-remediation wave, a tagged makeutil release with binstall assets, nested-Cargo
-applicability doctrine, and the `?=` doctrine question (permit-and-remediate
-versus forbid).
+remediation wave, a tagged makeutil release with binstall assets, and
+nested-Cargo applicability doctrine.
+
+Resolved after completion (2026-07-19, user decision): the `?=` question.
+`WHITAKER ?= whitaker` is the sanctioned estate pattern — local override
+permitted, CI installs the real binary — so rule package v0.2.0 removed the
+`?=` deny and the estate was re-baselined. Post-decision follow-up work also
+landed: the pg-embed-setup-unpriv parse fixup (PR #195), a makeutil corpus
+fixture pinning the bare-`$(error ...)` parser gap, and FP-003 `build`-target
+fixups for axinite and wildside.
 
 ## Context and orientation
 

@@ -9,13 +9,13 @@ Feature: Rust Makefile baseline rule run
     Then the exit status is 0
     And the table output reports zero findings
 
-  Scenario: environment-overridable lint gate
+  Scenario: soft-skipped lint gate
     Given a checkout with a root Cargo.toml
-    And makeutil reports the "overridable_gate" fixture facts
-    And conftest reports the overridable-gate failure
+    And makeutil reports the "soft_skip" fixture facts
+    And conftest reports the soft-skip failure
     When I run the rule against the checkout
     Then the exit status is 1
-    And the output contains a QG-001 finding citing Makefile line 1
+    And the output contains a QG-001 finding citing Makefile line 12
 
   Scenario: include renders the gate unprovable
     Given a checkout with a root Cargo.toml
