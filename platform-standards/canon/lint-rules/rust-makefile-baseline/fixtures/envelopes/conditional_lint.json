@@ -26,7 +26,7 @@
       "parser_version": "0.3.40"
     },
     "source": {
-      "path": "/home/leynos/Projects/concordat.worktrees/parabellum-vertical-slice/platform-standards/canon/lint-rules/rust-makefile-baseline/fixtures/makefiles/conditional-lint.mk",
+      "path": "conditional-lint.mk",
       "sha256": "b5f8ff39baeb332e7f8829647be4075d163969b40ae88b28b14cc0ae96389b7e",
       "byte_length": 148
     },

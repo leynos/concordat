@@ -30,8 +30,11 @@ CARGO_PARSED: typ.Final = {"package": {"name": "fixture", "version": "0.1.0"}}
 
 def parse_makefile(path: Path) -> dict[str, object]:
     """Return the makeutil report for *path*, tolerating recovered parses."""
+    # Run with a relative path so the recorded source.path stays
+    # machine-independent in the checked-in envelopes.
     completed = subprocess.run(  # noqa: S603 - fixed argv, no shell
-        ["makeutil", "parse", str(path)],  # noqa: S607 - resolved from PATH
+        ["makeutil", "parse", path.name],  # noqa: S607 - resolved from PATH
+        cwd=path.parent,
         capture_output=True,
         text=True,
         timeout=30,

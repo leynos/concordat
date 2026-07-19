@@ -26,7 +26,7 @@
       "parser_version": "0.3.40"
     },
     "source": {
-      "path": "/home/leynos/Projects/concordat.worktrees/parabellum-vertical-slice/platform-standards/canon/lint-rules/rust-makefile-baseline/fixtures/makefiles/suppressed.mk",
+      "path": "suppressed.mk",
       "sha256": "600c66d0a597a85c8b55c6b333655ced76159b337d23909e3b59630d58d215dd",
       "byte_length": 161
     },

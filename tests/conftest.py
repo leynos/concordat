@@ -78,6 +78,11 @@ class CmdMox:
         """Begin configuring expectations for the provided command."""
         return CmdMoxBuilder(self, command)
 
+    @property
+    def is_programmed(self) -> bool:
+        """Report whether any expectations have been queued."""
+        return bool(self._expectations)
+
     def enqueue(self, expectation: _Expectation) -> None:
         """Append a new expectation to the replay queue."""
         self._expectations.append(expectation)
@@ -93,7 +98,7 @@ class CmdMox:
         self,
         args: cabc.Iterable[str],
         **kwargs: object,
-    ) -> subprocess.CompletedProcess[list[str]]:
+    ) -> subprocess.CompletedProcess[str]:
         """Simulate subprocess.run while asserting the recorded calls."""
         if not self._expectations:
             raise UnexpectedCommandError(tuple(args))
@@ -118,7 +123,12 @@ class CmdMox:
                 output=expectation.stdout,
                 stderr=expectation.stderr,
             )
-        return subprocess.CompletedProcess(args_list, expectation.exit_code)
+        return subprocess.CompletedProcess(
+            args_list,
+            expectation.exit_code,
+            stdout=expectation.stdout,
+            stderr=expectation.stderr,
+        )
 
     def verify(self) -> None:
         """Ensure every expectation was consumed by the test."""

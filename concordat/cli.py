@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import os
+import pathlib
 import sys
+import typing as typ
 
-from cyclopts import App
+from cyclopts import App, Parameter
 
 from .enrol import disenrol_repositories, enrol_repositories
-from .errors import ConcordatError
+from .errors import ConcordatError, OperationalRuleError
 from .estate import (
     DEFAULT_BRANCH as ESTATE_DEFAULT_BRANCH,
 )
@@ -34,6 +36,10 @@ app = App()
 
 
 estate_app = App()
+
+artefact_app = App()
+
+rule_app = App()
 
 ERROR_NO_ACTIVE_ESTATE = (
     "No active estate configured. Run `concordat estate init --github-owner "
@@ -308,6 +314,33 @@ def persist(
 app.command(estate_app, name="estate")
 
 
+@rule_app.command(name="run")
+def rule_run(
+    rule_id: str,
+    *,
+    repo: pathlib.Path = pathlib.Path(),
+    output_format: typ.Annotated[
+        typ.Literal["table", "json"],
+        Parameter(name="--format"),
+    ] = "table",
+) -> int:
+    """Audit a local checkout against a canon lint rule package.
+
+    Exit codes: 0 compliant; 1 at least one finding (including
+    indeterminate verdicts, which fail closed); 2 operational failure.
+    """
+    from .rules import render_json, render_table, run_rule
+
+    result = run_rule(rule_id, repo)
+    rendered = render_json(result) if output_format == "json" else render_table(result)
+    print(rendered)
+    return result.exit_code
+
+
+artefact_app.command(rule_app, name="rule")
+app.command(artefact_app, name="artefact")
+
+
 def _resolve_estate_or_active(
     alias: str | None = None, *, require_owner: bool = True
 ) -> EstateRecord:
@@ -405,6 +438,9 @@ def main(argv: list[str] | tuple[str, ...] | None = None) -> int:
     """Entry point for the concordat CLI."""
     try:
         result = app(argv)
+    except OperationalRuleError as error:
+        print(f"concordat: {error}", file=sys.stderr)
+        return 2
     except ConcordatError as error:
         print(f"concordat: {error}")
         return 1

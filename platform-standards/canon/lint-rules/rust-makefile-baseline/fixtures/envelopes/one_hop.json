@@ -26,7 +26,7 @@
       "parser_version": "0.3.40"
     },
     "source": {
-      "path": "/home/leynos/Projects/concordat.worktrees/parabellum-vertical-slice/platform-standards/canon/lint-rules/rust-makefile-baseline/fixtures/makefiles/one-hop.mk",
+      "path": "one-hop.mk",
       "sha256": "ff7e86a8b5547d5958d9d26715ee640798e80ab9dadca580fd0458f761772307",
       "byte_length": 314
     },

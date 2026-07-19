@@ -26,7 +26,7 @@
       "parser_version": "0.3.40"
     },
     "source": {
-      "path": "/home/leynos/Projects/concordat.worktrees/parabellum-vertical-slice/platform-standards/canon/lint-rules/rust-makefile-baseline/fixtures/makefiles/recovered.mk",
+      "path": "recovered.mk",
       "sha256": "6328c35107a66d557e3a4ca64feb04002153210d2d8dd348bb38d3bbf5635c4a",
       "byte_length": 107
     },
