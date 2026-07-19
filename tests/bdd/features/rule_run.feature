@@ -9,6 +9,16 @@ Feature: Rust Makefile baseline rule run
     Then the exit status is 0
     And the table output reports zero findings
 
+  # `WHITAKER ?= whitaker` is the sanctioned estate pattern: a local override
+  # is permitted because CI installs the real binary. It is not a finding.
+  Scenario: overridable gate variable is compliant
+    Given a checkout with a root Cargo.toml
+    And makeutil reports the "overridable_gate" fixture facts
+    And conftest reports no failures
+    When I run the rule against the checkout
+    Then the exit status is 0
+    And the table output reports zero findings
+
   Scenario: soft-skipped lint gate
     Given a checkout with a root Cargo.toml
     And makeutil reports the "soft_skip" fixture facts

@@ -19,6 +19,9 @@ if typ.TYPE_CHECKING:
 
 SCHEMA_VERSION: typ.Final = 1
 
+# `makeutil parse` contract: exit 0 is a complete parse, 1 a recovered one.
+EXPECTED_STATUS_FOR_EXIT_CODE: typ.Final = {0: "complete", 1: "recovered"}
+
 ERROR_MAKEUTIL_MISSING = (
     "makeutil is required but was not found on PATH; install the pinned "
     "revision with `cargo install --git https://github.com/leynos/makeutil "
@@ -61,10 +64,14 @@ def inspect_makefile(path: pathlib.Path, *, timeout: float = 10.0) -> MakefileFa
         raise OperationalRuleError(message)
 
     try:
-        report: dict[str, typ.Any] = json.loads(completed.stdout)
+        report: typ.Any = json.loads(completed.stdout)
     except json.JSONDecodeError as error:
         message = f"makeutil emitted invalid JSON for {path}"
         raise OperationalRuleError(message) from error
+
+    if not isinstance(report, dict):
+        message = f"makeutil report for {path} is not a JSON object"
+        raise OperationalRuleError(message)
 
     if report.get("schema_version") != SCHEMA_VERSION:
         message = (
@@ -73,5 +80,23 @@ def inspect_makefile(path: pathlib.Path, *, timeout: float = 10.0) -> MakefileFa
         )
         raise OperationalRuleError(message)
 
-    status = str(report["parse"]["status"])
+    parse = report.get("parse")
+    if not isinstance(parse, dict):
+        message = f"makeutil report for {path} has no `parse` object"
+        raise OperationalRuleError(message)
+
+    status = parse.get("status")
+    if status not in EXPECTED_STATUS_FOR_EXIT_CODE.values():
+        message = f"makeutil report for {path} has unknown parse status {status!r}"
+        raise OperationalRuleError(message)
+
+    expected = EXPECTED_STATUS_FOR_EXIT_CODE[completed.returncode]
+    if status != expected:
+        message = (
+            f"makeutil report for {path} disagrees with its exit code: "
+            f"status {status!r} with exit {completed.returncode} "
+            f"(expected {expected!r})"
+        )
+        raise OperationalRuleError(message)
+
     return MakefileFacts(report=report, status=status)

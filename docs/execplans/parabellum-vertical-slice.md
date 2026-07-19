@@ -28,7 +28,7 @@ concordat artefact rule run rust-makefile-baseline --repo /path/to/checkout
 ```
 
 against any local Rust checkout and receive a table (or JSON) of findings with
-stable rule identifiers, severities, and source locations; and can run a sweep
+stable rule identifiers, severities, and source locations, and can run a sweep
 script that clones every Rust repository in the estate at a pinned commit,
 audits it, and appends one machine-readable record per repository to a campaign
 ledger. The observable outcome of the whole plan is a committed baseline
@@ -279,9 +279,12 @@ purpose: `concordat artefact rule run` exists and answers both questions with
 evidence; the sweep and ledger exist; the baseline report covers all 52
 repositories.
 
-Baseline (2026-07-19, `rust-makefile-baseline` v0.1.0, makeutil
-`29fc5a1634ff`): 44 noncompliant, 8 indeterminate, 0 compliant. Findings:
-QG-001 x48, AP-001 x6, FP-003 x2.
+Historical pre-rebaseline snapshot (2026-07-19, `rust-makefile-baseline`
+v0.1.0, makeutil `29fc5a1634ff`): 44 noncompliant, 8 indeterminate, 0
+compliant. Findings: QG-001 x48, AP-001 x6, FP-003 x2. These figures predate
+the doctrine decision that `WHITAKER ?=` is sanctioned; the current v0.2.0
+baseline in `docs/parabellum/baseline-report.md` reads 5 noncompliant, 8
+indeterminate, 39 compliant.
 
 What the baseline says:
 

@@ -73,11 +73,15 @@ class Estate:
 def load_estate(path: pathlib.Path) -> Estate:
     """Parse the estate inventory YAML document."""
     document = YAML(typ="safe").load(path.read_text(encoding="utf-8"))
-    entries = tuple(
-        EstateEntry(name=item["name"], excluded=item.get("excluded"))
-        for item in document["repositories"]
-    )
-    return Estate(owner=document["owner"], repositories=entries)
+    try:
+        entries = tuple(
+            EstateEntry(name=item["name"], excluded=item.get("excluded"))
+            for item in document["repositories"]
+        )
+        return Estate(owner=document["owner"], repositories=entries)
+    except KeyError as error:
+        message = f"estate manifest {path} is missing key {error.args[0]!r}"
+        raise OperationalRuleError(message) from error
 
 
 def _load_ledger(path: pathlib.Path) -> list[dict[str, typ.Any]]:
@@ -213,6 +217,18 @@ def run_sweep(
     appended: list[dict[str, typ.Any]] = []
     audited = 0
 
+    def emit(record: dict[str, typ.Any]) -> None:
+        """Append one record to the ledger immediately.
+
+        Auditing the estate takes many minutes and clones over the
+        network, so each record is durable before the next repository is
+        attempted; an interrupted sweep resumes rather than restarts.
+        """
+        ledger_path.parent.mkdir(parents=True, exist_ok=True)
+        with ledger_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record) + "\n")
+        appended.append(record)
+
     for entry in estate.repositories:
         if only is not None and entry.name not in only:
             continue
@@ -220,7 +236,7 @@ def run_sweep(
 
         if entry.excluded is not None:
             if not _already_ledgered(ledger, repository, commit_sha=None):
-                appended.append(_excluded_record(repository, entry.excluded))
+                emit(_excluded_record(repository, entry.excluded))
             continue
 
         if limit is not None and audited >= limit:
@@ -231,7 +247,7 @@ def run_sweep(
         except OperationalRuleError as error:
             record = _base_record(repository)
             record["error_detail"] = str(error)
-            appended.append(record)
+            emit(record)
             audited += 1
             continue
 
@@ -240,15 +256,10 @@ def run_sweep(
             continue
 
         record = _audit_record(estate.owner, entry)
-        appended.append(record)
+        emit(record)
         audited += 1
         print(f"{repository}: {record['verdict']}")
 
-    if appended:
-        ledger_path.parent.mkdir(parents=True, exist_ok=True)
-        with ledger_path.open("a", encoding="utf-8") as handle:
-            for record in appended:
-                handle.write(json.dumps(record) + "\n")
     return appended
 
 

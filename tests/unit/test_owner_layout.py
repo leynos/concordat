@@ -83,35 +83,91 @@ class TestDefaultConfigPath:
         assert "estates:" not in legacy.read_text()
 
 
+class TestActiveOwnerForImplicitConfig:
+    """`init_estate` settles the active owner before resolving its config.
+
+    The helper is exercised directly: it is the whole of the invariant, and
+    driving it through `init_estate` would require mocking GitHub and the
+    template bootstrap without covering anything further.
+    """
+
+    def test_implicit_path_records_the_estate_owner(
+        self,
+        xdg_env: dict[str, str],
+    ) -> None:
+        """With no active owner, the estate owner becomes the active owner."""
+        resolved = estate._ensure_active_owner_for_implicit_config(None, "leynos")
+        assert xdg.get_active_owner() == "leynos"
+        assert resolved == xdg.owner_config_path("leynos")
+
+    def test_explicit_path_has_no_side_effect(
+        self,
+        xdg_env: dict[str, str],
+        tmp_path: pathlib.Path,
+    ) -> None:
+        """An explicit config path bypasses the owner namespace entirely."""
+        explicit = tmp_path / "explicit.yaml"
+        resolved = estate._ensure_active_owner_for_implicit_config(explicit, "leynos")
+        assert resolved == explicit
+        assert xdg.get_active_owner() is None
+
+    def test_existing_active_owner_is_not_overwritten(
+        self,
+        xdg_env: dict[str, str],
+    ) -> None:
+        """A matching active owner is left exactly as configured."""
+        xdg.set_active_owner("leynos")
+        resolved = estate._ensure_active_owner_for_implicit_config(None, "leynos")
+        assert xdg.get_active_owner() == "leynos"
+        assert resolved == xdg.owner_config_path("leynos")
+
+    def test_mismatched_active_owner_is_refused(
+        self,
+        xdg_env: dict[str, str],
+    ) -> None:
+        """An estate is never registered under a different active owner."""
+        xdg.set_active_owner("df12")
+        with pytest.raises(estate.ActiveOwnerMismatchError):
+            estate._ensure_active_owner_for_implicit_config(None, "leynos")
+        assert xdg.get_active_owner() == "df12"
+
+
 class TestOwnerNamespacedCache:
     """Estate caches nest under the owning GitHub owner."""
 
-    def test_cache_destination_uses_record_owner(
+    @pytest.mark.parametrize(
+        ("record_owner", "active_owner", "expected_owner"),
+        [
+            pytest.param(
+                "leynos",
+                "df12",
+                "leynos",
+                id="record-owner-takes-precedence",
+            ),
+            pytest.param(
+                None,
+                "df12",
+                "df12",
+                id="falls-back-to-active-owner",
+            ),
+        ],
+    )
+    def test_cache_destination_resolves_owner(
         self,
         xdg_env: dict[str, str],
+        record_owner: str | None,
+        active_owner: str,
+        expected_owner: str,
     ) -> None:
-        """A record's github_owner namespaces its cache path."""
+        """The record's owner wins; the headline active owner fills the gap."""
+        xdg.set_active_owner(active_owner)
         record = EstateRecord(
             alias="prod",
             repo_url="git@github.com:leynos/df12-std-prod.git",
-            github_owner="leynos",
+            github_owner=record_owner,
         )
         destination = estate_cache.cache_destination(record)
-        assert destination == xdg.owner_estates_cache_dir("leynos") / "prod"
-
-    def test_cache_destination_falls_back_to_active_owner(
-        self,
-        xdg_env: dict[str, str],
-    ) -> None:
-        """A record without an owner uses the headline active owner."""
-        xdg.set_active_owner("df12")
-        record = EstateRecord(
-            alias="prod",
-            repo_url="git@github.com:leynos/df12-std-prod.git",
-            github_owner=None,
-        )
-        destination = estate_cache.cache_destination(record)
-        assert destination == xdg.owner_estates_cache_dir("df12") / "prod"
+        assert destination == xdg.owner_estates_cache_dir(expected_owner) / "prod"
 
     def test_cache_destination_requires_an_owner(
         self,

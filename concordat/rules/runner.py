@@ -9,6 +9,9 @@ import subprocess
 import tempfile
 import typing as typ
 
+from ruamel.yaml import YAML
+from ruamel.yaml.error import YAMLError
+
 from concordat.errors import OperationalRuleError
 
 from .envelope import build_envelope
@@ -21,6 +24,8 @@ RULE_PACKAGES_DIR: typ.Final = (
 )
 
 CONFTEST_TIMEOUT: typ.Final = 60.0
+
+_yaml = YAML(typ="safe")
 
 VERDICT_COMPLIANT: typ.Final = "compliant"
 VERDICT_NONCOMPLIANT: typ.Final = "noncompliant"
@@ -65,19 +70,53 @@ def _policy_namespace(rule_id: str) -> str:
     return "canon.lint_rules." + rule_id.replace("-", "_")
 
 
+def _rule_parameters(rule_dir: pathlib.Path) -> dict[str, typ.Any]:
+    """Return the rule manifest's parameter defaults.
+
+    The policies read their tunables from ``data.parameters``; without this
+    the manifest's declared defaults would be inert and only the ``default``
+    rules baked into the Rego would ever apply.
+    """
+    manifest_path = rule_dir / "rule.yaml"
+    if not manifest_path.is_file():
+        return {}
+    try:
+        manifest = _yaml.load(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, YAMLError) as error:
+        message = f"cannot read rule manifest {manifest_path}: {error}"
+        raise OperationalRuleError(message) from error
+    if not isinstance(manifest, dict):
+        message = f"rule manifest {manifest_path} is not a mapping"
+        raise OperationalRuleError(message)
+    parameters = manifest.get("parameters")
+    if not isinstance(parameters, dict):
+        return {}
+    defaults = parameters.get("defaults")
+    return dict(defaults) if isinstance(defaults, dict) else {}
+
+
 def _invoke_conftest(
     rule_id: str,
     envelope: dict[str, typ.Any],
 ) -> list[dict[str, typ.Any]]:
-    policy_dir = _rule_package_dir(rule_id) / "policy"
+    rule_dir = _rule_package_dir(rule_id)
+    policy_dir = rule_dir / "policy"
+    parameters = _rule_parameters(rule_dir)
     with tempfile.TemporaryDirectory(prefix="concordat-rule-") as scratch:
         envelope_path = pathlib.Path(scratch) / "envelope.json"
         envelope_path.write_text(json.dumps(envelope), encoding="utf-8")
+        data_path = pathlib.Path(scratch) / "parameters.json"
+        data_path.write_text(
+            json.dumps({"parameters": parameters}),
+            encoding="utf-8",
+        )
         argv = [
             "conftest",
             "test",
             "--policy",
             str(policy_dir),
+            "--data",
+            str(data_path),
             "--namespace",
             _policy_namespace(rule_id),
             "--output",

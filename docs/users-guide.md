@@ -116,18 +116,22 @@ workflows read the same flag before applying changes.
 
 ## Configuration, credentials, cache, and state locations
 
-Everything concordat persists lives under the XDG base directories, namespaced
-by GitHub owner:
+Everything concordat persists lives under the XDG base directories. A single
+global headline file names the active GitHub owner; everything else — per-owner
+configuration, credentials, caches, and state — is namespaced beneath that
+owner:
 
-- `$XDG_CONFIG_HOME/concordat/config.yaml` — the **headline** config; its
-  `github_owner` key names the active owner. Manage it with
-  `concordat owner use <owner>` and inspect it with `concordat owner show`.
+- `$XDG_CONFIG_HOME/concordat/config.yaml` — the **headline** config, global
+  rather than owner-namespaced; its `github_owner` key names the active owner.
+  Manage it with `concordat owner use <owner>` and inspect it with
+  `concordat owner show`.
 - `$XDG_CONFIG_HOME/concordat/owners/<owner>/config.yaml` — that owner's
   estates and active estate.
 - `$XDG_CONFIG_HOME/concordat/owners/<owner>/credentials.yaml` — optional
   credential fallbacks, mapping credential environment-variable names
   (`GITHUB_TOKEN`, `SCW_ACCESS_KEY`, `SCW_SECRET_KEY`, `AWS_*`, `SPACES_*`) to
-  values. Environment variables always win; keep the file `chmod 600`.
+  values. Environment variables always win. The file must be `chmod 600`:
+  concordat refuses to read one carrying any group or world permission bit.
   Concordat never writes this file.
 - `$XDG_CACHE_HOME/concordat/owners/<owner>/estates/<alias>` — estate
   repository caches.
@@ -137,10 +141,15 @@ by GitHub owner:
   working trees; removed after each run unless `--keep-workdir` is given.
 
 Remote OpenTofu state stored in the configured S3 backend (for example Scaleway
-Object Storage) is unaffected by this layout. A legacy flat
-`$XDG_CONFIG_HOME/concordat/config.yaml` containing an `estate` section is
-migrated into the owner-namespaced layout automatically the first time the
-owner can be derived from its records.
+Object Storage) is unaffected by this layout.
+
+**Migration from the legacy flat format.** Older releases wrote estates
+directly into `$XDG_CONFIG_HOME/concordat/config.yaml` — the same path the
+headline config now occupies. A file found there carrying an `estate` section
+is therefore a legacy configuration: its estates are moved into
+`owners/<owner>/config.yaml` automatically the first time the owner can be
+derived from those records, and the headline file is rewritten with only its
+`github_owner` key and any other non-estate settings.
 
 ## Managing estates
 

@@ -312,10 +312,10 @@ touching module logic.
 The delivered CLI follows the workflow above:
 
 - Active estates are refreshed into
-  `$XDG_CACHE_HOME/concordat/owners/<owner>/estates/<alias>`
-  and copied into a per-run temporary directory. The CLI prints the workspace
-  path at the start of every execution and removes it afterwards unless
-  `--keep-workdir` is passed for debugging.
+  `$XDG_CACHE_HOME/concordat/owners/<owner>/estates/<alias>` and copied into a
+  per-run temporary directory. The CLI prints the workspace path at the start
+  of every execution and removes it afterwards unless `--keep-workdir` is
+  passed for debugging.
 - `terraform.tfvars` is synthesized with the estate's `github_owner` before
   invoking OpenTofu. Commands refuse to run without `GITHUB_TOKEN`, so the
   GitHub provider can load schemas without interactive prompts.
@@ -1274,7 +1274,12 @@ The formal schema for this file is defined below.
 | `libraries.version_tag`     | String        | Required (if `libraries` is present) | The Git tag of the library version being used (e.g., `v2.4.1`). The Auditor uses this to fetch the correct version of the library's user guide for comparison.                                                                                                                                      |
 | `ci.needs_release_workflow` | Boolean       | Optional                             | Set to `true` if the repository should be configured with the canonical release workflow. Defaults to `false`.                                                                                                                                                                                      |
 
-#### 2.2.1. Nested Rust surfaces and gate reachability
+#### 2.2.1. Nested Rust surfaces and gate reachability (design, not yet shipped)
+
+This subsection specifies planned work for `rust-makefile-baseline` v0.3.0. The
+shipped v0.2.0 rule package, and the QG-001 row in Table 3, still bound gate
+delegation to one prerequisite hop and still sniff a root `Cargo.toml` for
+applicability. Nothing described below is enforced today.
 
 The Parabellum baseline showed that root-`Cargo.toml` sniffing under-covers the
 estate: six repositories carry their Rust in subdirectories (`rust/` workspaces

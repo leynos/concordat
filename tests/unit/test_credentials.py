@@ -29,6 +29,7 @@ def _write_credentials(env: dict[str, str], owner: str, body: str) -> pathlib.Pa
     path = xdg.owner_credentials_path(owner, env)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(body)
+    path.chmod(0o600)
     return path
 
 
@@ -59,6 +60,16 @@ class TestLoadCredentials:
             "SCW_ACCESS_KEY": "ak",
             "SCW_SECRET_KEY": "sk",
         }
+
+    def test_group_readable_file_is_refused(
+        self,
+        fake_env: dict[str, str],
+    ) -> None:
+        """A credentials file other users can read fails closed."""
+        path = _write_credentials(fake_env, "leynos", "GITHUB_TOKEN: ghp_file\n")
+        path.chmod(0o640)
+        with pytest.raises(credentials.InsecureCredentialsError):
+            credentials.load_credentials("leynos", env=fake_env)
 
 
 class TestCredentialEnvironment:
