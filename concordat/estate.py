@@ -14,6 +14,7 @@ from cyclopts import config as cyclopts_config
 from github3 import exceptions as github3_exceptions
 from pygit2 import RemoteCallbacks
 from ruamel.yaml import YAML
+from ruamel.yaml.error import YAMLError
 
 from . import xdg
 from .errors import ConcordatError
@@ -221,6 +222,18 @@ class MissingGitHubOwnerError(EstateError):
         super().__init__(ERROR_OWNER_REQUIRED)
 
 
+class ActiveOwnerMismatchError(EstateError):
+    """Raised when an estate's owner differs from the active GitHub owner."""
+
+    def __init__(self, active_owner: str, estate_owner: str) -> None:
+        """Initialise the error with both owners."""
+        super().__init__(
+            f"estate owner {estate_owner!r} does not match the active GitHub "
+            f"owner {active_owner!r}; run `concordat owner use {estate_owner}` "
+            "first if that is the intended namespace"
+        )
+
+
 class GitHubOrganizationAuthenticationError(GitHubAuthenticationError):
     """Raised when organisation-level auth fails."""
 
@@ -322,7 +335,11 @@ def _migrate_legacy_config() -> None:
     legacy = xdg.config_root() / CONFIG_FILENAME
     if not legacy.is_file():
         return
-    data = _yaml.load(legacy.read_text(encoding="utf-8"))
+    try:
+        data = _yaml.load(legacy.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, YAMLError) as error:
+        message = f"cannot read legacy configuration {legacy}: {error}"
+        raise EstateError(message) from error
     if not isinstance(data, dict):
         return
     estate_section = data.get(ESTATE_SECTION)
@@ -465,12 +482,11 @@ def init_estate(
     slug = parse_github_slug(repo_url)
     resolved_owner = _resolve_and_confirm_owner(slug, github_owner, confirmer)
     estate_owner = _require_owner(resolved_owner)
-    # Record the headline owner before touching estate config so the
-    # duplicate check and the eventual registration read the same
-    # owner-namespaced file.
-    if config_path is None and xdg.get_active_owner() is None:
-        xdg.set_active_owner(estate_owner)
-    records = _load_estates(config_path)
+    resolved_config_path = _ensure_active_owner_for_implicit_config(
+        config_path,
+        estate_owner,
+    )
+    records = _load_estates(resolved_config_path)
     if alias in records:
         raise DuplicateEstateAliasError(alias)
     repository_plan = _prepare_repository(
@@ -506,8 +522,34 @@ def init_estate(
         inventory_path=inventory_path,
         github_owner=estate_owner,
     )
-    register_estate(record, config_path=config_path, set_active_if_missing=True)
+    register_estate(
+        record,
+        config_path=resolved_config_path,
+        set_active_if_missing=True,
+    )
     return record
+
+
+def _ensure_active_owner_for_implicit_config(
+    config_path: Path | None,
+    estate_owner: str,
+) -> Path | None:
+    """Return the estate config path, settling the active owner first.
+
+    This must run before the estate configuration is resolved implicitly:
+    the duplicate-alias check and the eventual registration have to read
+    the same owner-namespaced file, and an estate must never be recorded
+    under a different active owner. An explicit *config_path* bypasses the
+    owner namespace entirely and is returned unchanged with no side effect.
+    """
+    if config_path is not None:
+        return config_path
+    active_owner = xdg.get_active_owner()
+    if active_owner is None:
+        xdg.set_active_owner(estate_owner)
+    elif active_owner != estate_owner:
+        raise ActiveOwnerMismatchError(active_owner, estate_owner)
+    return xdg.owner_config_path(estate_owner)
 
 
 def _resolve_and_confirm_owner(

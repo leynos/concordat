@@ -27,6 +27,7 @@ import typing as typ
 from pathlib import Path
 
 from ruamel.yaml import YAML
+from ruamel.yaml.error import YAMLError
 
 from .errors import ConcordatError
 
@@ -57,8 +58,12 @@ def _environ(env: EnvMapping | None) -> EnvMapping:
 
 def _base(env: EnvMapping | None, variable: str, fallback: tuple[str, ...]) -> Path:
     source = _environ(env)
+    # The XDG specification requires relative base directories to be
+    # ignored, falling back to the default location.
     if root := source.get(variable):
-        return Path(root).expanduser() / APP_DIRNAME
+        candidate = Path(root).expanduser()
+        if candidate.is_absolute():
+            return candidate / APP_DIRNAME
     return Path.home().joinpath(*fallback) / APP_DIRNAME
 
 
@@ -133,7 +138,11 @@ def _load_headline(env: EnvMapping | None) -> dict[str, typ.Any]:
     path = headline_config_path(env)
     if not path.is_file():
         return {}
-    loaded = _yaml.load(path.read_text(encoding="utf-8"))
+    try:
+        loaded = _yaml.load(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, YAMLError) as error:
+        message = f"cannot read headline configuration {path}: {error}"
+        raise ConcordatError(message) from error
     return dict(loaded) if isinstance(loaded, dict) else {}
 
 

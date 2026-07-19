@@ -10,18 +10,21 @@ maps credential environment-variable names to values, for example::
     SCW_SECRET_KEY: example-secret
 
 Only the keys named in :data:`CREDENTIAL_KEYS` are honoured; anything else
-is ignored. Keep the file readable only by its owner (``chmod 600``).
-Credentials are never written by concordat.
+is ignored. The file must be readable only by its owner: a file carrying
+any group or world permission bit is refused rather than read, so run
+``chmod 600`` on it. Credentials are never written by concordat.
 """
 
 from __future__ import annotations
 
 import os
+import stat
 import typing as typ
 
 from ruamel.yaml import YAML
 
 from . import xdg
+from .errors import ConcordatError
 
 CREDENTIAL_KEYS: typ.Final = (
     "GITHUB_TOKEN",
@@ -35,6 +38,19 @@ CREDENTIAL_KEYS: typ.Final = (
 )
 
 _yaml = YAML(typ="safe")
+
+_GROUP_WORLD_BITS: typ.Final = stat.S_IRWXG | stat.S_IRWXO | stat.S_ISUID | stat.S_ISGID
+
+
+class InsecureCredentialsError(ConcordatError):
+    """The credentials file is readable by users other than its owner."""
+
+    def __init__(self, path: object) -> None:
+        """Initialise the error with the offending path."""
+        super().__init__(
+            f"refusing to read {path}: credentials must not be group- or "
+            "world-accessible; run `chmod 600` on the file"
+        )
 
 
 def _environ(env: xdg.EnvMapping | None) -> xdg.EnvMapping:
@@ -50,6 +66,8 @@ def load_credentials(
     path = xdg.owner_credentials_path(owner, env)
     if not path.is_file():
         return {}
+    if path.stat().st_mode & _GROUP_WORLD_BITS:
+        raise InsecureCredentialsError(path)
     loaded = _yaml.load(path.read_text(encoding="utf-8"))
     if not isinstance(loaded, dict):
         return {}
