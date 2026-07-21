@@ -666,3 +666,40 @@ class TestEstateErrorTaxonomy:
             str(estate.TemplateMissingError(template))
             == f"Template directory {template} is missing."
         )
+
+
+class TestEstateConfigReexport:
+    """Configuration APIs stay importable from the ``concordat.estate`` façade."""
+
+    def test_estate_record_is_the_same_class(self) -> None:
+        """``estate.EstateRecord`` is the class defined in ``estate_config``."""
+        from concordat import estate_config
+
+        assert estate.EstateRecord is estate_config.EstateRecord
+
+    def test_config_apis_are_reexported(self) -> None:
+        """Moved public config symbols remain reachable through ``estate``."""
+        from concordat import estate_config
+
+        for name in (
+            "default_config_path",
+            "list_estates",
+            "get_estate",
+            "get_active_estate",
+            "set_active_estate",
+            "register_estate",
+            "CONFIG_FILENAME",
+            "DEFAULT_BRANCH",
+            "DEFAULT_INVENTORY_PATH",
+        ):
+            assert getattr(estate, name) is getattr(estate_config, name)
+
+    def test_register_estate_remains_callable(self, tmp_path: pathlib.Path) -> None:
+        """``estate.register_estate`` still persists an estate to a config file."""
+        config_path = tmp_path / "config.yaml"
+        record = estate.EstateRecord(
+            alias="core",
+            repo_url="git@github.com:example/core.git",
+        )
+        estate.register_estate(record, config_path=config_path)
+        assert estate.get_estate("core", config_path=config_path) == record
