@@ -163,6 +163,27 @@ class TestSweep:
         audited = [r for r in appended if r["verdict"] != "excluded"]
         assert len(audited) == 1
 
+    def test_limit_records_intervening_exclusion_then_stops(
+        self,
+        estate_path: pathlib.Path,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """A full budget still records a later exclusion before stopping."""
+        # Estate order is wireframe (audited), gauss (excluded), statelet
+        # (auditable). With limit=1 the wireframe audit spends the budget, the
+        # gauss exclusion is still recorded, and statelet is never reached.
+        appended = sweep.run_sweep(
+            estate_path=estate_path,
+            ledger_path=ledger_path,
+            options=sweep.SweepOptions(limit=1),
+        )
+        repositories = [r["repository"] for r in appended]
+        assert repositories == ["leynos/wireframe", "leynos/gauss"]
+        verdicts = {r["repository"]: r["verdict"] for r in appended}
+        assert verdicts["leynos/wireframe"] == "compliant"
+        assert verdicts["leynos/gauss"] == "excluded"
+        assert "leynos/statelet" not in repositories
+
     def test_exclusion_does_not_consume_limit(
         self,
         tmp_path: pathlib.Path,
