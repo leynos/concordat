@@ -32,9 +32,50 @@ VERDICT_NONCOMPLIANT: typ.Final = "noncompliant"
 VERDICT_INDETERMINATE: typ.Final = "indeterminate"
 
 
+class _ConftestMetadata(typ.TypedDict, total=False):
+    """The finding metadata a policy rule attaches to a Conftest failure."""
+
+    rule_id: str
+    severity: str
+    verdict: str
+    path: str
+    line: int
+
+
+class _ConftestFailure(typ.TypedDict, total=False):
+    """One failing assertion in a Conftest result document."""
+
+    metadata: _ConftestMetadata
+    msg: str
+
+
+class _ConftestResult(typ.TypedDict, total=False):
+    """One Conftest result document (one per evaluated input file)."""
+
+    failures: list[_ConftestFailure]
+
+
 @dataclasses.dataclass(frozen=True, slots=True)
 class Finding:
-    """One structured policy finding."""
+    """One structured policy finding.
+
+    Attributes
+    ----------
+    rule_id:
+        Identifier of the policy rule that produced the finding.
+    severity:
+        Severity label reported by the policy (for example ``"error"``).
+    verdict:
+        The finding's verdict: ``compliant``, ``noncompliant``, or
+        ``indeterminate``.
+    path:
+        Repository-relative path the finding refers to.
+    line:
+        One-based line number, or ``0`` when the finding is not line-specific.
+    message:
+        Human-readable description of the finding.
+
+    """
 
     rule_id: str
     severity: str
@@ -46,7 +87,18 @@ class Finding:
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class RuleRunResult:
-    """Outcome of evaluating one rule package against one checkout."""
+    """Outcome of evaluating one rule package against one checkout.
+
+    Attributes
+    ----------
+    rule_package:
+        Identifier of the evaluated rule package.
+    verdict:
+        The overall verdict aggregated across every finding.
+    findings:
+        The structured findings emitted by the policy.
+
+    """
 
     rule_package: str
     verdict: str
@@ -54,11 +106,12 @@ class RuleRunResult:
 
     @property
     def exit_code(self) -> int:
-        """0 when compliant; 1 when any finding (fail closed) exists."""
+        """Return 0 when compliant; 1 when any finding exists (fail closed)."""
         return 0 if self.verdict == VERDICT_COMPLIANT else 1
 
 
 def _rule_package_dir(rule_id: str) -> pathlib.Path:
+    """Return the rule package directory for *rule_id*, or raise if unknown."""
     rule_dir = RULE_PACKAGES_DIR / rule_id
     if not (rule_dir / "policy").is_dir():
         message = f"unknown rule package {rule_id!r}; expected {rule_dir}/policy"
@@ -71,6 +124,7 @@ def _rule_package_dir(rule_id: str) -> pathlib.Path:
 
 
 def _policy_namespace(rule_id: str) -> str:
+    """Return the Rego package namespace for *rule_id*."""
     return "canon.lint_rules." + rule_id.replace("-", "_")
 
 
@@ -107,10 +161,39 @@ def _rule_parameters(rule_dir: pathlib.Path) -> dict[str, typ.Any]:
     return dict(defaults) if isinstance(defaults, dict) else {}
 
 
+def _run_conftest(argv: list[str], rule_id: str) -> subprocess.CompletedProcess[str]:
+    """Run the fixed Conftest argv, translating spawn and timeout failures."""
+    try:
+        return subprocess.run(  # noqa: S603 - fixed argv, no shell
+            argv,
+            capture_output=True,
+            text=True,
+            timeout=CONFTEST_TIMEOUT,
+            check=False,
+        )
+    except FileNotFoundError as error:
+        message = "conftest is required but was not found on PATH"
+        raise OperationalRuleError(
+            message,
+            operation="invoke-conftest",
+            tool="conftest",
+            resource=rule_id,
+        ) from error
+    except subprocess.TimeoutExpired as error:
+        message = f"conftest timed out after {CONFTEST_TIMEOUT}s"
+        raise OperationalRuleError(
+            message,
+            operation="invoke-conftest",
+            tool="conftest",
+            resource=rule_id,
+        ) from error
+
+
 def _invoke_conftest(
     rule_id: str,
     envelope: PolicyEnvelope,
-) -> list[dict[str, typ.Any]]:
+) -> list[_ConftestResult]:
+    """Evaluate *envelope* against *rule_id*'s policy and return the results."""
     rule_dir = _rule_package_dir(rule_id)
     policy_dir = rule_dir / "policy"
     parameters = _rule_parameters(rule_dir)
@@ -135,35 +218,12 @@ def _invoke_conftest(
             "json",
             str(envelope_path),
         ]
-        try:
-            completed = subprocess.run(  # noqa: S603 - fixed argv, no shell
-                argv,
-                capture_output=True,
-                text=True,
-                timeout=CONFTEST_TIMEOUT,
-                check=False,
-            )
-        except FileNotFoundError as error:
-            message = "conftest is required but was not found on PATH"
-            raise OperationalRuleError(
-                message,
-                operation="invoke-conftest",
-                tool="conftest",
-                resource=rule_id,
-            ) from error
-        except subprocess.TimeoutExpired as error:
-            message = f"conftest timed out after {CONFTEST_TIMEOUT}s"
-            raise OperationalRuleError(
-                message,
-                operation="invoke-conftest",
-                tool="conftest",
-                resource=rule_id,
-            ) from error
+        completed = _run_conftest(argv, rule_id)
 
     # Conftest exits 0 on success and 1 on policy failures; both emit a JSON
     # result document. Anything else (or unparseable output) is operational.
     try:
-        results: list[dict[str, typ.Any]] = json.loads(completed.stdout)
+        results: list[_ConftestResult] = json.loads(completed.stdout)
     except json.JSONDecodeError as error:
         detail = (completed.stderr or completed.stdout or "").strip()
         message = f"conftest produced no usable output: {detail}"
@@ -176,27 +236,32 @@ def _invoke_conftest(
     return results
 
 
+def _finding_from_failure(failure: _ConftestFailure) -> Finding:
+    """Convert one Conftest failure document into a structured Finding."""
+    metadata = failure.get("metadata", {})
+    return Finding(
+        rule_id=str(metadata.get("rule_id", "UNKNOWN")),
+        severity=str(metadata.get("severity", "error")),
+        verdict=str(metadata.get("verdict", VERDICT_NONCOMPLIANT)),
+        path=str(metadata.get("path", "")),
+        line=int(metadata.get("line", 0)),
+        message=str(failure.get("msg", "")),
+    )
+
+
 def _findings_from_results(
-    results: list[dict[str, typ.Any]],
+    results: list[_ConftestResult],
 ) -> tuple[Finding, ...]:
-    findings: list[Finding] = []
-    for result in results:
-        for failure in result.get("failures", []):
-            metadata = failure.get("metadata", {})
-            findings.append(
-                Finding(
-                    rule_id=str(metadata.get("rule_id", "UNKNOWN")),
-                    severity=str(metadata.get("severity", "error")),
-                    verdict=str(metadata.get("verdict", VERDICT_NONCOMPLIANT)),
-                    path=str(metadata.get("path", "")),
-                    line=int(metadata.get("line", 0)),
-                    message=str(failure.get("msg", "")),
-                )
-            )
-    return tuple(findings)
+    """Flatten every Conftest failure across *results* into a tuple of findings."""
+    return tuple(
+        _finding_from_failure(failure)
+        for result in results
+        for failure in result.get("failures", [])
+    )
 
 
 def _overall_verdict(findings: tuple[Finding, ...]) -> str:
+    """Reduce findings to noncompliant, indeterminate, or compliant."""
     if any(f.verdict == VERDICT_NONCOMPLIANT for f in findings):
         return VERDICT_NONCOMPLIANT
     if findings:
@@ -205,7 +270,27 @@ def _overall_verdict(findings: tuple[Finding, ...]) -> str:
 
 
 def run_rule(rule_id: str, checkout: pathlib.Path) -> RuleRunResult:
-    """Evaluate *rule_id* against *checkout* and return the structured result."""
+    """Evaluate *rule_id* against *checkout* and return the structured result.
+
+    Parameters
+    ----------
+    rule_id:
+        Identifier of the rule package to evaluate.
+    checkout:
+        Path to the local checkout to audit.
+
+    Returns
+    -------
+    RuleRunResult
+        The overall verdict and the findings produced by the policy.
+
+    Raises
+    ------
+    OperationalRuleError
+        If the rule package is unknown, *checkout* is not a directory, or
+        Conftest cannot be run or produces no usable output.
+
+    """
     _rule_package_dir(rule_id)
     if not checkout.is_dir():
         message = f"checkout path {checkout} is not a directory"
@@ -225,7 +310,19 @@ def run_rule(rule_id: str, checkout: pathlib.Path) -> RuleRunResult:
 
 
 def render_table(result: RuleRunResult) -> str:
-    """Render a result as an aligned plain-text table."""
+    """Render a result as an aligned plain-text table.
+
+    Parameters
+    ----------
+    result:
+        The rule-run result to render.
+
+    Returns
+    -------
+    str
+        A header line, followed by one aligned row per finding.
+
+    """
     header = f"{result.rule_package}: {result.verdict}"
     if not result.findings:
         return header
@@ -255,7 +352,19 @@ def render_table(result: RuleRunResult) -> str:
 
 
 def render_json(result: RuleRunResult) -> str:
-    """Render a result as a stable JSON document."""
+    """Render a result as a stable JSON document.
+
+    Parameters
+    ----------
+    result:
+        The rule-run result to render.
+
+    Returns
+    -------
+    str
+        A pretty-printed JSON object with the package, verdict, and findings.
+
+    """
     return json.dumps(
         {
             "rule_package": result.rule_package,
