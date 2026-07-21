@@ -58,11 +58,17 @@ class TestLoadEstate:
     def test_parses_names_and_exclusions(self, estate_path: pathlib.Path) -> None:
         """Names and exclusion reasons round-trip from YAML."""
         estate = sweep.load_estate(estate_path)
-        assert estate.owner == "leynos"
+        assert estate.owner == "leynos", "estate owner should parse from the manifest"
         names = [entry.name for entry in estate.repositories]
-        assert names == ["wireframe", "gauss", "statelet"]
-        assert estate.repositories[1].excluded == ("test-framework migration in flight")
-        assert estate.repositories[0].excluded is None
+        assert names == ["wireframe", "gauss", "statelet"], (
+            "repository names should round-trip from YAML in order"
+        )
+        assert estate.repositories[1].excluded == (
+            "test-framework migration in flight"
+        ), "gauss should carry its exclusion reason"
+        assert estate.repositories[0].excluded is None, (
+            "wireframe should have no exclusion reason"
+        )
 
 
 class TestSweep:
@@ -86,14 +92,20 @@ class TestSweep:
         """Each audited repository appends one ledger record."""
         appended = sweep.run_sweep(estate_path=estate_path, ledger_path=ledger_path)
         records = _ledger_lines(ledger_path)
-        assert len(appended) == len(records) == 3
+        assert len(appended) == len(records) == 3, (
+            "every repository should append exactly one ledger record"
+        )
         audited = [r for r in records if r["verdict"] == "compliant"]
         assert {r["repository"] for r in audited} == {
             "leynos/wireframe",
             "leynos/statelet",
-        }
-        assert all(r["commit_sha"] == "a" * 40 for r in audited)
-        assert all(r["makeutil_rev"] == sweep.MAKEUTIL_REV for r in audited)
+        }, "both auditable repositories should be recorded compliant"
+        assert all(r["commit_sha"] == "a" * 40 for r in audited), (
+            "each audit should record the resolved commit sha"
+        )
+        assert all(r["makeutil_rev"] == sweep.MAKEUTIL_REV for r in audited), (
+            "each audit should record the pinned makeutil revision"
+        )
 
     def test_excluded_repository_gets_reasoned_record(
         self,
@@ -104,9 +116,13 @@ class TestSweep:
         sweep.run_sweep(estate_path=estate_path, ledger_path=ledger_path)
         records = _ledger_lines(ledger_path)
         excluded = [r for r in records if r["verdict"] == "excluded"]
-        assert len(excluded) == 1
-        assert excluded[0]["repository"] == "leynos/gauss"
-        assert excluded[0]["exclusion_reason"] == ("test-framework migration in flight")
+        assert len(excluded) == 1, "exactly one repository (gauss) should be excluded"
+        assert excluded[0]["repository"] == "leynos/gauss", (
+            "the excluded record should be gauss"
+        )
+        assert excluded[0]["exclusion_reason"] == (
+            "test-framework migration in flight"
+        ), "the exclusion reason should be preserved in the ledger"
 
     def test_second_run_is_idempotent(
         self,
@@ -116,8 +132,12 @@ class TestSweep:
         """A repository already ledgered at the same commit is skipped."""
         sweep.run_sweep(estate_path=estate_path, ledger_path=ledger_path)
         appended = sweep.run_sweep(estate_path=estate_path, ledger_path=ledger_path)
-        assert appended == []
-        assert len(_ledger_lines(ledger_path)) == 3
+        assert appended == [], (
+            "a repeated sweep at the same commit should append nothing"
+        )
+        assert len(_ledger_lines(ledger_path)) == 3, (
+            "the ledger should still hold the original three records"
+        )
 
     def test_force_reaudits_seen_commit(
         self,
@@ -134,7 +154,7 @@ class TestSweep:
         assert [r["repository"] for r in appended] == [
             "leynos/wireframe",
             "leynos/statelet",
-        ]
+        ], "--force should re-audit both auditable repositories"
 
     def test_only_filter_limits_scope(
         self,
@@ -147,7 +167,9 @@ class TestSweep:
             ledger_path=ledger_path,
             options=sweep.SweepOptions(only=frozenset({"statelet"})),
         )
-        assert [r["repository"] for r in appended] == ["leynos/statelet"]
+        assert [r["repository"] for r in appended] == ["leynos/statelet"], (
+            "--only should restrict the sweep to statelet"
+        )
 
     def test_limit_bounds_audits(
         self,
@@ -161,7 +183,7 @@ class TestSweep:
             options=sweep.SweepOptions(limit=1),
         )
         audited = [r for r in appended if r["verdict"] != "excluded"]
-        assert len(audited) == 1
+        assert len(audited) == 1, "--limit=1 should bound audits to one repository"
 
     def test_limit_records_intervening_exclusion_then_stops(
         self,
@@ -178,11 +200,19 @@ class TestSweep:
             options=sweep.SweepOptions(limit=1),
         )
         repositories = [r["repository"] for r in appended]
-        assert repositories == ["leynos/wireframe", "leynos/gauss"]
+        assert repositories == ["leynos/wireframe", "leynos/gauss"], (
+            "the audit and the intervening exclusion should both be recorded"
+        )
         verdicts = {r["repository"]: r["verdict"] for r in appended}
-        assert verdicts["leynos/wireframe"] == "compliant"
-        assert verdicts["leynos/gauss"] == "excluded"
-        assert "leynos/statelet" not in repositories
+        assert verdicts["leynos/wireframe"] == "compliant", (
+            "wireframe should be audited compliant"
+        )
+        assert verdicts["leynos/gauss"] == "excluded", (
+            "gauss should be recorded as excluded"
+        )
+        assert "leynos/statelet" not in repositories, (
+            "statelet should not be reached once the audit budget is spent"
+        )
 
     def test_exclusion_does_not_consume_limit(
         self,
@@ -208,10 +238,10 @@ class TestSweep:
             options=sweep.SweepOptions(limit=1),
         )
         verdicts = [r["verdict"] for r in appended]
-        assert verdicts.count("excluded") == 1
+        assert verdicts.count("excluded") == 1, "gauss should be excluded exactly once"
         assert [r["repository"] for r in appended if r["verdict"] != "excluded"] == [
             "leynos/wireframe"
-        ]
+        ], "wireframe should still be audited despite the preceding exclusion"
 
     def test_head_resolution_failure_records_error(
         self,
@@ -241,9 +271,13 @@ class TestSweep:
             ledger_path=ledger_path,
             options=sweep.SweepOptions(only=frozenset({"wireframe"})),
         )
-        assert len(appended) == 1
-        assert appended[0]["verdict"] == "error"
-        assert "head resolution failed" in appended[0]["error_detail"]
+        assert len(appended) == 1, "only wireframe's error record should be appended"
+        assert appended[0]["verdict"] == "error", (
+            "a head-resolution failure should ledger an error verdict"
+        )
+        assert "head resolution failed" in appended[0]["error_detail"], (
+            "the error detail should carry the resolve_head failure message"
+        )
 
     def test_head_resolution_failure_consumes_audit_slot(
         self,
@@ -271,8 +305,12 @@ class TestSweep:
             options=sweep.SweepOptions(limit=1),
         )
         error_records = [r for r in appended if r["verdict"] == "error"]
-        assert len(error_records) == 1
-        assert not any(r["repository"] == "leynos/statelet" for r in appended)
+        assert len(error_records) == 1, (
+            "the wireframe head failure should ledger exactly one error record"
+        )
+        assert not any(r["repository"] == "leynos/statelet" for r in appended), (
+            "statelet should not be reached after the failure consumes the slot"
+        )
 
     def test_operational_error_records_error_verdict(
         self,
@@ -297,9 +335,13 @@ class TestSweep:
             ledger_path=ledger_path,
             options=sweep.SweepOptions(only=frozenset({"wireframe"})),
         )
-        assert len(appended) == 1
-        assert appended[0]["verdict"] == "error"
-        assert "conftest" in appended[0]["error_detail"]
+        assert len(appended) == 1, "only wireframe should be recorded"
+        assert appended[0]["verdict"] == "error", (
+            "an audit failure should be ledgered with an error verdict"
+        )
+        assert "conftest" in appended[0]["error_detail"], (
+            "the error detail should carry the clone/audit failure message"
+        )
 
 
 class TestGitOperations:
@@ -326,9 +368,13 @@ class TestGitOperations:
         with pytest.raises(sweep.OperationalRuleError) as exc_info:
             sweep.resolve_head("leynos", "ghost")
         error = exc_info.value
-        assert error.operation == "resolve-git-head"
-        assert error.tool == "git"
-        assert error.resource == "leynos/ghost"
+        assert error.operation == "resolve-git-head", (
+            "the git failure should tag the resolve-git-head operation"
+        )
+        assert error.tool == "git", "the failure should identify git as the tool"
+        assert error.resource == "leynos/ghost", (
+            "the failure should identify the affected repository"
+        )
 
 
 class TestReport:
@@ -383,9 +429,21 @@ class TestReport:
         ]
         ledger_path.write_text("".join(json.dumps(record) + "\n" for record in records))
         report = sweep.render_report(ledger_path)
-        assert "| leynos/alpha | compliant |" in report
-        assert "| leynos/beta | indeterminate |" in report
-        assert "| leynos/gamma | excluded |" in report
-        assert "compliant: 1" in report
-        assert "indeterminate: 1" in report
-        assert "excluded: 1" in report
+        assert "| leynos/alpha | compliant |" in report, (
+            "alpha's latest (compliant) record should win over its earlier one"
+        )
+        assert "| leynos/beta | indeterminate |" in report, (
+            "beta should be reported as indeterminate"
+        )
+        assert "| leynos/gamma | excluded |" in report, (
+            "gamma should be reported as excluded"
+        )
+        assert "compliant: 1" in report, (
+            "the summary should count one compliant repository"
+        )
+        assert "indeterminate: 1" in report, (
+            "the summary should count one indeterminate repository"
+        )
+        assert "excluded: 1" in report, (
+            "the summary should count one excluded repository"
+        )
