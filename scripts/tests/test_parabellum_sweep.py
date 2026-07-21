@@ -163,6 +163,35 @@ class TestSweep:
         audited = [r for r in appended if r["verdict"] != "excluded"]
         assert len(audited) == 1
 
+    def test_exclusion_does_not_consume_limit(
+        self,
+        tmp_path: pathlib.Path,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """An excluded entry ahead of an audit still leaves the slot free."""
+        # gauss (excluded) precedes wireframe, so a limit of 1 must still audit
+        # wireframe: the exclusion must not spend the single audit slot.
+        estate_path = tmp_path / "excluded-first.yaml"
+        estate_path.write_text(
+            "---\n"
+            "schema_version: 1\n"
+            "owner: leynos\n"
+            "repositories:\n"
+            "  - name: gauss\n"
+            "    excluded: test-framework migration in flight\n"
+            "  - name: wireframe\n"
+        )
+        appended = sweep.run_sweep(
+            estate_path=estate_path,
+            ledger_path=ledger_path,
+            limit=1,
+        )
+        verdicts = [r["verdict"] for r in appended]
+        assert verdicts.count("excluded") == 1
+        assert [r["repository"] for r in appended if r["verdict"] != "excluded"] == [
+            "leynos/wireframe"
+        ]
+
     def test_operational_error_records_error_verdict(
         self,
         estate_path: pathlib.Path,
