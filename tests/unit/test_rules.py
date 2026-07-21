@@ -9,6 +9,7 @@ import typing as typ
 import pytest
 
 from concordat.errors import OperationalRuleError
+from concordat.rules import runner
 from concordat.rules.envelope import build_envelope
 from concordat.rules.makefile_facts import inspect_makefile
 from concordat.rules.runner import (
@@ -309,6 +310,44 @@ class TestBuildEnvelope:
         ) as exc_info:
             build_envelope(tmp_path)
         assert exc_info.value.operation == "parse-cargo-toml"
+
+
+class TestRunConftest:
+    """The Conftest subprocess wrapper translates spawn failures."""
+
+    def test_missing_conftest_translates(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A missing conftest binary becomes a structured operational error."""
+
+        def raise_missing(*args: object, **kwargs: object) -> typ.NoReturn:
+            raise FileNotFoundError("conftest")
+
+        monkeypatch.setattr(runner.subprocess, "run", raise_missing)
+        with pytest.raises(
+            OperationalRuleError, match="conftest is required"
+        ) as exc_info:
+            runner._run_conftest(["conftest", "test"], "rust-makefile-baseline")
+        error = exc_info.value
+        assert error.operation == "invoke-conftest"
+        assert error.tool == "conftest"
+        assert error.resource == "rust-makefile-baseline"
+
+    def test_conftest_timeout_translates(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A conftest timeout becomes a structured operational error."""
+
+        def raise_timeout(*args: object, **kwargs: object) -> typ.NoReturn:
+            raise subprocess.TimeoutExpired(cmd="conftest", timeout=60.0)
+
+        monkeypatch.setattr(runner.subprocess, "run", raise_timeout)
+        with pytest.raises(OperationalRuleError, match="timed out") as exc_info:
+            runner._run_conftest(["conftest", "test"], "rust-makefile-baseline")
+        assert exc_info.value.operation == "invoke-conftest"
+        assert exc_info.value.tool == "conftest"
 
 
 class TestRunRule:
