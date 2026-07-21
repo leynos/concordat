@@ -628,3 +628,41 @@ def test_build_client_uses_token(mocker: pytest_mock.MockFixture) -> None:
 
     assert client is fake
     mocked_ctor.assert_called_once_with(token="secret")  # noqa: S106
+
+
+class TestEstateErrorTaxonomy:
+    """The exception taxonomy is re-exported from ``concordat.estate``."""
+
+    def test_errors_are_reexported_from_estate(self) -> None:
+        """Representative errors remain importable from ``concordat.estate``."""
+        from concordat import estate_errors
+
+        for name in (
+            "EstateError",
+            "MissingGitHubOwnerError",
+            "TemplateMissingError",
+            "GitHubOrganizationAuthenticationError",
+        ):
+            assert getattr(estate, name) is getattr(estate_errors, name)
+
+    def test_base_class_inheritance_is_preserved(self) -> None:
+        """Moved errors keep their place under ``EstateError``."""
+        assert issubclass(estate.MissingGitHubOwnerError, estate.EstateError)
+        assert issubclass(estate.TemplateMissingError, estate.EstateError)
+        # Authentication subclasses still descend from GitHubAuthenticationError.
+        assert issubclass(
+            estate.GitHubOrganizationAuthenticationError,
+            estate.GitHubAuthenticationError,
+        )
+
+    def test_error_messages_are_preserved(self, tmp_path: pathlib.Path) -> None:
+        """Constructor messages are byte-for-byte unchanged after the move."""
+        assert str(estate.MissingGitHubOwnerError()) == (
+            "Unable to determine github_owner for the estate. Provide "
+            "--github-owner when the remote URL is not a GitHub repository."
+        )
+        template = tmp_path / "tpl"
+        assert (
+            str(estate.TemplateMissingError(template))
+            == f"Template directory {template} is missing."
+        )
