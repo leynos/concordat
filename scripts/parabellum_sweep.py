@@ -169,6 +169,18 @@ def _excluded_record(repository: str, reason: str) -> dict[str, typ.Any]:
     return record
 
 
+def _record_exclusion_once(
+    ledger: list[dict[str, typ.Any]],
+    repository: str,
+    reason: str,
+    emit: typ.Callable[[dict[str, typ.Any]], None],
+) -> None:
+    """Append an exclusion record unless the repository already has one."""
+    if _already_ledgered(ledger, repository, commit_sha=None):
+        return
+    emit(_excluded_record(repository, reason))
+
+
 def _audit_record(owner: str, entry: EstateEntry) -> dict[str, typ.Any]:
     repository = f"{owner}/{entry.name}"
     record = _base_record(repository)
@@ -235,8 +247,7 @@ def run_sweep(
         repository = f"{estate.owner}/{entry.name}"
 
         if entry.excluded is not None:
-            if not _already_ledgered(ledger, repository, commit_sha=None):
-                emit(_excluded_record(repository, entry.excluded))
+            _record_exclusion_once(ledger, repository, entry.excluded, emit)
             continue
 
         if limit is not None and audited >= limit:
