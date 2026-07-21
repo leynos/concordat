@@ -129,7 +129,7 @@ class TestSweep:
         appended = sweep.run_sweep(
             estate_path=estate_path,
             ledger_path=ledger_path,
-            force=True,
+            options=sweep.SweepOptions(force=True),
         )
         assert [r["repository"] for r in appended] == [
             "leynos/wireframe",
@@ -145,7 +145,7 @@ class TestSweep:
         appended = sweep.run_sweep(
             estate_path=estate_path,
             ledger_path=ledger_path,
-            only={"statelet"},
+            options=sweep.SweepOptions(only=frozenset({"statelet"})),
         )
         assert [r["repository"] for r in appended] == ["leynos/statelet"]
 
@@ -158,7 +158,7 @@ class TestSweep:
         appended = sweep.run_sweep(
             estate_path=estate_path,
             ledger_path=ledger_path,
-            limit=1,
+            options=sweep.SweepOptions(limit=1),
         )
         audited = [r for r in appended if r["verdict"] != "excluded"]
         assert len(audited) == 1
@@ -184,7 +184,7 @@ class TestSweep:
         appended = sweep.run_sweep(
             estate_path=estate_path,
             ledger_path=ledger_path,
-            limit=1,
+            options=sweep.SweepOptions(limit=1),
         )
         verdicts = [r["verdict"] for r in appended]
         assert verdicts.count("excluded") == 1
@@ -213,7 +213,7 @@ class TestSweep:
         appended = sweep.run_sweep(
             estate_path=estate_path,
             ledger_path=ledger_path,
-            only={"wireframe"},
+            options=sweep.SweepOptions(only=frozenset({"wireframe"})),
         )
         assert len(appended) == 1
         assert appended[0]["verdict"] == "error"
@@ -237,7 +237,7 @@ class TestSweep:
         appended = sweep.run_sweep(
             estate_path=estate_path,
             ledger_path=ledger_path,
-            limit=1,
+            options=sweep.SweepOptions(limit=1),
         )
         error_records = [r for r in appended if r["verdict"] == "error"]
         assert len(error_records) == 1
@@ -259,7 +259,7 @@ class TestSweep:
         appended = sweep.run_sweep(
             estate_path=estate_path,
             ledger_path=ledger_path,
-            only={"wireframe"},
+            options=sweep.SweepOptions(only=frozenset({"wireframe"})),
         )
         assert len(appended) == 1
         assert appended[0]["verdict"] == "error"
