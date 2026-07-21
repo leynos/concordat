@@ -62,7 +62,11 @@ def _rule_package_dir(rule_id: str) -> pathlib.Path:
     rule_dir = RULE_PACKAGES_DIR / rule_id
     if not (rule_dir / "policy").is_dir():
         message = f"unknown rule package {rule_id!r}; expected {rule_dir}/policy"
-        raise OperationalRuleError(message)
+        raise OperationalRuleError(
+            message,
+            operation="load-rule-package",
+            resource=rule_id,
+        )
     return rule_dir
 
 
@@ -84,10 +88,18 @@ def _rule_parameters(rule_dir: pathlib.Path) -> dict[str, typ.Any]:
         manifest = _yaml.load(manifest_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, YAMLError) as error:
         message = f"cannot read rule manifest {manifest_path}: {error}"
-        raise OperationalRuleError(message) from error
+        raise OperationalRuleError(
+            message,
+            operation="load-rule-manifest",
+            resource=manifest_path,
+        ) from error
     if not isinstance(manifest, dict):
         message = f"rule manifest {manifest_path} is not a mapping"
-        raise OperationalRuleError(message)
+        raise OperationalRuleError(
+            message,
+            operation="load-rule-manifest",
+            resource=manifest_path,
+        )
     parameters = manifest.get("parameters")
     if not isinstance(parameters, dict):
         return {}
@@ -133,10 +145,20 @@ def _invoke_conftest(
             )
         except FileNotFoundError as error:
             message = "conftest is required but was not found on PATH"
-            raise OperationalRuleError(message) from error
+            raise OperationalRuleError(
+                message,
+                operation="invoke-conftest",
+                tool="conftest",
+                resource=rule_id,
+            ) from error
         except subprocess.TimeoutExpired as error:
             message = f"conftest timed out after {CONFTEST_TIMEOUT}s"
-            raise OperationalRuleError(message) from error
+            raise OperationalRuleError(
+                message,
+                operation="invoke-conftest",
+                tool="conftest",
+                resource=rule_id,
+            ) from error
 
     # Conftest exits 0 on success and 1 on policy failures; both emit a JSON
     # result document. Anything else (or unparseable output) is operational.
@@ -145,7 +167,12 @@ def _invoke_conftest(
     except json.JSONDecodeError as error:
         detail = (completed.stderr or completed.stdout or "").strip()
         message = f"conftest produced no usable output: {detail}"
-        raise OperationalRuleError(message) from error
+        raise OperationalRuleError(
+            message,
+            operation="invoke-conftest",
+            tool="conftest",
+            resource=rule_id,
+        ) from error
     return results
 
 
@@ -182,7 +209,11 @@ def run_rule(rule_id: str, checkout: pathlib.Path) -> RuleRunResult:
     _rule_package_dir(rule_id)
     if not checkout.is_dir():
         message = f"checkout path {checkout} is not a directory"
-        raise OperationalRuleError(message)
+        raise OperationalRuleError(
+            message,
+            operation="audit-checkout",
+            resource=checkout,
+        )
     envelope = build_envelope(checkout)
     results = _invoke_conftest(rule_id, envelope)
     findings = _findings_from_results(results)

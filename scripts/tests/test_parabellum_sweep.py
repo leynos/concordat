@@ -223,7 +223,12 @@ class TestSweep:
 
         def raise_resolve(owner: str, name: str) -> typ.NoReturn:
             message = "gh api head resolution failed"
-            raise sweep.OperationalRuleError(message)
+            raise sweep.OperationalRuleError(
+                message,
+                operation="resolve-git-head",
+                tool="git",
+                resource=f"{owner}/{name}",
+            )
 
         def fail_if_audited(owner: str, name: str) -> typ.NoReturn:
             message = "clone_and_audit must not run on head failure"
@@ -250,7 +255,12 @@ class TestSweep:
 
         def raise_resolve(owner: str, name: str) -> typ.NoReturn:
             message = "boom"
-            raise sweep.OperationalRuleError(message)
+            raise sweep.OperationalRuleError(
+                message,
+                operation="resolve-git-head",
+                tool="git",
+                resource=f"{owner}/{name}",
+            )
 
         monkeypatch.setattr(sweep, "resolve_head", raise_resolve)
         # Estate order is wireframe, gauss (excluded), statelet. With limit=1
@@ -274,7 +284,12 @@ class TestSweep:
 
         def raise_operational(owner: str, name: str) -> typ.NoReturn:
             message = "conftest is required"
-            raise sweep.OperationalRuleError(message)
+            raise sweep.OperationalRuleError(
+                message,
+                operation="invoke-conftest",
+                tool="conftest",
+                resource=f"{owner}/{name}",
+            )
 
         monkeypatch.setattr(sweep, "clone_and_audit", raise_operational)
         appended = sweep.run_sweep(
@@ -285,6 +300,35 @@ class TestSweep:
         assert len(appended) == 1
         assert appended[0]["verdict"] == "error"
         assert "conftest" in appended[0]["error_detail"]
+
+
+class TestGitOperations:
+    """Structured context on git-backed operational failures."""
+
+    def test_resolve_head_git_failure_has_structured_context(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A failed git ls-remote surfaces operation/tool/resource context."""
+
+        def fake_run(
+            *args: object,
+            **kwargs: object,
+        ) -> sweep.subprocess.CompletedProcess[str]:
+            return sweep.subprocess.CompletedProcess(
+                args=["git"],
+                returncode=128,
+                stdout="",
+                stderr="fatal: repository not found",
+            )
+
+        monkeypatch.setattr(sweep.subprocess, "run", fake_run)
+        with pytest.raises(sweep.OperationalRuleError) as exc_info:
+            sweep.resolve_head("leynos", "ghost")
+        error = exc_info.value
+        assert error.operation == "resolve-git-head"
+        assert error.tool == "git"
+        assert error.resource == "leynos/ghost"
 
 
 class TestReport:

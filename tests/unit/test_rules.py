@@ -94,8 +94,12 @@ class TestInspectMakefile:
             raise FileNotFoundError("makeutil")
 
         monkeypatch.setattr(subprocess, "run", raise_missing)
-        with pytest.raises(OperationalRuleError, match="makeutil"):
+        with pytest.raises(OperationalRuleError, match="makeutil") as exc_info:
             inspect_makefile(tmp_path / "Makefile")
+        error = exc_info.value
+        assert error.operation == "parse-makefile"
+        assert error.tool == "makeutil"
+        assert error.resource == tmp_path / "Makefile"
 
     def test_fatal_exit_raises_operational_error(
         self,
@@ -149,8 +153,12 @@ class TestInspectMakefile:
         _write_checkout(tmp_path, cargo=False, makefile=True)
         cmd_mox.mock("makeutil").returns(stdout="not json at all")
         cmd_mox.replay()
-        with pytest.raises(OperationalRuleError, match="invalid JSON"):
+        with pytest.raises(OperationalRuleError, match="invalid JSON") as exc_info:
             inspect_makefile(tmp_path / "Makefile")
+        error = exc_info.value
+        assert error.operation == "parse-makefile"
+        assert error.tool == "makeutil"
+        assert error.resource == tmp_path / "Makefile"
 
     def test_non_object_json_raises(
         self,
@@ -242,11 +250,15 @@ class TestBuildEnvelope:
         assert makefile["schema_version"] == 1
 
     def test_invalid_cargo_toml_raises(self, tmp_path: pathlib.Path) -> None:
-        """Invalid cargo toml raises."""
+        """Invalid cargo toml raises with structured context."""
         tmp_path.mkdir(exist_ok=True)
         (tmp_path / "Cargo.toml").write_text("not = [valid")
-        with pytest.raises(OperationalRuleError, match=r"Cargo\.toml"):
+        with pytest.raises(OperationalRuleError, match=r"Cargo\.toml") as exc_info:
             build_envelope(tmp_path)
+        error = exc_info.value
+        assert error.operation == "parse-cargo-toml"
+        assert error.tool is None
+        assert error.resource == tmp_path / "Cargo.toml"
 
 
 class TestRunRule:
