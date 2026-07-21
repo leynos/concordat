@@ -96,7 +96,11 @@ def load_estate(path: pathlib.Path) -> Estate:
         return Estate(owner=document["owner"], repositories=entries)
     except KeyError as error:
         message = f"estate manifest {path} is missing key {error.args[0]!r}"
-        raise OperationalRuleError(message) from error
+        raise OperationalRuleError(
+            message,
+            operation="load-estate-manifest",
+            resource=path,
+        ) from error
 
 
 def _load_ledger(path: pathlib.Path) -> list[dict[str, typ.Any]]:
@@ -109,7 +113,13 @@ def _load_ledger(path: pathlib.Path) -> list[dict[str, typ.Any]]:
     ]
 
 
-def _git(args: list[str], *, cwd: pathlib.Path | None = None) -> str:
+def _git(
+    args: list[str],
+    *,
+    cwd: pathlib.Path | None = None,
+    operation: str,
+    resource: str,
+) -> str:
     completed = subprocess.run(  # noqa: S603 - fixed argv, no shell
         ["git", *args],  # noqa: S607 - resolved from PATH
         cwd=cwd,
@@ -121,22 +131,38 @@ def _git(args: list[str], *, cwd: pathlib.Path | None = None) -> str:
     if completed.returncode != 0:
         detail = (completed.stderr or "").strip()
         message = f"git {args[0]} failed: {detail}"
-        raise OperationalRuleError(message)
+        raise OperationalRuleError(
+            message,
+            operation=operation,
+            tool="git",
+            resource=resource,
+        )
     return completed.stdout
 
 
 def resolve_head(owner: str, name: str) -> str:
     """Return the default-branch head SHA without cloning."""
-    output = _git(["ls-remote", f"https://github.com/{owner}/{name}", "HEAD"])
+    repository = f"{owner}/{name}"
+    output = _git(
+        ["ls-remote", f"https://github.com/{owner}/{name}", "HEAD"],
+        operation="resolve-git-head",
+        resource=repository,
+    )
     try:
         return output.split()[0]
     except IndexError as error:
-        message = f"could not resolve HEAD for {owner}/{name}"
-        raise OperationalRuleError(message) from error
+        message = f"could not resolve HEAD for {repository}"
+        raise OperationalRuleError(
+            message,
+            operation="resolve-git-head",
+            tool="git",
+            resource=repository,
+        ) from error
 
 
 def clone_and_audit(owner: str, name: str) -> tuple[str, RuleRunResult]:
     """Shallow-clone the repository, audit it, and return (sha, result)."""
+    repository = f"{owner}/{name}"
     with tempfile.TemporaryDirectory(prefix="parabellum-") as scratch:
         checkout = pathlib.Path(scratch) / name
         _git(
@@ -147,9 +173,16 @@ def clone_and_audit(owner: str, name: str) -> tuple[str, RuleRunResult]:
                 "--quiet",
                 f"https://github.com/{owner}/{name}",
                 str(checkout),
-            ]
+            ],
+            operation="clone-repository",
+            resource=repository,
         )
-        sha = _git(["rev-parse", "HEAD"], cwd=checkout).strip()
+        sha = _git(
+            ["rev-parse", "HEAD"],
+            cwd=checkout,
+            operation="clone-repository",
+            resource=repository,
+        ).strip()
         result = run_rule(RULE_PACKAGE, checkout)
         return sha, result
 

@@ -33,7 +33,11 @@ def build_envelope(checkout: pathlib.Path) -> dict[str, typ.Any]:
             cargo_parsed = tomllib.loads(cargo_path.read_text(encoding="utf-8"))
         except (tomllib.TOMLDecodeError, UnicodeDecodeError, OSError) as error:
             message = f"cannot parse {cargo_path.name} in {checkout}: {error}"
-            raise OperationalRuleError(message) from error
+            raise OperationalRuleError(
+                message,
+                operation="parse-cargo-toml",
+                resource=cargo_path,
+            ) from error
 
     makefile_report: dict[str, typ.Any] | None = None
     if makefile_path.is_file():

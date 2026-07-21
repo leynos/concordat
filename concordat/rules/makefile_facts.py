@@ -19,6 +19,10 @@ if typ.TYPE_CHECKING:
 
 SCHEMA_VERSION: typ.Final = 1
 
+# Stable `operation` identifier and tool name for structured error context.
+OPERATION_PARSE_MAKEFILE: typ.Final = "parse-makefile"
+TOOL_MAKEUTIL: typ.Final = "makeutil"
+
 # `makeutil parse` contract: exit 0 is a complete parse, 1 a recovered one.
 EXPECTED_STATUS_FOR_EXIT_CODE: typ.Final = {0: "complete", 1: "recovered"}
 
@@ -35,6 +39,16 @@ class MakefileFacts:
 
     report: dict[str, typ.Any]
     status: str
+
+
+def _makeutil_error(message: str, path: pathlib.Path) -> OperationalRuleError:
+    """Build a `makeutil`-parse operational error carrying the Makefile path."""
+    return OperationalRuleError(
+        message,
+        operation=OPERATION_PARSE_MAKEFILE,
+        tool=TOOL_MAKEUTIL,
+        resource=path,
+    )
 
 
 def _run_makeutil(
@@ -55,10 +69,10 @@ def _run_makeutil(
             check=False,
         )
     except FileNotFoundError as error:
-        raise OperationalRuleError(ERROR_MAKEUTIL_MISSING) from error
+        raise _makeutil_error(ERROR_MAKEUTIL_MISSING, path) from error
     except subprocess.TimeoutExpired as error:
         message = f"makeutil timed out after {timeout}s on {path}"
-        raise OperationalRuleError(message) from error
+        raise _makeutil_error(message, path) from error
 
 
 def _validate_exit_code(
@@ -68,7 +82,7 @@ def _validate_exit_code(
     if completed.returncode not in EXPECTED_STATUS_FOR_EXIT_CODE:
         detail = (completed.stderr or "").strip() or "no diagnostic output"
         message = f"makeutil failed on {path}: {detail}"
-        raise OperationalRuleError(message)
+        raise _makeutil_error(message, path)
 
 
 def _decode_report(stdout: str, path: pathlib.Path) -> dict[str, typ.Any]:
@@ -77,11 +91,11 @@ def _decode_report(stdout: str, path: pathlib.Path) -> dict[str, typ.Any]:
         report: typ.Any = json.loads(stdout)
     except json.JSONDecodeError as error:
         message = f"makeutil emitted invalid JSON for {path}"
-        raise OperationalRuleError(message) from error
+        raise _makeutil_error(message, path) from error
 
     if not isinstance(report, dict):
         message = f"makeutil report for {path} is not a JSON object"
-        raise OperationalRuleError(message)
+        raise _makeutil_error(message, path)
     return report
 
 
@@ -94,17 +108,17 @@ def _validate_report(
             f"makeutil report for {path} has unsupported schema version "
             f"{report.get('schema_version')!r}; expected {SCHEMA_VERSION}"
         )
-        raise OperationalRuleError(message)
+        raise _makeutil_error(message, path)
 
     parse = report.get("parse")
     if not isinstance(parse, dict):
         message = f"makeutil report for {path} has no `parse` object"
-        raise OperationalRuleError(message)
+        raise _makeutil_error(message, path)
 
     status = parse.get("status")
     if status not in EXPECTED_STATUS_FOR_EXIT_CODE.values():
         message = f"makeutil report for {path} has unknown parse status {status!r}"
-        raise OperationalRuleError(message)
+        raise _makeutil_error(message, path)
 
     expected = EXPECTED_STATUS_FOR_EXIT_CODE[returncode]
     if status != expected:
@@ -113,7 +127,7 @@ def _validate_report(
             f"status {status!r} with exit {returncode} "
             f"(expected {expected!r})"
         )
-        raise OperationalRuleError(message)
+        raise _makeutil_error(message, path)
     return status
 
 
