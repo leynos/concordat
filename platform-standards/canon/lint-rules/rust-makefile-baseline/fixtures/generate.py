@@ -10,8 +10,8 @@ Run from the rule package directory::
 
     python fixtures/generate.py
 
-Exit code 2 from ``makeutil`` aborts generation; exit 1 (recovered parse)
-is expected for the ``recovered`` fixture and retained.
+Any makeutil failure aborts generation with a ``MakeutilFixtureError``;
+exit 1 (recovered parse) is accepted only for the ``recovered`` fixture.
 """
 
 from __future__ import annotations
@@ -27,6 +27,33 @@ ENVELOPES_DIR = FIXTURES_DIR / "envelopes"
 
 CARGO_PARSED: typ.Final = {"package": {"name": "fixture", "version": "0.1.0"}}
 
+# Only this fixture is expected to parse with recovery (makeutil exit 1).
+RECOVERED_FIXTURE: typ.Final = "recovered"
+
+
+class MakeutilFixtureError(RuntimeError):
+    """A makeutil invocation failed while regenerating fixtures.
+
+    Mirrors the ``OperationalRuleError`` pattern used in
+    ``concordat/rules/envelope.py``: a named domain error that carries the
+    offending tool and resource instead of a bare ``RuntimeError``.
+    """
+
+    def __init__(self, path: Path, detail: str) -> None:
+        """Initialise with the Makefile path and makeutil's diagnostic."""
+        super().__init__(f"makeutil failed on {path}: {detail}")
+        self.tool = "makeutil"
+        self.resource = path
+
+
+def _validate_returncode(returncode: int, path: Path, stderr: str) -> None:
+    """Accept exit 0 for any fixture and exit 1 only for the recovered one."""
+    if returncode == 0:
+        return
+    if returncode == 1 and path.stem == RECOVERED_FIXTURE:
+        return
+    raise MakeutilFixtureError(path, stderr.strip())
+
 
 def parse_makefile(path: Path) -> dict[str, object]:
     """Return the makeutil report for *path*, tolerating recovered parses."""
@@ -40,9 +67,7 @@ def parse_makefile(path: Path) -> dict[str, object]:
         timeout=30,
         check=False,
     )
-    if completed.returncode not in (0, 1):
-        message = f"makeutil failed on {path}: {completed.stderr.strip()}"
-        raise RuntimeError(message)
+    _validate_returncode(completed.returncode, path, completed.stderr)
     report: dict[str, object] = json.loads(completed.stdout)
     return report
 
