@@ -1,10 +1,8 @@
-"""Make the repository root importable for script tests."""
+"""Pytest configuration marker for the script tests.
+
+The repository root is placed on ``sys.path`` by the ``pythonpath`` setting in
+``pyproject.toml`` (``[tool.pytest.ini_options]``), so these tests import the
+``scripts`` package without mutating ``sys.path`` at import time.
+"""
 
 from __future__ import annotations
-
-import sys
-from pathlib import Path
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
