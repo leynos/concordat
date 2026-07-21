@@ -125,6 +125,85 @@ class TestInspectMakefile:
         with pytest.raises(OperationalRuleError, match="schema"):
             inspect_makefile(tmp_path / "Makefile")
 
+    def test_timeout_raises_operational_error(
+        self,
+        tmp_path: pathlib.Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A makeutil timeout surfaces as an operational error."""
+        _write_checkout(tmp_path, cargo=False, makefile=True)
+
+        def raise_timeout(*args: object, **kwargs: object) -> typ.NoReturn:
+            raise subprocess.TimeoutExpired(cmd="makeutil", timeout=10.0)
+
+        monkeypatch.setattr(subprocess, "run", raise_timeout)
+        with pytest.raises(OperationalRuleError, match="timed out"):
+            inspect_makefile(tmp_path / "Makefile")
+
+    def test_invalid_json_raises(
+        self,
+        tmp_path: pathlib.Path,
+        cmd_mox: CmdMox,
+    ) -> None:
+        """Non-JSON stdout raises before the report is inspected."""
+        _write_checkout(tmp_path, cargo=False, makefile=True)
+        cmd_mox.mock("makeutil").returns(stdout="not json at all")
+        cmd_mox.replay()
+        with pytest.raises(OperationalRuleError, match="invalid JSON"):
+            inspect_makefile(tmp_path / "Makefile")
+
+    def test_non_object_json_raises(
+        self,
+        tmp_path: pathlib.Path,
+        cmd_mox: CmdMox,
+    ) -> None:
+        """Valid JSON that is not an object raises."""
+        _write_checkout(tmp_path, cargo=False, makefile=True)
+        cmd_mox.mock("makeutil").returns(stdout=json.dumps([1, 2, 3]))
+        cmd_mox.replay()
+        with pytest.raises(OperationalRuleError, match="not a JSON object"):
+            inspect_makefile(tmp_path / "Makefile")
+
+    def test_missing_parse_object_raises(
+        self,
+        tmp_path: pathlib.Path,
+        cmd_mox: CmdMox,
+    ) -> None:
+        """A report whose `parse` is not an object raises."""
+        _write_checkout(tmp_path, cargo=False, makefile=True)
+        report = dict(MINIMAL_REPORT, parse="complete")
+        cmd_mox.mock("makeutil").returns(stdout=json.dumps(report))
+        cmd_mox.replay()
+        with pytest.raises(OperationalRuleError, match="no `parse` object"):
+            inspect_makefile(tmp_path / "Makefile")
+
+    def test_unknown_parse_status_raises(
+        self,
+        tmp_path: pathlib.Path,
+        cmd_mox: CmdMox,
+    ) -> None:
+        """An unrecognised parse status raises."""
+        _write_checkout(tmp_path, cargo=False, makefile=True)
+        report = dict(MINIMAL_REPORT, parse={"status": "bogus", "diagnostics": []})
+        cmd_mox.mock("makeutil").returns(stdout=json.dumps(report))
+        cmd_mox.replay()
+        with pytest.raises(OperationalRuleError, match="unknown parse status"):
+            inspect_makefile(tmp_path / "Makefile")
+
+    def test_exit_code_status_disagreement_raises(
+        self,
+        tmp_path: pathlib.Path,
+        cmd_mox: CmdMox,
+    ) -> None:
+        """A status that contradicts the exit code raises."""
+        _write_checkout(tmp_path, cargo=False, makefile=True)
+        # Exit 1 promises a recovered parse, but the report claims complete.
+        report = dict(MINIMAL_REPORT, parse={"status": "complete", "diagnostics": []})
+        cmd_mox.mock("makeutil").returns(exit_code=1, stdout=json.dumps(report))
+        cmd_mox.replay()
+        with pytest.raises(OperationalRuleError, match="disagrees with its exit code"):
+            inspect_makefile(tmp_path / "Makefile")
+
 
 class TestBuildEnvelope:
     """Envelope construction from a checkout directory."""

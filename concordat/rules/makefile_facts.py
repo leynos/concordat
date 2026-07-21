@@ -37,14 +37,16 @@ class MakefileFacts:
     status: str
 
 
-def inspect_makefile(path: pathlib.Path, *, timeout: float = 10.0) -> MakefileFacts:
-    """Run `makeutil parse` on *path* and return its validated report.
+def _run_makeutil(
+    path: pathlib.Path, timeout: float
+) -> subprocess.CompletedProcess[str]:
+    """Run `makeutil parse` on *path*, translating spawn failures.
 
     The subprocess runs with the Makefile's directory as its working
     directory so the recorded ``source.path`` stays repository-relative.
     """
     try:
-        completed = subprocess.run(  # noqa: S603 - fixed argv, no shell
+        return subprocess.run(  # noqa: S603 - fixed argv, no shell
             ["makeutil", "parse", path.name],  # noqa: S607 - resolved from PATH
             cwd=path.parent,
             capture_output=True,
@@ -58,13 +60,21 @@ def inspect_makefile(path: pathlib.Path, *, timeout: float = 10.0) -> MakefileFa
         message = f"makeutil timed out after {timeout}s on {path}"
         raise OperationalRuleError(message) from error
 
-    if completed.returncode not in (0, 1):
+
+def _validate_exit_code(
+    completed: subprocess.CompletedProcess[str], path: pathlib.Path
+) -> None:
+    """Reject fatal makeutil exits before its stdout is trusted."""
+    if completed.returncode not in EXPECTED_STATUS_FOR_EXIT_CODE:
         detail = (completed.stderr or "").strip() or "no diagnostic output"
         message = f"makeutil failed on {path}: {detail}"
         raise OperationalRuleError(message)
 
+
+def _decode_report(stdout: str, path: pathlib.Path) -> dict[str, typ.Any]:
+    """Decode makeutil stdout into a JSON object."""
     try:
-        report: typ.Any = json.loads(completed.stdout)
+        report: typ.Any = json.loads(stdout)
     except json.JSONDecodeError as error:
         message = f"makeutil emitted invalid JSON for {path}"
         raise OperationalRuleError(message) from error
@@ -72,7 +82,13 @@ def inspect_makefile(path: pathlib.Path, *, timeout: float = 10.0) -> MakefileFa
     if not isinstance(report, dict):
         message = f"makeutil report for {path} is not a JSON object"
         raise OperationalRuleError(message)
+    return report
 
+
+def _validate_report(
+    report: dict[str, typ.Any], returncode: int, path: pathlib.Path
+) -> str:
+    """Validate the report contract and return its agreed parse status."""
     if report.get("schema_version") != SCHEMA_VERSION:
         message = (
             f"makeutil report for {path} has unsupported schema version "
@@ -90,13 +106,25 @@ def inspect_makefile(path: pathlib.Path, *, timeout: float = 10.0) -> MakefileFa
         message = f"makeutil report for {path} has unknown parse status {status!r}"
         raise OperationalRuleError(message)
 
-    expected = EXPECTED_STATUS_FOR_EXIT_CODE[completed.returncode]
+    expected = EXPECTED_STATUS_FOR_EXIT_CODE[returncode]
     if status != expected:
         message = (
             f"makeutil report for {path} disagrees with its exit code: "
-            f"status {status!r} with exit {completed.returncode} "
+            f"status {status!r} with exit {returncode} "
             f"(expected {expected!r})"
         )
         raise OperationalRuleError(message)
+    return status
 
+
+def inspect_makefile(path: pathlib.Path, *, timeout: float = 10.0) -> MakefileFacts:
+    """Run `makeutil parse` on *path* and return its validated report.
+
+    Fatal process exits are rejected before stdout is decoded, and the
+    JSON/report contract is validated before exit-code/status agreement.
+    """
+    completed = _run_makeutil(path, timeout)
+    _validate_exit_code(completed, path)
+    report = _decode_report(completed.stdout, path)
+    status = _validate_report(report, completed.returncode, path)
     return MakefileFacts(report=report, status=status)
