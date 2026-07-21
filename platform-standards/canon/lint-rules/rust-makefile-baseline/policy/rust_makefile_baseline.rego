@@ -101,7 +101,7 @@ rules_defining(target) := [rule |
 
 lint_rules := rules_defining("lint")
 
-lint_prerequisites := {prerequisite |
+lint_prerequisites contains prerequisite if {
 	some rule in lint_rules
 	some prerequisite in rule.prerequisites
 }
