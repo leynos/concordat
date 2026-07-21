@@ -115,6 +115,9 @@ typing = "typ"
 asyncio_default_fixture_loop_scope = "function"
 # Tests automatically killed after seconds elapsed
 timeout = 30
+# Put the repository root on sys.path so `scripts/tests` can import the
+# `scripts` package without a conftest-time sys.path mutation.
+pythonpath = ["."]
 testpaths = ["scripts/tests", "tests"]
 markers = [
     "integration: marks tests that rely on act or external tooling",
