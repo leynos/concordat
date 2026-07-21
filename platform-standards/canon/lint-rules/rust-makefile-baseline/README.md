@@ -3,7 +3,7 @@
 Audits a Rust repository's root `Makefile` against the estate baseline. The
 sensor is a Conftest/Rego policy evaluated over a `policy-input/v1` envelope
 built by `concordat artefact rule run`; Makefile facts come from the pinned
-`makeutil parse` command, never from re-parsing Make syntax.
+`makeutil parse` command, never from reparsing Make syntax.
 
 ## Checks
 

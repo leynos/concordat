@@ -518,7 +518,7 @@ Then implement, in a new module `concordat/rules/` (grouped by feature per
   the invocation is
   `concordat artefact rule run <rule-id> --repo PATH --format {table,json}`.
   Exit codes: 0 no findings (compliant); 1 at least one finding, including
-  indeterminate verdicts (fail closed); 2 operational failure (missing tools,
+  indeterminate verdicts (fail closed); 2 operational failures (missing tools,
   unreadable checkout, envelope construction failure) via `ConcordatError`.
 
 Validation: focused red tests now pass; full commit gates pass.
