@@ -279,6 +279,55 @@ def _sweep_auditable_entry(
     return True
 
 
+@dataclasses.dataclass
+class _SweepSession:
+    """Mutable per-invocation state for one estate sweep.
+
+    Holding the loop state on an object keeps ``run_sweep`` a flat sequence of
+    calls: ``process`` decides each entry's fate and reports back only whether
+    the sweep should stop, so the branching no longer piles up in the loop.
+    """
+
+    owner: str
+    ledger: list[dict[str, typ.Any]]
+    ledger_path: pathlib.Path
+    only: frozenset[str] | None
+    limit: int | None
+    force: bool
+    appended: list[dict[str, typ.Any]] = dataclasses.field(default_factory=list)
+    audited: int = 0
+
+    def process(self, entry: EstateEntry) -> bool:
+        """Handle one estate entry, returning whether the sweep should stop."""
+        if self.only is not None and entry.name not in self.only:
+            return False
+        repository = f"{self.owner}/{entry.name}"
+        if entry.excluded is not None:
+            _record_exclusion(
+                ledger=self.ledger,
+                ledger_path=self.ledger_path,
+                appended=self.appended,
+                repository=repository,
+                reason=entry.excluded,
+            )
+            return False
+        return self._process_auditable(entry)
+
+    def _process_auditable(self, entry: EstateEntry) -> bool:
+        """Audit a non-excluded entry; stop once the audit budget is spent."""
+        if self.limit is not None and self.audited >= self.limit:
+            return True
+        self.audited += _sweep_auditable_entry(
+            owner=self.owner,
+            entry=entry,
+            ledger=self.ledger,
+            ledger_path=self.ledger_path,
+            appended=self.appended,
+            force=self.force,
+        )
+        return False
+
+
 def run_sweep(
     *,
     estate_path: pathlib.Path = DEFAULT_ESTATE_PATH,
@@ -290,38 +339,20 @@ def run_sweep(
     Returns the records appended by this invocation.
     """
     estate = load_estate(estate_path)
-    ledger = _load_ledger(ledger_path)
-    appended: list[dict[str, typ.Any]] = []
-    audited = 0
+    session = _SweepSession(
+        owner=estate.owner,
+        ledger=_load_ledger(ledger_path),
+        ledger_path=ledger_path,
+        only=options.only,
+        limit=options.limit,
+        force=options.force,
+    )
 
     for entry in estate.repositories:
-        if options.only is not None and entry.name not in options.only:
-            continue
-        repository = f"{estate.owner}/{entry.name}"
-
-        if entry.excluded is not None:
-            _record_exclusion(
-                ledger=ledger,
-                ledger_path=ledger_path,
-                appended=appended,
-                repository=repository,
-                reason=entry.excluded,
-            )
-            continue
-
-        if options.limit is not None and audited >= options.limit:
+        if session.process(entry):
             break
 
-        audited += _sweep_auditable_entry(
-            owner=estate.owner,
-            entry=entry,
-            ledger=ledger,
-            ledger_path=ledger_path,
-            appended=appended,
-            force=options.force,
-        )
-
-    return appended
+    return session.appended
 
 
 DEFAULT_REPORT_PATH: typ.Final = (
