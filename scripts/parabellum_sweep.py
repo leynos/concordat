@@ -35,6 +35,7 @@ __all__ = [
     "EstateEntry",
     "OperationalRuleError",
     "RuleRunResult",
+    "SweepOptions",
     "clone_and_audit",
     "load_estate",
     "main",
@@ -68,6 +69,20 @@ class Estate:
 
     owner: str
     repositories: tuple[EstateEntry, ...]
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class SweepOptions:
+    """Filtering and execution controls for an estate sweep."""
+
+    only: frozenset[str] | None = None
+    limit: int | None = None
+    force: bool = False
+
+
+# A frozen singleton so `run_sweep`'s default is a real, shareable value
+# rather than a per-call construction in the signature (ruff B008).
+_DEFAULT_SWEEP_OPTIONS: typ.Final = SweepOptions()
 
 
 def load_estate(path: pathlib.Path) -> Estate:
@@ -268,9 +283,7 @@ def run_sweep(
     *,
     estate_path: pathlib.Path = DEFAULT_ESTATE_PATH,
     ledger_path: pathlib.Path = DEFAULT_LEDGER_PATH,
-    only: set[str] | None = None,
-    limit: int | None = None,
-    force: bool = False,
+    options: SweepOptions = _DEFAULT_SWEEP_OPTIONS,
 ) -> list[dict[str, typ.Any]]:
     """Sweep the estate and append new records to the ledger.
 
@@ -282,7 +295,7 @@ def run_sweep(
     audited = 0
 
     for entry in estate.repositories:
-        if only is not None and entry.name not in only:
+        if options.only is not None and entry.name not in options.only:
             continue
         repository = f"{estate.owner}/{entry.name}"
 
@@ -296,7 +309,7 @@ def run_sweep(
             )
             continue
 
-        if limit is not None and audited >= limit:
+        if options.limit is not None and audited >= options.limit:
             break
 
         audited += _sweep_auditable_entry(
@@ -305,7 +318,7 @@ def run_sweep(
             ledger=ledger,
             ledger_path=ledger_path,
             appended=appended,
-            force=force,
+            force=options.force,
         )
 
     return appended
@@ -428,12 +441,15 @@ def sweep_command(
     only_set = (
         {name.strip() for name in only.split(",") if name.strip()} if only else None
     )
+    options = SweepOptions(
+        only=frozenset(only_set) if only_set else None,
+        limit=limit,
+        force=force,
+    )
     appended = run_sweep(
         estate_path=estate,
         ledger_path=ledger,
-        only=only_set,
-        limit=limit,
-        force=force,
+        options=options,
     )
     print(f"appended {len(appended)} record(s) to {ledger}")
     return 0
