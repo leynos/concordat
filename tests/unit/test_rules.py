@@ -212,6 +212,35 @@ class TestInspectMakefile:
         with pytest.raises(OperationalRuleError, match="disagrees with its exit code"):
             inspect_makefile(tmp_path / "Makefile")
 
+    def test_malformed_source_object_raises(
+        self,
+        tmp_path: pathlib.Path,
+        cmd_mox: CmdMox,
+    ) -> None:
+        """A `source` that is not an object is rejected as nested malformed data."""
+        _write_checkout(tmp_path, cargo=False, makefile=True)
+        report = dict(MINIMAL_REPORT, source="Makefile")
+        cmd_mox.mock("makeutil").returns(stdout=json.dumps(report))
+        cmd_mox.replay()
+        with pytest.raises(
+            OperationalRuleError, match="malformed `source`"
+        ) as exc_info:
+            inspect_makefile(tmp_path / "Makefile")
+        assert exc_info.value.operation == "parse-makefile"
+
+    def test_malformed_rules_array_raises(
+        self,
+        tmp_path: pathlib.Path,
+        cmd_mox: CmdMox,
+    ) -> None:
+        """A `rules` field that is not a list is rejected before narrowing."""
+        _write_checkout(tmp_path, cargo=False, makefile=True)
+        report = dict(MINIMAL_REPORT, rules={"not": "a list"})
+        cmd_mox.mock("makeutil").returns(stdout=json.dumps(report))
+        cmd_mox.replay()
+        with pytest.raises(OperationalRuleError, match="malformed `rules`"):
+            inspect_makefile(tmp_path / "Makefile")
+
 
 class TestBuildEnvelope:
     """Envelope construction from a checkout directory."""
@@ -259,6 +288,27 @@ class TestBuildEnvelope:
         assert error.operation == "parse-cargo-toml"
         assert error.tool is None
         assert error.resource == tmp_path / "Cargo.toml"
+
+    def test_non_table_cargo_structure_raises(
+        self,
+        tmp_path: pathlib.Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Cargo TOML that parses to a non-table cannot fill the envelope."""
+        from concordat.rules import envelope as envelope_module
+
+        tmp_path.mkdir(exist_ok=True)
+        (tmp_path / "Cargo.toml").write_text('[package]\nname = "x"\n')
+        monkeypatch.setattr(
+            envelope_module.tomllib,
+            "loads",
+            lambda _text: ["not", "a", "table"],
+        )
+        with pytest.raises(
+            OperationalRuleError, match="did not parse to a table"
+        ) as exc_info:
+            build_envelope(tmp_path)
+        assert exc_info.value.operation == "parse-cargo-toml"
 
 
 class TestRunRule:

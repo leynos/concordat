@@ -14,7 +14,7 @@ from ruamel.yaml.error import YAMLError
 
 from concordat.errors import OperationalRuleError
 
-from .envelope import build_envelope
+from .envelope import PolicyEnvelope, build_envelope
 
 RULE_PACKAGES_DIR: typ.Final = (
     pathlib.Path(__file__).resolve().parents[2]
@@ -109,7 +109,7 @@ def _rule_parameters(rule_dir: pathlib.Path) -> dict[str, typ.Any]:
 
 def _invoke_conftest(
     rule_id: str,
-    envelope: dict[str, typ.Any],
+    envelope: PolicyEnvelope,
 ) -> list[dict[str, typ.Any]]:
     rule_dir = _rule_package_dir(rule_id)
     policy_dir = rule_dir / "policy"
