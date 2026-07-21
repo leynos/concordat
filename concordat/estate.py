@@ -328,38 +328,69 @@ def default_config_path() -> Path:
     return xdg.config_root() / CONFIG_FILENAME
 
 
-def _migrate_legacy_config() -> None:
-    """Move a legacy flat estates config into the owner-namespaced layout."""
+def _load_legacy_migration() -> (
+    tuple[Path, dict[str, typ.Any], dict[str, typ.Any], str] | None
+):
+    """Return the legacy migration inputs, or ``None`` when none applies.
+
+    The tuple is ``(legacy, full_data, estate_section, owner)``. ``None`` is
+    returned when an active owner is already configured, the flat config is
+    absent, the parsed YAML or estate section is not a mapping, or no owner can
+    be derived from the recorded estates.
+    """
     if xdg.get_active_owner() is not None:
-        return
+        return None
     legacy = xdg.config_root() / CONFIG_FILENAME
     if not legacy.is_file():
-        return
+        return None
     try:
         data = _yaml.load(legacy.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, YAMLError) as error:
         message = f"cannot read legacy configuration {legacy}: {error}"
         raise EstateError(message) from error
     if not isinstance(data, dict):
-        return
+        return None
     estate_section = data.get(ESTATE_SECTION)
     if not isinstance(estate_section, dict):
-        return
+        return None
     owner = _derive_owner_from_estates(estate_section)
     if owner is None:
-        return
+        return None
+    return legacy, data, estate_section, owner
 
+
+def _write_owner_estate_config(owner: str, estate_section: dict[str, typ.Any]) -> None:
+    """Write the estate section into the owner-namespaced config file."""
     owner_path = xdg.owner_config_path(owner)
     owner_path.parent.mkdir(parents=True, exist_ok=True)
     with owner_path.open("w", encoding="utf-8") as handle:
         _yaml.dump({ESTATE_SECTION: estate_section}, handle)
 
+
+def _remove_legacy_estate_section(legacy: Path, data: dict[str, typ.Any]) -> None:
+    """Drop the estate section from the legacy file, rewriting or removing it."""
     remaining = {key: value for key, value in data.items() if key != ESTATE_SECTION}
     if remaining:
         with legacy.open("w", encoding="utf-8") as handle:
             _yaml.dump(remaining, handle)
     else:
         legacy.unlink()
+
+
+def _migrate_legacy_config() -> None:
+    """Move a legacy flat estates config into the owner-namespaced layout.
+
+    The active owner is only set once both filesystem writes succeed: were it
+    set earlier, ``default_config_path()`` would resolve future implicit
+    configuration operations to an incomplete owner-scoped config after a
+    failed migration.
+    """
+    migration = _load_legacy_migration()
+    if migration is None:
+        return
+    legacy, data, estate_section, owner = migration
+    _write_owner_estate_config(owner, estate_section)
+    _remove_legacy_estate_section(legacy, data)
     xdg.set_active_owner(owner)
 
 
