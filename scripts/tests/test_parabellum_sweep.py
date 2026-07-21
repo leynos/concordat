@@ -192,6 +192,57 @@ class TestSweep:
             "leynos/wireframe"
         ]
 
+    def test_head_resolution_failure_records_error(
+        self,
+        estate_path: pathlib.Path,
+        ledger_path: pathlib.Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A resolve_head failure is ledgered without cloning or auditing."""
+
+        def raise_resolve(owner: str, name: str) -> typ.NoReturn:
+            message = "gh api head resolution failed"
+            raise sweep.OperationalRuleError(message)
+
+        def fail_if_audited(owner: str, name: str) -> typ.NoReturn:
+            message = "clone_and_audit must not run on head failure"
+            raise AssertionError(message)
+
+        monkeypatch.setattr(sweep, "resolve_head", raise_resolve)
+        monkeypatch.setattr(sweep, "clone_and_audit", fail_if_audited)
+        appended = sweep.run_sweep(
+            estate_path=estate_path,
+            ledger_path=ledger_path,
+            only={"wireframe"},
+        )
+        assert len(appended) == 1
+        assert appended[0]["verdict"] == "error"
+        assert "head resolution failed" in appended[0]["error_detail"]
+
+    def test_head_resolution_failure_consumes_audit_slot(
+        self,
+        estate_path: pathlib.Path,
+        ledger_path: pathlib.Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A head-resolution failure spends one audit slot under --limit."""
+
+        def raise_resolve(owner: str, name: str) -> typ.NoReturn:
+            message = "boom"
+            raise sweep.OperationalRuleError(message)
+
+        monkeypatch.setattr(sweep, "resolve_head", raise_resolve)
+        # Estate order is wireframe, gauss (excluded), statelet. With limit=1
+        # the wireframe failure consumes the slot, so statelet is never reached.
+        appended = sweep.run_sweep(
+            estate_path=estate_path,
+            ledger_path=ledger_path,
+            limit=1,
+        )
+        error_records = [r for r in appended if r["verdict"] == "error"]
+        assert len(error_records) == 1
+        assert not any(r["repository"] == "leynos/statelet" for r in appended)
+
     def test_operational_error_records_error_verdict(
         self,
         estate_path: pathlib.Path,

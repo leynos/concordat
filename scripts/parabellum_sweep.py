@@ -169,16 +169,35 @@ def _excluded_record(repository: str, reason: str) -> dict[str, typ.Any]:
     return record
 
 
-def _record_exclusion_once(
+def _append_record(
+    ledger_path: pathlib.Path,
+    appended: list[dict[str, typ.Any]],
+    record: dict[str, typ.Any],
+) -> None:
+    """Append one record to the ledger immediately.
+
+    Auditing the estate takes many minutes and clones over the network, so
+    each record is durable before the next repository is attempted; an
+    interrupted sweep resumes rather than restarts.
+    """
+    ledger_path.parent.mkdir(parents=True, exist_ok=True)
+    with ledger_path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record) + "\n")
+    appended.append(record)
+
+
+def _record_exclusion(
+    *,
     ledger: list[dict[str, typ.Any]],
+    ledger_path: pathlib.Path,
+    appended: list[dict[str, typ.Any]],
     repository: str,
     reason: str,
-    emit: typ.Callable[[dict[str, typ.Any]], None],
 ) -> None:
     """Append an exclusion record unless the repository already has one."""
     if _already_ledgered(ledger, repository, commit_sha=None):
         return
-    emit(_excluded_record(repository, reason))
+    _append_record(ledger_path, appended, _excluded_record(repository, reason))
 
 
 def _audit_record(owner: str, entry: EstateEntry) -> dict[str, typ.Any]:
@@ -212,6 +231,39 @@ def _already_ledgered(
     )
 
 
+def _sweep_auditable_entry(
+    *,
+    owner: str,
+    entry: EstateEntry,
+    ledger: list[dict[str, typ.Any]],
+    ledger_path: pathlib.Path,
+    appended: list[dict[str, typ.Any]],
+    force: bool,
+) -> bool:
+    """Audit one non-excluded entry, returning whether it consumed a slot.
+
+    A head-resolution failure and a completed audit both consume an audit
+    slot; an idempotent skip of an already-ledgered commit does not.
+    """
+    repository = f"{owner}/{entry.name}"
+    try:
+        head = resolve_head(owner, entry.name)
+    except OperationalRuleError as error:
+        record = _base_record(repository)
+        record["error_detail"] = str(error)
+        _append_record(ledger_path, appended, record)
+        return True
+
+    if not force and _already_ledgered(ledger, repository, commit_sha=head):
+        print(f"{repository}: already ledgered at {head[:12]}, skipping")
+        return False
+
+    record = _audit_record(owner, entry)
+    _append_record(ledger_path, appended, record)
+    print(f"{repository}: {record['verdict']}")
+    return True
+
+
 def run_sweep(
     *,
     estate_path: pathlib.Path = DEFAULT_ESTATE_PATH,
@@ -229,47 +281,32 @@ def run_sweep(
     appended: list[dict[str, typ.Any]] = []
     audited = 0
 
-    def emit(record: dict[str, typ.Any]) -> None:
-        """Append one record to the ledger immediately.
-
-        Auditing the estate takes many minutes and clones over the
-        network, so each record is durable before the next repository is
-        attempted; an interrupted sweep resumes rather than restarts.
-        """
-        ledger_path.parent.mkdir(parents=True, exist_ok=True)
-        with ledger_path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(record) + "\n")
-        appended.append(record)
-
     for entry in estate.repositories:
         if only is not None and entry.name not in only:
             continue
         repository = f"{estate.owner}/{entry.name}"
 
         if entry.excluded is not None:
-            _record_exclusion_once(ledger, repository, entry.excluded, emit)
+            _record_exclusion(
+                ledger=ledger,
+                ledger_path=ledger_path,
+                appended=appended,
+                repository=repository,
+                reason=entry.excluded,
+            )
             continue
 
         if limit is not None and audited >= limit:
             break
 
-        try:
-            head = resolve_head(estate.owner, entry.name)
-        except OperationalRuleError as error:
-            record = _base_record(repository)
-            record["error_detail"] = str(error)
-            emit(record)
-            audited += 1
-            continue
-
-        if not force and _already_ledgered(ledger, repository, commit_sha=head):
-            print(f"{repository}: already ledgered at {head[:12]}, skipping")
-            continue
-
-        record = _audit_record(estate.owner, entry)
-        emit(record)
-        audited += 1
-        print(f"{repository}: {record['verdict']}")
+        audited += _sweep_auditable_entry(
+            owner=estate.owner,
+            entry=entry,
+            ledger=ledger,
+            ledger_path=ledger_path,
+            appended=appended,
+            force=force,
+        )
 
     return appended
 
