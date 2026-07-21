@@ -82,6 +82,62 @@ class TestDefaultConfigPath:
         # The headline file no longer carries the estate section.
         assert "estates:" not in legacy.read_text()
 
+    def test_migration_preserves_non_estate_headline_keys(
+        self,
+        xdg_env: dict[str, str],
+    ) -> None:
+        """Headline keys outside the estate section survive migration."""
+        legacy = xdg.config_root() / estate.CONFIG_FILENAME
+        legacy.parent.mkdir(parents=True)
+        # ``telemetry`` is an arbitrary non-estate headline key; it must not be
+        # ``github_owner`` (the active-owner key), which would skip migration.
+        legacy.write_text(f"telemetry: disabled\n{LEGACY_CONFIG}")
+
+        estate.default_config_path()
+
+        remaining = legacy.read_text()
+        assert "telemetry: disabled" in remaining
+        assert "estates:" not in remaining
+
+    def test_existing_active_owner_skips_migration(
+        self,
+        xdg_env: dict[str, str],
+    ) -> None:
+        """A configured active owner leaves the legacy config untouched."""
+        # The legacy flat file and the headline file are the same path, so a
+        # configured active owner lives alongside the estate section here.
+        legacy = xdg.config_root() / estate.CONFIG_FILENAME
+        legacy.parent.mkdir(parents=True)
+        contents = f"github_owner: someone-else\n{LEGACY_CONFIG}"
+        legacy.write_text(contents)
+        assert xdg.get_active_owner() == "someone-else"
+
+        estate.default_config_path()
+
+        assert legacy.read_text() == contents
+        assert xdg.get_active_owner() == "someone-else"
+
+    def test_malformed_legacy_config_raises(
+        self,
+        xdg_env: dict[str, str],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Unreadable legacy YAML surfaces as an EstateError.
+
+        The legacy flat file and the headline file share a path, so an active
+        owner lookup would otherwise read the malformed file first. Forcing no
+        active owner isolates the migration's own read-failure branch.
+        """
+        monkeypatch.setattr(xdg, "get_active_owner", lambda *_, **__: None)
+        legacy = xdg.config_root() / estate.CONFIG_FILENAME
+        legacy.parent.mkdir(parents=True)
+        legacy.write_text("estate: [unterminated\n")
+
+        with pytest.raises(
+            estate.EstateError, match="cannot read legacy configuration"
+        ):
+            estate.default_config_path()
+
 
 class TestActiveOwnerForImplicitConfig:
     """`init_estate` settles the active owner before resolving its config.
