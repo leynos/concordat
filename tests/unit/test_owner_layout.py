@@ -138,6 +138,43 @@ class TestDefaultConfigPath:
         ):
             estate.default_config_path()
 
+    def test_mixed_owner_legacy_config_is_rejected(
+        self,
+        xdg_env: dict[str, str],
+    ) -> None:
+        """A legacy config spanning multiple owners is refused, not misplaced."""
+        legacy = xdg.config_root() / estate.CONFIG_FILENAME
+        legacy.parent.mkdir(parents=True)
+        legacy.write_text(
+            "estate:\n"
+            "  estates:\n"
+            "    prod:\n"
+            "      repo_url: git@github.com:leynos/prod.git\n"
+            "      github_owner: leynos\n"
+            "    other:\n"
+            "      repo_url: git@github.com:someone/other.git\n"
+            "      github_owner: someone\n"
+        )
+
+        with pytest.raises(
+            estate.EstateError, match="multiple github owners"
+        ) as exc_info:
+            estate.default_config_path()
+        message = str(exc_info.value)
+        assert "leynos" in message, (
+            "the error should name owner 'leynos' so the operator can split them"
+        )
+        assert "someone" in message, (
+            "the error should name owner 'someone' so the operator can split them"
+        )
+        # Nothing was migrated: no owner file was written for either owner.
+        assert not xdg.owner_config_path("leynos").exists(), (
+            "leynos's estate config must not be written on a rejected migration"
+        )
+        assert not xdg.owner_config_path("someone").exists(), (
+            "someone's estate config must not be written on a rejected migration"
+        )
+
 
 class TestActiveOwnerForImplicitConfig:
     """`init_estate` settles the active owner before resolving its config.
