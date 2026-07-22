@@ -120,14 +120,31 @@ def _git(
     operation: str,
     resource: str,
 ) -> str:
-    completed = subprocess.run(  # noqa: S603 - fixed argv, no shell
-        ["git", *args],  # noqa: S607 - resolved from PATH
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-        timeout=GIT_TIMEOUT,
-        check=False,
-    )
+    try:
+        completed = subprocess.run(  # noqa: S603 - fixed argv, no shell
+            ["git", *args],  # noqa: S607 - resolved from PATH
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=GIT_TIMEOUT,
+            check=False,
+        )
+    except FileNotFoundError as error:
+        message = "git is required but was not found on PATH"
+        raise OperationalRuleError(
+            message,
+            operation=operation,
+            tool="git",
+            resource=resource,
+        ) from error
+    except subprocess.TimeoutExpired as error:
+        message = f"git {args[0]} timed out after {GIT_TIMEOUT}s"
+        raise OperationalRuleError(
+            message,
+            operation=operation,
+            tool="git",
+            resource=resource,
+        ) from error
     if completed.returncode != 0:
         detail = (completed.stderr or "").strip()
         message = f"git {args[0]} failed: {detail}"
