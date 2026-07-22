@@ -22,6 +22,7 @@ import stat
 import typing as typ
 
 from ruamel.yaml import YAML
+from ruamel.yaml.error import YAMLError
 
 from . import xdg
 from .errors import ConcordatError
@@ -53,6 +54,14 @@ class InsecureCredentialsError(ConcordatError):
         )
 
 
+class MalformedCredentialsError(ConcordatError):
+    """The credentials file could not be read or parsed."""
+
+    def __init__(self, path: object, detail: str) -> None:
+        """Initialise the error with the offending path and diagnostic."""
+        super().__init__(f"cannot read credentials {path}: {detail}")
+
+
 def _environ(env: xdg.EnvMapping | None) -> xdg.EnvMapping:
     return os.environ if env is None else env
 
@@ -68,7 +77,10 @@ def load_credentials(
         return {}
     if path.stat().st_mode & _GROUP_WORLD_BITS:
         raise InsecureCredentialsError(path)
-    loaded = _yaml.load(path.read_text(encoding="utf-8"))
+    try:
+        loaded = _yaml.load(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, YAMLError) as error:
+        raise MalformedCredentialsError(path, str(error)) from error
     if not isinstance(loaded, dict):
         return {}
     return {
