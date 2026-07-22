@@ -52,7 +52,10 @@ def then_owner_output_is(
     expected: str,
 ) -> None:
     """Assert the command printed exactly the expected line."""
-    assert cli_invocation["result"].stdout.strip() == expected
+    stdout = cli_invocation["result"].stdout
+    assert stdout.strip() == expected, (
+        f"expected owner output {expected!r}, got stdout {stdout!r}"
+    )
 
 
 @then(parsers.cfparse('the owner output mentions "{fragment}"'))
@@ -62,4 +65,7 @@ def then_owner_output_mentions(
 ) -> None:
     """Assert the output (stdout or stderr) contains the fragment."""
     result = cli_invocation["result"]
-    assert fragment in result.stdout + result.stderr
+    assert fragment in result.stdout + result.stderr, (
+        f"expected fragment {fragment!r} in output; "
+        f"stdout {result.stdout!r}, stderr {result.stderr!r}"
+    )

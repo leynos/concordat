@@ -189,26 +189,26 @@ def then_exit_status(cli_invocation: dict[str, RunResult], code: int) -> None:
 def then_zero_findings(cli_invocation: dict[str, RunResult]) -> None:
     """Assert the table names the compliant verdict and no findings."""
     stdout = cli_invocation["result"].stdout
-    assert "compliant" in stdout
-    assert "QG-001" not in stdout
-    assert "FP-003" not in stdout
+    assert "compliant" in stdout, stdout
+    assert "QG-001" not in stdout, stdout
+    assert "FP-003" not in stdout, stdout
 
 
 @then("the output contains a QG-001 finding citing Makefile line 12")
 def then_qg001_with_line(cli_invocation: dict[str, RunResult]) -> None:
     """Assert the QG-001 finding carries its source location."""
     stdout = cli_invocation["result"].stdout
-    assert "QG-001" in stdout
-    assert "Makefile:12" in stdout
-    assert "command -v" in stdout
+    assert "QG-001" in stdout, stdout
+    assert "Makefile:12" in stdout, stdout
+    assert "command -v" in stdout, stdout
 
 
 @then("the output reports QG-001 as indeterminate")
 def then_qg001_indeterminate(cli_invocation: dict[str, RunResult]) -> None:
     """Assert the indeterminate verdict is surfaced."""
     stdout = cli_invocation["result"].stdout
-    assert "QG-001" in stdout
-    assert "indeterminate" in stdout
+    assert "QG-001" in stdout, stdout
+    assert "indeterminate" in stdout, stdout
 
 
 @then(
@@ -222,11 +222,13 @@ def then_fp003_names_target(
 ) -> None:
     """Assert the FP-003 finding names the absent target."""
     stdout = cli_invocation["result"].stdout
-    assert "FP-003" in stdout
-    assert f'"{target}"' in stdout
+    assert "FP-003" in stdout, stdout
+    assert f'"{target}"' in stdout, stdout
 
 
 @then("stderr explains that makeutil is required")
 def then_stderr_mentions_makeutil(cli_invocation: dict[str, RunResult]) -> None:
     """Assert the operational failure names the missing tool."""
-    assert "makeutil" in cli_invocation["result"].stderr
+    assert "makeutil" in cli_invocation["result"].stderr, cli_invocation[
+        "result"
+    ].stderr
