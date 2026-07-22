@@ -71,6 +71,21 @@ class TestLoadCredentials:
         with pytest.raises(credentials.InsecureCredentialsError):
             credentials.load_credentials("leynos", env=fake_env)
 
+    def test_malformed_yaml_raises_concordat_error(
+        self,
+        fake_env: dict[str, str],
+    ) -> None:
+        """A YAML syntax error surfaces as a catchable ConcordatError."""
+        _write_credentials(fake_env, "leynos", "GITHUB_TOKEN: [unterminated\n")
+        with pytest.raises(
+            credentials.MalformedCredentialsError, match="cannot read credentials"
+        ) as exc_info:
+            credentials.load_credentials("leynos", env=fake_env)
+        # The CLI boundary catches ConcordatError; the domain error must be one.
+        assert isinstance(exc_info.value, credentials.ConcordatError), (
+            "MalformedCredentialsError must reach the CLI as a ConcordatError"
+        )
+
 
 class TestCredentialEnvironment:
     """Merging process environment over file-backed fallbacks."""
