@@ -144,14 +144,33 @@ def _migrate_legacy_config() -> None:
 
 
 def _derive_owner_from_estates(estate_section: dict[str, typ.Any]) -> str | None:
-    """Return the first github_owner recorded in a legacy estate section."""
+    """Return the sole github_owner recorded in a legacy estate section.
+
+    The legacy flat format permitted estates for more than one owner. Moving
+    such a section wholesale into a single owner's namespace would silently
+    misplace the other owners' estates, so mixed-owner input is rejected
+    rather than migrated under the first owner encountered.
+    """
     estates = estate_section.get(ESTATE_COLLECTION_KEY)
     if not isinstance(estates, dict):
         return None
-    for entry in estates.values():
-        if isinstance(entry, dict) and (owner := entry.get("github_owner")):
-            return str(owner)
-    return None
+    owners = {
+        str(entry["github_owner"])
+        for entry in estates.values()
+        if isinstance(entry, dict) and entry.get("github_owner")
+    }
+    if not owners:
+        return None
+    if len(owners) > 1:
+        joined = ", ".join(sorted(owners))
+        message = (
+            f"legacy configuration mixes estates from multiple github owners "
+            f"({joined}); split them into per-owner configurations under "
+            "the relevant `concordat owner use <owner>` namespaces before "
+            "migrating"
+        )
+        raise EstateError(message)
+    return next(iter(owners))
 
 
 def list_estates(config_path: Path | None = None) -> list[EstateRecord]:
