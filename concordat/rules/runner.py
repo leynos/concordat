@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import importlib.resources
 import json
 import pathlib
 import subprocess
@@ -16,12 +17,30 @@ from concordat.errors import OperationalRuleError
 
 from .envelope import PolicyEnvelope, build_envelope
 
-RULE_PACKAGES_DIR: typ.Final = (
-    pathlib.Path(__file__).resolve().parents[2]
-    / "platform-standards"
-    / "canon"
-    / "lint-rules"
-)
+
+def _resolve_rule_packages_dir() -> pathlib.Path:
+    """Return the canon lint-rule tree, whether installed or run from source.
+
+    A wheel ships the policies inside the package (see the
+    ``force-include`` in ``pyproject.toml``), reachable via
+    ``importlib.resources``. A source checkout keeps them in the sibling
+    ``platform-standards`` tree, so that layout is used as a fallback.
+    """
+    packaged = importlib.resources.files("concordat") / "canon" / "lint-rules"
+    if isinstance(packaged, pathlib.Path) and packaged.is_dir():
+        return packaged
+    source = (
+        pathlib.Path(__file__).resolve().parents[2]
+        / "platform-standards"
+        / "canon"
+        / "lint-rules"
+    )
+    if source.is_dir():
+        return source
+    return pathlib.Path(str(packaged))
+
+
+RULE_PACKAGES_DIR: typ.Final = _resolve_rule_packages_dir()
 
 CONFTEST_TIMEOUT: typ.Final = 60.0
 
