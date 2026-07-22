@@ -376,6 +376,45 @@ class TestGitOperations:
             "the failure should identify the affected repository"
         )
 
+    def test_git_timeout_becomes_operational_error(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A git timeout is translated instead of aborting the sweep."""
+
+        def raise_timeout(*args: object, **kwargs: object) -> typ.NoReturn:
+            raise sweep.subprocess.TimeoutExpired(cmd="git", timeout=sweep.GIT_TIMEOUT)
+
+        monkeypatch.setattr(sweep.subprocess, "run", raise_timeout)
+        with pytest.raises(sweep.OperationalRuleError, match="timed out") as exc_info:
+            sweep.resolve_head("leynos", "ghost")
+        error = exc_info.value
+        assert error.operation == "resolve-git-head", (
+            "a git timeout should keep the resolve-git-head operation tag"
+        )
+        assert error.tool == "git", "a git timeout should identify git as the tool"
+        assert error.resource == "leynos/ghost", (
+            "a git timeout should identify the affected repository"
+        )
+
+    def test_missing_git_executable_becomes_operational_error(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A missing git binary is translated instead of aborting the sweep."""
+
+        def raise_missing(*args: object, **kwargs: object) -> typ.NoReturn:
+            raise FileNotFoundError("git")
+
+        monkeypatch.setattr(sweep.subprocess, "run", raise_missing)
+        with pytest.raises(
+            sweep.OperationalRuleError, match="not found on PATH"
+        ) as exc_info:
+            sweep.resolve_head("leynos", "ghost")
+        assert exc_info.value.tool == "git", (
+            "a missing git binary should identify git as the tool"
+        )
+
 
 class TestReport:
     """Baseline report generation from the ledger."""
