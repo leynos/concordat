@@ -3,12 +3,13 @@
 
 from __future__ import annotations
 
-import os
 import typing as typ
 
 import boto3
 from botocore import exceptions as boto_exceptions
 from botocore.config import Config as BotoConfig
+
+from concordat import credentials as owner_credentials
 
 from .backend import (
     AWS_BACKEND_ENV,
@@ -213,7 +214,9 @@ def _default_s3_client_factory(region: str, endpoint: str) -> S3Client:
     """Create a boto3 S3 client configured for path-style endpoints."""
     endpoint = normalize_endpoint_url(endpoint)
     config = BotoConfig(s3={"addressing_style": "path"})
-    credentials = _credentials_from_environment(os.environ)
+    credentials = _credentials_from_environment(
+        owner_credentials.credential_environment()
+    )
     return typ.cast(
         "S3Client",
         boto3.client(

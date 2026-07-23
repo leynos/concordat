@@ -14,4 +14,7 @@ accepted = ["Hashi"] # HashiCorp product-name prefix.
 ignore = []
 
 [files]
-exclude = [".terraform"] # Shared policy also excludes generated OpenTofu output.
+# Shared policy also excludes generated OpenTofu output; the Parabellum
+# baseline report is generated and quotes commit SHA prefixes that the
+# tokenizer misreads as words.
+exclude = [".terraform", "docs/parabellum/baseline-report.md"]

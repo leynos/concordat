@@ -628,3 +628,78 @@ def test_build_client_uses_token(mocker: pytest_mock.MockFixture) -> None:
 
     assert client is fake
     mocked_ctor.assert_called_once_with(token="secret")  # noqa: S106
+
+
+class TestEstateErrorTaxonomy:
+    """The exception taxonomy is re-exported from ``concordat.estate``."""
+
+    def test_errors_are_reexported_from_estate(self) -> None:
+        """Representative errors remain importable from ``concordat.estate``."""
+        from concordat import estate_errors
+
+        for name in (
+            "EstateError",
+            "MissingGitHubOwnerError",
+            "TemplateMissingError",
+            "GitHubOrganizationAuthenticationError",
+        ):
+            assert getattr(estate, name) is getattr(estate_errors, name)
+
+    def test_base_class_inheritance_is_preserved(self) -> None:
+        """Moved errors keep their place under ``EstateError``."""
+        assert issubclass(estate.MissingGitHubOwnerError, estate.EstateError)
+        assert issubclass(estate.TemplateMissingError, estate.EstateError)
+        # Authentication subclasses still descend from GitHubAuthenticationError.
+        assert issubclass(
+            estate.GitHubOrganizationAuthenticationError,
+            estate.GitHubAuthenticationError,
+        )
+
+    def test_error_messages_are_preserved(self, tmp_path: pathlib.Path) -> None:
+        """Constructor messages are byte-for-byte unchanged after the move."""
+        assert str(estate.MissingGitHubOwnerError()) == (
+            "Unable to determine github_owner for the estate. Provide "
+            "--github-owner when the remote URL is not a GitHub repository."
+        )
+        template = tmp_path / "tpl"
+        assert (
+            str(estate.TemplateMissingError(template))
+            == f"Template directory {template} is missing."
+        )
+
+
+class TestEstateConfigReexport:
+    """Configuration APIs stay importable from the ``concordat.estate`` façade."""
+
+    def test_estate_record_is_the_same_class(self) -> None:
+        """``estate.EstateRecord`` is the class defined in ``estate_config``."""
+        from concordat import estate_config
+
+        assert estate.EstateRecord is estate_config.EstateRecord
+
+    def test_config_apis_are_reexported(self) -> None:
+        """Moved public config symbols remain reachable through ``estate``."""
+        from concordat import estate_config
+
+        for name in (
+            "default_config_path",
+            "list_estates",
+            "get_estate",
+            "get_active_estate",
+            "set_active_estate",
+            "register_estate",
+            "CONFIG_FILENAME",
+            "DEFAULT_BRANCH",
+            "DEFAULT_INVENTORY_PATH",
+        ):
+            assert getattr(estate, name) is getattr(estate_config, name)
+
+    def test_register_estate_remains_callable(self, tmp_path: pathlib.Path) -> None:
+        """``estate.register_estate`` still persists an estate to a config file."""
+        config_path = tmp_path / "config.yaml"
+        record = estate.EstateRecord(
+            alias="core",
+            repo_url="git@github.com:example/core.git",
+        )
+        estate.register_estate(record, config_path=config_path)
+        assert estate.get_estate("core", config_path=config_path) == record

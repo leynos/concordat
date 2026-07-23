@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
-import os
 import shutil
 import typing as typ
 import warnings
@@ -14,16 +13,14 @@ from tofupy import Tofu  # noqa: TC002 - Used at runtime
 from concordat.persistence import backend as persistence_backend
 from concordat.persistence import models as persistence_models
 
-from . import apply_recovery
+from . import apply_recovery, xdg
+from . import credentials as _credentials
 from .apply_recovery import RecoveryCallbacks, RecoveryContext
 from .errors import ConcordatError
 from .estate_cache import (
     EstateCacheError,
     clone_into_temp,
     ensure_estate_cache,
-)
-from .estate_cache import (
-    cache_root as _cache_root_original,
 )
 from .tofu_github_errors import (
     detect_missing_repo_imports as _detect_missing_repo_imports,
@@ -74,7 +71,6 @@ _DEPRECATED_EXPORTS: dict[str, tuple[str, object]] = {
         "concordat.persistence.backend (as build_object_key)",
         persistence_backend.build_object_key,
     ),
-    "cache_root": ("concordat.estate_cache", _cache_root_original),
 }
 
 
@@ -184,9 +180,18 @@ def estate_workspace(
     keep_workdir: bool = False,
     prefix: str = "plan",
 ) -> cabc.Iterator[Path]:
-    """Yield a throwaway working tree populated from the estate cache."""
+    """Yield a throwaway working tree populated from the estate cache.
+
+    The working tree lives under the owning GitHub owner's XDG state
+    directory (``$XDG_STATE_HOME/concordat/owners/<owner>/runs``) so kept
+    workdirs are easy to find; without a resolvable owner it falls back to
+    the system temporary directory.
+    """
     cache_path = ensure_estate_cache(record, cache_directory=cache_directory)
-    workdir = clone_into_temp(cache_path, prefix)
+    runs_root: Path | None = None
+    if owner := record.github_owner or xdg.get_active_owner():
+        runs_root = xdg.owner_runs_dir(owner)
+    workdir = clone_into_temp(cache_path, prefix, runs_root=runs_root)
     try:
         yield workdir
     finally:
@@ -248,10 +253,22 @@ def _initialize_tofu(workdir: Path, env: typ.Mapping[str, str]) -> Tofu:
 
 
 def _prepare_execution_environment(options: ExecutionOptions) -> dict[str, str]:
-    """Compose the base environment for tofu invocation."""
-    env_source = dict(os.environ)
+    """Compose the base environment for tofu invocation.
+
+    The process environment is overlaid with the owner's file-backed
+    credential fallbacks (environment variables win), and the shared
+    OpenTofu provider plugin cache is enabled unless the caller already
+    set one.
+    """
+    env_source = _credentials.credential_environment(
+        owner=options.github_owner or None,
+    )
     if options.environment is not None:
         env_source.update(options.environment)
+    if "TF_PLUGIN_CACHE_DIR" not in env_source:
+        plugin_cache = xdg.tofu_plugin_cache_dir()
+        plugin_cache.mkdir(parents=True, exist_ok=True)
+        env_source["TF_PLUGIN_CACHE_DIR"] = str(plugin_cache)
     persistence_backend.remove_blank_session_token(env_source)
     return env_source
 

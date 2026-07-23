@@ -78,6 +78,11 @@ class CmdMox:
         """Begin configuring expectations for the provided command."""
         return CmdMoxBuilder(self, command)
 
+    @property
+    def is_programmed(self) -> bool:
+        """Report whether any expectations have been queued."""
+        return bool(self._expectations)
+
     def enqueue(self, expectation: _Expectation) -> None:
         """Append a new expectation to the replay queue."""
         self._expectations.append(expectation)
@@ -93,7 +98,7 @@ class CmdMox:
         self,
         args: cabc.Iterable[str],
         **kwargs: object,
-    ) -> subprocess.CompletedProcess[list[str]]:
+    ) -> subprocess.CompletedProcess[str]:
         """Simulate subprocess.run while asserting the recorded calls."""
         if not self._expectations:
             raise UnexpectedCommandError(tuple(args))
@@ -118,7 +123,12 @@ class CmdMox:
                 output=expectation.stdout,
                 stderr=expectation.stderr,
             )
-        return subprocess.CompletedProcess(args_list, expectation.exit_code)
+        return subprocess.CompletedProcess(
+            args_list,
+            expectation.exit_code,
+            stdout=expectation.stdout,
+            stderr=expectation.stderr,
+        )
 
     def verify(self) -> None:
         """Ensure every expectation was consumed by the test."""
@@ -152,6 +162,23 @@ class CmdMoxBuilder:
             )
         )
         return self._harness
+
+
+@pytest.fixture(autouse=True)
+def _isolated_xdg_bases(
+    tmp_path_factory: pytest.TempPathFactory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Redirect the XDG base directories away from the real home.
+
+    Every test gets throwaway config/cache/state roots so nothing can read
+    or write the operator's actual ``~/.config/concordat`` (or cache/state)
+    by accident. Tests that need specific locations still override these.
+    """
+    base = tmp_path_factory.mktemp("xdg")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(base / "config"))
+    monkeypatch.setenv("XDG_CACHE_HOME", str(base / "cache"))
+    monkeypatch.setenv("XDG_STATE_HOME", str(base / "state"))
 
 
 @pytest.fixture

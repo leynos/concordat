@@ -66,3 +66,17 @@ artifacts:
       Ensures repositories opt into OpenTofu management via the
       `.concordat` enrolled flag.
     sha256: 5c10d9c58bfc0ed2b844fb554008f9b60b03001c891807031a781781f36715d7
+  - id: lint-rule-rust-makefile-baseline
+    type: opa-policy
+    path: platform-standards/canon/lint-rules/rust-makefile-baseline/policy/rust_makefile_baseline.rego
+    description: >
+      Sensor policy for the rust-makefile-baseline rule package: FP-003
+      canonical Make targets and QG-001 binding Whitaker lint gate.
+    sha256: 1ff07e79decb657776b7f7300fb30dcd1be38edbf3382b0c72f30ce71ea2c364
+  - id: lint-rule-rust-makefile-baseline-manifest
+    type: lint-config
+    path: platform-standards/canon/lint-rules/rust-makefile-baseline/rule.yaml
+    description: >
+      Rule package manifest (sensor wiring, parameters, defaults) for
+      rust-makefile-baseline.
+    sha256: 43ef998c78e3ee226735c42f64eec369bf1e68222a9cf72a360bccdb64b39157

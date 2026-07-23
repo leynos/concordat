@@ -1,0 +1,201 @@
+{
+  "schema_version": 1,
+  "kind": "policy-input/rust-makefile-baseline",
+  "repository": {
+    "path": ".",
+    "name": null
+  },
+  "applicability": {
+    "root_cargo_toml": true,
+    "root_makefile": true
+  },
+  "cargo": {
+    "parsed": {
+      "package": {
+        "name": "fixture",
+        "version": "0.1.0"
+      }
+    }
+  },
+  "makefile": {
+    "schema_version": 1,
+    "tool": {
+      "name": "makeutil",
+      "version": "0.1.0",
+      "parser": "makefile-lossless",
+      "parser_version": "0.3.40"
+    },
+    "source": {
+      "path": "with-include.mk",
+      "sha256": "04453ab5a0ddbd2585ae489833a54f466811938130d9e92635de0b59d5901e32",
+      "byte_length": 148
+    },
+    "parse": {
+      "status": "complete",
+      "diagnostics": []
+    },
+    "rules": [
+      {
+        "ordinal": 2,
+        "targets": [
+          ".PHONY"
+        ],
+        "prerequisites": [
+          "build",
+          "test",
+          "lint"
+        ],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [],
+        "location": {
+          "start_byte": 37,
+          "end_byte": 62,
+          "start_line": 5,
+          "start_column": 1,
+          "end_line": 7,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 3,
+        "targets": [
+          "build"
+        ],
+        "prerequisites": [],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "cargo build --all-targets",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 69,
+              "end_byte": 96,
+              "start_line": 8,
+              "start_column": 1,
+              "end_line": 9,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 62,
+          "end_byte": 97,
+          "start_line": 7,
+          "start_column": 1,
+          "end_line": 10,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 4,
+        "targets": [
+          "test"
+        ],
+        "prerequisites": [],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "cargo nextest run",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 103,
+              "end_byte": 122,
+              "start_line": 11,
+              "start_column": 1,
+              "end_line": 12,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 97,
+          "end_byte": 123,
+          "start_line": 10,
+          "start_column": 1,
+          "end_line": 13,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 5,
+        "targets": [
+          "lint"
+        ],
+        "prerequisites": [],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "$(WHITAKER) --all",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 129,
+              "end_byte": 148,
+              "start_line": 14,
+              "start_column": 1,
+              "end_line": 15,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 123,
+          "end_byte": 148,
+          "start_line": 13,
+          "start_column": 1,
+          "end_line": 15,
+          "end_column": 1
+        }
+      }
+    ],
+    "variables": [
+      {
+        "ordinal": 0,
+        "name": "WHITAKER",
+        "operator": ":=",
+        "raw_value": "whitaker",
+        "exported": false,
+        "overridden": false,
+        "define_block": false,
+        "conditions": [],
+        "location": {
+          "start_byte": 0,
+          "end_byte": 21,
+          "start_line": 1,
+          "start_column": 1,
+          "end_line": 2,
+          "end_column": 1
+        }
+      }
+    ],
+    "includes": [
+      {
+        "ordinal": 1,
+        "raw_path": "ci.mk",
+        "optional": false,
+        "dynamic": false,
+        "conditions": [],
+        "location": {
+          "start_byte": 22,
+          "end_byte": 36,
+          "start_line": 3,
+          "start_column": 1,
+          "end_line": 4,
+          "end_column": 1
+        }
+      }
+    ]
+  }
+}

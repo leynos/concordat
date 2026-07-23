@@ -115,6 +115,9 @@ typing = "typ"
 asyncio_default_fixture_loop_scope = "function"
 # Tests automatically killed after seconds elapsed
 timeout = 30
+# Put the repository root on sys.path so `scripts/tests` can import the
+# `scripts` package without a conftest-time sys.path mutation.
+pythonpath = ["."]
 testpaths = ["scripts/tests", "tests"]
 markers = [
     "integration: marks tests that rely on act or external tooling",
@@ -125,5 +128,14 @@ package = true
 
 
 [build-system]
-requires = ["setuptools>=83.0.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["concordat"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"platform-standards/canon/lint-rules" = "concordat/canon/lint-rules"
+
+[tool.hatch.build.targets.sdist]
+include = ["concordat", "platform-standards", "scripts", "tests"]

@@ -114,14 +114,51 @@ workflows read the same flag before applying changes.
   uv run concordat ls --token "$GITHUB_TOKEN" my-org
   ```
 
+## Configuration, credentials, cache, and state locations
+
+Everything concordat persists lives under the XDG base directories. A single
+global headline file names the active GitHub owner; everything else — per-owner
+configuration, credentials, caches, and state — is namespaced beneath that
+owner:
+
+- `$XDG_CONFIG_HOME/concordat/config.yaml` — the **headline** config, global
+  rather than owner-namespaced; its `github_owner` key names the active owner.
+  Manage it with `concordat owner use <owner>` and inspect it with
+  `concordat owner show`.
+- `$XDG_CONFIG_HOME/concordat/owners/<owner>/config.yaml` — that owner's
+  estates and active estate.
+- `$XDG_CONFIG_HOME/concordat/owners/<owner>/credentials.yaml` — optional
+  credential fallbacks, mapping credential environment-variable names
+  (`GITHUB_TOKEN`, `SCW_ACCESS_KEY`, `SCW_SECRET_KEY`, `AWS_*`, `SPACES_*`) to
+  values. Environment variables always win. The file must be `chmod 600`:
+  concordat refuses to read one carrying any group or world permission bit.
+  Concordat never writes this file.
+- `$XDG_CACHE_HOME/concordat/owners/<owner>/estates/<alias>` — estate
+  repository caches.
+- `$XDG_CACHE_HOME/concordat/tofu/plugin-cache` — the shared OpenTofu
+  provider plugin cache (exported as `TF_PLUGIN_CACHE_DIR` unless already set).
+- `$XDG_STATE_HOME/concordat/owners/<owner>/runs/` — throwaway OpenTofu
+  working trees; removed after each run unless `--keep-workdir` is given.
+
+Remote OpenTofu state stored in the configured S3 backend (for example Scaleway
+Object Storage) is unaffected by this layout.
+
+**Migration from the legacy flat format.** Older releases wrote estates
+directly into `$XDG_CONFIG_HOME/concordat/config.yaml` — the same path the
+headline config now occupies. A file found there carrying an `estate` section
+is therefore a legacy configuration: its estates are moved into
+`owners/<owner>/config.yaml` automatically the first time the owner can be
+derived from those records, and the headline file is rewritten with only its
+`github_owner` key and any other non-estate settings.
+
 ## Managing estates
 
 Concordat tracks platform-standards repositories, referred to as *estates*, in
-`$XDG_CONFIG_HOME/concordat/config.yaml` (`~/.config/concordat/config.yaml` on
-most systems). Each estate entry records an alias, the managed `github_owner`,
-the Git URL for the platform-standards repository, the OpenTofu inventory path,
-and the default branch. The CLI uses the **active estate** to determine where
-enrolment PRs should be opened.
+the active owner's configuration file (see the locations section above). Each
+estate entry records an alias, the managed `github_owner`, the Git URL for the
+platform-standards repository, the OpenTofu inventory path, and the default
+branch. The CLI uses the **active estate** to determine where enrolment PRs
+should be opened.
 
 - Bootstrap a new estate from the bundled template:
 
@@ -164,8 +201,8 @@ enrolment PRs should be opened.
 
 ## Syncing canonical platform-standards artefacts
 
-Concordat ships a `platform-standards/` template tree. The canonical files
-under `platform-standards/canon/` are tracked in
+Concordat ships a `platform-standards/` template tree. The canonical files under
+`platform-standards/canon/` are tracked in
 `platform-standards/canon/manifest.yaml` by a stable `id`, a `path`, and a
 sha256 digest (a content-derived version).
 
@@ -199,6 +236,54 @@ checkout against the template and optionally copy missing/outdated artefacts.
   uv run python -m scripts.canon_artifacts tui path/to/platform-standards
   ```
 
+## Auditing a checkout against a lint rule package
+
+`concordat artefact rule run` evaluates one canon lint rule package against a
+local checkout and reports structured findings. The first package,
+`rust-makefile-baseline`, audits a Rust repository's root `Makefile` for the
+canonical `build`, `test`, and `lint` targets (FP-003) and for a binding
+Whitaker lint gate (QG-001):
+
+```shell
+concordat artefact rule run rust-makefile-baseline --repo /path/to/checkout
+```
+
+Options:
+
+- `--repo PATH` — the checkout to audit (defaults to the current
+  directory).
+- `--format {table,json}` — output format (defaults to `table`).
+
+Verdicts are three-valued. `compliant` means the finding set is empty;
+`noncompliant` means the policy proved a violation; `indeterminate` means the
+policy could not prove compliance and fails closed (for example, the `Makefile`
+includes other files, or the parse had to recover from syntax errors).
+
+Exit codes: `0` compliant; `1` at least one finding, including indeterminate
+verdicts; `2` operational failure (for example, the pinned `makeutil` or
+`conftest` executable is missing), reported on standard error.
+
+The command requires two external tools on `PATH`: `conftest` and the pinned
+`makeutil` (see
+`platform-standards/canon/lint-rules/rust-makefile-baseline/README.md` for the
+pin and regeneration workflow).
+
+### Sweeping the Rust estate
+
+`scripts/parabellum_sweep.py` audits every repository listed in
+`docs/parabellum/estate.yaml` and appends one record per repository to the
+append-only campaign ledger `docs/parabellum/ledger.jsonl`:
+
+```shell
+uv run python -m scripts.parabellum_sweep [--only a,b] [--limit N] [--force]
+uv run python -m scripts.parabellum_sweep report
+```
+
+A repository already ledgered at its current head commit is skipped unless
+`--force` is given, so an interrupted sweep resumes by re-running the same
+command. The `report` subcommand regenerates
+`docs/parabellum/baseline-report.md` from the ledger.
+
 ## Previewing and applying estate changes
 
 Use the `plan` and `apply` commands to run OpenTofu against the active estate
@@ -213,22 +298,22 @@ without leaving the CLI. Both commands require `GITHUB_TOKEN` and the estate's
   ```
 
   The CLI refreshes the cached estate under
-  `$XDG_CACHE_HOME/concordat/estates/<alias>`, clones it into a temporary
-  directory, writes `terraform.tfvars` with the recorded owner, runs
-  `tofu init -input=false`, and then `tofu plan`. Paths are echoed, so the
-  workspace can be inspected; pass `--keep-workdir` to skip the cleanup step.
-  Concordat preserves OpenTofu's standard CLI plan output (including the
-  per-resource diff), so operators do not need to re-run `tofu plan` manually
-  just to see what would change.
+  `$XDG_CACHE_HOME/concordat/owners/<owner>/estates/<alias>`, clones it into a
+  run directory under `$XDG_STATE_HOME/concordat/owners/<owner>/runs/`, writes
+  `terraform.tfvars` with the recorded owner, runs `tofu init -input=false`,
+  and then `tofu plan`. Paths are echoed, so the workspace can be inspected;
+  pass `--keep-workdir` to skip the cleanup step. Concordat preserves
+  OpenTofu's standard CLI plan output (including the per-resource diff), so
+  operators do not need to re-run `tofu plan` manually just to see what would
+  change.
 
   When `backend/persistence.yaml` exists with `enabled: true`, the CLI adds
-  `-backend-config=<path>` to `tofu init`, maps
-  `SCW_ACCESS_KEY`/`SCW_SECRET_KEY` onto
-  `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` when needed, and fails fast if
-  neither pair is present. Standard error (stderr) logs echo the backend
-  bucket, key, region, and config path—never credentials—for traceability. If
-  the manifest is absent or `enabled: false`, `plan` and `apply` keep using the
-  local state layout.
+  `-backend-config=<path>` to `tofu init`, maps `SCW_ACCESS_KEY`/
+  `SCW_SECRET_KEY` onto `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` when
+  needed, and fails fast if neither pair is present. Standard error (stderr)
+  logs echo the backend bucket, key, region, and config path—never
+  credentials—for traceability. If the manifest is absent or `enabled: false`,
+  `plan` and `apply` keep using the local state layout.
 
 - Reconcile the estate with `concordat apply`. The command requires an explicit
   `--auto-approve` to match OpenTofu's automation guard.
@@ -451,9 +536,10 @@ with the following measures:
 
 ### Estate configuration file
 
-Concordat stores estate metadata in `$XDG_CONFIG_HOME/concordat/config.yaml`
-(`~/.config/concordat/config.yaml` when the environment variable is unset). The
-file is regular YAML 1.2 with an `estate` section:
+Concordat stores estate metadata in
+`$XDG_CONFIG_HOME/concordat/owners/<owner>/config.yaml`, where `<owner>` is the
+active GitHub owner from the headline configuration. The file is regular YAML
+1.2 with an `estate` section:
 
 ```yaml
 estate:
