@@ -40,6 +40,12 @@ MINIMAL_REPORT: typ.Final = {
     "includes": [],
 }
 
+
+def _report_with(**overrides: object) -> dict[str, object]:
+    """Return an isolated minimal makeutil report with selected overrides."""
+    return dict(MINIMAL_REPORT, **overrides)
+
+
 CARGO_STUB = '[package]\nname = "fixture"\nversion = "0.1.0"\n'
 
 
@@ -102,34 +108,6 @@ class TestInspectMakefile:
         assert error.tool == "makeutil", error.tool
         assert error.resource == tmp_path / "Makefile", error.resource
 
-    def test_fatal_exit_raises_operational_error(
-        self,
-        tmp_path: pathlib.Path,
-        cmd_mox: CmdMox,
-    ) -> None:
-        """Fatal exit raises operational error."""
-        _write_checkout(tmp_path, cargo=False, makefile=True)
-        cmd_mox.mock("makeutil").returns(
-            exit_code=2,
-            stderr="makeutil: source-utf8: invalid",
-        )
-        cmd_mox.replay()
-        with pytest.raises(OperationalRuleError, match="source-utf8"):
-            inspect_makefile(tmp_path / "Makefile")
-
-    def test_unknown_schema_version_raises(
-        self,
-        tmp_path: pathlib.Path,
-        cmd_mox: CmdMox,
-    ) -> None:
-        """Unknown schema version raises."""
-        _write_checkout(tmp_path, cargo=False, makefile=True)
-        report = dict(MINIMAL_REPORT, schema_version=99)
-        cmd_mox.mock("makeutil").returns(stdout=json.dumps(report))
-        cmd_mox.replay()
-        with pytest.raises(OperationalRuleError, match="schema"):
-            inspect_makefile(tmp_path / "Makefile")
-
     def test_timeout_raises_operational_error(
         self,
         tmp_path: pathlib.Path,
@@ -145,102 +123,96 @@ class TestInspectMakefile:
         with pytest.raises(OperationalRuleError, match="timed out"):
             inspect_makefile(tmp_path / "Makefile")
 
-    def test_invalid_json_raises(
+    @pytest.mark.parametrize(
+        ("exit_code", "stdout", "stderr", "message"),
+        [
+            pytest.param(
+                2,
+                "",
+                "makeutil: source-utf8: invalid",
+                "source-utf8",
+                id="fatal-exit",
+            ),
+            pytest.param(
+                0,
+                lambda: _report_with(schema_version=99),
+                "",
+                "schema",
+                id="unsupported-schema",
+            ),
+            pytest.param(0, "not json at all", "", "invalid JSON", id="invalid-json"),
+            pytest.param(
+                0,
+                json.dumps([1, 2, 3]),
+                "",
+                "not a JSON object",
+                id="non-object-json",
+            ),
+            pytest.param(
+                0,
+                lambda: _report_with(parse="complete"),
+                "",
+                "no `parse` object",
+                id="non-object-parse",
+            ),
+            pytest.param(
+                0,
+                lambda: _report_with(parse={"status": "bogus", "diagnostics": []}),
+                "",
+                "unknown parse status",
+                id="unknown-status",
+            ),
+            pytest.param(
+                1,
+                lambda: _report_with(parse={"status": "complete", "diagnostics": []}),
+                "",
+                "disagrees with its exit code",
+                id="exit-status-disagreement",
+            ),
+            pytest.param(
+                0,
+                lambda: _report_with(source="Makefile"),
+                "",
+                "malformed `source`",
+                id="malformed-source",
+            ),
+            pytest.param(
+                0,
+                lambda: _report_with(rules={"not": "a list"}),
+                "",
+                "malformed `rules`",
+                id="malformed-rules",
+            ),
+        ],
+    )
+    def test_rejects_invalid_makeutil_output(
         self,
         tmp_path: pathlib.Path,
         cmd_mox: CmdMox,
+        exit_code: int,
+        stdout: str | typ.Callable[[], dict[str, object]],
+        stderr: str,
+        message: str,
     ) -> None:
-        """Non-JSON stdout raises before the report is inspected."""
+        """Invalid makeutil output raises a parse-makefile operational error.
+
+        Each case receives an isolated report mapping (callables are resolved
+        per invocation), so no parametrization mutates ``MINIMAL_REPORT``.
+        """
         _write_checkout(tmp_path, cargo=False, makefile=True)
-        cmd_mox.mock("makeutil").returns(stdout="not json at all")
+        stdout_text = stdout if isinstance(stdout, str) else json.dumps(stdout())
+        cmd_mox.mock("makeutil").returns(
+            exit_code=exit_code,
+            stdout=stdout_text,
+            stderr=stderr,
+        )
         cmd_mox.replay()
-        with pytest.raises(OperationalRuleError, match="invalid JSON") as exc_info:
+        with pytest.raises(OperationalRuleError, match=message) as exc_info:
             inspect_makefile(tmp_path / "Makefile")
         error = exc_info.value
         assert error.operation == "parse-makefile", error.operation
         assert error.tool == "makeutil", error.tool
         assert error.resource == tmp_path / "Makefile", error.resource
-
-    def test_non_object_json_raises(
-        self,
-        tmp_path: pathlib.Path,
-        cmd_mox: CmdMox,
-    ) -> None:
-        """Valid JSON that is not an object raises."""
-        _write_checkout(tmp_path, cargo=False, makefile=True)
-        cmd_mox.mock("makeutil").returns(stdout=json.dumps([1, 2, 3]))
-        cmd_mox.replay()
-        with pytest.raises(OperationalRuleError, match="not a JSON object"):
-            inspect_makefile(tmp_path / "Makefile")
-
-    def test_missing_parse_object_raises(
-        self,
-        tmp_path: pathlib.Path,
-        cmd_mox: CmdMox,
-    ) -> None:
-        """A report whose `parse` is not an object raises."""
-        _write_checkout(tmp_path, cargo=False, makefile=True)
-        report = dict(MINIMAL_REPORT, parse="complete")
-        cmd_mox.mock("makeutil").returns(stdout=json.dumps(report))
-        cmd_mox.replay()
-        with pytest.raises(OperationalRuleError, match="no `parse` object"):
-            inspect_makefile(tmp_path / "Makefile")
-
-    def test_unknown_parse_status_raises(
-        self,
-        tmp_path: pathlib.Path,
-        cmd_mox: CmdMox,
-    ) -> None:
-        """An unrecognised parse status raises."""
-        _write_checkout(tmp_path, cargo=False, makefile=True)
-        report = dict(MINIMAL_REPORT, parse={"status": "bogus", "diagnostics": []})
-        cmd_mox.mock("makeutil").returns(stdout=json.dumps(report))
-        cmd_mox.replay()
-        with pytest.raises(OperationalRuleError, match="unknown parse status"):
-            inspect_makefile(tmp_path / "Makefile")
-
-    def test_exit_code_status_disagreement_raises(
-        self,
-        tmp_path: pathlib.Path,
-        cmd_mox: CmdMox,
-    ) -> None:
-        """A status that contradicts the exit code raises."""
-        _write_checkout(tmp_path, cargo=False, makefile=True)
-        # Exit 1 promises a recovered parse, but the report claims complete.
-        report = dict(MINIMAL_REPORT, parse={"status": "complete", "diagnostics": []})
-        cmd_mox.mock("makeutil").returns(exit_code=1, stdout=json.dumps(report))
-        cmd_mox.replay()
-        with pytest.raises(OperationalRuleError, match="disagrees with its exit code"):
-            inspect_makefile(tmp_path / "Makefile")
-
-    def test_malformed_source_object_raises(
-        self,
-        tmp_path: pathlib.Path,
-        cmd_mox: CmdMox,
-    ) -> None:
-        """A `source` that is not an object is rejected as nested malformed data."""
-        _write_checkout(tmp_path, cargo=False, makefile=True)
-        report = dict(MINIMAL_REPORT, source="Makefile")
-        cmd_mox.mock("makeutil").returns(stdout=json.dumps(report))
-        cmd_mox.replay()
-        with pytest.raises(
-            OperationalRuleError, match="malformed `source`"
-        ) as exc_info:
-            inspect_makefile(tmp_path / "Makefile")
-        assert exc_info.value.operation == "parse-makefile", exc_info.value.operation
-
-    def test_malformed_rules_array_raises(
-        self,
-        tmp_path: pathlib.Path,
-        cmd_mox: CmdMox,
-    ) -> None:
-        """A `rules` field that is not a list is rejected before narrowing."""
-        _write_checkout(tmp_path, cargo=False, makefile=True)
-        report = dict(MINIMAL_REPORT, rules={"not": "a list"})
-        cmd_mox.mock("makeutil").returns(stdout=json.dumps(report))
-        cmd_mox.replay()
-        with pytest.raises(OperationalRuleError, match="malformed `rules`"):
-            inspect_makefile(tmp_path / "Makefile")
 
 
 class TestBuildEnvelope:
