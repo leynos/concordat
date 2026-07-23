@@ -6,7 +6,10 @@ schema = 1
 stems = []
 
 [words]
-accepted = ["Hashi"] # HashiCorp product-name prefix.
+accepted = [
+    "Hashi", # HashiCorp product-name prefix.
+    "mold",  # The mold linker tool name, not the en-GB spelling of "mould".
+]
 
 [words.corrections]
 

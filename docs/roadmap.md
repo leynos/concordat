@@ -28,14 +28,13 @@ automation assets.
 - [x] Extend `concordat enrol` so that, in addition to writing `.concordat`, it
   opens a pull request in `platform-standards` adding the repository to the
   OpenTofu inventory. Acceptance: enrolling a repository produces both the
-  `.concordat` commit (optional push) and a passing IaC PR that runs
-  `tofu fmt`, `tflint`, and `tofu validate`.
+  `.concordat` commit (optional push) and a passing IaC PR that runs `tofu fmt`,
+  `tflint`, and `tofu validate`.
 - [x] Teach estates about the GitHub namespace they govern by persisting
   `github_owner` in the concordat config file and rejecting enrolments that
-  target other owners. Acceptance: `concordat estate init` records the owner
-  and `concordat enrol` refuses to add repositories whose slug does not begin
-  with it; invoking `concordat ls` without namespaces defaults to the recorded
-  owner.
+  target other owners. Acceptance: `concordat estate init` records the owner and
+  `concordat enrol` refuses to add repositories whose slug does not begin with
+  it; invoking `concordat ls` without namespaces defaults to the recorded owner.
 
 ### 1.2. Introduce canonical artefact management
 
@@ -257,3 +256,157 @@ Scale Concordat with self-service and targeted automation.
   retire redundant checks and capture new governance requirements. Acceptance:
   each quarter concludes with an action list approved by the platform steering
   group.
+
+### 4.2. Enforce quality-gate integrity
+
+Deliver the Quality-Gate Integrity audit domain (design document Section
+3.1.1): sensors that detect quality gates which cannot fail or never run, and
+actuators that remediate them. Each check ships as a lint rule package under
+`canon/lint-rules/` per the Section 2.1.2 format.
+
+- [ ] Add the `github-api` sensor and actuator types to the lint rule package
+  contract (Section 2.1.2) before shipping any API-backed check, including the
+  observability requirements of Section 3.2.2. The `conftest` sensor over a
+  static input tree cannot express checks that read live repository state, and
+  deterministic-edit mutations cannot post comments or open issues. Acceptance:
+  `concordat artefact rule validate` accepts a package declaring
+  `sensor.type: github-api` and `github-api` actuators (`comment`, `issue`);
+  `rule run` executes an authenticated query against a recorded fixture and
+  `rule mutate` performs the side effect against a mocked API; each emits a
+  structured log line carrying the check ID, operation, and entity IDs, and the
+  sweep publishes bounded per-check metrics and fires an alert on error or
+  incompletion. The package declares least-privilege token scopes; API calls
+  carry a request timeout and retry transient failures with exponential
+  backoff; the token and any secret value are never persisted or logged; and
+  each actuator is idempotent via a stable deduplication key with
+  check-before-create, so a second `rule mutate` (or repeated sweep) against
+  the mocked API produces no duplicate comment, issue, or annotation. This item
+  is a prerequisite for CV-003, AM-001, AM-002, DP-001, and DP-002.
+- [ ] Ship the lint-gate binding rule packages (QG-001 to QG-003): Makefile
+  sensors for soft-skipped or environment-overridable lint targets, workflow
+  sensors for the hardened pinned-release install step (version-keyed cache,
+  shell-variable indirection, `--locked`, binstall-or-build fallback, Cranelift
+  preservation), and a rolling-release detector with a suite-ref-pin mutation.
+  Acceptance: fixtures reproducing the Whitaker rollout defects (soft-skip
+  Makefile, `WHITAKER=true` no-op, git-rev install with stale cache key) each
+  raise the intended finding, and the mutations produce the canonical forms.
+- [ ] Ship the test-runner completeness rule package (QG-004): sensors for
+  nextest-only suites lacking a doctest target, unlocked test-tool installs,
+  and missing `TEST_CMD` fallback; mutations patch the Makefile with
+  `TEST_CMD`, a `test-doc` target, and aggregate wiring. Acceptance: a fixture
+  whose doctests are never executed is detected, and the mutated Makefile runs
+  doctests under `make test`.
+- [ ] Ship the coverage-pipeline rule packages (CV-001, CV-002, CV-004):
+  pull-request jobs must gate via `cs-coverage check` with `fetch-depth: 0`, a
+  `project-url`, and `*.info` LCOV naming; a main-only push workflow must
+  upload; exactly one ratcheting invocation per job with the baseline written
+  on main. Acceptance: fixtures for upload-from-PR, missing main workflow,
+  summary-only pins, and PR-scoped baselines each raise findings; mutations
+  emit the canonical coverage-main workflow and job patches.
+- [ ] Implement the dual-store secret sensor (CV-003) in the Auditor:
+  enumerate secret names in the Actions and Dependabot stores via the GitHub
+  API and cross-reference every `if: env.X != ''` workflow guard. Acceptance: a
+  repository whose guard secret exists in only one store is reported with the
+  absent store named; `concordat` gains a provisioning command that sets an
+  operator-supplied token in both stores. The provisioning command sources the
+  token from a secret store and never persists or logs it — the acceptance test
+  asserts the token appears in no log line, process argument, or temporary file.
+- [ ] Implement the automerge-jam and workflow-health sensors (AM-001,
+  AM-002) as scheduled Auditor sweeps: Dependabot pull requests `BLOCKED`
+  specifically by a stale or timed-out required status check (with all other
+  merge requirements satisfied), and workflows whose recent runs uniformly
+  conclude `startup_failure`. Acceptance: the AM-001 sensor classifies the
+  block cause and comments `@dependabot rebase` only on stale-check jams,
+  leaving a fixture blocked by a missing approval untouched; the AM-002
+  actuator opens a tracking issue; and a second sweep over the same fixture
+  posts no duplicate `@dependabot rebase` comment and opens no duplicate
+  tracking issue (check-before-create keyed on the pull request and the
+  workflow).
+- [ ] Implement the dependency-pin actionability sensors (DP-001, DP-002):
+  cross-reference open Dependabot alerts' first patched versions against
+  manifest requirements, and detect git-revision pins lacking a
+  `TODO(<issue-url>)` resolving to an open issue. Acceptance: a fixture
+  manifest pinning below a patched version raises DP-001 with the blocked alert
+  numbers; the DP-002 actuator inserts the `TODO` via the comment-preserving
+  TOML remediation provider and raises the tracking issue; and re-running the
+  actuators is idempotent — no duplicate migration issue, tracking issue, or
+  `TODO` annotation is created when an equivalent one keyed on the alert or
+  git-revision dependency already exists.
+- [ ] Ship the Dependabot governance rule packages (DB-001 to DB-004):
+  manifest-scan sensor diffing package roots against `dependabot.yml` entries,
+  cooldown policy checks (tiered for semver ecosystems, `default-days` for
+  non-semver), pinned shared auto-merge workflow verification, and detection of
+  lockfile-wide audit steps gating Dependabot pull requests paired with a
+  scheduled-audit presence check. Acceptance: fixtures reproducing the estate
+  defects (uncovered workspace member, deadlocking audit gate) raise findings,
+  and mutations patch `dependabot.yml` and deploy the canonical workflows.
+- [ ] Ship the mutation-testing rule package (MT-001): sensors for the
+  scheduled workflow calling the pinned shared mutation-testing workflow
+  without being merge-blocking; the mutation deploys the canonical workflow.
+  Acceptance: a repository without mutation testing raises the finding and the
+  deployed workflow passes `act` validation.
+
+### 4.3. Enforce licensing integrity and toolchain baselines
+
+Deliver the Licensing Integrity and Toolchain Baseline audit domains (design
+document Sections 3.1.2 and 3.1.3): licence presence, currency, and
+declared-licence consistency for every repository, and language toolchain
+floors pinned to the `leynos/agent-template-python` and
+`leynos/agent-template-rust` templates. Each check ships as a lint rule package
+under `canon/lint-rules/` per the Section 2.1.2 format.
+
+- [ ] Ship the licensing rule packages (LC-001 to LC-003): root `LICENSE`
+  presence, copyright year matched against the latest commit's committer year,
+  and SPDX identity of each `LICENSE` cross-referenced against manifest and
+  README declarations under the nearest-ancestor rule. Acceptance: fixtures for
+  a missing `LICENSE`, a stale year range, and a manifest declaring a different
+  licence from its governing `LICENSE` each raise the intended finding; the
+  LC-002 mutation extends the year range, and LC-001 degrades to a tracking
+  issue when no manifest names a licence. The LC-002 year comparator and the
+  LC-003 nearest-ancestor resolver carry Hypothesis property tests for the
+  invariants in Section 3.1.4 (totality and monotonicity of resolution, LC-002
+  mutation idempotence), with mutmut confirming the properties bite.
+- [ ] Build the Python applicability sensor and vendor the
+  `agent-template-python` baseline: enumerate `*.py` files, `pyproject.toml`
+  manifests, Python-invoking workflow steps, and Ansible plugin directories;
+  extract the template's ruff and pylint baselines at a pinned tag into
+  rule-package data. Acceptance: fixtures modelling incidental Python (a Rust
+  repository with helper scripts, a Python-implemented GitHub Action, an
+  Ansible collection) are all detected as in scope, and the vendored baseline
+  regenerates deterministically from the pinned tag.
+- [ ] Ship the Python formatting and linting rule packages (PY-001 to
+  PY-005): ruff format and check wiring bound into the format and lint gates,
+  pylint present via `pylint-pypy-shim`, and both configurations matching or
+  exceeding the vendored template baseline. Acceptance: fixtures with a missing
+  format target, a soft-skipped lint step, a disabled template rule, and an
+  over-broad ignore list each raise findings; mutations patch the configuration
+  without disturbing comments.
+- [ ] Ship the Python documentation, version-floor, and tooling rule packages
+  (PY-006 to PY-010): interrogate at `fail-under = 100`, a `requires-python`
+  floor of at least 3.12, version declarations reconciled against that floor
+  (scalar declarations equal the floor; matrices keep their minimum at the
+  floor with no lower entry), and pytest-xdist and ty wiring with the exemption
+  path honoured. Acceptance: a fixture declaring 3.11 in CI against a 3.12
+  manifest floor raises PY-008 naming the divergent file, while a fixture whose
+  CI matrix tests 3.12 and 3.13 against a 3.12 floor raises nothing; an
+  exempted fixture downgrades PY-009 to `note`. The PY-008
+  version-reconciliation comparator carries Hypothesis property tests for the
+  floor and matrix invariants of Section 3.1.4 (including the metamorphic
+  relations: a version above the floor never becomes a finding, a version below
+  it always does).
+- [ ] Ship the Rust formatting and linting rule packages (RT-001 to RT-005):
+  rustfmt wiring and template-matched configuration, clippy presence with
+  `[lints]` entries at the template level or stricter, and Whitaker presence
+  delegating gate bindingness to `rust-makefile-baseline`. Acceptance: fixtures
+  with drifted `rustfmt.toml` keys and a downgraded `[lints]` entry each raise
+  findings; mutations restore the canonical values comment-preservingly.
+- [ ] Ship the Rust toolchain and acceleration rule packages (RT-006 to
+  RT-011): nightly pins no older than one year, required toolchain components,
+  mold and Cranelift development configuration, Polonius-next for
+  application-only repositories, and nextest via the canonical `TEST_CMD`
+  fallback. Acceptance: fixtures for a stale nightly, a missing `rust-analyzer`
+  component, and a binary-only crate without Polonius-next each raise findings;
+  RT-006 opens a tracking issue rather than patching the pin, and the RT-011
+  mutation reuses the QG-004 Makefile patch. The RT-006 nightly-age comparator
+  carries a Hypothesis property test asserting the one-year boundary of Section
+  3.1.4.
