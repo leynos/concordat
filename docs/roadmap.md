@@ -275,8 +275,13 @@ actuators that remediate them. Each check ships as a lint rule package under
   `rule mutate` performs the side effect against a mocked API; each emits a
   structured log line carrying the check ID, operation, and entity IDs, and the
   sweep publishes bounded per-check metrics and fires an alert on error or
-  incompletion. This item is a prerequisite for CV-003, AM-001, AM-002, DP-001,
-  and DP-002.
+  incompletion. The package declares least-privilege token scopes; API calls
+  carry a request timeout and retry transient failures with exponential
+  backoff; the token and any secret value are never persisted or logged; and
+  each actuator is idempotent via a stable deduplication key with
+  check-before-create, so a second `rule mutate` (or repeated sweep) against
+  the mocked API produces no duplicate comment, issue, or annotation. This item
+  is a prerequisite for CV-003, AM-001, AM-002, DP-001, and DP-002.
 - [ ] Ship the lint-gate binding rule packages (QG-001 to QG-003): Makefile
   sensors for soft-skipped or environment-overridable lint targets, workflow
   sensors for the hardened pinned-release install step (version-keyed cache,
@@ -303,7 +308,9 @@ actuators that remediate them. Each check ships as a lint rule package under
   API and cross-reference every `if: env.X != ''` workflow guard. Acceptance: a
   repository whose guard secret exists in only one store is reported with the
   absent store named; `concordat` gains a provisioning command that sets an
-  operator-supplied token in both stores.
+  operator-supplied token in both stores. The provisioning command sources the
+  token from a secret store and never persists or logs it — the acceptance test
+  asserts the token appears in no log line, process argument, or temporary file.
 - [ ] Implement the automerge-jam and workflow-health sensors (AM-001,
   AM-002) as scheduled Auditor sweeps: Dependabot pull requests `BLOCKED`
   specifically by a stale or timed-out required status check (with all other
@@ -311,14 +318,20 @@ actuators that remediate them. Each check ships as a lint rule package under
   conclude `startup_failure`. Acceptance: the AM-001 sensor classifies the
   block cause and comments `@dependabot rebase` only on stale-check jams,
   leaving a fixture blocked by a missing approval untouched; the AM-002
-  actuator opens a tracking issue; both actuators are idempotent.
+  actuator opens a tracking issue; and a second sweep over the same fixture
+  posts no duplicate `@dependabot rebase` comment and opens no duplicate
+  tracking issue (check-before-create keyed on the pull request and the
+  workflow).
 - [ ] Implement the dependency-pin actionability sensors (DP-001, DP-002):
   cross-reference open Dependabot alerts' first patched versions against
   manifest requirements, and detect git-revision pins lacking a
   `TODO(<issue-url>)` resolving to an open issue. Acceptance: a fixture
   manifest pinning below a patched version raises DP-001 with the blocked alert
   numbers; the DP-002 actuator inserts the `TODO` via the comment-preserving
-  TOML remediation provider and raises the tracking issue.
+  TOML remediation provider and raises the tracking issue; and re-running the
+  actuators is idempotent — no duplicate migration issue, tracking issue, or
+  `TODO` annotation is created when an equivalent one keyed on the alert or
+  git-revision dependency already exists.
 - [ ] Ship the Dependabot governance rule packages (DB-001 to DB-004):
   manifest-scan sensor diffing package roots against `dependabot.yml` entries,
   cooldown policy checks (tiered for semver ecosystems, `default-days` for

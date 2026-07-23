@@ -137,8 +137,9 @@ Two reusable modules extend `platform-standards/tofu`:
    `tofu apply` performs upserts for missing options.
 
 Both modules execute in the standard OpenTofu runner and respect the apply
-workflow already defined in the design: nightly plans surface drift; a manual
-`workflow_dispatch` runs `tofu apply` after review.
+workflow already defined in the design: nightly plans surface drift via a
+read-only `tofu plan -detailed-exitcode` run (a non-zero exit status flags
+drift); a manual `workflow_dispatch` runs `tofu apply` after review.
 
 ### 2.4 Sync workflow between labels and Projects
 
@@ -887,6 +888,21 @@ so that `rule run` and `rule mutate` have a defined execution path for the
 API-backed checks. Their delivery is sequenced ahead of those check packages in
 the roadmap (Section 4.2).
 
+Every `github-api` sensor and actuator must satisfy an operational contract:
+
+- runs with least-privilege GitHub token scopes (per the permissions model,
+  Section 8.1);
+- sources its token from a secret store, never from a command-line argument or
+  an environment dump, and never persists or logs the token or any secret value
+  (redaction per Section 3.2.2);
+- sets a request timeout on every API call and retries transient failures with
+  exponential backoff (Section 8.2);
+- defines a stable deduplication key (derived from the target entity and the
+  action — for example the pull-request head plus the comment intent, or the
+  alert number plus the issue kind) and performs a check-before-create against
+  that key, so a repeated sweep never posts a duplicate comment, opens a
+  duplicate issue, or inserts a duplicate annotation.
+
 To support this, each lint rule should be packaged as a directory:
 
 - `platform-standards/canon/lint-rules/<rule-id>/`
@@ -1541,7 +1557,10 @@ Dependabot runs read different stores).
   patches, and a `concordat`-driven secret provisioning command that sets an
   operator-supplied token in both stores; where the token is not available to
   automation, the actuator degrades to opening a tracking issue naming the
-  absent store.
+  absent store. The provisioning command sources the operator-supplied token
+  from a secret store and never persists or logs it (per the Section 2.1.2
+  contract), and the tracking-issue fallback is deduplicated on the absent
+  store so a re-run opens no duplicate.
 
 ##### Automerge and workflow health (AM-001, AM-002)
 
@@ -1566,7 +1585,10 @@ load-time failures post no check to any pull request.
   recover). Rebasing cannot clear a non-status blocker such as a missing
   approval, and it re-pushes the branch head, which may dismiss existing
   reviews; the sensor's exclusion of those cases is what keeps the actuator
-  safe. Unloadable workflows get a tracking issue instead.
+  safe. Unloadable workflows get a tracking issue instead. The actuator keys on
+  the pull-request head and checks for an outstanding bot rebase comment before
+  commenting (the check-before-create of Section 2.1.2), so a repeated sweep
+  posts nothing new.
 
 ##### Dependency-pin actionability (DP-001, DP-002)
 
@@ -1582,7 +1604,10 @@ git-revision pin on a dependency awaiting a release.
   `TODO(<issue-url>)` comment that resolves to an open issue.
 - **Actuators:** open a migration tracking issue enumerating the blocked
   alerts; insert the `TODO` comment and raise the tracking issue via the
-  comment-preserving TOML remediation provider (Section 2.3).
+  comment-preserving TOML remediation provider (Section 2.3). Both actuators
+  are idempotent per Section 2.1.2: the tracking issue and the `TODO`
+  annotation are created only when an equivalent one — keyed on the blocked
+  alert or the git-revision dependency — does not already exist.
 
 ##### Dependabot governance (DB-001 through DB-004)
 
