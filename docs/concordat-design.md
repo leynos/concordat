@@ -1780,6 +1780,55 @@ date ages past the point where current tooling supports it.
   configuration in the canonical form; the RT-011 mutation reuses the QG-004
   Makefile patch.
 
+#### 3.1.4 Verifying the reconciliation invariants
+
+Several checks reduce to a pure comparator over a small structured input, where
+example-based tests leave the interesting boundaries unexercised. These
+comparators carry invariants that must hold for every input, so they are
+verified with property-based tests rather than a handful of fixtures:
+
+- **PY-008 version reconciliation.** For a floor `F` and a version set `S`, the
+  result is compliant if and only if `min(S) >= F`, and a scalar declaration is
+  compliant if and only if it equals `F`. The property tests assert this
+  directly and encode the metamorphic relations that motivated the review:
+  adding a version above `F` to a compliant matrix keeps it compliant (higher
+  versions are never findings), and lowering any entry below `F` makes it
+  non-compliant.
+- **LC-002 copyright currency.** For a declared year (or the upper bound of a
+  year range) `Y` and a latest-commit year `C`, compliance holds if and only if
+  `Y == C`; the mutation that extends the range must be idempotent when
+  reapplied and must never lower the bound.
+- **LC-003 nearest-ancestor resolution.** For a manifest at path `P` and a set
+  of `LICENSE` paths, the governing licence is the one at the deepest ancestor
+  of `P`; the resolver must be total (a repository-root `LICENSE` governs every
+  path) and monotonic (adding a deeper `LICENSE` can only move the governing
+  file downward).
+- **RT-006 nightly-pin age.** For an audit date `A` and a pinned nightly date
+  `N`, the pin is stale if and only if `A - N > 365` days; the boundary at
+  exactly one year is asserted explicitly.
+
+Recommended tooling, in order of leverage:
+
+- **Hypothesis** is the primary adversary for these Python comparators:
+  strategies generate arbitrary floors, version sets, year ranges, and path
+  trees, and the tests assert the invariants and metamorphic relations above.
+- **CrossHair** verifies the totality and ordering contracts of the pure
+  comparators (for example that the LC-003 resolver never returns `None` for a
+  path under a root `LICENSE`), catching partiality that random sampling may
+  miss.
+- **mutmut** runs against the comparator modules to confirm the property tests
+  actually bite; a surviving mutant in a comparator is promoted to a new
+  property or example.
+
+The Rego policies keep using their existing Conftest test files (the
+`policy/*_test.rego` fixtures already required by the package format); those
+are example-based by construction and are not a property-testing target.
+Heavier formal proof (Kani or Verus) is deliberately **not** recommended here:
+these comparators contain no unbounded lemma, only bounded arithmetic and
+ordering, so property tests plus CrossHair contracts give full-coverage
+confidence without the proof-maintenance cost. Proofs are reserved for genuine
+lemmas, which this domain does not introduce.
+
 ### 3.2. Implementation design and execution model
 
 The Auditor will be implemented as a composite GitHub Action, primarily written
@@ -1850,6 +1899,44 @@ action nightly (`0 5 * * *`) with permissions limited to `contents: read` and
 `security-events: write`. A manual `workflow_dispatch` input set allows teams
 to supply a fixture snapshot and skip the upload (`upload_sarif=false`), which
 keeps local smoke tests hermetic.
+
+#### 3.2.2 Observability for API-backed sensors and actuators
+
+The `conftest` checks are deterministic functions of a checkout and surface
+entirely through SARIF, so the Code Scanning dashboard is sufficient
+observability for them. The `github-api` sensors and actuators (CV-003, AM-001,
+AM-002, DP-001, DP-002) are different: they run as scheduled sweeps, make
+authenticated network calls, and take side effects (comments, issues, secret
+provisioning). A silent failure there is invisible in SARIF — the AM-002
+`startup_failure` incident is precisely a check that failed with no signal — so
+each API-backed check carries explicit observability requirements.
+
+- **Structured logs.** Every API operation emits a structured (JSON) log line
+  carrying the check ID, the operation (for example `list-secrets`,
+  `classify-merge-state`, `comment-rebase`), the target entity IDs (repository
+  slug, pull-request number, workflow ID, alert number), the outcome
+  (`compliant`, `finding`, `actuated`, `skipped`, `error`), and, for actuators,
+  an idempotency key so a replay is identifiable. Secret **values** are never
+  logged; only secret names and the store they were found in.
+- **Metrics.** Each sweep publishes bounded, low-cardinality counters and
+  histograms: checks run, findings raised, actuators fired, API calls made,
+  rate-limit remaining, and sweep duration, labelled by check ID and outcome
+  only (never by repository or entity ID, which would be unbounded). The
+  remaining GitHub API rate-limit budget is recorded so exhaustion is
+  observable before it causes skips.
+- **Tracing.** A sweep opens one trace per run with a span per repository and a
+  child span per API call, so latency and failures can be attributed across the
+  API boundary. Trace and span IDs are included in the structured log lines to
+  correlate the two.
+- **Alerts.** Actionable alerts fire on conditions that SARIF cannot express: a
+  sweep that errors or does not complete, an actuator whose API call fails, a
+  rate-limit budget below a threshold, and — mirroring AM-002 — a sweep whose
+  own workflow concludes `startup_failure`. Alerts name the check ID and the
+  affected entity so an operator can act without first reproducing the sweep.
+
+These requirements are part of the `github-api` sensor and actuator contract
+(Section 2.1.2) and gate the roadmap item that introduces those types (Section
+4.2), so no API-backed check ships without them.
 
 ### 3.3. Reporting mechanism: SARIF integration with GitHub code scanning
 

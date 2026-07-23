@@ -265,14 +265,18 @@ actuators that remediate them. Each check ships as a lint rule package under
 `canon/lint-rules/` per the Section 2.1.2 format.
 
 - [ ] Add the `github-api` sensor and actuator types to the lint rule package
-  contract (Section 2.1.2) before shipping any API-backed check. The `conftest`
-  sensor over a static input tree cannot express checks that read live
-  repository state, and deterministic-edit mutations cannot post comments or
-  open issues. Acceptance: `concordat artefact rule validate` accepts a package
-  declaring `sensor.type: github-api` and `github-api` actuators (`comment`,
-  `issue`); `rule run` executes an authenticated query against a recorded
-  fixture and `rule mutate` performs the side effect against a mocked API. This
-  item is a prerequisite for CV-003, AM-001, AM-002, DP-001, and DP-002.
+  contract (Section 2.1.2) before shipping any API-backed check, including the
+  observability requirements of Section 3.2.2. The `conftest` sensor over a
+  static input tree cannot express checks that read live repository state, and
+  deterministic-edit mutations cannot post comments or open issues. Acceptance:
+  `concordat artefact rule validate` accepts a package declaring
+  `sensor.type: github-api` and `github-api` actuators (`comment`, `issue`);
+  `rule run` executes an authenticated query against a recorded fixture and
+  `rule mutate` performs the side effect against a mocked API; each emits a
+  structured log line carrying the check ID, operation, and entity IDs, and the
+  sweep publishes bounded per-check metrics and fires an alert on error or
+  incompletion. This item is a prerequisite for CV-003, AM-001, AM-002, DP-001,
+  and DP-002.
 - [ ] Ship the lint-gate binding rule packages (QG-001 to QG-003): Makefile
   sensors for soft-skipped or environment-overridable lint targets, workflow
   sensors for the hardened pinned-release install step (version-keyed cache,
@@ -345,7 +349,10 @@ under `canon/lint-rules/` per the Section 2.1.2 format.
   a missing `LICENSE`, a stale year range, and a manifest declaring a different
   licence from its governing `LICENSE` each raise the intended finding; the
   LC-002 mutation extends the year range, and LC-001 degrades to a tracking
-  issue when no manifest names a licence.
+  issue when no manifest names a licence. The LC-002 year comparator and the
+  LC-003 nearest-ancestor resolver carry Hypothesis property tests for the
+  invariants in Section 3.1.4 (totality and monotonicity of resolution, LC-002
+  mutation idempotence), with mutmut confirming the properties bite.
 - [ ] Build the Python applicability sensor and vendor the
   `agent-template-python` baseline: enumerate `*.py` files, `pyproject.toml`
   manifests, Python-invoking workflow steps, and Ansible plugin directories;
@@ -369,7 +376,11 @@ under `canon/lint-rules/` per the Section 2.1.2 format.
   path honoured. Acceptance: a fixture declaring 3.11 in CI against a 3.12
   manifest floor raises PY-008 naming the divergent file, while a fixture whose
   CI matrix tests 3.12 and 3.13 against a 3.12 floor raises nothing; an
-  exempted fixture downgrades PY-009 to `note`.
+  exempted fixture downgrades PY-009 to `note`. The PY-008
+  version-reconciliation comparator carries Hypothesis property tests for the
+  floor and matrix invariants of Section 3.1.4 (including the metamorphic
+  relations: a version above the floor never becomes a finding, a version below
+  it always does).
 - [ ] Ship the Rust formatting and linting rule packages (RT-001 to RT-005):
   rustfmt wiring and template-matched configuration, clippy presence with
   `[lints]` entries at the template level or stricter, and Whitaker presence
@@ -383,4 +394,6 @@ under `canon/lint-rules/` per the Section 2.1.2 format.
   fallback. Acceptance: fixtures for a stale nightly, a missing `rust-analyzer`
   component, and a binary-only crate without Polonius-next each raise findings;
   RT-006 opens a tracking issue rather than patching the pin, and the RT-011
-  mutation reuses the QG-004 Makefile patch.
+  mutation reuses the QG-004 Makefile patch. The RT-006 nightly-age comparator
+  carries a Hypothesis property test asserting the one-year boundary of Section
+  3.1.4.
