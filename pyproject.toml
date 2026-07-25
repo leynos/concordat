@@ -128,14 +128,19 @@ package = true
 
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
 
-[tool.hatch.build.targets.wheel]
-packages = ["concordat"]
+# Ship the canon lint-rule policy tree inside the installed package so
+# `concordat artefact rule run` works from a wheel, not only a source checkout.
+# `concordat.canon` maps to the out-of-tree `platform-standards/canon` source so
+# its `lint-rules/**` data lands under `concordat/canon/lint-rules` in the wheel;
+# the runner resolves this via `importlib.resources`, with a source fallback.
+[tool.setuptools]
+packages = ["concordat", "concordat.canon"]
 
-[tool.hatch.build.targets.wheel.force-include]
-"platform-standards/canon/lint-rules" = "concordat/canon/lint-rules"
+[tool.setuptools.package-dir]
+"concordat.canon" = "platform-standards/canon"
 
-[tool.hatch.build.targets.sdist]
-include = ["concordat", "platform-standards", "scripts", "tests"]
+[tool.setuptools.package-data]
+"concordat.canon" = ["lint-rules/**/*"]

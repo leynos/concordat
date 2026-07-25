@@ -21,10 +21,11 @@ from .envelope import PolicyEnvelope, build_envelope
 def _resolve_rule_packages_dir() -> pathlib.Path:
     """Return the canon lint-rule tree, whether installed or run from source.
 
-    A wheel ships the policies inside the package (see the
-    ``force-include`` in ``pyproject.toml``), reachable via
-    ``importlib.resources``. A source checkout keeps them in the sibling
-    ``platform-standards`` tree, so that layout is used as a fallback.
+    A wheel ships the policies inside the package at ``concordat/canon/
+    lint-rules`` (see the ``concordat.canon`` package-data mapping in
+    ``pyproject.toml``), reachable via ``importlib.resources``. A source
+    checkout keeps them in the sibling ``platform-standards`` tree, so that
+    layout is used as a fallback.
     """
     packaged = importlib.resources.files("concordat") / "canon" / "lint-rules"
     if isinstance(packaged, pathlib.Path) and packaged.is_dir():
