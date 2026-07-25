@@ -177,21 +177,23 @@ class TestDefaultConfigPath:
 
 
 class TestActiveOwnerForImplicitConfig:
-    """`init_estate` settles the active owner before resolving its config.
+    """`init_estate` resolves the owner-scoped config without committing early.
 
-    The helper is exercised directly: it is the whole of the invariant, and
-    driving it through `init_estate` would require mocking GitHub and the
-    template bootstrap without covering anything further.
+    The resolver is exercised directly for the resolution/validation invariant;
+    the deferred activation — the active owner is committed only after a
+    successful registration — is covered by the duplicate-alias regression
+    driven through `init_estate`.
     """
 
-    def test_implicit_path_records_the_estate_owner(
+    def test_implicit_path_reports_owner_without_activating(
         self,
         xdg_env: dict[str, str],
     ) -> None:
-        """With no active owner, the estate owner becomes the active owner."""
-        resolved = estate._ensure_active_owner_for_implicit_config(None, "leynos")
-        assert xdg.get_active_owner() == "leynos"
-        assert resolved == xdg.owner_config_path("leynos")
+        """With no active owner, the resolver reports it but does not commit it."""
+        path, owner_to_activate = estate._resolve_implicit_config_path(None, "leynos")
+        assert path == xdg.owner_config_path("leynos"), path
+        assert owner_to_activate == "leynos", owner_to_activate
+        assert xdg.get_active_owner() is None, xdg.get_active_owner()
 
     def test_explicit_path_has_no_side_effect(
         self,
@@ -200,19 +202,23 @@ class TestActiveOwnerForImplicitConfig:
     ) -> None:
         """An explicit config path bypasses the owner namespace entirely."""
         explicit = tmp_path / "explicit.yaml"
-        resolved = estate._ensure_active_owner_for_implicit_config(explicit, "leynos")
-        assert resolved == explicit
-        assert xdg.get_active_owner() is None
+        path, owner_to_activate = estate._resolve_implicit_config_path(
+            explicit, "leynos"
+        )
+        assert path == explicit, path
+        assert owner_to_activate is None, owner_to_activate
+        assert xdg.get_active_owner() is None, xdg.get_active_owner()
 
     def test_existing_active_owner_is_not_overwritten(
         self,
         xdg_env: dict[str, str],
     ) -> None:
-        """A matching active owner is left exactly as configured."""
+        """A matching active owner needs no re-activation."""
         xdg.set_active_owner("leynos")
-        resolved = estate._ensure_active_owner_for_implicit_config(None, "leynos")
-        assert xdg.get_active_owner() == "leynos"
-        assert resolved == xdg.owner_config_path("leynos")
+        path, owner_to_activate = estate._resolve_implicit_config_path(None, "leynos")
+        assert path == xdg.owner_config_path("leynos"), path
+        assert owner_to_activate is None, owner_to_activate
+        assert xdg.get_active_owner() == "leynos", xdg.get_active_owner()
 
     def test_mismatched_active_owner_is_refused(
         self,
@@ -221,8 +227,34 @@ class TestActiveOwnerForImplicitConfig:
         """An estate is never registered under a different active owner."""
         xdg.set_active_owner("df12")
         with pytest.raises(estate.ActiveOwnerMismatchError):
-            estate._ensure_active_owner_for_implicit_config(None, "leynos")
-        assert xdg.get_active_owner() == "df12"
+            estate._resolve_implicit_config_path(None, "leynos")
+        assert xdg.get_active_owner() == "df12", xdg.get_active_owner()
+
+    def test_duplicate_alias_via_implicit_path_leaves_owner_unset(
+        self,
+        xdg_env: dict[str, str],
+    ) -> None:
+        """A duplicate-alias failure on the implicit path leaves no active owner."""
+        # Seed the owner's config with an estate that collides on alias. The
+        # duplicate-alias check fires before any GitHub/git interaction, so no
+        # remote mocking is needed to reach the failure.
+        estate.register_estate(
+            estate.EstateRecord(
+                alias="prod",
+                repo_url="git@github.com:leynos/prod.git",
+                github_owner="leynos",
+            ),
+            config_path=xdg.owner_config_path("leynos"),
+        )
+        assert xdg.get_active_owner() is None, "seeding must not activate an owner"
+
+        with pytest.raises(estate.DuplicateEstateAliasError):
+            estate.init_estate(
+                "prod",
+                "git@github.com:leynos/prod.git",
+                confirm=lambda _prompt: True,
+            )
+        assert xdg.get_active_owner() is None, xdg.get_active_owner()
 
 
 class TestOwnerNamespacedCache:

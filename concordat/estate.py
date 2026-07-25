@@ -138,7 +138,7 @@ def init_estate(
     slug = parse_github_slug(repo_url)
     resolved_owner = _resolve_and_confirm_owner(slug, github_owner, confirmer)
     estate_owner = _require_owner(resolved_owner)
-    resolved_config_path = _ensure_active_owner_for_implicit_config(
+    resolved_config_path, owner_to_activate = _resolve_implicit_config_path(
         config_path,
         estate_owner,
     )
@@ -183,29 +183,37 @@ def init_estate(
         config_path=resolved_config_path,
         set_active_if_missing=True,
     )
+    # Only now that validation, repository creation, bootstrap, and
+    # registration have all succeeded is it safe to make this owner active: a
+    # failure above (e.g. DuplicateEstateAliasError) must leave the active
+    # owner untouched rather than stranding it on a half-initialised estate.
+    if owner_to_activate is not None:
+        xdg.set_active_owner(owner_to_activate)
     return record
 
 
-def _ensure_active_owner_for_implicit_config(
+def _resolve_implicit_config_path(
     config_path: Path | None,
     estate_owner: str,
-) -> Path | None:
-    """Return the estate config path, settling the active owner first.
+) -> tuple[Path | None, str | None]:
+    """Resolve the estate config path and the owner to activate on success.
 
-    This must run before the estate configuration is resolved implicitly:
-    the duplicate-alias check and the eventual registration have to read
-    the same owner-namespaced file, and an estate must never be recorded
-    under a different active owner. An explicit *config_path* bypasses the
-    owner namespace entirely and is returned unchanged with no side effect.
+    The duplicate-alias check and the eventual registration must read and
+    write the same owner-namespaced file, so the path is resolved up front and
+    any active-owner mismatch is rejected here. The active owner is NOT mutated:
+    the returned ``owner_to_activate`` (non-``None`` only on the implicit path
+    with no active owner yet) is committed by the caller after registration
+    succeeds, so a failed init leaves ``xdg.get_active_owner()`` unchanged. An
+    explicit *config_path* bypasses the owner namespace entirely.
     """
     if config_path is not None:
-        return config_path
+        return config_path, None
     active_owner = xdg.get_active_owner()
     if active_owner is None:
-        xdg.set_active_owner(estate_owner)
-    elif active_owner != estate_owner:
+        return xdg.owner_config_path(estate_owner), estate_owner
+    if active_owner != estate_owner:
         raise ActiveOwnerMismatchError(active_owner, estate_owner)
-    return xdg.owner_config_path(estate_owner)
+    return xdg.owner_config_path(estate_owner), None
 
 
 def _resolve_and_confirm_owner(

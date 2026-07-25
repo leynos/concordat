@@ -643,28 +643,35 @@ class TestEstateErrorTaxonomy:
             "TemplateMissingError",
             "GitHubOrganizationAuthenticationError",
         ):
-            assert getattr(estate, name) is getattr(estate_errors, name)
+            assert getattr(estate, name) is getattr(estate_errors, name), (
+                f"estate.{name} should be the same object as estate_errors.{name}"
+            )
 
     def test_base_class_inheritance_is_preserved(self) -> None:
         """Moved errors keep their place under ``EstateError``."""
-        assert issubclass(estate.MissingGitHubOwnerError, estate.EstateError)
-        assert issubclass(estate.TemplateMissingError, estate.EstateError)
+        assert issubclass(estate.MissingGitHubOwnerError, estate.EstateError), (
+            "MissingGitHubOwnerError should subclass EstateError"
+        )
+        assert issubclass(estate.TemplateMissingError, estate.EstateError), (
+            "TemplateMissingError should subclass EstateError"
+        )
         # Authentication subclasses still descend from GitHubAuthenticationError.
         assert issubclass(
             estate.GitHubOrganizationAuthenticationError,
             estate.GitHubAuthenticationError,
-        )
+        ), "GitHubOrganizationAuthenticationError should subclass the auth base"
 
     def test_error_messages_are_preserved(self, tmp_path: pathlib.Path) -> None:
         """Constructor messages are byte-for-byte unchanged after the move."""
-        assert str(estate.MissingGitHubOwnerError()) == (
+        owner_message = str(estate.MissingGitHubOwnerError())
+        assert owner_message == (
             "Unable to determine github_owner for the estate. Provide "
             "--github-owner when the remote URL is not a GitHub repository."
-        )
+        ), owner_message
         template = tmp_path / "tpl"
-        assert (
-            str(estate.TemplateMissingError(template))
-            == f"Template directory {template} is missing."
+        template_message = str(estate.TemplateMissingError(template))
+        assert template_message == f"Template directory {template} is missing.", (
+            template_message
         )
 
 
@@ -675,7 +682,9 @@ class TestEstateConfigReexport:
         """``estate.EstateRecord`` is the class defined in ``estate_config``."""
         from concordat import estate_config
 
-        assert estate.EstateRecord is estate_config.EstateRecord
+        assert estate.EstateRecord is estate_config.EstateRecord, (
+            "estate.EstateRecord should be estate_config.EstateRecord"
+        )
 
     def test_config_apis_are_reexported(self) -> None:
         """Moved public config symbols remain reachable through ``estate``."""
@@ -692,7 +701,9 @@ class TestEstateConfigReexport:
             "DEFAULT_BRANCH",
             "DEFAULT_INVENTORY_PATH",
         ):
-            assert getattr(estate, name) is getattr(estate_config, name)
+            assert getattr(estate, name) is getattr(estate_config, name), (
+                f"estate.{name} should be the same object as estate_config.{name}"
+            )
 
     def test_register_estate_remains_callable(self, tmp_path: pathlib.Path) -> None:
         """``estate.register_estate`` still persists an estate to a config file."""
@@ -702,4 +713,28 @@ class TestEstateConfigReexport:
             repo_url="git@github.com:example/core.git",
         )
         estate.register_estate(record, config_path=config_path)
-        assert estate.get_estate("core", config_path=config_path) == record
+        loaded = estate.get_estate("core", config_path=config_path)
+        assert loaded == record, f"persisted estate should round-trip: {loaded}"
+
+
+def test_yaml_config_load_raises_estate_error(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Malformed YAML in the config provider raises a descriptive EstateError.
+
+    Cyclopts re-wraps this into a controlled ``CycloptsError`` at the CLI
+    boundary, so the provider method is exercised directly to verify the
+    domain error and message it produces.
+    """
+    from concordat import estate_config
+
+    bad = tmp_path / "config.yaml"
+    bad.write_text("estate: [unterminated\n")
+    provider = estate_config._YamlConfig(path=str(bad), must_exist=False)
+    with pytest.raises(
+        estate.EstateError, match="cannot read estate configuration"
+    ) as exc_info:
+        provider._load_config(bad)
+    assert isinstance(exc_info.value, ConcordatError), (
+        "EstateError must be a ConcordatError subtype"
+    )

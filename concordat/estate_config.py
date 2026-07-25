@@ -47,8 +47,12 @@ class _YamlConfig(cyclopts_config.ConfigFromFile):
     def _load_config(self, path: Path) -> dict[str, typ.Any]:
         if not path.exists():
             return {}
-        with path.open("r", encoding="utf-8") as handle:
-            contents = _yaml.load(handle) or {}
+        try:
+            with path.open("r", encoding="utf-8") as handle:
+                contents = _yaml.load(handle) or {}
+        except (OSError, UnicodeDecodeError, YAMLError) as error:
+            message = f"cannot read estate configuration {path}: {error}"
+            raise EstateError(message) from error
         return dict(contents) if isinstance(contents, dict) else {}
 
 
@@ -263,28 +267,24 @@ def _load_estates(config_path: Path | None) -> dict[str, EstateRecord]:
     result: dict[str, EstateRecord] = {}
     if isinstance(raw_estates, dict):
         for alias, payload in raw_estates.items():
-            if isinstance(payload, str):
-                record = EstateRecord(alias=alias, repo_url=payload)
-            elif isinstance(payload, dict):
-                repo_url = payload.get("repo_url")
-                if not isinstance(repo_url, str):
+            match payload:
+                case str():
+                    result[alias] = EstateRecord(alias=alias, repo_url=payload)
+                case dict() as entry:
+                    repo_url = entry.get("repo_url")
+                    if not isinstance(repo_url, str):
+                        continue
+                    result[alias] = EstateRecord(
+                        alias=alias,
+                        repo_url=repo_url,
+                        branch=str(entry.get("branch", DEFAULT_BRANCH)),
+                        inventory_path=str(
+                            entry.get("inventory_path", DEFAULT_INVENTORY_PATH)
+                        ),
+                        github_owner=_normalise_owner(entry.get("github_owner")),
+                    )
+                case _:
                     continue
-                branch = payload.get("branch", DEFAULT_BRANCH)
-                inventory_path = payload.get(
-                    "inventory_path",
-                    DEFAULT_INVENTORY_PATH,
-                )
-                owner = payload.get("github_owner")
-                record = EstateRecord(
-                    alias=alias,
-                    repo_url=repo_url,
-                    branch=str(branch),
-                    inventory_path=str(inventory_path),
-                    github_owner=_normalise_owner(owner),
-                )
-            else:
-                continue
-            result[alias] = record
     return result
 
 
