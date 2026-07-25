@@ -250,9 +250,11 @@ template usage, satisfying the evaluate-mode acceptance criteria.
 - Estate repositories are cached under
   `$XDG_CACHE_HOME/concordat/owners/<owner>/estates/<alias>`. `plan`/`apply`
   issue a fetch and hard reset against this cache before every run.
-- Each execution clones the cached workspace into a temporary directory (e.g.
-  `/tmp/concordat-plan-XXXX`). This keeps the cache clean and makes it easy to
-  tear down state after completion.
+- Each execution clones the cached workspace into a per-run directory under the
+  owning GitHub owner's XDG state home (e.g.
+  `$XDG_STATE_HOME/concordat/owners/<owner>/runs/plan-XXXX`), falling back to a
+  system temporary directory when no owner is resolvable. This keeps the cache
+  clean and makes it easy to tear down state after completion.
 - Variable files are generated on the fly in the execution directory. At a
   minimum they set `github_owner`. Sensitive values such as `github_token`
   continue to come from the environment unless the user explicitly requests a
