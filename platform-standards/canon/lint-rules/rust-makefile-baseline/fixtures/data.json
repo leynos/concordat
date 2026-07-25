@@ -66,7 +66,7 @@
         },
         "source": {
           "path": "compliant.mk",
-          "sha256": "49ce593cba8a16a53dcc560de15b3addcd9e6b7e56384a21adbfb3f9c5e2b371",
+          "sha256": "457765b7f64e02b1aec114d55e12f4321aa949bdd8a2e57cb37184a7a525cd68",
           "byte_length": 232
         },
         "parse": {
@@ -218,7 +218,7 @@
           {
             "ordinal": 0,
             "name": "WHITAKER",
-            "operator": ":=",
+            "operator": "?=",
             "raw_value": "whitaker",
             "exported": false,
             "overridden": false,
@@ -266,7 +266,7 @@
         },
         "source": {
           "path": "conditional-lint.mk",
-          "sha256": "b5f8ff39baeb332e7f8829647be4075d163969b40ae88b28b14cc0ae96389b7e",
+          "sha256": "49970781634cebe1909fd6914b7b29bc2ecb27f0d9cd7f1ffdb15b854a0d5b03",
           "byte_length": 148
         },
         "parse": {
@@ -417,7 +417,7 @@
           {
             "ordinal": 0,
             "name": "WHITAKER",
-            "operator": ":=",
+            "operator": "?=",
             "raw_value": "whitaker",
             "exported": false,
             "overridden": false,
@@ -465,7 +465,7 @@
         },
         "source": {
           "path": "duplicate-lint.mk",
-          "sha256": "bcd3796eebcbfd2edb98174ab674e5d9b5aa52f8ab31353be68a4eef8ba61b76",
+          "sha256": "1d873ec728256103cfef978c0f8715ee0d9e88bb949b300289cc5cc1b6f61e06",
           "byte_length": 185
         },
         "parse": {
@@ -636,7 +636,7 @@
           {
             "ordinal": 0,
             "name": "WHITAKER",
-            "operator": ":=",
+            "operator": "?=",
             "raw_value": "whitaker",
             "exported": false,
             "overridden": false,
@@ -815,7 +815,7 @@
         },
         "source": {
           "path": "one-hop.mk",
-          "sha256": "ff7e86a8b5547d5958d9d26715ee640798e80ab9dadca580fd0458f761772307",
+          "sha256": "cfa27993b515a3e695667d6a0a68fe5ca25b8f79c29b6c422715e3d495446b31",
           "byte_length": 314
         },
         "parse": {
@@ -1009,7 +1009,7 @@
           {
             "ordinal": 0,
             "name": "WHITAKER",
-            "operator": ":=",
+            "operator": "?=",
             "raw_value": "whitaker",
             "exported": false,
             "overridden": false,
@@ -1417,7 +1417,7 @@
         },
         "source": {
           "path": "soft-skip.mk",
-          "sha256": "644802c1e21c976ff68805f91c335ead683f44baad9a361151db9ca80c78ae60",
+          "sha256": "d8786d5a97687a4279a6ee55e3bd54fe48e767a2ebdbd952b8a86d86692ba1d5",
           "byte_length": 172
         },
         "parse": {
@@ -1554,7 +1554,7 @@
           {
             "ordinal": 0,
             "name": "WHITAKER",
-            "operator": ":=",
+            "operator": "?=",
             "raw_value": "whitaker",
             "exported": false,
             "overridden": false,
@@ -1602,7 +1602,7 @@
         },
         "source": {
           "path": "suppressed.mk",
-          "sha256": "600c66d0a597a85c8b55c6b333655ced76159b337d23909e3b59630d58d215dd",
+          "sha256": "f0e4d34b96069c179191418541e1f2fc197a41962aede2707b04775738080a9c",
           "byte_length": 161
         },
         "parse": {
@@ -1754,7 +1754,7 @@
           {
             "ordinal": 0,
             "name": "WHITAKER",
-            "operator": ":=",
+            "operator": "?=",
             "raw_value": "whitaker",
             "exported": false,
             "overridden": false,
@@ -1802,7 +1802,7 @@
         },
         "source": {
           "path": "two-hop.mk",
-          "sha256": "b2df4b58faa3f5893ad85e880c6a23edb4c112adf73a3c2d21f7714960784a79",
+          "sha256": "fb9fb6a001f5281ae42e02f02bc7862ea939eaf32e2b2f5ac544e01d31747019",
           "byte_length": 197
         },
         "parse": {
@@ -1981,7 +1981,7 @@
           {
             "ordinal": 0,
             "name": "WHITAKER",
-            "operator": ":=",
+            "operator": "?=",
             "raw_value": "whitaker",
             "exported": false,
             "overridden": false,
@@ -2029,7 +2029,7 @@
         },
         "source": {
           "path": "with-include.mk",
-          "sha256": "04453ab5a0ddbd2585ae489833a54f466811938130d9e92635de0b59d5901e32",
+          "sha256": "62fa884ce4ee015a3688faff7377d3efc609e2aea4f2f61fe476b3ae1bd49bae",
           "byte_length": 148
         },
         "parse": {
@@ -2166,7 +2166,7 @@
           {
             "ordinal": 0,
             "name": "WHITAKER",
-            "operator": ":=",
+            "operator": "?=",
             "raw_value": "whitaker",
             "exported": false,
             "overridden": false,

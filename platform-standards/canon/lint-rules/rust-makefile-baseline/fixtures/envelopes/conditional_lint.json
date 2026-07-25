@@ -27,7 +27,7 @@
     },
     "source": {
       "path": "conditional-lint.mk",
-      "sha256": "b5f8ff39baeb332e7f8829647be4075d163969b40ae88b28b14cc0ae96389b7e",
+      "sha256": "49970781634cebe1909fd6914b7b29bc2ecb27f0d9cd7f1ffdb15b854a0d5b03",
       "byte_length": 148
     },
     "parse": {
@@ -178,7 +178,7 @@
       {
         "ordinal": 0,
         "name": "WHITAKER",
-        "operator": ":=",
+        "operator": "?=",
         "raw_value": "whitaker",
         "exported": false,
         "overridden": false,

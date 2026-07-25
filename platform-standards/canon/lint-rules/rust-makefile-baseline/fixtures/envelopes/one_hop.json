@@ -27,7 +27,7 @@
     },
     "source": {
       "path": "one-hop.mk",
-      "sha256": "ff7e86a8b5547d5958d9d26715ee640798e80ab9dadca580fd0458f761772307",
+      "sha256": "cfa27993b515a3e695667d6a0a68fe5ca25b8f79c29b6c422715e3d495446b31",
       "byte_length": 314
     },
     "parse": {
@@ -221,7 +221,7 @@
       {
         "ordinal": 0,
         "name": "WHITAKER",
-        "operator": ":=",
+        "operator": "?=",
         "raw_value": "whitaker",
         "exported": false,
         "overridden": false,

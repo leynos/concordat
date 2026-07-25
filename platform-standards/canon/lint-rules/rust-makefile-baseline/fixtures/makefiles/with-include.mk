@@ -1,4 +1,4 @@
-WHITAKER := whitaker
+WHITAKER ?= whitaker
 
 include ci.mk
 

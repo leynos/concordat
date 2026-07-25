@@ -27,7 +27,7 @@
     },
     "source": {
       "path": "suppressed.mk",
-      "sha256": "600c66d0a597a85c8b55c6b333655ced76159b337d23909e3b59630d58d215dd",
+      "sha256": "f0e4d34b96069c179191418541e1f2fc197a41962aede2707b04775738080a9c",
       "byte_length": 161
     },
     "parse": {
@@ -179,7 +179,7 @@
       {
         "ordinal": 0,
         "name": "WHITAKER",
-        "operator": ":=",
+        "operator": "?=",
         "raw_value": "whitaker",
         "exported": false,
         "overridden": false,

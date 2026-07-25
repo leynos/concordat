@@ -27,7 +27,7 @@
     },
     "source": {
       "path": "soft-skip.mk",
-      "sha256": "644802c1e21c976ff68805f91c335ead683f44baad9a361151db9ca80c78ae60",
+      "sha256": "d8786d5a97687a4279a6ee55e3bd54fe48e767a2ebdbd952b8a86d86692ba1d5",
       "byte_length": 172
     },
     "parse": {
@@ -164,7 +164,7 @@
       {
         "ordinal": 0,
         "name": "WHITAKER",
-        "operator": ":=",
+        "operator": "?=",
         "raw_value": "whitaker",
         "exported": false,
         "overridden": false,

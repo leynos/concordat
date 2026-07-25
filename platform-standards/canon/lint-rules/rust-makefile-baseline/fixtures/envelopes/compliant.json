@@ -27,7 +27,7 @@
     },
     "source": {
       "path": "compliant.mk",
-      "sha256": "49ce593cba8a16a53dcc560de15b3addcd9e6b7e56384a21adbfb3f9c5e2b371",
+      "sha256": "457765b7f64e02b1aec114d55e12f4321aa949bdd8a2e57cb37184a7a525cd68",
       "byte_length": 232
     },
     "parse": {
@@ -179,7 +179,7 @@
       {
         "ordinal": 0,
         "name": "WHITAKER",
-        "operator": ":=",
+        "operator": "?=",
         "raw_value": "whitaker",
         "exported": false,
         "overridden": false,

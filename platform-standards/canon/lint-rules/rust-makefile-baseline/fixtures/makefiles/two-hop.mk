@@ -1,4 +1,4 @@
-WHITAKER := whitaker
+WHITAKER ?= whitaker
 
 .PHONY: build test lint stage-one stage-two
 
