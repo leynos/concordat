@@ -48,10 +48,12 @@ class InsecureCredentialsError(ConcordatError):
 
     def __init__(self, path: object) -> None:
         """Initialise the error with the offending path."""
-        super().__init__(
+        message = (
             f"refusing to read {path}: credentials must not be group- or "
             "world-accessible; run `chmod 600` on the file"
         )
+        super().__init__(message)
+        self.path = path
 
 
 class MalformedCredentialsError(ConcordatError):
@@ -59,7 +61,10 @@ class MalformedCredentialsError(ConcordatError):
 
     def __init__(self, path: object, detail: str) -> None:
         """Initialise the error with the offending path and diagnostic."""
-        super().__init__(f"cannot read credentials {path}: {detail}")
+        message = f"cannot read credentials {path}: {detail}"
+        super().__init__(message)
+        self.path = path
+        self.detail = detail
 
 
 def _environ(env: xdg.EnvMapping | None) -> xdg.EnvMapping:

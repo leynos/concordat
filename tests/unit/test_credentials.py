@@ -26,6 +26,7 @@ def fake_env(tmp_path: pathlib.Path) -> dict[str, str]:
 
 
 def _write_credentials(env: dict[str, str], owner: str, body: str) -> pathlib.Path:
+    """Write *body* as *owner*'s credentials file and return its path."""
     path = xdg.owner_credentials_path(owner, env)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(body)
@@ -41,7 +42,8 @@ class TestLoadCredentials:
         fake_env: dict[str, str],
     ) -> None:
         """No credentials file means no file-sourced credentials."""
-        assert credentials.load_credentials("leynos", env=fake_env) == {}
+        loaded = credentials.load_credentials("leynos", env=fake_env)
+        assert loaded == {}, f"missing credentials file should load to empty: {loaded}"
 
     def test_known_keys_load_and_unknown_keys_are_ignored(
         self,
@@ -59,7 +61,7 @@ class TestLoadCredentials:
             "GITHUB_TOKEN": "ghp_file",
             "SCW_ACCESS_KEY": "ak",
             "SCW_SECRET_KEY": "sk",
-        }
+        }, f"loading should keep only recognised keys: {loaded}"
 
     def test_group_readable_file_is_refused(
         self,
@@ -100,8 +102,12 @@ class TestCredentialEnvironment:
         env = dict(fake_env)
         env["GITHUB_TOKEN"] = ENV_TOKEN
         merged = credentials.credential_environment(owner="leynos", env=env)
-        assert merged["GITHUB_TOKEN"] == ENV_TOKEN
-        assert merged["SCW_ACCESS_KEY"] == "file-ak"
+        assert merged["GITHUB_TOKEN"] == ENV_TOKEN, (
+            f"env GITHUB_TOKEN should win over the file: {merged['GITHUB_TOKEN']!r}"
+        )
+        assert merged["SCW_ACCESS_KEY"] == "file-ak", (
+            f"file SCW_ACCESS_KEY should fill the gap: {merged['SCW_ACCESS_KEY']!r}"
+        )
 
     def test_no_owner_returns_plain_environment(
         self,
@@ -111,7 +117,10 @@ class TestCredentialEnvironment:
         env = dict(fake_env)
         env["GITHUB_TOKEN"] = ENV_TOKEN
         merged = credentials.credential_environment(owner=None, env=env)
-        assert merged["GITHUB_TOKEN"] == ENV_TOKEN
+        assert merged["GITHUB_TOKEN"] == ENV_TOKEN, (
+            f"no-owner path should pass the env token through: "
+            f"{merged['GITHUB_TOKEN']!r}"
+        )
 
     def test_active_owner_is_used_when_owner_omitted(
         self,
@@ -121,7 +130,9 @@ class TestCredentialEnvironment:
         xdg.set_active_owner("leynos", fake_env)
         _write_credentials(fake_env, "leynos", "GITHUB_TOKEN: ghp_file\n")
         merged = credentials.credential_environment(env=fake_env)
-        assert merged["GITHUB_TOKEN"] == FILE_TOKEN
+        assert merged["GITHUB_TOKEN"] == FILE_TOKEN, (
+            f"active owner should scope the file token: {merged['GITHUB_TOKEN']!r}"
+        )
 
 
 class TestGithubToken:
@@ -131,11 +142,18 @@ class TestGithubToken:
         """Environment beats file; file beats nothing."""
         _write_credentials(fake_env, "leynos", "GITHUB_TOKEN: ghp_file\n")
         xdg.set_active_owner("leynos", fake_env)
-        assert credentials.github_token(env=fake_env) == FILE_TOKEN
+        file_token = credentials.github_token(env=fake_env)
+        assert file_token == FILE_TOKEN, (
+            f"file token should resolve when the env var is unset: {file_token!r}"
+        )
         env = dict(fake_env)
         env["GITHUB_TOKEN"] = ENV_TOKEN
-        assert credentials.github_token(env=env) == ENV_TOKEN
+        env_token = credentials.github_token(env=env)
+        assert env_token == ENV_TOKEN, (
+            f"env token should beat the file token: {env_token!r}"
+        )
 
     def test_returns_none_when_absent(self, fake_env: dict[str, str]) -> None:
         """No env value and no file yields None."""
-        assert credentials.github_token(env=fake_env) is None
+        token = credentials.github_token(env=fake_env)
+        assert token is None, f"absent env and file should yield None: {token!r}"

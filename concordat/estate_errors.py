@@ -28,7 +28,9 @@ class EstateNotConfiguredError(EstateError):
 
     def __init__(self, alias: str) -> None:
         """Initialise the error with the missing alias."""
-        super().__init__(f"Estate {alias!r} is not configured.")
+        message = f"Estate {alias!r} is not configured."
+        super().__init__(message)
+        self.alias = alias
 
 
 class DuplicateEstateAliasError(EstateError):
@@ -36,7 +38,9 @@ class DuplicateEstateAliasError(EstateError):
 
     def __init__(self, alias: str) -> None:
         """Initialise the error with the duplicate alias."""
-        super().__init__(f"Estate alias {alias!r} already exists.")
+        message = f"Estate alias {alias!r} already exists."
+        super().__init__(message)
+        self.alias = alias
 
 
 class NoActiveEstateError(EstateError):
@@ -70,10 +74,12 @@ class NonEmptyRepositoryError(EstateError):
 
     def __init__(self, repo_url: str) -> None:
         """Initialise the error with the offending repository."""
-        super().__init__(
+        message = (
             f"Repository {repo_url!r} already contains commits; "
             "estate init requires an empty repository."
         )
+        super().__init__(message)
+        self.repo_url = repo_url
 
 
 class RepositoryUnreachableError(EstateError):
@@ -81,7 +87,9 @@ class RepositoryUnreachableError(EstateError):
 
     def __init__(self, repo_url: str) -> None:
         """Initialise the error with the unreachable repository."""
-        super().__init__(f"Cannot reach {repo_url!r}; provide a GitHub SSH URL.")
+        message = f"Cannot reach {repo_url!r}; provide a GitHub SSH URL."
+        super().__init__(message)
+        self.repo_url = repo_url
 
 
 class RepositoryInaccessibleError(EstateError):
@@ -89,10 +97,12 @@ class RepositoryInaccessibleError(EstateError):
 
     def __init__(self, repo_url: str) -> None:
         """Initialise the error with the inaccessible repository."""
-        super().__init__(
+        message = (
             f"Repository {repo_url!r} exists but could not be reached via SSH; "
             "ensure your agent exposes the required key."
         )
+        super().__init__(message)
+        self.repo_url = repo_url
 
 
 class RepositorySlugUnknownError(EstateError):
@@ -135,7 +145,10 @@ class EstateInventoryMissingError(EstateError):
 
     def __init__(self, alias: str, path: str) -> None:
         """Initialise the error with the alias and path."""
-        super().__init__(f"Inventory {path!r} missing from estate {alias!r}.")
+        message = f"Inventory {path!r} missing from estate {alias!r}."
+        super().__init__(message)
+        self.alias = alias
+        self.path = path
 
 
 class RepositoryCreationPermissionError(EstateError):
@@ -143,9 +156,9 @@ class RepositoryCreationPermissionError(EstateError):
 
     def __init__(self, owner: str) -> None:
         """Initialise the error with the owner namespace."""
-        super().__init__(
-            f"Authenticated user cannot create repositories under {owner!r}."
-        )
+        message = f"Authenticated user cannot create repositories under {owner!r}."
+        super().__init__(message)
+        self.owner = owner
 
 
 class TemplateMissingError(EstateError):
@@ -153,7 +166,9 @@ class TemplateMissingError(EstateError):
 
     def __init__(self, template_root: Path) -> None:
         """Initialise the error with the template path."""
-        super().__init__(f"Template directory {template_root} is missing.")
+        message = f"Template directory {template_root} is missing."
+        super().__init__(message)
+        self.template_root = template_root
 
 
 class TemplatePushError(EstateError):
@@ -161,7 +176,9 @@ class TemplatePushError(EstateError):
 
     def __init__(self, detail: str) -> None:
         """Initialise the error with the push failure detail."""
-        super().__init__(f"Failed to push estate template: {detail}")
+        message = f"Failed to push estate template: {detail}"
+        super().__init__(message)
+        self.detail = detail
 
 
 class GitHubClientInitializationError(EstateError):
@@ -191,6 +208,7 @@ class GitHubAuthenticationError(EstateError):
     ) -> None:
         """Initialise the error with the provided detail."""
         super().__init__(message)
+        self.message = message
 
 
 class MissingGitHubOwnerError(EstateError):
@@ -206,11 +224,14 @@ class ActiveOwnerMismatchError(EstateError):
 
     def __init__(self, active_owner: str, estate_owner: str) -> None:
         """Initialise the error with both owners."""
-        super().__init__(
+        message = (
             f"estate owner {estate_owner!r} does not match the active GitHub "
             f"owner {active_owner!r}; run `concordat owner use {estate_owner}` "
             "first if that is the intended namespace"
         )
+        super().__init__(message)
+        self.active_owner = active_owner
+        self.estate_owner = estate_owner
 
 
 class GitHubOrganizationAuthenticationError(GitHubAuthenticationError):
@@ -218,10 +239,12 @@ class GitHubOrganizationAuthenticationError(GitHubAuthenticationError):
 
     def __init__(self, owner: str) -> None:
         """Initialise the error with the organisation owner."""
-        super().__init__(
+        message = (
             f"GitHub authentication failed accessing organization {owner!r}. "
             "Ensure GITHUB_TOKEN includes the 'repo' scope and is valid."
         )
+        super().__init__(message)
+        self.owner = owner
 
 
 class GitHubRepositoryCreationAuthenticationError(GitHubAuthenticationError):
@@ -229,10 +252,13 @@ class GitHubRepositoryCreationAuthenticationError(GitHubAuthenticationError):
 
     def __init__(self, owner: str, name: str) -> None:
         """Initialise the error with the repository slug."""
-        super().__init__(
+        message = (
             f"GitHub authentication failed creating {owner}/{name}. "
             "Ensure GITHUB_TOKEN includes the 'repo' scope and is valid."
         )
+        super().__init__(message)
+        self.owner = owner
+        self.name = name
 
 
 class GitHubRepositoryAuthenticationError(GitHubAuthenticationError):
