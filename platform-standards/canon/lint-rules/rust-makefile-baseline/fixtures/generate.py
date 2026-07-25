@@ -59,14 +59,18 @@ def parse_makefile(path: Path) -> dict[str, object]:
     """Return the makeutil report for *path*, tolerating recovered parses."""
     # Run with a relative path so the recorded source.path stays
     # machine-independent in the checked-in envelopes.
-    completed = subprocess.run(  # noqa: S603 - fixed argv, no shell
-        ["makeutil", "parse", path.name],  # noqa: S607 - resolved from PATH
-        cwd=path.parent,
-        capture_output=True,
-        text=True,
-        timeout=30,
-        check=False,
-    )
+    try:
+        completed = subprocess.run(  # noqa: S603 - fixed argv, no shell
+            ["makeutil", "parse", path.name],  # noqa: S607 - resolved from PATH
+            cwd=path.parent,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as error:
+        detail = f"could not run makeutil: {error}"
+        raise MakeutilFixtureError(path, detail) from error
     _validate_returncode(completed.returncode, path, completed.stderr)
     report: dict[str, object] = json.loads(completed.stdout)
     return report

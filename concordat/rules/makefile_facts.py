@@ -139,6 +139,11 @@ def _run_makeutil(
     except subprocess.TimeoutExpired as error:
         message = f"makeutil timed out after {timeout}s on {path}"
         raise _makeutil_error(message, path) from error
+    except OSError as error:
+        # Permission denied, bad working directory, and similar launch
+        # failures must reach the CLI's operational-error boundary too.
+        message = f"could not launch makeutil for {path}: {error}"
+        raise _makeutil_error(message, path) from error
 
 
 def _validate_exit_code(

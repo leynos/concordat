@@ -123,6 +123,27 @@ class TestInspectMakefile:
         with pytest.raises(OperationalRuleError, match="timed out"):
             inspect_makefile(tmp_path / "Makefile")
 
+    def test_launch_oserror_raises_operational_error(
+        self,
+        tmp_path: pathlib.Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A permission/working-directory launch failure surfaces operationally."""
+        _write_checkout(tmp_path, cargo=False, makefile=True)
+
+        def raise_permission(*args: object, **kwargs: object) -> typ.NoReturn:
+            raise PermissionError("makeutil")
+
+        monkeypatch.setattr(subprocess, "run", raise_permission)
+        with pytest.raises(
+            OperationalRuleError, match="could not launch makeutil"
+        ) as exc_info:
+            inspect_makefile(tmp_path / "Makefile")
+        error = exc_info.value
+        assert error.operation == "parse-makefile", error.operation
+        assert error.tool == "makeutil", error.tool
+        assert error.resource == tmp_path / "Makefile", error.resource
+
     @pytest.mark.parametrize(
         ("exit_code", "stdout", "stderr", "message"),
         [
@@ -200,7 +221,11 @@ class TestInspectMakefile:
         per invocation), so no parametrization mutates ``MINIMAL_REPORT``.
         """
         _write_checkout(tmp_path, cargo=False, makefile=True)
-        stdout_text = stdout if isinstance(stdout, str) else json.dumps(stdout())
+        match stdout:
+            case str():
+                stdout_text = stdout
+            case report_factory:
+                stdout_text = json.dumps(report_factory())
         cmd_mox.mock("makeutil").returns(
             exit_code=exit_code,
             stdout=stdout_text,
