@@ -52,6 +52,7 @@ def _failure(
     line: int,
     msg: str,
 ) -> dict[str, object]:
+    """Build one conftest failure entry in the observed metadata shape."""
     return {
         "msg": msg,
         "metadata": {

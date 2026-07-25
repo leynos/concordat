@@ -29,13 +29,19 @@ def test_cache_destination_honours_xdg(
     monkeypatch.setenv("XDG_CACHE_HOME", str(cache_home))
     xdg.set_active_owner("acme")
     record = _make_record(tmp_path / "estate.git")
-    assert record.github_owner == "example"
+    assert record.github_owner == "example", (
+        f"record owner should outrank the active owner: {record.github_owner!r}"
+    )
 
     destination = cache_destination(record)
 
     expected_root = cache_home / "concordat" / "owners" / "example" / "estates"
-    assert destination == expected_root / record.alias
-    assert expected_root.exists()
+    assert destination == expected_root / record.alias, (
+        f"expected {expected_root / record.alias}, got {destination}"
+    )
+    assert expected_root.exists(), (
+        f"the owner-scoped cache root should be created: {expected_root}"
+    )
 
 
 def test_ensure_estate_cache_clones_repository(
@@ -47,8 +53,12 @@ def test_ensure_estate_cache_clones_repository(
 
     workdir = ensure_estate_cache(record, cache_directory=cache_dir)
 
-    assert workdir == cache_dir / record.alias
-    assert (workdir / ".git").exists()
+    assert workdir == cache_dir / record.alias, (
+        f"expected {cache_dir / record.alias}, got {workdir}"
+    )
+    assert (workdir / ".git").exists(), (
+        f"cloned cache workdir should contain a .git directory: {workdir}"
+    )
 
 
 def test_ensure_estate_cache_bare_destination(
@@ -88,7 +98,9 @@ def test_ensure_estate_cache_fetches_updates(git_repo: GitRepo, tmp_path: Path) 
     ensure_estate_cache(record, cache_directory=cache_dir)
 
     cached_repo = pygit2.Repository(str(workdir))
-    assert cached_repo.head.target != initial_head
+    assert cached_repo.head.target != initial_head, (
+        f"refreshed cache HEAD should advance from {initial_head}"
+    )
 
 
 def test_ensure_estate_cache_requires_origin(git_repo: GitRepo, tmp_path: Path) -> None:
