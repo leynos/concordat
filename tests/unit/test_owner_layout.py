@@ -70,6 +70,7 @@ class TestDefaultConfigPath:
         legacy.parent.mkdir(parents=True)
         legacy.write_text(LEGACY_CONFIG)
 
+        estate.migrate_legacy_config()
         resolved = estate.default_config_path()
 
         assert resolved == xdg.owner_config_path("leynos")
@@ -93,7 +94,7 @@ class TestDefaultConfigPath:
         # ``github_owner`` (the active-owner key), which would skip migration.
         legacy.write_text(f"telemetry: disabled\n{LEGACY_CONFIG}")
 
-        estate.default_config_path()
+        estate.migrate_legacy_config()
 
         remaining = legacy.read_text()
         assert "telemetry: disabled" in remaining
@@ -112,7 +113,7 @@ class TestDefaultConfigPath:
         legacy.write_text(contents)
         assert xdg.get_active_owner() == "someone-else"
 
-        estate.default_config_path()
+        estate.migrate_legacy_config()
 
         assert legacy.read_text() == contents
         assert xdg.get_active_owner() == "someone-else"
@@ -136,7 +137,7 @@ class TestDefaultConfigPath:
         with pytest.raises(
             estate.EstateError, match="cannot read legacy configuration"
         ):
-            estate.default_config_path()
+            estate.migrate_legacy_config()
 
     def test_mixed_owner_legacy_config_is_rejected(
         self,
@@ -159,7 +160,7 @@ class TestDefaultConfigPath:
         with pytest.raises(
             estate.EstateError, match="multiple github owners"
         ) as exc_info:
-            estate.default_config_path()
+            estate.migrate_legacy_config()
         message = str(exc_info.value)
         assert "leynos" in message, (
             "the error should name owner 'leynos' so the operator can split them"
@@ -191,9 +192,16 @@ class TestActiveOwnerForImplicitConfig:
     ) -> None:
         """With no active owner, the resolver reports it but does not commit it."""
         path, owner_to_activate = estate._resolve_implicit_config_path(None, "leynos")
-        assert path == xdg.owner_config_path("leynos"), path
-        assert owner_to_activate == "leynos", owner_to_activate
-        assert xdg.get_active_owner() is None, xdg.get_active_owner()
+        assert path == xdg.owner_config_path("leynos"), (
+            f"implicit path should resolve to the owner-scoped config, got {path!r}"
+        )
+        assert owner_to_activate == "leynos", (
+            "resolver should report the estate owner to activate, got "
+            f"{owner_to_activate!r}"
+        )
+        assert xdg.get_active_owner() is None, (
+            f"resolution must not activate an owner, got {xdg.get_active_owner()!r}"
+        )
 
     def test_explicit_path_has_no_side_effect(
         self,
@@ -205,9 +213,17 @@ class TestActiveOwnerForImplicitConfig:
         path, owner_to_activate = estate._resolve_implicit_config_path(
             explicit, "leynos"
         )
-        assert path == explicit, path
-        assert owner_to_activate is None, owner_to_activate
-        assert xdg.get_active_owner() is None, xdg.get_active_owner()
+        assert path == explicit, (
+            f"an explicit config path should be returned unchanged, got {path!r}"
+        )
+        assert owner_to_activate is None, (
+            "an explicit path must not schedule owner activation, got "
+            f"{owner_to_activate!r}"
+        )
+        assert xdg.get_active_owner() is None, (
+            "an explicit path must not touch the active owner, got "
+            f"{xdg.get_active_owner()!r}"
+        )
 
     def test_existing_active_owner_is_not_overwritten(
         self,
@@ -216,9 +232,16 @@ class TestActiveOwnerForImplicitConfig:
         """A matching active owner needs no re-activation."""
         xdg.set_active_owner("leynos")
         path, owner_to_activate = estate._resolve_implicit_config_path(None, "leynos")
-        assert path == xdg.owner_config_path("leynos"), path
-        assert owner_to_activate is None, owner_to_activate
-        assert xdg.get_active_owner() == "leynos", xdg.get_active_owner()
+        assert path == xdg.owner_config_path("leynos"), (
+            f"a matching owner should resolve to its config path, got {path!r}"
+        )
+        assert owner_to_activate is None, (
+            f"an already-active owner needs no re-activation, got {owner_to_activate!r}"
+        )
+        assert xdg.get_active_owner() == "leynos", (
+            "the matching active owner should be preserved, got "
+            f"{xdg.get_active_owner()!r}"
+        )
 
     def test_mismatched_active_owner_is_refused(
         self,
@@ -228,7 +251,10 @@ class TestActiveOwnerForImplicitConfig:
         xdg.set_active_owner("df12")
         with pytest.raises(estate.ActiveOwnerMismatchError):
             estate._resolve_implicit_config_path(None, "leynos")
-        assert xdg.get_active_owner() == "df12", xdg.get_active_owner()
+        assert xdg.get_active_owner() == "df12", (
+            "a rejected owner mismatch must preserve the active owner, got "
+            f"{xdg.get_active_owner()!r}"
+        )
 
     def test_duplicate_alias_via_implicit_path_leaves_owner_unset(
         self,
@@ -254,7 +280,10 @@ class TestActiveOwnerForImplicitConfig:
                 "git@github.com:leynos/prod.git",
                 confirm=lambda _prompt: True,
             )
-        assert xdg.get_active_owner() is None, xdg.get_active_owner()
+        assert xdg.get_active_owner() is None, (
+            "a duplicate-alias failure must leave no active owner, got "
+            f"{xdg.get_active_owner()!r}"
+        )
 
 
 class TestOwnerNamespacedCache:

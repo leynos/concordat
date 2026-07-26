@@ -26,6 +26,7 @@ from .estate import (
     init_estate,
     list_enrolled_repositories,
     list_estates,
+    migrate_legacy_config,
     set_active_estate,
 )
 from .estate_execution import ExecutionIO, ExecutionOptions, run_apply, run_plan
@@ -465,6 +466,9 @@ def apply(
 def main(argv: list[str] | tuple[str, ...] | None = None) -> int:
     """Entry point for the concordat CLI."""
     try:
+        # One-time, explicit legacy-config migration at the bootstrap boundary,
+        # so `default_config_path()` stays a read-only query for every command.
+        migrate_legacy_config()
         result = app(argv)
     except OperationalRuleError as error:
         print(f"concordat: {error}", file=sys.stderr)

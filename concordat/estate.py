@@ -39,6 +39,9 @@ from .estate_config import (
     list_estates as list_estates,
 )
 from .estate_config import (
+    migrate_legacy_config as migrate_legacy_config,
+)
+from .estate_config import (
     set_active_estate as set_active_estate,
 )
 from .estate_errors import (
@@ -206,14 +209,15 @@ def _resolve_implicit_config_path(
     succeeds, so a failed init leaves ``xdg.get_active_owner()`` unchanged. An
     explicit *config_path* bypasses the owner namespace entirely.
     """
-    if config_path is not None:
-        return config_path, None
-    active_owner = xdg.get_active_owner()
-    if active_owner is None:
-        return xdg.owner_config_path(estate_owner), estate_owner
-    if active_owner != estate_owner:
-        raise ActiveOwnerMismatchError(active_owner, estate_owner)
-    return xdg.owner_config_path(estate_owner), None
+    match (config_path, xdg.get_active_owner()):
+        case (Path() as explicit, _):
+            return explicit, None
+        case (None, None):
+            return xdg.owner_config_path(estate_owner), estate_owner
+        case (None, active_owner) if active_owner != estate_owner:
+            raise ActiveOwnerMismatchError(active_owner, estate_owner)
+        case _:
+            return xdg.owner_config_path(estate_owner), None
 
 
 def _resolve_and_confirm_owner(

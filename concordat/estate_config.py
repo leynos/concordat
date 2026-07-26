@@ -70,12 +70,13 @@ class EstateRecord:
 def default_config_path() -> Path:
     """Return the path to the estates configuration file.
 
-    Estates live under the active owner's namespace
-    (``$XDG_CONFIG_HOME/concordat/owners/<owner>/config.yaml``). A legacy
-    flat configuration is migrated into that layout the first time the
-    owner is derivable; until then the flat path keeps working.
+    This is a read-only query: it resolves the path from the current active
+    owner and never mutates state. Estates live under the active owner's
+    namespace (``$XDG_CONFIG_HOME/concordat/owners/<owner>/config.yaml``); with
+    no active owner the flat path is returned. Any legacy-flat migration is a
+    separate, explicit bootstrap step (see :func:`migrate_legacy_config`), run
+    once at the CLI entry point rather than implicitly from this getter.
     """
-    _migrate_legacy_config()
     if owner := xdg.get_active_owner():
         return xdg.owner_config_path(owner)
     return xdg.config_root() / CONFIG_FILENAME
@@ -130,8 +131,14 @@ def _remove_legacy_estate_section(legacy: Path, data: dict[str, typ.Any]) -> Non
         legacy.unlink()
 
 
-def _migrate_legacy_config() -> None:
+def migrate_legacy_config() -> None:
     """Move a legacy flat estates config into the owner-namespaced layout.
+
+    This is the explicit, side-effecting migration step: it writes the
+    owner-scoped config, rewrites or removes the legacy flat file, and sets the
+    active owner. It is idempotent (a no-op once migrated or when no legacy
+    config exists) and is invoked once at the CLI bootstrap, keeping
+    :func:`default_config_path` a pure read-only query.
 
     The active owner is only set once both filesystem writes succeed: were it
     set earlier, ``default_config_path()`` would resolve future implicit
@@ -270,18 +277,15 @@ def _load_estates(config_path: Path | None) -> dict[str, EstateRecord]:
             match payload:
                 case str():
                     result[alias] = EstateRecord(alias=alias, repo_url=payload)
-                case dict() as entry:
-                    repo_url = entry.get("repo_url")
-                    if not isinstance(repo_url, str):
-                        continue
+                case {"repo_url": str() as repo_url}:
                     result[alias] = EstateRecord(
                         alias=alias,
                         repo_url=repo_url,
-                        branch=str(entry.get("branch", DEFAULT_BRANCH)),
+                        branch=str(payload.get("branch", DEFAULT_BRANCH)),
                         inventory_path=str(
-                            entry.get("inventory_path", DEFAULT_INVENTORY_PATH)
+                            payload.get("inventory_path", DEFAULT_INVENTORY_PATH)
                         ),
-                        github_owner=_normalise_owner(entry.get("github_owner")),
+                        github_owner=_normalise_owner(payload.get("github_owner")),
                     )
                 case _:
                     continue

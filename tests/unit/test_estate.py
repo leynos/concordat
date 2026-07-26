@@ -667,11 +667,11 @@ class TestEstateErrorTaxonomy:
         assert owner_message == (
             "Unable to determine github_owner for the estate. Provide "
             "--github-owner when the remote URL is not a GitHub repository."
-        ), owner_message
+        ), f"MissingGitHubOwnerError message must be preserved, got {owner_message!r}"
         template = tmp_path / "tpl"
         template_message = str(estate.TemplateMissingError(template))
         assert template_message == f"Template directory {template} is missing.", (
-            template_message
+            f"TemplateMissingError message must be preserved, got {template_message!r}"
         )
 
 
