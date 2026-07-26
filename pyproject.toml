@@ -137,7 +137,16 @@ build-backend = "setuptools.build_meta"
 # its `lint-rules/**` data lands under `concordat/canon/lint-rules` in the wheel;
 # the runner resolves this via `importlib.resources`, with a source fallback.
 [tool.setuptools]
-packages = ["concordat", "concordat.canon"]
+# List every shipped package explicitly. `concordat.canon` is the out-of-tree
+# policy-data package (mapped and populated below); it must be named here, which
+# rules out `packages.find`, so the in-tree subpackages are listed too.
+packages = [
+    "concordat",
+    "concordat.auditor",
+    "concordat.persistence",
+    "concordat.rules",
+    "concordat.canon",
+]
 
 [tool.setuptools.package-dir]
 "concordat.canon" = "platform-standards/canon"
