@@ -565,8 +565,7 @@ hoc during this slice.
 
 ## Concrete steps
 
-All commands run from the repository root
-(`/home/leynos/Projects/concordat.worktrees/parabellum-vertical-slice`) unless
+All commands run from the repository root (the checkout of this branch) unless
 stated. Long outputs go through `tee` to
 `/tmp/<action>-concordat-parabellum-vertical-slice.out`. Gate runs are
 delegated to the scrutineer subagent where available.
