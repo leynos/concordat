@@ -96,7 +96,7 @@ jobs:
         # generated and uploaded by coverage-main.yml on push, so this
         # step is skipped there to avoid generating it twice.
         if: github.event_name == 'pull_request'
-        uses: leynos/shared-actions/.github/actions/generate-coverage@18bed1ca49a6de3d8882bd72635a32ae3f023d57
+        uses: leynos/shared-actions/.github/actions/generate-coverage@4d696e72fff6db49f34302ccf119ba978f1032c9
         with:
           output-path: coverage.xml
           format: cobertura
