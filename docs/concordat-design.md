@@ -122,11 +122,11 @@ immediately as SARIF findings even before OpenTofu applies corrections.
 Two reusable modules extend `platform-standards/tofu`:
 
 1. `modules/repo-priority-labels` — accepts a repository name, and the parsed
-   priority model. It creates or updates the canonical `priority/*` labels
-   using `github_issue_label` resources, removes deprecated labels when
-   `aliases` indicate replacement, and operates across an entire repository map
-   via `for_each`. This module is idempotent, and captured in nightly
-   `tofu plan` drift reports.
+   priority model. It creates or updates the canonical `priority/*` labels using
+   `github_issue_label` resources, removes deprecated labels when `aliases`
+   indicate replacement, and operates across an entire repository map via
+   `for_each`. This module is idempotent, and captured in nightly `tofu plan`
+   drift reports.
 
 2. `modules/projects-v2-priority-field` — ensures that every targeted Projects
    v2 board exposes a single-select "Priority" field whose options match the
@@ -425,15 +425,15 @@ export AWS_SECRET_ACCESS_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxx
 export AWS_SESSION_TOKEN=...
 ```
 
-The CLI also supports the Scaleway-specific aliases
-`SCW_ACCESS_KEY`/`SCW_SECRET_KEY` and maps them onto the AWS variables before
-launching OpenTofu. DigitalOcean Spaces operators can rely on
-`SPACES_ACCESS_KEY_ID`/`SPACES_SECRET_ACCESS_KEY`; Concordat applies the same
-mapping so every provider reuses the AWS env var contract. The design
-deliberately omits `encrypt = true` because Scaleway only offers server-side
-encryption with customer-provided keys (SSE-C) and Terraform's backend expects
-SSE-S3 headers. At-rest encryption therefore remains a caller concern (for
-example, by keeping secrets out of state or using client-side encryption).
+The CLI also supports the Scaleway-specific aliases `SCW_ACCESS_KEY`/
+`SCW_SECRET_KEY` and maps them onto the AWS variables before launching
+OpenTofu. DigitalOcean Spaces operators can rely on `SPACES_ACCESS_KEY_ID`/
+`SPACES_SECRET_ACCESS_KEY`; Concordat applies the same mapping so every
+provider reuses the AWS env var contract. The design deliberately omits
+`encrypt = true` because Scaleway only offers server-side encryption with
+customer-provided keys (SSE-C) and Terraform's backend expects SSE-S3 headers.
+At-rest encryption therefore remains a caller concern (for example, by keeping
+secrets out of state or using client-side encryption).
 
 Every persistence descriptor ships alongside a YAML manifest
 (`platform-standards/tofu/backend/persistence.yaml`) storing a schema version,
@@ -459,11 +459,11 @@ optional keys (such as `notification_topic`) as unset values. Section 2.8.4
 details the alerting and disaster-recovery flows that consume these attributes.
 
 Every backend bucket—AWS, DigitalOcean, or Scaleway—must enable versioning
-before the CLI writes any state. The command performs a
-`HeadBucket`+`GetBucketVersioning` check via boto3, emits a blocking error if
-versioning is disabled, and surfaces a warning (not an error) when Object Lock
-is absent. Object Lock (the WORM/immutability feature) hardens retention but is
-orthogonal to Terraform's `.tflock` mutexes.
+before the CLI writes any state. The command performs a `HeadBucket`+
+`GetBucketVersioning` check via boto3, emits a blocking error if versioning is
+disabled, and surfaces a warning (not an error) when Object Lock is absent.
+Object Lock (the WORM/immutability feature) hardens retention but is orthogonal
+to Terraform's `.tflock` mutexes.
 
 #### 2.8.2 `estate persist` interactive workflow
 
@@ -515,9 +515,8 @@ acknowledge the state migration impact.
   verbatim.
 - Missing Amazon Web Services (AWS)/DigitalOcean/Scaleway environment variables
   trigger a descriptive error before `tofu init` runs, preventing OpenTofu's
-  opaque credential failures. The CLI prefers existing
-  `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`, falls back to
-  `SCW_ACCESS_KEY`/`SCW_SECRET_KEY` or
+  opaque credential failures. The CLI prefers existing `AWS_ACCESS_KEY_ID`/
+  `AWS_SECRET_ACCESS_KEY`, falls back to `SCW_ACCESS_KEY`/`SCW_SECRET_KEY` or
   `SPACES_ACCESS_KEY_ID`/`SPACES_SECRET_ACCESS_KEY`, and aborts when none are
   set. When the descriptor is absent, both commands retain the current
   local-state default.
@@ -1195,8 +1194,8 @@ The following workflows describe expected operator usage.
 
 1. Platform maintainer adds a new rule package under
    `platform-standards/canon/lint-rules/<rule-id>/`.
-2. Platform maintainer registers it in the template manifest with `version:
-   0.1.0` and adds documentation to the package `README.md`.
+2. Platform maintainer registers it in the template manifest with
+   `version: 0.1.0` and adds documentation to the package `README.md`.
 3. Estate operator syncs the package and pins it in the estate lockfile.
 
 ##### Capabilities, limitations, and future directions

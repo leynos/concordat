@@ -164,8 +164,8 @@ enrolment PRs should be opened.
 
 ## Syncing canonical platform-standards artefacts
 
-Concordat ships a `platform-standards/` template tree. The canonical files
-under `platform-standards/canon/` are tracked in
+Concordat ships a `platform-standards/` template tree. The canonical files under
+`platform-standards/canon/` are tracked in
 `platform-standards/canon/manifest.yaml` by a stable `id`, a `path`, and a
 sha256 digest (a content-derived version).
 
@@ -222,13 +222,12 @@ without leaving the CLI. Both commands require `GITHUB_TOKEN` and the estate's
   just to see what would change.
 
   When `backend/persistence.yaml` exists with `enabled: true`, the CLI adds
-  `-backend-config=<path>` to `tofu init`, maps
-  `SCW_ACCESS_KEY`/`SCW_SECRET_KEY` onto
-  `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` when needed, and fails fast if
-  neither pair is present. Standard error (stderr) logs echo the backend
-  bucket, key, region, and config path—never credentials—for traceability. If
-  the manifest is absent or `enabled: false`, `plan` and `apply` keep using the
-  local state layout.
+  `-backend-config=<path>` to `tofu init`, maps `SCW_ACCESS_KEY`/
+  `SCW_SECRET_KEY` onto `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` when
+  needed, and fails fast if neither pair is present. Standard error (stderr)
+  logs echo the backend bucket, key, region, and config path—never
+  credentials—for traceability. If the manifest is absent or `enabled: false`,
+  `plan` and `apply` keep using the local state layout.
 
 - Reconcile the estate with `concordat apply`. The command requires an explicit
   `--auto-approve` to match OpenTofu's automation guard.

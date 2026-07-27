@@ -28,14 +28,13 @@ automation assets.
 - [x] Extend `concordat enrol` so that, in addition to writing `.concordat`, it
   opens a pull request in `platform-standards` adding the repository to the
   OpenTofu inventory. Acceptance: enrolling a repository produces both the
-  `.concordat` commit (optional push) and a passing IaC PR that runs
-  `tofu fmt`, `tflint`, and `tofu validate`.
+  `.concordat` commit (optional push) and a passing IaC PR that runs `tofu fmt`,
+  `tflint`, and `tofu validate`.
 - [x] Teach estates about the GitHub namespace they govern by persisting
   `github_owner` in the concordat config file and rejecting enrolments that
-  target other owners. Acceptance: `concordat estate init` records the owner
-  and `concordat enrol` refuses to add repositories whose slug does not begin
-  with it; invoking `concordat ls` without namespaces defaults to the recorded
-  owner.
+  target other owners. Acceptance: `concordat estate init` records the owner and
+  `concordat enrol` refuses to add repositories whose slug does not begin with
+  it; invoking `concordat ls` without namespaces defaults to the recorded owner.
 
 ### 1.2. Introduce canonical artefact management
 

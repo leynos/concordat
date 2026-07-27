@@ -112,7 +112,7 @@ intended to be used and how it behaves under various conditions.18
   `platform-standards/tofu/policies`. Validate both happy and unhappy paths by
   executing
   `conftest test --policy platform-standards/tofu/policies platform-standards/tofu/policies/examples/*.json`.
-   The JSON fixtures mirror drift scenarios and destructive changes so that
+  The JSON fixtures mirror drift scenarios and destructive changes so that
   policy rules stay in sync with the modules they protect.
 
 #### Layer 3: integration testing (the connections)
@@ -983,8 +983,8 @@ However, with the advent of robust native testing in OpenTofu/Terraform, and
 the widespread adoption of the more flexible Terratest framework,
 Kitchen-Terraform is now largely considered a legacy tool. The project itself
 has been deprecated in favour of the native test framework, and while it was a
-valuable part of the ecosystem's history, new projects should favour `tofu test`
-or Terratest for their testing needs.54
+valuable part of the ecosystem's history, new projects should favour
+`tofu test` or Terratest for their testing needs.54
 
 ## Part 5: architectural best practices for testable OpenTofu modules
 
@@ -1399,8 +1399,8 @@ infrastructure changes while optimizing for developer productivity.8
 The emergence of powerful, native testing frameworks like `tofu test` and
 sophisticated third-party libraries like Terratest marks a significant
 maturation point for Infrastructure as Code. IaC is no longer just a scripting
-practice; it is a formal engineering discipline that demands the same rigour and
-quality assurance as application development.
+practice; it is a formal engineering discipline that demands the same rigour
+and quality assurance as application development.
 
 The future of IaC testing will likely see this trend continue, and accelerate.
 Expect even tighter integration of testing tools within IDEs, providing
