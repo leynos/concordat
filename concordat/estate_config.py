@@ -267,29 +267,46 @@ def _write_config(data: dict[str, typ.Any], config_path: Path | None) -> None:
         _yaml.dump(data, handle)
 
 
+def _estate_record_from_payload(
+    alias: str,
+    payload: object,
+) -> EstateRecord | None:
+    """Decode one persisted estate payload, or reject an unsupported one.
+
+    A bare string is the legacy shorthand for a repository URL. A mapping is
+    accepted only when it carries a string ``repo_url``; anything else — a
+    list, a scalar, or a mapping without a usable URL — is rejected so the
+    caller can skip it.
+    """
+    match payload:
+        case str():
+            return EstateRecord(alias=alias, repo_url=payload)
+        case {"repo_url": str() as repo_url, **rest}:
+            return EstateRecord(
+                alias=alias,
+                repo_url=repo_url,
+                branch=str(rest.get("branch", DEFAULT_BRANCH)),
+                inventory_path=str(rest.get("inventory_path", DEFAULT_INVENTORY_PATH)),
+                github_owner=_normalise_owner(rest.get("github_owner")),
+            )
+        case _:
+            return None
+
+
 def _load_estates(config_path: Path | None) -> dict[str, EstateRecord]:
+    """Load valid estate records indexed by alias."""
     data = _load_config(config_path)
     estate_section = data.get(ESTATE_SECTION, {})
     raw_estates = estate_section.get(ESTATE_COLLECTION_KEY, {})
-    result: dict[str, EstateRecord] = {}
-    if isinstance(raw_estates, dict):
-        for alias, payload in raw_estates.items():
-            match payload:
-                case str():
-                    result[alias] = EstateRecord(alias=alias, repo_url=payload)
-                case {"repo_url": str() as repo_url}:
-                    result[alias] = EstateRecord(
-                        alias=alias,
-                        repo_url=repo_url,
-                        branch=str(payload.get("branch", DEFAULT_BRANCH)),
-                        inventory_path=str(
-                            payload.get("inventory_path", DEFAULT_INVENTORY_PATH)
-                        ),
-                        github_owner=_normalise_owner(payload.get("github_owner")),
-                    )
-                case _:
-                    continue
-    return result
+    if not isinstance(raw_estates, dict):
+        return {}
+
+    records: dict[str, EstateRecord] = {}
+    for alias, payload in raw_estates.items():
+        record = _estate_record_from_payload(alias, payload)
+        if record is not None:
+            records[alias] = record
+    return records
 
 
 def _load_metadata(config_path: Path | None) -> dict[str, typ.Any]:

@@ -9,7 +9,7 @@ import pygit2
 import pytest
 from github3 import exceptions as github3_exceptions
 
-from concordat import estate, estate_repository
+from concordat import estate, estate_config, estate_repository
 from concordat.errors import ConcordatError
 from concordat.estate import (
     EstateRecord,
@@ -682,6 +682,110 @@ class TestEstateErrorTaxonomy:
         assert template_message == f"Template directory {template} is missing.", (
             f"TemplateMissingError message must be preserved, got {template_message!r}"
         )
+
+
+class TestEstateRecordFromPayload:
+    """Decoding of persisted estate payloads into records."""
+
+    def test_legacy_string_payload_uses_defaults(self) -> None:
+        """A bare repo-URL string is the legacy shorthand for a record."""
+        record = estate_config._estate_record_from_payload(
+            "core", "git@github.com:example/core.git"
+        )
+        assert record == EstateRecord(
+            alias="core",
+            repo_url="git@github.com:example/core.git",
+            branch=estate_config.DEFAULT_BRANCH,
+            inventory_path=estate_config.DEFAULT_INVENTORY_PATH,
+            github_owner=None,
+        ), record
+
+    def test_mapping_payload_fills_omitted_optionals(self) -> None:
+        """A mapping with only repo_url falls back to the declared defaults."""
+        record = estate_config._estate_record_from_payload(
+            "core", {"repo_url": "git@github.com:example/core.git"}
+        )
+        assert record is not None, "a mapping with a string repo_url should decode"
+        assert record.branch == estate_config.DEFAULT_BRANCH, record.branch
+        assert record.inventory_path == estate_config.DEFAULT_INVENTORY_PATH, (
+            record.inventory_path
+        )
+        assert record.github_owner is None, record.github_owner
+
+    def test_supplied_optionals_are_coerced_to_str(self) -> None:
+        """Non-string branch and inventory_path values are stringified."""
+        record = estate_config._estate_record_from_payload(
+            "core",
+            {
+                "repo_url": "git@github.com:example/core.git",
+                "branch": 2,
+                "inventory_path": 7,
+                "github_owner": "example",
+            },
+        )
+        assert record is not None, "a mapping with a string repo_url should decode"
+        assert record.branch == "2", record.branch
+        assert record.inventory_path == "7", record.inventory_path
+        assert record.github_owner == "example", record.github_owner
+
+    def test_whitespace_owner_normalises_to_none(self) -> None:
+        """A whitespace-only github_owner is normalised away."""
+        record = estate_config._estate_record_from_payload(
+            "core",
+            {"repo_url": "git@github.com:example/core.git", "github_owner": "   "},
+        )
+        assert record is not None, "a mapping with a string repo_url should decode"
+        assert record.github_owner is None, record.github_owner
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            pytest.param(["git@github.com:example/core.git"], id="list"),
+            pytest.param(7, id="integer"),
+            pytest.param(None, id="none"),
+            pytest.param({}, id="mapping-without-repo-url"),
+            pytest.param({"repo_url": 7}, id="mapping-with-non-string-repo-url"),
+            pytest.param({"repo_url": None}, id="mapping-with-null-repo-url"),
+        ],
+    )
+    def test_unsupported_payloads_are_rejected(self, payload: object) -> None:
+        """Unsupported payloads decode to None rather than raising."""
+        assert estate_config._estate_record_from_payload("core", payload) is None, (
+            f"payload {payload!r} should be rejected"
+        )
+
+    def test_invalid_payloads_are_omitted_from_the_collection(
+        self,
+        tmp_path: pathlib.Path,
+    ) -> None:
+        """`_load_estates` skips undecodable entries and keeps the valid ones."""
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text(
+            "estate:\n"
+            "  estates:\n"
+            "    legacy: git@github.com:example/legacy.git\n"
+            "    good:\n"
+            "      repo_url: git@github.com:example/good.git\n"
+            "    listy:\n"
+            "      - git@github.com:example/listy.git\n"
+            "    numeric: 7\n"
+            "    bad_url:\n"
+            "      repo_url: 7\n",
+            encoding="utf-8",
+        )
+        records = estate_config._load_estates(config_path)
+        assert sorted(records) == ["good", "legacy"], sorted(records)
+
+    def test_non_mapping_estate_collection_yields_no_records(
+        self,
+        tmp_path: pathlib.Path,
+    ) -> None:
+        """An `estates` value that is not a mapping loads as empty."""
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text(
+            "estate:\n  estates:\n    - not-a-mapping\n", encoding="utf-8"
+        )
+        assert estate_config._load_estates(config_path) == {}, "expected no records"
 
 
 class TestEstateRepositoryReexport:
