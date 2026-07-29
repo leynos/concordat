@@ -565,6 +565,26 @@ def test_init_estate_rejects_non_empty_remote_without_building_a_client(
     mock_bootstrap.assert_not_called()
 
 
+def test_bootstrap_template_requires_an_existing_template_root(
+    tmp_path: pathlib.Path,
+) -> None:
+    """An absent template root is rejected before any Git work begins."""
+    missing = tmp_path / "absent-template"
+    bootstrap = estate_repository.TemplateBootstrap(
+        branch="main",
+        template_root=missing,
+        inventory_path="tofu/inventory/repositories.yaml",
+        callbacks=None,
+    )
+
+    with pytest.raises(estate.TemplateMissingError) as exc_info:
+        estate_repository._bootstrap_template(
+            "git@github.com:example/core.git", bootstrap
+        )
+
+    assert str(missing) in str(exc_info.value), str(exc_info.value)
+
+
 def test_init_estate_raises_when_remote_is_inaccessible(
     tmp_path: pathlib.Path,
     mocker: pytest_mock.MockFixture,

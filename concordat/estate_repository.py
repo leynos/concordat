@@ -65,6 +65,16 @@ class RepositoryPlan:
     client: github3.GitHub | None
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
+class TemplateBootstrap:
+    """Inputs controlling one estate-template bootstrap operation."""
+
+    branch: str
+    template_root: Path
+    inventory_path: str
+    callbacks: RemoteCallbacks | None
+
+
 def default_template_root() -> Path:
     """Return the repository template bundled with concordat."""
     return Path(__file__).resolve().parents[1] / "platform-standards"
@@ -287,18 +297,21 @@ def _create_repository(
 
 def _bootstrap_template(
     repo_url: str,
-    *,
-    branch: str,
-    template_root: Path,
-    inventory_path: str,
-    callbacks: RemoteCallbacks | None,
+    bootstrap: TemplateBootstrap,
 ) -> None:
-    if not template_root.exists():
-        raise TemplateMissingError(template_root)
+    """Seed *repo_url* from the bundled template as one atomic operation.
+
+    Validates template availability, copies and sanitizes the template,
+    initialises and commits a Git repository, pushes the target branch, and
+    sets the local remote HEAD where applicable.
+    """
+    branch = bootstrap.branch
+    if not bootstrap.template_root.exists():
+        raise TemplateMissingError(bootstrap.template_root)
     with TemporaryDirectory(prefix="concordat-estate-template-") as temp_root:
         target = Path(temp_root, "estate")
-        shutil.copytree(template_root, target, dirs_exist_ok=True)
-        _sanitize_inventory(target / inventory_path)
+        shutil.copytree(bootstrap.template_root, target, dirs_exist_ok=True)
+        _sanitize_inventory(target / bootstrap.inventory_path)
         repository = pygit2.init_repository(str(target), initial_head=branch)
         index = repository.index
         index.add_all()
@@ -316,7 +329,7 @@ def _bootstrap_template(
         repo_remote = repository.remotes.create("origin", repo_url)
         refspec = f"refs/heads/{branch}:refs/heads/{branch}"
         try:
-            repo_remote.push([refspec], callbacks=callbacks)
+            repo_remote.push([refspec], callbacks=bootstrap.callbacks)
         except pygit2.GitError as error:
             raise TemplatePushError(str(error)) from error
         _set_remote_head_if_local(repo_url, branch)

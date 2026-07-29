@@ -188,14 +188,13 @@ def init_estate(
             confirmer,
         )
 
-    callbacks = estate_repository.build_remote_callbacks(repo_url)
-    estate_repository._bootstrap_template(
-        repo_url,
+    bootstrap = estate_repository.TemplateBootstrap(
         branch=branch,
         template_root=template_root or estate_repository.default_template_root(),
         inventory_path=inventory_path,
-        callbacks=callbacks,
+        callbacks=estate_repository.build_remote_callbacks(repo_url),
     )
+    estate_repository._bootstrap_template(repo_url, bootstrap)
 
     record = EstateRecord(
         alias=alias,
