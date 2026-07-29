@@ -107,28 +107,67 @@ def _prepare_repository(
 ) -> RepositoryPlan:
     """Probe the remote repository and decide whether provisioning is required."""
     probe = _probe_remote(repo_url)
-    needs_creation = not probe.exists
+    if not probe.exists:
+        return _plan_missing_repository(slug)
+    if not probe.reachable:
+        return _plan_unreachable_repository(
+            repo_url,
+            slug,
+            github_token,
+            client_factory,
+        )
+    return _plan_reachable_repository(repo_url, probe)
 
-    client: github3.GitHub | None = None
-    owner = name = None
 
-    if needs_creation:
-        if not slug:
-            raise UnsupportedRepositoryCreationError
-        owner, name = _split_slug(slug)
-    elif probe.reachable and not probe.empty:
-        raise NonEmptyRepositoryError(repo_url)
-    elif not probe.reachable:
-        if not slug:
-            raise RepositoryUnreachableError(repo_url)
-        client = _build_client(github_token, client_factory)
-        owner, name = _split_slug(slug)
-        if client.repository(owner, name):
-            raise RepositoryInaccessibleError(repo_url)
-        needs_creation = True
-
+def _plan_missing_repository(slug: str | None) -> RepositoryPlan:
+    """Plan provisioning for a remote the probe reports as absent."""
+    if not slug:
+        raise UnsupportedRepositoryCreationError
+    owner, name = _split_slug(slug)
     return RepositoryPlan(
-        needs_creation=needs_creation,
+        needs_creation=True,
+        owner=owner,
+        name=name,
+        client=None,
+    )
+
+
+def _plan_reachable_repository(repo_url: str, probe: RemoteProbe) -> RepositoryPlan:
+    """Plan for a reachable, existing remote; only empty ones are usable.
+
+    Callers must route only reachable probes here, so no reachability check is
+    repeated. A non-empty remote is rejected without contacting GitHub.
+    """
+    if not probe.empty:
+        raise NonEmptyRepositoryError(repo_url)
+    return RepositoryPlan(
+        needs_creation=False,
+        owner=None,
+        name=None,
+        client=None,
+    )
+
+
+def _plan_unreachable_repository(
+    repo_url: str,
+    slug: str | None,
+    github_token: str | None,
+    client_factory: typ.Callable[[str | None], github3.GitHub] | None,
+) -> RepositoryPlan:
+    """Plan for an unreachable remote by asking GitHub whether it exists.
+
+    A repository GitHub can see but SSH cannot reach is inaccessible rather
+    than missing. The constructed client is returned in the plan so
+    ``_ensure_repository_exists`` reuses it instead of authenticating twice.
+    """
+    if not slug:
+        raise RepositoryUnreachableError(repo_url)
+    client = _build_client(github_token, client_factory)
+    owner, name = _split_slug(slug)
+    if client.repository(owner, name):
+        raise RepositoryInaccessibleError(repo_url)
+    return RepositoryPlan(
+        needs_creation=True,
         owner=owner,
         name=name,
         client=client,

@@ -537,6 +537,34 @@ def test_init_estate_error_conditions(
     mock_bootstrap.assert_not_called()
 
 
+def test_init_estate_rejects_non_empty_remote_without_building_a_client(
+    tmp_path: pathlib.Path,
+    mocker: pytest_mock.MockFixture,
+    mock_remote_probe: typ.Callable[..., mock.Mock],
+    mock_bootstrap: mock.Mock,
+) -> None:
+    """A reachable, non-empty remote is rejected before GitHub authentication.
+
+    A token is supplied so the rejection cannot be explained by a missing
+    credential: the only proof is that the client is never constructed.
+    """
+    config_path = tmp_path / "config.yaml"
+    mock_remote_probe(reachable=True, exists=True, empty=False)
+    build_client = mocker.patch.object(estate_repository, "_build_client")
+
+    with pytest.raises(NonEmptyRepositoryError):
+        init_estate(
+            "core",
+            "git@github.com:example/platform-standards.git",
+            github_token="token",  # noqa: S106
+            confirm=lambda _: True,
+            config_path=config_path,
+        )
+
+    build_client.assert_not_called()
+    mock_bootstrap.assert_not_called()
+
+
 def test_init_estate_raises_when_remote_is_inaccessible(
     tmp_path: pathlib.Path,
     mocker: pytest_mock.MockFixture,
