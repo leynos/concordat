@@ -264,7 +264,6 @@ Scale Concordat with self-service and targeted automation.
   each quarter concludes with an action list approved by the platform steering
   group.
 
-
 ### 4.2. Enforce quality-gate integrity
 
 Deliver the Quality-Gate Integrity audit domain (design document Section

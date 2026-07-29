@@ -1632,7 +1632,6 @@ whose cache key never rotated.
   with the canonical mandatory form, and file patches replacing bespoke install
   steps with the canonical hardened step from `canon/`.
 
-
 ##### Test-runner completeness (QG-004)
 
 nextest does not execute doctests. A repository whose Makefile and CI both
@@ -1648,7 +1647,6 @@ introduced its locked-build tripwire.
   rather than failing.
 - **Actuators:** Makefile patches adding the `TEST_CMD` variable, a
   `test-doc` target, and the aggregate-target wiring.
-
 
 ##### Coverage pipeline reach (CV-001 through CV-004)
 
@@ -1748,7 +1746,6 @@ Dependabot pull request regardless of its content.
   directories and cooldown blocks, and file-copies of the canonical auto-merge
   and scheduled-audit workflows.
 
-
 ##### Mutation-testing coverage (MT-001)
 
 Mutation testing was rolled out estate-wide as a scheduled job calling a shared
@@ -1764,7 +1761,6 @@ degenerate case).
 - **Actuators:** file-copy of the canonical scheduled mutation-testing
   workflow from `canon/`.
 
-
 #### 3.1.2 Licensing integrity: sensors and actuators
 
 The licensing checks generalize routine estate findings rather than a single
@@ -1774,7 +1770,6 @@ shipped beside. Both defects are invisible to CI — nothing fails when a licenc
 declaration drifts — so they accumulate until an external consumer notices. As
 elsewhere in the domain catalogue, each check ships as a lint rule package
 (Section 2.1.2) with a sensor, parameters, and a mutation.
-
 
 ##### Licence presence and currency (LC-001, LC-002)
 
@@ -1794,7 +1789,6 @@ statement must not lag the repository's activity.
   a licence is a legal decision that automation must not make, so the actuator
   degrades to opening a tracking issue.
 
-
 ##### Declared-licence consistency (LC-003)
 
 A licence declaration is only as good as its agreement with the licence text
@@ -1812,7 +1806,6 @@ ancestor's.
   comment-preserving remediation providers (Section 2.3). README statements are
   prose, and prose edits are not mechanically safe, so README mismatches
   degrade to a tracking issue quoting the conflicting statements.
-
 
 #### 3.1.3 Toolchain baseline: sensors and actuators
 
@@ -1840,7 +1833,6 @@ PY-010, RT-008, RT-009, RT-011) through `standards-exemptions.yaml`; a
 recorded, unexpired exemption downgrades the finding to `note`, per the
 existing exemption contract.
 
-
 ##### Python formatting and linting (PY-001 to PY-005)
 
 - **Sensors:** Makefile and workflow policies verify that `ruff format`
@@ -1855,7 +1847,6 @@ existing exemption contract.
   lint wiring in the canonical form. Where a repository has no Python tooling
   at all, the mutation seeds the canonical `ruff.toml` and pylint configuration
   from `canon/lint/python/`.
-
 
 ##### Python documentation and version-floor consistency (PY-006 to PY-008)
 
@@ -1887,7 +1878,6 @@ existing exemption contract.
 - **Actuators:** dependency-group and Makefile patches adding the
   missing wiring in the canonical form.
 
-
 ##### Rust formatting and linting (RT-001 to RT-005)
 
 - **Sensors:** Makefile and workflow policies verify rustfmt backs the
@@ -1900,7 +1890,6 @@ existing exemption contract.
 - **Actuators:** comment-preserving TOML patches for `rustfmt.toml` and
   `[lints]` drift; Makefile patches adding missing format and lint wiring;
   file-copy of the canonical Whitaker install step from `canon/` where absent.
-
 
 ##### Rust toolchain currency (RT-006, RT-007)
 
@@ -1916,7 +1905,6 @@ date ages past the point where current tooling supports it.
   pin can change lint and borrow-checker behaviour, so the bump needs a human
   to shepherd the fallout.
 
-
 ##### Rust build and test acceleration (RT-008 to RT-011)
 
 - **Sensors:** parse `.cargo/config.toml` for the mold linker (RT-008)
@@ -1931,7 +1919,6 @@ date ages past the point where current tooling supports it.
   `.cargo/config.toml` adding the linker, codegen, and borrow-checker
   configuration in the canonical form; the RT-011 mutation reuses the QG-004
   Makefile patch.
-
 
 #### 3.1.4 Verifying the reconciliation invariants
 
@@ -2052,7 +2039,6 @@ action nightly (`0 5 * * *`) with permissions limited to `contents: read` and
 `security-events: write`. A manual `workflow_dispatch` input set allows teams
 to supply a fixture snapshot and skip the upload (`upload_sarif=false`), which
 keeps local smoke tests hermetic.
-
 
 #### 3.2.2 Observability for API-backed sensors and actuators
 
