@@ -201,8 +201,9 @@ false-positive rate is acceptable. Exemptions use the existing
   inspect, and select the active estate. The enrolment workflow automatically
   targets the active estate unless the operator passes
   `--platform-standards-url`.
-- `concordat plan` clones the active estate into a temporary workspace, renders
-  the OpenTofu variable file from estate metadata, and invokes OpenTofu via the
+- `concordat plan` clones the active estate into a throwaway per-run workspace
+  under the owner's XDG state home (see the estate cache section), renders the
+  OpenTofu variable file from estate metadata, and invokes OpenTofu via the
   tofupy wrapper. The command preserves OpenTofu's standard CLI plan output
   (including the diff), so operators can review drift without leaving the CLI.
 - `concordat apply` reuses the same machinery but runs OpenTofu apply via the
@@ -252,9 +253,12 @@ template usage, satisfying the evaluate-mode acceptance criteria.
   issue a fetch and hard reset against this cache before every run.
 - Each execution clones the cached workspace into a per-run directory under the
   configured owner's XDG state home (e.g.
-  `$XDG_STATE_HOME/concordat/owners/<owner>/runs/plan-XXXX`), falling back to a
-  system temporary directory when no owner is resolvable. This keeps the cache
-  clean and makes it easy to tear down state after completion.
+  `$XDG_STATE_HOME/concordat/owners/<owner>/runs/plan-XXXX`). This keeps the
+  cache clean and makes it easy to tear down state after completion. An owner
+  is always resolvable in normal execution: cache namespacing requires either
+  the estate's `github_owner` or an active owner, and fails closed otherwise.
+  Only the injected `cache_directory` test seam bypasses that requirement, and
+  it is the sole route to the system temporary-directory fallback.
 - Variable files are generated on the fly in the execution directory. At a
   minimum they set `github_owner`. Sensitive values such as `github_token`
   continue to come from the environment unless the user explicitly requests a
@@ -315,9 +319,10 @@ The delivered CLI follows the workflow above:
 
 - Active estates are refreshed into
   `$XDG_CACHE_HOME/concordat/owners/<owner>/estates/<alias>` and copied into a
-  per-run temporary directory. The CLI prints the workspace path at the start
-  of every execution and removes it afterwards unless `--keep-workdir` is
-  passed for debugging.
+  throwaway per-run directory under
+  `$XDG_STATE_HOME/concordat/owners/<owner>/runs`. The CLI prints the workspace
+  path at the start of every execution and removes it afterwards unless
+  `--keep-workdir` is passed for debugging.
 - `terraform.tfvars` is synthesized with the estate's `github_owner` before
   invoking OpenTofu. Commands refuse to run without `GITHUB_TOKEN`, so the
   GitHub provider can load schemas without interactive prompts.
@@ -1067,8 +1072,8 @@ In this mode the command would:
 
 - clone or refresh the estate platform-standards repository via the existing
   estate cache machinery, and
-- run operations inside a temporary workspace, consistent with `plan` and
-  `apply`.
+- run operations inside a throwaway per-run workspace under the owner's XDG
+  state home, consistent with `plan` and `apply`.
 
 ###### `rule` commands
 

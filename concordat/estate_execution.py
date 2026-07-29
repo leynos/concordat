@@ -182,10 +182,17 @@ def estate_workspace(
 ) -> cabc.Iterator[Path]:
     """Yield a throwaway working tree populated from the estate cache.
 
-    The working tree lives under the owning GitHub owner's XDG state
-    directory (``$XDG_STATE_HOME/concordat/owners/<owner>/runs``) so kept
-    workdirs are easy to find; without a resolvable owner it falls back to
-    the system temporary directory.
+    Normal execution always resolves an owner: :func:`ensure_estate_cache`
+    runs first and refuses to namespace the cache unless the record carries a
+    ``github_owner`` or an active owner is configured. The working tree
+    therefore lives under that owner's XDG state directory
+    (``$XDG_STATE_HOME/concordat/owners/<owner>/runs``), so kept workdirs are
+    easy to find.
+
+    The system temporary-directory fallback is reachable only through the
+    *cache_directory* seam: injecting a cache directory bypasses the
+    owner-required cache resolution, so an ownerless record can get that far
+    and land in the system temporary directory instead.
     """
     cache_path = ensure_estate_cache(record, cache_directory=cache_directory)
     runs_root: Path | None = None
