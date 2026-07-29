@@ -15,7 +15,7 @@ from betamax import Betamax
 from pytest_bdd import given, scenarios, then, when
 from ruamel.yaml import YAML
 
-from concordat import cli, estate
+from concordat import cli, estate_repository
 from concordat.errors import ConcordatError
 from concordat.estate import EstateRecord, RemoteProbe, list_estates, register_estate
 
@@ -166,7 +166,7 @@ def given_betamax_cassette(
 
     fake_client = FakeGithubClient()
     monkeypatch.setattr(
-        estate,
+        estate_repository,
         "_build_client",
         lambda token, client_factory=None: fake_client,
     )
@@ -176,22 +176,26 @@ def given_betamax_cassette(
 def given_missing_remote(monkeypatch: pytest.MonkeyPatch) -> None:
     """Pretend the remote repository does not exist."""
     monkeypatch.setattr(
-        estate,
+        estate_repository,
         "_probe_remote",
         lambda url: RemoteProbe(reachable=False, exists=False, empty=True, error=None),
     )
-    monkeypatch.setattr(estate, "_bootstrap_template", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        estate_repository, "_bootstrap_template", lambda *args, **kwargs: None
+    )
 
 
 @given("the estate remote probe reports an empty existing repository")
 def given_empty_existing_remote(monkeypatch: pytest.MonkeyPatch) -> None:
     """Pretend the remote exists, is empty, and can be reached."""
     monkeypatch.setattr(
-        estate,
+        estate_repository,
         "_probe_remote",
         lambda url: RemoteProbe(reachable=True, exists=True, empty=True, error=None),
     )
-    monkeypatch.setattr(estate, "_bootstrap_template", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        estate_repository, "_bootstrap_template", lambda *args, **kwargs: None
+    )
 
 
 @given(

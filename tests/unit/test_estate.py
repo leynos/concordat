@@ -9,7 +9,7 @@ import pygit2
 import pytest
 from github3 import exceptions as github3_exceptions
 
-from concordat import estate
+from concordat import estate, estate_repository
 from concordat.errors import ConcordatError
 from concordat.estate import (
     EstateRecord,
@@ -19,14 +19,19 @@ from concordat.estate import (
     RemoteProbe,
     RepositoryIdentityError,
     RepositoryInaccessibleError,
-    _build_client,
-    _resolve_and_confirm_owner,
     get_active_estate,
     init_estate,
     list_enrolled_repositories,
     list_estates,
     register_estate,
     set_active_estate,
+)
+
+# The repository lifecycle now lives in `estate_repository`; its private
+# helpers are exercised (and patched) at that implementation module.
+from concordat.estate_repository import (
+    _build_client,
+    _resolve_and_confirm_owner,
 )
 
 if typ.TYPE_CHECKING:
@@ -44,15 +49,15 @@ def init_estate_error_setup(
     """Provide shared setup for init_estate error-path tests."""
     config_path = tmp_path / "config.yaml"
     mocker.patch.object(
-        estate,
+        estate_repository,
         "_probe_remote",
         return_value=RemoteProbe(reachable=False, exists=False, empty=True, error=None),
     )
-    mocker.patch.object(estate, "_bootstrap_template")
+    mocker.patch.object(estate_repository, "_bootstrap_template")
 
     fake_client = mocker.Mock()
     fake_client.repository.return_value = None
-    mocker.patch.object(estate, "_build_client", return_value=fake_client)
+    mocker.patch.object(estate_repository, "_build_client", return_value=fake_client)
     return config_path, mocker, fake_client
 
 
@@ -75,7 +80,9 @@ def mock_remote_probe(
             empty=empty,
             error=error,
         )
-        return mocker.patch.object(estate, "_probe_remote", return_value=probe)
+        return mocker.patch.object(
+            estate_repository, "_probe_remote", return_value=probe
+        )
 
     return factory
 
@@ -83,7 +90,7 @@ def mock_remote_probe(
 @pytest.fixture
 def mock_bootstrap(mocker: pytest_mock.MockFixture) -> mock.Mock:
     """Mock template bootstrapping during init_estate tests."""
-    return mocker.patch.object(estate, "_bootstrap_template")
+    return mocker.patch.object(estate_repository, "_bootstrap_template")
 
 
 @pytest.fixture
@@ -181,17 +188,17 @@ def test_init_estate_creates_repository_when_missing(
     """init_estate provisions a repository when the remote is absent."""
     config_path = tmp_path / "config.yaml"
     mocker.patch.object(
-        estate,
+        estate_repository,
         "_probe_remote",
         return_value=RemoteProbe(reachable=False, exists=False, empty=True, error=None),
     )
-    mocker.patch.object(estate, "_bootstrap_template")
+    mocker.patch.object(estate_repository, "_bootstrap_template")
 
     fake_client = mocker.Mock()
     fake_client.repository.return_value = None
     fake_org = mocker.Mock()
     fake_client.organization.return_value = fake_org
-    mocker.patch.object(estate, "_build_client", return_value=fake_client)
+    mocker.patch.object(estate_repository, "_build_client", return_value=fake_client)
 
     record = init_estate(
         "core",
@@ -217,11 +224,11 @@ def test_init_estate_requires_owner_for_non_github_remote(
     """Local remotes require an explicit github_owner override."""
     config_path = tmp_path / "config.yaml"
     mocker.patch.object(
-        estate,
+        estate_repository,
         "_probe_remote",
         return_value=RemoteProbe(reachable=True, exists=True, empty=True, error=None),
     )
-    mocker.patch.object(estate, "_bootstrap_template")
+    mocker.patch.object(estate_repository, "_bootstrap_template")
 
     with pytest.raises(ConcordatError) as caught:
         init_estate(
@@ -259,17 +266,17 @@ def test_init_estate_allows_explicit_owner_override(
     """Explicit owners take precedence over repository slugs."""
     config_path = tmp_path / "config.yaml"
     mocker.patch.object(
-        estate,
+        estate_repository,
         "_probe_remote",
         return_value=RemoteProbe(reachable=False, exists=False, empty=True, error=None),
     )
-    mocker.patch.object(estate, "_bootstrap_template")
+    mocker.patch.object(estate_repository, "_bootstrap_template")
 
     fake_client = mocker.Mock()
     fake_client.repository.return_value = None
     fake_org = mocker.Mock()
     fake_client.organization.return_value = fake_org
-    mocker.patch.object(estate, "_build_client", return_value=fake_client)
+    mocker.patch.object(estate_repository, "_build_client", return_value=fake_client)
 
     record = init_estate(
         "core",
@@ -291,11 +298,11 @@ def test_init_estate_prompts_to_confirm_inferred_owner(
     """Prompt operators to confirm github_owner inferred from the repo slug."""
     config_path = tmp_path / "config.yaml"
     mocker.patch.object(
-        estate,
+        estate_repository,
         "_probe_remote",
         return_value=RemoteProbe(reachable=True, exists=True, empty=True, error=None),
     )
-    mocker.patch.object(estate, "_bootstrap_template")
+    mocker.patch.object(estate_repository, "_bootstrap_template")
 
     confirm = mocker.Mock(return_value=True)
     record = init_estate(
@@ -322,11 +329,11 @@ def test_init_estate_aborts_when_inferred_owner_not_confirmed(
     """Abort init_estate when the inferred owner is declined."""
     config_path = tmp_path / "config.yaml"
     mocker.patch.object(
-        estate,
+        estate_repository,
         "_probe_remote",
         return_value=RemoteProbe(reachable=True, exists=True, empty=True, error=None),
     )
-    mocker.patch.object(estate, "_bootstrap_template")
+    mocker.patch.object(estate_repository, "_bootstrap_template")
 
     with pytest.raises(
         GitHubOwnerConfirmationAbortedError,
@@ -429,11 +436,11 @@ def test_init_estate_does_not_prompt_when_owner_is_explicit(
     """Explicit github_owner skips the inferred-owner confirmation prompt."""
     config_path = tmp_path / "config.yaml"
     mocker.patch.object(
-        estate,
+        estate_repository,
         "_probe_remote",
         return_value=RemoteProbe(reachable=True, exists=True, empty=True, error=None),
     )
-    mocker.patch.object(estate, "_bootstrap_template")
+    mocker.patch.object(estate_repository, "_bootstrap_template")
 
     confirm = mocker.Mock(return_value=True)
     record = init_estate(
@@ -537,15 +544,15 @@ def test_init_estate_raises_when_remote_is_inaccessible(
     """Raise RepositoryInaccessibleError when GitHub reports an existing repo."""
     config_path = tmp_path / "config.yaml"
     mocker.patch.object(
-        estate,
+        estate_repository,
         "_probe_remote",
         return_value=RemoteProbe(reachable=False, exists=True, empty=True, error=None),
     )
-    mocker.patch.object(estate, "_bootstrap_template")
+    mocker.patch.object(estate_repository, "_bootstrap_template")
 
     fake_client = mocker.Mock()
     fake_client.repository.return_value = object()
-    mocker.patch.object(estate, "_build_client", return_value=fake_client)
+    mocker.patch.object(estate_repository, "_build_client", return_value=fake_client)
 
     with pytest.raises(RepositoryInaccessibleError):
         init_estate(
@@ -564,19 +571,19 @@ def test_init_estate_creates_repository_when_remote_unreachable_and_missing(
     """Create a repo when GitHub reports it missing but SSH is unreachable."""
     config_path = tmp_path / "config.yaml"
     mocker.patch.object(
-        estate,
+        estate_repository,
         "_probe_remote",
         return_value=RemoteProbe(reachable=False, exists=True, empty=True, error=None),
     )
-    mocker.patch.object(estate, "_bootstrap_template")
+    mocker.patch.object(estate_repository, "_bootstrap_template")
 
     fake_client = mocker.Mock()
     fake_client.repository.return_value = None
     fake_org = mocker.Mock()
     fake_client.organization.return_value = fake_org
-    mocker.patch.object(estate, "_build_client", return_value=fake_client)
+    mocker.patch.object(estate_repository, "_build_client", return_value=fake_client)
 
-    create_repo = mocker.patch.object(estate, "_create_repository")
+    create_repo = mocker.patch.object(estate_repository, "_create_repository")
     confirm = mocker.Mock(return_value=True)
 
     record = init_estate(
@@ -599,7 +606,7 @@ def test_init_estate_translates_authentication_errors(
     fake_client.organization.side_effect = github3_exceptions.AuthenticationFailed(
         mocker.Mock()
     )
-    mocker.patch.object(estate, "_build_client", return_value=fake_client)
+    mocker.patch.object(estate_repository, "_build_client", return_value=fake_client)
 
     with pytest.raises(ConcordatError) as caught:
         init_estate(
@@ -622,7 +629,9 @@ def test_build_client_requires_token() -> None:
 def test_build_client_uses_token(mocker: pytest_mock.MockFixture) -> None:
     """Authenticate the GitHub client using the provided token."""
     fake = mocker.Mock()
-    mocked_ctor = mocker.patch.object(estate.github3, "GitHub", return_value=fake)
+    mocked_ctor = mocker.patch.object(
+        estate_repository.github3, "GitHub", return_value=fake
+    )
 
     client = _build_client("secret")
 
@@ -672,6 +681,16 @@ class TestEstateErrorTaxonomy:
         template_message = str(estate.TemplateMissingError(template))
         assert template_message == f"Template directory {template} is missing.", (
             f"TemplateMissingError message must be preserved, got {template_message!r}"
+        )
+
+
+class TestEstateRepositoryReexport:
+    """Repository-lifecycle types stay importable from the façade."""
+
+    def test_remote_probe_is_the_same_class(self) -> None:
+        """``estate.RemoteProbe`` is the class defined in ``estate_repository``."""
+        assert estate.RemoteProbe is estate_repository.RemoteProbe, (
+            "estate.RemoteProbe should be estate_repository.RemoteProbe"
         )
 
 

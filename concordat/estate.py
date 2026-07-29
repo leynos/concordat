@@ -1,19 +1,18 @@
-"""Estate management helpers for the concordat CLI."""
+"""Estate management helpers for the concordat CLI.
+
+This module is the public façade. Configuration persistence lives in
+:mod:`concordat.estate_config`, the exception taxonomy in
+:mod:`concordat.estate_errors`, and the GitHub/git repository lifecycle in
+:mod:`concordat.estate_repository`. What remains here is orchestration: the
+estate-init transaction and the inventory lookup the CLI calls.
+"""
 
 from __future__ import annotations
 
-import dataclasses
-import shutil
 import typing as typ
 from pathlib import Path
-from tempfile import TemporaryDirectory
 
-import github3
-import pygit2
-from github3 import exceptions as github3_exceptions
-from pygit2 import RemoteCallbacks
-
-from . import xdg
+from . import estate_repository, xdg
 
 # Configuration persistence and migration live in `estate_config`; these names
 # are imported so `concordat.estate` stays the public façade. Names used only
@@ -26,8 +25,6 @@ from .estate_config import (
     DEFAULT_INVENTORY_PATH,
     EstateRecord,
     _load_estates,
-    _normalise_owner,
-    _yaml,
     get_active_estate,
     get_estate,
     register_estate,
@@ -47,59 +44,83 @@ from .estate_config import (
 from .estate_errors import (
     ActiveOwnerMismatchError,
     DuplicateEstateAliasError,
-    EstateCreationAbortedError,
-    EstateInventoryMissingError,
     EstateNotConfiguredError,
-    GitHubAuthenticationError,
-    GitHubClientInitializationError,
-    GitHubOrganizationAuthenticationError,
-    GitHubOwnerConfirmationAbortedError,
-    GitHubRepositoryAuthenticationError,
-    GitHubRepositoryCreationAuthenticationError,
     MissingEstateAliasError,
-    MissingGitHubOwnerError,
-    MissingGitHubTokenError,
     NoActiveEstateError,
-    NonEmptyRepositoryError,
-    RepositoryCreationPermissionError,
-    RepositoryIdentityError,
-    RepositoryInaccessibleError,
-    RepositorySlugUnknownError,
-    RepositoryUnreachableError,
-    TemplateMissingError,
-    TemplatePushError,
-    UnsupportedRepositoryCreationError,
+)
+
+# The repository-lifecycle errors are raised in `estate_repository`, but the
+# taxonomy stays importable from this façade for existing callers and tests.
+from .estate_errors import (
+    EstateCreationAbortedError as EstateCreationAbortedError,
 )
 from .estate_errors import (
     EstateError as EstateError,
 )
-from .gitutils import build_remote_callbacks
+from .estate_errors import (
+    EstateInventoryMissingError as EstateInventoryMissingError,
+)
+from .estate_errors import (
+    GitHubAuthenticationError as GitHubAuthenticationError,
+)
+from .estate_errors import (
+    GitHubClientInitializationError as GitHubClientInitializationError,
+)
+from .estate_errors import (
+    GitHubOrganizationAuthenticationError as GitHubOrganizationAuthenticationError,
+)
+from .estate_errors import (
+    GitHubOwnerConfirmationAbortedError as GitHubOwnerConfirmationAbortedError,
+)
+from .estate_errors import (
+    GitHubRepositoryAuthenticationError as GitHubRepositoryAuthenticationError,
+)
+from .estate_errors import (
+    # The redundant alias marks the re-export; the name is too long to wrap.
+    GitHubRepositoryCreationAuthenticationError as GitHubRepositoryCreationAuthenticationError,  # noqa: E501
+)
+from .estate_errors import (
+    MissingGitHubOwnerError as MissingGitHubOwnerError,
+)
+from .estate_errors import (
+    MissingGitHubTokenError as MissingGitHubTokenError,
+)
+from .estate_errors import (
+    NonEmptyRepositoryError as NonEmptyRepositoryError,
+)
+from .estate_errors import (
+    RepositoryCreationPermissionError as RepositoryCreationPermissionError,
+)
+from .estate_errors import (
+    RepositoryIdentityError as RepositoryIdentityError,
+)
+from .estate_errors import (
+    RepositoryInaccessibleError as RepositoryInaccessibleError,
+)
+from .estate_errors import (
+    RepositorySlugUnknownError as RepositorySlugUnknownError,
+)
+from .estate_errors import (
+    RepositoryUnreachableError as RepositoryUnreachableError,
+)
+from .estate_errors import (
+    TemplateMissingError as TemplateMissingError,
+)
+from .estate_errors import (
+    TemplatePushError as TemplatePushError,
+)
+from .estate_errors import (
+    UnsupportedRepositoryCreationError as UnsupportedRepositoryCreationError,
+)
+
+# Re-exported for callers (including the BDD suite) that build probe results.
+from .estate_repository import (
+    RemoteProbe as RemoteProbe,
+)
 from .platform_standards import parse_github_slug
 
-
-@dataclasses.dataclass(frozen=True, slots=True)
-class RemoteProbe:
-    """Describe the observed state of a remote repository."""
-
-    reachable: bool
-    exists: bool
-    empty: bool
-    error: str | None = None
-
-
-@dataclasses.dataclass(frozen=True, slots=True)
-class RepositoryPlan:
-    """Describe the steps required to prepare an estate repository."""
-
-    needs_creation: bool
-    owner: str | None
-    name: str | None
-    client: github3.GitHub | None
-
-
-def default_template_root() -> Path:
-    """Return the repository template bundled with concordat."""
-    return Path(__file__).resolve().parents[1] / "platform-standards"
+if typ.TYPE_CHECKING:
+    import github3
 
 
 def list_enrolled_repositories(
@@ -117,7 +138,7 @@ def list_enrolled_repositories(
         record = get_active_estate(config_path)
         if not record:
             raise NoActiveEstateError
-    return _collect_inventory(record)
+    return estate_repository._collect_inventory(record)
 
 
 def init_estate(
@@ -137,10 +158,12 @@ def init_estate(
     if not alias:
         raise MissingEstateAliasError
 
-    confirmer = confirm or _prompt_yes_no
+    confirmer = confirm or estate_repository._prompt_yes_no
     slug = parse_github_slug(repo_url)
-    resolved_owner = _resolve_and_confirm_owner(slug, github_owner, confirmer)
-    estate_owner = _require_owner(resolved_owner)
+    resolved_owner = estate_repository._resolve_and_confirm_owner(
+        slug, github_owner, confirmer
+    )
+    estate_owner = estate_repository._require_owner(resolved_owner)
     resolved_config_path, owner_to_activate = _resolve_implicit_config_path(
         config_path,
         estate_owner,
@@ -148,14 +171,14 @@ def init_estate(
     records = _load_estates(resolved_config_path)
     if alias in records:
         raise DuplicateEstateAliasError(alias)
-    repository_plan = _prepare_repository(
+    repository_plan = estate_repository._prepare_repository(
         repo_url,
         slug,
         github_token,
         client_factory,
     )
     if repository_plan.needs_creation:
-        _ensure_repository_exists(
+        estate_repository._ensure_repository_exists(
             slug,
             repository_plan.owner,
             repository_plan.name,
@@ -165,11 +188,11 @@ def init_estate(
             confirmer,
         )
 
-    callbacks = build_remote_callbacks(repo_url)
-    _bootstrap_template(
+    callbacks = estate_repository.build_remote_callbacks(repo_url)
+    estate_repository._bootstrap_template(
         repo_url,
         branch=branch,
-        template_root=template_root or default_template_root(),
+        template_root=template_root or estate_repository.default_template_root(),
         inventory_path=inventory_path,
         callbacks=callbacks,
     )
@@ -218,292 +241,3 @@ def _resolve_implicit_config_path(
             raise ActiveOwnerMismatchError(active_owner, estate_owner)
         case _:
             return xdg.owner_config_path(estate_owner), None
-
-
-def _resolve_and_confirm_owner(
-    slug: str | None,
-    github_owner: str | None,
-    confirmer: typ.Callable[[str], bool],
-) -> str | None:
-    """Resolve github_owner and prompt when inferred from the estate slug."""
-    if github_owner is not None:
-        return _resolve_github_owner(slug, github_owner)
-
-    inferred_owner = _owner_from_slug(slug)
-    if inferred_owner and not confirmer(
-        "Inferred github_owner "
-        f"{inferred_owner!r} from estate repo {slug!r}. "
-        "Use this? [y/N]: ",
-    ):
-        raise GitHubOwnerConfirmationAbortedError
-    return inferred_owner
-
-
-def _split_slug(slug: str) -> tuple[str, str]:
-    """Return owner/name for a GitHub slug or raise when invalid."""
-    if slug.count("/") != 1:
-        raise RepositoryIdentityError
-    owner, name = slug.split("/", 1)
-    if not owner or not name:
-        raise RepositoryIdentityError
-    return owner, name
-
-
-def _prepare_repository(
-    repo_url: str,
-    slug: str | None,
-    github_token: str | None,
-    client_factory: typ.Callable[[str | None], github3.GitHub] | None,
-) -> RepositoryPlan:
-    """Probe the remote repository and decide whether provisioning is required."""
-    probe = _probe_remote(repo_url)
-    needs_creation = not probe.exists
-
-    client: github3.GitHub | None = None
-    owner = name = None
-
-    if needs_creation:
-        if not slug:
-            raise UnsupportedRepositoryCreationError
-        owner, name = _split_slug(slug)
-    elif probe.reachable and not probe.empty:
-        raise NonEmptyRepositoryError(repo_url)
-    elif not probe.reachable:
-        if not slug:
-            raise RepositoryUnreachableError(repo_url)
-        client = _build_client(github_token, client_factory)
-        owner, name = _split_slug(slug)
-        if client.repository(owner, name):
-            raise RepositoryInaccessibleError(repo_url)
-        needs_creation = True
-
-    return RepositoryPlan(
-        needs_creation=needs_creation,
-        owner=owner,
-        name=name,
-        client=client,
-    )
-
-
-def _ensure_repository_exists(
-    slug: str | None,
-    owner: str | None,
-    name: str | None,
-    client: github3.GitHub | None,
-    github_token: str | None,
-    client_factory: typ.Callable[[str | None], github3.GitHub] | None,
-    confirmer: typ.Callable[[str], bool],
-) -> None:
-    """Create the GitHub repository when it does not yet exist."""
-    if not slug:
-        raise RepositorySlugUnknownError
-
-    resolved_client = client or _build_client(github_token, client_factory)
-    if not confirmer(
-        f"Create GitHub repository {slug}? [y/N]: ",
-    ):
-        raise EstateCreationAbortedError
-    if not owner or not name:
-        raise RepositoryIdentityError
-    _create_repository(resolved_client, owner, name)
-    return
-
-
-def _probe_remote(repo_url: str) -> RemoteProbe:
-    callbacks = build_remote_callbacks(repo_url)
-    with TemporaryDirectory(prefix="concordat-estate-probe-") as temp_root:
-        repository = pygit2.init_repository(temp_root)
-        remote = repository.remotes.create("origin", repo_url)
-        try:
-            refs = remote.ls_remotes(callbacks=callbacks)
-        except pygit2.GitError as error:
-            return RemoteProbe(
-                reachable=False,
-                exists=False,
-                empty=True,
-                error=str(error),
-            )
-    return RemoteProbe(reachable=True, exists=True, empty=not refs)
-
-
-def _collect_inventory(record: EstateRecord) -> list[str]:
-    callbacks = build_remote_callbacks(record.repo_url)
-    with TemporaryDirectory(prefix="concordat-estate-") as temp_root:
-        repository = pygit2.clone_repository(
-            record.repo_url,
-            temp_root,
-            callbacks=callbacks,
-        )
-        workdir = Path(repository.workdir or temp_root)
-        inventory_path = workdir / record.inventory_path
-        if not inventory_path.exists():
-            raise EstateInventoryMissingError(record.alias, record.inventory_path)
-        contents = _yaml.load(inventory_path.read_text(encoding="utf-8")) or {}
-        repos = contents.get("repositories") or []
-        slugs: set[str] = set()
-        for entry in repos:
-            if not isinstance(entry, dict):
-                continue
-            slug = entry.get("name")
-            if isinstance(slug, str) and slug.strip():
-                slugs.add(slug.strip())
-        return sorted(_slug_to_git_url(slug) for slug in slugs)
-
-
-def _slug_to_git_url(slug: str) -> str:
-    if slug.startswith("git@") or slug.startswith("ssh://"):
-        return slug
-    if slug.startswith("https://") or slug.startswith("http://"):
-        return slug
-    return f"git@github.com:{slug}.git"
-
-
-def _create_repository(
-    client: github3.GitHub,
-    owner: str,
-    name: str,
-) -> None:
-    try:
-        org = client.organization(owner)
-    except github3_exceptions.AuthenticationFailed as error:
-        raise GitHubOrganizationAuthenticationError(owner) from error
-    except github3_exceptions.NotFoundError:
-        org = None
-
-    if org:
-        try:
-            org.create_repository(
-                name,
-                private=True,
-                auto_init=False,
-                description="Platform standards repository managed by concordat",
-            )
-        except github3_exceptions.AuthenticationFailed as error:
-            raise GitHubRepositoryCreationAuthenticationError(owner, name) from error
-        return
-
-    user = client.me()
-    if not user or user.login != owner:
-        raise RepositoryCreationPermissionError(owner)
-    try:
-        client.create_repository(
-            name,
-            private=True,
-            auto_init=False,
-            description="Platform standards repository managed by concordat",
-        )
-    except github3_exceptions.AuthenticationFailed as error:
-        raise GitHubRepositoryAuthenticationError from error
-
-
-def _bootstrap_template(
-    repo_url: str,
-    *,
-    branch: str,
-    template_root: Path,
-    inventory_path: str,
-    callbacks: RemoteCallbacks | None,
-) -> None:
-    if not template_root.exists():
-        raise TemplateMissingError(template_root)
-    with TemporaryDirectory(prefix="concordat-estate-template-") as temp_root:
-        target = Path(temp_root, "estate")
-        shutil.copytree(template_root, target, dirs_exist_ok=True)
-        _sanitize_inventory(target / inventory_path)
-        repository = pygit2.init_repository(str(target), initial_head=branch)
-        index = repository.index
-        index.add_all()
-        index.write()
-        tree_oid = index.write_tree()
-        signature = pygit2.Signature("concordat", "concordat@local")
-        repository.create_commit(
-            f"refs/heads/{branch}",
-            signature,
-            signature,
-            "chore: bootstrap platform-standards template",
-            tree_oid,
-            [],
-        )
-        repo_remote = repository.remotes.create("origin", repo_url)
-        refspec = f"refs/heads/{branch}:refs/heads/{branch}"
-        try:
-            repo_remote.push([refspec], callbacks=callbacks)
-        except pygit2.GitError as error:
-            raise TemplatePushError(str(error)) from error
-        _set_remote_head_if_local(repo_url, branch)
-
-
-def _build_client(
-    token: str | None,
-    client_factory: typ.Callable[[str | None], github3.GitHub] | None = None,
-) -> github3.GitHub:
-    if client_factory:
-        client = client_factory(token)
-        if client is None:
-            raise GitHubClientInitializationError
-        return client
-
-    if not token:
-        raise MissingGitHubTokenError
-
-    client = github3.GitHub(token=token)
-    if client is None:
-        raise GitHubAuthenticationError
-    return client
-
-
-def _sanitize_inventory(path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    loaded: object = {}
-    if path.exists():
-        loaded = _yaml.load(path.read_text(encoding="utf-8")) or {}
-    if not isinstance(loaded, dict):
-        loaded = {}
-    loaded.setdefault("schema_version", 1)
-    loaded["repositories"] = []
-    with path.open("w", encoding="utf-8") as handle:
-        _yaml.dump(loaded, handle)
-
-
-def _set_remote_head_if_local(repo_url: str, branch: str) -> None:
-    path = Path(repo_url)
-    if not path.exists():
-        return
-    try:
-        remote = pygit2.Repository(str(path))
-    except pygit2.GitError:
-        return
-    try:
-        remote.set_head(f"refs/heads/{branch}")
-    except pygit2.GitError:
-        # Ignore repositories that refuse head updates (e.g., already configured).
-        return
-
-
-def _prompt_yes_no(message: str) -> bool:
-    response = input(message)
-    return response.strip().lower() in {"y", "yes"}
-
-
-def _owner_from_slug(slug: str | None) -> str | None:
-    if not slug:
-        return None
-    owner, _, _ = slug.partition("/")
-    return _normalise_owner(owner)
-
-
-def _resolve_github_owner(
-    slug: str | None,
-    explicit_owner: str | None,
-) -> str | None:
-    if explicit_owner is not None:
-        if owner := _normalise_owner(explicit_owner):
-            return owner
-        raise MissingGitHubOwnerError
-    return _owner_from_slug(slug)
-
-
-def _require_owner(owner: str | None) -> str:
-    if not owner:
-        raise MissingGitHubOwnerError
-    return owner
