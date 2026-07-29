@@ -138,8 +138,10 @@ Two reusable modules extend `platform-standards/tofu`:
 
 Both modules execute in the standard OpenTofu runner and respect the apply
 workflow already defined in the design: nightly plans surface drift via a
-read-only `tofu plan -detailed-exitcode` run (a non-zero exit status flags
-drift); a manual `workflow_dispatch` runs `tofu apply` after review.
+read-only `tofu plan -detailed-exitcode` run (exit status `2` on a successful
+plan indicates drift; exit status `1` indicates plan execution failure and is
+treated as an error, not drift); a manual `workflow_dispatch` runs `tofu apply`
+after review.
 
 ### 2.4 Sync workflow between labels and Projects
 
@@ -477,11 +479,12 @@ optional keys (such as `notification_topic`) as unset values. Section 2.8.4
 details the alerting and disaster-recovery flows that consume these attributes.
 
 Every backend bucket—AWS, DigitalOcean, or Scaleway—must enable versioning
-before the CLI writes any state. The command performs a `HeadBucket`+
-`GetBucketVersioning` check via boto3, emits a blocking error if versioning is
-disabled, and surfaces a warning (not an error) when Object Lock is absent.
-Object Lock (the WORM/immutability feature) hardens retention but is orthogonal
-to Terraform's `.tflock` mutexes.
+before the CLI writes any state. The command calls `GetBucketVersioning` via
+boto3 and raises a blocking error if versioning is disabled, then verifies
+write access with a temporary `put_object`/`delete_object` probe against the
+bucket. Object Lock (the write-once-read-many immutability feature) hardens
+retention but is orthogonal to Terraform's `.tflock` mutexes and is left to
+operator discretion; the CLI does not inspect it.
 
 #### 2.8.2 `estate persist` interactive workflow
 
@@ -1738,10 +1741,13 @@ Dependabot pull request regardless of its content.
 - **Sensors:** enumerate package roots (Cargo workspace members, Python
   projects, workflow directories) and diff them against `dependabot.yml` update
   entries; policy-check cooldown blocks per ecosystem; verify the auto-merge
-  workflow calls the pinned shared reusable workflow with the prescribed
-  `pull_request_target` permission set; detect audit steps that run for the
-  Dependabot actor, paired with a presence check for the scheduled audit
-  workflow that covers merged results instead.
+  workflow calls the shared reusable workflow pinned per the Section 8.3
+  contract (a semantic-version tag at minimum, preferably an immutable commit
+  SHA or major-version pin; branch and mutable-tag references are
+  non-compliant) with the prescribed `pull_request_target` permission set;
+  detect audit steps that run for the Dependabot actor, paired with a presence
+  check for the scheduled audit workflow — verifying its pin the same way —
+  that covers merged results instead.
 - **Actuators:** comment-preserving patches adding missing `dependabot.yml`
   directories and cooldown blocks, and file-copies of the canonical auto-merge
   and scheduled-audit workflows.
@@ -1756,8 +1762,9 @@ metrics cannot expose (the doctests-never-ran incident in QG-004 being the
 degenerate case).
 
 - **Sensors:** file presence and policy checks that a scheduled workflow
-  exists, calls the pinned shared mutation-testing workflow, and is not wired
-  into required pull-request checks.
+  exists, calls the shared mutation-testing workflow pinned per the Section 8.3
+  contract (semantic-version tag at minimum; branch and mutable-tag references
+  non-compliant), and is not wired into required pull-request checks.
 - **Actuators:** file-copy of the canonical scheduled mutation-testing
   workflow from `canon/`.
 
@@ -2523,7 +2530,11 @@ the principle of least privilege.
   version tag (e.g., `@v1`) to receive non-breaking updates automatically,
   while breaking changes must be introduced under a new major version (e.g.,
   `@v2`), and rolled out deliberately. Using a specific commit SHA is the
-  safest option for maximum stability and security.14
+  safest option for maximum stability and security.14 A semantic-version tag is
+  the minimum acceptable reference; an immutable commit SHA or a major-version
+  tag is preferred. Branch references (e.g., `@main`) and other mutable or
+  floating references (e.g., `@latest`) are not acceptable and must be reported
+  as non-compliant.
 
 ## Works cited
 

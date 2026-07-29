@@ -347,11 +347,16 @@ actuators that remediate them. Each check ships as a lint rule package under
   scheduled-audit presence check. Acceptance: fixtures reproducing the estate
   defects (uncovered workspace member, deadlocking audit gate) raise findings,
   and mutations patch `dependabot.yml` and deploy the canonical workflows.
+  Fixtures whose auto-merge or scheduled-audit workflow references the shared
+  workflow by a branch (e.g., `@main`) or a mutable tag (e.g., `@latest`) are
+  flagged non-compliant, while a semantic-version tag, major-version pin, or
+  commit SHA passes.
 - [ ] Ship the mutation-testing rule package (MT-001): sensors for the
   scheduled workflow calling the pinned shared mutation-testing workflow
   without being merge-blocking; the mutation deploys the canonical workflow.
   Acceptance: a repository without mutation testing raises the finding and the
-  deployed workflow passes `act` validation.
+  deployed workflow passes `act` validation. A fixture pinning the shared
+  mutation-testing workflow to a branch or mutable tag also raises the finding.
 
 ### 4.3. Enforce licensing integrity and toolchain baselines
 
