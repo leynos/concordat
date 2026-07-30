@@ -668,6 +668,82 @@ def test_init_estate_translates_authentication_errors(
     assert "GitHub authentication failed" in str(caught.value)
 
 
+class TestRepositoryPlanHelpers:
+    """State distinctions behind `_prepare_repository`'s remote-state dispatch.
+
+    The public `init_estate` flow already covers each outcome; these pin the
+    contracts the dispatcher relies on — chiefly which paths may build a
+    GitHub client, and the slug guards that precede any authentication.
+    """
+
+    REPO_URL = "git@github.com:example/core.git"
+
+    def test_missing_remote_plan_never_builds_a_client(
+        self,
+        mocker: pytest_mock.MockFixture,
+    ) -> None:
+        """A confirmed-absent remote is planned without contacting GitHub."""
+        build_client = mocker.patch.object(estate_repository, "_build_client")
+
+        plan = estate_repository._plan_missing_repository("example/core")
+
+        assert plan.needs_creation is True, plan
+        assert (plan.owner, plan.name) == ("example", "core"), plan
+        assert plan.client is None, "a missing remote needs no client, got a client"
+        build_client.assert_not_called()
+
+    def test_missing_remote_plan_requires_a_slug(
+        self,
+        mocker: pytest_mock.MockFixture,
+    ) -> None:
+        """Without a slug there is nothing to create, and no client is built."""
+        build_client = mocker.patch.object(estate_repository, "_build_client")
+
+        with pytest.raises(estate.UnsupportedRepositoryCreationError):
+            estate_repository._plan_missing_repository(None)
+
+        build_client.assert_not_called()
+
+    def test_unreachable_remote_plan_preserves_the_built_client(
+        self,
+        mocker: pytest_mock.MockFixture,
+    ) -> None:
+        """The client built to query GitHub is carried into the plan."""
+        fake_client = mocker.Mock()
+        fake_client.repository.return_value = None
+        build_client = mocker.patch.object(
+            estate_repository, "_build_client", return_value=fake_client
+        )
+
+        plan = estate_repository._plan_unreachable_repository(
+            self.REPO_URL,
+            "example/core",
+            "token",
+            None,
+        )
+
+        build_client.assert_called_once_with("token", None)
+        assert plan.needs_creation is True, plan
+        assert (plan.owner, plan.name) == ("example", "core"), plan
+        assert plan.client is fake_client, (
+            "the plan should reuse the client built for the GitHub lookup"
+        )
+
+    def test_unreachable_remote_plan_requires_a_slug(
+        self,
+        mocker: pytest_mock.MockFixture,
+    ) -> None:
+        """An unreachable remote without a slug fails before authenticating."""
+        build_client = mocker.patch.object(estate_repository, "_build_client")
+
+        with pytest.raises(estate.RepositoryUnreachableError):
+            estate_repository._plan_unreachable_repository(
+                self.REPO_URL, None, "token", None
+            )
+
+        build_client.assert_not_called()
+
+
 class TestCreateRepository:
     """Contracts of the organisation/personal repository-creation helpers.
 
