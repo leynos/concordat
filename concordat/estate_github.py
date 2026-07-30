@@ -11,6 +11,9 @@ from __future__ import annotations
 import typing as typ
 
 import github3
+
+# Imported explicitly so the `github3.orgs.Organization` hints below resolve.
+import github3.orgs
 from github3 import exceptions as github3_exceptions
 
 from .estate_errors import (
@@ -48,25 +51,55 @@ def _create_repository(
     owner: str,
     name: str,
 ) -> None:
+    """Create a repository in an organisation or for the authenticated user."""
+    org = _find_organization(client, owner)
+    if org:
+        _create_organization_repository(org, owner, name)
+        return
+    _create_personal_repository(client, owner, name)
+
+
+def _find_organization(
+    client: github3.GitHub,
+    owner: str,
+) -> github3.orgs.Organization | None:
+    """Return the organisation named *owner*, or ``None`` when there is none.
+
+    An authentication failure here precedes any creation attempt: a rejected
+    lookup says nothing about whether *owner* is an organisation, so falling
+    through to the personal path would misreport the cause.
+    """
     try:
-        org = client.organization(owner)
+        return client.organization(owner)
     except github3_exceptions.AuthenticationFailed as error:
         raise GitHubOrganizationAuthenticationError(owner) from error
     except github3_exceptions.NotFoundError:
-        org = None
+        return None
 
-    if org:
-        try:
-            org.create_repository(
-                name,
-                private=True,
-                auto_init=False,
-                description="Platform standards repository managed by concordat",
-            )
-        except github3_exceptions.AuthenticationFailed as error:
-            raise GitHubRepositoryCreationAuthenticationError(owner, name) from error
-        return
 
+def _create_organization_repository(
+    org: github3.orgs.Organization,
+    owner: str,
+    name: str,
+) -> None:
+    """Create *name* inside the *owner* organisation."""
+    try:
+        org.create_repository(
+            name,
+            private=True,
+            auto_init=False,
+            description="Platform standards repository managed by concordat",
+        )
+    except github3_exceptions.AuthenticationFailed as error:
+        raise GitHubRepositoryCreationAuthenticationError(owner, name) from error
+
+
+def _create_personal_repository(
+    client: github3.GitHub,
+    owner: str,
+    name: str,
+) -> None:
+    """Create *name* for the authenticated user, who must be *owner*."""
     user = client.me()
     if not user or user.login != owner:
         raise RepositoryCreationPermissionError(owner)
