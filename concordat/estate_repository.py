@@ -1,58 +1,65 @@
-"""GitHub and git repository lifecycle for estate initialisation.
+"""Estate-init decisions: owner resolution and repository provisioning plans.
 
-This module owns the side-effecting repository work behind
-``concordat estate init``: probing the remote, provisioning it through the
-GitHub API, bootstrapping the bundled template, and reading an estate's
-inventory. :mod:`concordat.estate` is the façade that orchestrates these
-steps; it imports this module, never the reverse.
+This module decides *what* ``concordat estate init`` must do — which owner an
+estate belongs to, and whether its remote needs provisioning — and delegates
+the *how* to :mod:`concordat.estate_github` (GitHub API) and
+:mod:`concordat.estate_git` (git operations).
+
+The names imported below are deliberate, not incidental. They keep this module
+the single lookup site the façade calls through (``estate_repository.<name>``)
+and the single seam the test suite monkeypatches, so the split stays invisible
+to both. :mod:`concordat.estate` imports this module, never the reverse.
 """
 
 from __future__ import annotations
 
 import dataclasses
-import shutil
 import typing as typ
-from pathlib import Path
-from tempfile import TemporaryDirectory
 
-import github3
-import pygit2
-from github3 import exceptions as github3_exceptions
-from pygit2 import RemoteCallbacks
-
-from .estate_config import EstateRecord, _normalise_owner, _yaml
+from .estate_config import _normalise_owner
 from .estate_errors import (
     EstateCreationAbortedError,
-    EstateInventoryMissingError,
-    GitHubAuthenticationError,
-    GitHubClientInitializationError,
-    GitHubOrganizationAuthenticationError,
     GitHubOwnerConfirmationAbortedError,
-    GitHubRepositoryAuthenticationError,
-    GitHubRepositoryCreationAuthenticationError,
     MissingGitHubOwnerError,
-    MissingGitHubTokenError,
     NonEmptyRepositoryError,
-    RepositoryCreationPermissionError,
     RepositoryIdentityError,
     RepositoryInaccessibleError,
     RepositorySlugUnknownError,
     RepositoryUnreachableError,
-    TemplateMissingError,
-    TemplatePushError,
     UnsupportedRepositoryCreationError,
 )
-from .gitutils import build_remote_callbacks
 
+# Used directly below; also the seam tests patch as
+# ``estate_repository._probe_remote`` / ``._build_client`` / ``._create_repository``.
+from .estate_git import (
+    RemoteProbe,
+    _probe_remote,
+)
 
-@dataclasses.dataclass(frozen=True, slots=True)
-class RemoteProbe:
-    """Describe the observed state of a remote repository."""
+# Re-exported for the façade to call and for tests to patch: `init_estate`
+# invokes `estate_repository._bootstrap_template` / `.default_template_root` /
+# `.TemplateBootstrap`, and `list_enrolled_repositories` invokes
+# `estate_repository._collect_inventory`.
+from .estate_git import (
+    TemplateBootstrap as TemplateBootstrap,
+)
+from .estate_git import (
+    _bootstrap_template as _bootstrap_template,
+)
+from .estate_git import (
+    _collect_inventory as _collect_inventory,
+)
+from .estate_git import (
+    default_template_root as default_template_root,
+)
+from .estate_github import _build_client, _create_repository
 
-    reachable: bool
-    exists: bool
-    empty: bool
-    error: str | None = None
+# `init_estate` builds its push callbacks through this façade lookup site too;
+# re-exported from `gitutils` exactly as before the GitHub/git split.
+from .gitutils import build_remote_callbacks as build_remote_callbacks
+
+if typ.TYPE_CHECKING:
+    import github3
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -63,21 +70,6 @@ class RepositoryPlan:
     owner: str | None
     name: str | None
     client: github3.GitHub | None
-
-
-@dataclasses.dataclass(frozen=True, slots=True)
-class TemplateBootstrap:
-    """Inputs controlling one estate-template bootstrap operation."""
-
-    branch: str
-    template_root: Path
-    inventory_path: str
-    callbacks: RemoteCallbacks | None
-
-
-def default_template_root() -> Path:
-    """Return the repository template bundled with concordat."""
-    return Path(__file__).resolve().parents[1] / "platform-standards"
 
 
 def _resolve_and_confirm_owner(
@@ -206,180 +198,6 @@ def _ensure_repository_exists(
         raise RepositoryIdentityError
     _create_repository(resolved_client, owner, name)
     return
-
-
-def _probe_remote(repo_url: str) -> RemoteProbe:
-    callbacks = build_remote_callbacks(repo_url)
-    with TemporaryDirectory(prefix="concordat-estate-probe-") as temp_root:
-        repository = pygit2.init_repository(temp_root)
-        remote = repository.remotes.create("origin", repo_url)
-        try:
-            refs = remote.ls_remotes(callbacks=callbacks)
-        except pygit2.GitError as error:
-            return RemoteProbe(
-                reachable=False,
-                exists=False,
-                empty=True,
-                error=str(error),
-            )
-    return RemoteProbe(reachable=True, exists=True, empty=not refs)
-
-
-def _collect_inventory(record: EstateRecord) -> list[str]:
-    callbacks = build_remote_callbacks(record.repo_url)
-    with TemporaryDirectory(prefix="concordat-estate-") as temp_root:
-        repository = pygit2.clone_repository(
-            record.repo_url,
-            temp_root,
-            callbacks=callbacks,
-        )
-        workdir = Path(repository.workdir or temp_root)
-        inventory_path = workdir / record.inventory_path
-        if not inventory_path.exists():
-            raise EstateInventoryMissingError(record.alias, record.inventory_path)
-        contents = _yaml.load(inventory_path.read_text(encoding="utf-8")) or {}
-        repos = contents.get("repositories") or []
-        slugs: set[str] = set()
-        for entry in repos:
-            if not isinstance(entry, dict):
-                continue
-            slug = entry.get("name")
-            if isinstance(slug, str) and slug.strip():
-                slugs.add(slug.strip())
-        return sorted(_slug_to_git_url(slug) for slug in slugs)
-
-
-def _slug_to_git_url(slug: str) -> str:
-    if slug.startswith("git@") or slug.startswith("ssh://"):
-        return slug
-    if slug.startswith("https://") or slug.startswith("http://"):
-        return slug
-    return f"git@github.com:{slug}.git"
-
-
-def _create_repository(
-    client: github3.GitHub,
-    owner: str,
-    name: str,
-) -> None:
-    try:
-        org = client.organization(owner)
-    except github3_exceptions.AuthenticationFailed as error:
-        raise GitHubOrganizationAuthenticationError(owner) from error
-    except github3_exceptions.NotFoundError:
-        org = None
-
-    if org:
-        try:
-            org.create_repository(
-                name,
-                private=True,
-                auto_init=False,
-                description="Platform standards repository managed by concordat",
-            )
-        except github3_exceptions.AuthenticationFailed as error:
-            raise GitHubRepositoryCreationAuthenticationError(owner, name) from error
-        return
-
-    user = client.me()
-    if not user or user.login != owner:
-        raise RepositoryCreationPermissionError(owner)
-    try:
-        client.create_repository(
-            name,
-            private=True,
-            auto_init=False,
-            description="Platform standards repository managed by concordat",
-        )
-    except github3_exceptions.AuthenticationFailed as error:
-        raise GitHubRepositoryAuthenticationError from error
-
-
-def _bootstrap_template(
-    repo_url: str,
-    bootstrap: TemplateBootstrap,
-) -> None:
-    """Seed *repo_url* from the bundled template as one atomic operation.
-
-    Validates template availability, copies and sanitizes the template,
-    initialises and commits a Git repository, pushes the target branch, and
-    sets the local remote HEAD where applicable.
-    """
-    branch = bootstrap.branch
-    if not bootstrap.template_root.exists():
-        raise TemplateMissingError(bootstrap.template_root)
-    with TemporaryDirectory(prefix="concordat-estate-template-") as temp_root:
-        target = Path(temp_root, "estate")
-        shutil.copytree(bootstrap.template_root, target, dirs_exist_ok=True)
-        _sanitize_inventory(target / bootstrap.inventory_path)
-        repository = pygit2.init_repository(str(target), initial_head=branch)
-        index = repository.index
-        index.add_all()
-        index.write()
-        tree_oid = index.write_tree()
-        signature = pygit2.Signature("concordat", "concordat@local")
-        repository.create_commit(
-            f"refs/heads/{branch}",
-            signature,
-            signature,
-            "chore: bootstrap platform-standards template",
-            tree_oid,
-            [],
-        )
-        repo_remote = repository.remotes.create("origin", repo_url)
-        refspec = f"refs/heads/{branch}:refs/heads/{branch}"
-        try:
-            repo_remote.push([refspec], callbacks=bootstrap.callbacks)
-        except pygit2.GitError as error:
-            raise TemplatePushError(str(error)) from error
-        _set_remote_head_if_local(repo_url, branch)
-
-
-def _build_client(
-    token: str | None,
-    client_factory: typ.Callable[[str | None], github3.GitHub] | None = None,
-) -> github3.GitHub:
-    if client_factory:
-        client = client_factory(token)
-        if client is None:
-            raise GitHubClientInitializationError
-        return client
-
-    if not token:
-        raise MissingGitHubTokenError
-
-    client = github3.GitHub(token=token)
-    if client is None:
-        raise GitHubAuthenticationError
-    return client
-
-
-def _sanitize_inventory(path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    loaded: object = {}
-    if path.exists():
-        loaded = _yaml.load(path.read_text(encoding="utf-8")) or {}
-    if not isinstance(loaded, dict):
-        loaded = {}
-    loaded.setdefault("schema_version", 1)
-    loaded["repositories"] = []
-    with path.open("w", encoding="utf-8") as handle:
-        _yaml.dump(loaded, handle)
-
-
-def _set_remote_head_if_local(repo_url: str, branch: str) -> None:
-    path = Path(repo_url)
-    if not path.exists():
-        return
-    try:
-        remote = pygit2.Repository(str(path))
-    except pygit2.GitError:
-        return
-    try:
-        remote.set_head(f"refs/heads/{branch}")
-    except pygit2.GitError:
-        # Ignore repositories that refuse head updates (e.g., already configured).
-        return
 
 
 def _prompt_yes_no(message: str) -> bool:

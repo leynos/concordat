@@ -9,7 +9,7 @@ import pygit2
 import pytest
 from github3 import exceptions as github3_exceptions
 
-from concordat import estate, estate_config, estate_repository
+from concordat import estate, estate_config, estate_github, estate_repository
 from concordat.errors import ConcordatError
 from concordat.estate import (
     EstateRecord,
@@ -677,8 +677,10 @@ def test_build_client_requires_token() -> None:
 def test_build_client_uses_token(mocker: pytest_mock.MockFixture) -> None:
     """Authenticate the GitHub client using the provided token."""
     fake = mocker.Mock()
+    # `_build_client` lives in `estate_github`, so its `github3` reference —
+    # unlike the function seams — is patched at that implementation module.
     mocked_ctor = mocker.patch.object(
-        estate_repository.github3, "GitHub", return_value=fake
+        estate_github.github3, "GitHub", return_value=fake
     )
 
     client = _build_client("secret")
@@ -840,10 +842,40 @@ class TestEstateRepositoryReexport:
     """Repository-lifecycle types stay importable from the façade."""
 
     def test_remote_probe_is_the_same_class(self) -> None:
-        """``estate.RemoteProbe`` is the class defined in ``estate_repository``."""
+        """``estate.RemoteProbe`` is the class defined in ``estate_git``.
+
+        The façade re-exports through ``estate_repository``, which imports the
+        class directly, so all three names must be one object.
+        """
+        from concordat import estate_git
+
         assert estate.RemoteProbe is estate_repository.RemoteProbe, (
             "estate.RemoteProbe should be estate_repository.RemoteProbe"
         )
+        assert estate_repository.RemoteProbe is estate_git.RemoteProbe, (
+            "estate_repository.RemoteProbe should be estate_git.RemoteProbe"
+        )
+
+    def test_moved_helpers_are_imported_aliases(self) -> None:
+        """The patch seams alias the implementations, so monkeypatches bite.
+
+        Tests patch ``estate_repository`` attributes; those must be the very
+        objects ``estate_git``/``estate_github`` define, not wrappers.
+        """
+        from concordat import estate_git, estate_github
+
+        for name, module in (
+            ("_probe_remote", estate_git),
+            ("_bootstrap_template", estate_git),
+            ("_collect_inventory", estate_git),
+            ("default_template_root", estate_git),
+            ("TemplateBootstrap", estate_git),
+            ("_build_client", estate_github),
+            ("_create_repository", estate_github),
+        ):
+            assert getattr(estate_repository, name) is getattr(module, name), (
+                f"estate_repository.{name} should be {module.__name__}.{name}"
+            )
 
 
 class TestEstateConfigReexport:
