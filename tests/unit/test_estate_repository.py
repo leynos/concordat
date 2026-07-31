@@ -287,27 +287,31 @@ class TestEnsureRepositoryExists:
     """
 
     @staticmethod
-    def _provisioning(
-        mocker: pytest_mock.MockFixture,
+    def _plan(
         *,
         slug: str | None = "example/core",
         owner: str | None = "example",
         name: str | None = "core",
         client: github3.GitHub | None = None,
-        confirmer: typ.Callable[[str], bool] = lambda _prompt: True,
-    ) -> estate_repository.RepositoryProvisioning:
-        plan = estate_repository.RepositoryPlan(
+    ) -> estate_repository.RepositoryPlan:
+        return estate_repository.RepositoryPlan(
             needs_creation=True,
+            slug=slug,
             owner=owner,
             name=name,
             client=client,
         )
-        return estate_repository.RepositoryProvisioning(
-            slug=slug,
-            plan=plan,
-            github_token="token",  # noqa: S106
-            client_factory=None,
-            confirmer=confirmer,
+
+    @staticmethod
+    def _ensure(
+        plan: estate_repository.RepositoryPlan,
+        confirmer: typ.Callable[[str], bool],
+    ) -> None:
+        estate_repository._ensure_repository_exists(
+            plan,
+            "token",
+            None,
+            confirmer,
         )
 
     def test_missing_slug_does_not_build_a_client(
@@ -320,9 +324,7 @@ class TestEnsureRepositoryExists:
         confirmer = mocker.Mock(return_value=True)
 
         with pytest.raises(estate.RepositorySlugUnknownError):
-            estate_repository._ensure_repository_exists(
-                self._provisioning(mocker, slug=None, confirmer=confirmer)
-            )
+            self._ensure(self._plan(slug=None), confirmer)
 
         build_client.assert_not_called()
         confirmer.assert_not_called()
@@ -337,9 +339,7 @@ class TestEnsureRepositoryExists:
         confirmer = mocker.Mock(return_value=False)
 
         with pytest.raises(estate.EstateCreationAbortedError):
-            estate_repository._ensure_repository_exists(
-                self._provisioning(mocker, client=mocker.Mock(), confirmer=confirmer)
-            )
+            self._ensure(self._plan(client=mocker.Mock()), confirmer)
 
         confirmer.assert_called_once_with(
             "Create GitHub repository example/core? [y/N]: "
@@ -355,9 +355,7 @@ class TestEnsureRepositoryExists:
         create = mocker.patch.object(estate_repository, "_create_repository")
         prepared = mocker.Mock()
 
-        estate_repository._ensure_repository_exists(
-            self._provisioning(mocker, client=prepared)
-        )
+        self._ensure(self._plan(client=prepared), lambda _prompt: True)
 
         build_client.assert_not_called()
         create.assert_called_once_with(prepared, "example", "core")
@@ -380,14 +378,9 @@ class TestEnsureRepositoryExists:
         confirmer = mocker.Mock(return_value=True)
 
         with pytest.raises(estate.RepositoryIdentityError):
-            estate_repository._ensure_repository_exists(
-                self._provisioning(
-                    mocker,
-                    owner=owner,
-                    name=name,
-                    client=mocker.Mock(),
-                    confirmer=confirmer,
-                )
+            self._ensure(
+                self._plan(owner=owner, name=name, client=mocker.Mock()),
+                confirmer,
             )
 
         confirmer.assert_called_once()

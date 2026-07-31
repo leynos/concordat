@@ -64,23 +64,18 @@ if typ.TYPE_CHECKING:
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class RepositoryPlan:
-    """Describe the steps required to prepare an estate repository."""
+    """Describe the steps required to prepare an estate repository.
+
+    ``slug``, ``owner``, and ``name`` are the one repository identity the plan
+    resolved — ``owner``/``name`` are split from ``slug`` — so provisioning
+    reads them all from here rather than receiving parallel arguments.
+    """
 
     needs_creation: bool
+    slug: str | None
     owner: str | None
     name: str | None
     client: github3.GitHub | None
-
-
-@dataclasses.dataclass(frozen=True, slots=True)
-class RepositoryProvisioning:
-    """Inputs for creating one missing estate repository."""
-
-    slug: str | None
-    plan: RepositoryPlan
-    github_token: str | None
-    client_factory: typ.Callable[[str | None], github3.GitHub] | None
-    confirmer: typ.Callable[[str], bool]
 
 
 def _resolve_and_confirm_owner(
@@ -139,6 +134,7 @@ def _plan_missing_repository(slug: str | None) -> RepositoryPlan:
     owner, name = _split_slug(slug)
     return RepositoryPlan(
         needs_creation=True,
+        slug=slug,
         owner=owner,
         name=name,
         client=None,
@@ -155,6 +151,7 @@ def _plan_reachable_repository(repo_url: str, probe: RemoteProbe) -> RepositoryP
         raise NonEmptyRepositoryError(repo_url)
     return RepositoryPlan(
         needs_creation=False,
+        slug=None,
         owner=None,
         name=None,
         client=None,
@@ -181,23 +178,29 @@ def _plan_unreachable_repository(
         raise RepositoryInaccessibleError(repo_url)
     return RepositoryPlan(
         needs_creation=True,
+        slug=slug,
         owner=owner,
         name=name,
         client=client,
     )
 
 
-def _ensure_repository_exists(provisioning: RepositoryProvisioning) -> None:
-    """Create the GitHub repository described by *provisioning*.
+def _ensure_repository_exists(
+    plan: RepositoryPlan,
+    github_token: str | None,
+    client_factory: typ.Callable[[str | None], github3.GitHub] | None,
+    confirmer: typ.Callable[[str], bool],
+) -> None:
+    """Create the GitHub repository described by *plan*.
 
     The step order is load-bearing: identity is required before any client is
     built, the operator is prompted before the owner/name pair is validated,
     and nothing is created until the prompt is accepted.
     """
-    slug = _require_repository_slug(provisioning.slug)
-    client = _resolve_provisioning_client(provisioning)
-    _confirm_repository_creation(slug, provisioning.confirmer)
-    owner, name = _require_repository_identity(provisioning.plan)
+    slug = _require_repository_slug(plan.slug)
+    client = plan.client or _build_client(github_token, client_factory)
+    _confirm_repository_creation(slug, confirmer)
+    owner, name = _require_repository_identity(plan)
     _create_repository(client, owner, name)
 
 
@@ -206,16 +209,6 @@ def _require_repository_slug(slug: str | None) -> str:
     if not slug:
         raise RepositorySlugUnknownError
     return slug
-
-
-def _resolve_provisioning_client(
-    provisioning: RepositoryProvisioning,
-) -> github3.GitHub:
-    """Reuse the prepared client or create one on demand."""
-    return provisioning.plan.client or _build_client(
-        provisioning.github_token,
-        provisioning.client_factory,
-    )
 
 
 def _confirm_repository_creation(

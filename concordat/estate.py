@@ -179,13 +179,10 @@ def init_estate(
     )
     if repository_plan.needs_creation:
         estate_repository._ensure_repository_exists(
-            estate_repository.RepositoryProvisioning(
-                slug=slug,
-                plan=repository_plan,
-                github_token=github_token,
-                client_factory=client_factory,
-                confirmer=confirmer,
-            )
+            repository_plan,
+            github_token,
+            client_factory,
+            confirmer,
         )
 
     bootstrap = estate_repository.TemplateBootstrap(
