@@ -8,7 +8,7 @@ import typing as typ
 import pytest
 from github3 import exceptions as github3_exceptions
 
-from concordat import estate, estate_github, estate_repository
+from concordat import estate, estate_git, estate_github, estate_repository
 from concordat.errors import ConcordatError
 from concordat.estate import GitHubOwnerConfirmationAbortedError
 from concordat.estate_repository import _build_client, _resolve_and_confirm_owner
@@ -196,6 +196,86 @@ class TestRepositoryPlanHelpers:
             )
 
         build_client.assert_not_called()
+
+
+class TestInventoryUrls:
+    """Decoding of an estate's inventory into enrolled repository URLs.
+
+    The public clone path is covered end to end by the `init_estate` suite;
+    these exercise the filtering, normalisation, and ordering directly.
+    """
+
+    @staticmethod
+    def _inventory(tmp_path: pathlib.Path, body: str) -> pathlib.Path:
+        path = tmp_path / "repositories.yaml"
+        path.write_text(body, encoding="utf-8")
+        return path
+
+    def test_invalid_entries_are_ignored(self, tmp_path: pathlib.Path) -> None:
+        """Only mapping entries carrying a non-blank string name are kept."""
+        inventory = self._inventory(
+            tmp_path,
+            "schema_version: 1\n"
+            "repositories:\n"
+            "  - name: example/one\n"
+            "  - not-a-mapping\n"
+            "  - name: 7\n"
+            "  - name: ''\n"
+            "  - name: '   '\n"
+            "  - other_key: example/ignored\n",
+        )
+
+        assert estate_git._inventory_urls(inventory) == [
+            "git@github.com:example/one.git"
+        ], estate_git._inventory_urls(inventory)
+
+    def test_duplicate_and_padded_names_collapse(self, tmp_path: pathlib.Path) -> None:
+        """Names are stripped before deduplication, yielding one URL."""
+        inventory = self._inventory(
+            tmp_path,
+            "repositories:\n"
+            "  - name: example/one\n"
+            "  - name: '  example/one  '\n"
+            "  - name: example/one\n",
+        )
+
+        assert estate_git._inventory_urls(inventory) == [
+            "git@github.com:example/one.git"
+        ], estate_git._inventory_urls(inventory)
+
+    def test_urls_are_sorted(self, tmp_path: pathlib.Path) -> None:
+        """Inventory order does not leak into the returned URLs."""
+        inventory = self._inventory(
+            tmp_path,
+            "repositories:\n"
+            "  - name: example/zulu\n"
+            "  - name: example/alpha\n"
+            "  - name: example/mike\n",
+        )
+
+        urls = estate_git._inventory_urls(inventory)
+        assert urls == sorted(urls), urls
+        assert urls == [
+            "git@github.com:example/alpha.git",
+            "git@github.com:example/mike.git",
+            "git@github.com:example/zulu.git",
+        ], urls
+
+    def test_qualified_urls_are_preserved(self, tmp_path: pathlib.Path) -> None:
+        """Already-qualified SSH and HTTPS remotes pass through untouched."""
+        inventory = self._inventory(
+            tmp_path,
+            "repositories:\n"
+            "  - name: git@github.com:example/ssh.git\n"
+            "  - name: https://github.com/example/https.git\n"
+            "  - name: example/bare\n",
+        )
+
+        assert estate_git._inventory_urls(inventory) == [
+            "git@github.com:example/bare.git",
+            "git@github.com:example/ssh.git",
+            "https://github.com/example/https.git",
+        ], estate_git._inventory_urls(inventory)
 
 
 class TestEnsureRepositoryExists:

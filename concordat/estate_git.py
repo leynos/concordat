@@ -69,6 +69,7 @@ def _probe_remote(repo_url: str) -> RemoteProbe:
 
 
 def _collect_inventory(record: EstateRecord) -> list[str]:
+    """Clone an estate and return its enrolled repository URLs."""
     callbacks = build_remote_callbacks(record.repo_url)
     with TemporaryDirectory(prefix="concordat-estate-") as temp_root:
         repository = pygit2.clone_repository(
@@ -79,17 +80,25 @@ def _collect_inventory(record: EstateRecord) -> list[str]:
         workdir = Path(repository.workdir or temp_root)
         inventory_path = workdir / record.inventory_path
         if not inventory_path.exists():
-            raise EstateInventoryMissingError(record.alias, record.inventory_path)
-        contents = _yaml.load(inventory_path.read_text(encoding="utf-8")) or {}
-        repos = contents.get("repositories") or []
-        slugs: set[str] = set()
-        for entry in repos:
-            if not isinstance(entry, dict):
-                continue
-            slug = entry.get("name")
-            if isinstance(slug, str) and slug.strip():
-                slugs.add(slug.strip())
-        return sorted(_slug_to_git_url(slug) for slug in slugs)
+            raise EstateInventoryMissingError(
+                record.alias,
+                record.inventory_path,
+            )
+        return _inventory_urls(inventory_path)
+
+
+def _inventory_urls(inventory_path: Path) -> list[str]:
+    """Load, normalize, deduplicate, and sort repository URLs from inventory."""
+    contents = _yaml.load(inventory_path.read_text(encoding="utf-8")) or {}
+    repos = contents.get("repositories") or []
+    slugs: set[str] = set()
+    for entry in repos:
+        if not isinstance(entry, dict):
+            continue
+        slug = entry.get("name")
+        if isinstance(slug, str) and slug.strip():
+            slugs.add(slug.strip())
+    return sorted(_slug_to_git_url(slug) for slug in slugs)
 
 
 def _slug_to_git_url(slug: str) -> str:
