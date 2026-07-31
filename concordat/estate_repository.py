@@ -72,6 +72,17 @@ class RepositoryPlan:
     client: github3.GitHub | None
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
+class RepositoryProvisioning:
+    """Inputs for creating one missing estate repository."""
+
+    slug: str | None
+    plan: RepositoryPlan
+    github_token: str | None
+    client_factory: typ.Callable[[str | None], github3.GitHub] | None
+    confirmer: typ.Callable[[str], bool]
+
+
 def _resolve_and_confirm_owner(
     slug: str | None,
     github_owner: str | None,
@@ -176,28 +187,53 @@ def _plan_unreachable_repository(
     )
 
 
-def _ensure_repository_exists(
-    slug: str | None,
-    owner: str | None,
-    name: str | None,
-    client: github3.GitHub | None,
-    github_token: str | None,
-    client_factory: typ.Callable[[str | None], github3.GitHub] | None,
-    confirmer: typ.Callable[[str], bool],
-) -> None:
-    """Create the GitHub repository when it does not yet exist."""
+def _ensure_repository_exists(provisioning: RepositoryProvisioning) -> None:
+    """Create the GitHub repository described by *provisioning*.
+
+    The step order is load-bearing: identity is required before any client is
+    built, the operator is prompted before the owner/name pair is validated,
+    and nothing is created until the prompt is accepted.
+    """
+    slug = _require_repository_slug(provisioning.slug)
+    client = _resolve_provisioning_client(provisioning)
+    _confirm_repository_creation(slug, provisioning.confirmer)
+    owner, name = _require_repository_identity(provisioning.plan)
+    _create_repository(client, owner, name)
+
+
+def _require_repository_slug(slug: str | None) -> str:
+    """Return a creation slug or raise when repository identity is absent."""
     if not slug:
         raise RepositorySlugUnknownError
+    return slug
 
-    resolved_client = client or _build_client(github_token, client_factory)
-    if not confirmer(
-        f"Create GitHub repository {slug}? [y/N]: ",
-    ):
+
+def _resolve_provisioning_client(
+    provisioning: RepositoryProvisioning,
+) -> github3.GitHub:
+    """Reuse the prepared client or create one on demand."""
+    return provisioning.plan.client or _build_client(
+        provisioning.github_token,
+        provisioning.client_factory,
+    )
+
+
+def _confirm_repository_creation(
+    slug: str,
+    confirmer: typ.Callable[[str], bool],
+) -> None:
+    """Require confirmation before creating the repository."""
+    if not confirmer(f"Create GitHub repository {slug}? [y/N]: "):
         raise EstateCreationAbortedError
-    if not owner or not name:
+
+
+def _require_repository_identity(
+    plan: RepositoryPlan,
+) -> tuple[str, str]:
+    """Return the owner/name pair required by the GitHub creation API."""
+    if not plan.owner or not plan.name:
         raise RepositoryIdentityError
-    _create_repository(resolved_client, owner, name)
-    return
+    return plan.owner, plan.name
 
 
 def _prompt_yes_no(message: str) -> bool:

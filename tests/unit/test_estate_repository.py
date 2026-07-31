@@ -16,6 +16,7 @@ from concordat.estate_repository import _build_client, _resolve_and_confirm_owne
 if typ.TYPE_CHECKING:
     import pathlib
 
+    import github3
     import pytest_mock
 
 
@@ -195,6 +196,122 @@ class TestRepositoryPlanHelpers:
             )
 
         build_client.assert_not_called()
+
+
+class TestEnsureRepositoryExists:
+    """Step ordering of the provisioning flow.
+
+    The order is load-bearing: identity is required before a client is built,
+    the operator is prompted before the owner/name pair is validated, and
+    nothing is created until the prompt is accepted.
+    """
+
+    @staticmethod
+    def _provisioning(
+        mocker: pytest_mock.MockFixture,
+        *,
+        slug: str | None = "example/core",
+        owner: str | None = "example",
+        name: str | None = "core",
+        client: github3.GitHub | None = None,
+        confirmer: typ.Callable[[str], bool] = lambda _prompt: True,
+    ) -> estate_repository.RepositoryProvisioning:
+        plan = estate_repository.RepositoryPlan(
+            needs_creation=True,
+            owner=owner,
+            name=name,
+            client=client,
+        )
+        return estate_repository.RepositoryProvisioning(
+            slug=slug,
+            plan=plan,
+            github_token="token",  # noqa: S106
+            client_factory=None,
+            confirmer=confirmer,
+        )
+
+    def test_missing_slug_does_not_build_a_client(
+        self,
+        mocker: pytest_mock.MockFixture,
+    ) -> None:
+        """Without a slug the flow fails before authenticating or prompting."""
+        build_client = mocker.patch.object(estate_repository, "_build_client")
+        create = mocker.patch.object(estate_repository, "_create_repository")
+        confirmer = mocker.Mock(return_value=True)
+
+        with pytest.raises(estate.RepositorySlugUnknownError):
+            estate_repository._ensure_repository_exists(
+                self._provisioning(mocker, slug=None, confirmer=confirmer)
+            )
+
+        build_client.assert_not_called()
+        confirmer.assert_not_called()
+        create.assert_not_called()
+
+    def test_declined_confirmation_creates_nothing(
+        self,
+        mocker: pytest_mock.MockFixture,
+    ) -> None:
+        """A declined prompt aborts before any repository is created."""
+        create = mocker.patch.object(estate_repository, "_create_repository")
+        confirmer = mocker.Mock(return_value=False)
+
+        with pytest.raises(estate.EstateCreationAbortedError):
+            estate_repository._ensure_repository_exists(
+                self._provisioning(mocker, client=mocker.Mock(), confirmer=confirmer)
+            )
+
+        confirmer.assert_called_once_with(
+            "Create GitHub repository example/core? [y/N]: "
+        )
+        create.assert_not_called()
+
+    def test_prepared_client_is_reused_for_creation(
+        self,
+        mocker: pytest_mock.MockFixture,
+    ) -> None:
+        """A plan carrying a client reuses it instead of authenticating again."""
+        build_client = mocker.patch.object(estate_repository, "_build_client")
+        create = mocker.patch.object(estate_repository, "_create_repository")
+        prepared = mocker.Mock()
+
+        estate_repository._ensure_repository_exists(
+            self._provisioning(mocker, client=prepared)
+        )
+
+        build_client.assert_not_called()
+        create.assert_called_once_with(prepared, "example", "core")
+
+    @pytest.mark.parametrize(
+        ("owner", "name"),
+        [
+            pytest.param(None, "core", id="missing-owner"),
+            pytest.param("example", None, id="missing-name"),
+        ],
+    )
+    def test_incomplete_identity_is_rejected_after_confirmation(
+        self,
+        mocker: pytest_mock.MockFixture,
+        owner: str | None,
+        name: str | None,
+    ) -> None:
+        """The owner/name pair is validated only once the prompt is accepted."""
+        create = mocker.patch.object(estate_repository, "_create_repository")
+        confirmer = mocker.Mock(return_value=True)
+
+        with pytest.raises(estate.RepositoryIdentityError):
+            estate_repository._ensure_repository_exists(
+                self._provisioning(
+                    mocker,
+                    owner=owner,
+                    name=name,
+                    client=mocker.Mock(),
+                    confirmer=confirmer,
+                )
+            )
+
+        confirmer.assert_called_once()
+        create.assert_not_called()
 
 
 class TestCreateRepository:
