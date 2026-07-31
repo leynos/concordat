@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import subprocess
 import typing as typ
@@ -44,6 +45,21 @@ MINIMAL_REPORT: typ.Final = {
 def _report_with(**overrides: object) -> dict[str, object]:
     """Return an isolated minimal makeutil report with selected overrides."""
     return dict(MINIMAL_REPORT, **overrides)
+
+
+# A case supplies stdout either verbatim (non-JSON or hand-built payloads) or as
+# a factory, so each parametrized run gets its own report mapping.
+MakeutilOutput = str | typ.Callable[[], dict[str, object]]
+
+
+@dataclasses.dataclass(frozen=True)
+class MakeutilFailureCase:
+    """A malformed or rejected makeutil subprocess result."""
+
+    exit_code: int
+    stdout: MakeutilOutput
+    stderr: str
+    message: str
 
 
 CARGO_STUB = '[package]\nname = "fixture"\nversion = "0.1.0"\n'
@@ -145,63 +161,91 @@ class TestInspectMakefile:
         assert error.resource == tmp_path / "Makefile", error.resource
 
     @pytest.mark.parametrize(
-        ("exit_code", "stdout", "stderr", "message"),
+        "case",
         [
             pytest.param(
-                2,
-                "",
-                "makeutil: source-utf8: invalid",
-                "source-utf8",
+                MakeutilFailureCase(
+                    exit_code=2,
+                    stdout="",
+                    stderr="makeutil: source-utf8: invalid",
+                    message="source-utf8",
+                ),
                 id="fatal-exit",
             ),
             pytest.param(
-                0,
-                lambda: _report_with(schema_version=99),
-                "",
-                "schema",
+                MakeutilFailureCase(
+                    exit_code=0,
+                    stdout=lambda: _report_with(schema_version=99),
+                    stderr="",
+                    message="schema",
+                ),
                 id="unsupported-schema",
             ),
-            pytest.param(0, "not json at all", "", "invalid JSON", id="invalid-json"),
             pytest.param(
-                0,
-                json.dumps([1, 2, 3]),
-                "",
-                "not a JSON object",
+                MakeutilFailureCase(
+                    exit_code=0,
+                    stdout="not json at all",
+                    stderr="",
+                    message="invalid JSON",
+                ),
+                id="invalid-json",
+            ),
+            pytest.param(
+                MakeutilFailureCase(
+                    exit_code=0,
+                    stdout=json.dumps([1, 2, 3]),
+                    stderr="",
+                    message="not a JSON object",
+                ),
                 id="non-object-json",
             ),
             pytest.param(
-                0,
-                lambda: _report_with(parse="complete"),
-                "",
-                "no `parse` object",
+                MakeutilFailureCase(
+                    exit_code=0,
+                    stdout=lambda: _report_with(parse="complete"),
+                    stderr="",
+                    message="no `parse` object",
+                ),
                 id="non-object-parse",
             ),
             pytest.param(
-                0,
-                lambda: _report_with(parse={"status": "bogus", "diagnostics": []}),
-                "",
-                "unknown parse status",
+                MakeutilFailureCase(
+                    exit_code=0,
+                    stdout=lambda: _report_with(
+                        parse={"status": "bogus", "diagnostics": []}
+                    ),
+                    stderr="",
+                    message="unknown parse status",
+                ),
                 id="unknown-status",
             ),
             pytest.param(
-                1,
-                lambda: _report_with(parse={"status": "complete", "diagnostics": []}),
-                "",
-                "disagrees with its exit code",
+                MakeutilFailureCase(
+                    exit_code=1,
+                    stdout=lambda: _report_with(
+                        parse={"status": "complete", "diagnostics": []}
+                    ),
+                    stderr="",
+                    message="disagrees with its exit code",
+                ),
                 id="exit-status-disagreement",
             ),
             pytest.param(
-                0,
-                lambda: _report_with(source="Makefile"),
-                "",
-                "malformed `source`",
+                MakeutilFailureCase(
+                    exit_code=0,
+                    stdout=lambda: _report_with(source="Makefile"),
+                    stderr="",
+                    message="malformed `source`",
+                ),
                 id="malformed-source",
             ),
             pytest.param(
-                0,
-                lambda: _report_with(rules={"not": "a list"}),
-                "",
-                "malformed `rules`",
+                MakeutilFailureCase(
+                    exit_code=0,
+                    stdout=lambda: _report_with(rules={"not": "a list"}),
+                    stderr="",
+                    message="malformed `rules`",
+                ),
                 id="malformed-rules",
             ),
         ],
@@ -210,10 +254,7 @@ class TestInspectMakefile:
         self,
         tmp_path: pathlib.Path,
         cmd_mox: CmdMox,
-        exit_code: int,
-        stdout: str | typ.Callable[[], dict[str, object]],
-        stderr: str,
-        message: str,
+        case: MakeutilFailureCase,
     ) -> None:
         """Invalid makeutil output raises a parse-makefile operational error.
 
@@ -221,18 +262,16 @@ class TestInspectMakefile:
         per invocation), so no parametrization mutates ``MINIMAL_REPORT``.
         """
         _write_checkout(tmp_path, cargo=False, makefile=True)
-        match stdout:
-            case str():
-                stdout_text = stdout
-            case report_factory:
-                stdout_text = json.dumps(report_factory())
+        stdout_text = (
+            case.stdout if isinstance(case.stdout, str) else json.dumps(case.stdout())
+        )
         cmd_mox.mock("makeutil").returns(
-            exit_code=exit_code,
+            exit_code=case.exit_code,
             stdout=stdout_text,
-            stderr=stderr,
+            stderr=case.stderr,
         )
         cmd_mox.replay()
-        with pytest.raises(OperationalRuleError, match=message) as exc_info:
+        with pytest.raises(OperationalRuleError, match=case.message) as exc_info:
             inspect_makefile(tmp_path / "Makefile")
         error = exc_info.value
         assert error.operation == "parse-makefile", error.operation
