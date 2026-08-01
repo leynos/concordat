@@ -62,6 +62,38 @@ class MakeutilFailureCase:
     message: str
 
 
+@dataclasses.dataclass(frozen=True)
+class SpawnFailureCase:
+    """One subprocess launch failure and its expected error message."""
+
+    error: Exception
+    match: str
+
+
+def _raise_process_error(
+    error: BaseException,
+) -> typ.Callable[..., typ.NoReturn]:
+    """Return a subprocess replacement that raises *error*."""
+
+    def raise_error(*args: object, **kwargs: object) -> typ.NoReturn:
+        raise error
+
+    return raise_error
+
+
+def _assert_operational_context(
+    error: OperationalRuleError,
+    *,
+    operation: str,
+    tool: str,
+    resource: pathlib.Path | str,
+) -> None:
+    """Assert stable structured context on an operational rule error."""
+    assert error.operation == operation, error.operation
+    assert error.tool == tool, error.tool
+    assert error.resource == resource, error.resource
+
+
 CARGO_STUB = '[package]\nname = "fixture"\nversion = "0.1.0"\n'
 
 
@@ -105,60 +137,53 @@ class TestInspectMakefile:
         facts = inspect_makefile(tmp_path / "Makefile")
         assert facts.status == "recovered", facts.status
 
-    def test_missing_binary_raises_operational_error(
+    @pytest.mark.parametrize(
+        "case",
+        [
+            pytest.param(
+                SpawnFailureCase(FileNotFoundError("makeutil"), "makeutil"),
+                id="missing-binary",
+            ),
+            pytest.param(
+                SpawnFailureCase(
+                    subprocess.TimeoutExpired(cmd="makeutil", timeout=10.0),
+                    "timed out",
+                ),
+                id="timeout",
+            ),
+            pytest.param(
+                SpawnFailureCase(
+                    PermissionError("makeutil"),
+                    "could not launch makeutil",
+                ),
+                id="launch-oserror",
+            ),
+        ],
+    )
+    def test_spawn_failure_raises_operational_error(
         self,
         tmp_path: pathlib.Path,
         monkeypatch: pytest.MonkeyPatch,
+        case: SpawnFailureCase,
     ) -> None:
-        """Missing binary raises operational error."""
+        """Every makeutil launch failure carries parse-makefile context.
+
+        ``_run_makeutil`` translates a missing binary, a timeout, and a generic
+        ``OSError`` such as a permission denial; each must reach the CLI's
+        operational-error boundary naming the Makefile it was parsing.
+        """
         _write_checkout(tmp_path, cargo=False, makefile=True)
+        monkeypatch.setattr(subprocess, "run", _raise_process_error(case.error))
 
-        def raise_missing(*args: object, **kwargs: object) -> typ.NoReturn:
-            raise FileNotFoundError("makeutil")
-
-        monkeypatch.setattr(subprocess, "run", raise_missing)
-        with pytest.raises(OperationalRuleError, match="makeutil") as exc_info:
-            inspect_makefile(tmp_path / "Makefile")
-        error = exc_info.value
-        assert error.operation == "parse-makefile", error.operation
-        assert error.tool == "makeutil", error.tool
-        assert error.resource == tmp_path / "Makefile", error.resource
-
-    def test_timeout_raises_operational_error(
-        self,
-        tmp_path: pathlib.Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """A makeutil timeout surfaces as an operational error."""
-        _write_checkout(tmp_path, cargo=False, makefile=True)
-
-        def raise_timeout(*args: object, **kwargs: object) -> typ.NoReturn:
-            raise subprocess.TimeoutExpired(cmd="makeutil", timeout=10.0)
-
-        monkeypatch.setattr(subprocess, "run", raise_timeout)
-        with pytest.raises(OperationalRuleError, match="timed out"):
+        with pytest.raises(OperationalRuleError, match=case.match) as exc_info:
             inspect_makefile(tmp_path / "Makefile")
 
-    def test_launch_oserror_raises_operational_error(
-        self,
-        tmp_path: pathlib.Path,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """A permission/working-directory launch failure surfaces operationally."""
-        _write_checkout(tmp_path, cargo=False, makefile=True)
-
-        def raise_permission(*args: object, **kwargs: object) -> typ.NoReturn:
-            raise PermissionError("makeutil")
-
-        monkeypatch.setattr(subprocess, "run", raise_permission)
-        with pytest.raises(
-            OperationalRuleError, match="could not launch makeutil"
-        ) as exc_info:
-            inspect_makefile(tmp_path / "Makefile")
-        error = exc_info.value
-        assert error.operation == "parse-makefile", error.operation
-        assert error.tool == "makeutil", error.tool
-        assert error.resource == tmp_path / "Makefile", error.resource
+        _assert_operational_context(
+            exc_info.value,
+            operation="parse-makefile",
+            tool="makeutil",
+            resource=tmp_path / "Makefile",
+        )
 
     @pytest.mark.parametrize(
         "case",
@@ -351,39 +376,47 @@ class TestBuildEnvelope:
 class TestRunConftest:
     """The Conftest subprocess wrapper translates spawn failures."""
 
-    def test_missing_conftest_translates(
+    @pytest.mark.parametrize(
+        "case",
+        [
+            pytest.param(
+                SpawnFailureCase(
+                    FileNotFoundError("conftest"),
+                    "conftest is required",
+                ),
+                id="missing-binary",
+            ),
+            pytest.param(
+                SpawnFailureCase(
+                    subprocess.TimeoutExpired(cmd="conftest", timeout=60.0),
+                    "timed out",
+                ),
+                id="timeout",
+            ),
+        ],
+    )
+    def test_spawn_failure_translates(
         self,
         monkeypatch: pytest.MonkeyPatch,
+        case: SpawnFailureCase,
     ) -> None:
-        """A missing conftest binary becomes a structured operational error."""
+        """Every conftest launch failure carries invoke-conftest context.
 
-        def raise_missing(*args: object, **kwargs: object) -> typ.NoReturn:
-            raise FileNotFoundError("conftest")
+        Unlike ``_run_makeutil`` this wrapper translates only a missing binary
+        and a timeout, so a generic ``OSError`` is deliberately not covered
+        here; the rule ID stands in for the resource being evaluated.
+        """
+        monkeypatch.setattr(runner.subprocess, "run", _raise_process_error(case.error))
 
-        monkeypatch.setattr(runner.subprocess, "run", raise_missing)
-        with pytest.raises(
-            OperationalRuleError, match="conftest is required"
-        ) as exc_info:
+        with pytest.raises(OperationalRuleError, match=case.match) as exc_info:
             runner._run_conftest(["conftest", "test"], "rust-makefile-baseline")
-        error = exc_info.value
-        assert error.operation == "invoke-conftest", error.operation
-        assert error.tool == "conftest", error.tool
-        assert error.resource == "rust-makefile-baseline", error.resource
 
-    def test_conftest_timeout_translates(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """A conftest timeout becomes a structured operational error."""
-
-        def raise_timeout(*args: object, **kwargs: object) -> typ.NoReturn:
-            raise subprocess.TimeoutExpired(cmd="conftest", timeout=60.0)
-
-        monkeypatch.setattr(runner.subprocess, "run", raise_timeout)
-        with pytest.raises(OperationalRuleError, match="timed out") as exc_info:
-            runner._run_conftest(["conftest", "test"], "rust-makefile-baseline")
-        assert exc_info.value.operation == "invoke-conftest", exc_info.value.operation
-        assert exc_info.value.tool == "conftest", exc_info.value.tool
+        _assert_operational_context(
+            exc_info.value,
+            operation="invoke-conftest",
+            tool="conftest",
+            resource="rust-makefile-baseline",
+        )
 
 
 class TestRunRule:
