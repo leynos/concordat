@@ -49,7 +49,7 @@ def _report_with(**overrides: object) -> dict[str, object]:
 
 # A case supplies stdout either verbatim (non-JSON or hand-built payloads) or as
 # a factory, so each parametrized run gets its own report mapping.
-MakeutilOutput = str | typ.Callable[[], dict[str, object]]
+type MakeutilOutput = str | typ.Callable[[], dict[str, object]]
 
 
 @dataclasses.dataclass(frozen=True)

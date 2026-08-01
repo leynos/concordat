@@ -68,7 +68,10 @@ def parse_makefile(path: Path) -> dict[str, object]:
             timeout=30,
             check=False,
         )
-    except (FileNotFoundError, subprocess.TimeoutExpired) as error:
+    except (OSError, subprocess.TimeoutExpired) as error:
+        # `OSError` covers the absent binary (`FileNotFoundError`) alongside
+        # every other launch failure, such as a `makeutil` on PATH that is not
+        # executable, so none escapes as a raw operating-system error.
         detail = f"could not run makeutil: {error}"
         raise MakeutilFixtureError(path, detail) from error
     _validate_returncode(completed.returncode, path, completed.stderr)

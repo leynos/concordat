@@ -2,6 +2,8 @@
 
 These cover the successful enrolment paths and owner-confirmation behaviour.
 Remote-state and provisioning error paths live in `test_estate_provisioning`.
+The `mock_remote_probe` and `mock_bootstrap` fixtures are shared with that
+module and live in `tests/unit/conftest.py`.
 """
 
 from __future__ import annotations
@@ -17,7 +19,6 @@ from concordat.estate import (
     EstateRecord,
     GitHubOwnerConfirmationAbortedError,
     MissingGitHubOwnerError,
-    RemoteProbe,
     init_estate,
     list_enrolled_repositories,
     list_estates,
@@ -26,6 +27,7 @@ from concordat.estate import (
 
 if typ.TYPE_CHECKING:
     import pathlib
+    import unittest.mock as mock
 
     import pytest_mock
 
@@ -61,21 +63,18 @@ def test_list_enrolled_repositories_reads_inventory(tmp_path: pathlib.Path) -> N
     assert urls == [
         "git@github.com:example/one.git",
         "git@github.com:other/two.git",
-    ]
+    ], urls
 
 
 def test_init_estate_creates_repository_when_missing(
     tmp_path: pathlib.Path,
     mocker: pytest_mock.MockFixture,
+    mock_remote_probe: typ.Callable[..., mock.Mock],
+    mock_bootstrap: mock.Mock,
 ) -> None:
     """init_estate provisions a repository when the remote is absent."""
     config_path = tmp_path / "config.yaml"
-    mocker.patch.object(
-        estate_repository,
-        "_probe_remote",
-        return_value=RemoteProbe(reachable=False, exists=False, empty=True, error=None),
-    )
-    mocker.patch.object(estate_repository, "_bootstrap_template")
+    mock_remote_probe(reachable=False, exists=False, empty=True)
 
     fake_client = mocker.Mock()
     fake_client.repository.return_value = None
@@ -91,27 +90,24 @@ def test_init_estate_creates_repository_when_missing(
         config_path=config_path,
     )
 
-    assert record.alias == "core"
-    assert record.github_owner == "example"
+    assert record.alias == "core", record
+    assert record.github_owner == "example", record
     fake_client.organization.assert_called_once_with("example")
     fake_org.create_repository.assert_called_once()
     stored = list_estates(config_path=config_path)[0]
-    assert stored.alias == "core"
-    assert stored.github_owner == "example"
+    assert stored.alias == "core", stored
+    assert stored.github_owner == "example", stored
 
 
 def test_init_estate_requires_owner_for_non_github_remote(
     tmp_path: pathlib.Path,
     mocker: pytest_mock.MockFixture,
+    mock_remote_probe: typ.Callable[..., mock.Mock],
+    mock_bootstrap: mock.Mock,
 ) -> None:
     """Local remotes require an explicit github_owner override."""
     config_path = tmp_path / "config.yaml"
-    mocker.patch.object(
-        estate_repository,
-        "_probe_remote",
-        return_value=RemoteProbe(reachable=True, exists=True, empty=True, error=None),
-    )
-    mocker.patch.object(estate_repository, "_bootstrap_template")
+    mock_remote_probe(reachable=True, exists=True, empty=True)
 
     with pytest.raises(ConcordatError) as caught:
         init_estate(
@@ -127,15 +123,12 @@ def test_init_estate_requires_owner_for_non_github_remote(
 def test_init_estate_rejects_empty_owner(
     tmp_path: pathlib.Path,
     mocker: pytest_mock.MockFixture,
+    mock_remote_probe: typ.Callable[..., mock.Mock],
+    mock_bootstrap: mock.Mock,
 ) -> None:
     """Empty github_owner values are rejected."""
     config_path = tmp_path / "config.yaml"
-    mocker.patch.object(
-        estate_repository,
-        "_probe_remote",
-        return_value=RemoteProbe(reachable=False, exists=False, empty=True, error=None),
-    )
-    mocker.patch.object(estate_repository, "_bootstrap_template")
+    mock_remote_probe(reachable=False, exists=False, empty=True)
 
     fake_client = mocker.Mock()
     fake_client.repository.return_value = None
@@ -156,15 +149,12 @@ def test_init_estate_rejects_empty_owner(
 def test_init_estate_allows_explicit_owner_override(
     tmp_path: pathlib.Path,
     mocker: pytest_mock.MockFixture,
+    mock_remote_probe: typ.Callable[..., mock.Mock],
+    mock_bootstrap: mock.Mock,
 ) -> None:
     """Explicit owners take precedence over repository slugs."""
     config_path = tmp_path / "config.yaml"
-    mocker.patch.object(
-        estate_repository,
-        "_probe_remote",
-        return_value=RemoteProbe(reachable=False, exists=False, empty=True, error=None),
-    )
-    mocker.patch.object(estate_repository, "_bootstrap_template")
+    mock_remote_probe(reachable=False, exists=False, empty=True)
 
     fake_client = mocker.Mock()
     fake_client.repository.return_value = None
@@ -188,15 +178,12 @@ def test_init_estate_allows_explicit_owner_override(
 def test_init_estate_prompts_to_confirm_inferred_owner(
     tmp_path: pathlib.Path,
     mocker: pytest_mock.MockFixture,
+    mock_remote_probe: typ.Callable[..., mock.Mock],
+    mock_bootstrap: mock.Mock,
 ) -> None:
     """Prompt operators to confirm github_owner inferred from the repo slug."""
     config_path = tmp_path / "config.yaml"
-    mocker.patch.object(
-        estate_repository,
-        "_probe_remote",
-        return_value=RemoteProbe(reachable=True, exists=True, empty=True, error=None),
-    )
-    mocker.patch.object(estate_repository, "_bootstrap_template")
+    mock_remote_probe(reachable=True, exists=True, empty=True)
 
     confirm = mocker.Mock(return_value=True)
     record = init_estate(
@@ -219,15 +206,12 @@ def test_init_estate_prompts_to_confirm_inferred_owner(
 def test_init_estate_aborts_when_inferred_owner_not_confirmed(
     tmp_path: pathlib.Path,
     mocker: pytest_mock.MockFixture,
+    mock_remote_probe: typ.Callable[..., mock.Mock],
+    mock_bootstrap: mock.Mock,
 ) -> None:
     """Abort init_estate when the inferred owner is declined."""
     config_path = tmp_path / "config.yaml"
-    mocker.patch.object(
-        estate_repository,
-        "_probe_remote",
-        return_value=RemoteProbe(reachable=True, exists=True, empty=True, error=None),
-    )
-    mocker.patch.object(estate_repository, "_bootstrap_template")
+    mock_remote_probe(reachable=True, exists=True, empty=True)
 
     with pytest.raises(
         GitHubOwnerConfirmationAbortedError,
@@ -244,15 +228,12 @@ def test_init_estate_aborts_when_inferred_owner_not_confirmed(
 def test_init_estate_does_not_prompt_when_owner_is_explicit(
     tmp_path: pathlib.Path,
     mocker: pytest_mock.MockFixture,
+    mock_remote_probe: typ.Callable[..., mock.Mock],
+    mock_bootstrap: mock.Mock,
 ) -> None:
     """Explicit github_owner skips the inferred-owner confirmation prompt."""
     config_path = tmp_path / "config.yaml"
-    mocker.patch.object(
-        estate_repository,
-        "_probe_remote",
-        return_value=RemoteProbe(reachable=True, exists=True, empty=True, error=None),
-    )
-    mocker.patch.object(estate_repository, "_bootstrap_template")
+    mock_remote_probe(reachable=True, exists=True, empty=True)
 
     confirm = mocker.Mock(return_value=True)
     record = init_estate(

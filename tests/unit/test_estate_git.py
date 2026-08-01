@@ -65,9 +65,8 @@ class TestInventoryUrls:
             "  - other_key: example/ignored\n",
         )
 
-        assert estate_git._inventory_urls(inventory) == [
-            "git@github.com:example/one.git"
-        ], estate_git._inventory_urls(inventory)
+        urls = estate_git._inventory_urls(inventory)
+        assert urls == ["git@github.com:example/one.git"], urls
 
     def test_duplicate_and_padded_names_collapse(self, tmp_path: pathlib.Path) -> None:
         """Names are stripped before deduplication, yielding one URL."""
@@ -79,9 +78,8 @@ class TestInventoryUrls:
             "  - name: example/one\n",
         )
 
-        assert estate_git._inventory_urls(inventory) == [
-            "git@github.com:example/one.git"
-        ], estate_git._inventory_urls(inventory)
+        urls = estate_git._inventory_urls(inventory)
+        assert urls == ["git@github.com:example/one.git"], urls
 
     def test_urls_are_sorted(self, tmp_path: pathlib.Path) -> None:
         """Inventory order does not leak into the returned URLs."""
@@ -111,8 +109,9 @@ class TestInventoryUrls:
             "  - name: example/bare\n",
         )
 
-        assert estate_git._inventory_urls(inventory) == [
+        urls = estate_git._inventory_urls(inventory)
+        assert urls == [
             "git@github.com:example/bare.git",
             "git@github.com:example/ssh.git",
             "https://github.com/example/https.git",
-        ], estate_git._inventory_urls(inventory)
+        ], urls

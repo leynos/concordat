@@ -451,7 +451,7 @@ Validation (red): from the repository root,
 ```shell
 conftest verify \
   --policy platform-standards/canon/lint-rules/rust-makefile-baseline/policy \
-  | tee /tmp/conftest-verify-concordat-parabellum-vertical-slice.out
+  | tee "$RUN_LOG_DIR/conftest-verify.out"
 ```
 
 fails with the tests unable to resolve the policy package.
@@ -566,9 +566,21 @@ hoc during this slice.
 ## Concrete steps
 
 All commands run from the repository root (the checkout of this branch) unless
-stated. Long outputs go through `tee` to
-`/tmp/<action>-concordat-parabellum-vertical-slice.out`. Gate runs are
-delegated to the scrutineer subagent where available.
+stated. Long outputs go through `tee`, but never to a predictable shared `/tmp`
+path: create an owner-scoped run-log directory under the XDG state home with
+`mktemp -d` under `umask 077`, and write log files inside it. Run this once per
+session, and the `$RUN_LOG_DIR` used by the examples below refers to it:
+
+```shell
+umask 077
+mkdir -p "${XDG_STATE_HOME:-$HOME/.local/state}/concordat-parabellum"
+RUN_LOG_DIR="$(mktemp -d \
+  "${XDG_STATE_HOME:-$HOME/.local/state}/concordat-parabellum/run.XXXXXX")"
+```
+
+Run logs must never capture or emit credentials (tokens, keys, passwords, or
+other secrets). Gate runs are delegated to the scrutineer subagent where
+available.
 
 1. Milestone A:
 
@@ -613,7 +625,7 @@ delegated to the scrutineer subagent where available.
    ```shell
    uv run python -m scripts.parabellum_sweep \
      --only wireframe,netsuke,weaver,statelet,fingermouse \
-     | tee /tmp/sweep-canary-concordat-parabellum-vertical-slice.out
+     | tee "$RUN_LOG_DIR/sweep-canary.out"
    ```
 
    Expect five new lines in `docs/parabellum/ledger.jsonl`. Review by hand;

@@ -13,6 +13,7 @@ import dataclasses
 import typing as typ
 
 import pytest
+from github3 import exceptions as github3_exceptions
 
 from concordat import estate, estate_repository
 from concordat.estate import GitHubOwnerConfirmationAbortedError
@@ -23,7 +24,7 @@ if typ.TYPE_CHECKING:
     import pytest_mock
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True, slots=True)
 class OwnerResolutionScenario:
     """Test scenario for resolving github_owner."""
 
@@ -97,7 +98,10 @@ def test_resolve_and_confirm_owner_behavior(
             scenario.github_owner,
             confirmer,
         )
-        assert resolved == scenario.expected_result
+        assert resolved == scenario.expected_result, (
+            f"slug {scenario.slug!r} with github_owner "
+            f"{scenario.github_owner!r} resolved to {resolved!r}"
+        )
 
     if scenario.confirmer_called:
         confirmer.assert_called_once()
@@ -140,6 +144,74 @@ class TestRepositoryPlanHelpers:
             estate_repository._plan_missing_repository(None)
 
         build_client.assert_not_called()
+
+    def test_absent_repository_is_planned_for_creation(
+        self,
+        mocker: pytest_mock.MockFixture,
+    ) -> None:
+        """A GitHub lookup that raises ``NotFoundError`` means "create it".
+
+        ``GitHub.repository`` reports an absent repository by raising rather
+        than returning ``None``, so the error is the answer and must not escape.
+        """
+        fake_client = mocker.Mock()
+        fake_client.repository.side_effect = github3_exceptions.NotFoundError(
+            mocker.Mock(status_code=404)
+        )
+        mocker.patch.object(
+            estate_repository, "_build_client", return_value=fake_client
+        )
+
+        plan = estate_repository._plan_unreachable_repository(
+            self.REPO_URL,
+            "example/core",
+            "token",
+            None,
+        )
+
+        assert plan.needs_creation is True, plan
+        assert (plan.owner, plan.name) == ("example", "core"), plan
+
+    @pytest.mark.parametrize(
+        ("raised", "expected"),
+        [
+            pytest.param(
+                github3_exceptions.AuthenticationFailed,
+                estate.GitHubAuthenticationError,
+                id="unauthenticated",
+            ),
+            pytest.param(
+                github3_exceptions.ForbiddenError,
+                estate.GitHubAuthenticationError,
+                id="forbidden",
+            ),
+            pytest.param(
+                github3_exceptions.ConnectionError,
+                estate.RepositoryUnreachableError,
+                id="connection-failure",
+            ),
+        ],
+    )
+    def test_failed_lookup_is_translated(
+        self,
+        mocker: pytest_mock.MockFixture,
+        raised: type[Exception],
+        expected: type[Exception],
+    ) -> None:
+        """A lookup that fails leaves the remote unknown, so it is translated."""
+        fake_client = mocker.Mock()
+        fake_client.repository.side_effect = raised(mocker.Mock(status_code=500))
+        mocker.patch.object(
+            estate_repository, "_build_client", return_value=fake_client
+        )
+
+        with pytest.raises(expected):
+            estate_repository._plan_unreachable_repository(
+                self.REPO_URL,
+                "example/core",
+                "token",
+                None,
+            )
 
     def test_unreachable_remote_plan_preserves_the_built_client(
         self,

@@ -8,6 +8,7 @@ about git, the estate-init decision flow, or :mod:`concordat.estate`.
 
 from __future__ import annotations
 
+import types
 import typing as typ
 
 import github3
@@ -17,7 +18,6 @@ import github3.orgs
 from github3 import exceptions as github3_exceptions
 
 from .estate_errors import (
-    GitHubAuthenticationError,
     GitHubClientInitializationError,
     GitHubOrganizationAuthenticationError,
     GitHubRepositoryAuthenticationError,
@@ -26,11 +26,34 @@ from .estate_errors import (
     RepositoryCreationPermissionError,
 )
 
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
+# Both creation paths must offer the same repository, so the options they share
+# are declared once here and unpacked at each call site, leaving only the name
+# path-specific. The proxy keeps the shared mapping immutable.
+_REPOSITORY_OPTIONS: cabc.Mapping[str, object] = types.MappingProxyType(
+    {
+        "private": True,
+        "auto_init": False,
+        "description": "Platform standards repository managed by concordat",
+    }
+)
+
+# github3 raises a 401 as `AuthenticationFailed` and a 403 as `ForbiddenError`;
+# they are siblings rather than one deriving from the other, so both must be
+# named to translate a rejected call into the estate taxonomy.
+_REJECTED = (
+    github3_exceptions.AuthenticationFailed,
+    github3_exceptions.ForbiddenError,
+)
+
 
 def _build_client(
     token: str | None,
     client_factory: typ.Callable[[str | None], github3.GitHub] | None = None,
 ) -> github3.GitHub:
+    """Return an authenticated GitHub client from *client_factory* or *token*."""
     if client_factory:
         client = client_factory(token)
         if client is None:
@@ -40,10 +63,7 @@ def _build_client(
     if not token:
         raise MissingGitHubTokenError
 
-    client = github3.GitHub(token=token)
-    if client is None:
-        raise GitHubAuthenticationError
-    return client
+    return github3.GitHub(token=token)
 
 
 def _create_repository(
@@ -71,10 +91,10 @@ def _find_organization(
     """
     try:
         return client.organization(owner)
-    except github3_exceptions.AuthenticationFailed as error:
-        raise GitHubOrganizationAuthenticationError(owner) from error
     except github3_exceptions.NotFoundError:
         return None
+    except _REJECTED as error:
+        raise GitHubOrganizationAuthenticationError(owner) from error
 
 
 def _create_organization_repository(
@@ -84,13 +104,8 @@ def _create_organization_repository(
 ) -> None:
     """Create *name* inside the *owner* organisation."""
     try:
-        org.create_repository(
-            name,
-            private=True,
-            auto_init=False,
-            description="Platform standards repository managed by concordat",
-        )
-    except github3_exceptions.AuthenticationFailed as error:
+        org.create_repository(name, **_REPOSITORY_OPTIONS)
+    except _REJECTED as error:
         raise GitHubRepositoryCreationAuthenticationError(owner, name) from error
 
 
@@ -104,11 +119,6 @@ def _create_personal_repository(
     if not user or user.login != owner:
         raise RepositoryCreationPermissionError(owner)
     try:
-        client.create_repository(
-            name,
-            private=True,
-            auto_init=False,
-            description="Platform standards repository managed by concordat",
-        )
-    except github3_exceptions.AuthenticationFailed as error:
+        client.create_repository(name, **_REPOSITORY_OPTIONS)
+    except _REJECTED as error:
         raise GitHubRepositoryAuthenticationError from error

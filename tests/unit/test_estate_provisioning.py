@@ -4,9 +4,8 @@ These cover what `init_estate` does when the remote is missing, unreachable,
 inaccessible, or non-empty, and how GitHub authentication failures surface. The
 successful enrolment flows live in `test_estate_init`.
 
-The fixtures below are private setup for these error paths rather than shared
-test infrastructure, so they stay module-local instead of moving to a
-`conftest`.
+`mock_remote_probe` and `mock_bootstrap` are shared with `test_estate_init`
+and live in `tests/unit/conftest.py`.
 """
 
 from __future__ import annotations
@@ -39,7 +38,7 @@ if typ.TYPE_CHECKING:
 def init_estate_error_setup(
     tmp_path: pathlib.Path,
     mocker: pytest_mock.MockFixture,
-) -> tuple[pathlib.Path, pytest_mock.MockFixture, typ.Any]:
+) -> tuple[pathlib.Path, typ.Any]:
     """Provide shared setup for init_estate error-path tests."""
     config_path = tmp_path / "config.yaml"
     mocker.patch.object(
@@ -52,39 +51,7 @@ def init_estate_error_setup(
     fake_client = mocker.Mock()
     fake_client.repository.return_value = None
     mocker.patch.object(estate_repository, "_build_client", return_value=fake_client)
-    return config_path, mocker, fake_client
-
-
-@pytest.fixture
-def mock_remote_probe(
-    mocker: pytest_mock.MockFixture,
-) -> typ.Callable[..., mock.Mock]:
-    """Return a factory for mocking estate remote probes."""
-
-    def factory(
-        *,
-        reachable: bool,
-        exists: bool,
-        empty: bool,
-        error: str | None = None,
-    ) -> mock.Mock:
-        probe = RemoteProbe(
-            reachable=reachable,
-            exists=exists,
-            empty=empty,
-            error=error,
-        )
-        return mocker.patch.object(
-            estate_repository, "_probe_remote", return_value=probe
-        )
-
-    return factory
-
-
-@pytest.fixture
-def mock_bootstrap(mocker: pytest_mock.MockFixture) -> mock.Mock:
-    """Mock template bootstrapping during init_estate tests."""
-    return mocker.patch.object(estate_repository, "_bootstrap_template")
+    return config_path, fake_client
 
 
 @dataclasses.dataclass
@@ -152,12 +119,8 @@ def test_init_estate_error_conditions(
     mock_remote_probe(**scenario.probe_state)
 
     resolved_repo_url = scenario.repo_url.format(tmp_path=tmp_path)
-    if scenario.match:
-        error_context = pytest.raises(scenario.expected_error, match=scenario.match)
-    else:
-        error_context = pytest.raises(scenario.expected_error)
 
-    with error_context:
+    with pytest.raises(scenario.expected_error, match=scenario.match):
         init_estate(
             "core",
             resolved_repo_url,
@@ -200,15 +163,12 @@ def test_init_estate_rejects_non_empty_remote_without_building_a_client(
 def test_init_estate_raises_when_remote_is_inaccessible(
     tmp_path: pathlib.Path,
     mocker: pytest_mock.MockFixture,
+    mock_remote_probe: typ.Callable[..., mock.Mock],
+    mock_bootstrap: mock.Mock,
 ) -> None:
     """Raise RepositoryInaccessibleError when GitHub reports an existing repo."""
     config_path = tmp_path / "config.yaml"
-    mocker.patch.object(
-        estate_repository,
-        "_probe_remote",
-        return_value=RemoteProbe(reachable=False, exists=True, empty=True, error=None),
-    )
-    mocker.patch.object(estate_repository, "_bootstrap_template")
+    mock_remote_probe(reachable=False, exists=True, empty=True)
 
     fake_client = mocker.Mock()
     fake_client.repository.return_value = object()
@@ -227,15 +187,12 @@ def test_init_estate_raises_when_remote_is_inaccessible(
 def test_init_estate_creates_repository_when_remote_unreachable_and_missing(
     tmp_path: pathlib.Path,
     mocker: pytest_mock.MockFixture,
+    mock_remote_probe: typ.Callable[..., mock.Mock],
+    mock_bootstrap: mock.Mock,
 ) -> None:
     """Create a repo when GitHub reports it missing but SSH is unreachable."""
     config_path = tmp_path / "config.yaml"
-    mocker.patch.object(
-        estate_repository,
-        "_probe_remote",
-        return_value=RemoteProbe(reachable=False, exists=True, empty=True, error=None),
-    )
-    mocker.patch.object(estate_repository, "_bootstrap_template")
+    mock_remote_probe(reachable=False, exists=True, empty=True)
 
     fake_client = mocker.Mock()
     fake_client.repository.return_value = None
@@ -254,19 +211,19 @@ def test_init_estate_creates_repository_when_remote_unreachable_and_missing(
         config_path=config_path,
     )
 
-    assert record.github_owner == "example"
+    assert record.github_owner == "example", record
     create_repo.assert_called_once_with(fake_client, "example", "platform-standards")
 
 
 def test_init_estate_translates_authentication_errors(
-    init_estate_error_setup: tuple[pathlib.Path, pytest_mock.MockFixture, typ.Any],
+    init_estate_error_setup: tuple[pathlib.Path, typ.Any],
+    mocker: pytest_mock.MockFixture,
 ) -> None:
     """Surface authentication failures when provisioning estates."""
-    config_path, mocker, fake_client = init_estate_error_setup
+    config_path, fake_client = init_estate_error_setup
     fake_client.organization.side_effect = github3_exceptions.AuthenticationFailed(
         mocker.Mock()
     )
-    mocker.patch.object(estate_repository, "_build_client", return_value=fake_client)
 
     with pytest.raises(ConcordatError) as caught:
         init_estate(
@@ -277,4 +234,4 @@ def test_init_estate_translates_authentication_errors(
             config_path=config_path,
         )
 
-    assert "GitHub authentication failed" in str(caught.value)
+    assert "GitHub authentication failed" in str(caught.value), caught.value

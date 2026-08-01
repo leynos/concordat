@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import dataclasses
 import shutil
+import typing as typ
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -24,6 +25,9 @@ from .estate_errors import (
     TemplatePushError,
 )
 from .gitutils import build_remote_callbacks
+
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -52,6 +56,14 @@ def default_template_root() -> Path:
 
 
 def _probe_remote(repo_url: str) -> RemoteProbe:
+    """Report whether *repo_url* can be listed, and whether it holds any refs.
+
+    A remote this cannot reach is reported as ``exists=False`` as well as
+    ``reachable=False``, because listing is the only evidence available here:
+    an unroutable host and an absent repository both surface as one
+    ``GitError``. Callers therefore route an unreachable remote down the
+    missing-remote path, which asks GitHub what is actually there.
+    """
     callbacks = build_remote_callbacks(repo_url)
     with TemporaryDirectory(prefix="concordat-estate-probe-") as temp_root:
         repository = pygit2.init_repository(temp_root)
@@ -87,21 +99,27 @@ def _collect_inventory(record: EstateRecord) -> list[str]:
         return _inventory_urls(inventory_path)
 
 
+def _inventory_slugs(entries: cabc.Iterable[object]) -> cabc.Iterator[str]:
+    """Yield the trimmed name of each usable entry, skipping the rest.
+
+    An entry is usable only when it is mapping-shaped and carries a ``name``
+    that is a non-blank string; anything else is inventory noise.
+    """
+    for entry in entries:
+        match entry:
+            case {"name": str() as name} if name.strip():
+                yield name.strip()
+
+
 def _inventory_urls(inventory_path: Path) -> list[str]:
     """Load, normalize, deduplicate, and sort repository URLs from inventory."""
     contents = _yaml.load(inventory_path.read_text(encoding="utf-8")) or {}
-    repos = contents.get("repositories") or []
-    slugs: set[str] = set()
-    for entry in repos:
-        if not isinstance(entry, dict):
-            continue
-        slug = entry.get("name")
-        if isinstance(slug, str) and slug.strip():
-            slugs.add(slug.strip())
+    slugs = set(_inventory_slugs(contents.get("repositories") or []))
     return sorted(_slug_to_git_url(slug) for slug in slugs)
 
 
 def _slug_to_git_url(slug: str) -> str:
+    """Return *slug* as a Git URL, qualifying bare ``owner/name`` slugs."""
     if slug.startswith("git@") or slug.startswith("ssh://"):
         return slug
     if slug.startswith("https://") or slug.startswith("http://"):
@@ -150,6 +168,7 @@ def _bootstrap_template(
 
 
 def _sanitize_inventory(path: Path) -> None:
+    """Rewrite the template inventory at *path* with no enrolled repositories."""
     path.parent.mkdir(parents=True, exist_ok=True)
     loaded: object = {}
     if path.exists():
@@ -163,6 +182,7 @@ def _sanitize_inventory(path: Path) -> None:
 
 
 def _set_remote_head_if_local(repo_url: str, branch: str) -> None:
+    """Point a local remote's HEAD at *branch*, ignoring non-local remotes."""
     path = Path(repo_url)
     if not path.exists():
         return

@@ -16,9 +16,12 @@ from __future__ import annotations
 import dataclasses
 import typing as typ
 
+from github3 import exceptions as github3_exceptions
+
 from .estate_config import _normalise_owner
 from .estate_errors import (
     EstateCreationAbortedError,
+    GitHubAuthenticationError,
     GitHubOwnerConfirmationAbortedError,
     MissingGitHubOwnerError,
     NonEmptyRepositoryError,
@@ -174,7 +177,7 @@ def _plan_unreachable_repository(
         raise RepositoryUnreachableError(repo_url)
     client = _build_client(github_token, client_factory)
     owner, name = _split_slug(slug)
-    if client.repository(owner, name):
+    if _lookup_repository(client, repo_url, owner, name):
         raise RepositoryInaccessibleError(repo_url)
     return RepositoryPlan(
         needs_creation=True,
@@ -183,6 +186,34 @@ def _plan_unreachable_repository(
         name=name,
         client=client,
     )
+
+
+def _lookup_repository(
+    client: github3.GitHub,
+    repo_url: str,
+    owner: str,
+    name: str,
+) -> object | None:
+    """Return the GitHub repository *owner*/*name*, or ``None`` when absent.
+
+    ``GitHub.repository`` signals an absent repository by raising rather than
+    returning ``None``, so a ``NotFoundError`` is the answer "it is not there"
+    and must not escape. Every other GitHub failure leaves the remote's state
+    unknown, so it is translated rather than surfaced raw: a rejected call is
+    an authentication problem, and anything else means the lookup itself could
+    not be completed.
+    """
+    try:
+        return client.repository(owner, name)
+    except github3_exceptions.NotFoundError:
+        return None
+    except (
+        github3_exceptions.AuthenticationFailed,
+        github3_exceptions.ForbiddenError,
+    ) as error:
+        raise GitHubAuthenticationError from error
+    except github3_exceptions.GitHubException as error:
+        raise RepositoryUnreachableError(repo_url) from error
 
 
 def _ensure_repository_exists(
@@ -230,11 +261,13 @@ def _require_repository_identity(
 
 
 def _prompt_yes_no(message: str) -> bool:
+    """Return whether the operator answered *message* affirmatively."""
     response = input(message)
     return response.strip().lower() in {"y", "yes"}
 
 
 def _owner_from_slug(slug: str | None) -> str | None:
+    """Return the normalised owner half of *slug*, or ``None`` without one."""
     if not slug:
         return None
     owner, _, _ = slug.partition("/")
@@ -245,6 +278,7 @@ def _resolve_github_owner(
     slug: str | None,
     explicit_owner: str | None,
 ) -> str | None:
+    """Return the explicit owner when given, else the one inferred from *slug*."""
     if explicit_owner is not None:
         if owner := _normalise_owner(explicit_owner):
             return owner
@@ -253,6 +287,7 @@ def _resolve_github_owner(
 
 
 def _require_owner(owner: str | None) -> str:
+    """Return *owner* or reject the estate as having no resolvable owner."""
     if not owner:
         raise MissingGitHubOwnerError
     return owner

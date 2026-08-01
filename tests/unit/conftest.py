@@ -1,4 +1,4 @@
-"""Shared fixtures for persistence unit tests."""
+"""Shared fixtures for the unit suite."""
 
 from __future__ import annotations
 
@@ -12,8 +12,45 @@ import pytest
 
 import concordat.persistence.gitops as gitops
 import concordat.persistence.models as persistence_models
-from concordat import estate_execution
-from concordat.estate import EstateRecord
+from concordat import estate_execution, estate_repository
+from concordat.estate import EstateRecord, RemoteProbe
+
+if typ.TYPE_CHECKING:
+    import unittest.mock as mock
+
+    import pytest_mock
+
+
+@pytest.fixture
+def mock_remote_probe(
+    mocker: pytest_mock.MockFixture,
+) -> typ.Callable[..., mock.Mock]:
+    """Return a factory for mocking estate remote probes."""
+
+    def factory(
+        *,
+        reachable: bool,
+        exists: bool,
+        empty: bool,
+        error: str | None = None,
+    ) -> mock.Mock:
+        probe = RemoteProbe(
+            reachable=reachable,
+            exists=exists,
+            empty=empty,
+            error=error,
+        )
+        return mocker.patch.object(
+            estate_repository, "_probe_remote", return_value=probe
+        )
+
+    return factory
+
+
+@pytest.fixture
+def mock_bootstrap(mocker: pytest_mock.MockFixture) -> mock.Mock:
+    """Mock template bootstrapping during init_estate tests."""
+    return mocker.patch.object(estate_repository, "_bootstrap_template")
 
 
 @dataclasses.dataclass(frozen=True)
