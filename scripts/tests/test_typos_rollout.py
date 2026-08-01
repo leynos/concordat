@@ -122,6 +122,12 @@ def test_dictionary_validation_rejects_invalid_documents(
         _dictionary_text().replace("schema = 1", "schema = 2"),
         _dictionary_text().replace('[oxford]\nstems = ["organ"]', 'oxford = "bad"'),
         _dictionary_text().replace('stems = ["organ"]', "stems = [1]"),
+        # A string-list key holding a bare string is not a list.
+        _dictionary_text().replace('stems = ["organ"]', 'stems = "organ"'),
+        # Every string-list field rejects non-string members, not just stems.
+        _dictionary_text().replace("accepted = []", "accepted = [1]"),
+        _dictionary_text().replace("ignore = []", "ignore = [2]"),
+        _dictionary_text().replace("exclude = []", "exclude = [3]"),
         _dictionary_text().replace(
             "[words.corrections]", "[words.corrections]\nteh = 1"
         ),
@@ -132,7 +138,47 @@ def test_dictionary_validation_rejects_invalid_documents(
         with pytest.raises((TypeError, ValueError)):
             rollout.load_dictionary(source)
 
+def test_string_lists_are_deduplicated_and_sorted(
+    rollout_modules: tuple[types.ModuleType, types.ModuleType, types.ModuleType],
+    tmp_path: Path,
+) -> None:
+    """Every string-list field is deduplicated and lexically sorted on load."""
+    _, rollout, _ = rollout_modules
+    source = tmp_path / "base.toml"
+    source.write_text(
+        'schema = 1\n\n[oxford]\nstems = ["organ", "cathode", "organ"]\n\n'
+        '[words]\naccepted = ["zeta", "alpha", "zeta"]\n\n[words.corrections]\n\n'
+        '[patterns]\nignore = ["b", "a", "b"]\n\n'
+        '[files]\nexclude = ["y", "x", "y"]\n',
+        encoding="utf-8",
+    )
 
+    dictionary = rollout.load_dictionary(source)
+
+    assert dictionary.stems == ("cathode", "organ")
+    assert dictionary.accepted == ("alpha", "zeta")
+    assert dictionary.ignore_patterns == ("a", "b")
+    assert dictionary.excluded_files == ("x", "y")
+
+def test_string_lists_default_to_empty_when_keys_are_absent(
+    rollout_modules: tuple[types.ModuleType, types.ModuleType, types.ModuleType],
+    tmp_path: Path,
+) -> None:
+    """Absent string-list keys fall back to empty tuples rather than failing."""
+    _, rollout, _ = rollout_modules
+    source = tmp_path / "base.toml"
+    source.write_text(
+        "schema = 1\n\n[oxford]\n\n[words]\n\n[words.corrections]\n\n"
+        "[patterns]\n\n[files]\n",
+        encoding="utf-8",
+    )
+
+    dictionary = rollout.load_dictionary(source)
+
+    assert dictionary.stems == ()
+    assert dictionary.accepted == ()
+    assert dictionary.ignore_patterns == ()
+    assert dictionary.excluded_files == ()
 def test_merge_rejects_conflicting_corrections(
     rollout_modules: tuple[types.ModuleType, types.ModuleType, types.ModuleType],
 ) -> None:
