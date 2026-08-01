@@ -27,6 +27,9 @@ from ruamel.yaml.error import YAMLError
 from . import xdg
 from .errors import ConcordatError
 
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
 CREDENTIAL_KEYS: typ.Final = (
     "GITHUB_TOKEN",
     "AWS_ACCESS_KEY_ID",
@@ -88,10 +91,19 @@ def load_credentials(
         raise MalformedCredentialsError(path, str(error)) from error
     if not isinstance(loaded, dict):
         return {}
+    return _recognised_credentials(loaded)
+
+
+def _recognised_credentials(loaded: cabc.Mapping[object, object]) -> dict[str, str]:
+    """Return the recognised, non-blank credential entries in *loaded*.
+
+    YAML mappings can carry non-string keys, so the key type is narrowed here
+    rather than assumed.
+    """
     return {
         key: str(value).strip()
         for key, value in loaded.items()
-        if key in CREDENTIAL_KEYS and str(value).strip()
+        if isinstance(key, str) and key in CREDENTIAL_KEYS and str(value).strip()
     }
 
 

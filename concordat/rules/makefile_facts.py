@@ -170,10 +170,8 @@ def _decode_report(stdout: str, path: pathlib.Path) -> dict[str, object]:
     return typ.cast("dict[str, object]", decoded)
 
 
-def _validate_status(
-    report: dict[str, object], returncode: int, path: pathlib.Path
-) -> str:
-    """Validate the schema version and parse status, returning the status."""
+def _require_schema_version(report: dict[str, object], path: pathlib.Path) -> None:
+    """Reject a report whose schema version this build cannot interpret."""
     if report.get("schema_version") != SCHEMA_VERSION:
         message = (
             f"makeutil report for {path} has unsupported schema version "
@@ -181,6 +179,9 @@ def _validate_status(
         )
         raise _makeutil_error(message, path)
 
+
+def _read_parse_status(report: dict[str, object], path: pathlib.Path) -> str:
+    """Return the recognised parse status carried by *report*."""
     parse = report.get("parse")
     if not isinstance(parse, dict):
         message = f"makeutil report for {path} has no `parse` object"
@@ -191,7 +192,13 @@ def _validate_status(
     if not isinstance(status, str) or status not in known_statuses:
         message = f"makeutil report for {path} has unknown parse status {status!r}"
         raise _makeutil_error(message, path)
+    return status
 
+
+def _require_status_matches_exit(
+    status: str, returncode: int, path: pathlib.Path
+) -> None:
+    """Reject a report whose parse status contradicts makeutil's exit code."""
     expected = EXPECTED_STATUS_FOR_EXIT_CODE[returncode]
     if status != expected:
         message = (
@@ -200,6 +207,15 @@ def _validate_status(
             f"(expected {expected!r})"
         )
         raise _makeutil_error(message, path)
+
+
+def _validate_status(
+    report: dict[str, object], returncode: int, path: pathlib.Path
+) -> str:
+    """Validate the schema version and parse status, returning the status."""
+    _require_schema_version(report, path)
+    status = _read_parse_status(report, path)
+    _require_status_matches_exit(status, returncode, path)
     return status
 
 
