@@ -131,6 +131,25 @@ def _remove_legacy_estate_section(legacy: Path, data: dict[str, typ.Any]) -> Non
         legacy.unlink()
 
 
+def _current_legacy_data(
+    legacy: Path,
+    fallback: dict[str, typ.Any],
+) -> dict[str, typ.Any]:
+    """Return the legacy file's contents as they stand now.
+
+    The legacy flat config and the XDG headline config are the same file, so
+    :func:`xdg.set_active_owner` writes the active-owner key into it. Cleanup
+    must therefore drop the estate section from what is on disk *after* that
+    write; rewriting the snapshot taken before it would erase the key, or
+    delete the file outright when the estate section was its only content,
+    leaving the migrated estates unreachable.
+    """
+    if not legacy.is_file():
+        return fallback
+    reloaded = _yaml.load(legacy.read_text(encoding="utf-8"))
+    return reloaded if isinstance(reloaded, dict) else fallback
+
+
 def migrate_legacy_config() -> None:
     """Move a legacy flat estates config into the owner-namespaced layout.
 
@@ -140,18 +159,27 @@ def migrate_legacy_config() -> None:
     config exists) and is invoked once at the CLI bootstrap, keeping
     :func:`default_config_path` a pure read-only query.
 
-    The active owner is only set once both filesystem writes succeed: were it
-    set earlier, ``default_config_path()`` would resolve future implicit
-    configuration operations to an incomplete owner-scoped config after a
-    failed migration.
+    The step order is load-bearing. The active owner is set as soon as the
+    owner-scoped file is complete, and legacy cleanup happens last, because
+    the active owner is what points ``default_config_path`` at the migrated
+    data. Removing the legacy section first opens a window where a failure
+    would leave the estates in neither place the CLI looks: the flat file no
+    longer holds them and no active owner selects the owner-scoped file. That
+    is unrecoverable, since :func:`_load_legacy_migration` then finds no
+    estate section to retry from.
+
+    Cleanup is therefore the only step allowed to fail. If it does, the estate
+    data is duplicated rather than lost — the migrated copy is already live —
+    and a later run leaves the stale legacy section in place. Duplicated but
+    reachable beats complete but invisible.
     """
     migration = _load_legacy_migration()
     if migration is None:
         return
     legacy, data, estate_section, owner = migration
     _write_owner_estate_config(owner, estate_section)
-    _remove_legacy_estate_section(legacy, data)
     xdg.set_active_owner(owner)
+    _remove_legacy_estate_section(legacy, _current_legacy_data(legacy, data))
 
 
 def _derive_owner_from_estates(estate_section: dict[str, typ.Any]) -> str | None:

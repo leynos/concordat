@@ -6,7 +6,7 @@ import typing as typ
 
 import pytest
 
-from concordat import estate, estate_cache, xdg
+from concordat import estate, estate_cache, estate_config, xdg
 from concordat.estate import EstateRecord
 from concordat.estate_cache import EstateCacheError
 
@@ -82,6 +82,41 @@ class TestDefaultConfigPath:
         assert active.alias == "prod"
         # The headline file no longer carries the estate section.
         assert "estates:" not in legacy.read_text()
+
+    def test_failed_cleanup_leaves_migrated_estates_reachable(
+        self,
+        xdg_env: dict[str, str],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A failed legacy cleanup duplicates estate data rather than hiding it.
+
+        Cleanup is the last step precisely so it is the only one that may fail.
+        The active owner is already set by then, so ``default_config_path``
+        still selects the complete owner-scoped file even though the legacy
+        section survives.
+        """
+        legacy = xdg.config_root() / estate.CONFIG_FILENAME
+        legacy.parent.mkdir(parents=True)
+        legacy.write_text(LEGACY_CONFIG)
+
+        def refuse_cleanup(*_args: object, **_kwargs: object) -> typ.NoReturn:
+            message = "cleanup denied"
+            raise OSError(message)
+
+        monkeypatch.setattr(
+            estate_config,
+            "_remove_legacy_estate_section",
+            refuse_cleanup,
+        )
+
+        with pytest.raises(OSError, match="cleanup denied"):
+            estate.migrate_legacy_config()
+
+        assert xdg.get_active_owner() == "leynos", xdg.get_active_owner()
+        records = estate.list_estates()
+        assert [record.alias for record in records] == ["prod"], records
+        # The duplicate is the accepted cost: the data is reachable, not lost.
+        assert "estates:" in legacy.read_text(), legacy.read_text()
 
     def test_migration_preserves_non_estate_headline_keys(
         self,
