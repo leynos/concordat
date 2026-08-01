@@ -24,7 +24,7 @@ import subprocess
 import tempfile
 import typing as typ
 
-from cyclopts import App
+from cyclopts import App, Parameter
 from ruamel.yaml import YAML
 
 from concordat.errors import OperationalRuleError
@@ -83,6 +83,29 @@ class SweepOptions:
 # A frozen singleton so `run_sweep`'s default is a real, shareable value
 # rather than a per-call construction in the signature (ruff B008).
 _DEFAULT_SWEEP_OPTIONS: typ.Final = SweepOptions()
+
+
+# `name="*"` flattens the fields onto the command, so the CLI keeps its
+# top-level `--only`/`--limit`/`--force`/`--estate`/`--ledger` flags rather
+# than gaining a nested `--options.` prefix.
+# `kw_only` keeps the flags keyword-only, as the previous `*`-marked signature
+# made them: without it Cyclopts would also accept them positionally.
+@Parameter(name="*")
+@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
+class SweepCommandOptions:
+    """CLI inputs for one Parabellum estate sweep."""
+
+    only: str | None = None
+    limit: int | None = None
+    force: bool = False
+    estate: pathlib.Path = DEFAULT_ESTATE_PATH
+    ledger: pathlib.Path = DEFAULT_LEDGER_PATH
+
+
+# Every field is optional, so Cyclopts requires the parameter itself to carry a
+# default. A frozen singleton supplies one without calling the constructor in
+# the signature (ruff B008), matching `_DEFAULT_SWEEP_OPTIONS` above.
+_DEFAULT_COMMAND_OPTIONS: typ.Final = SweepCommandOptions()
 
 
 def load_estate(path: pathlib.Path) -> Estate:
@@ -251,20 +274,6 @@ def _append_record(
     appended.append(record)
 
 
-def _record_exclusion(
-    *,
-    ledger: list[dict[str, typ.Any]],
-    ledger_path: pathlib.Path,
-    appended: list[dict[str, typ.Any]],
-    repository: str,
-    reason: str,
-) -> None:
-    """Append an exclusion record unless the repository already has one."""
-    if _already_ledgered(ledger, repository, commit_sha=None):
-        return
-    _append_record(ledger_path, appended, _excluded_record(repository, reason))
-
-
 def _audit_record(owner: str, entry: EstateEntry) -> dict[str, typ.Any]:
     repository = f"{owner}/{entry.name}"
     record = _base_record(repository)
@@ -296,39 +305,6 @@ def _already_ledgered(
     )
 
 
-def _sweep_auditable_entry(
-    *,
-    owner: str,
-    entry: EstateEntry,
-    ledger: list[dict[str, typ.Any]],
-    ledger_path: pathlib.Path,
-    appended: list[dict[str, typ.Any]],
-    force: bool,
-) -> bool:
-    """Audit one non-excluded entry, returning whether it consumed a slot.
-
-    A head-resolution failure and a completed audit both consume an audit
-    slot; an idempotent skip of an already-ledgered commit does not.
-    """
-    repository = f"{owner}/{entry.name}"
-    try:
-        head = resolve_head(owner, entry.name)
-    except OperationalRuleError as error:
-        record = _base_record(repository)
-        record["error_detail"] = str(error)
-        _append_record(ledger_path, appended, record)
-        return True
-
-    if not force and _already_ledgered(ledger, repository, commit_sha=head):
-        print(f"{repository}: already ledgered at {head[:12]}, skipping")
-        return False
-
-    record = _audit_record(owner, entry)
-    _append_record(ledger_path, appended, record)
-    print(f"{repository}: {record['verdict']}")
-    return True
-
-
 @dataclasses.dataclass
 class _SweepSession:
     """Mutable per-invocation state for one estate sweep.
@@ -351,31 +327,61 @@ class _SweepSession:
         """Handle one estate entry, returning whether the sweep should stop."""
         if self.only is not None and entry.name not in self.only:
             return False
-        repository = f"{self.owner}/{entry.name}"
         if entry.excluded is not None:
-            _record_exclusion(
-                ledger=self.ledger,
-                ledger_path=self.ledger_path,
-                appended=self.appended,
-                repository=repository,
-                reason=entry.excluded,
-            )
+            self._record_exclusion(entry)
             return False
         return self._process_auditable(entry)
+
+    def _record_exclusion(self, entry: EstateEntry) -> None:
+        """Append an exclusion record unless the repository already has one.
+
+        ``process`` only routes excluded entries here, but that guard's
+        narrowing of ``entry.excluded`` does not cross the method boundary, so
+        the reason is re-checked rather than asserted.
+        """
+        if entry.excluded is None:
+            return
+        repository = f"{self.owner}/{entry.name}"
+        if _already_ledgered(self.ledger, repository, commit_sha=None):
+            return
+        _append_record(
+            self.ledger_path,
+            self.appended,
+            _excluded_record(repository, entry.excluded),
+        )
 
     def _process_auditable(self, entry: EstateEntry) -> bool:
         """Audit a non-excluded entry; stop once the audit budget is spent."""
         if self.limit is not None and self.audited >= self.limit:
             return True
-        self.audited += _sweep_auditable_entry(
-            owner=self.owner,
-            entry=entry,
-            ledger=self.ledger,
-            ledger_path=self.ledger_path,
-            appended=self.appended,
-            force=self.force,
-        )
+        self.audited += self._sweep_auditable_entry(entry)
         return False
+
+    def _sweep_auditable_entry(self, entry: EstateEntry) -> bool:
+        """Audit one non-excluded entry and report audit-slot consumption.
+
+        A head-resolution failure and a completed audit both consume an audit
+        slot; an idempotent skip of an already-ledgered commit does not.
+        """
+        repository = f"{self.owner}/{entry.name}"
+        try:
+            head = resolve_head(self.owner, entry.name)
+        except OperationalRuleError as error:
+            record = _base_record(repository)
+            record["error_detail"] = str(error)
+            _append_record(self.ledger_path, self.appended, record)
+            return True
+
+        if not self.force and _already_ledgered(
+            self.ledger, repository, commit_sha=head
+        ):
+            print(f"{repository}: already ledgered at {head[:12]}, skipping")
+            return False
+
+        record = _audit_record(self.owner, entry)
+        _append_record(self.ledger_path, self.appended, record)
+        print(f"{repository}: {record['verdict']}")
+        return True
 
 
 def run_sweep(
@@ -506,33 +512,28 @@ def report_command(
 
 
 @app.default
-def sweep_command(
-    *,
-    only: str | None = None,
-    limit: int | None = None,
-    force: bool = False,
-    estate: pathlib.Path = DEFAULT_ESTATE_PATH,
-    ledger: pathlib.Path = DEFAULT_LEDGER_PATH,
-) -> int:
+def sweep_command(options: SweepCommandOptions = _DEFAULT_COMMAND_OPTIONS) -> int:
     """Audit the Rust estate and append results to the campaign ledger.
 
     ``--only`` takes a comma-separated list of repository names;
     ``--limit`` bounds how many repositories are audited this run.
     """
     only_set = (
-        {name.strip() for name in only.split(",") if name.strip()} if only else None
+        {name.strip() for name in options.only.split(",") if name.strip()}
+        if options.only
+        else None
     )
-    options = SweepOptions(
+    sweep_options = SweepOptions(
         only=frozenset(only_set) if only_set else None,
-        limit=limit,
-        force=force,
+        limit=options.limit,
+        force=options.force,
     )
     appended = run_sweep(
-        estate_path=estate,
-        ledger_path=ledger,
-        options=options,
+        estate_path=options.estate,
+        ledger_path=options.ledger,
+        options=sweep_options,
     )
-    print(f"appended {len(appended)} record(s) to {ledger}")
+    print(f"appended {len(appended)} record(s) to {options.ledger}")
     return 0
 
 

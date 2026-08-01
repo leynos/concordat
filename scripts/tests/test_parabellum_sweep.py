@@ -486,3 +486,187 @@ class TestReport:
         assert "excluded: 1" in report, (
             "the summary should count one excluded repository"
         )
+
+
+class TestSweepCommand:
+    """Option parsing for the default `parabellum-sweep` command.
+
+    These drive the Cyclopts app directly so the flattened
+    `SweepCommandOptions` parameter is exercised through real argument
+    parsing rather than by calling `sweep_command` with a constructed object.
+    """
+
+    @staticmethod
+    def _capture(
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> list[dict[str, typ.Any]]:
+        """Patch `run_sweep`, recording the arguments it is handed."""
+        calls: list[dict[str, typ.Any]] = []
+
+        def fake_run_sweep(
+            *,
+            estate_path: pathlib.Path,
+            ledger_path: pathlib.Path,
+            options: sweep.SweepOptions,
+        ) -> list[dict[str, typ.Any]]:
+            calls.append(
+                {
+                    "estate_path": estate_path,
+                    "ledger_path": ledger_path,
+                    "options": options,
+                }
+            )
+            return []
+
+        monkeypatch.setattr(sweep, "run_sweep", fake_run_sweep)
+        return calls
+
+    @staticmethod
+    def _invoke(tokens: list[str]) -> int:
+        """Run the app, normalising Cyclopts' `SystemExit` into a code."""
+        try:
+            sweep.app(tokens)
+        except SystemExit as exc:
+            return 0 if exc.code is None else int(exc.code)
+        return 0
+
+    def test_flags_reach_run_sweep(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        estate_path: pathlib.Path,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """Every top-level flag is parsed and forwarded unchanged."""
+        calls = self._capture(monkeypatch)
+
+        exit_code = self._invoke(
+            [
+                "--only",
+                "statelet",
+                "--limit",
+                "1",
+                "--force",
+                "--estate",
+                str(estate_path),
+                "--ledger",
+                str(ledger_path),
+            ]
+        )
+
+        assert exit_code == 0, exit_code
+        assert len(calls) == 1, calls
+        call = calls[0]
+        assert call["estate_path"] == estate_path, call
+        assert call["ledger_path"] == ledger_path, call
+        assert call["options"] == sweep.SweepOptions(
+            only=frozenset({"statelet"}),
+            limit=1,
+            force=True,
+        ), call["options"]
+
+    def test_only_list_is_split_and_cleaned(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        estate_path: pathlib.Path,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """`--only` splits on commas, trimming blanks and collapsing repeats."""
+        calls = self._capture(monkeypatch)
+
+        self._invoke(
+            [
+                "--only",
+                "alpha, beta, ,alpha",
+                "--estate",
+                str(estate_path),
+                "--ledger",
+                str(ledger_path),
+            ]
+        )
+
+        assert calls[0]["options"].only == frozenset({"alpha", "beta"}), calls[0]
+
+    def test_empty_only_selects_every_repository(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        estate_path: pathlib.Path,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """An empty `--only` value filters nothing rather than everything."""
+        calls = self._capture(monkeypatch)
+
+        self._invoke(
+            [
+                "--only",
+                "",
+                "--estate",
+                str(estate_path),
+                "--ledger",
+                str(ledger_path),
+            ]
+        )
+
+        assert calls[0]["options"].only is None, calls[0]
+
+    def test_defaults_apply_without_flags(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """With no flags the command still runs, using the packaged defaults."""
+        calls = self._capture(monkeypatch)
+
+        exit_code = self._invoke([])
+
+        assert exit_code == 0, exit_code
+        call = calls[0]
+        assert call["estate_path"] == sweep.DEFAULT_ESTATE_PATH, call
+        assert call["ledger_path"] == sweep.DEFAULT_LEDGER_PATH, call
+        assert call["options"] == sweep.SweepOptions(), call["options"]
+
+    def test_summary_line_names_the_ledger(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        estate_path: pathlib.Path,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """The command reports how many records it appended, and where."""
+        monkeypatch.setattr(
+            sweep,
+            "run_sweep",
+            lambda **_kwargs: [{"repository": "leynos/statelet"}],
+        )
+
+        self._invoke(
+            [
+                "--estate",
+                str(estate_path),
+                "--ledger",
+                str(ledger_path),
+            ]
+        )
+
+        captured = capsys.readouterr().out
+        assert f"appended 1 record(s) to {ledger_path}" in captured, captured
+
+    def test_flags_stay_flat_and_top_level(
+        self,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """The options object is flattened onto the command, not nested.
+
+        `SweepCommandOptions` carries `@Parameter(name="*")` precisely so the
+        CLI keeps its original flags. Without it Cyclopts namespaces them as
+        `--<prefix>.only` and every documented invocation breaks, so the flag
+        surface is asserted rather than assumed.
+        """
+        self._invoke(["--help"])
+
+        rendered = capsys.readouterr().out
+        for name in ("only", "limit", "force", "estate", "ledger"):
+            assert f"--{name}" in rendered, f"--{name} missing from:\n{rendered}"
+            # A namespaced flag renders as `--<prefix>.<name>`; the default
+            # paths in the help carry dots only before file extensions.
+            assert f".{name}" not in rendered, (
+                f"--{name} should not be namespaced:\n{rendered}"
+            )
