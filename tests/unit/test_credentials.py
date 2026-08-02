@@ -63,6 +63,27 @@ class TestLoadCredentials:
             "SCW_SECRET_KEY": "sk",
         }, f"loading should keep only recognised keys: {loaded}"
 
+    def test_non_string_values_are_ignored(
+        self,
+        fake_env: dict[str, str],
+    ) -> None:
+        """Only string values count as credentials.
+
+        Coercing would be worse than dropping: an empty ``GITHUB_TOKEN:``
+        parses as ``None`` and would become the literal secret ``"None"``,
+        which concordat would then present to the remote.
+        """
+        _write_credentials(
+            fake_env,
+            "leynos",
+            "GITHUB_TOKEN:\nAWS_ACCESS_KEY_ID: false\nAWS_SESSION_TOKEN: 12345\n"
+            "SCW_ACCESS_KEY: ak\n",
+        )
+        loaded = credentials.load_credentials("leynos", env=fake_env)
+        assert loaded == {"SCW_ACCESS_KEY": "ak"}, (
+            f"null, boolean, and numeric values should be dropped: {loaded}"
+        )
+
     def test_group_readable_file_is_refused(
         self,
         fake_env: dict[str, str],

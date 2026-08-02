@@ -38,7 +38,7 @@ if typ.TYPE_CHECKING:
 def init_estate_error_setup(
     tmp_path: pathlib.Path,
     mocker: pytest_mock.MockFixture,
-) -> tuple[pathlib.Path, typ.Any]:
+) -> tuple[pathlib.Path, mock.Mock]:
     """Provide shared setup for init_estate error-path tests."""
     config_path = tmp_path / "config.yaml"
     mocker.patch.object(
@@ -216,7 +216,7 @@ def test_init_estate_creates_repository_when_remote_unreachable_and_missing(
 
 
 def test_init_estate_translates_authentication_errors(
-    init_estate_error_setup: tuple[pathlib.Path, typ.Any],
+    init_estate_error_setup: tuple[pathlib.Path, mock.Mock],
     mocker: pytest_mock.MockFixture,
 ) -> None:
     """Surface authentication failures when provisioning estates."""

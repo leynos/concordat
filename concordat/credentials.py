@@ -95,15 +95,19 @@ def load_credentials(
 
 
 def _recognised_credentials(loaded: cabc.Mapping[object, object]) -> dict[str, str]:
-    """Return the recognised, non-blank credential entries in *loaded*.
-
-    YAML mappings can carry non-string keys, so the key type is narrowed here
-    rather than assumed.
-    """
+    """Return the recognised, non-blank credential entries in *loaded*."""
     return {
-        key: str(value).strip()
+        # A credential becomes an environment variable, so only a genuine
+        # string counts. Coercing instead would turn an empty `KEY:` into the
+        # literal "None" and a `false` into "False", and hand either to the
+        # remote as if it were a secret. YAML also permits non-string keys,
+        # so the key type is narrowed rather than assumed.
+        key: value.strip()
         for key, value in loaded.items()
-        if isinstance(key, str) and key in CREDENTIAL_KEYS and str(value).strip()
+        if isinstance(key, str)
+        and key in CREDENTIAL_KEYS
+        and isinstance(value, str)
+        and value.strip()
     }
 
 

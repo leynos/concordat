@@ -1337,10 +1337,19 @@ and needs no depth bound because every edge is a fact from the single parsed
 file. Dynamic edges (`$(MAKE) $(VAR)`, `$(MAKE) -C`, recursive make into other
 files) stay indeterminate, as do includes. A gate invocation is a reachable
 recipe referencing the gate variable or executable; where surfaces are
-declared, the invocation must be qualified to a surface — a `cd <dir> &&`
-prefix, a `--manifest-path <path>` flag, or a `make -C <dir>` matching the
-surface's directory — and QG-001 requires every declared surface's gate to be
-reachable from `lint`.
+declared, the invocation must be qualified to a surface — either a
+`cd <dir> &&` prefix or a `--manifest-path <path>` flag — and QG-001 requires
+every declared surface's gate to be reachable from `lint`.
+
+`make -C <dir>` is indeterminate in every role, both as a reachability edge
+and as a surface qualifier. The two qualifiers above keep the gate invocation
+inside the file being parsed, so it remains a fact; `-C` instead delegates to a
+Makefile this rule never reads, and accepting it would assert a gate that has
+not been observed. Treating it as proof would need the envelope to carry the
+nested file's parse, which it does not: `build_envelope` parses only the
+checkout's root `Makefile`. A repository that delegates its surface gates
+through `-C` therefore reports indeterminate rather than compliant, in keeping
+with how includes and recovered parses already fail closed.
 
 Consequences across the seven repositories that motivated the change: cuprum,
 femtologging, msgspec-crockford, and shared-actions become governable and their

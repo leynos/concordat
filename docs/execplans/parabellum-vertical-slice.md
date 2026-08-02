@@ -261,9 +261,12 @@ Hard invariants. Violation requires escalation, not workarounds.
 
 - Decision: pin `makeutil` at commit
   `29fc5a1634ffbaa18a773eed9dff1b2838a45d9c` (head of
-  `adr-0001-single-file-gnu-make-parse` on 2026-07-19). Rationale: Milestone A
-  requires an exact, reproducible pin; this SHA is recorded in every ledger
-  record. Date/Author: 2026-07-19, Fable (Milestone A).
+  `adr-0001-single-file-gnu-make-parse` on 2026-07-19) and install with
+  `cargo install --locked`. Rationale: Milestone A requires an exact,
+  reproducible pin; this SHA is recorded in every ledger record, and
+  `--locked` pins dependency resolution to the `Cargo.lock` committed at that
+  commit rather than re-solving it at install time. Date/Author: 2026-07-19,
+  Fable (Milestone A).
 - Decision: develop the Rego policy against the locally installed conftest
   0.68.2 (OPA 1.15.2) while CI pins v0.52.0; the policy restricts itself to
   `import rego.v1` semantics supported by both. Rationale: the constraint pins
@@ -405,13 +408,15 @@ Resolve the head commit of `leynos/makeutil` branch
 plan's Decision log. Install with:
 
 ```shell
-cargo install --git https://github.com/leynos/makeutil \
+cargo install --locked --git https://github.com/leynos/makeutil \
   --rev <PINNED_SHA> makeutil
 ```
 
 (The repository pins its own nightly via `rust-toolchain.toml` and carries the
 `makefile-lossless` fork patch in its manifest, so this command is
-self-contained. Use the shared default Cargo cache; if another Cargo job holds
+self-contained. `--locked` uses the `Cargo.lock` committed at the pinned
+commit, so dependency resolution is reproducible rather than re-solved at
+install time. Use the shared default Cargo cache; if another Cargo job holds
 the package-cache lock, wait for it.)
 
 Smoke-test: `makeutil parse Makefile` in this repository's root must exit 0 and
@@ -446,7 +451,8 @@ Create `platform-standards/canon/lint-rules/rust-makefile-baseline/`:
   command below must fail because `policy/rust_makefile_baseline.rego` does not
   yet exist.
 
-Validation (red): from the repository root,
+Validation (red): from the repository root, with `$RUN_LOG_DIR` initialized
+once per session as shown in the run-log setup under Concrete steps below,
 
 ```shell
 conftest verify \
@@ -466,11 +472,12 @@ producing structured findings
 - FP-003: missing root Makefile (the envelope says so), or any of
   `required_targets` absent from the rule facts, or present only under a
   non-empty conditional ancestry.
-- QG-001 (noncompliant): a variable fact named `gate_variable` with operator
-  `?=`; a lint-path recipe with `ignore_errors: true`; a lint-path recipe whose
-  text matches a bounded set of guard patterns (`command -v`, `which ... ||`,
-  `|| true`); no `$(WHITAKER)` invocation reachable from `lint` within one
-  prerequisite hop.
+- QG-001 (noncompliant): a lint-path recipe with `ignore_errors: true`; a
+  lint-path recipe whose text matches a bounded set of guard patterns
+  (`command -v`, `which ... ||`, `|| true`); no `$(WHITAKER)` invocation
+  reachable from `lint` within one prerequisite hop. The gate variable's `?=`
+  assignment (`WHITAKER ?= whitaker`) is the sanctioned estate pattern and is
+  not a finding.
 - QG-001 (indeterminate): any include fact; `parse.status == "recovered"`;
   a `lint` rule with `double_colon: true` or duplicate `lint` definitions.
 
@@ -567,15 +574,22 @@ hoc during this slice.
 
 All commands run from the repository root (the checkout of this branch) unless
 stated. Long outputs go through `tee`, but never to a predictable shared `/tmp`
-path: create an owner-scoped run-log directory under the XDG state home with
-`mktemp -d` under `umask 077`, and write log files inside it. Run this once per
-session, and the `$RUN_LOG_DIR` used by the examples below refers to it:
+path: create a run-log directory under the swept owner's XDG state hierarchy
+(`concordat/owners/<owner>/...`, matching `concordat/xdg.py`) with `mktemp -d`
+under `umask 077`, and write log files inside it. Both the owner-scoped base
+directory and the temporary run-log directory are mode `0700`; `mkdir -p`
+alone does not guarantee this when the base directory already exists, hence
+the explicit `chmod`. Run this once per session, and the `$RUN_LOG_DIR` used
+by the examples below refers to it:
 
 ```shell
 umask 077
-mkdir -p "${XDG_STATE_HOME:-$HOME/.local/state}/concordat-parabellum"
-RUN_LOG_DIR="$(mktemp -d \
-  "${XDG_STATE_HOME:-$HOME/.local/state}/concordat-parabellum/run.XXXXXX")"
+OWNER="leynos"
+RUN_LOG_BASE="${XDG_STATE_HOME:-$HOME/.local/state}/concordat/owners/$OWNER/parabellum"
+mkdir -p "$RUN_LOG_BASE"
+chmod 700 "$RUN_LOG_BASE"
+RUN_LOG_DIR="$(mktemp -d "$RUN_LOG_BASE/run.XXXXXX")"
+chmod 700 "$RUN_LOG_DIR"
 ```
 
 Run logs must never capture or emit credentials (tokens, keys, passwords, or
@@ -587,7 +601,8 @@ available.
    ```shell
    gh api repos/leynos/makeutil/commits/adr-0001-single-file-gnu-make-parse \
      --jq .sha
-   cargo install --git https://github.com/leynos/makeutil --rev <SHA> makeutil
+   cargo install --locked --git https://github.com/leynos/makeutil \
+     --rev <SHA> makeutil
    makeutil parse Makefile | head -c 200
    ```
 
@@ -652,13 +667,12 @@ Feature: Rust Makefile baseline rule run
     Then the exit status is 0
     And the table output reports zero findings
 
-  Scenario: environment-overridable lint gate
+  Scenario: overridable gate variable is compliant
     Given a checkout with a root Cargo.toml
     And a Makefile whose facts match the "overridable-gate" fixture
     When I run "concordat artefact rule run rust-makefile-baseline --repo ."
-    Then the exit status is 1
-    And the output contains a QG-001 finding citing the Makefile line of
-      the "?=" assignment
+    Then the exit status is 0
+    And the table output reports zero findings
 
   Scenario: include renders the gate unprovable
     Given a checkout with a root Cargo.toml

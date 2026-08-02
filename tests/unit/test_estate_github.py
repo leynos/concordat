@@ -23,17 +23,19 @@ if typ.TYPE_CHECKING:
     import pytest_mock
 
 
-def _rejected(mocker: pytest_mock.MockFixture) -> github3_exceptions.GitHubException:
-    """Return the rejection github3 raises for an unauthenticated call."""
-    return github3_exceptions.AuthenticationFailed(mocker.Mock())
+# github3 raises 401 as `AuthenticationFailed` and 403 as `ForbiddenError`.
+# They are siblings under `ResponseError`, so each boundary must translate
+# both; the production `_REJECTED` tuple names them together.
+type Rejection = type[github3_exceptions.ResponseError]
 
 
 def _client_rejecting_organisation_lookup(
     mocker: pytest_mock.MockFixture,
+    rejection: Rejection,
 ) -> github3.GitHub:
     """Return a client whose organisation lookup is rejected."""
     client = mocker.Mock()
-    client.organization.side_effect = _rejected(mocker)
+    client.organization.side_effect = rejection(mocker.Mock())
     return client
 
 
@@ -44,10 +46,11 @@ def _look_up_organisation(client: github3.GitHub) -> None:
 
 def _organisation_rejecting_creation(
     mocker: pytest_mock.MockFixture,
+    rejection: Rejection,
 ) -> github3.orgs.Organization:
     """Return an organisation that refuses to create a repository."""
     org = mocker.Mock()
-    org.create_repository.side_effect = _rejected(mocker)
+    org.create_repository.side_effect = rejection(mocker.Mock())
     return org
 
 
@@ -58,6 +61,7 @@ def _create_organisation_repository(org: github3.orgs.Organization) -> None:
 
 def _client_rejecting_personal_creation(
     mocker: pytest_mock.MockFixture,
+    rejection: Rejection,
 ) -> github3.GitHub:
     """Return an authenticated client that refuses to create a repository.
 
@@ -66,7 +70,7 @@ def _client_rejecting_personal_creation(
     """
     client = mocker.Mock()
     client.me.return_value = mocker.Mock(login="example")
-    client.create_repository.side_effect = _rejected(mocker)
+    client.create_repository.side_effect = rejection(mocker.Mock())
     return client
 
 
@@ -83,7 +87,7 @@ class AuthenticationFailureScenario:
     # contravariant, so a `Callable[[object], None]` field would reject the
     # boundary-typed helpers below. Each setup/invoke pair is matched at
     # construction, so the erasure is contained to this table.
-    setup: typ.Callable[[pytest_mock.MockFixture], typ.Any]
+    setup: typ.Callable[[pytest_mock.MockFixture, Rejection], typ.Any]
     invoke: typ.Callable[[typ.Any], None]
     error_type: type[ConcordatError]
 
@@ -101,6 +105,16 @@ class TestCreateRepository:
         "description": "Platform standards repository managed by concordat",
     }
 
+    @pytest.mark.parametrize(
+        "rejection",
+        [
+            pytest.param(
+                github3_exceptions.AuthenticationFailed,
+                id="unauthenticated",
+            ),
+            pytest.param(github3_exceptions.ForbiddenError, id="forbidden"),
+        ],
+    )
     @pytest.mark.parametrize(
         "scenario",
         [
@@ -130,18 +144,20 @@ class TestCreateRepository:
             ),
         ],
     )
-    def test_authentication_failure_is_translated(
+    def test_rejected_call_is_translated(
         self,
         mocker: pytest_mock.MockFixture,
         scenario: AuthenticationFailureScenario,
+        rejection: Rejection,
     ) -> None:
         """Each rejected call reports the error naming its own boundary.
 
-        The three helpers share a rejection but not a diagnosis: a refused
-        lookup says nothing about whether the owner is an organisation, so
-        each boundary keeps a distinct error class.
+        The boundaries share a rejection but not a diagnosis: a refused lookup
+        says nothing about whether the owner is an organisation, so each keeps
+        a distinct error class. Both a 401 and a 403 must translate, since
+        github3 models them as unrelated siblings.
         """
-        subject = scenario.setup(mocker)
+        subject = scenario.setup(mocker, rejection)
 
         with pytest.raises(scenario.error_type):
             scenario.invoke(subject)
