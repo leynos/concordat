@@ -111,32 +111,77 @@ def test_https_failure_reuses_valid_tracked_config(
     assert result.cache == tracked_config
 
 
+@pytest.mark.parametrize(
+    ("document", "expected_error", "expected_message"),
+    [
+        pytest.param(
+            _dictionary_text().replace("schema = 1", "schema = 2"),
+            ValueError,
+            "unsupported dictionary schema",
+            id="schema-mismatch",
+        ),
+        pytest.param(
+            _dictionary_text().replace('[oxford]\nstems = ["organ"]', 'oxford = "bad"'),
+            TypeError,
+            "'oxford' must be a table",
+            id="oxford-not-a-table",
+        ),
+        pytest.param(
+            _dictionary_text().replace('stems = ["organ"]', "stems = [1]"),
+            TypeError,
+            "'stems' must be a list of strings",
+            id="stems-non-string-member",
+        ),
+        # A string-list key holding a bare string is not a list.
+        pytest.param(
+            _dictionary_text().replace('stems = ["organ"]', 'stems = "organ"'),
+            TypeError,
+            "'stems' must be a list of strings",
+            id="stems-not-a-list",
+        ),
+        # Every string-list field rejects non-string members, not just stems.
+        pytest.param(
+            _dictionary_text().replace("accepted = []", "accepted = [1]"),
+            TypeError,
+            "'accepted' must be a list of strings",
+            id="accepted-non-string-member",
+        ),
+        pytest.param(
+            _dictionary_text().replace("ignore = []", "ignore = [2]"),
+            TypeError,
+            "'ignore' must be a list of strings",
+            id="ignore-non-string-member",
+        ),
+        pytest.param(
+            _dictionary_text().replace("exclude = []", "exclude = [3]"),
+            TypeError,
+            "'exclude' must be a list of strings",
+            id="exclude-non-string-member",
+        ),
+        pytest.param(
+            _dictionary_text().replace(
+                "[words.corrections]", "[words.corrections]\nteh = 1"
+            ),
+            TypeError,
+            "word corrections must map strings to strings",
+            id="correction-non-string-value",
+        ),
+    ],
+)
 def test_dictionary_validation_rejects_invalid_documents(
     rollout_modules: tuple[types.ModuleType, types.ModuleType, types.ModuleType],
     tmp_path: Path,
+    document: str,
+    expected_error: type[Exception],
+    expected_message: str,
 ) -> None:
     """Schema, table, string-list and correction types remain validated."""
     _, rollout, _ = rollout_modules
     source = tmp_path / "base.toml"
-    invalid_documents = (
-        _dictionary_text().replace("schema = 1", "schema = 2"),
-        _dictionary_text().replace('[oxford]\nstems = ["organ"]', 'oxford = "bad"'),
-        _dictionary_text().replace('stems = ["organ"]', "stems = [1]"),
-        # A string-list key holding a bare string is not a list.
-        _dictionary_text().replace('stems = ["organ"]', 'stems = "organ"'),
-        # Every string-list field rejects non-string members, not just stems.
-        _dictionary_text().replace("accepted = []", "accepted = [1]"),
-        _dictionary_text().replace("ignore = []", "ignore = [2]"),
-        _dictionary_text().replace("exclude = []", "exclude = [3]"),
-        _dictionary_text().replace(
-            "[words.corrections]", "[words.corrections]\nteh = 1"
-        ),
-    )
+    source.write_text(document, encoding="utf-8")
 
-    for document in invalid_documents:
-        source.write_text(document, encoding="utf-8")
-        with pytest.raises((TypeError, ValueError)):
-            rollout.load_dictionary(source)
+    with pytest.raises(expected_error, match=expected_message):
+        rollout.load_dictionary(source)
 
 def test_string_lists_are_deduplicated_and_sorted(
     rollout_modules: tuple[types.ModuleType, types.ModuleType, types.ModuleType],
@@ -155,10 +200,18 @@ def test_string_lists_are_deduplicated_and_sorted(
 
     dictionary = rollout.load_dictionary(source)
 
-    assert dictionary.stems == ("cathode", "organ")
-    assert dictionary.accepted == ("alpha", "zeta")
-    assert dictionary.ignore_patterns == ("a", "b")
-    assert dictionary.excluded_files == ("x", "y")
+    assert dictionary.stems == ("cathode", "organ"), (
+        "stems must drop the duplicate 'organ' and sort lexically"
+    )
+    assert dictionary.accepted == ("alpha", "zeta"), (
+        "accepted must drop the duplicate 'zeta' and sort lexically"
+    )
+    assert dictionary.ignore_patterns == ("a", "b"), (
+        "ignore patterns must drop the duplicate 'b' and sort lexically"
+    )
+    assert dictionary.excluded_files == ("x", "y"), (
+        "excluded files must drop the duplicate 'y' and sort lexically"
+    )
 
 def test_string_lists_default_to_empty_when_keys_are_absent(
     rollout_modules: tuple[types.ModuleType, types.ModuleType, types.ModuleType],
@@ -175,10 +228,18 @@ def test_string_lists_default_to_empty_when_keys_are_absent(
 
     dictionary = rollout.load_dictionary(source)
 
-    assert dictionary.stems == ()
-    assert dictionary.accepted == ()
-    assert dictionary.ignore_patterns == ()
-    assert dictionary.excluded_files == ()
+    assert dictionary.stems == (), (
+        "an absent 'stems' key must default to the empty tuple"
+    )
+    assert dictionary.accepted == (), (
+        "an absent 'accepted' key must default to the empty tuple"
+    )
+    assert dictionary.ignore_patterns == (), (
+        "an absent 'ignore' key must default to the empty tuple"
+    )
+    assert dictionary.excluded_files == (), (
+        "an absent 'exclude' key must default to the empty tuple"
+    )
 def test_merge_rejects_conflicting_corrections(
     rollout_modules: tuple[types.ModuleType, types.ModuleType, types.ModuleType],
 ) -> None:
