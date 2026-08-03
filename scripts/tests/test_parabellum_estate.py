@@ -163,6 +163,46 @@ class TestManifestIdentifiers:
             "the failure should name the manifest it could not decode"
         )
 
+    @pytest.mark.parametrize(
+        ("body", "fragment"),
+        [
+            pytest.param(
+                "owner: leynos\nrepositories:\n  - wireframe\n",
+                "non-mapping repository entry",
+                id="non-mapping-entry",
+            ),
+            pytest.param(
+                "owner: leynos\nrepositories:\n  - {excluded: why}\n",
+                "missing key 'name'",
+                id="entry-without-name",
+            ),
+            pytest.param(
+                "owner: leynos\nrepositories:\n  - {name: gauss, excluded: 7}\n",
+                "non-string exclusion reason",
+                id="non-string-exclusion-reason",
+            ),
+        ],
+    )
+    def test_malformed_entry_names_its_defect(
+        self,
+        tmp_path: pathlib.Path,
+        body: str,
+        fragment: str,
+    ) -> None:
+        """Each per-entry rejection keeps its own diagnostic wording.
+
+        The shape checks above prove an entry is refused; these pin *why*, so
+        moving the per-entry validation cannot quietly collapse three distinct
+        defects into one message the operator cannot act on.
+        """
+        manifest = self._manifest(tmp_path, body)
+
+        with pytest.raises(sweep.OperationalRuleError, match=fragment) as info:
+            sweep.load_estate(manifest)
+
+        assert info.value.operation == "load-estate-manifest", info.value.operation
+        assert info.value.resource == manifest, info.value.resource
+
     def test_valid_manifest_is_accepted(self, tmp_path: pathlib.Path) -> None:
         """Ordinary owners and names, including dots and underscores, parse."""
         manifest = self._manifest(

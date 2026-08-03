@@ -193,11 +193,35 @@ def _manifest_error(path: pathlib.Path, detail: str) -> OperationalRuleError:
     )
 
 
+def _repository_entry(item: object, path: pathlib.Path) -> EstateEntry:
+    """Decode one repository entry from an estate manifest."""
+    if not isinstance(item, dict):
+        raise _manifest_error(path, f"has a non-mapping repository entry: {item!r}")
+    entry = typ.cast("dict[str, object]", item)
+    if "name" not in entry:
+        raise _manifest_error(path, "has a repository entry missing key 'name'")
+    excluded = entry.get("excluded")
+    # An exclusion reason is prose the ledger records verbatim. Dropping a
+    # non-string would silently un-exclude the repository and audit it, so
+    # the manifest is refused instead.
+    if excluded is not None and not isinstance(excluded, str):
+        raise _manifest_error(
+            path,
+            f"has a non-string exclusion reason: {excluded!r}",
+        )
+    return EstateEntry(
+        name=_validated_identifier(
+            entry["name"], _REPO_NAME_PATTERN, "repository name", path
+        ),
+        excluded=excluded,
+    )
+
+
 def _repository_entries(
     repositories: object,
     path: pathlib.Path,
 ) -> tuple[EstateEntry, ...]:
-    """Decode the repository list, rejecting any entry that is not a mapping.
+    """Decode the repository collection from an estate manifest.
 
     Only a list is a repository collection. A scalar raises on iteration and a
     bare string is walked character by character, so both are refused here
@@ -208,31 +232,7 @@ def _repository_entries(
             path,
             f"has a `repositories` value that is not a list: {repositories!r}",
         )
-    entries: list[EstateEntry] = []
-    for item in repositories:
-        if not isinstance(item, dict):
-            raise _manifest_error(path, f"has a non-mapping repository entry: {item!r}")
-        entry = typ.cast("dict[str, object]", item)
-        if "name" not in entry:
-            raise _manifest_error(path, "has a repository entry missing key 'name'")
-        excluded = entry.get("excluded")
-        # An exclusion reason is prose the ledger records verbatim. Dropping a
-        # non-string would silently un-exclude the repository and audit it, so
-        # the manifest is refused instead.
-        if excluded is not None and not isinstance(excluded, str):
-            raise _manifest_error(
-                path,
-                f"has a non-string exclusion reason: {excluded!r}",
-            )
-        entries.append(
-            EstateEntry(
-                name=_validated_identifier(
-                    entry["name"], _REPO_NAME_PATTERN, "repository name", path
-                ),
-                excluded=excluded,
-            )
-        )
-    return tuple(entries)
+    return tuple(_repository_entry(item, path) for item in repositories)
 
 
 def load_estate(path: pathlib.Path) -> Estate:
