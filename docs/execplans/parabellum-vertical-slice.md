@@ -593,7 +593,15 @@ examples below refers to it:
 ```shell
 umask 077
 OWNER="leynos"
-RUN_LOG_BASE="${XDG_STATE_HOME:-$HOME/.local/state}/concordat/owners/$OWNER/parabellum"
+XDG_STATE_ROOT="${XDG_STATE_HOME:-$HOME/.local/state}"
+# The XDG specification requires a relative base directory to be ignored, and
+# concordat's own `xdg._base` does the same. A relative value here would put
+# the run logs somewhere that depends on the working directory.
+case "$XDG_STATE_ROOT" in
+  /*) ;;
+  *) XDG_STATE_ROOT="$HOME/.local/state" ;;
+esac
+RUN_LOG_BASE="$XDG_STATE_ROOT/concordat/owners/$OWNER/parabellum"
 mkdir -p "$RUN_LOG_BASE"
 chmod 700 "$RUN_LOG_BASE"
 RUN_LOG_DIR="$(mktemp -d "$RUN_LOG_BASE/run.XXXXXX")"
