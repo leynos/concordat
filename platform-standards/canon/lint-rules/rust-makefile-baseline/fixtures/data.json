@@ -1417,8 +1417,8 @@
         },
         "source": {
           "path": "soft-skip.mk",
-          "sha256": "d8786d5a97687a4279a6ee55e3bd54fe48e767a2ebdbd952b8a86d86692ba1d5",
-          "byte_length": 172
+          "sha256": "ca2eca9f92fd49698b66f13f2676a905569c0de51c5d504ad7e9a29229117de8",
+          "byte_length": 183
         },
         "parse": {
           "status": "complete",
@@ -1526,13 +1526,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "command -v whitaker >/dev/null 2>&1 && $(WHITAKER) --all",
+                "text": "command -v $(WHITAKER) >/dev/null 2>&1 || exit 0; $(WHITAKER) --all",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 114,
-                  "end_byte": 172,
+                  "end_byte": 183,
                   "start_line": 12,
                   "start_column": 1,
                   "end_line": 13,
@@ -1542,7 +1542,7 @@
             ],
             "location": {
               "start_byte": 108,
-              "end_byte": 172,
+              "end_byte": 183,
               "start_line": 11,
               "start_column": 1,
               "end_line": 13,

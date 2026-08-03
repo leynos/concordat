@@ -9,4 +9,4 @@ test:
 	cargo nextest run
 
 lint:
-	command -v whitaker >/dev/null 2>&1 && $(WHITAKER) --all
+	command -v $(WHITAKER) >/dev/null 2>&1 || exit 0; $(WHITAKER) --all
