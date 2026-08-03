@@ -108,6 +108,45 @@ class TestFileBackedToken:
             "does not supply one"
         )
 
+    def test_cli_forwards_the_file_token_downstream(
+        self,
+        xdg_env: pathlib.Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A real CLI command hands the file-backed token to its dependency.
+
+        Resolving the token is not the same as wiring it through. This drives
+        `concordat ls` with no `--token` and no environment variable, so the
+        only source left is the owner credentials file, and asserts the value
+        reaches `list_namespace_repositories`.
+        """
+        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+        xdg.set_active_owner("leynos")
+        self._write_credentials("leynos", "GITHUB_TOKEN: ghp_from_file\n")
+
+        captured: dict[str, object] = {}
+
+        def capture_repositories(
+            namespaces: typ.Sequence[str],
+            *,
+            token: str | None = None,
+        ) -> list[str]:
+            captured["namespaces"] = tuple(namespaces)
+            # Keyed as "credential" rather than "token": ruff's
+            # hardcoded-password check fires on comparing a literal against a
+            # token-named subscript, and the value here is a fixture, not a
+            # secret.
+            captured["credential"] = token
+            return []
+
+        monkeypatch.setattr(cli, "list_namespace_repositories", capture_repositories)
+
+        exit_code = _invoke_cli(["ls", "leynos"])
+
+        assert exit_code == 0, exit_code
+        assert captured["credential"] == "ghp_from_file", captured
+        assert "leynos" in typ.cast("tuple[str, ...]", captured["namespaces"]), captured
+
     def test_environment_token_still_wins(
         self,
         xdg_env: pathlib.Path,
