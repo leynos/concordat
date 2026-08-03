@@ -797,11 +797,25 @@ def inspect_makefile(path: Path, *, timeout: float = 10.0) -> MakefileFacts: ...
 def build_envelope(checkout: Path) -> dict[str, object]: ...
 
 # concordat/rules/runner.py
-def run_rule(rule_id: str, checkout: Path, *, output: str = "table") -> RuleRunResult: ...
+def run_rule(rule_id: str, checkout: Path) -> RuleRunResult: ...
 ```
 
 `MakefileFacts` and `RuleRunResult` are frozen dataclasses in the same modules;
 `RuleRunResult` carries `verdict`, `findings`, and `exit_code`.
+
+Rendering is separate from evaluation: `run_rule` returns the structured
+result, and two standalone renderers in `concordat/rules/runner.py` format
+it — the choice of output format is the CLI's concern, not the evaluator's,
+so `run_rule` takes no formatting parameter.
+
+```python
+# concordat/rules/runner.py
+def render_table(result: RuleRunResult) -> str: ...
+def render_json(result: RuleRunResult) -> str: ...
+```
+
+`render_table` renders an aligned plain-text table; `render_json` renders a
+stable JSON document.
 
 Ledger record schema (`docs/parabellum/ledger.jsonl`, one JSON object per line):
 `schema_version` (1), `repository` (owner/name), `commit_sha`, `audited_at`

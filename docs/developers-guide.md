@@ -9,6 +9,26 @@ broader estate-audit architecture. Where behaviour described here is planned
 rather than shipped, that is called out explicitly; everything else is
 derived from the current source.
 
+## Development environment and gates
+
+`uv sync --group dev` installs the development dependency group. The group
+is declared in `pyproject.toml` under `[dependency-groups]` as `dev`, and
+pulls in pytest, pytest-xdist, pytest-bdd, pytest-asyncio, pytest-mock,
+ruff, pyright, pytest-timeout, betamax, hypothesis, and textual. The
+`Makefile`'s `build` target runs `uv sync --group dev` as part of setting up
+the virtual environment.
+
+The type checker is pinned, not resolved at run time. `Makefile` declares
+`TY_VERSION ?= 0.0.65` and `TY := uv tool run ty@$(TY_VERSION)`; the
+`typecheck` target invokes `$(TY)` throughout. An unpinned `ty` meant CI and
+a local checkout could run different versions of the tool and disagree
+about which diagnostics were real; pinning the version in one Makefile
+variable, and having every invocation read it from there, closes that gap.
+`ty` is deliberately absent from the Makefile's `TOOLS` list — the CLI
+tools whose presence `make` verifies with `command -v` — because it is
+fetched on demand at the pinned version via `uv tool run` instead of being
+expected to already be on `PATH`.
+
 ## XDG layout and owner namespaces
 
 `concordat/xdg.py` is the single source of truth for where concordat reads
@@ -188,6 +208,35 @@ at" and "what does OpenTofu actually do with it":
   cache directory, so kept workdirs (`--keep-workdir`) land somewhere
   predictable.
 
+### Estate module boundaries
+
+`concordat.estate` is the public façade for estate management; the modules
+below sit beneath it, and `concordat.estate` imports each of them, never
+the reverse:
+
+- **`concordat/estate_config.py`** — configuration persistence and
+  migration: loading and writing the owner-scoped estate configuration, the
+  legacy-flat migration (see [Legacy-flat
+  migration](#legacy-flat-migration)), and owner normalization.
+- **`concordat/estate_errors.py`** — the estate exception taxonomy. It is a
+  leaf module with no dependency on git or GitHub code, so any other layer
+  can import it without risking an import cycle.
+- **`concordat/estate_git.py`** — git operations behind `concordat estate
+  init` and `concordat ls`: remote probing, inventory collection from a
+  clone, and template bootstrapping for a new estate. It knows nothing
+  about the GitHub API or the estate-init decision flow.
+- **`concordat/estate_github.py`** — the GitHub API calls concordat makes
+  when an estate repository must be created, and the translation of
+  github3's authentication failures into the estate error taxonomy. It
+  knows nothing about git or the estate-init decision flow.
+- **`concordat/estate_repository.py`** — the *decisions* `concordat estate
+  init` makes (which owner an estate belongs to, whether its remote needs
+  provisioning), delegating the *how* to `estate_github` and `estate_git`.
+  Its imports are deliberate, not incidental: it is the single lookup site
+  the `concordat.estate` façade calls through, and the single seam the
+  test suite monkeypatches (see [Module-level monkeypatch
+  seams](#module-level-monkeypatch-seams)).
+
 ## `concordat artefact rule run`
 
 `concordat/rules/runner.py` and `concordat/rules/envelope.py` implement the
@@ -276,6 +325,32 @@ if it printed something on stdout that looks like JSON.
 rather than risk decoding an operational failure as though it were a clean
 run.
 
+### Packaging: installed package data and the source distribution
+
+The build backend is setuptools (`[build-system]` in `pyproject.toml`:
+`requires = ["setuptools>=61.0", "wheel"]`,
+`build-backend = "setuptools.build_meta"`).
+
+`[tool.setuptools] packages` lists every shipped package explicitly:
+`concordat`, `concordat.auditor`, `concordat.persistence`,
+`concordat.rules`, `concordat.canon`. The list is explicit rather than
+`packages.find` because `concordat.canon` is an out-of-tree data package
+that has to be named — that rules out `find`, so the in-tree subpackages
+are listed alongside it rather than discovered automatically.
+
+`[tool.setuptools.package-dir]` maps `"concordat.canon" =
+"platform-standards/canon"`, and `[tool.setuptools.package-data]` ships
+`"concordat.canon" = ["lint-rules/**/*"]`. So the canon lint-rule tree
+lands under `concordat/canon/lint-rules` in the wheel, which is the point:
+`concordat artefact rule run` has to work from an installed wheel, not only
+a source checkout. The runner resolves the rule-package tree through
+`importlib.resources`, with a source-checkout fallback — see
+`_rule_packages_dir()` above.
+
+`MANIFEST.in` controls the source distribution, and grafts three trees:
+`platform-standards`, `scripts`, and `tests`. This preserves the sdist
+contents the previous build backend shipped, per the file's own comment.
+
 ## Parabellum boundaries
 
 `scripts/parabellum_sweep.py` is the campaign driver for auditing the Rust
@@ -341,6 +416,59 @@ command is missing, times out, or exits non-zero. Two call sites build on
   `HEAD` there with `git rev-parse HEAD`, and hands the checkout to
   `concordat.rules.run_rule` for the `rust-makefile-baseline` audit. The
   sweep is audit-only: nothing here ever writes to an estate repository.
+
+## Property tests and the bounded reachability contract
+
+### Hypothesis property tests
+
+`tests/unit/test_properties.py` holds concordat's Hypothesis-based property
+tests. Its module docstring states the discipline the whole file follows:
+"where a property restates a regex, it is written from the specification
+rather than the implementation's pattern, so the two can disagree" — a
+property test that reimplements the code under test proves nothing, so
+each property is derived from the documented rule instead. The file covers:
+
+- **the owner-name grammar** (`TestOwnerNames`) — acceptance against
+  `xdg.validate_owner` agrees with a grammar written independently of
+  `_OWNER_PATTERN`, well-formed names round-trip unchanged, and no name
+  containing a path separator is ever accepted;
+- **credential filtering** (`TestCredentialFiltering`) — every value that
+  survives `credentials._recognised_credentials` is a recognized key with a
+  trimmed, non-blank string;
+- **rule-package identifiers** (`TestRulePackageIdentifiers`) — acceptance
+  by `runner._validated_rule_id` agrees with the canonical hyphenated-words
+  grammar, and a rejected identifier never reaches the filesystem;
+- **manifest repository names** (`TestManifestRepositoryNames`) — every
+  name accepted by `sweep._validated_identifier` is a single, safe path
+  component that cannot escape the directory it is joined to; and
+- **ledger record selection** (`TestLedgerSelection`) — over a generated
+  append-only history, the latest record for a repository is the last one
+  appended.
+
+`test_a_component_joined_to_a_root_stays_inside_it` joins a generated name
+to a real directory rather than a `tmp_path` fixture: Hypothesis rejects
+function-scoped fixtures, since they would be created once and then shared
+across every generated example rather than being fresh per example.
+
+### The bounded Rego reachability test
+
+The rule package's `policy/rust_makefile_baseline_test.rego`, under the
+`-- bounded reachability contract --` banner, enumerates `lint` prerequisite
+chains of increasing depth over one envelope. QG-001 proves gate delegation
+within one prerequisite hop, so this suite pins the boundary between
+"provable" and "indeterminate" rather than sampling it: depth 0 (a direct
+gate invocation) and depth 1 (one hop of delegation) are compliant, and
+every deeper chain is indeterminate. `build` and `test` targets are kept
+present in every case so FP-003 stays silent and QG-001 is the only
+variable under test.
+
+This policy suite is not wired into the Makefile. It is run directly with
+Conftest:
+
+```shell
+cd platform-standards/canon/lint-rules/rust-makefile-baseline
+conftest verify --policy policy --data fixtures/data.json
+```
 
 ## Test seams and subprocess contracts
 

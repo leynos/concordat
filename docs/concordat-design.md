@@ -1133,6 +1133,19 @@ Commands must return stable exit codes for CI integration.
 | 3         | Catalogue integrity failure (template manifest mismatch, invalid schema) |
 | 4         | Mutations planned or applied failed (patch application or policy errors) |
 
+Table 3 is a proposal for the general `artefact` command family and does not
+describe what ships today. The one `artefact` subcommand that is
+implemented, `concordat artefact rule run`, ships a narrower, already-fixed
+scheme instead:
+
+- `0` — compliant.
+- `1` — policy findings, including `indeterminate` (which fails closed).
+- `2` — operational failure.
+
+See [`docs/developers-guide.md`, "Verdicts and exit
+codes"](developers-guide.md#verdicts-and-exit-codes) for the mapping from
+verdict to exit code.
+
 ##### Configuration and locking
 
 Semantic versions require a lock model to describe what is deployed in an
