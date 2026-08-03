@@ -33,22 +33,37 @@ ERROR_MAKEUTIL_MISSING = (
 )
 
 
-class MakeLocation(typ.TypedDict, total=False):
-    """Source span of a Make construct; only ``start_line`` is consumed."""
+class MakeLocation(typ.TypedDict):
+    """Source span of a Make construct; only ``start_line`` is consumed.
+
+    Required rather than optional: the policy reads ``start_line`` directly
+    when reporting a finding's line, and a missing one makes the whole
+    ``finding(...)`` term undefined — which silently drops a finding that
+    should have been reported.
+    """
 
     start_line: int
 
 
-class MakeRecipe(typ.TypedDict, total=False):
-    """One recipe line within a rule."""
+class MakeRecipe(typ.TypedDict):
+    """One recipe line within a rule.
+
+    Every field here is read by the policy without a guard, so all three are
+    required and validated before the report is forwarded.
+    """
 
     text: str
     ignore_errors: bool
     location: MakeLocation
 
 
-class MakeRule(typ.TypedDict, total=False):
-    """One parsed Make rule and the recipes/conditions attached to it."""
+class MakeRule(typ.TypedDict):
+    """One parsed Make rule and the recipes/conditions attached to it.
+
+    All six fields are consumed by the policy without a guard, so none is
+    optional. ``conditions`` reaches Rego's ``count()``, which raises on a
+    non-collection rather than degrading to undefined.
+    """
 
     targets: list[str]
     prerequisites: list[str]
@@ -219,15 +234,103 @@ def _validate_status(
     return status
 
 
+def _malformed(label: str, path: pathlib.Path) -> OperationalRuleError:
+    """Return the rejection for a report field that has the wrong shape."""
+    message = f"makeutil report for {path} has a malformed `{label}`"
+    return _makeutil_error(message, path)
+
+
+def _require_object(value: object, label: str, path: pathlib.Path) -> dict[str, object]:
+    """Return *value* as a mapping, or reject the report."""
+    if not isinstance(value, dict):
+        raise _malformed(label, path)
+    return typ.cast("dict[str, object]", value)
+
+
+def _require_list(value: object, label: str, path: pathlib.Path) -> list[object]:
+    """Return *value* as a list, or reject the report."""
+    if not isinstance(value, list):
+        raise _malformed(label, path)
+    return typ.cast("list[object]", value)
+
+
+def _require_bool(value: object, label: str, path: pathlib.Path) -> None:
+    """Reject *value* unless it is a boolean.
+
+    Checked before `isinstance(value, int)` would matter: `bool` is a subclass
+    of `int`, so an explicit type check is what keeps `1` from passing as
+    `True`.
+    """
+    if not isinstance(value, bool):
+        raise _malformed(label, path)
+
+
+def _require_str_list(value: object, label: str, path: pathlib.Path) -> None:
+    """Reject *value* unless it is a list of strings."""
+    for index, item in enumerate(_require_list(value, label, path)):
+        if not isinstance(item, str):
+            raise _malformed(f"{label}[{index}]", path)
+
+
+def _require_location(value: object, label: str, path: pathlib.Path) -> None:
+    """Reject *value* unless it is an object with an integer ``start_line``.
+
+    The policy uses ``start_line`` as a finding's reported line. A bool would
+    satisfy `isinstance(..., int)`, so it is excluded explicitly.
+    """
+    location = _require_object(value, label, path)
+    start_line = location.get("start_line")
+    if not isinstance(start_line, int) or isinstance(start_line, bool):
+        raise _malformed(f"{label}.start_line", path)
+
+
+def _validate_recipe(value: object, label: str, path: pathlib.Path) -> None:
+    """Validate one recipe entry of a rule."""
+    recipe = _require_object(value, label, path)
+    if not isinstance(recipe.get("text"), str):
+        raise _malformed(f"{label}.text", path)
+    _require_bool(recipe.get("ignore_errors"), f"{label}.ignore_errors", path)
+    _require_location(recipe.get("location"), f"{label}.location", path)
+
+
+def _validate_rule(value: object, label: str, path: pathlib.Path) -> None:
+    """Validate one rule entry and every recipe attached to it."""
+    rule = _require_object(value, label, path)
+    _require_str_list(rule.get("targets"), f"{label}.targets", path)
+    _require_str_list(rule.get("prerequisites"), f"{label}.prerequisites", path)
+    _require_list(rule.get("conditions"), f"{label}.conditions", path)
+    _require_location(rule.get("location"), f"{label}.location", path)
+    _require_bool(rule.get("double_colon"), f"{label}.double_colon", path)
+    for index, recipe in enumerate(
+        _require_list(rule.get("recipes"), f"{label}.recipes", path)
+    ):
+        _validate_recipe(recipe, f"{label}.recipes[{index}]", path)
+
+
 def _validate_report_shape(report: dict[str, object], path: pathlib.Path) -> None:
-    """Reject malformed nested report data beyond the top-level object."""
-    if not isinstance(report.get("source"), dict):
-        message = f"makeutil report for {path} has a malformed `source` object"
-        raise _makeutil_error(message, path)
-    for key in ("rules", "variables", "includes"):
-        if not isinstance(report.get(key), list):
-            message = f"makeutil report for {path} has a malformed `{key}` list"
-            raise _makeutil_error(message, path)
+    """Reject malformed nested report data beyond the top-level object.
+
+    The Rego policy reads these fields without guarding their types. Most bad
+    shapes make a Rego expression *undefined* rather than raising, which
+    silently drops a finding or invents one — a wrong verdict is worse than a
+    refusal, so the report is rejected here instead. Two paths would raise
+    outright: `count()` over `conditions`/`includes` and `contains()` over a
+    recipe's `text`.
+
+    Validation only inspects; the report mapping is forwarded to Conftest
+    unchanged, with any keys makeutil adds still present.
+    """
+    _require_object(report.get("source"), "source", path)
+    lists = {
+        key: _require_list(report.get(key), key, path)
+        for key in ("rules", "variables", "includes")
+    }
+    for index, rule in enumerate(lists["rules"]):
+        _validate_rule(rule, f"rules[{index}]", path)
+    for index, include in enumerate(lists["includes"]):
+        label = f"includes[{index}]"
+        entry = _require_object(include, label, path)
+        _require_location(entry.get("location"), f"{label}.location", path)
 
 
 def _validate_report(
