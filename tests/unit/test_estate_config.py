@@ -31,10 +31,14 @@ def test_register_estate_sets_active(tmp_path: pathlib.Path) -> None:
     register_estate(record, config_path=config_path)
 
     estates = list_estates(config_path=config_path)
-    assert estates == [record]
+    assert estates == [record], (
+        f"the registered estate should round-trip from the config, got {estates}"
+    )
 
     active = get_active_estate(config_path=config_path)
-    assert active == record
+    assert active == record, (
+        f"the first registered estate should become active, got {active}"
+    )
 
 
 def test_set_active_estate_switches_alias(tmp_path: pathlib.Path) -> None:
@@ -54,8 +58,11 @@ def test_set_active_estate_switches_alias(tmp_path: pathlib.Path) -> None:
     register_estate(second, config_path=config_path, set_active_if_missing=False)
 
     updated = set_active_estate("sandbox", config_path=config_path)
-    assert updated == second
-    assert get_active_estate(config_path=config_path) == second
+    assert updated == second, (
+        f"switching should return the sandbox record, got {updated}"
+    )
+    active = get_active_estate(config_path=config_path)
+    assert active == second, f"sandbox should become the active estate, got {active}"
 
 
 class TestEstateRecordFromPayload:

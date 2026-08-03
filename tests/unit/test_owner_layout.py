@@ -57,15 +57,31 @@ class TestDefaultConfigPath:
         estate.migrate_legacy_config()
         resolved = estate.default_config_path()
 
-        assert resolved == xdg.owner_config_path("leynos")
-        assert xdg.get_active_owner() == "leynos"
+        expected_path = xdg.owner_config_path("leynos")
+        assert resolved == expected_path, (
+            f"migration should point the config at {expected_path}, got {resolved}"
+        )
+        owner = xdg.get_active_owner()
+        assert owner == "leynos", (
+            f"the owner derived from the legacy estates should be active, got {owner!r}"
+        )
         records = estate.list_estates()
-        assert [record.alias for record in records] == ["prod"]
+        aliases = [record.alias for record in records]
+        assert aliases == ["prod"], (
+            f"the migrated estate should be readable under its owner, got {aliases}"
+        )
         active = estate.get_active_estate()
-        assert active is not None
-        assert active.alias == "prod"
+        assert active is not None, (
+            "the migrated estate should be the active one, but none is set"
+        )
+        assert active.alias == "prod", (
+            f"the active estate should be the migrated 'prod', got {active.alias!r}"
+        )
         # The headline file no longer carries the estate section.
-        assert "estates:" not in legacy.read_text()
+        remaining = legacy.read_text()
+        assert "estates:" not in remaining, (
+            f"the legacy estate section should have been removed, got {remaining!r}"
+        )
 
     def test_failed_cleanup_leaves_migrated_estates_reachable(
         self,
@@ -116,8 +132,12 @@ class TestDefaultConfigPath:
         estate.migrate_legacy_config()
 
         remaining = legacy.read_text()
-        assert "telemetry: disabled" in remaining
-        assert "estates:" not in remaining
+        assert "telemetry: disabled" in remaining, (
+            f"a non-estate headline key should survive migration, got {remaining!r}"
+        )
+        assert "estates:" not in remaining, (
+            f"the estate section should still be removed, got {remaining!r}"
+        )
 
     def test_existing_active_owner_skips_migration(
         self,

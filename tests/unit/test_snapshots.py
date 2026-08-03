@@ -63,7 +63,9 @@ class TestRuleRunRendering:
 
     def test_table_matches_the_snapshot(self) -> None:
         """The human-readable table is unchanged."""
-        assert render_table(RESULT) == _snapshot("render_table.txt")
+        assert render_table(RESULT) == _snapshot("render_table.txt"), (
+            "render_table's output diverged from snapshots/render_table.txt"
+        )
 
     def test_table_states_the_verdict_and_every_finding(self) -> None:
         """Semantics, not just bytes: the verdict and each rule appear."""
@@ -75,7 +77,9 @@ class TestRuleRunRendering:
 
     def test_json_matches_the_snapshot(self) -> None:
         """The machine-readable document is unchanged."""
-        assert render_json(RESULT) == _snapshot("render_json.json")
+        assert render_json(RESULT) == _snapshot("render_json.json"), (
+            "render_json's output diverged from snapshots/render_json.json"
+        )
 
     def test_json_carries_the_key_fields(self) -> None:
         """The decoded document keeps the fields consumers depend on."""
@@ -134,7 +138,9 @@ class TestReportRendering:
         `_base_record` stamps a timestamp, but the report never renders one,
         so nothing needs normalizing for this to be stable.
         """
-        assert sweep.render_report(ledger_path) == _snapshot("render_report.md")
+        assert sweep.render_report(ledger_path) == _snapshot("render_report.md"), (
+            "render_report's output diverged from snapshots/render_report.md"
+        )
 
     def test_report_counts_each_verdict(self, ledger_path: pathlib.Path) -> None:
         """Semantics: every repository is summarized under its verdict."""
