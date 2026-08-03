@@ -256,11 +256,14 @@ exit code 2, printed to standard error, distinct from the `1` that
 Rule package identifiers are validated against a canonical pattern —
 lower-case ASCII words joined by single hyphens
 (`^[a-z0-9]+(?:-[a-z0-9]+)*$`) — **before** any filesystem access.
-`_rule_package_dir` then joins the validated identifier to
-`RULE_PACKAGES_DIR` and confirms the resolved path stays under that root
-even though the pattern alone already excludes traversal characters; the
-containment check exists so that a future loosening of the pattern cannot
-silently reach outside the root.
+`_rule_package_dir` then joins the validated identifier to the packages
+root and confirms the resolved path stays under that root even though the
+pattern alone already excludes traversal characters; the containment check
+exists so that a future loosening of the pattern cannot silently reach
+outside the root. The root itself comes from `_rule_packages_dir()`, a
+cached lookup performed on first use rather than at import, so a missing or
+unreadable rule tree surfaces when a rule runs instead of when the module
+is imported.
 
 ### Conftest exit codes
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import importlib
 import json
 import subprocess
 import typing as typ
@@ -737,3 +738,54 @@ class TestConftestExitCodes:
         )
 
         assert results == [{"failures": []}], results
+
+
+class TestRulePackagesDirIsLazy:
+    """The canon rule tree is resolved on use, not on import."""
+
+    def test_importing_the_module_does_not_resolve_the_tree(
+        self,
+        mocker: pytest_mock.MockFixture,
+    ) -> None:
+        """A fresh import performs no resource lookup for the rule tree.
+
+        Resolving at import made merely importing the CLI depend on the policy
+        tree being present and readable, so a packaging fault surfaced as an
+        import error rather than an operational one.
+
+        `importlib.resources.files` is patched rather than
+        `_resolve_rule_packages_dir`: reloading re-defines the module's own
+        functions, so a patch on the module would be discarded before the
+        module body ran and the test could not fail.
+        """
+        files = mocker.patch("importlib.resources.files", autospec=True)
+        runner._rule_packages_dir.cache_clear()
+
+        importlib.reload(runner)
+
+        assert not hasattr(runner, "RULE_PACKAGES_DIR"), (
+            "an eagerly resolved module constant resolves the tree at import"
+        )
+        files.assert_not_called()
+
+    def test_the_resolver_runs_when_a_package_is_looked_up(
+        self,
+        mocker: pytest_mock.MockFixture,
+    ) -> None:
+        """`_rule_package_dir` resolves the tree, and caches the result."""
+        real_root = runner._resolve_rule_packages_dir()
+        resolve = mocker.patch.object(
+            runner,
+            "_resolve_rule_packages_dir",
+            autospec=True,
+            return_value=real_root,
+        )
+        runner._rule_packages_dir.cache_clear()
+
+        runner._rule_package_dir("rust-makefile-baseline")
+        runner._rule_package_dir("rust-makefile-baseline")
+
+        assert resolve.call_count == 1, (
+            f"the tree should resolve once and cache, got {resolve.call_count} calls"
+        )
+        runner._rule_packages_dir.cache_clear()

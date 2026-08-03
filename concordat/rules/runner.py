@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import functools
 import importlib.resources
 import json
 import pathlib
@@ -42,7 +43,11 @@ def _resolve_rule_packages_dir() -> pathlib.Path:
     return pathlib.Path(str(packaged))
 
 
-RULE_PACKAGES_DIR: typ.Final = _resolve_rule_packages_dir()
+@functools.lru_cache(maxsize=1)
+def _rule_packages_dir() -> pathlib.Path:
+    """Return the cached canon lint-rule tree."""
+    return _resolve_rule_packages_dir()
+
 
 CONFTEST_TIMEOUT: typ.Final = 60.0
 # Conftest reports an evaluated policy with 0 (clean) or 1 (failures); any
@@ -165,9 +170,14 @@ def _rule_package_dir(rule_id: str) -> pathlib.Path:
     path is then confirmed to stay under the packages root. The pattern alone
     already excludes traversal, but the containment check means a future
     loosening of the pattern cannot silently reach outside the root.
+
+    The packages root is resolved here rather than at import, so a missing or
+    unreadable rule tree fails when a rule is run rather than when the module
+    is imported — importing the CLI should not depend on the policy tree.
     """
-    rule_dir = RULE_PACKAGES_DIR / _validated_rule_id(rule_id)
-    root = RULE_PACKAGES_DIR.resolve()
+    packages_root = _rule_packages_dir()
+    rule_dir = packages_root / _validated_rule_id(rule_id)
+    root = packages_root.resolve()
     candidate = rule_dir.resolve()
     if not candidate.is_relative_to(root):
         message = f"rule package {rule_id!r} resolves outside {root}"
