@@ -149,6 +149,39 @@ class TestReport:
         assert row.rstrip().endswith("| none |"), row
         assert row.count("|") == 5, f"the row should keep four cells: {row}"
 
+    def test_report_command_writes_the_rendered_report(
+        self,
+        ledger_path: pathlib.Path,
+        tmp_path: pathlib.Path,
+    ) -> None:
+        """`report_command` writes what `render_report` returns, creating dirs.
+
+        The renderer is covered above; what is untested is the command around
+        it. The output path is deliberately nested under a directory that does
+        not exist: the command is run against a fresh checkout, so it must
+        create the report's parent rather than fail on it.
+        """
+        ledger_path.write_text(
+            "".join(
+                json.dumps(record) + "\n"
+                for record in (
+                    self._record("leynos/alpha", "compliant"),
+                    self._record("leynos/beta", "noncompliant"),
+                )
+            ),
+            encoding="utf-8",
+        )
+        output_path = tmp_path / "docs" / "parabellum" / "baseline-report.md"
+        assert not output_path.parent.exists(), "the parent must start absent"
+
+        status = sweep.report_command(ledger=ledger_path, output=output_path)
+
+        assert status == 0, f"the report command should succeed, got {status}"
+        assert output_path.is_file(), f"{output_path} should have been written"
+        assert output_path.read_text(encoding="utf-8") == sweep.render_report(
+            ledger_path
+        ), "the written file should be exactly the rendered report"
+
     def test_report_uses_latest_record_per_repository(
         self,
         ledger_path: pathlib.Path,
