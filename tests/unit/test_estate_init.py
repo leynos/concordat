@@ -13,7 +13,6 @@ import typing as typ
 import pygit2
 import pytest
 
-from concordat.errors import ConcordatError
 from concordat.estate import (
     EstateRecord,
     GitHubOwnerConfirmationAbortedError,
@@ -104,15 +103,13 @@ def test_init_estate_requires_owner_for_non_github_remote(
     config_path = tmp_path / "config.yaml"
     mock_remote_probe(reachable=True, exists=True, empty=True)
 
-    with pytest.raises(ConcordatError) as caught:
+    with pytest.raises(MissingGitHubOwnerError, match="github_owner"):
         init_estate(
             "local",
             str(tmp_path / "estate.git"),
             config_path=config_path,
             confirm=lambda _: True,
         )
-
-    assert "github_owner" in str(caught.value)
 
 
 def test_init_estate_rejects_empty_owner(
