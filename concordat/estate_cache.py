@@ -64,7 +64,9 @@ def ensure_estate_cache(
 
     destination = cache_destination(record, cache_directory)
     # `cache_destination` is a pure query, so the owner-scoped parent may not
-    # exist yet; it is created here, where the clone is about to need it.
+    # exist yet. It is created here, once, rather than inside
+    # `_open_or_clone_cache`: that only covered the clone branch, and the
+    # directory has to exist before either branch runs.
     destination.parent.mkdir(parents=True, exist_ok=True)
     callbacks = build_remote_callbacks(record.repo_url)
     repository = _open_or_clone_cache(
@@ -93,7 +95,6 @@ def _open_or_clone_cache(
             _refresh_cache(repository, record.branch, callbacks)
             return repository
 
-        destination.parent.mkdir(parents=True, exist_ok=True)
         return pygit2.clone_repository(
             record.repo_url,
             str(destination),
