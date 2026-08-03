@@ -50,6 +50,28 @@ class TestReport:
         record.update(extra)
         return record
 
+    def test_a_caption_precedes_the_repositories_table(
+        self,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """The repositories table is captioned, immediately before its header.
+
+        The caption has to sit between the heading and the header row: a
+        caption after the header would be read as a table row.
+        """
+        lines = sweep.render_report(ledger_path).splitlines()
+        heading = lines.index("## Repositories")
+        header = next(
+            i for i, line in enumerate(lines) if line.startswith("| Repository ")
+        )
+
+        caption = "Table 1: Latest verdict and findings per estate repository."
+        assert lines[heading + 2] == caption, lines[heading : header + 1]
+        assert header == heading + 4, (
+            f"expected caption then a blank line before the header: "
+            f"{lines[heading : header + 1]}"
+        )
+
     def test_report_uses_latest_record_per_repository(
         self,
         ledger_path: pathlib.Path,

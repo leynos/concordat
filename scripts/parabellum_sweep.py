@@ -537,6 +537,8 @@ def render_report(ledger_path: pathlib.Path = DEFAULT_LEDGER_PATH) -> str:
             "",
             "## Repositories",
             "",
+            "Table 1: Latest verdict and findings per estate repository.",
+            "",
             "| Repository | Verdict | Commit | Findings |",
             "| ---------- | ------- | ------ | -------- |",
         ]

@@ -19,6 +19,8 @@ Findings by rule:
 
 ## Repositories
 
+Table 1: Latest verdict and findings per estate repository.
+
 | Repository                   | Verdict       | Commit       | Findings                                                                                                                                                 |
 | ---------------------------- | ------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | leynos/actix-v2a             | noncompliant  | 12948c9dbb59 | QG-001 (noncompliant) no recipe invokes the "WHITAKER" lint gate                                                                                         |

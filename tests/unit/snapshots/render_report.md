@@ -17,6 +17,8 @@ Findings by rule:
 
 ## Repositories
 
+Table 1: Latest verdict and findings per estate repository.
+
 | Repository | Verdict | Commit | Findings |
 | ---------- | ------- | ------ | -------- |
 | leynos/alpha | compliant | aaaaaaaaaaaa | none |
