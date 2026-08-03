@@ -141,28 +141,78 @@ def _validated_identifier(
     )
 
 
-def load_estate(path: pathlib.Path) -> Estate:
-    """Parse the estate inventory YAML document."""
-    document = YAML(typ="safe").load(path.read_text(encoding="utf-8"))
-    try:
-        entries = tuple(
+def _manifest_error(path: pathlib.Path, detail: str) -> OperationalRuleError:
+    """Return the rejection for a manifest whose shape cannot be decoded."""
+    message = f"estate manifest {path} {detail}"
+    return OperationalRuleError(
+        message,
+        operation="load-estate-manifest",
+        resource=path,
+    )
+
+
+def _repository_entries(
+    repositories: object,
+    path: pathlib.Path,
+) -> tuple[EstateEntry, ...]:
+    """Decode the repository list, rejecting any entry that is not a mapping.
+
+    Only a list is a repository collection. A scalar raises on iteration and a
+    bare string is walked character by character, so both are refused here
+    rather than reaching the entry decoding as `TypeError`.
+    """
+    if not isinstance(repositories, list):
+        raise _manifest_error(
+            path,
+            f"has a `repositories` value that is not a list: {repositories!r}",
+        )
+    entries: list[EstateEntry] = []
+    for item in repositories:
+        if not isinstance(item, dict):
+            raise _manifest_error(path, f"has a non-mapping repository entry: {item!r}")
+        entry = typ.cast("dict[str, object]", item)
+        if "name" not in entry:
+            raise _manifest_error(path, "has a repository entry missing key 'name'")
+        excluded = entry.get("excluded")
+        # An exclusion reason is prose the ledger records verbatim. Dropping a
+        # non-string would silently un-exclude the repository and audit it, so
+        # the manifest is refused instead.
+        if excluded is not None and not isinstance(excluded, str):
+            raise _manifest_error(
+                path,
+                f"has a non-string exclusion reason: {excluded!r}",
+            )
+        entries.append(
             EstateEntry(
                 name=_validated_identifier(
-                    item["name"], _REPO_NAME_PATTERN, "repository name", path
+                    entry["name"], _REPO_NAME_PATTERN, "repository name", path
                 ),
-                excluded=item.get("excluded"),
+                excluded=excluded,
             )
-            for item in document["repositories"]
         )
-        owner = _validated_identifier(document["owner"], _OWNER_PATTERN, "owner", path)
-        return Estate(owner=owner, repositories=entries)
-    except KeyError as error:
-        message = f"estate manifest {path} is missing key {error.args[0]!r}"
-        raise OperationalRuleError(
-            message,
-            operation="load-estate-manifest",
-            resource=path,
-        ) from error
+    return tuple(entries)
+
+
+def load_estate(path: pathlib.Path) -> Estate:
+    """Parse the estate inventory YAML document.
+
+    Every shape the document can take is checked before it is indexed. The
+    file is operator-supplied, so a malformed one must surface as an
+    operational error naming the manifest, not as a `TypeError` from a
+    subscript.
+    """
+    document = YAML(typ="safe").load(path.read_text(encoding="utf-8"))
+    if not isinstance(document, dict):
+        raise _manifest_error(
+            path,
+            f"is not a mapping: {type(document).__name__}",
+        )
+    for key in ("repositories", "owner"):
+        if key not in document:
+            raise _manifest_error(path, f"is missing key {key!r}")
+    entries = _repository_entries(document["repositories"], path)
+    owner = _validated_identifier(document["owner"], _OWNER_PATTERN, "owner", path)
+    return Estate(owner=owner, repositories=entries)
 
 
 def _load_ledger(path: pathlib.Path) -> list[dict[str, typ.Any]]:

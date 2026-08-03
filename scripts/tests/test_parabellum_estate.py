@@ -118,6 +118,71 @@ class TestManifestIdentifiers:
 
         assert info.value.operation == "load-estate-manifest", info.value.operation
 
+    @pytest.mark.parametrize(
+        "body",
+        [
+            pytest.param("", id="empty"),
+            pytest.param("7\n", id="scalar-number"),
+            pytest.param("just a string\n", id="scalar-string"),
+            pytest.param("- alpha\n- beta\n", id="list-document"),
+            pytest.param(
+                "owner: leynos\nrepositories:\n  - just-a-string\n",
+                id="non-mapping-entry",
+            ),
+            # A string entry containing "name" passes a bare `in` check, since
+            # that tests a substring rather than a key, and then leaks an
+            # `AttributeError` from `.get`. Only the mapping guard stops it.
+            pytest.param(
+                "owner: leynos\nrepositories:\n  - my-name-here\n",
+                id="string-entry-containing-name",
+            ),
+            pytest.param(
+                "owner: leynos\nrepositories: 5\n",
+                id="repositories-scalar",
+            ),
+            pytest.param(
+                'owner: leynos\nrepositories: "abc"\n',
+                id="repositories-string",
+            ),
+            pytest.param(
+                "owner: leynos\nrepositories: {a: b}\n",
+                id="repositories-mapping",
+            ),
+            pytest.param(
+                "owner: leynos\nrepositories:\n  - {excluded: why}\n",
+                id="entry-without-name",
+            ),
+            pytest.param("repositories: []\n", id="missing-owner"),
+            pytest.param("owner: leynos\n", id="missing-repositories"),
+            pytest.param(
+                "owner: leynos\nrepositories:\n  - {name: gauss, excluded: 7}\n",
+                id="non-string-exclusion-reason",
+            ),
+        ],
+    )
+    def test_malformed_manifest_shapes_are_rejected(
+        self,
+        tmp_path: pathlib.Path,
+        body: str,
+    ) -> None:
+        """Every malformed shape becomes an operational error, not a TypeError.
+
+        The manifest is operator-supplied, so indexing it without checking its
+        shape turned a bad file into a bare `TypeError` from a subscript —
+        untagged, and giving the sweep no repository to blame.
+        """
+        manifest = self._manifest(tmp_path, body)
+
+        with pytest.raises(sweep.OperationalRuleError) as info:
+            sweep.load_estate(manifest)
+
+        assert info.value.operation == "load-estate-manifest", (
+            "a malformed manifest should be tagged as a manifest-load failure"
+        )
+        assert info.value.resource == manifest, (
+            "the failure should name the manifest it could not decode"
+        )
+
     def test_valid_manifest_is_accepted(self, tmp_path: pathlib.Path) -> None:
         """Ordinary owners and names, including dots and underscores, parse."""
         manifest = self._manifest(
