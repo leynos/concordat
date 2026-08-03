@@ -193,3 +193,50 @@ test_four_hop_delegation_is_indeterminate if {
 	findings := policy.deny with input as chain_input(4)
 	profile(findings) == {["QG-001", "indeterminate"]}
 }
+
+# -- gate references must be Make variable references -----------------------
+#
+# Only `$(WHITAKER)` and `${WHITAKER}` invoke the gate. Text that merely
+# contains the name — `WHITAKER_HOME`, an `echo`, a comment, a filename —
+# must not, or a repository that never runs Whitaker reads as compliant.
+
+gate_recipe_text(text) := {"ordinal": 0, "text": text, "silent": false, "ignore_errors": false, "always_execute": false, "location": loc}
+
+# A `lint` rule whose recipe is *text*, over an otherwise compliant envelope.
+lint_recipe_input(text) := object.union(
+	data.fixtures.compliant,
+	{"makefile": object.union(
+		data.fixtures.compliant.makefile,
+		{"rules": array.concat(
+			[
+				make_rule(["build"], [], [gate_recipe_text("cargo build")]),
+				make_rule(["test"], [], [gate_recipe_text("cargo test")]),
+			],
+			[make_rule(["lint"], [], [gate_recipe_text(text)])],
+		)},
+	)},
+)
+
+test_bare_gate_name_does_not_invoke_the_gate if {
+	not policy.gate_invoked_somewhere with input as lint_recipe_input("echo WHITAKER; $(WHITAKER_HOME)/bin/lint whitaker.log")
+}
+
+test_bare_gate_name_reports_no_invocation if {
+	findings := policy.deny with input as lint_recipe_input("echo WHITAKER; $(WHITAKER_HOME)/bin/lint whitaker.log")
+	profile(findings) == {["QG-001", "noncompliant"]}
+	some f in findings
+	contains(f.msg, "no recipe invokes")
+}
+
+test_paren_reference_invokes_the_gate if {
+	policy.gate_invoked_somewhere with input as lint_recipe_input("$(WHITAKER) --all")
+}
+
+test_brace_reference_invokes_the_gate if {
+	policy.gate_invoked_somewhere with input as lint_recipe_input("${WHITAKER} --all")
+}
+
+test_brace_reference_is_compliant if {
+	findings := policy.deny with input as lint_recipe_input("${WHITAKER} --all")
+	count(findings) == 0
+}

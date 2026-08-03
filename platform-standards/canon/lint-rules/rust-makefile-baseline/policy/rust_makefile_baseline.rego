@@ -113,11 +113,17 @@ lint_path_rule(rule) if {
 	target in lint_prerequisites
 }
 
+# Only a Make variable reference counts as invoking the gate. Matching the
+# bare name would count `WHITAKER_HOME`, `echo WHITAKER`, a comment, or a
+# filename as an invocation, and a repository that merely mentions the gate
+# would read as compliant.
 gate_reference := sprintf("$(%s)", [gate_variable])
+
+gate_brace_reference := sprintf("${%s}", [gate_variable])
 
 recipe_invokes_gate(recipe) if contains(recipe.text, gate_reference)
 
-recipe_invokes_gate(recipe) if contains(lower(recipe.text), lower(gate_variable))
+recipe_invokes_gate(recipe) if contains(recipe.text, gate_brace_reference)
 
 gate_invoked_somewhere if {
 	some rule in input.makefile.rules
