@@ -53,6 +53,7 @@ def test_estate_workspace_preserves_directory_when_requested(
 def test_estate_workspace_uses_owner_scoped_run_dir(
     git_repo: GitRepo,
     tmp_path: Path,
+    xdg_env: dict[str, str],
 ) -> None:
     """The run directory nests under the owner's XDG state runs directory."""
     record = _make_record(git_repo.path)  # github_owner="example"
@@ -68,6 +69,7 @@ def test_estate_workspace_uses_owner_scoped_run_dir(
 def test_estate_workspace_falls_back_to_temp_without_owner(
     git_repo: GitRepo,
     tmp_path: Path,
+    xdg_env: dict[str, str],
 ) -> None:
     """With no resolvable owner, the workspace falls back to the system temp dir."""
     record = dataclasses.replace(_make_record(git_repo.path), github_owner=None)

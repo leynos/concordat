@@ -53,6 +53,26 @@ def mock_bootstrap(mocker: pytest_mock.MockFixture) -> mock.Mock:
     return mocker.patch.object(estate_repository, "_bootstrap_template")
 
 
+@pytest.fixture
+def xdg_env(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> dict[str, str]:
+    """Redirect every XDG base into the test's temporary directory.
+
+    Shared so no test reads or writes the developer's real XDG directories,
+    and so an active owner written by one test cannot be observed by another.
+    """
+    mapping = {
+        "XDG_CONFIG_HOME": str(tmp_path / "config"),
+        "XDG_CACHE_HOME": str(tmp_path / "cache"),
+        "XDG_STATE_HOME": str(tmp_path / "state"),
+    }
+    for key, value in mapping.items():
+        monkeypatch.setenv(key, value)
+    return mapping
+
+
 @dataclasses.dataclass(frozen=True)
 class ConflictExpectation:
     """Expected behavior for conflict handling tests."""

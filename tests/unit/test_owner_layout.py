@@ -25,22 +25,6 @@ estate:
 """
 
 
-@pytest.fixture
-def xdg_env(
-    tmp_path: pathlib.Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> dict[str, str]:
-    """Redirect every XDG base into the test's temporary directory."""
-    mapping = {
-        "XDG_CONFIG_HOME": str(tmp_path / "config"),
-        "XDG_CACHE_HOME": str(tmp_path / "cache"),
-        "XDG_STATE_HOME": str(tmp_path / "state"),
-    }
-    for key, value in mapping.items():
-        monkeypatch.setenv(key, value)
-    return mapping
-
-
 class TestDefaultConfigPath:
     """default_config_path resolves through the headline owner."""
 

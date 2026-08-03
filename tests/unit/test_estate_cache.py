@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import typing as typ
+from pathlib import Path
 
 import pygit2
 import pytest
@@ -13,20 +14,15 @@ from concordat.estate_execution import EstateExecutionError, ensure_estate_cache
 from tests.unit.conftest import _make_record
 
 if typ.TYPE_CHECKING:  # pragma: no cover - type checking only
-    from pathlib import Path
-
     from tests.conftest import GitRepo
 
 
-def test_cache_destination_honours_xdg(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_cache_destination_honours_xdg(xdg_env: dict[str, str], tmp_path: Path) -> None:
     """The cache path derives from XDG_CACHE_HOME, namespaced by owner.
 
     The record's own github_owner outranks the headline active owner.
     """
-    cache_home = tmp_path / "xdg-cache"
-    monkeypatch.setenv("XDG_CACHE_HOME", str(cache_home))
+    cache_home = Path(xdg_env["XDG_CACHE_HOME"])
     xdg.set_active_owner("acme")
     record = _make_record(tmp_path / "estate.git")
     assert record.github_owner == "example", (
