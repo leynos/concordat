@@ -621,17 +621,17 @@ def _latest_records(
 
 
 def _finding_summary(record: LedgerRecord) -> str:
+    # Every branch falls back to the same placeholder. A blank final cell is
+    # ambiguous to a reader — it does not distinguish "nothing to report" from
+    # "the detail is missing" — so each verdict says which it is.
     if record["verdict"] == "excluded":
-        return record.get("exclusion_reason", "")
+        return record.get("exclusion_reason") or "none"
     if record["verdict"] == "error":
-        return record.get("error_detail", "")
+        return record.get("error_detail") or "none"
     parts = [
         f"{finding['rule_id']} ({finding['verdict']}) {finding['message']}"
         for finding in record["findings"]
     ]
-    # A visible placeholder keeps every table row at the full column count;
-    # Markdown formatters collapse empty trailing cells, which then trips
-    # MD056 (table-column-count).
     return "; ".join(parts) or "none"
 
 

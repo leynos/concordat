@@ -72,6 +72,39 @@ class TestReport:
             f"{lines[heading : header + 1]}"
         )
 
+    @pytest.mark.parametrize(
+        ("verdict", "extra"),
+        [
+            pytest.param("excluded", {}, id="excluded-without-reason"),
+            pytest.param("excluded", {"exclusion_reason": ""}, id="excluded-blank"),
+            pytest.param("error", {}, id="error-without-detail"),
+            pytest.param("error", {"error_detail": ""}, id="error-blank"),
+        ],
+    )
+    def test_absent_detail_renders_a_visible_placeholder(
+        self,
+        ledger_path: pathlib.Path,
+        verdict: str,
+        extra: dict[str, str],
+    ) -> None:
+        """A missing or empty detail still fills the final table cell.
+
+        A blank cell does not distinguish "nothing to report" from "the
+        detail is missing", so every branch says which it is.
+        """
+        ledger_path.write_text(
+            json.dumps(self._record("leynos/alpha", verdict, **extra)) + "\n",
+            encoding="utf-8",
+        )
+
+        report = sweep.render_report(ledger_path)
+
+        row = next(
+            line for line in report.splitlines() if line.startswith("| leynos/alpha ")
+        )
+        assert row.rstrip().endswith("| none |"), row
+        assert row.count("|") == 5, f"the row should keep four cells: {row}"
+
     def test_report_uses_latest_record_per_repository(
         self,
         ledger_path: pathlib.Path,
