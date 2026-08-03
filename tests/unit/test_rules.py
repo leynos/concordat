@@ -715,6 +715,45 @@ class TestConftestExitCodes:
         assert "error parsing policy" in str(error), str(error)
 
     @pytest.mark.parametrize(
+        "stdout",
+        [
+            pytest.param("{}", id="object"),
+            pytest.param('"a string"', id="string"),
+            pytest.param("7", id="number"),
+            pytest.param("null", id="null"),
+        ],
+    )
+    def test_valid_json_that_is_not_an_array_is_rejected(
+        self,
+        mocker: pytest_mock.MockFixture,
+        stdout: str,
+    ) -> None:
+        """A decodable document of the wrong shape is still unusable.
+
+        A result document is an array, one entry per evaluated input. Anything
+        else would previously be returned as-is on the strength of the type
+        annotation and fail later, far from the cause.
+        """
+        completed = subprocess.CompletedProcess(
+            args=["conftest"],
+            returncode=0,
+            stdout=stdout,
+            stderr="",
+        )
+        mocker.patch.object(runner, "_run_conftest", return_value=completed)
+        mocker.patch.object(runner, "_rule_parameters", return_value={})
+
+        with pytest.raises(OperationalRuleError, match="no usable output") as exc_info:
+            runner._invoke_conftest("rust-makefile-baseline", typ.cast("typ.Any", {}))
+
+        _assert_operational_context(
+            exc_info.value,
+            operation="invoke-conftest",
+            tool="conftest",
+            resource="rust-makefile-baseline",
+        )
+
+    @pytest.mark.parametrize(
         "returncode",
         [pytest.param(0, id="clean"), pytest.param(1, id="policy-failures")],
     )

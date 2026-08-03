@@ -324,10 +324,10 @@ def _invoke_conftest(
     # Conftest exits 0 on success and 1 on policy failures; both emit a JSON
     # result document. Anything else (or unparseable output) is operational.
     _require_policy_exit_code(completed, rule_id)
+    detail = (completed.stderr or completed.stdout or "").strip()
     try:
-        results: list[_ConftestResult] = json.loads(completed.stdout)
+        decoded: object = json.loads(completed.stdout)
     except json.JSONDecodeError as error:
-        detail = (completed.stderr or completed.stdout or "").strip()
         message = f"conftest produced no usable output: {detail}"
         raise OperationalRuleError(
             message,
@@ -335,7 +335,23 @@ def _invoke_conftest(
             tool="conftest",
             resource=rule_id,
         ) from error
-    return results
+    # A result document is an array, one entry per evaluated input. Valid JSON
+    # of another shape is still unusable, and the annotation alone would not
+    # stop it: it would be returned as-is and fail later, far from the cause.
+    if not isinstance(decoded, list):
+        message = (
+            "conftest produced no usable output: expected a JSON array of "
+            f"results, got {type(decoded).__name__}: {detail}"
+        )
+        raise OperationalRuleError(
+            message,
+            operation="invoke-conftest",
+            tool="conftest",
+            resource=rule_id,
+        )
+    # The shape is now checked; the cast records what the check established,
+    # matching how `_decode_report` narrows makeutil's JSON.
+    return typ.cast("list[_ConftestResult]", decoded)
 
 
 def _finding_from_failure(failure: _ConftestFailure) -> Finding:
