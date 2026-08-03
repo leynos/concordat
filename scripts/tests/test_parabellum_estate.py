@@ -12,26 +12,6 @@ if typ.TYPE_CHECKING:
     import pathlib
 
 
-ESTATE_YAML = """\
----
-schema_version: 1
-owner: leynos
-repositories:
-  - name: wireframe
-  - name: gauss
-    excluded: test-framework migration in flight
-  - name: statelet
-"""
-
-
-@pytest.fixture
-def estate_path(tmp_path: pathlib.Path) -> pathlib.Path:
-    """Write a small estate inventory and return its path."""
-    path = tmp_path / "estate.yaml"
-    path.write_text(ESTATE_YAML)
-    return path
-
-
 class TestLoadEstate:
     """Parsing of the estate inventory."""
 

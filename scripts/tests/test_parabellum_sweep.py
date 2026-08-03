@@ -13,32 +13,6 @@ if typ.TYPE_CHECKING:
     import pathlib
 
 
-ESTATE_YAML = """\
----
-schema_version: 1
-owner: leynos
-repositories:
-  - name: wireframe
-  - name: gauss
-    excluded: test-framework migration in flight
-  - name: statelet
-"""
-
-
-@pytest.fixture
-def estate_path(tmp_path: pathlib.Path) -> pathlib.Path:
-    """Write a small estate inventory and return its path."""
-    path = tmp_path / "estate.yaml"
-    path.write_text(ESTATE_YAML)
-    return path
-
-
-@pytest.fixture
-def ledger_path(tmp_path: pathlib.Path) -> pathlib.Path:
-    """Return a ledger path inside the test's temporary directory."""
-    return tmp_path / "ledger.jsonl"
-
-
 def _ledger_lines(path: pathlib.Path) -> list[dict[str, typ.Any]]:
     if not path.exists():
         return []

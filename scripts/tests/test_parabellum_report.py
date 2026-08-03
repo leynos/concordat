@@ -13,12 +13,6 @@ if typ.TYPE_CHECKING:
     import pathlib
 
 
-@pytest.fixture
-def ledger_path(tmp_path: pathlib.Path) -> pathlib.Path:
-    """Return a ledger path inside the test's temporary directory."""
-    return tmp_path / "ledger.jsonl"
-
-
 class TestReport:
     """Baseline report generation from the ledger."""
 

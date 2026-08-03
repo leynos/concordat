@@ -12,18 +12,6 @@ if typ.TYPE_CHECKING:
     import pathlib
 
 
-@pytest.fixture
-def estate_path(tmp_path: pathlib.Path) -> pathlib.Path:
-    """Return an estate path; `run_sweep` is stubbed, so it is never read."""
-    return tmp_path / "estate.yaml"
-
-
-@pytest.fixture
-def ledger_path(tmp_path: pathlib.Path) -> pathlib.Path:
-    """Return a ledger path inside the test's temporary directory."""
-    return tmp_path / "ledger.jsonl"
-
-
 class TestSweepCommand:
     """Option parsing for the default `parabellum-sweep` command.
 
