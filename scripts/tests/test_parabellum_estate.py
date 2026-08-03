@@ -12,6 +12,16 @@ if typ.TYPE_CHECKING:
     import pathlib
 
 
+def _owner_manifest(owner: str) -> str:
+    """Return a manifest whose only questionable value is its owner."""
+    return f"schema_version: 1\nowner: {owner}\nrepositories:\n  - name: wireframe\n"
+
+
+def _repository_manifest(name: str) -> str:
+    """Return a manifest whose only questionable value is a repository name."""
+    return f"schema_version: 1\nowner: leynos\nrepositories:\n  - name: {name}\n"
+
+
 class TestLoadEstate:
     """Parsing of the estate inventory."""
 
@@ -41,62 +51,96 @@ class TestManifestIdentifiers:
         return path
 
     @pytest.mark.parametrize(
-        "owner",
+        ("body", "fragment"),
         [
-            pytest.param("../evil", id="parent-traversal"),
-            pytest.param("a/b", id="path-separator"),
-            pytest.param("..", id="dot-dot"),
-            pytest.param("-leading", id="leading-hyphen"),
-            pytest.param("trailing-", id="trailing-hyphen"),
-            pytest.param("''", id="empty"),
+            pytest.param(
+                _owner_manifest("../evil"),
+                "invalid owner",
+                id="owner-parent-traversal",
+            ),
+            pytest.param(
+                _owner_manifest("a/b"),
+                "invalid owner",
+                id="owner-path-separator",
+            ),
+            pytest.param(
+                _owner_manifest(".."),
+                "invalid owner",
+                id="owner-dot-dot",
+            ),
+            pytest.param(
+                _owner_manifest("-leading"),
+                "invalid owner",
+                id="owner-leading-hyphen",
+            ),
+            pytest.param(
+                _owner_manifest("trailing-"),
+                "invalid owner",
+                id="owner-trailing-hyphen",
+            ),
+            pytest.param(
+                _owner_manifest("''"),
+                "invalid owner",
+                id="owner-empty",
+            ),
+            pytest.param(
+                _repository_manifest("../escape"),
+                "invalid repository name",
+                id="repository-parent-traversal",
+            ),
+            pytest.param(
+                _repository_manifest("nested/name"),
+                "invalid repository name",
+                id="repository-path-separator",
+            ),
+            pytest.param(
+                _repository_manifest('"..\\\\windows"'),
+                "invalid repository name",
+                id="repository-backslash",
+            ),
+            pytest.param(
+                _repository_manifest("'.'"),
+                "invalid repository name",
+                id="repository-dot",
+            ),
+            pytest.param(
+                _repository_manifest("'..'"),
+                "invalid repository name",
+                id="repository-dot-dot",
+            ),
+            pytest.param(
+                _repository_manifest("/absolute"),
+                "invalid repository name",
+                id="repository-absolute-path",
+            ),
+            pytest.param(
+                _repository_manifest("''"),
+                "invalid repository name",
+                id="repository-empty",
+            ),
         ],
     )
-    def test_invalid_owner_is_rejected(
+    def test_invalid_identifier_is_rejected(
         self,
         tmp_path: pathlib.Path,
-        owner: str,
+        body: str,
+        fragment: str,
     ) -> None:
-        """A manifest owner that is not a GitHub login is refused."""
-        manifest = self._manifest(
-            tmp_path,
-            f"schema_version: 1\nowner: {owner}\nrepositories:\n  - name: wireframe\n",
-        )
+        """An invalid manifest owner or repository name is refused.
 
-        with pytest.raises(sweep.OperationalRuleError, match="invalid owner") as info:
+        Both identifiers reach the same helper at the same boundary and fail
+        the same way, so the contract is stated once here and each case says
+        only which identifier it is about. `fragment` is what keeps the two
+        apart: a case must be refused for its *own* reason, not merely
+        refused.
+        """
+        manifest = self._manifest(tmp_path, body)
+
+        with pytest.raises(sweep.OperationalRuleError, match=fragment) as info:
             sweep.load_estate(manifest)
 
         assert info.value.operation == "load-estate-manifest", info.value.operation
         assert info.value.resource == manifest, info.value.resource
-
-    @pytest.mark.parametrize(
-        "name",
-        [
-            pytest.param("../escape", id="parent-traversal"),
-            pytest.param("nested/name", id="path-separator"),
-            pytest.param('"..\\\\windows"', id="backslash"),
-            pytest.param("'.'", id="dot"),
-            pytest.param("'..'", id="dot-dot"),
-            pytest.param("/absolute", id="absolute-path"),
-            pytest.param("''", id="empty"),
-        ],
-    )
-    def test_invalid_repository_name_is_rejected(
-        self,
-        tmp_path: pathlib.Path,
-        name: str,
-    ) -> None:
-        """A repository name that is not a single safe component is refused."""
-        manifest = self._manifest(
-            tmp_path,
-            f"schema_version: 1\nowner: leynos\nrepositories:\n  - name: {name}\n",
-        )
-
-        with pytest.raises(
-            sweep.OperationalRuleError, match="invalid repository name"
-        ) as info:
-            sweep.load_estate(manifest)
-
-        assert info.value.operation == "load-estate-manifest", info.value.operation
 
     @pytest.mark.parametrize(
         "body",
