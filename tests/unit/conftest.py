@@ -54,6 +54,21 @@ def mock_bootstrap(mocker: pytest_mock.MockFixture) -> mock.Mock:
 
 
 @pytest.fixture
+def fake_github_client(mocker: pytest_mock.MockFixture) -> mock.Mock:
+    """Patch `_build_client` with a GitHub client that has no repository yet.
+
+    The organisation mock is reachable as
+    ``fake_github_client.organization.return_value`` for tests that assert
+    the repository was created through it.
+    """
+    client = mocker.Mock()
+    client.repository.return_value = None
+    client.organization.return_value = mocker.Mock()
+    mocker.patch.object(estate_repository, "_build_client", return_value=client)
+    return client
+
+
+@pytest.fixture
 def xdg_env(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

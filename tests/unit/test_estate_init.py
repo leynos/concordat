@@ -2,8 +2,8 @@
 
 These cover the successful enrolment paths and owner-confirmation behaviour.
 Remote-state and provisioning error paths live in `test_estate_provisioning`.
-The `mock_remote_probe` and `mock_bootstrap` fixtures are shared with that
-module and live in `tests/unit/conftest.py`.
+The `mock_remote_probe`, `mock_bootstrap`, and `fake_github_client` fixtures
+live in `tests/unit/conftest.py`.
 """
 
 from __future__ import annotations
@@ -13,7 +13,6 @@ import typing as typ
 import pygit2
 import pytest
 
-from concordat import estate_repository
 from concordat.errors import ConcordatError
 from concordat.estate import (
     EstateRecord,
@@ -68,7 +67,7 @@ def test_list_enrolled_repositories_reads_inventory(tmp_path: pathlib.Path) -> N
 
 def test_init_estate_creates_repository_when_missing(
     tmp_path: pathlib.Path,
-    mocker: pytest_mock.MockFixture,
+    fake_github_client: mock.Mock,
     mock_remote_probe: typ.Callable[..., mock.Mock],
     mock_bootstrap: mock.Mock,
 ) -> None:
@@ -76,11 +75,7 @@ def test_init_estate_creates_repository_when_missing(
     config_path = tmp_path / "config.yaml"
     mock_remote_probe(reachable=False, exists=False, empty=True)
 
-    fake_client = mocker.Mock()
-    fake_client.repository.return_value = None
-    fake_org = mocker.Mock()
-    fake_client.organization.return_value = fake_org
-    mocker.patch.object(estate_repository, "_build_client", return_value=fake_client)
+    fake_org = fake_github_client.organization.return_value
 
     record = init_estate(
         "core",
@@ -92,7 +87,7 @@ def test_init_estate_creates_repository_when_missing(
 
     assert record.alias == "core", record
     assert record.github_owner == "example", record
-    fake_client.organization.assert_called_once_with("example")
+    fake_github_client.organization.assert_called_once_with("example")
     fake_org.create_repository.assert_called_once()
     stored = list_estates(config_path=config_path)[0]
     assert stored.alias == "core", stored
@@ -122,18 +117,13 @@ def test_init_estate_requires_owner_for_non_github_remote(
 
 def test_init_estate_rejects_empty_owner(
     tmp_path: pathlib.Path,
-    mocker: pytest_mock.MockFixture,
+    fake_github_client: mock.Mock,
     mock_remote_probe: typ.Callable[..., mock.Mock],
     mock_bootstrap: mock.Mock,
 ) -> None:
     """Empty github_owner values are rejected."""
     config_path = tmp_path / "config.yaml"
     mock_remote_probe(reachable=False, exists=False, empty=True)
-
-    fake_client = mocker.Mock()
-    fake_client.repository.return_value = None
-    fake_client.organization.return_value = mocker.Mock()
-    mocker.patch.object(estate_repository, "_build_client", return_value=fake_client)
 
     with pytest.raises(MissingGitHubOwnerError):
         init_estate(
@@ -148,19 +138,13 @@ def test_init_estate_rejects_empty_owner(
 
 def test_init_estate_allows_explicit_owner_override(
     tmp_path: pathlib.Path,
-    mocker: pytest_mock.MockFixture,
+    fake_github_client: mock.Mock,
     mock_remote_probe: typ.Callable[..., mock.Mock],
     mock_bootstrap: mock.Mock,
 ) -> None:
     """Explicit owners take precedence over repository slugs."""
     config_path = tmp_path / "config.yaml"
     mock_remote_probe(reachable=False, exists=False, empty=True)
-
-    fake_client = mocker.Mock()
-    fake_client.repository.return_value = None
-    fake_org = mocker.Mock()
-    fake_client.organization.return_value = fake_org
-    mocker.patch.object(estate_repository, "_build_client", return_value=fake_client)
 
     record = init_estate(
         "core",
