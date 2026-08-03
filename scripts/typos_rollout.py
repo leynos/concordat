@@ -51,10 +51,17 @@ class Dictionary:
 def _string_list(table: cabc.Mapping[str, object], key: str) -> tuple[str, ...]:
     """Read and validate a list of strings from a TOML table."""
     value = table.get(key, [])
-    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
-        message = f"{key!r} must be a list of strings"
-        raise TypeError(message)
-    return tuple(sorted(set(value)))
+    if isinstance(value, list):
+        # The comprehension narrows as well as filters. An `isinstance` inside
+        # a generator passed to `all` proves nothing about the element type, so
+        # the entries stayed `object` and `sorted` had no ordering to use.
+        # Comparing the lengths keeps the original contract: every entry must
+        # be a string, not merely some of them.
+        items = [item for item in value if isinstance(item, str)]
+        if len(items) == len(value):
+            return tuple(sorted(set(items)))
+    message = f"{key!r} must be a list of strings"
+    raise TypeError(message)
 
 
 def _table(document: cabc.Mapping[str, object], key: str) -> cabc.Mapping[str, object]:
