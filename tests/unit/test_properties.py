@@ -199,9 +199,16 @@ class TestManifestRepositoryNames:
 _REPOS = ("leynos/alpha", "leynos/beta", "leynos/gamma")
 
 
-def _record(repository: str, verdict: str, sha: str | None) -> dict[str, object]:
-    """Build a minimal ledger record."""
-    return {"repository": repository, "verdict": verdict, "commit_sha": sha}
+def _record(repository: str, verdict: str, sha: str | None) -> sweep.LedgerRecord:
+    """Build a complete ledger record with the fields under test varied.
+
+    Built through `_base_record` rather than by hand, so the generated
+    histories carry every required key and stay valid `LedgerRecord` values.
+    """
+    record = sweep._base_record(repository)
+    record["verdict"] = verdict
+    record["commit_sha"] = sha
+    return record
 
 
 _LEDGER = st.lists(
@@ -221,7 +228,7 @@ class TestLedgerSelection:
     @given(_LEDGER)
     def test_latest_record_is_the_last_appended(
         self,
-        ledger: list[dict[str, object]],
+        ledger: sweep.Ledger,
     ) -> None:
         """The report shows each repository's final record, not its first.
 
@@ -238,7 +245,7 @@ class TestLedgerSelection:
     @given(_LEDGER)
     def test_idempotency_lookup_matches_a_scan(
         self,
-        ledger: list[dict[str, object]],
+        ledger: sweep.Ledger,
     ) -> None:
         """`_already_ledgered` agrees with a direct scan of the history.
 

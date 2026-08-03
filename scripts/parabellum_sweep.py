@@ -29,7 +29,7 @@ from cyclopts import App, Parameter
 from ruamel.yaml import YAML
 
 from concordat.errors import OperationalRuleError
-from concordat.rules import RuleRunResult, run_rule
+from concordat.rules import Finding, RuleRunResult, run_rule
 
 __all__ = [
     "Estate",
@@ -70,6 +70,48 @@ class Estate:
 
     owner: str
     repositories: tuple[EstateEntry, ...]
+
+
+class FindingRecord(typ.TypedDict):
+    """One serialized :class:`concordat.rules.Finding` as stored in the ledger."""
+
+    rule_id: str
+    severity: str
+    verdict: str
+    path: str
+    line: int
+    message: str
+
+
+class LedgerRequiredFields(typ.TypedDict):
+    """The keys every ledger record carries."""
+
+    schema_version: int
+    repository: str
+    commit_sha: str | None
+    audited_at: str
+    rule_package: str
+    rule_version: str
+    makeutil_rev: str
+    verdict: str
+    findings: list[FindingRecord]
+
+
+class LedgerOptionalFields(typ.TypedDict, total=False):
+    """Keys present only on excluded and errored records."""
+
+    exclusion_reason: str
+    error_detail: str
+
+
+class LedgerRecord(LedgerRequiredFields, LedgerOptionalFields):
+    """One append-only ledger line."""
+
+
+type Ledger = list[LedgerRecord]
+
+# Derived from the TypedDict so a new required key cannot be forgotten here.
+_LEDGER_REQUIRED_KEYS: typ.Final = frozenset(LedgerRequiredFields.__annotations__)
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -215,12 +257,39 @@ def load_estate(path: pathlib.Path) -> Estate:
     return Estate(owner=owner, repositories=entries)
 
 
-def _load_ledger(path: pathlib.Path) -> list[dict[str, typ.Any]]:
+def _ledger_record(
+    decoded: object, path: pathlib.Path, line_number: int
+) -> LedgerRecord:
+    """Return *decoded* as a ledger record, or reject the malformed line.
+
+    The ledger is append-only and read back on every sweep, so a truncated or
+    hand-edited line has to surface as an operational error rather than be
+    trusted into the typed flow by a cast.
+    """
+    if not isinstance(decoded, dict):
+        message = f"ledger {path} line {line_number} is not a JSON object"
+        raise OperationalRuleError(
+            message,
+            operation="load-ledger",
+            resource=path,
+        )
+    missing = sorted(_LEDGER_REQUIRED_KEYS - decoded.keys())
+    if missing:
+        message = f"ledger {path} line {line_number} is missing {missing}"
+        raise OperationalRuleError(
+            message,
+            operation="load-ledger",
+            resource=path,
+        )
+    return typ.cast("LedgerRecord", decoded)
+
+
+def _load_ledger(path: pathlib.Path) -> Ledger:
     if not path.exists():
         return []
     return [
-        json.loads(line)
-        for line in path.read_text(encoding="utf-8").splitlines()
+        _ledger_record(json.loads(line), path, number)
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
         if line.strip()
     ]
 
@@ -338,7 +407,7 @@ def _timestamp() -> str:
     )
 
 
-def _base_record(repository: str) -> dict[str, typ.Any]:
+def _base_record(repository: str) -> LedgerRecord:
     return {
         "schema_version": LEDGER_SCHEMA_VERSION,
         "repository": repository,
@@ -352,7 +421,7 @@ def _base_record(repository: str) -> dict[str, typ.Any]:
     }
 
 
-def _excluded_record(repository: str, reason: str) -> dict[str, typ.Any]:
+def _excluded_record(repository: str, reason: str) -> LedgerRecord:
     record = _base_record(repository)
     record["verdict"] = "excluded"
     record["exclusion_reason"] = reason
@@ -361,8 +430,8 @@ def _excluded_record(repository: str, reason: str) -> dict[str, typ.Any]:
 
 def _append_record(
     ledger_path: pathlib.Path,
-    appended: list[dict[str, typ.Any]],
-    record: dict[str, typ.Any],
+    appended: Ledger,
+    record: LedgerRecord,
 ) -> None:
     """Append one record to the ledger immediately.
 
@@ -376,7 +445,23 @@ def _append_record(
     appended.append(record)
 
 
-def _audit_record(owner: str, entry: EstateEntry) -> dict[str, typ.Any]:
+def _finding_record(finding: Finding) -> FindingRecord:
+    """Serialize one finding, naming each field so the result stays typed.
+
+    `dataclasses.asdict` returns `dict[str, Any]`, which would defeat the
+    point of the record types.
+    """
+    return {
+        "rule_id": finding.rule_id,
+        "severity": finding.severity,
+        "verdict": finding.verdict,
+        "path": finding.path,
+        "line": finding.line,
+        "message": finding.message,
+    }
+
+
+def _audit_record(owner: str, entry: EstateEntry) -> LedgerRecord:
     repository = f"{owner}/{entry.name}"
     record = _base_record(repository)
     try:
@@ -386,12 +471,12 @@ def _audit_record(owner: str, entry: EstateEntry) -> dict[str, typ.Any]:
         return record
     record["commit_sha"] = sha
     record["verdict"] = result.verdict
-    record["findings"] = [dataclasses.asdict(finding) for finding in result.findings]
+    record["findings"] = [_finding_record(finding) for finding in result.findings]
     return record
 
 
 def _already_ledgered(
-    ledger: list[dict[str, typ.Any]],
+    ledger: Ledger,
     repository: str,
     *,
     commit_sha: str | None,
@@ -417,12 +502,12 @@ class _SweepSession:
     """
 
     owner: str
-    ledger: list[dict[str, typ.Any]]
+    ledger: Ledger
     ledger_path: pathlib.Path
     only: frozenset[str] | None
     limit: int | None
     force: bool
-    appended: list[dict[str, typ.Any]] = dataclasses.field(default_factory=list)
+    appended: Ledger = dataclasses.field(default_factory=list)
     audited: int = 0
 
     def process(self, entry: EstateEntry) -> bool:
@@ -491,7 +576,7 @@ def run_sweep(
     estate_path: pathlib.Path = DEFAULT_ESTATE_PATH,
     ledger_path: pathlib.Path = DEFAULT_LEDGER_PATH,
     options: SweepOptions = _DEFAULT_SWEEP_OPTIONS,
-) -> list[dict[str, typ.Any]]:
+) -> Ledger:
     """Sweep the estate and append new records to the ledger.
 
     Returns the records appended by this invocation.
@@ -527,15 +612,15 @@ VERDICT_ORDER: typ.Final = (
 
 
 def _latest_records(
-    ledger: list[dict[str, typ.Any]],
-) -> dict[str, dict[str, typ.Any]]:
-    latest: dict[str, dict[str, typ.Any]] = {}
+    ledger: Ledger,
+) -> dict[str, LedgerRecord]:
+    latest: dict[str, LedgerRecord] = {}
     for record in ledger:
         latest[record["repository"]] = record
     return latest
 
 
-def _finding_summary(record: dict[str, typ.Any]) -> str:
+def _finding_summary(record: LedgerRecord) -> str:
     if record["verdict"] == "excluded":
         return record.get("exclusion_reason", "")
     if record["verdict"] == "error":

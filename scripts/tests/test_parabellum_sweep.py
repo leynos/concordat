@@ -324,3 +324,46 @@ class TestSweep:
         assert "conftest" in appended[0]["error_detail"], (
             "the error detail should carry the clone/audit failure message"
         )
+
+
+class TestLedgerDecoding:
+    """`_load_ledger` validates each line before treating it as a record."""
+
+    @pytest.mark.parametrize(
+        ("line", "reason"),
+        [
+            pytest.param('"a string"', "is not a JSON object", id="string"),
+            pytest.param("[1, 2]", "is not a JSON object", id="array"),
+            pytest.param("7", "is not a JSON object", id="number"),
+            pytest.param('{"repository": "leynos/x"}', "is missing", id="missing-keys"),
+        ],
+    )
+    def test_malformed_line_is_rejected(
+        self,
+        ledger_path: pathlib.Path,
+        line: str,
+        reason: str,
+    ) -> None:
+        """A truncated or hand-edited ledger line raises rather than typing in.
+
+        The ledger is read back on every sweep, so a bad line must be reported
+        against the file rather than trusted into the typed flow by a cast.
+        """
+        ledger_path.write_text(line + "\n", encoding="utf-8")
+
+        with pytest.raises(sweep.OperationalRuleError, match=reason) as info:
+            sweep._load_ledger(ledger_path)
+
+        assert info.value.operation == "load-ledger", (
+            "a bad ledger line should be tagged as a ledger-load failure"
+        )
+        assert info.value.resource == ledger_path, (
+            "the failure should name the ledger it could not decode"
+        )
+
+    def test_a_complete_record_round_trips(self, ledger_path: pathlib.Path) -> None:
+        """A record written by the sweep decodes back unchanged."""
+        record = sweep._excluded_record("leynos/gauss", "migration in flight")
+        ledger_path.write_text(json.dumps(record) + "\n", encoding="utf-8")
+
+        assert sweep._load_ledger(ledger_path) == [record], "record should round-trip"
