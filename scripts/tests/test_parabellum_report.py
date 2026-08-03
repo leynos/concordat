@@ -66,6 +66,56 @@ class TestReport:
             f"{lines[heading : header + 1]}"
         )
 
+    @staticmethod
+    def _row_cells(report: str, repository: str) -> list[str]:
+        """Return the data cells of *repository*'s row in the rendered table."""
+        row = next(
+            line for line in report.splitlines() if line.startswith(f"| {repository} ")
+        )
+        return [cell.strip() for cell in row.strip().strip("|").split("|")]
+
+    @pytest.mark.parametrize(
+        ("verdict", "extra", "expected_detail"),
+        [
+            pytest.param(
+                "excluded",
+                {"exclusion_reason": "not ready"},
+                "not ready",
+                id="excluded-with-reason",
+            ),
+            # The absent case renders the "none" placeholder rather than an
+            # empty cell: `_finding_summary` falls back for every verdict, so a
+            # blank cell cannot distinguish "nothing to report" from "the
+            # detail is missing".
+            pytest.param("excluded", {}, "none", id="excluded-without-reason"),
+            pytest.param(
+                "error",
+                {"error_detail": "conftest is required"},
+                "conftest is required",
+                id="error-with-detail",
+            ),
+        ],
+    )
+    def test_optional_detail_fills_the_final_cell(
+        self,
+        ledger_path: pathlib.Path,
+        verdict: str,
+        extra: dict[str, str],
+        expected_detail: str,
+    ) -> None:
+        """The row keeps four cells, and the last carries the detail."""
+        ledger_path.write_text(
+            json.dumps(self._record("leynos/alpha", verdict, **extra)) + "\n",
+            encoding="utf-8",
+        )
+
+        cells = self._row_cells(sweep.render_report(ledger_path), "leynos/alpha")
+
+        assert len(cells) == 4, f"expected four data cells, got {cells}"
+        assert cells[0] == "leynos/alpha", cells
+        assert cells[1] == verdict, cells
+        assert cells[3] == expected_detail, cells
+
     @pytest.mark.parametrize(
         ("verdict", "extra"),
         [
