@@ -12,6 +12,19 @@ if typ.TYPE_CHECKING:
     import pathlib
 
 
+class _SweepCall(typ.TypedDict):
+    """One recorded `run_sweep` invocation.
+
+    Named so the captured arguments carry the same types the real `run_sweep`
+    declares; a `dict[str, typ.Any]` let an assertion compare a path against
+    an option object without the type checker objecting.
+    """
+
+    estate_path: pathlib.Path
+    ledger_path: pathlib.Path
+    options: sweep.SweepOptions
+
+
 class TestSweepCommand:
     """Option parsing for the default `parabellum-sweep` command.
 
@@ -23,16 +36,18 @@ class TestSweepCommand:
     @staticmethod
     def _capture(
         monkeypatch: pytest.MonkeyPatch,
-    ) -> list[dict[str, typ.Any]]:
+    ) -> list[_SweepCall]:
         """Patch `run_sweep`, recording the arguments it is handed."""
-        calls: list[dict[str, typ.Any]] = []
+        calls: list[_SweepCall] = []
 
+        # The stub stands in for `run_sweep`, so it returns a ledger — not one
+        # of the captured calls above. The two are deliberately distinct types.
         def fake_run_sweep(
             *,
             estate_path: pathlib.Path,
             ledger_path: pathlib.Path,
             options: sweep.SweepOptions,
-        ) -> list[dict[str, typ.Any]]:
+        ) -> sweep.Ledger:
             calls.append(
                 {
                     "estate_path": estate_path,
