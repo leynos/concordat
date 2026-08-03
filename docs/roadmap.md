@@ -396,16 +396,16 @@ under `canon/lint-rules/` per the Section 2.1.2 format.
 - [ ] Ship the Python documentation, version-floor, and tooling rule packages
   (PY-006 to PY-010): interrogate at `fail-under = 100`, a `requires-python`
   floor of at least 3.12, version declarations reconciled against that floor
-  (scalar declarations equal the floor; matrices keep their minimum at the
-  floor with no lower entry), and pytest-xdist and ty wiring with the exemption
-  path honoured. Acceptance: a fixture declaring 3.11 in CI against a 3.12
-  manifest floor raises PY-008 naming the divergent file, while a fixture whose
-  CI matrix tests 3.12 and 3.13 against a 3.12 floor raises nothing; an
-  exempted fixture downgrades PY-009 to `note`. The PY-008
-  version-reconciliation comparator carries Hypothesis property tests for the
-  floor and matrix invariants of Section 3.1.4 (including the metamorphic
-  relations: a version above the floor never becomes a finding, a version below
-  it always does).
+  (scalar declarations equal the floor; every matrix entry sits at or above the
+  floor, which need not itself appear), and pytest-xdist and ty wiring with the
+  exemption path honoured. Acceptance: a fixture declaring 3.11 in CI against a
+  3.12 manifest floor raises PY-008 naming the divergent file, while fixtures
+  whose CI matrix tests 3.12 and 3.13, and whose matrix begins at 3.13, both
+  raise nothing against a `requires-python >=3.12` floor; an exempted fixture
+  downgrades PY-009 to `note`. The PY-008 version-reconciliation comparator
+  carries Hypothesis property tests for the floor and matrix invariants of
+  Section 3.1.4 (including the metamorphic relations: a version above the floor
+  never becomes a finding, a version below it always does).
 - [ ] Ship the Rust formatting and linting rule packages (RT-001 to RT-005):
   rustfmt wiring and template-matched configuration, clippy presence with
   `[lints]` entries at the template level or stricter, and Whitaker presence
