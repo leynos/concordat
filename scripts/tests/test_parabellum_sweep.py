@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
+import subprocess
 import typing as typ
 
 import pytest
@@ -50,6 +52,42 @@ def _fake_result(verdict: str) -> sweep.RuleRunResult:
         verdict=verdict,
         findings=(),
     )
+
+
+@dataclasses.dataclass(frozen=True)
+class OnlyFlagCase:
+    """One `--only` value and the repository filter it should produce."""
+
+    value: str
+    expected: frozenset[str] | None
+
+
+@dataclasses.dataclass(frozen=True)
+class GitFailureCase:
+    """One git process failure and its expected translated error."""
+
+    error: Exception
+    match: str
+
+
+def _raise_process_error(
+    error: Exception,
+) -> typ.Callable[..., typ.NoReturn]:
+    """Return a subprocess replacement that raises *error*."""
+
+    def raise_error(*_args: object, **_kwargs: object) -> typ.NoReturn:
+        raise error
+
+    return raise_error
+
+
+def _assert_git_operational_context(
+    error: sweep.OperationalRuleError,
+) -> None:
+    """Assert the stable context for a failed git head lookup."""
+    assert error.operation == "resolve-git-head", error.operation
+    assert error.tool == "git", error.tool
+    assert error.resource == "leynos/ghost", error.resource
 
 
 class TestLoadEstate:
@@ -376,44 +414,39 @@ class TestGitOperations:
             "the failure should identify the affected repository"
         )
 
-    def test_git_timeout_becomes_operational_error(
+    @pytest.mark.parametrize(
+        "case",
+        [
+            pytest.param(
+                GitFailureCase(
+                    subprocess.TimeoutExpired(cmd="git", timeout=sweep.GIT_TIMEOUT),
+                    "timed out",
+                ),
+                id="timeout",
+            ),
+            pytest.param(
+                GitFailureCase(FileNotFoundError("git"), "not found on PATH"),
+                id="missing-executable",
+            ),
+        ],
+    )
+    def test_git_process_failure_becomes_operational_error(
         self,
         monkeypatch: pytest.MonkeyPatch,
+        case: GitFailureCase,
     ) -> None:
-        """A git timeout is translated instead of aborting the sweep."""
+        """A git process failure is translated instead of aborting the sweep.
 
-        def raise_timeout(*args: object, **kwargs: object) -> typ.NoReturn:
-            raise sweep.subprocess.TimeoutExpired(cmd="git", timeout=sweep.GIT_TIMEOUT)
+        A hung remote and an absent binary both surface through `_git`, and
+        both must carry the same context so the sweep can record which
+        repository the lookup was for.
+        """
+        monkeypatch.setattr(sweep.subprocess, "run", _raise_process_error(case.error))
 
-        monkeypatch.setattr(sweep.subprocess, "run", raise_timeout)
-        with pytest.raises(sweep.OperationalRuleError, match="timed out") as exc_info:
+        with pytest.raises(sweep.OperationalRuleError, match=case.match) as exc_info:
             sweep.resolve_head("leynos", "ghost")
-        error = exc_info.value
-        assert error.operation == "resolve-git-head", (
-            "a git timeout should keep the resolve-git-head operation tag"
-        )
-        assert error.tool == "git", "a git timeout should identify git as the tool"
-        assert error.resource == "leynos/ghost", (
-            "a git timeout should identify the affected repository"
-        )
 
-    def test_missing_git_executable_becomes_operational_error(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """A missing git binary is translated instead of aborting the sweep."""
-
-        def raise_missing(*args: object, **kwargs: object) -> typ.NoReturn:
-            raise FileNotFoundError("git")
-
-        monkeypatch.setattr(sweep.subprocess, "run", raise_missing)
-        with pytest.raises(
-            sweep.OperationalRuleError, match="not found on PATH"
-        ) as exc_info:
-            sweep.resolve_head("leynos", "ghost")
-        assert exc_info.value.tool == "git", (
-            "a missing git binary should identify git as the tool"
-        )
+        _assert_git_operational_context(exc_info.value)
 
 
 class TestReport:
@@ -564,19 +597,37 @@ class TestSweepCommand:
             force=True,
         ), call["options"]
 
-    def test_only_list_is_split_and_cleaned(
+    @pytest.mark.parametrize(
+        "case",
+        [
+            pytest.param(
+                OnlyFlagCase("alpha, beta, ,alpha", frozenset({"alpha", "beta"})),
+                id="split-clean-deduplicate",
+            ),
+            pytest.param(
+                OnlyFlagCase("", None),
+                id="empty-selects-all",
+            ),
+        ],
+    )
+    def test_only_flag_is_parsed_into_a_filter(
         self,
         monkeypatch: pytest.MonkeyPatch,
         estate_path: pathlib.Path,
         ledger_path: pathlib.Path,
+        case: OnlyFlagCase,
     ) -> None:
-        """`--only` splits on commas, trimming blanks and collapsing repeats."""
+        """`--only` becomes a repository filter, or none at all when empty.
+
+        Commas separate names, blanks are discarded and repeats collapse; an
+        empty value means "sweep everything" rather than "sweep nothing".
+        """
         calls = self._capture(monkeypatch)
 
         self._invoke(
             [
                 "--only",
-                "alpha, beta, ,alpha",
+                case.value,
                 "--estate",
                 str(estate_path),
                 "--ledger",
@@ -584,29 +635,8 @@ class TestSweepCommand:
             ]
         )
 
-        assert calls[0]["options"].only == frozenset({"alpha", "beta"}), calls[0]
-
-    def test_empty_only_selects_every_repository(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        estate_path: pathlib.Path,
-        ledger_path: pathlib.Path,
-    ) -> None:
-        """An empty `--only` value filters nothing rather than everything."""
-        calls = self._capture(monkeypatch)
-
-        self._invoke(
-            [
-                "--only",
-                "",
-                "--estate",
-                str(estate_path),
-                "--ledger",
-                str(ledger_path),
-            ]
-        )
-
-        assert calls[0]["options"].only is None, calls[0]
+        assert len(calls) == 1, calls
+        assert calls[0]["options"].only == case.expected, calls[0]
 
     def test_defaults_apply_without_flags(
         self,
