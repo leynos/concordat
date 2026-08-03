@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import dataclasses
 import json
-import subprocess
 import typing as typ
 
 import pytest
@@ -54,25 +52,7 @@ def _fake_result(verdict: str) -> sweep.RuleRunResult:
     )
 
 
-@dataclasses.dataclass(frozen=True)
-class OnlyFlagCase:
-    """One `--only` value and the repository filter it should produce."""
-
-    value: str
-    expected: frozenset[str] | None
-
-
-@dataclasses.dataclass(frozen=True)
-class GitFailureCase:
-    """One git process failure and its expected translated error."""
-
-    error: Exception
-    match: str
-
-
-def _raise_process_error(
-    error: Exception,
-) -> typ.Callable[..., typ.NoReturn]:
+def _raise(error: Exception) -> typ.Callable[..., typ.NoReturn]:
     """Return a subprocess replacement that raises *error*."""
 
     def raise_error(*_args: object, **_kwargs: object) -> typ.NoReturn:
@@ -81,10 +61,8 @@ def _raise_process_error(
     return raise_error
 
 
-def _assert_git_operational_context(
-    error: sweep.OperationalRuleError,
-) -> None:
-    """Assert the stable context for a failed git head lookup."""
+def _assert_git_error_context(error: sweep.OperationalRuleError) -> None:
+    """Assert the context used by `resolve_head` git launch failures."""
     assert error.operation == "resolve-git-head", error.operation
     assert error.tool == "git", error.tool
     assert error.resource == "leynos/ghost", error.resource
@@ -415,17 +393,19 @@ class TestGitOperations:
         )
 
     @pytest.mark.parametrize(
-        "case",
+        ("failure", "message"),
         [
             pytest.param(
-                GitFailureCase(
-                    subprocess.TimeoutExpired(cmd="git", timeout=sweep.GIT_TIMEOUT),
-                    "timed out",
+                sweep.subprocess.TimeoutExpired(
+                    cmd="git",
+                    timeout=sweep.GIT_TIMEOUT,
                 ),
+                "timed out",
                 id="timeout",
             ),
             pytest.param(
-                GitFailureCase(FileNotFoundError("git"), "not found on PATH"),
+                FileNotFoundError("git"),
+                "not found on PATH",
                 id="missing-executable",
             ),
         ],
@@ -433,7 +413,8 @@ class TestGitOperations:
     def test_git_process_failure_becomes_operational_error(
         self,
         monkeypatch: pytest.MonkeyPatch,
-        case: GitFailureCase,
+        failure: Exception,
+        message: str,
     ) -> None:
         """A git process failure is translated instead of aborting the sweep.
 
@@ -441,12 +422,12 @@ class TestGitOperations:
         both must carry the same context so the sweep can record which
         repository the lookup was for.
         """
-        monkeypatch.setattr(sweep.subprocess, "run", _raise_process_error(case.error))
+        monkeypatch.setattr(sweep.subprocess, "run", _raise(failure))
 
-        with pytest.raises(sweep.OperationalRuleError, match=case.match) as exc_info:
+        with pytest.raises(sweep.OperationalRuleError, match=message) as exc_info:
             sweep.resolve_head("leynos", "ghost")
 
-        _assert_git_operational_context(exc_info.value)
+        _assert_git_error_context(exc_info.value)
 
 
 class TestReport:
@@ -598,45 +579,48 @@ class TestSweepCommand:
         ), call["options"]
 
     @pytest.mark.parametrize(
-        "case",
+        ("only", "expected"),
         [
             pytest.param(
-                OnlyFlagCase("alpha, beta, ,alpha", frozenset({"alpha", "beta"})),
-                id="split-clean-deduplicate",
+                "alpha, beta, ,alpha",
+                frozenset({"alpha", "beta"}),
+                id="split-trim-and-deduplicate",
             ),
-            pytest.param(
-                OnlyFlagCase("", None),
-                id="empty-selects-all",
-            ),
+            pytest.param("", None, id="empty-selects-all"),
         ],
     )
     def test_only_flag_is_parsed_into_a_filter(
         self,
         monkeypatch: pytest.MonkeyPatch,
-        estate_path: pathlib.Path,
-        ledger_path: pathlib.Path,
-        case: OnlyFlagCase,
+        tmp_path: pathlib.Path,
+        only: str,
+        expected: frozenset[str] | None,
     ) -> None:
         """`--only` becomes a repository filter, or none at all when empty.
 
         Commas separate names, blanks are discarded and repeats collapse; an
         empty value means "sweep everything" rather than "sweep nothing".
+
+        The paths are built here rather than taken from the `estate_path` and
+        `ledger_path` fixtures only because `run_sweep` is stubbed out, so they
+        need to round-trip through the parser and nothing more; two fixtures
+        would push this past the argument-count budget.
         """
         calls = self._capture(monkeypatch)
 
         self._invoke(
             [
                 "--only",
-                case.value,
+                only,
                 "--estate",
-                str(estate_path),
+                str(tmp_path / "estate.yaml"),
                 "--ledger",
-                str(ledger_path),
+                str(tmp_path / "ledger.jsonl"),
             ]
         )
 
         assert len(calls) == 1, calls
-        assert calls[0]["options"].only == case.expected, calls[0]
+        assert calls[0]["options"].only == expected, calls[0]
 
     def test_defaults_apply_without_flags(
         self,
