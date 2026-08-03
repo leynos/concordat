@@ -112,6 +112,31 @@ class TestEstateRecordFromPayload:
         assert record.github_owner is None, record.github_owner
 
     @pytest.mark.parametrize(
+        "owner",
+        [
+            pytest.param(None, id="null"),
+            pytest.param(7, id="integer"),
+            pytest.param(False, id="boolean"),
+            pytest.param([], id="list"),
+            pytest.param({}, id="mapping"),
+        ],
+    )
+    def test_non_string_owner_normalises_to_none(self, owner: object) -> None:
+        """A non-string github_owner is ignored rather than crashing the load.
+
+        The mapping pattern proves only that ``repo_url`` is a string, so the
+        owner is still whatever YAML decoded. Anything but a string reached
+        ``_normalise_owner`` and died on ``.strip()``, taking down every
+        command that reads the config rather than skipping one bad field.
+        """
+        record = estate_config._estate_record_from_payload(
+            "core",
+            {"repo_url": "git@github.com:example/core.git", "github_owner": owner},
+        )
+        assert record is not None, "a mapping with a string repo_url should decode"
+        assert record.github_owner is None, record.github_owner
+
+    @pytest.mark.parametrize(
         "payload",
         [
             pytest.param(["git@github.com:example/core.git"], id="list"),

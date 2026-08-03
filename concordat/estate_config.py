@@ -310,12 +310,19 @@ def _estate_record_from_payload(
         case str():
             return EstateRecord(alias=alias, repo_url=payload)
         case {"repo_url": str() as repo_url, **rest}:
+            # The pattern proves only that `repo_url` is a string, so the owner
+            # is still whatever YAML decoded. Narrow it at runtime rather than
+            # asserting a type: a persisted `github_owner: 7` would otherwise
+            # reach `.strip()` and crash the CLI instead of being ignored.
+            owner = rest.get("github_owner")
             return EstateRecord(
                 alias=alias,
                 repo_url=repo_url,
                 branch=str(rest.get("branch", DEFAULT_BRANCH)),
                 inventory_path=str(rest.get("inventory_path", DEFAULT_INVENTORY_PATH)),
-                github_owner=_normalise_owner(rest.get("github_owner")),
+                github_owner=_normalise_owner(
+                    owner if isinstance(owner, str) else None
+                ),
             )
         case _:
             return None
