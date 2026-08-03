@@ -121,10 +121,10 @@ workflows read the same flag before applying changes.
 
 ## Configuration, credentials, cache, and state locations
 
-Everything concordat persists lives under the XDG base directories. A single
-global headline file names the active GitHub owner; everything else — per-owner
-configuration, credentials, caches, and state — is namespaced beneath that
-owner:
+Concordat's local configuration, credentials, caches, and state live under
+the XDG base directories. A single global headline file names the active
+GitHub owner; everything else — per-owner configuration, credentials,
+caches, and state — is namespaced beneath that owner:
 
 - `$XDG_CONFIG_HOME/concordat/config.yaml` — the **headline** config, global
   rather than owner-namespaced; its `github_owner` key names the active owner.
@@ -314,11 +314,12 @@ without leaving the CLI. Both commands require `GITHUB_TOKEN` and the estate's
 
   When `backend/persistence.yaml` exists with `enabled: true`, the CLI adds
   `-backend-config=<path>` to `tofu init`, maps `SCW_ACCESS_KEY`/
-  `SCW_SECRET_KEY` onto `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` when
-  needed, and fails fast if neither pair is present. Standard error (stderr)
-  logs echo the backend bucket, key, region, and config path—never
-  credentials—for traceability. If the manifest is absent or `enabled: false`,
-  `plan` and `apply` keep using the local state layout.
+  `SCW_SECRET_KEY` or `SPACES_ACCESS_KEY_ID`/`SPACES_SECRET_ACCESS_KEY` onto
+  `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` when needed, and fails fast if
+  none of the pairs is present. Standard error (stderr) logs echo the backend
+  bucket, key, region, and config path—never credentials—for traceability.
+  If the manifest is absent or `enabled: false`, `plan` and `apply` keep
+  using the local state layout.
 
 - Reconcile the estate with `concordat apply`. The command requires an explicit
   `--auto-approve` to match OpenTofu's automation guard.
@@ -397,10 +398,11 @@ Remote-state backends rely on environment variables; the CLI simply checks that
 they exist before shelling out to OpenTofu. Export the pair that matches the
 selected provider:
 
-| Provider                | Required variables                           | Optional variables                                                       | Notes                                                                      |
-| ----------------------- | -------------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
-| AWS S3 / Spaces         | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | `AWS_SESSION_TOKEN` (when using temporary credentials such as STS)       | Values are passed straight to OpenTofu's S3 backend.                       |
-| Scaleway Object Storage | `SCW_ACCESS_KEY`, `SCW_SECRET_KEY`           | `AWS_SESSION_TOKEN` (only when Scaleway issues temporary AWS-style keys) | Concordat maps these onto the AWS variable names before invoking OpenTofu. |
+| Provider                | Required variables                                 | Optional variables                                                       | Notes                                                                      |
+| ----------------------- | -------------------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| AWS S3                  | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`       | `AWS_SESSION_TOKEN` (when using temporary credentials such as STS)       | Values are passed straight to OpenTofu's S3 backend.                       |
+| Scaleway Object Storage | `SCW_ACCESS_KEY`, `SCW_SECRET_KEY`                 | `AWS_SESSION_TOKEN` (only when Scaleway issues temporary AWS-style keys) | Concordat maps these onto the AWS variable names before invoking OpenTofu. |
+| DigitalOcean Spaces     | `SPACES_ACCESS_KEY_ID`, `SPACES_SECRET_ACCESS_KEY` | `AWS_SESSION_TOKEN` (only when Spaces issues temporary AWS-style keys)   | Concordat maps these onto the AWS variable names before invoking OpenTofu. |
 
 When `AWS_SESSION_TOKEN` is present, Concordat forwards it alongside whichever
 credential pair is selected so temporary AWS STS, Scaleway, or Spaces sessions
@@ -542,9 +544,9 @@ with the following measures:
 ### Estate configuration file
 
 Concordat stores estate metadata in
-`$XDG_CONFIG_HOME/concordat/owners/<owner>/config.yaml`, where `<owner>` is the
-active GitHub owner from the headline configuration. The file is regular YAML
-1.2 with an `estate` section:
+`$XDG_CONFIG_HOME/concordat/owners/<owner>/config.yaml`, where `<owner>` is
+the active configured owner from the headline configuration. The file is
+regular YAML 1.2 with an `estate` section:
 
 ```yaml
 estate:

@@ -114,7 +114,15 @@ def _inventory_slugs(entries: cabc.Iterable[object]) -> cabc.Iterator[str]:
 def _inventory_urls(inventory_path: Path) -> list[str]:
     """Load, normalize, deduplicate, and sort repository URLs from inventory."""
     contents = _yaml.load(inventory_path.read_text(encoding="utf-8")) or {}
-    slugs = set(_inventory_slugs(contents.get("repositories") or []))
+    # Only a list is an inventory. A scalar such as `5` would raise on
+    # iteration, and a bare string would be walked character by character and
+    # silently yield nothing; both are malformed and read as empty.
+    match contents.get("repositories"):
+        case list() as repositories:
+            pass
+        case _:
+            repositories = []
+    slugs = set(_inventory_slugs(repositories))
     return sorted(_slug_to_git_url(slug) for slug in slugs)
 
 
@@ -170,11 +178,14 @@ def _bootstrap_template(
 def _sanitize_inventory(path: Path) -> None:
     """Rewrite the template inventory at *path* with no enrolled repositories."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    loaded: object = {}
+    raw: object = {}
     if path.exists():
-        loaded = _yaml.load(path.read_text(encoding="utf-8")) or {}
-    if not isinstance(loaded, dict):
-        loaded = {}
+        raw = _yaml.load(path.read_text(encoding="utf-8")) or {}
+    match raw:
+        case dict() as loaded:
+            pass
+        case _:
+            loaded = {}
     loaded.setdefault("schema_version", 1)
     loaded["repositories"] = []
     with path.open("w", encoding="utf-8") as handle:

@@ -252,3 +252,28 @@ def test_build_client_uses_token(mocker: pytest_mock.MockFixture) -> None:
 
     assert client is fake
     mocked_ctor.assert_called_once_with(token="secret")  # noqa: S106
+
+
+@pytest.mark.parametrize(
+    "rejection",
+    [
+        pytest.param(github3_exceptions.AuthenticationFailed, id="unauthenticated"),
+        pytest.param(github3_exceptions.ForbiddenError, id="forbidden"),
+    ],
+)
+def test_rejected_me_lookup_is_translated(
+    mocker: pytest_mock.MockFixture,
+    rejection: Rejection,
+) -> None:
+    """A rejected `me()` becomes an estate error rather than escaping raw.
+
+    Identifying the authenticated user is a credentialed call, so it needs the
+    same translation as creating the repository.
+    """
+    client = mocker.Mock()
+    client.me.side_effect = rejection(mocker.Mock())
+
+    with pytest.raises(estate.GitHubAuthenticationError):
+        estate_github._create_personal_repository(client, "example", "core")
+
+    client.create_repository.assert_not_called()

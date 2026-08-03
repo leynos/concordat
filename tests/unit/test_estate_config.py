@@ -250,3 +250,38 @@ def test_yaml_config_load_raises_estate_error(
     assert isinstance(exc_info.value, ConcordatError), (
         "EstateError must be a ConcordatError subtype"
     )
+
+
+class TestNonMappingEstateSection:
+    """A persisted non-mapping `estate:` must not break the write paths."""
+
+    @pytest.mark.parametrize(
+        "section",
+        [
+            pytest.param("just-a-string", id="string"),
+            pytest.param("[1, 2]", id="list"),
+            pytest.param("7", id="integer"),
+        ],
+    )
+    def test_write_paths_replace_a_non_mapping_section(
+        self,
+        tmp_path: pathlib.Path,
+        section: str,
+    ) -> None:
+        """Registering an estate over a malformed section succeeds.
+
+        `setdefault` returns an existing non-mapping value untouched, so the
+        write paths used to mutate a string or list and raise `TypeError` or
+        `AttributeError`. They now replace it, as the read paths already did.
+        """
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text(f"estate: {section}\n", encoding="utf-8")
+
+        estate_config.register_estate(
+            EstateRecord(alias="core", repo_url="git@github.com:example/core.git"),
+            config_path=config_path,
+            set_active_if_missing=True,
+        )
+
+        records = estate_config.list_estates(config_path=config_path)
+        assert [record.alias for record in records] == ["core"], records

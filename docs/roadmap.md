@@ -27,9 +27,10 @@ automation assets.
   catalogue without missing entries.
 - [x] Extend `concordat enrol` so that, in addition to writing `.concordat`, it
   opens a pull request in `platform-standards` adding the repository to the
-  OpenTofu inventory. Acceptance: enrolling a repository produces both the
-  `.concordat` commit (optional push) and a passing IaC PR that runs `tofu fmt`,
-  `tflint`, and `tofu validate`.
+  OpenTofu inventory. Acceptance: when the platform-standards URL (or its
+  environment-variable equivalent) is configured, enrolling a repository
+  produces both the `.concordat` commit (optional push) and a passing IaC PR
+  that runs `tofu fmt`, `tflint`, and `tofu validate`.
 - [x] Teach estates about the GitHub namespace they govern by persisting
   `github_owner` in the concordat config file and rejecting enrolments that
   target other owners. Acceptance: `concordat estate init` records the owner and

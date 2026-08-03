@@ -289,9 +289,11 @@ class TestInspectMakefile:
         per invocation), so no parametrization mutates ``MINIMAL_REPORT``.
         """
         _write_checkout(tmp_path, cargo=False, makefile=True)
-        stdout_text = (
-            case.stdout if isinstance(case.stdout, str) else json.dumps(case.stdout())
-        )
+        match case.stdout:
+            case str() as verbatim:
+                stdout_text = verbatim
+            case build_report:
+                stdout_text = json.dumps(build_report())
         cmd_mox.mock("makeutil").returns(
             exit_code=case.exit_code,
             stdout=stdout_text,

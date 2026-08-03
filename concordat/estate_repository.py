@@ -175,8 +175,10 @@ def _plan_unreachable_repository(
     """
     if not slug:
         raise RepositoryUnreachableError(repo_url)
-    client = _build_client(github_token, client_factory)
+    # Identity first, matching `_ensure_repository_exists`: a malformed slug
+    # is a local error and must not cost a round trip or a credential.
     owner, name = _split_slug(slug)
+    client = _build_client(github_token, client_factory)
     if _lookup_repository(client, repo_url, owner, name):
         raise RepositoryInaccessibleError(repo_url)
     return RepositoryPlan(

@@ -1,4 +1,4 @@
-# concordat Developers' Guide
+# Concordat developers' guide
 
 This guide documents concordat's internal boundaries: the module contracts
 that other modules, tests, and the CLI rely on. It complements
@@ -49,13 +49,13 @@ validates the owner and rewrites the file, preserving any other keys already
 present so the headline file can grow additional settings without one writer
 clobbering another's.
 
-Every owner-derived path is built through `validate_owner`, which rejects
-anything that is not alphanumerics with internal hyphens (no leading,
-trailing, or doubled separators are enforced beyond that — the pattern is
-`^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$`). Owner names reach this
-validation before they are joined into a filesystem path, so a malformed
-owner argument fails fast rather than producing a path that quietly bypasses
-namespacing.
+Every owner-derived path is built through `validate_owner`, which accepts
+names that begin and end with an alphanumeric character and may contain
+alphanumerics and hyphens internally, including doubled internal hyphens
+(the pattern is `^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$`). Owner names
+reach this validation before they are joined into a filesystem path, so a
+malformed owner argument fails fast rather than producing a path that
+quietly bypasses namespacing.
 
 ### Legacy-flat migration
 

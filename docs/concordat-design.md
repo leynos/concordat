@@ -444,10 +444,13 @@ The CLI also supports the Scaleway-specific aliases `SCW_ACCESS_KEY`/
 OpenTofu. DigitalOcean Spaces operators can rely on `SPACES_ACCESS_KEY_ID`/
 `SPACES_SECRET_ACCESS_KEY`; Concordat applies the same mapping so every
 provider reuses the AWS env var contract. The design deliberately omits
-`encrypt = true` because Scaleway only offers server-side encryption with
-customer-provided keys (SSE-C) and Terraform's backend expects SSE-S3 headers.
-At-rest encryption therefore remains a caller concern (for example, by keeping
-secrets out of state or using client-side encryption).
+`encrypt = true` because Terraform's backend sends an AES256 (SSE-S3) header
+with that flag, and neither Scaleway nor DigitalOcean Spaces accepts it.
+Scaleway also offers SSE-ONE and SSE-KMS in addition to SSE-C, but bucket
+encryption for Scaleway is configured separately rather than through
+Terraform's `encrypt` flag. At-rest encryption therefore remains a caller
+concern (for example, by configuring bucket-side encryption directly,
+keeping secrets out of state, or using client-side encryption).
 
 Every persistence descriptor ships alongside a YAML manifest
 (`platform-standards/tofu/backend/persistence.yaml`) storing a schema version,

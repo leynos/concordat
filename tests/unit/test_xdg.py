@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-import typing as typ
+import pathlib
 
 import pytest
 
 from concordat import xdg
 from concordat.errors import ConcordatError
-
-if typ.TYPE_CHECKING:
-    import pathlib
 
 
 @pytest.fixture
@@ -39,9 +36,16 @@ class TestRoots:
     def test_roots_fall_back_to_home_defaults(self) -> None:
         """Unset XDG variables fall back to the specification defaults."""
         env: dict[str, str] = {}
-        assert str(xdg.config_root(env)).endswith(".config/concordat")
-        assert str(xdg.cache_root(env)).endswith(".cache/concordat")
-        assert str(xdg.state_root(env)).endswith(".local/state/concordat")
+        home = pathlib.Path.home()
+        assert xdg.config_root(env) == home / ".config" / "concordat", (
+            f"config root should fall back under {home}"
+        )
+        assert xdg.cache_root(env) == home / ".cache" / "concordat", (
+            f"cache root should fall back under {home}"
+        )
+        assert xdg.state_root(env) == home / ".local" / "state" / "concordat", (
+            f"state root should fall back under {home}"
+        )
 
 
 class TestOwnerPaths:
@@ -83,7 +87,7 @@ class TestOwnerPaths:
     )
     def test_invalid_owner_names_are_rejected(self, owner: str) -> None:
         """Owner names that are not valid GitHub owners raise."""
-        with pytest.raises(ConcordatError):
+        with pytest.raises(ConcordatError, match="owner"):
             xdg.owner_config_path(owner, {})
 
 
@@ -103,9 +107,11 @@ class TestHeadlineOwner:
         fake_env: dict[str, str],
     ) -> None:
         """Invalid owner names never reach the headline file."""
-        with pytest.raises(ConcordatError):
+        with pytest.raises(ConcordatError, match="owner"):
             xdg.set_active_owner("not/valid", fake_env)
-        assert xdg.get_active_owner(fake_env) is None
+        assert xdg.get_active_owner(fake_env) is None, (
+            "a rejected owner must not be persisted"
+        )
 
     def test_headline_preserves_unknown_keys(
         self,

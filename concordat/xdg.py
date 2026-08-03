@@ -85,7 +85,8 @@ def state_root(env: EnvMapping | None = None) -> Path:
 def validate_owner(owner: str) -> str:
     """Return *owner* unchanged, raising when it is not a valid owner name."""
     if not _OWNER_PATTERN.match(owner or ""):
-        raise ConcordatError(ERROR_INVALID_OWNER.format(owner=owner))
+        message = ERROR_INVALID_OWNER.format(owner=owner)
+        raise ConcordatError(message)
     return owner
 
 

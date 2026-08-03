@@ -18,6 +18,7 @@ import github3.orgs
 from github3 import exceptions as github3_exceptions
 
 from .estate_errors import (
+    GitHubAuthenticationError,
     GitHubClientInitializationError,
     GitHubOrganizationAuthenticationError,
     GitHubRepositoryAuthenticationError,
@@ -115,7 +116,12 @@ def _create_personal_repository(
     name: str,
 ) -> None:
     """Create *name* for the authenticated user, who must be *owner*."""
-    user = client.me()
+    try:
+        user = client.me()
+    except _REJECTED as error:
+        # Identifying the authenticated user is as much a credentialed call as
+        # creating the repository, so a 401 or 403 here must not escape raw.
+        raise GitHubAuthenticationError from error
     if not user or user.login != owner:
         raise RepositoryCreationPermissionError(owner)
     try:

@@ -238,6 +238,34 @@ class TestRepositoryPlanHelpers:
             "the plan should reuse the client built for the GitHub lookup"
         )
 
+    @pytest.mark.parametrize(
+        "slug",
+        [
+            pytest.param("no-slash", id="missing-separator"),
+            pytest.param("a/b/c", id="too-many-separators"),
+            pytest.param("/core", id="empty-owner"),
+            pytest.param("example/", id="empty-name"),
+        ],
+    )
+    def test_malformed_slug_is_rejected_before_authenticating(
+        self,
+        mocker: pytest_mock.MockFixture,
+        slug: str,
+    ) -> None:
+        """A slug that cannot be split costs neither a credential nor a call.
+
+        Splitting is a local check, so it belongs ahead of `_build_client`,
+        matching the identity-first order `_ensure_repository_exists` keeps.
+        """
+        build_client = mocker.patch.object(estate_repository, "_build_client")
+
+        with pytest.raises(estate.RepositoryIdentityError):
+            estate_repository._plan_unreachable_repository(
+                self.REPO_URL, slug, "token", None
+            )
+
+        build_client.assert_not_called()
+
     def test_unreachable_remote_plan_requires_a_slug(
         self,
         mocker: pytest_mock.MockFixture,

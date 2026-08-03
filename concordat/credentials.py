@@ -29,6 +29,7 @@ from .errors import ConcordatError
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+    from pathlib import Path
 
 CREDENTIAL_KEYS: typ.Final = (
     "GITHUB_TOKEN",
@@ -49,7 +50,7 @@ _GROUP_WORLD_BITS: typ.Final = stat.S_IRWXG | stat.S_IRWXO | stat.S_ISUID | stat
 class InsecureCredentialsError(ConcordatError):
     """The credentials file is readable by users other than its owner."""
 
-    def __init__(self, path: object) -> None:
+    def __init__(self, path: Path) -> None:
         """Initialise the error with the offending path."""
         message = (
             f"refusing to read {path}: credentials must not be group- or "
@@ -62,7 +63,7 @@ class InsecureCredentialsError(ConcordatError):
 class MalformedCredentialsError(ConcordatError):
     """The credentials file could not be read or parsed."""
 
-    def __init__(self, path: object, detail: str) -> None:
+    def __init__(self, path: Path, detail: str) -> None:
         """Initialise the error with the offending path and diagnostic."""
         message = f"cannot read credentials {path}: {detail}"
         super().__init__(message)

@@ -131,6 +131,21 @@ def _remove_legacy_estate_section(legacy: Path, data: dict[str, typ.Any]) -> Non
         legacy.unlink()
 
 
+def _estate_section(data: dict[str, typ.Any]) -> dict[str, typ.Any]:
+    """Return the mutable estate section, replacing a non-mapping value.
+
+    `setdefault` only inserts when the key is absent, so a persisted
+    ``estate:`` holding a string or list would be returned as-is and then
+    mutated, raising `TypeError` or `AttributeError`. The read paths already
+    treat a non-mapping section as empty; the write paths now agree.
+    """
+    section = data.get(ESTATE_SECTION)
+    if not isinstance(section, dict):
+        section = {}
+        data[ESTATE_SECTION] = section
+    return section
+
+
 def _current_legacy_data(
     legacy: Path,
     fallback: dict[str, typ.Any],
@@ -146,7 +161,11 @@ def _current_legacy_data(
     """
     if not legacy.is_file():
         return fallback
-    reloaded = _yaml.load(legacy.read_text(encoding="utf-8"))
+    try:
+        reloaded = _yaml.load(legacy.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, YAMLError) as error:
+        message = f"cannot read legacy configuration {legacy}: {error}"
+        raise EstateError(message) from error
     return reloaded if isinstance(reloaded, dict) else fallback
 
 
@@ -250,7 +269,7 @@ def set_active_estate(
     if not record:
         raise EstateNotConfiguredError(alias)
     data = _load_config(config_path)
-    estate_section = data.setdefault(ESTATE_SECTION, {})
+    estate_section = _estate_section(data)
     estate_section[ACTIVE_ESTATE_KEY] = alias
     _write_config(data, config_path)
     return record
@@ -264,7 +283,7 @@ def register_estate(
 ) -> None:
     """Persist a new estate entry and optionally set it active."""
     data = _load_config(config_path)
-    estate_section = data.setdefault(ESTATE_SECTION, {})
+    estate_section = _estate_section(data)
     estates = estate_section.setdefault(ESTATE_COLLECTION_KEY, {})
     if record.alias in estates:
         raise DuplicateEstateAliasError(record.alias)

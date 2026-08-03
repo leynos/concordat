@@ -115,3 +115,27 @@ class TestInventoryUrls:
             "git@github.com:example/ssh.git",
             "https://github.com/example/https.git",
         ], urls
+
+    @pytest.mark.parametrize(
+        "repositories",
+        [
+            pytest.param("5", id="integer-scalar"),
+            pytest.param('"example/one"', id="string-scalar"),
+            pytest.param("{name: example/one}", id="mapping"),
+            pytest.param("null", id="null"),
+        ],
+    )
+    def test_malformed_repositories_read_as_empty(
+        self,
+        tmp_path: pathlib.Path,
+        repositories: str,
+    ) -> None:
+        """A `repositories` value that is not a list yields no URLs.
+
+        A scalar previously raised on iteration and a bare string was walked
+        character by character, so neither reached the mapping pattern; both
+        now read as an empty inventory instead.
+        """
+        inventory = self._inventory(tmp_path, f"repositories: {repositories}\n")
+
+        assert estate_git._inventory_urls(inventory) == [], repositories

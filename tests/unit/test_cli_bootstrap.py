@@ -145,7 +145,7 @@ class TestFileBackedToken:
 
         assert exit_code == 0, exit_code
         assert captured["credential"] == "ghp_from_file", captured
-        assert "leynos" in typ.cast("tuple[str, ...]", captured["namespaces"]), captured
+        assert captured["namespaces"] == ("leynos",), captured
 
     def test_environment_token_still_wins(
         self,

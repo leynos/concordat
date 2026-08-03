@@ -133,8 +133,12 @@ def clone_into_temp(
         temp_root = Path(mkdtemp(dir=runs_root, prefix=f"{prefix}-"))
     else:
         temp_root = Path(mkdtemp(prefix=f"concordat-{prefix}-"))
-    shutil.rmtree(temp_root)
-    shutil.copytree(cache_path, temp_root, symlinks=True)
+    # `mkdtemp` already reserved this directory at mode 0700. Copy into it
+    # rather than deleting and letting `copytree` recreate it: removing it
+    # releases the name for the window before the copy, and recreating it
+    # would take the cache directory's permissions in place of the private
+    # ones `mkdtemp` chose.
+    shutil.copytree(cache_path, temp_root, symlinks=True, dirs_exist_ok=True)
     return temp_root
 
 
