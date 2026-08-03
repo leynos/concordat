@@ -1,0 +1,4 @@
+rust-makefile-baseline: noncompliant
+FP-003  noncompliant   Makefile:12  required target 'test' is not defined unconditionally
+QG-001  noncompliant   Makefile:27  the lint recipe ignores errors, so the gate cannot fail the build
+QG-001  indeterminate  Makefile:0   an include directive makes the gate unprovable

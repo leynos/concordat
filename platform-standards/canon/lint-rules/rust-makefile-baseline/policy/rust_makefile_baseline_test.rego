@@ -112,3 +112,84 @@ test_unknown_schema_version_is_rejected if {
 	count(findings) == 1
 	profile(findings) == {["EN-001", "indeterminate"]}
 }
+
+# -- bounded reachability contract -----------------------------------------
+#
+# QG-001 proves gate delegation within one prerequisite hop. These enumerate
+# `lint` chains of increasing depth over one envelope, so the boundary between
+# "provable" and "indeterminate" is pinned rather than sampled: depth 0 and 1
+# are compliant, and everything deeper fails closed. `build` and `test` are
+# kept in every case so FP-003 stays silent and QG-001 is the only variable.
+
+loc := {"start_byte": 0, "end_byte": 1, "start_line": 1, "start_column": 1, "end_line": 1, "end_column": 1}
+
+gate_recipe := {"ordinal": 0, "text": "$(WHITAKER) --all", "silent": false, "ignore_errors": false, "always_execute": false, "location": loc}
+
+make_rule(targets, prerequisites, recipes) := {
+	"ordinal": 1,
+	"targets": targets,
+	"prerequisites": prerequisites,
+	"double_colon": false,
+	"conditions": [],
+	"recipes": recipes,
+	"location": loc,
+}
+
+stage(i) := sprintf("stage%d", [i])
+
+# `lint` delegates to the first stage when there is one, and otherwise runs
+# the gate itself.
+lint_rule(depth) := make_rule(
+	["lint"],
+	[stage(0) | depth > 0],
+	[gate_recipe | depth == 0],
+)
+
+# Stage *i* hands on to stage *i + 1*, except the last, which runs the gate.
+stage_rules(depth) := [make_rule(
+	[stage(i)],
+	[stage(i + 1) | i < (depth - 1)],
+	[gate_recipe | i == (depth - 1)],
+) |
+	depth > 0
+	i := numbers.range(0, depth - 1)[_]
+]
+
+chain(depth) := array.concat(
+	[
+		make_rule(["build"], [], [{"ordinal": 0, "text": "cargo build", "silent": false, "ignore_errors": false, "always_execute": false, "location": loc}]),
+		make_rule(["test"], [], [{"ordinal": 0, "text": "cargo test", "silent": false, "ignore_errors": false, "always_execute": false, "location": loc}]),
+		lint_rule(depth),
+	],
+	stage_rules(depth),
+)
+
+chain_input(depth) := object.union(
+	data.fixtures.compliant,
+	{"makefile": object.union(data.fixtures.compliant.makefile, {"rules": chain(depth)})},
+)
+
+test_direct_gate_invocation_is_compliant if {
+	findings := policy.deny with input as chain_input(0)
+	count(findings) == 0
+}
+
+test_one_hop_delegation_is_compliant if {
+	findings := policy.deny with input as chain_input(1)
+	count(findings) == 0
+}
+
+test_two_hop_delegation_is_indeterminate if {
+	findings := policy.deny with input as chain_input(2)
+	profile(findings) == {["QG-001", "indeterminate"]}
+}
+
+test_three_hop_delegation_is_indeterminate if {
+	findings := policy.deny with input as chain_input(3)
+	profile(findings) == {["QG-001", "indeterminate"]}
+}
+
+test_four_hop_delegation_is_indeterminate if {
+	findings := policy.deny with input as chain_input(4)
+	profile(findings) == {["QG-001", "indeterminate"]}
+}

@@ -1,5 +1,10 @@
 # concordat Users' Guide
 
+For the internal module boundaries behind this CLI — the XDG layout,
+credential resolution order, cache/execution API split, and the rule-run and
+Parabellum sweep contracts — see
+[`docs/developers-guide.md`](developers-guide.md).
+
 ## Overview
 
 The `concordat` command line interface (CLI) helps maintainers enrol Git

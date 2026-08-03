@@ -219,6 +219,10 @@ false-positive rate is acceptable. Exemptions use the existing
   `priority-sync` workflow to a repository, but the CLI continues to defer
   state changes to IaC.
 
+See [`docs/developers-guide.md`](developers-guide.md) for the CLI's internal
+module boundaries — XDG layout, credential resolution, the cache/execution
+API split, and the rule-run and Parabellum sweep contracts.
+
 ### 2.7 Estate execution workflow
 
 The CLI now needs to operate on live estates, not just the template. Two new
