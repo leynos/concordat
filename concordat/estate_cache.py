@@ -50,9 +50,7 @@ def cache_destination(
     owner = record.github_owner or xdg.get_active_owner()
     if not owner:
         raise EstateCacheError(ERROR_OWNER_REQUIRED)
-    root = xdg.owner_estates_cache_dir(owner)
-    root.mkdir(parents=True, exist_ok=True)
-    return root / record.alias
+    return xdg.owner_estates_cache_dir(owner) / record.alias
 
 
 def ensure_estate_cache(
@@ -65,6 +63,9 @@ def ensure_estate_cache(
         raise EstateCacheError(ERROR_ALIAS_REQUIRED)
 
     destination = cache_destination(record, cache_directory)
+    # `cache_destination` is a pure query, so the owner-scoped parent may not
+    # exist yet; it is created here, where the clone is about to need it.
+    destination.parent.mkdir(parents=True, exist_ok=True)
     callbacks = build_remote_callbacks(record.repo_url)
     repository = _open_or_clone_cache(
         record,

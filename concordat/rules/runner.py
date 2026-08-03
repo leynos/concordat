@@ -6,6 +6,7 @@ import dataclasses
 import importlib.resources
 import json
 import pathlib
+import re
 import subprocess
 import tempfile
 import typing as typ
@@ -44,6 +45,12 @@ def _resolve_rule_packages_dir() -> pathlib.Path:
 RULE_PACKAGES_DIR: typ.Final = _resolve_rule_packages_dir()
 
 CONFTEST_TIMEOUT: typ.Final = 60.0
+# Conftest reports an evaluated policy with 0 (clean) or 1 (failures); any
+# other status means it did not evaluate one, whatever it printed on stdout.
+POLICY_EXIT_CODES: typ.Final = frozenset({0, 1})
+# Diagnostics are quoted back to the operator, so cap how much of a runaway
+# stderr reaches the error message.
+_MAX_ERROR_DETAIL: typ.Final = 500
 
 _yaml = YAML(typ="safe")
 
@@ -130,9 +137,45 @@ class RuleRunResult:
         return 0 if self.verdict == VERDICT_COMPLIANT else 1
 
 
+# A rule package is one canonical name: lower-case ASCII words joined by
+# single hyphens. Anything else — a separator, a dot segment, punctuation — is
+# refused before it can be joined to a path.
+_RULE_ID_PATTERN: typ.Final = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+
+
+def _validated_rule_id(rule_id: str) -> str:
+    """Return *rule_id* if it is a canonical package name, else raise."""
+    if not _RULE_ID_PATTERN.fullmatch(rule_id):
+        message = (
+            f"invalid rule package {rule_id!r}; expected lower-case words "
+            "joined by single hyphens"
+        )
+        raise OperationalRuleError(
+            message,
+            operation="load-rule-package",
+            resource=rule_id,
+        )
+    return rule_id
+
+
 def _rule_package_dir(rule_id: str) -> pathlib.Path:
-    """Return the rule package directory for *rule_id*, or raise if unknown."""
-    rule_dir = RULE_PACKAGES_DIR / rule_id
+    """Return the rule package directory for *rule_id*, or raise if unknown.
+
+    The identifier is validated before it is joined to a path, and the joined
+    path is then confirmed to stay under the packages root. The pattern alone
+    already excludes traversal, but the containment check means a future
+    loosening of the pattern cannot silently reach outside the root.
+    """
+    rule_dir = RULE_PACKAGES_DIR / _validated_rule_id(rule_id)
+    root = RULE_PACKAGES_DIR.resolve()
+    candidate = rule_dir.resolve()
+    if not candidate.is_relative_to(root):
+        message = f"rule package {rule_id!r} resolves outside {root}"
+        raise OperationalRuleError(
+            message,
+            operation="load-rule-package",
+            resource=rule_id,
+        )
     if not (rule_dir / "policy").is_dir():
         message = f"unknown rule package {rule_id!r}; expected {rule_dir}/policy"
         raise OperationalRuleError(
@@ -209,6 +252,34 @@ def _run_conftest(argv: list[str], rule_id: str) -> subprocess.CompletedProcess[
         ) from error
 
 
+def _require_policy_exit_code(
+    completed: subprocess.CompletedProcess[str],
+    rule_id: str,
+) -> None:
+    """Reject any Conftest exit status that is not a policy verdict.
+
+    Only 0 (no failures) and 1 (policy failures) describe an evaluated policy.
+    A higher status means Conftest could not evaluate it — a malformed policy,
+    a bad flag, a missing file — and it may still print well-formed JSON on
+    stdout. Decoding that would report an operational failure as a clean run.
+    """
+    if completed.returncode in POLICY_EXIT_CODES:
+        return
+    detail = (completed.stderr or completed.stdout or "").strip()
+    if len(detail) > _MAX_ERROR_DETAIL:
+        detail = f"{detail[:_MAX_ERROR_DETAIL]}..."
+    message = (
+        f"conftest exited {completed.returncode} without evaluating the policy"
+        f"{f': {detail}' if detail else ''}"
+    )
+    raise OperationalRuleError(
+        message,
+        operation="invoke-conftest",
+        tool="conftest",
+        resource=rule_id,
+    )
+
+
 def _invoke_conftest(
     rule_id: str,
     envelope: PolicyEnvelope,
@@ -242,6 +313,7 @@ def _invoke_conftest(
 
     # Conftest exits 0 on success and 1 on policy failures; both emit a JSON
     # result document. Anything else (or unparseable output) is operational.
+    _require_policy_exit_code(completed, rule_id)
     try:
         results: list[_ConftestResult] = json.loads(completed.stdout)
     except json.JSONDecodeError as error:

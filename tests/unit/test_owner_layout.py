@@ -357,6 +357,10 @@ class TestOwnerNamespacedCache:
         )
         destination = estate_cache.cache_destination(record)
         assert destination == xdg.owner_estates_cache_dir(expected_owner) / "prod"
+        assert not destination.parent.exists(), (
+            "resolving a cache path must not create it: "
+            f"{destination.parent} should still be absent"
+        )
 
     def test_cache_destination_requires_an_owner(
         self,

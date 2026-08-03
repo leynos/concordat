@@ -7,7 +7,7 @@ import typing as typ
 import pygit2
 import pytest
 
-from concordat import xdg
+from concordat import estate_cache, xdg
 from concordat.estate_cache import cache_destination
 from concordat.estate_execution import EstateExecutionError, ensure_estate_cache
 from tests.unit.conftest import _make_record
@@ -39,8 +39,42 @@ def test_cache_destination_honours_xdg(
     assert destination == expected_root / record.alias, (
         f"expected {expected_root / record.alias}, got {destination}"
     )
-    assert expected_root.exists(), (
-        f"the owner-scoped cache root should be created: {expected_root}"
+    assert not expected_root.exists(), (
+        "cache_destination is a pure query and must not create "
+        f"{expected_root}; only ensure_estate_cache may"
+    )
+
+
+def test_ensure_estate_cache_creates_the_parent_before_cloning(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """The owner-scoped parent exists by the time the clone boundary runs.
+
+    `cache_destination` no longer creates it, so this is the step that must,
+    and it must happen before pygit2 is asked to write into it.
+    """
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "xdg-cache"))
+    record = _make_record(tmp_path / "estate.git")
+    observed: list[bool] = []
+
+    def fake_open_or_clone(
+        _record: object,
+        *,
+        destination: Path,
+        callbacks: object,
+    ) -> object:
+        observed.append(destination.parent.is_dir())
+        destination.mkdir(parents=True, exist_ok=True)
+        return pygit2.init_repository(str(destination))
+
+    monkeypatch.setattr(estate_cache, "_open_or_clone_cache", fake_open_or_clone)
+
+    ensure_estate_cache(record)
+
+    assert observed == [True], (
+        "the cache parent should already exist when the clone boundary is "
+        f"reached, got {observed}"
     )
 
 
