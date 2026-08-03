@@ -138,7 +138,7 @@ class TestRulePackageIdentifiers:
         )
         try:
             runner._validated_rule_id(rule_id)
-        except Exception:  # noqa: BLE001 - any rejection counts as "not accepted"
+        except runner.OperationalRuleError:
             accepted = False
         else:
             accepted = True
@@ -154,7 +154,7 @@ class TestRulePackageIdentifiers:
         """A rejected identifier raises before any path is resolved."""
         try:
             runner._validated_rule_id(rule_id)
-        except Exception:  # noqa: BLE001 - rejection is the property under test
+        except runner.OperationalRuleError:
             return
         assert "/" not in rule_id, rule_id
         assert "\\" not in rule_id, rule_id
