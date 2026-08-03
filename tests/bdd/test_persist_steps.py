@@ -110,10 +110,20 @@ class FakeS3Client:
 def fake_s3(monkeypatch: pytest.MonkeyPatch) -> FakeS3Client:
     """Replace the default S3 client factory with a stub."""
     client = FakeS3Client()
+
+    # `persist_estate` binds `owner` onto the default factory with
+    # `functools.partial`, so a stub standing in for that factory has to
+    # accept it. Only the injected `PersistenceOptions.s3_client_factory`
+    # keeps the bare two-argument signature.
+    def factory(
+        region: str, endpoint: str, *, owner: str | None = None
+    ) -> FakeS3Client:
+        return client
+
     monkeypatch.setattr(
         persistence_validation,
         "_default_s3_client_factory",
-        lambda region, endpoint: client,
+        factory,
     )
     return client
 

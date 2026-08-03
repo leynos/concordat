@@ -208,8 +208,14 @@ def persist_test_context(
     persist_prompts: typ.Iterator[str],
     persist_monkeypatch_base: None,
     stub_s3: type[StubS3],
+    xdg_env: dict[str, str],
 ) -> PersistTestContext:
-    """Bundle common fixtures for persist_estate tests."""
+    """Bundle common fixtures for persist_estate tests.
+
+    `xdg_env` is a dependency because `persist_estate` reads the active owner
+    and the owner's credentials file: without it these tests would consult
+    the developer's real XDG directories and pass or fail on what they found.
+    """
     workdir, repo, bare, record = persist_repo_setup
     return PersistTestContext(
         workdir=workdir,

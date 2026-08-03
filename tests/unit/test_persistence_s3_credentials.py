@@ -7,6 +7,7 @@ import typing as typ
 import pytest
 
 import concordat.persistence.validation as persistence_validation
+from concordat import xdg
 
 
 @pytest.mark.parametrize(
@@ -179,3 +180,95 @@ def test_default_s3_client_factory_leaves_credentials_unset_when_missing(
     assert "aws_access_key_id" not in kwargs
     assert "aws_secret_access_key" not in kwargs
     assert "aws_session_token" not in kwargs
+
+
+def _write_owner_keys(owner: str, access: str, secret: str) -> None:
+    """Write *owner*'s S3 credentials file with the mode the loader demands."""
+    path = xdg.owner_credentials_path(owner)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        f"AWS_ACCESS_KEY_ID: {access}\nAWS_SECRET_ACCESS_KEY: {secret}\n",
+        encoding="utf-8",
+    )
+    path.chmod(0o600)
+
+
+class TestOwnerScopedS3Credentials:
+    """The default factory reads the named owner's credentials file."""
+
+    @pytest.fixture
+    def captured_kwargs(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        xdg_env: dict[str, str],
+    ) -> dict[str, typ.Any]:
+        """Stub boto3 and return the mapping the client kwargs land in."""
+        captured: dict[str, typ.Any] = {}
+
+        def fake_client(service_name: str, **kwargs: object) -> object:
+            captured["kwargs"] = kwargs
+            return object()
+
+        monkeypatch.setattr(persistence_validation.boto3, "client", fake_client)
+        for variable in (
+            *persistence_validation.AWS_BACKEND_ENV,
+            *persistence_validation.SCW_BACKEND_ENV,
+            *persistence_validation.SPACES_BACKEND_ENV,
+            persistence_validation.AWS_SESSION_TOKEN_VAR,
+        ):
+            monkeypatch.delenv(variable, raising=False)
+        _write_owner_keys("alpha", "alpha-access", "alpha-secret")
+        _write_owner_keys("bravo", "bravo-access", "bravo-secret")
+        xdg.set_active_owner("alpha")
+        return captured
+
+    def test_named_owner_overrides_the_active_owner(
+        self,
+        captured_kwargs: dict[str, typ.Any],
+    ) -> None:
+        """`owner=` selects the credentials file, even against an active owner.
+
+        ``alpha`` is active, so without the parameter the factory would map
+        ``alpha``'s keys onto an estate belonging to ``bravo``.
+        """
+        persistence_validation._default_s3_client_factory(
+            "fr-par",
+            "https://s3.fr-par.scw.cloud",
+            owner="bravo",
+        )
+
+        kwargs = typ.cast("dict[str, object]", captured_kwargs["kwargs"])
+        assert kwargs["aws_access_key_id"] == "bravo-access", kwargs
+        assert kwargs["aws_secret_access_key"] == "bravo-secret", kwargs  # noqa: S105
+
+    def test_without_an_owner_the_active_one_still_applies(
+        self,
+        captured_kwargs: dict[str, typ.Any],
+    ) -> None:
+        """Omitting `owner` keeps the previous active-owner behaviour."""
+        persistence_validation._default_s3_client_factory(
+            "fr-par",
+            "https://s3.fr-par.scw.cloud",
+        )
+
+        kwargs = typ.cast("dict[str, object]", captured_kwargs["kwargs"])
+        assert kwargs["aws_access_key_id"] == "alpha-access", kwargs
+
+    def test_the_environment_still_outranks_the_owner_file(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        captured_kwargs: dict[str, typ.Any],
+    ) -> None:
+        """Owner scoping does not disturb environment-over-file precedence."""
+        monkeypatch.setenv("AWS_ACCESS_KEY_ID", "env-access")
+        monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "env-secret")
+
+        persistence_validation._default_s3_client_factory(
+            "fr-par",
+            "https://s3.fr-par.scw.cloud",
+            owner="bravo",
+        )
+
+        kwargs = typ.cast("dict[str, object]", captured_kwargs["kwargs"])
+        assert kwargs["aws_access_key_id"] == "env-access", kwargs
+        assert kwargs["aws_secret_access_key"] == "env-secret", kwargs  # noqa: S105

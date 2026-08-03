@@ -210,12 +210,25 @@ def _credentials_from_environment(env: typ.Mapping[str, str]) -> dict[str, str]:
     return resolved
 
 
-def _default_s3_client_factory(region: str, endpoint: str) -> S3Client:
-    """Create a boto3 S3 client configured for path-style endpoints."""
+def _default_s3_client_factory(
+    region: str,
+    endpoint: str,
+    *,
+    owner: str | None = None,
+) -> S3Client:
+    """Create a boto3 S3 client configured for path-style endpoints.
+
+    *owner* scopes the credentials file to the estate being persisted rather
+    than to whichever owner happens to be active, so an estate never reaches
+    object storage with another owner's keys. It is keyword-only, and
+    defaulted, so the two-positional-argument factory contract that
+    ``PersistenceOptions.s3_client_factory`` promises is unchanged; callers
+    bind it with ``functools.partial``.
+    """
     endpoint = normalize_endpoint_url(endpoint)
     config = BotoConfig(s3={"addressing_style": "path"})
     credentials = _credentials_from_environment(
-        owner_credentials.credential_environment()
+        owner_credentials.credential_environment(owner=owner)
     )
     return typ.cast(
         "S3Client",

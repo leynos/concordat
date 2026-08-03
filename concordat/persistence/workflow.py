@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+import functools
 import typing as typ
 
 import pygit2
 
-from concordat import credentials, estate_execution
+from concordat import credentials, estate_execution, xdg
+
+# Imported from the leaf error module rather than the `concordat.estate`
+# façade: `estate_execution` already reaches back into this package, so the
+# façade is not safe to import at module scope. It is the same class the
+# façade re-exports as `concordat.estate.ActiveOwnerMismatchError`.
+from concordat.estate_errors import ActiveOwnerMismatchError
 
 from . import gitops
 from . import validation as persistence_validation
@@ -141,22 +148,40 @@ def _finalize_persistence_result(
     )
 
 
+def _require_matching_active_owner(record: EstateRecord) -> None:
+    """Refuse to persist an estate belonging to a different owner.
+
+    Persistence resolves credentials and opens a pull request on the estate's
+    behalf, so it must not run while a different owner is active: the tokens
+    and keys in play would be the wrong ones. This is checked first, before
+    the cache is loaded or any client is built, so a mismatch costs nothing
+    and touches nothing.
+    """
+    active_owner = xdg.get_active_owner()
+    if active_owner and record.github_owner and active_owner != record.github_owner:
+        raise ActiveOwnerMismatchError(active_owner, record.github_owner)
+
+
 def persist_estate(
     record: EstateRecord,
     options: PersistenceOptions | None = None,
 ) -> PersistenceResult:
     """Configure remote state for an estate and open a pull request."""
     opts = options or PersistenceOptions()
+    _require_matching_active_owner(record)
     github_token = (
         opts.github_token
         if opts.github_token is not None
-        else credentials.github_token()
+        else credentials.github_token(owner=record.github_owner)
     )
 
     workspace, paths = _setup_persistence_environment(record)
 
-    s3_client_factory = (
-        opts.s3_client_factory or persistence_validation._default_s3_client_factory
+    # The estate's own owner scopes the credentials file. An injected factory
+    # is left exactly as given: it still receives only `(region, endpoint)`.
+    s3_client_factory = opts.s3_client_factory or functools.partial(
+        persistence_validation._default_s3_client_factory,
+        owner=record.github_owner,
     )
 
     descriptor, key_suffix = _prepare_and_validate_descriptor(
