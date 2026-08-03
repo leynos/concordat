@@ -20,6 +20,7 @@ import dataclasses
 import datetime as dt
 import json
 import pathlib
+import re
 import subprocess
 import tempfile
 import typing as typ
@@ -108,15 +109,53 @@ class SweepCommandOptions:
 _DEFAULT_COMMAND_OPTIONS: typ.Final = SweepCommandOptions()
 
 
+# GitHub owners are alphanumerics and hyphens, no leading or trailing hyphen.
+# Repository names additionally allow dot and underscore, but must remain a
+# single path component that is safe to use as a clone directory: `.` and `..`
+# are excluded by requiring at least one character that is not a dot.
+_OWNER_PATTERN: typ.Final = re.compile(
+    r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$"
+)
+_REPO_NAME_PATTERN: typ.Final = re.compile(r"^(?=.*[^.])[A-Za-z0-9._-]{1,100}$")
+
+
+def _validated_identifier(
+    value: object,
+    pattern: re.Pattern[str],
+    kind: str,
+    resource: pathlib.Path | str,
+) -> str:
+    """Return *value* when it matches *pattern*, else reject the manifest.
+
+    Names from the manifest become URL segments and clone-directory
+    components, so they are validated here, at the boundary, rather than
+    trusted downstream.
+    """
+    if isinstance(value, str) and pattern.fullmatch(value):
+        return value
+    message = f"estate manifest declares an invalid {kind}: {value!r}"
+    raise OperationalRuleError(
+        message,
+        operation="load-estate-manifest",
+        resource=resource,
+    )
+
+
 def load_estate(path: pathlib.Path) -> Estate:
     """Parse the estate inventory YAML document."""
     document = YAML(typ="safe").load(path.read_text(encoding="utf-8"))
     try:
         entries = tuple(
-            EstateEntry(name=item["name"], excluded=item.get("excluded"))
+            EstateEntry(
+                name=_validated_identifier(
+                    item["name"], _REPO_NAME_PATTERN, "repository name", path
+                ),
+                excluded=item.get("excluded"),
+            )
             for item in document["repositories"]
         )
-        return Estate(owner=document["owner"], repositories=entries)
+        owner = _validated_identifier(document["owner"], _OWNER_PATTERN, "owner", path)
+        return Estate(owner=owner, repositories=entries)
     except KeyError as error:
         message = f"estate manifest {path} is missing key {error.args[0]!r}"
         raise OperationalRuleError(
@@ -203,8 +242,21 @@ def resolve_head(owner: str, name: str) -> str:
 def clone_and_audit(owner: str, name: str) -> tuple[str, RuleRunResult]:
     """Shallow-clone the repository, audit it, and return (sha, result)."""
     repository = f"{owner}/{name}"
+    _validated_identifier(owner, _OWNER_PATTERN, "owner", repository)
+    _validated_identifier(name, _REPO_NAME_PATTERN, "repository name", repository)
     with tempfile.TemporaryDirectory(prefix="parabellum-") as scratch:
-        checkout = pathlib.Path(scratch) / name
+        root = pathlib.Path(scratch).resolve()
+        checkout = (root / name).resolve()
+        # `load_estate` already rejects separators and dot segments, so this
+        # cannot trigger today; it is here so a caller reaching
+        # `clone_and_audit` directly cannot write outside the scratch root.
+        if not checkout.is_relative_to(root):
+            message = f"clone destination for {repository} escapes {root}"
+            raise OperationalRuleError(
+                message,
+                operation="clone-repository",
+                resource=repository,
+            )
         _git(
             [
                 "clone",

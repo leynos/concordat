@@ -684,3 +684,119 @@ class TestSweepCommand:
             assert f".{name}" not in rendered, (
                 f"--{name} should not be namespaced:\n{rendered}"
             )
+
+
+class TestManifestIdentifiers:
+    """Validation of manifest owners and repository names at the boundary."""
+
+    @staticmethod
+    def _manifest(tmp_path: pathlib.Path, body: str) -> pathlib.Path:
+        path = tmp_path / "estate.yaml"
+        path.write_text(body)
+        return path
+
+    @pytest.mark.parametrize(
+        "owner",
+        [
+            pytest.param("../evil", id="parent-traversal"),
+            pytest.param("a/b", id="path-separator"),
+            pytest.param("..", id="dot-dot"),
+            pytest.param("-leading", id="leading-hyphen"),
+            pytest.param("trailing-", id="trailing-hyphen"),
+            pytest.param("''", id="empty"),
+        ],
+    )
+    def test_invalid_owner_is_rejected(
+        self,
+        tmp_path: pathlib.Path,
+        owner: str,
+    ) -> None:
+        """A manifest owner that is not a GitHub login is refused."""
+        manifest = self._manifest(
+            tmp_path,
+            f"schema_version: 1\nowner: {owner}\nrepositories:\n  - name: wireframe\n",
+        )
+
+        with pytest.raises(sweep.OperationalRuleError, match="invalid owner") as info:
+            sweep.load_estate(manifest)
+
+        assert info.value.operation == "load-estate-manifest", info.value.operation
+        assert info.value.resource == manifest, info.value.resource
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            pytest.param("../escape", id="parent-traversal"),
+            pytest.param("nested/name", id="path-separator"),
+            pytest.param('"..\\\\windows"', id="backslash"),
+            pytest.param("'.'", id="dot"),
+            pytest.param("'..'", id="dot-dot"),
+            pytest.param("/absolute", id="absolute-path"),
+            pytest.param("''", id="empty"),
+        ],
+    )
+    def test_invalid_repository_name_is_rejected(
+        self,
+        tmp_path: pathlib.Path,
+        name: str,
+    ) -> None:
+        """A repository name that is not a single safe component is refused."""
+        manifest = self._manifest(
+            tmp_path,
+            f"schema_version: 1\nowner: leynos\nrepositories:\n  - name: {name}\n",
+        )
+
+        with pytest.raises(
+            sweep.OperationalRuleError, match="invalid repository name"
+        ) as info:
+            sweep.load_estate(manifest)
+
+        assert info.value.operation == "load-estate-manifest", info.value.operation
+
+    def test_valid_manifest_is_accepted(self, tmp_path: pathlib.Path) -> None:
+        """Ordinary owners and names, including dots and underscores, parse."""
+        manifest = self._manifest(
+            tmp_path,
+            "schema_version: 1\nowner: leynos\nrepositories:\n"
+            "  - name: wireframe\n  - name: some.repo_name-2\n",
+        )
+
+        estate = sweep.load_estate(manifest)
+
+        assert estate.owner == "leynos", estate.owner
+        assert [e.name for e in estate.repositories] == [
+            "wireframe",
+            "some.repo_name-2",
+        ], estate.repositories
+
+
+class TestCloneDestination:
+    """`clone_and_audit` refuses identifiers it was handed directly."""
+
+    @pytest.mark.parametrize(
+        ("owner", "name"),
+        [
+            pytest.param("leynos", "../escape", id="name-traversal"),
+            pytest.param("leynos", "nested/name", id="name-separator"),
+            pytest.param("leynos", "..", id="name-dot-dot"),
+            pytest.param("../evil", "wireframe", id="owner-traversal"),
+        ],
+    )
+    def test_invalid_identifiers_never_reach_git(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        owner: str,
+        name: str,
+    ) -> None:
+        """A crafted identifier is refused before any git process starts.
+
+        `load_estate` already rejects these, so this guards the direct entry
+        point: nothing may clone into a path outside the scratch root.
+        """
+        calls: list[object] = []
+        monkeypatch.setattr(sweep, "_git", lambda *a, **k: calls.append((a, k)))
+
+        with pytest.raises(sweep.OperationalRuleError):
+            sweep.clone_and_audit(owner, name)
+
+        assert calls == [], f"git should not run for {owner}/{name}, got {calls}"
