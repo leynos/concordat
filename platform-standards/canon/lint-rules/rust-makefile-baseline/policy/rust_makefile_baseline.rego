@@ -150,13 +150,24 @@ gate_variable_is_simple if regex.match(`^[A-Za-z_][A-Za-z0-9_]*$`, gate_variable
 # whitespace the group requires is absent.
 gate_assignment_prefix := `[A-Za-z_][A-Za-z0-9_]*=("[^"]*"|'[^']*'|[^[:space:]]*)[[:space:]]+`
 
+# The trailing group is what ends the command word. Whitespace and
+# end-of-text are the obvious cases; `;`, `&`, `|` and `)` end it too, and
+# the command still executes — `$(GATE); cargo test`, `$(GATE) && cargo test`
+# and `$(GATE) | tee log` all run the gate.
 gate_command_pattern := sprintf(
-	`(^|[;&|(])[[:space:]]*[-@+]*[[:space:]]*(%s)*(\$\(%s\)|\$\{%s\})([[:space:]]|$)`,
+	`(^|[;&|(])[[:space:]]*[-@+]*[[:space:]]*(%s)*(\$\(%s\)|\$\{%s\})([[:space:]]|[;&|)]|$)`,
 	[gate_assignment_prefix, gate_variable, gate_variable],
 ) if gate_variable_is_simple
 
+# A recipe line whose first word is `#` is a shell comment: the whole line is
+# discarded, including any separator inside it. Without this, `# note; $(GATE)`
+# matched — the `;` in the comment satisfied the segment-separator class — and
+# a commented-out gate read as compliant.
+recipe_is_comment(recipe) if regex.match(`^[[:space:]]*[-@+]*[[:space:]]*#`, recipe.text)
+
 recipe_invokes_gate(recipe) if {
 	gate_variable_is_simple
+	not recipe_is_comment(recipe)
 	regex.match(gate_command_pattern, recipe.text)
 }
 

@@ -307,3 +307,34 @@ test_absent_gate_remains_noncompliant if {
 	findings := policy.deny with input as gate_position_input("cargo clippy --all")
 	profile(findings) == {["QG-001", "noncompliant"]}
 }
+
+# A command word ends at a separator as well as at whitespace, and a recipe
+# line that is entirely a shell comment executes nothing at all — including
+# any separator inside it.
+
+test_semicolon_terminated_command_is_compliant if {
+	findings := policy.deny with input as gate_position_input("$(WHITAKER); cargo test")
+	profile(findings) == set()
+}
+
+test_and_terminated_command_is_compliant if {
+	findings := policy.deny with input as gate_position_input("$(WHITAKER) && cargo test")
+	profile(findings) == set()
+}
+
+test_bare_gate_command_is_compliant if {
+	findings := policy.deny with input as gate_position_input("$(WHITAKER)")
+	profile(findings) == set()
+}
+
+# A separator inside a comment must not stand in for a command boundary.
+test_commented_separator_is_indeterminate if {
+	findings := policy.deny with input as gate_position_input("# note; $(WHITAKER)")
+	profile(findings) == {["QG-001", "indeterminate"]}
+}
+
+# A separator inside a quoted string is likewise not a command boundary.
+test_quoted_separator_is_indeterminate if {
+	findings := policy.deny with input as gate_position_input(`echo "a; $(WHITAKER)"`)
+	profile(findings) == {["QG-001", "indeterminate"]}
+}
