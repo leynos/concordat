@@ -123,8 +123,10 @@ workflows read the same flag before applying changes.
 
 Concordat's local configuration, credentials, caches, and state live under
 the XDG base directories. A single global headline file names the active
-configured owner; everything else — per-owner configuration, credentials,
-caches, and state — is namespaced beneath that owner:
+configured owner; per-owner configuration, credentials, estate caches, and
+state are namespaced beneath that owner, while the OpenTofu provider plugin
+cache is shared across owners, since provider binaries are identical
+regardless of owner:
 
 - `$XDG_CONFIG_HOME/concordat/config.yaml` — the **headline** config, global
   rather than owner-namespaced; its `github_owner` key names the active owner.

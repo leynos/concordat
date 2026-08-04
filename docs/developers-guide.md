@@ -432,9 +432,9 @@ each property is derived from the documented rule instead. The file covers:
   `xdg.validate_owner` agrees with a grammar written independently of
   `_OWNER_PATTERN`, well-formed names round-trip unchanged, and no name
   containing a path separator is ever accepted;
-- **credential filtering** (`TestCredentialFiltering`) — every value that
-  survives `credentials._recognized_credentials` is a recognized key with a
-  trimmed, non-blank string;
+- **credential filtering** (`TestCredentialFiltering`) — every entry that
+  survives `credentials._recognized_credentials` has a recognized key and a
+  trimmed, non-blank string value;
 - **rule-package identifiers** (`TestRulePackageIdentifiers`) — acceptance
   by `runner._validated_rule_id` agrees with the canonical hyphenated-words
   grammar, and a rejected identifier never reaches the filesystem;
@@ -459,10 +459,18 @@ chains of increasing depth over one envelope. In the shipped
 within one prerequisite hop, so this suite pins the boundary between
 "provable" and "indeterminate" rather than sampling it: depth 0 (a direct
 gate invocation) and depth 1 (one hop of delegation) are compliant, and
-every deeper chain is indeterminate. This one-hop bound is a property of the
-current rule version; a future version could widen it. `build` and `test`
-targets are kept present in every case so FP-003 stays silent and QG-001 is
-the only variable under test.
+every deeper chain is indeterminate. This one-hop bound is the semantics of
+the shipped v0.2.0 rule package only. `docs/concordat-design.md` §2.2.1
+specifies, but has not shipped, a v0.3.0 that widens QG-001's delegation
+proof from one prerequisite hop to a full static closure over the parsed
+Makefile: the closure's edges are a rule's prerequisites plus any recipe
+line invoking `$(MAKE) <literal-target>` in the same file. That closure is
+cycle-safe and needs no depth bound, because every edge is a fact from the
+single parsed file; dynamic edges (`$(MAKE) $(VAR)`, `$(MAKE) -C`, recursive
+make into other files) stay indeterminate, as do includes. Under v0.3.0 the
+`two_hop` fixture's expectation changes from indeterminate to compliant.
+`build` and `test` targets are kept present in every case so FP-003 stays
+silent and QG-001 is the only variable under test.
 
 This policy suite is not wired into the Makefile. It is run directly with
 Conftest:
