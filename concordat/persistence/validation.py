@@ -216,15 +216,10 @@ def _default_s3_client_factory(
     *,
     owner: str | None = None,
 ) -> S3Client:
-    """Create a boto3 S3 client configured for path-style endpoints.
-
-    *owner* scopes the credentials file to the estate being persisted rather
-    than to whichever owner happens to be active, so an estate never reaches
-    object storage with another owner's keys. It is keyword-only, and
-    defaulted, so the two-positional-argument factory contract that
-    ``PersistenceOptions.s3_client_factory`` promises is unchanged; callers
-    bind it with ``functools.partial``.
-    """
+    """Create a boto3 S3 client configured for path-style endpoints."""
+    # `owner` is keyword-only and defaulted so this still satisfies the
+    # two-positional-argument contract `PersistenceOptions.s3_client_factory`
+    # promises; callers bind it with `functools.partial`.
     endpoint = normalize_endpoint_url(endpoint)
     config = BotoConfig(s3={"addressing_style": "path"})
     credentials = _credentials_from_environment(

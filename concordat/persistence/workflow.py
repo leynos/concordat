@@ -149,14 +149,10 @@ def _finalize_persistence_result(
 
 
 def _require_matching_active_owner(record: EstateRecord) -> None:
-    """Refuse to persist an estate belonging to a different owner.
-
-    Persistence resolves credentials and opens a pull request on the estate's
-    behalf, so it must not run while a different owner is active: the tokens
-    and keys in play would be the wrong ones. This is checked first, before
-    the cache is loaded or any client is built, so a mismatch costs nothing
-    and touches nothing.
-    """
+    """Refuse to persist an estate belonging to a different owner."""
+    # Called before the cache is loaded or any client is built: persistence
+    # resolves credentials on the estate's behalf, so a mismatch must cost
+    # nothing and touch nothing.
     active_owner = xdg.get_active_owner()
     if not active_owner:
         return
