@@ -175,8 +175,19 @@ def persist_prompts() -> typ.Iterator[str]:
 def persist_monkeypatch_base(
     monkeypatch: pytest.MonkeyPatch,
     persist_repo_setup: tuple[Path, pygit2.Repository, Path, EstateRecord],
+    xdg_env: dict[str, str],
 ) -> None:
-    """Apply shared monkeypatches for persistence repo setup."""
+    """Apply shared isolated-environment setup for persistence tests.
+
+    `xdg_env` is depended on for its ordering, not its value. `persist_estate`
+    reads the active owner and the owner's credentials file, so these tests
+    need those paths pinned to this test's own `tmp_path`: the autouse
+    `_isolated_xdg_bases` in `tests/conftest.py` already keeps every test out
+    of the real home, but it points at a separate factory-made directory, so
+    a test cannot write a credentials file where the code under test will
+    look for it.
+    """
+    del xdg_env
     workdir, _, _, _ = persist_repo_setup
     monkeypatch.setattr(
         estate_execution,
@@ -208,13 +219,11 @@ def persist_test_context(
     persist_prompts: typ.Iterator[str],
     persist_monkeypatch_base: None,
     stub_s3: type[StubS3],
-    xdg_env: dict[str, str],
 ) -> PersistTestContext:
     """Bundle common fixtures for persist_estate tests.
 
-    `xdg_env` is a dependency because `persist_estate` reads the active owner
-    and the owner's credentials file: without it these tests would consult
-    the developer's real XDG directories and pass or fail on what they found.
+    XDG isolation arrives through `persist_monkeypatch_base`, which owns the
+    shared environment setup these tests need.
     """
     workdir, repo, bare, record = persist_repo_setup
     return PersistTestContext(
