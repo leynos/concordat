@@ -240,3 +240,70 @@ test_brace_reference_is_compliant if {
 	findings := policy.deny with input as lint_recipe_input("${WHITAKER} --all")
 	count(findings) == 0
 }
+
+# -- QG-001 command-position contract --------------------------------------
+#
+# A recipe may contain the gate reference without running it. The policy does
+# not parse shell, so it proves only the shape it can read — the expansion
+# standing alone as the command word — and reports anything else it cannot
+# prove as indeterminate rather than passing it. Each case pins the whole
+# QG-001 profile; `build` and `test` are present throughout so FP-003 stays
+# silent and QG-001 is the only variable.
+
+gate_position_input(text) := object.union(
+	data.fixtures.compliant,
+	{"makefile": object.union(data.fixtures.compliant.makefile, {"rules": [
+		make_rule(["build"], [], [{"ordinal": 0, "text": "cargo build", "silent": false, "ignore_errors": false, "always_execute": false, "location": loc}]),
+		make_rule(["test"], [], [{"ordinal": 0, "text": "cargo test", "silent": false, "ignore_errors": false, "always_execute": false, "location": loc}]),
+		make_rule(["lint"], [], [{"ordinal": 0, "text": text, "silent": false, "ignore_errors": false, "always_execute": false, "location": loc}]),
+	]})},
+)
+
+test_paren_command_position_is_compliant if {
+	findings := policy.deny with input as gate_position_input("$(WHITAKER) --all")
+	profile(findings) == set()
+}
+
+test_brace_command_position_is_compliant if {
+	findings := policy.deny with input as gate_position_input("${WHITAKER} --all")
+	profile(findings) == set()
+}
+
+# The estate's own recipes carry an environment prefix; it still executes.
+test_assignment_prefixed_command_is_compliant if {
+	findings := policy.deny with input as gate_position_input(`RUSTFLAGS="-D warnings" $(WHITAKER) --all`)
+	profile(findings) == set()
+}
+
+test_echoed_gate_is_indeterminate if {
+	findings := policy.deny with input as gate_position_input(`echo "$(WHITAKER)"`)
+	profile(findings) == {["QG-001", "indeterminate"]}
+}
+
+test_shell_noop_gate_is_indeterminate if {
+	findings := policy.deny with input as gate_position_input(": $(WHITAKER)")
+	profile(findings) == {["QG-001", "indeterminate"]}
+}
+
+test_assigned_gate_value_is_indeterminate if {
+	findings := policy.deny with input as gate_position_input("TOOL=$(WHITAKER)")
+	profile(findings) == {["QG-001", "indeterminate"]}
+}
+
+test_commented_gate_is_indeterminate if {
+	findings := policy.deny with input as gate_position_input("# $(WHITAKER)")
+	profile(findings) == {["QG-001", "indeterminate"]}
+}
+
+# Ambiguous: the gate is inside a string handed to another shell, so whether
+# it runs depends on quoting the policy does not evaluate.
+test_ambiguous_nested_shell_is_indeterminate if {
+	findings := policy.deny with input as gate_position_input(`sh -c "$(WHITAKER) --all"`)
+	profile(findings) == {["QG-001", "indeterminate"]}
+}
+
+# Proven absence stays noncompliant: nothing mentions the gate at all.
+test_absent_gate_remains_noncompliant if {
+	findings := policy.deny with input as gate_position_input("cargo clippy --all")
+	profile(findings) == {["QG-001", "noncompliant"]}
+}

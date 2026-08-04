@@ -113,22 +113,63 @@ lint_path_rule(rule) if {
 	target in lint_prerequisites
 }
 
-# Only a Make variable reference counts as invoking the gate. Matching the
+# Only a Make variable reference counts as mentioning the gate. Matching the
 # bare name would count `WHITAKER_HOME`, `echo WHITAKER`, a comment, or a
-# filename as an invocation, and a repository that merely mentions the gate
-# would read as compliant.
+# filename, and a repository that merely names the gate would read as
+# compliant.
 gate_reference := sprintf("$(%s)", [gate_variable])
 
 gate_brace_reference := sprintf("${%s}", [gate_variable])
 
-recipe_invokes_gate(recipe) if contains(recipe.text, gate_reference)
+recipe_mentions_gate(recipe) if contains(recipe.text, gate_reference)
 
-recipe_invokes_gate(recipe) if contains(recipe.text, gate_brace_reference)
+recipe_mentions_gate(recipe) if contains(recipe.text, gate_brace_reference)
+
+# A mention is not an invocation. `echo "$(WHITAKER)"` prints the path,
+# `: $(WHITAKER)` expands it and discards it, `TOOL=$(WHITAKER)` only assigns
+# it, and `# $(WHITAKER)` is a comment — none runs the gate, yet all four
+# contain the reference. The policy does not parse shell, so rather than
+# guess it proves the one shape it can read directly: the expansion standing
+# alone as the command word at the start of a command segment.
+#
+# The gate variable is interpolated into a pattern, so it must be a plain
+# identifier; anything else leaves the pattern undefined and nothing is
+# proven, which is the fail-closed direction.
+gate_variable_is_simple if regex.match(`^[A-Za-z_][A-Za-z0-9_]*$`, gate_variable)
+
+# `(^|[;&|(])` is start-of-text or a segment separator, so `cd sub && $(GATE)`
+# still counts while `echo "$(GATE)"`, `: $(GATE)` and `# $(GATE)` do not —
+# each puts a character before the reference that cannot end a command
+# segment. `[-@+]*` allows Make's recipe prefixes, which change echoing and
+# error handling but not what executes.
+#
+# The assignment group allows POSIX environment prefixes: in
+# `RUSTFLAGS="-D warnings" $(GATE) --all` the gate is still the command word.
+# `TOOL=$(GATE)` is not accepted by it — there the reference is the
+# assignment's *value*, with no command word after it, so the trailing
+# whitespace the group requires is absent.
+gate_assignment_prefix := `[A-Za-z_][A-Za-z0-9_]*=("[^"]*"|'[^']*'|[^[:space:]]*)[[:space:]]+`
+
+gate_command_pattern := sprintf(
+	`(^|[;&|(])[[:space:]]*[-@+]*[[:space:]]*(%s)*(\$\(%s\)|\$\{%s\})([[:space:]]|$)`,
+	[gate_assignment_prefix, gate_variable, gate_variable],
+) if gate_variable_is_simple
+
+recipe_invokes_gate(recipe) if {
+	gate_variable_is_simple
+	regex.match(gate_command_pattern, recipe.text)
+}
 
 gate_invoked_somewhere if {
 	some rule in input.makefile.rules
 	some recipe in rule.recipes
 	recipe_invokes_gate(recipe)
+}
+
+gate_mentioned_somewhere if {
+	some rule in input.makefile.rules
+	some recipe in rule.recipes
+	recipe_mentions_gate(recipe)
 }
 
 gate_reachable if {
@@ -233,10 +274,24 @@ deny contains f if {
 
 deny contains f if {
 	gate_provable
-	not gate_invoked_somewhere
+	not gate_mentioned_somewhere
 	f := finding(
 		"QG-001", "noncompliant", 0,
 		sprintf("no recipe invokes the %q lint gate", [gate_variable]),
+	)
+}
+
+# Mentioned, but not in a position this policy can prove executes it.
+deny contains f if {
+	gate_provable
+	gate_mentioned_somewhere
+	not gate_invoked_somewhere
+	f := finding(
+		"QG-001", "indeterminate", 0,
+		sprintf(
+			"a recipe mentions %q but not as a command; its execution cannot be proven",
+			[gate_variable],
+		),
 	)
 }
 
