@@ -139,3 +139,26 @@ class TestInventoryUrls:
         inventory = self._inventory(tmp_path, f"repositories: {repositories}\n")
 
         assert estate_git._inventory_urls(inventory) == [], repositories
+
+    @pytest.mark.parametrize(
+        "document",
+        [
+            pytest.param("5\n", id="scalar-number"),
+            pytest.param("just a string\n", id="scalar-string"),
+            pytest.param("- alpha\n- beta\n", id="list-document"),
+        ],
+    )
+    def test_a_non_mapping_document_reads_as_empty(
+        self,
+        tmp_path: pathlib.Path,
+        document: str,
+    ) -> None:
+        """A document root that is not a mapping yields no URLs.
+
+        `or {}` rescues only a falsy decode, so a truthy scalar or list
+        reached `.get` and raised `AttributeError` — an inventory that is not
+        a mapping simply has no repositories.
+        """
+        inventory = self._inventory(tmp_path, document)
+
+        assert estate_git._inventory_urls(inventory) == [], document

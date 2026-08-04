@@ -290,5 +290,47 @@ class TestNonMappingEstateSection:
             set_active_if_missing=True,
         )
 
-        records = estate_config.list_estates(config_path=config_path)
-        assert [record.alias for record in records] == ["core"], records
+        aliases = [
+            record.alias
+            for record in estate_config.list_estates(config_path=config_path)
+        ]
+        assert aliases == ["core"], (
+            "the malformed section should be replaced and the estate "
+            f"registered, got {aliases}"
+        )
+
+    @pytest.mark.parametrize(
+        "estates",
+        [
+            pytest.param("just-a-string", id="string"),
+            pytest.param("[1, 2]", id="list"),
+            pytest.param("7", id="integer"),
+        ],
+    )
+    def test_write_paths_replace_a_non_mapping_collection(
+        self,
+        tmp_path: pathlib.Path,
+        estates: str,
+    ) -> None:
+        """The same hazard one level down, under `estates:`, is handled too.
+
+        A list here passed the duplicate-alias membership test and then raised
+        on item assignment; a scalar raised on the membership test itself.
+        """
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text(f"estate:\n  estates: {estates}\n", encoding="utf-8")
+
+        estate_config.register_estate(
+            EstateRecord(alias="core", repo_url="git@github.com:example/core.git"),
+            config_path=config_path,
+            set_active_if_missing=True,
+        )
+
+        aliases = [
+            record.alias
+            for record in estate_config.list_estates(config_path=config_path)
+        ]
+        assert aliases == ["core"], (
+            "a malformed estate collection should be replaced and the estate "
+            f"registered, got {aliases}"
+        )

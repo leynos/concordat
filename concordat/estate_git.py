@@ -113,7 +113,15 @@ def _inventory_slugs(entries: cabc.Iterable[object]) -> cabc.Iterator[str]:
 
 def _inventory_urls(inventory_path: Path) -> list[str]:
     """Load, normalize, deduplicate, and sort repository URLs from inventory."""
-    contents = _yaml.load(inventory_path.read_text(encoding="utf-8")) or {}
+    # `or {}` only rescues a falsy decode. A truthy scalar, string, or list
+    # at the document root is still not a mapping, and `.get` on one raises
+    # `AttributeError`; an inventory that is not a mapping has no
+    # repositories, so it reads as empty.
+    match _yaml.load(inventory_path.read_text(encoding="utf-8")):
+        case dict() as contents:
+            pass
+        case _:
+            contents = {}
     # Only a list is an inventory. A scalar such as `5` would raise on
     # iteration, and a bare string would be walked character by character and
     # silently yield nothing; both are malformed and read as empty.

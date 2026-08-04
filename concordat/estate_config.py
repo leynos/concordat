@@ -132,18 +132,29 @@ def _remove_legacy_estate_section(legacy: Path, data: dict[str, typ.Any]) -> Non
 
 
 def _estate_section(data: dict[str, typ.Any]) -> dict[str, typ.Any]:
-    """Return the mutable estate section, replacing a non-mapping value.
-
-    `setdefault` only inserts when the key is absent, so a persisted
-    ``estate:`` holding a string or list would be returned as-is and then
-    mutated, raising `TypeError` or `AttributeError`. The read paths already
-    treat a non-mapping section as empty; the write paths now agree.
-    """
+    """Return the mutable estate section."""
     section = data.get(ESTATE_SECTION)
     if not isinstance(section, dict):
+        # `setdefault` only inserts when the key is absent, so a persisted
+        # `estate:` holding a string or list would be returned as-is and then
+        # mutated, raising `TypeError` or `AttributeError`. The read paths
+        # already treat a non-mapping section as empty; the write paths agree.
         section = {}
         data[ESTATE_SECTION] = section
     return section
+
+
+def _estate_collection(section: dict[str, typ.Any]) -> dict[str, typ.Any]:
+    """Return the mutable estate collection within *section*."""
+    estates = section.get(ESTATE_COLLECTION_KEY)
+    if not isinstance(estates, dict):
+        # The same `setdefault` hazard one level down: a persisted
+        # `estates:` holding a list passes the duplicate-alias membership
+        # test and then raises on item assignment, and a scalar raises on
+        # the membership test itself.
+        estates = {}
+        section[ESTATE_COLLECTION_KEY] = estates
+    return estates
 
 
 def _current_legacy_data(
@@ -284,7 +295,7 @@ def register_estate(
     """Persist a new estate entry and optionally set it active."""
     data = _load_config(config_path)
     estate_section = _estate_section(data)
-    estates = estate_section.setdefault(ESTATE_COLLECTION_KEY, {})
+    estates = _estate_collection(estate_section)
     if record.alias in estates:
         raise DuplicateEstateAliasError(record.alias)
     entry = {
