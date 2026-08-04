@@ -32,8 +32,12 @@ extend-exclude = [
 locale = "en-gb"
 extend-ignore-re = [
     "(?s)```.*?```",
+    "--artifact-server-path",
+    "\\b_recognised_credentials\\b",
+    "\\bcanon_artifacts\\b",
     "\\brust-analyzer\\b",
-    "`[^`\\n]+`",
+    "`color`",
+    "`var\\.iamge_id`",
 ]
 
 [default.extend-words]

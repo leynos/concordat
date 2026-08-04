@@ -46,6 +46,11 @@ class Dictionary:
     corrections: tuple[tuple[str, str], ...] = ()
     ignore_patterns: tuple[str, ...] = ()
     excluded_files: tuple[str, ...] = ()
+    # Ignore patterns a local overlay withdraws from the shared base. Every
+    # other field merges by union, which cannot express "the base is too
+    # broad here" — and a base pattern that suppresses checking of a whole
+    # syntactic construct is exactly the case a repository needs to narrow.
+    removed_patterns: tuple[str, ...] = ()
 
 
 def _string_list(table: cabc.Mapping[str, object], key: str) -> tuple[str, ...]:
@@ -99,12 +104,32 @@ def _dictionary_from_text(text: str) -> Dictionary:
         corrections=tuple(sorted(corrections.items())),
         ignore_patterns=_string_list(patterns, "ignore"),
         excluded_files=_string_list(files, "exclude"),
+        removed_patterns=_string_list(patterns, "remove"),
     )
 
 
 def load_dictionary(path: pathlib.Path) -> Dictionary:
     """Load a validated shared dictionary from *path*."""
     return _dictionary_from_text(path.read_text(encoding="utf-8"))
+
+
+def _merged_ignore_patterns(base: Dictionary, local: Dictionary) -> tuple[str, ...]:
+    """Union both ignore lists, then withdraw the overlay's removals.
+
+    A removal that matches nothing is not an error: the shared base is
+    maintained elsewhere, so it may drop a pattern this repository had
+    already withdrawn, and that should not fail generation here.
+    """
+    removed = set(local.removed_patterns)
+    if contradictory := removed & set(local.ignore_patterns):
+        message = (
+            "local overlay both ignores and removes: "
+            f"{', '.join(sorted(contradictory))}"
+        )
+        raise ValueError(message)
+    return tuple(
+        sorted((set(base.ignore_patterns) | set(local.ignore_patterns)) - removed)
+    )
 
 
 def merge_dictionaries(base: Dictionary, local: Dictionary) -> Dictionary:
@@ -122,11 +147,12 @@ def merge_dictionaries(base: Dictionary, local: Dictionary) -> Dictionary:
         stems=tuple(sorted(set(base.stems) | set(local.stems))),
         accepted=tuple(sorted(set(base.accepted) | set(local.accepted))),
         corrections=tuple(sorted(corrections.items())),
-        ignore_patterns=tuple(
-            sorted(set(base.ignore_patterns) | set(local.ignore_patterns))
-        ),
+        ignore_patterns=_merged_ignore_patterns(base, local),
         excluded_files=tuple(
             sorted(set(base.excluded_files) | set(local.excluded_files))
+        ),
+        removed_patterns=tuple(
+            sorted(set(base.removed_patterns) | set(local.removed_patterns))
         ),
     )
 
