@@ -80,6 +80,57 @@ class TestSweep:
             "test-framework migration in flight"
         ), "the exclusion reason should be preserved in the ledger"
 
+    def test_duplicate_auditable_entry_is_audited_once(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: pathlib.Path,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """A repeated auditable entry is cloned and audited once, not twice.
+
+        The excluded path writes a record without doing any work; this one
+        clones over the network and runs the rule package, so a duplicate here
+        costs a second clone and a second audit slot. `_persist` adds the
+        record to `self.ledger` — the view `_already_ledgered` reads — which is
+        what stops the second mention.
+        """
+        head = "c" * 40
+        calls: list[tuple[str, str]] = []
+
+        def fake_clone_and_audit(
+            owner: str, name: str
+        ) -> tuple[str, sweep.RuleRunResult]:
+            calls.append((owner, name))
+            return head, _fake_result("compliant")
+
+        monkeypatch.setattr(sweep, "resolve_head", lambda owner, name: head)
+        monkeypatch.setattr(sweep, "clone_and_audit", fake_clone_and_audit)
+
+        estate_path = tmp_path / "estate.yaml"
+        estate_path.write_text(
+            "schema_version: 1\nowner: leynos\nrepositories:\n"
+            "  - name: wireframe\n"
+            "  - name: wireframe\n",
+            encoding="utf-8",
+        )
+
+        appended = sweep.run_sweep(estate_path=estate_path, ledger_path=ledger_path)
+
+        assert calls == [("leynos", "wireframe")], (
+            f"the repeated entry should be audited exactly once, got {calls}"
+        )
+        assert len(appended) == 1, (
+            f"the repeated entry should be recorded once, got {appended}"
+        )
+        records = _ledger_lines(ledger_path)
+        assert len(records) == 1, (
+            f"the ledger should hold one line for the repeated entry, got {records}"
+        )
+        record = records[0]
+        assert record["repository"] == "leynos/wireframe", record
+        assert record["commit_sha"] == head, record
+        assert record["verdict"] == "compliant", record
+
     def test_a_repository_named_twice_is_processed_once(
         self,
         tmp_path: pathlib.Path,
