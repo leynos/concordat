@@ -158,8 +158,15 @@ def _require_matching_active_owner(record: EstateRecord) -> None:
     and touches nothing.
     """
     active_owner = xdg.get_active_owner()
-    if active_owner and record.github_owner and active_owner != record.github_owner:
-        raise ActiveOwnerMismatchError(active_owner, record.github_owner)
+    if not active_owner:
+        return
+
+    estate_owner = record.github_owner
+    if not estate_owner:
+        return
+
+    if active_owner != estate_owner:
+        raise ActiveOwnerMismatchError(active_owner, estate_owner)
 
 
 def persist_estate(

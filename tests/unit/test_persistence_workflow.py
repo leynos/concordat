@@ -285,6 +285,43 @@ class TestOwnerScopedCredentials:
         assert info.value.active_owner == "alpha", info.value.active_owner
         assert info.value.estate_owner == "bravo", info.value.estate_owner
 
+    @pytest.mark.parametrize(
+        ("active_owner", "estate_owner"),
+        [
+            pytest.param(None, "bravo", id="no-active-owner"),
+            pytest.param("alpha", None, id="no-estate-owner"),
+        ],
+    )
+    def test_the_guard_needs_both_owners_to_object(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        xdg_env: dict[str, str],
+        active_owner: str | None,
+        estate_owner: str | None,
+    ) -> None:
+        """One owner missing is not a mismatch, so neither case raises.
+
+        A mismatch means two known owners disagreeing. An absent active owner
+        is an operator who has not selected one, and an estate without a
+        `github_owner` names no owner to conflict with — refusing either
+        would block work that has nothing wrong with it.
+
+        The guard is called directly: these cases assert that nothing is
+        raised, and running persistence to prove that would drag in the cache,
+        an S3 client, and a git push for no added evidence.
+        """
+        if active_owner is not None:
+            xdg.set_active_owner(active_owner)
+        assert xdg.get_active_owner() == active_owner, xdg.get_active_owner()
+
+        record = EstateRecord(
+            alias="core",
+            repo_url="git@github.com:example/core.git",
+            github_owner=estate_owner,
+        )
+
+        persistence_workflow._require_matching_active_owner(record)
+
     def test_a_matching_active_owner_is_permitted(
         self,
         monkeypatch: pytest.MonkeyPatch,
