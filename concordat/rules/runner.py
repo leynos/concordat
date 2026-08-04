@@ -175,8 +175,11 @@ def _rule_package_dir(rule_id: str) -> pathlib.Path:
     unreadable rule tree fails when a rule is run rather than when the module
     is imported — importing the CLI should not depend on the policy tree.
     """
+    # Validation first: a malformed identifier is a local error, and must not
+    # cost the packages-root lookup (which touches the filesystem) to reject.
+    validated = _validated_rule_id(rule_id)
     packages_root = _rule_packages_dir()
-    rule_dir = packages_root / _validated_rule_id(rule_id)
+    rule_dir = packages_root / validated
     root = packages_root.resolve()
     candidate = rule_dir.resolve()
     if not candidate.is_relative_to(root):
@@ -262,6 +265,20 @@ def _run_conftest(argv: list[str], rule_id: str) -> subprocess.CompletedProcess[
         ) from error
 
 
+def _bounded_detail(completed: subprocess.CompletedProcess[str]) -> str:
+    """Return Conftest's diagnostic, truncated to a bounded length.
+
+    The diagnostic is whatever the tool printed, so it can be arbitrarily
+    long — a stack trace, or a whole result document echoed to stderr. Both
+    failure paths that interpolate it into an error message use this, so
+    neither can put unbounded tool output in front of an operator.
+    """
+    detail = (completed.stderr or completed.stdout or "").strip()
+    if len(detail) > _MAX_ERROR_DETAIL:
+        return f"{detail[:_MAX_ERROR_DETAIL]}..."
+    return detail
+
+
 def _require_policy_exit_code(
     completed: subprocess.CompletedProcess[str],
     rule_id: str,
@@ -275,9 +292,7 @@ def _require_policy_exit_code(
     """
     if completed.returncode in POLICY_EXIT_CODES:
         return
-    detail = (completed.stderr or completed.stdout or "").strip()
-    if len(detail) > _MAX_ERROR_DETAIL:
-        detail = f"{detail[:_MAX_ERROR_DETAIL]}..."
+    detail = _bounded_detail(completed)
     message = (
         f"conftest exited {completed.returncode} without evaluating the policy"
         f"{f': {detail}' if detail else ''}"
@@ -324,7 +339,7 @@ def _invoke_conftest(
     # Conftest exits 0 on success and 1 on policy failures; both emit a JSON
     # result document. Anything else (or unparseable output) is operational.
     _require_policy_exit_code(completed, rule_id)
-    detail = (completed.stderr or completed.stdout or "").strip()
+    detail = _bounded_detail(completed)
     try:
         decoded: object = json.loads(completed.stdout)
     except json.JSONDecodeError as error:
