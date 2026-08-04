@@ -533,11 +533,19 @@ with the following measures:
   operations (read/write/delete on the state prefix).
 - **Server-side encryption (AWS):** Enable SSE-S3 or SSE-KMS on the bucket.
   OpenTofu's S3 backend automatically uses SSE when the bucket enforces it.
-- **Client-side encryption (Scaleway):** Scaleway Object Storage supports SSE-C
-  (customer-provided keys) but not SSE-S3. OpenTofu's S3 backend does not
-  natively support SSE-C, so encryption must happen outside OpenTofu. Wrap
-  `tofu state`/`tofu plan` calls with tooling that encrypts state files before
-  upload, or use external envelope-encryption workflows.
+- **Server-side encryption (Scaleway):** Scaleway Object Storage offers
+  SSE-ONE and SSE-KMS alongside SSE-C, so state can be encrypted at rest.
+  Configure it in the Scaleway provider or bucket configuration rather than
+  through the backend.
+- **Do not set `encrypt = true` on Scaleway or DigitalOcean Spaces:** that
+  flag makes the OpenTofu S3 backend send an AES256 (SSE-S3) header, which
+  neither provider accepts. Concordat omits it for this reason; bucket
+  encryption is configured provider-side instead.
+- **Client-side or envelope encryption (optional):** an independent control,
+  useful whichever provider is in use. OpenTofu's S3 backend does not
+  natively support SSE-C, so a customer-provided-key workflow has to happen
+  outside OpenTofu — wrap `tofu state`/`tofu plan` calls with tooling that
+  encrypts state before upload.
 - **Audit access logs:** Periodically review bucket access logs to detect
   unauthorized reads or unexpected access patterns.
 
