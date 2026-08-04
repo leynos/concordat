@@ -78,7 +78,7 @@ def captured_client_kwargs(monkeypatch: pytest.MonkeyPatch) -> dict[str, typ.Any
                     "AWS_SECRET_ACCESS_KEY": "aws-secret",
                 },
                 access_key="aws-access",
-                secret_key="aws-secret",  # noqa: S106
+                secret_key="aws-secret",  # noqa: S106 - synthetic test credential
             ),
             id="aws_credentials",
         ),
@@ -86,7 +86,7 @@ def captured_client_kwargs(monkeypatch: pytest.MonkeyPatch) -> dict[str, typ.Any
             CredentialsCase(
                 env={"SCW_ACCESS_KEY": "scw-access", "SCW_SECRET_KEY": "scw-secret"},
                 access_key="scw-access",
-                secret_key="scw-secret",  # noqa: S106
+                secret_key="scw-secret",  # noqa: S106 - synthetic test credential
             ),
             id="scw_credentials",
         ),
@@ -97,7 +97,7 @@ def captured_client_kwargs(monkeypatch: pytest.MonkeyPatch) -> dict[str, typ.Any
                     "SPACES_SECRET_ACCESS_KEY": "spaces-secret",
                 },
                 access_key="spaces-access",
-                secret_key="spaces-secret",  # noqa: S106
+                secret_key="spaces-secret",  # noqa: S106 - synthetic test credential
             ),
             id="spaces_credentials",
         ),
@@ -138,7 +138,7 @@ def test_default_s3_client_factory_maps_environment_credentials(
                     "SCW_SECRET_KEY": "scw-secret",
                 },
                 access_key="aws-access",
-                secret_key="aws-secret",  # noqa: S106
+                secret_key="aws-secret",  # noqa: S106 - synthetic test credential
             ),
             id="aws-precedes-scw",
         ),
@@ -150,7 +150,7 @@ def test_default_s3_client_factory_maps_environment_credentials(
                     "AWS_SESSION_TOKEN": "   ",
                 },
                 access_key="scw-access",
-                secret_key="scw-secret",  # noqa: S106
+                secret_key="scw-secret",  # noqa: S106 - synthetic test credential
                 # Stated rather than defaulted: a token *is* present in the
                 # environment here, and the expectation is that it is dropped.
                 session_token=None,
@@ -165,8 +165,8 @@ def test_default_s3_client_factory_maps_environment_credentials(
                     "AWS_SESSION_TOKEN": "session-token",
                 },
                 access_key="scw-access",
-                secret_key="scw-secret",  # noqa: S106
-                session_token="session-token",  # noqa: S106
+                secret_key="scw-secret",  # noqa: S106 - synthetic test credential
+                session_token="session-token",  # noqa: S106 - synthetic test credential
             ),
             id="session-token-is-forwarded",
         ),
@@ -274,11 +274,12 @@ class TestOwnerScopedS3Credentials:
             owner="bravo",
         )
 
+        expected_secret = "bravo-secret"  # noqa: S105 - synthetic test credential
         kwargs = _client_kwargs(captured_kwargs)
         assert kwargs["aws_access_key_id"] == "bravo-access", (
             f"the named owner's credentials should win over the active one: {kwargs}"
         )
-        assert kwargs["aws_secret_access_key"] == "bravo-secret", (  # noqa: S105
+        assert kwargs["aws_secret_access_key"] == expected_secret, (
             f"the named owner's secret should win over the active one: {kwargs}"
         )
 
@@ -312,10 +313,11 @@ class TestOwnerScopedS3Credentials:
             owner="bravo",
         )
 
+        expected_secret = "env-secret"  # noqa: S105 - synthetic test credential
         kwargs = _client_kwargs(captured_kwargs)
         assert kwargs["aws_access_key_id"] == "env-access", (
             f"the environment should outrank the owner's file: {kwargs}"
         )
-        assert kwargs["aws_secret_access_key"] == "env-secret", (  # noqa: S105
+        assert kwargs["aws_secret_access_key"] == expected_secret, (
             f"the environment secret should outrank the owner's file: {kwargs}"
         )

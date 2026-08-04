@@ -20,9 +20,18 @@ class TestReport:
         self,
         repository: str,
         verdict: str,
-        **extra: str,
-    ) -> dict[str, typ.Any]:
-        finding = {
+        *,
+        audited_at: str = "2026-07-19T16:00:00Z",
+        detail: sweep.LedgerOptionalFields | None = None,
+    ) -> sweep.LedgerRecord:
+        """Build one ledger record, optionally carrying an excluded/error detail.
+
+        `detail` is the production `LedgerOptionalFields`, so a fixture cannot
+        introduce a key the ledger schema does not define. `audited_at` is a
+        *required* field and gets its own parameter: the latest-record test
+        varies it, which is not the same thing as supplying an optional detail.
+        """
+        finding: sweep.FindingRecord = {
             "rule_id": "QG-001",
             "severity": "error",
             "verdict": "noncompliant",
@@ -30,18 +39,25 @@ class TestReport:
             "line": 1,
             "message": "gate-critical variable uses ?=",
         }
-        record: dict[str, typ.Any] = {
+        record: sweep.LedgerRecord = {
             "schema_version": 1,
             "repository": repository,
             "commit_sha": "b" * 40,
-            "audited_at": "2026-07-19T16:00:00Z",
+            "audited_at": audited_at,
             "rule_package": "rust-makefile-baseline",
             "rule_version": "0.1.0",
             "makeutil_rev": sweep.MAKEUTIL_REV,
             "verdict": verdict,
             "findings": [finding] if verdict == "noncompliant" else [],
         }
-        record.update(extra)
+        # Keyed explicitly rather than by update: `is not None` keeps a blank
+        # detail distinct from an absent one, which is exactly what the
+        # `-blank` and `-without-` cases below exist to tell apart.
+        if detail is not None:
+            if (reason := detail.get("exclusion_reason")) is not None:
+                record["exclusion_reason"] = reason
+            if (error := detail.get("error_detail")) is not None:
+                record["error_detail"] = error
         return record
 
     def test_a_caption_precedes_the_repositories_table(
@@ -100,12 +116,12 @@ class TestReport:
         self,
         ledger_path: pathlib.Path,
         verdict: str,
-        extra: dict[str, str],
+        extra: sweep.LedgerOptionalFields,
         expected_detail: str,
     ) -> None:
         """The row keeps four cells, and the last carries the detail."""
         ledger_path.write_text(
-            json.dumps(self._record("leynos/alpha", verdict, **extra)) + "\n",
+            json.dumps(self._record("leynos/alpha", verdict, detail=extra)) + "\n",
             encoding="utf-8",
         )
 
@@ -129,7 +145,7 @@ class TestReport:
         self,
         ledger_path: pathlib.Path,
         verdict: str,
-        extra: dict[str, str],
+        extra: sweep.LedgerOptionalFields,
     ) -> None:
         """A missing or empty detail still fills the final table cell.
 
@@ -137,7 +153,7 @@ class TestReport:
         detail is missing", so every branch says which it is.
         """
         ledger_path.write_text(
-            json.dumps(self._record("leynos/alpha", verdict, **extra)) + "\n",
+            json.dumps(self._record("leynos/alpha", verdict, detail=extra)) + "\n",
             encoding="utf-8",
         )
 
@@ -238,7 +254,9 @@ class TestReport:
         a newline ends the row, silently corrupting every column after it.
         """
         ledger_path.write_text(
-            json.dumps(self._record("leynos/alpha", "error", error_detail=detail))
+            json.dumps(
+                self._record("leynos/alpha", "error", detail={"error_detail": detail})
+            )
             + "\n",
             encoding="utf-8",
         )
@@ -338,7 +356,7 @@ class TestReport:
             self._record(
                 "leynos/gamma",
                 "excluded",
-                exclusion_reason="not ready",
+                detail={"exclusion_reason": "not ready"},
             ),
         ]
         ledger_path.write_text("".join(json.dumps(record) + "\n" for record in records))
