@@ -28,7 +28,20 @@ class CredentialsCase:
     session_token: str | None = None
 
 
-def _client_kwargs(captured: dict[str, typ.Any]) -> dict[str, object]:
+class CapturedCall(typ.TypedDict, total=False):
+    """What a stubbed `boto3.client` call recorded.
+
+    Both keys are optional because the fixture starts empty: a factory that
+    never reaches boto3 leaves it that way, which is what `_client_kwargs`
+    reports rather than raising `KeyError`. Only the module-level fixture
+    records `service_name`; the owner-scoped one asserts on keywords alone.
+    """
+
+    service_name: str
+    kwargs: dict[str, object]
+
+
+def _client_kwargs(captured: CapturedCall) -> dict[str, object]:
     """Return the captured boto3 keyword arguments, or fail describing why.
 
     Indexing the mapping directly turned "the factory never called boto3"
@@ -38,17 +51,24 @@ def _client_kwargs(captured: dict[str, typ.Any]) -> dict[str, object]:
     assert "kwargs" in captured, (
         f"the S3 client factory should have called boto3.client, got {captured}"
     )
-    return typ.cast("dict[str, object]", captured["kwargs"])
+    return captured["kwargs"]
 
 
 @pytest.fixture
-def captured_client_kwargs(monkeypatch: pytest.MonkeyPatch) -> dict[str, typ.Any]:
+def captured_client_kwargs(
+    monkeypatch: pytest.MonkeyPatch,
+    xdg_env: dict[str, str],
+) -> CapturedCall:
     """Clear every backend credential variable and capture the boto3 call.
 
     The cleanup matters as much as the capture: these tests assert on what the
     factory read from the environment, so a variable inherited from the
-    developer's shell would otherwise decide the result.
+    developer's shell would otherwise decide the result. `xdg_env` pins the
+    owner tree to this test's `tmp_path` for the same reason — the factory
+    falls back to the active owner's credentials file when no `owner=` is
+    given, and that lookup must not find one written by another test.
     """
+    del xdg_env
     for variable in (
         *persistence_validation.AWS_BACKEND_ENV,
         *persistence_validation.SCW_BACKEND_ENV,
@@ -57,7 +77,7 @@ def captured_client_kwargs(monkeypatch: pytest.MonkeyPatch) -> dict[str, typ.Any
     ):
         monkeypatch.delenv(variable, raising=False)
 
-    captured: dict[str, typ.Any] = {}
+    captured: CapturedCall = {}
 
     def fake_client(service_name: str, **kwargs: object) -> object:
         captured["service_name"] = service_name
@@ -105,7 +125,7 @@ def captured_client_kwargs(monkeypatch: pytest.MonkeyPatch) -> dict[str, typ.Any
 )
 def test_default_s3_client_factory_maps_environment_credentials(
     monkeypatch: pytest.MonkeyPatch,
-    captured_client_kwargs: dict[str, typ.Any],
+    captured_client_kwargs: CapturedCall,
     case: CredentialsCase,
 ) -> None:
     """The default S3 client factory supports AWS, SCW, and Spaces env vars."""
@@ -174,7 +194,7 @@ def test_default_s3_client_factory_maps_environment_credentials(
 )
 def test_default_s3_client_factory_applies_backend_and_session_precedence(
     monkeypatch: pytest.MonkeyPatch,
-    captured_client_kwargs: dict[str, typ.Any],
+    captured_client_kwargs: CapturedCall,
     case: CredentialsCase,
 ) -> None:
     """Which backend wins, and whether a session token is forwarded.
@@ -206,7 +226,7 @@ def test_default_s3_client_factory_applies_backend_and_session_precedence(
 
 
 def test_default_s3_client_factory_leaves_credentials_unset_when_missing(
-    captured_client_kwargs: dict[str, typ.Any],
+    captured_client_kwargs: CapturedCall,
 ) -> None:
     """When no supported env vars exist, the factory defers to boto3 discovery."""
     persistence_validation._default_s3_client_factory(REGION, ENDPOINT)
@@ -238,9 +258,9 @@ class TestOwnerScopedS3Credentials:
         self,
         monkeypatch: pytest.MonkeyPatch,
         xdg_env: dict[str, str],
-    ) -> dict[str, typ.Any]:
+    ) -> CapturedCall:
         """Stub boto3 and return the mapping the client kwargs land in."""
-        captured: dict[str, typ.Any] = {}
+        captured: CapturedCall = {}
 
         def fake_client(service_name: str, **kwargs: object) -> object:
             captured["kwargs"] = kwargs
@@ -261,7 +281,7 @@ class TestOwnerScopedS3Credentials:
 
     def test_named_owner_overrides_the_active_owner(
         self,
-        captured_kwargs: dict[str, typ.Any],
+        captured_kwargs: CapturedCall,
     ) -> None:
         """`owner=` selects the credentials file, even against an active owner.
 
@@ -285,7 +305,7 @@ class TestOwnerScopedS3Credentials:
 
     def test_without_an_owner_the_active_one_still_applies(
         self,
-        captured_kwargs: dict[str, typ.Any],
+        captured_kwargs: CapturedCall,
     ) -> None:
         """Omitting `owner` keeps the previous active-owner behaviour."""
         persistence_validation._default_s3_client_factory(
@@ -301,7 +321,7 @@ class TestOwnerScopedS3Credentials:
     def test_the_environment_still_outranks_the_owner_file(
         self,
         monkeypatch: pytest.MonkeyPatch,
-        captured_kwargs: dict[str, typ.Any],
+        captured_kwargs: CapturedCall,
     ) -> None:
         """Owner scoping does not disturb environment-over-file precedence."""
         monkeypatch.setenv("AWS_ACCESS_KEY_ID", "env-access")

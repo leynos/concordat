@@ -158,7 +158,8 @@ class TestOwnerScopedCredentials:
             ),
         )
 
-        assert seen["token"] == "bravo-token", (  # noqa: S105
+        expected_token = "bravo-token"  # noqa: S105 - synthetic test credential
+        assert seen["token"] == expected_token, (
             f"the record owner's token should be used, got {seen['token']!r}"
         )
 
