@@ -15,22 +15,17 @@ ENDPOINT: typ.Final = "https://s3.fr-par.scw.cloud"
 
 
 @dataclasses.dataclass(frozen=True)
-class BackendMappingCase:
-    """One vendor's environment variables and the keys they map onto."""
+class CredentialsCase:
+    """One environment credential mapping and expected boto3 values.
+
+    `session_token` defaults to absent so the vendor-mapping cases, which say
+    nothing about session tokens, do not have to mention it.
+    """
 
     env: dict[str, str]
     access_key: str
     secret_key: str
-
-
-@dataclasses.dataclass(frozen=True)
-class BackendCredentialCase:
-    """One backend credential and session-token resolution scenario."""
-
-    env: dict[str, str]
-    access_key: str
-    secret_key: str
-    session_token: str | None
+    session_token: str | None = None
 
 
 @pytest.fixture
@@ -64,7 +59,7 @@ def captured_client_kwargs(monkeypatch: pytest.MonkeyPatch) -> dict[str, typ.Any
     "case",
     [
         pytest.param(
-            BackendMappingCase(
+            CredentialsCase(
                 env={
                     "AWS_ACCESS_KEY_ID": "aws-access",
                     "AWS_SECRET_ACCESS_KEY": "aws-secret",
@@ -75,7 +70,7 @@ def captured_client_kwargs(monkeypatch: pytest.MonkeyPatch) -> dict[str, typ.Any
             id="aws_credentials",
         ),
         pytest.param(
-            BackendMappingCase(
+            CredentialsCase(
                 env={"SCW_ACCESS_KEY": "scw-access", "SCW_SECRET_KEY": "scw-secret"},
                 access_key="scw-access",
                 secret_key="scw-secret",  # noqa: S106
@@ -83,7 +78,7 @@ def captured_client_kwargs(monkeypatch: pytest.MonkeyPatch) -> dict[str, typ.Any
             id="scw_credentials",
         ),
         pytest.param(
-            BackendMappingCase(
+            CredentialsCase(
                 env={
                     "SPACES_ACCESS_KEY_ID": "spaces-access",
                     "SPACES_SECRET_ACCESS_KEY": "spaces-secret",
@@ -98,7 +93,7 @@ def captured_client_kwargs(monkeypatch: pytest.MonkeyPatch) -> dict[str, typ.Any
 def test_default_s3_client_factory_maps_environment_credentials(
     monkeypatch: pytest.MonkeyPatch,
     captured_client_kwargs: dict[str, typ.Any],
-    case: BackendMappingCase,
+    case: CredentialsCase,
 ) -> None:
     """The default S3 client factory supports AWS, SCW, and Spaces env vars."""
     for key, value in case.env.items():
@@ -116,7 +111,7 @@ def test_default_s3_client_factory_maps_environment_credentials(
     "case",
     [
         pytest.param(
-            BackendCredentialCase(
+            CredentialsCase(
                 env={
                     "AWS_ACCESS_KEY_ID": "aws-access",
                     "AWS_SECRET_ACCESS_KEY": "aws-secret",
@@ -125,12 +120,11 @@ def test_default_s3_client_factory_maps_environment_credentials(
                 },
                 access_key="aws-access",
                 secret_key="aws-secret",  # noqa: S106
-                session_token=None,
             ),
             id="aws-precedes-scw",
         ),
         pytest.param(
-            BackendCredentialCase(
+            CredentialsCase(
                 env={
                     "SCW_ACCESS_KEY": "scw-access",
                     "SCW_SECRET_KEY": "scw-secret",
@@ -138,12 +132,14 @@ def test_default_s3_client_factory_maps_environment_credentials(
                 },
                 access_key="scw-access",
                 secret_key="scw-secret",  # noqa: S106
+                # Stated rather than defaulted: a token *is* present in the
+                # environment here, and the expectation is that it is dropped.
                 session_token=None,
             ),
             id="blank-session-token-is-omitted",
         ),
         pytest.param(
-            BackendCredentialCase(
+            CredentialsCase(
                 env={
                     "SCW_ACCESS_KEY": "scw-access",
                     "SCW_SECRET_KEY": "scw-secret",
@@ -160,7 +156,7 @@ def test_default_s3_client_factory_maps_environment_credentials(
 def test_default_s3_client_factory_applies_backend_and_session_precedence(
     monkeypatch: pytest.MonkeyPatch,
     captured_client_kwargs: dict[str, typ.Any],
-    case: BackendCredentialCase,
+    case: CredentialsCase,
 ) -> None:
     """Which backend wins, and whether a session token is forwarded.
 
