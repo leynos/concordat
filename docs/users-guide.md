@@ -123,7 +123,7 @@ workflows read the same flag before applying changes.
 
 Concordat's local configuration, credentials, caches, and state live under
 the XDG base directories. A single global headline file names the active
-GitHub owner; everything else — per-owner configuration, credentials,
+configured owner; everything else — per-owner configuration, credentials,
 caches, and state — is namespaced beneath that owner:
 
 - `$XDG_CONFIG_HOME/concordat/config.yaml` — the **headline** config, global
@@ -398,6 +398,8 @@ Remote-state backends rely on environment variables; the CLI simply checks that
 they exist before shelling out to OpenTofu. Export the pair that matches the
 selected provider:
 
+Table 1: Backend environment variables required per storage provider.
+
 | Provider                | Required variables                                 | Optional variables                                                       | Notes                                                                      |
 | ----------------------- | -------------------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
 | AWS S3                  | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`       | `AWS_SESSION_TOKEN` (when using temporary credentials such as STS)       | Values are passed straight to OpenTofu's S3 backend.                       |
@@ -541,11 +543,17 @@ with the following measures:
   flag makes the OpenTofu S3 backend send an AES256 (SSE-S3) header, which
   neither provider accepts. Concordat omits it for this reason; bucket
   encryption is configured provider-side instead.
-- **Client-side or envelope encryption (optional):** an independent control,
-  useful whichever provider is in use. OpenTofu's S3 backend does not
-  natively support SSE-C, so a customer-provided-key workflow has to happen
-  outside OpenTofu — wrap `tofu state`/`tofu plan` calls with tooling that
-  encrypts state before upload.
+- **Server-side encryption with a customer-provided key (SSE-C):** OpenTofu's
+  S3 backend supports SSE-C directly through the `sse_customer_key` backend
+  argument, which can be sourced from the `AWS_SSE_CUSTOMER_KEY` environment
+  variable (a 32-byte, base64-encoded key) instead of being written into
+  committed backend configuration. **The key must never be persisted to the
+  repository, the backend file, or logs:** losing it makes the state
+  unreadable, and leaking it defeats the encryption.
+- **Client-side or envelope encryption (optional):** a genuinely separate,
+  independent control from SSE-C, useful whichever provider is in use. Wrap
+  `tofu state`/`tofu plan` calls with tooling that encrypts state before
+  upload.
 - **Audit access logs:** Periodically review bucket access logs to detect
   unauthorized reads or unexpected access patterns.
 
@@ -553,7 +561,7 @@ with the following measures:
 
 Concordat stores estate metadata in
 `$XDG_CONFIG_HOME/concordat/owners/<owner>/config.yaml`, where `<owner>` is
-the active configured owner from the headline configuration. The file is
+the active owner configured in the headline configuration. The file is
 regular YAML 1.2 with an `estate` section:
 
 ```yaml

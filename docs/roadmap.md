@@ -72,10 +72,10 @@ template tree into published platform-standards repositories.
   defaults and allowed overrides. Progress: the first rule package
   (`rust-makefile-baseline`, audit-only) exists with `rule.yaml`, a Rego
   sensor, fixtures, and policy tests, and
-  `concordat artefact rule run <rule-id> --repo PATH --format {table,json}`
-  evaluates it against a local checkout (Operation Parabellum vertical slice;
-  `docs/execplans/parabellum-vertical-slice.md`). `rule validate` and the
-  mutation vocabulary remain open.
+  `concordat artefact rule run <rule-id> --repo PATH --format table` (or
+  `--format json`) evaluates it against a local checkout (Operation
+  Parabellum vertical slice; `docs/execplans/parabellum-vertical-slice.md`).
+  `rule validate` and the mutation vocabulary remain open.
 
 ### 1.3. Ship the estate execution CLI
 
