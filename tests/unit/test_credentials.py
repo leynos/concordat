@@ -61,7 +61,7 @@ class TestLoadCredentials:
             "GITHUB_TOKEN": "ghp_file",
             "SCW_ACCESS_KEY": "ak",
             "SCW_SECRET_KEY": "sk",
-        }, f"loading should keep only recognised keys: {loaded}"
+        }, f"loading should keep only recognized keys: {loaded}"
 
     def test_non_string_values_are_ignored(
         self,

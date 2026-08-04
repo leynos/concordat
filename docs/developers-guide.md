@@ -164,7 +164,7 @@ Two defensive details are worth knowing when working on this module:
   `InsecureCredentialsError` rather than reading a file that might be
   readable by other local users. The fix is `chmod 600`.
 - **Only genuine non-blank strings are honoured; non-string values are
-  dropped, not coerced.** `_recognised_credentials` requires both the key
+  dropped, not coerced.** `_recognized_credentials` requires both the key
   and the value to be `str` instances, and the value to be non-blank after
   stripping. A credential becomes an environment variable, so coercion would
   be actively harmful: an empty `KEY:` would coerce to the literal string
@@ -433,7 +433,7 @@ each property is derived from the documented rule instead. The file covers:
   `_OWNER_PATTERN`, well-formed names round-trip unchanged, and no name
   containing a path separator is ever accepted;
 - **credential filtering** (`TestCredentialFiltering`) — every value that
-  survives `credentials._recognised_credentials` is a recognized key with a
+  survives `credentials._recognized_credentials` is a recognized key with a
   trimmed, non-blank string;
 - **rule-package identifiers** (`TestRulePackageIdentifiers`) — acceptance
   by `runner._validated_rule_id` agrees with the canonical hyphenated-words
@@ -454,13 +454,15 @@ across every generated example rather than being fresh per example.
 
 The rule package's `policy/rust_makefile_baseline_test.rego`, under the
 `-- bounded reachability contract --` banner, enumerates `lint` prerequisite
-chains of increasing depth over one envelope. QG-001 proves gate delegation
+chains of increasing depth over one envelope. In the shipped
+`rust-makefile-baseline` v0.2.0 rule package, QG-001 proves gate delegation
 within one prerequisite hop, so this suite pins the boundary between
 "provable" and "indeterminate" rather than sampling it: depth 0 (a direct
 gate invocation) and depth 1 (one hop of delegation) are compliant, and
-every deeper chain is indeterminate. `build` and `test` targets are kept
-present in every case so FP-003 stays silent and QG-001 is the only
-variable under test.
+every deeper chain is indeterminate. This one-hop bound is a property of the
+current rule version; a future version could widen it. `build` and `test`
+targets are kept present in every case so FP-003 stays silent and QG-001 is
+the only variable under test.
 
 This policy suite is not wired into the Makefile. It is run directly with
 Conftest:

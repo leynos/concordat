@@ -196,7 +196,7 @@ def _require_schema_version(report: dict[str, object], path: pathlib.Path) -> No
 
 
 def _read_parse_status(report: dict[str, object], path: pathlib.Path) -> str:
-    """Return the recognised parse status carried by *report*."""
+    """Return the recognized parse status carried by *report*."""
     parse = report.get("parse")
     if not isinstance(parse, dict):
         message = f"makeutil report for {path} has no `parse` object"

@@ -20,7 +20,6 @@ ignore = [
   # keeping US spelling when it is an API name.
   '`color`',
   # Symbols defined in this repository.
-  '\b_recognised_credentials\b',
   '\bcanon_artifacts\b',
   # A flag defined by `act`.
   '--artifact-server-path',

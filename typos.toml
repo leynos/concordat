@@ -33,7 +33,6 @@ locale = "en-gb"
 extend-ignore-re = [
     "(?s)```.*?```",
     "--artifact-server-path",
-    "\\b_recognised_credentials\\b",
     "\\bcanon_artifacts\\b",
     "\\brust-analyzer\\b",
     "`color`",

@@ -92,11 +92,11 @@ def load_credentials(
         raise MalformedCredentialsError(path, str(error)) from error
     if not isinstance(loaded, dict):
         return {}
-    return _recognised_credentials(loaded)
+    return _recognized_credentials(loaded)
 
 
-def _recognised_credentials(loaded: cabc.Mapping[object, object]) -> dict[str, str]:
-    """Return the recognised, non-blank credential entries in *loaded*."""
+def _recognized_credentials(loaded: cabc.Mapping[object, object]) -> dict[str, str]:
+    """Return the recognized, non-blank credential entries in *loaded*."""
     return {
         # A credential becomes an environment variable, so only a genuine
         # string counts. Coercing instead would turn an empty `KEY:` into the

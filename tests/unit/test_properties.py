@@ -104,7 +104,7 @@ class TestCredentialFiltering:
         loaded: dict[object, object],
     ) -> None:
         """Every surviving entry is a recognized key with a trimmed string."""
-        result = credentials._recognised_credentials(loaded)
+        result = credentials._recognized_credentials(loaded)
 
         for key, value in result.items():
             assert key in CREDENTIAL_KEYS, f"unrecognized key survived: {key!r}"
