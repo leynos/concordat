@@ -252,6 +252,76 @@ class TestReport:
         assert expected in row, f"expected {expected!r} in {row!r}"
         assert "\n" not in row.strip(), row
 
+    def test_every_finding_reaches_the_cell_in_ledger_order(
+        self,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """A record's findings are all rendered, in the order stored.
+
+        The two special verdicts read a single optional field; every other
+        verdict folds a whole list into one cell, so a dropped or reordered
+        finding is the failure mode this pins.
+        """
+        record = self._record("leynos/alpha", "noncompliant")
+        record["findings"] = [
+            {
+                "rule_id": "FP-003",
+                "severity": "error",
+                "verdict": "noncompliant",
+                "path": "Makefile",
+                "line": 12,
+                "message": "required target 'test' is not defined",
+            },
+            {
+                "rule_id": "QG-001",
+                "severity": "warning",
+                "verdict": "indeterminate",
+                "path": "Makefile",
+                "line": 27,
+                "message": "an include directive makes the gate unprovable",
+            },
+        ]
+        ledger_path.write_text(json.dumps(record) + "\n", encoding="utf-8")
+
+        cells = self._row_cells(sweep.render_report(ledger_path), "leynos/alpha")
+
+        expected = (
+            "FP-003 (noncompliant) required target 'test' is not defined; "
+            "QG-001 (indeterminate) an include directive makes the gate unprovable"
+        )
+        assert cells[3] == expected, (
+            f"both findings should render as `<rule_id> (<verdict>) <message>` "
+            f"in ledger order, got {cells[3]!r}"
+        )
+
+    @pytest.mark.parametrize(
+        "verdict",
+        [
+            pytest.param("compliant", id="compliant"),
+            pytest.param("indeterminate", id="indeterminate"),
+        ],
+    )
+    def test_a_verdict_without_findings_renders_the_placeholder(
+        self,
+        ledger_path: pathlib.Path,
+        verdict: str,
+    ) -> None:
+        """An empty findings list fills the cell rather than leaving it blank.
+
+        The placeholder is not only for the two special verdicts: a compliant
+        record has nothing to list, and a blank cell would not say so.
+        """
+        record = self._record("leynos/alpha", verdict)
+        record["findings"] = []
+        ledger_path.write_text(json.dumps(record) + "\n", encoding="utf-8")
+
+        cells = self._row_cells(sweep.render_report(ledger_path), "leynos/alpha")
+
+        assert cells[3] == "none", (
+            f"a verdict with no findings should render the placeholder, "
+            f"got {cells[3]!r}"
+        )
+
     def test_report_uses_latest_record_per_repository(
         self,
         ledger_path: pathlib.Path,

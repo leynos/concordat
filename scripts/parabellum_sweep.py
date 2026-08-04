@@ -642,20 +642,27 @@ def _cell(value: str) -> str:
     return " ".join(value.split()).translate(_CELL_ESCAPES)
 
 
+def _findings_summary(findings: list[FindingRecord]) -> str:
+    """Render rule findings as one Markdown table-cell value."""
+    parts = [
+        f"{_cell(finding['rule_id'])} ({_cell(finding['verdict'])}) "
+        f"{_cell(finding['message'])}"
+        for finding in findings
+    ]
+    return "; ".join(parts) or "none"
+
+
 def _finding_summary(record: LedgerRecord) -> str:
-    # Every branch falls back to the same placeholder. A blank final cell is
-    # ambiguous to a reader — it does not distinguish "nothing to report" from
-    # "the detail is missing" — so each verdict says which it is.
+    """Return the final Markdown table-cell value for one ledger record."""
+    # Every branch falls back to the same placeholder, `_findings_summary`
+    # included. A blank final cell is ambiguous to a reader — it does not
+    # distinguish "nothing to report" from "the detail is missing" — so each
+    # verdict says which it is.
     if record["verdict"] == "excluded":
         return _cell(record.get("exclusion_reason") or "") or "none"
     if record["verdict"] == "error":
         return _cell(record.get("error_detail") or "") or "none"
-    parts = [
-        f"{_cell(finding['rule_id'])} ({_cell(finding['verdict'])}) "
-        f"{_cell(finding['message'])}"
-        for finding in record["findings"]
-    ]
-    return "; ".join(parts) or "none"
+    return _findings_summary(record["findings"])
 
 
 def render_report(ledger_path: pathlib.Path = DEFAULT_LEDGER_PATH) -> str:
