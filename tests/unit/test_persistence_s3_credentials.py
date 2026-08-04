@@ -28,6 +28,19 @@ class CredentialsCase:
     session_token: str | None = None
 
 
+def _client_kwargs(captured: dict[str, typ.Any]) -> dict[str, object]:
+    """Return the captured boto3 keyword arguments, or fail describing why.
+
+    Indexing the mapping directly turned "the factory never called boto3"
+    into a `KeyError` from the test body, which names neither the factory nor
+    what was expected of it.
+    """
+    assert "kwargs" in captured, (
+        f"the S3 client factory should have called boto3.client, got {captured}"
+    )
+    return typ.cast("dict[str, object]", captured["kwargs"])
+
+
 @pytest.fixture
 def captured_client_kwargs(monkeypatch: pytest.MonkeyPatch) -> dict[str, typ.Any]:
     """Clear every backend credential variable and capture the boto3 call.
@@ -101,10 +114,16 @@ def test_default_s3_client_factory_maps_environment_credentials(
 
     persistence_validation._default_s3_client_factory(REGION, ENDPOINT)
 
-    assert captured_client_kwargs["service_name"] == "s3"
-    kwargs = typ.cast("dict[str, object]", captured_client_kwargs["kwargs"])
-    assert kwargs["aws_access_key_id"] == case.access_key
-    assert kwargs["aws_secret_access_key"] == case.secret_key
+    assert captured_client_kwargs.get("service_name") == "s3", (
+        f"the factory should build an s3 client, got {captured_client_kwargs}"
+    )
+    kwargs = _client_kwargs(captured_client_kwargs)
+    assert kwargs["aws_access_key_id"] == case.access_key, (
+        f"this vendor's access key should map onto aws_access_key_id: {kwargs}"
+    )
+    assert kwargs["aws_secret_access_key"] == case.secret_key, (
+        f"this vendor's secret key should map onto aws_secret_access_key: {kwargs}"
+    )
 
 
 @pytest.mark.parametrize(
@@ -169,13 +188,21 @@ def test_default_s3_client_factory_applies_backend_and_session_precedence(
 
     persistence_validation._default_s3_client_factory(REGION, ENDPOINT)
 
-    kwargs = typ.cast("dict[str, object]", captured_client_kwargs["kwargs"])
-    assert kwargs["aws_access_key_id"] == case.access_key, kwargs
-    assert kwargs["aws_secret_access_key"] == case.secret_key, kwargs
+    kwargs = _client_kwargs(captured_client_kwargs)
+    assert kwargs["aws_access_key_id"] == case.access_key, (
+        f"the winning backend should supply the access key: {kwargs}"
+    )
+    assert kwargs["aws_secret_access_key"] == case.secret_key, (
+        f"the winning backend should supply the secret key: {kwargs}"
+    )
     if case.session_token is None:
-        assert "aws_session_token" not in kwargs, kwargs
+        assert "aws_session_token" not in kwargs, (
+            f"a blank or absent session token should not be forwarded: {kwargs}"
+        )
     else:
-        assert kwargs["aws_session_token"] == case.session_token, kwargs
+        assert kwargs["aws_session_token"] == case.session_token, (
+            f"a non-blank session token should be forwarded intact: {kwargs}"
+        )
 
 
 def test_default_s3_client_factory_leaves_credentials_unset_when_missing(
@@ -184,10 +211,12 @@ def test_default_s3_client_factory_leaves_credentials_unset_when_missing(
     """When no supported env vars exist, the factory defers to boto3 discovery."""
     persistence_validation._default_s3_client_factory(REGION, ENDPOINT)
 
-    kwargs = typ.cast("dict[str, object]", captured_client_kwargs["kwargs"])
-    assert "aws_access_key_id" not in kwargs
-    assert "aws_secret_access_key" not in kwargs
-    assert "aws_session_token" not in kwargs
+    kwargs = _client_kwargs(captured_client_kwargs)
+    for field in ("aws_access_key_id", "aws_secret_access_key", "aws_session_token"):
+        assert field not in kwargs, (
+            f"with no supported variables set, {field} should be left to "
+            f"boto3's own discovery: {kwargs}"
+        )
 
 
 def _write_owner_keys(owner: str, access: str, secret: str) -> None:
@@ -245,9 +274,13 @@ class TestOwnerScopedS3Credentials:
             owner="bravo",
         )
 
-        kwargs = typ.cast("dict[str, object]", captured_kwargs["kwargs"])
-        assert kwargs["aws_access_key_id"] == "bravo-access", kwargs
-        assert kwargs["aws_secret_access_key"] == "bravo-secret", kwargs  # noqa: S105
+        kwargs = _client_kwargs(captured_kwargs)
+        assert kwargs["aws_access_key_id"] == "bravo-access", (
+            f"the named owner's credentials should win over the active one: {kwargs}"
+        )
+        assert kwargs["aws_secret_access_key"] == "bravo-secret", (  # noqa: S105
+            f"the named owner's secret should win over the active one: {kwargs}"
+        )
 
     def test_without_an_owner_the_active_one_still_applies(
         self,
@@ -259,8 +292,10 @@ class TestOwnerScopedS3Credentials:
             "https://s3.fr-par.scw.cloud",
         )
 
-        kwargs = typ.cast("dict[str, object]", captured_kwargs["kwargs"])
-        assert kwargs["aws_access_key_id"] == "alpha-access", kwargs
+        kwargs = _client_kwargs(captured_kwargs)
+        assert kwargs["aws_access_key_id"] == "alpha-access", (
+            f"without an owner argument the active owner should apply: {kwargs}"
+        )
 
     def test_the_environment_still_outranks_the_owner_file(
         self,
@@ -277,6 +312,10 @@ class TestOwnerScopedS3Credentials:
             owner="bravo",
         )
 
-        kwargs = typ.cast("dict[str, object]", captured_kwargs["kwargs"])
-        assert kwargs["aws_access_key_id"] == "env-access", kwargs
-        assert kwargs["aws_secret_access_key"] == "env-secret", kwargs  # noqa: S105
+        kwargs = _client_kwargs(captured_kwargs)
+        assert kwargs["aws_access_key_id"] == "env-access", (
+            f"the environment should outrank the owner's file: {kwargs}"
+        )
+        assert kwargs["aws_secret_access_key"] == "env-secret", (  # noqa: S105
+            f"the environment secret should outrank the owner's file: {kwargs}"
+        )

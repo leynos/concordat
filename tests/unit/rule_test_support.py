@@ -65,10 +65,11 @@ def _assert_operational_context(
     assert error.resource == resource, error.resource
 
 
-CARGO_STUB = '[package]\nname = "fixture"\nversion = "0.1.0"\n'
+CARGO_STUB: typ.Final = '[package]\nname = "fixture"\nversion = "0.1.0"\n'
 
 
 def _write_checkout(root: pathlib.Path, *, cargo: bool, makefile: bool) -> None:
+    """Create a checkout at *root* with the requested marker files."""
     root.mkdir(exist_ok=True)
     if cargo:
         (root / "Cargo.toml").write_text(CARGO_STUB)

@@ -353,6 +353,19 @@ class TestConftestExitCodes:
 class TestRulePackagesDirIsLazy:
     """The canon rule tree is resolved on use, not on import."""
 
+    @pytest.fixture(autouse=True)
+    def _restore_module(self) -> typ.Iterator[None]:
+        """Reload the module again afterwards, and clear its cached root.
+
+        The laziness test reloads `runner` to observe a fresh import. Reload
+        rewrites the module's own dict, so function objects captured before it
+        keep working, but the resolver cache and any patched attribute would
+        otherwise persist into whatever runs next in this worker.
+        """
+        yield
+        importlib.reload(runner)
+        runner._rule_packages_dir.cache_clear()
+
     def test_importing_the_module_does_not_resolve_the_tree(
         self,
         mocker: pytest_mock.MockFixture,

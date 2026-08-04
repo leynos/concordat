@@ -41,7 +41,7 @@ def _load_generator() -> types.ModuleType:
     )
     if spec is None or spec.loader is None:
         message = f"could not load a module spec from {_GENERATE_PATH}"
-        raise RuntimeError(message)
+        raise ImportError(message)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -155,7 +155,9 @@ class TestParseMakefile:
 
         monkeypatch.setattr(generate.subprocess, "run", fake_run)
 
-        assert generate.parse_makefile(source) == report
+        assert generate.parse_makefile(source) == report, (
+            "the decoded report should be makeutil's stdout verbatim"
+        )
 
         # The recorded `source.path` must stay machine-independent, so makeutil
         # is invoked on the bare filename from the fixture's own directory.
@@ -171,7 +173,10 @@ class TestSyntheticEnvelopes:
         generate: types.ModuleType,
     ) -> None:
         """`no_makefile` and `not_rust` are generated without a fixture."""
-        assert set(generate.synthetic_envelopes()) == {"no_makefile", "not_rust"}
+        assert set(generate.synthetic_envelopes()) == {
+            "no_makefile",
+            "not_rust",
+        }, "both synthetic envelopes should be generated without a fixture"
 
     @pytest.mark.parametrize(
         ("key", "root_cargo_toml"),

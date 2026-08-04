@@ -62,7 +62,7 @@ class TestBuildEnvelope:
     def test_invalid_cargo_toml_raises(self, tmp_path: pathlib.Path) -> None:
         """Invalid cargo toml raises with structured context."""
         tmp_path.mkdir(exist_ok=True)
-        (tmp_path / "Cargo.toml").write_text("not = [valid")
+        (tmp_path / "Cargo.toml").write_text("not = [valid", encoding="utf-8")
         with pytest.raises(OperationalRuleError, match=r"Cargo\.toml") as exc_info:
             build_envelope(tmp_path)
         error = exc_info.value
@@ -79,7 +79,9 @@ class TestBuildEnvelope:
         from concordat.rules import envelope as envelope_module
 
         tmp_path.mkdir(exist_ok=True)
-        (tmp_path / "Cargo.toml").write_text('[package]\nname = "x"\n')
+        (tmp_path / "Cargo.toml").write_text(
+            '[package]\nname = "x"\n', encoding="utf-8"
+        )
         monkeypatch.setattr(
             envelope_module.tomllib,
             "loads",

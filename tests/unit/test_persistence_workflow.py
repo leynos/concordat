@@ -282,8 +282,12 @@ class TestOwnerScopedCredentials:
                 ),
             )
 
-        assert info.value.active_owner == "alpha", info.value.active_owner
-        assert info.value.estate_owner == "bravo", info.value.estate_owner
+        assert info.value.active_owner == "alpha", (
+            f"the error should name the active owner, got {info.value.active_owner!r}"
+        )
+        assert info.value.estate_owner == "bravo", (
+            f"the error should name the estate owner, got {info.value.estate_owner!r}"
+        )
 
     @pytest.mark.parametrize(
         ("active_owner", "estate_owner"),
@@ -312,7 +316,10 @@ class TestOwnerScopedCredentials:
         """
         if active_owner is not None:
             xdg.set_active_owner(active_owner)
-        assert xdg.get_active_owner() == active_owner, xdg.get_active_owner()
+        configured = xdg.get_active_owner()
+        assert configured == active_owner, (
+            f"this case needs an active owner of {active_owner!r}, got {configured!r}"
+        )
 
         record = EstateRecord(
             alias="core",
@@ -340,7 +347,9 @@ class TestOwnerScopedCredentials:
             ),
         )
 
-        assert result.updated, result
+        assert result.updated, (
+            f"persistence should report the estate as updated, got {result}"
+        )
 
 
 def test_non_interactive_persist_uses_provided_values(
