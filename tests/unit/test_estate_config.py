@@ -260,29 +260,40 @@ def test_yaml_config_load_raises_estate_error(
 
 
 class TestNonMappingEstateSection:
-    """A persisted non-mapping `estate:` must not break the write paths."""
+    """Persisted non-mapping estate data must not break the write paths.
+
+    `register_estate` walks two levels of the document — the `estate:`
+    section and the `estates:` collection within it — and `setdefault`
+    returns an existing non-mapping value untouched at either. A string or
+    list was therefore mutated rather than replaced, raising `TypeError` or
+    `AttributeError`. The read paths already treated both as empty; the
+    write paths now agree.
+    """
 
     @pytest.mark.parametrize(
-        "section",
+        "contents",
         [
-            pytest.param("just-a-string", id="string"),
-            pytest.param("[1, 2]", id="list"),
-            pytest.param("7", id="integer"),
+            pytest.param("estate: just-a-string\n", id="section-string"),
+            pytest.param("estate: [1, 2]\n", id="section-list"),
+            pytest.param("estate: 7\n", id="section-integer"),
+            pytest.param("estate:\n  estates: just-a-string\n", id="collection-string"),
+            pytest.param("estate:\n  estates: [1, 2]\n", id="collection-list"),
+            pytest.param("estate:\n  estates: 7\n", id="collection-integer"),
         ],
     )
-    def test_write_paths_replace_a_non_mapping_section(
+    def test_write_paths_replace_non_mapping_estate_data(
         self,
         tmp_path: pathlib.Path,
-        section: str,
+        contents: str,
     ) -> None:
-        """Registering an estate over a malformed section succeeds.
+        """Registering an estate over malformed data succeeds either way.
 
-        `setdefault` returns an existing non-mapping value untouched, so the
-        write paths used to mutate a string or list and raise `TypeError` or
-        `AttributeError`. They now replace it, as the read paths already did.
+        The `section-` cases exercise `_estate_section` and the `collection-`
+        cases `_estate_collection`; `register_estate` calls both in sequence,
+        so each is covered independently by the level its YAML corrupts.
         """
         config_path = tmp_path / "config.yaml"
-        config_path.write_text(f"estate: {section}\n", encoding="utf-8")
+        config_path.write_text(contents, encoding="utf-8")
 
         estate_config.register_estate(
             EstateRecord(alias="core", repo_url="git@github.com:example/core.git"),
@@ -295,42 +306,6 @@ class TestNonMappingEstateSection:
             for record in estate_config.list_estates(config_path=config_path)
         ]
         assert aliases == ["core"], (
-            "the malformed section should be replaced and the estate "
-            f"registered, got {aliases}"
-        )
-
-    @pytest.mark.parametrize(
-        "estates",
-        [
-            pytest.param("just-a-string", id="string"),
-            pytest.param("[1, 2]", id="list"),
-            pytest.param("7", id="integer"),
-        ],
-    )
-    def test_write_paths_replace_a_non_mapping_collection(
-        self,
-        tmp_path: pathlib.Path,
-        estates: str,
-    ) -> None:
-        """The same hazard one level down, under `estates:`, is handled too.
-
-        A list here passed the duplicate-alias membership test and then raised
-        on item assignment; a scalar raised on the membership test itself.
-        """
-        config_path = tmp_path / "config.yaml"
-        config_path.write_text(f"estate:\n  estates: {estates}\n", encoding="utf-8")
-
-        estate_config.register_estate(
-            EstateRecord(alias="core", repo_url="git@github.com:example/core.git"),
-            config_path=config_path,
-            set_active_if_missing=True,
-        )
-
-        aliases = [
-            record.alias
-            for record in estate_config.list_estates(config_path=config_path)
-        ]
-        assert aliases == ["core"], (
-            "a malformed estate collection should be replaced and the estate "
+            "malformed estate data should be replaced and the estate "
             f"registered, got {aliases}"
         )
