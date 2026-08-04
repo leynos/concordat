@@ -519,6 +519,17 @@ class _SweepSession:
             return False
         return self._process_auditable(entry)
 
+    def _persist(self, record: LedgerRecord) -> None:
+        """Append *record* to the ledger file and to both in-memory views.
+
+        `_already_ledgered` consults `self.ledger`, which is loaded once
+        before the run. Without adding the record there too, a repository
+        named twice in one manifest would be processed twice: the first pass
+        never enters the view the duplicate check reads.
+        """
+        _append_record(self.ledger_path, self.appended, record)
+        self.ledger.append(record)
+
     def _record_exclusion(self, entry: EstateEntry) -> None:
         """Append an exclusion record unless the repository already has one.
 
@@ -531,11 +542,7 @@ class _SweepSession:
         repository = f"{self.owner}/{entry.name}"
         if _already_ledgered(self.ledger, repository, commit_sha=None):
             return
-        _append_record(
-            self.ledger_path,
-            self.appended,
-            _excluded_record(repository, entry.excluded),
-        )
+        self._persist(_excluded_record(repository, entry.excluded))
 
     def _process_auditable(self, entry: EstateEntry) -> bool:
         """Audit a non-excluded entry; stop once the audit budget is spent."""
@@ -556,7 +563,7 @@ class _SweepSession:
         except OperationalRuleError as error:
             record = _base_record(repository)
             record["error_detail"] = str(error)
-            _append_record(self.ledger_path, self.appended, record)
+            self._persist(record)
             return True
 
         if not self.force and _already_ledgered(
@@ -566,7 +573,7 @@ class _SweepSession:
             return False
 
         record = _audit_record(self.owner, entry)
-        _append_record(self.ledger_path, self.appended, record)
+        self._persist(record)
         print(f"{repository}: {record['verdict']}")
         return True
 
@@ -620,16 +627,32 @@ def _latest_records(
     return latest
 
 
+# A table cell ends at an unescaped `|`, and a newline ends the row. Ledger
+# prose — an exclusion reason from the manifest, an error detail from a tool,
+# a finding message from the policy — is free text that may contain either.
+_CELL_ESCAPES: typ.Final = str.maketrans({"\\": "\\\\", "|": "\\|"})
+
+
+def _cell(value: str) -> str:
+    """Return *value* rendered safely inside a Markdown table cell."""
+    # `split()` with no argument folds every run of whitespace, newlines
+    # included, so a multi-line detail becomes one line rather than breaking
+    # the table. Backslash is escaped in the same pass as the pipe, so an
+    # already-escaped pipe cannot be produced by escaping twice.
+    return " ".join(value.split()).translate(_CELL_ESCAPES)
+
+
 def _finding_summary(record: LedgerRecord) -> str:
     # Every branch falls back to the same placeholder. A blank final cell is
     # ambiguous to a reader — it does not distinguish "nothing to report" from
     # "the detail is missing" — so each verdict says which it is.
     if record["verdict"] == "excluded":
-        return record.get("exclusion_reason") or "none"
+        return _cell(record.get("exclusion_reason") or "") or "none"
     if record["verdict"] == "error":
-        return record.get("error_detail") or "none"
+        return _cell(record.get("error_detail") or "") or "none"
     parts = [
-        f"{finding['rule_id']} ({finding['verdict']}) {finding['message']}"
+        f"{_cell(finding['rule_id'])} ({_cell(finding['verdict'])}) "
+        f"{_cell(finding['message'])}"
         for finding in record["findings"]
     ]
     return "; ".join(parts) or "none"

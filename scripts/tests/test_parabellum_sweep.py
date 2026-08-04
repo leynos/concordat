@@ -80,6 +80,35 @@ class TestSweep:
             "test-framework migration in flight"
         ), "the exclusion reason should be preserved in the ledger"
 
+    def test_a_repository_named_twice_is_processed_once(
+        self,
+        tmp_path: pathlib.Path,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """A duplicate manifest entry does not produce a duplicate record.
+
+        The duplicate check reads the ledger loaded before the run started, so
+        a record written during the run was invisible to it: the second
+        mention of the same name was processed and appended again.
+        """
+        estate_path = tmp_path / "estate.yaml"
+        estate_path.write_text(
+            "schema_version: 1\nowner: leynos\nrepositories:\n"
+            "  - name: gauss\n    excluded: migration in flight\n"
+            "  - name: gauss\n    excluded: migration in flight\n",
+            encoding="utf-8",
+        )
+
+        appended = sweep.run_sweep(estate_path=estate_path, ledger_path=ledger_path)
+
+        assert len(appended) == 1, (
+            f"the repeated entry should be recorded once, got {appended}"
+        )
+        records = _ledger_lines(ledger_path)
+        assert len(records) == 1, (
+            f"the ledger should hold one line for the repeated entry, got {records}"
+        )
+
     def test_second_run_is_idempotent(
         self,
         estate_path: pathlib.Path,

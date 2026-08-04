@@ -182,6 +182,76 @@ class TestReport:
             ledger_path
         ), "the written file should be exactly the rendered report"
 
+    @staticmethod
+    def _delimiter_count(row: str) -> int:
+        """Return the number of cell delimiters, ignoring escaped pipes.
+
+        A bare `row.count("|")` would count the escaping as a delimiter and
+        so could not tell a broken row from a correctly escaped one.
+        """
+        count = 0
+        escaped = False
+        for character in row:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == "|":
+                count += 1
+        return count
+
+    @pytest.mark.parametrize(
+        ("detail", "expected"),
+        [
+            pytest.param(
+                "breaks | the | row",
+                r"breaks \| the \| row",
+                id="pipes-are-escaped",
+            ),
+            pytest.param(
+                "first line\nsecond line",
+                "first line second line",
+                id="newlines-are-folded",
+            ),
+            pytest.param(
+                r"a \ backslash",
+                r"a \\ backslash",
+                id="backslashes-are-escaped",
+            ),
+            pytest.param(
+                r"already \| escaped",
+                r"already \\\| escaped",
+                id="an-escape-is-not-reapplied",
+            ),
+        ],
+    )
+    def test_free_text_cannot_break_the_table(
+        self,
+        ledger_path: pathlib.Path,
+        detail: str,
+        expected: str,
+    ) -> None:
+        """Ledger prose is escaped before it reaches a table cell.
+
+        An exclusion reason comes from the manifest and an error detail from a
+        tool, so both are free text. An unescaped `|` ends the cell early and
+        a newline ends the row, silently corrupting every column after it.
+        """
+        ledger_path.write_text(
+            json.dumps(self._record("leynos/alpha", "error", error_detail=detail))
+            + "\n",
+            encoding="utf-8",
+        )
+
+        report = sweep.render_report(ledger_path)
+        row = next(
+            line for line in report.splitlines() if line.startswith("| leynos/alpha ")
+        )
+
+        assert self._delimiter_count(row) == 5, f"the row should keep four cells: {row}"
+        assert expected in row, f"expected {expected!r} in {row!r}"
+        assert "\n" not in row.strip(), row
+
     def test_report_uses_latest_record_per_repository(
         self,
         ledger_path: pathlib.Path,
