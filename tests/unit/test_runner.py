@@ -26,6 +26,7 @@ from tests.unit.rule_test_support import (
 )
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import pathlib
 
     import pytest_mock
@@ -325,6 +326,84 @@ class TestConftestExitCodes:
         )
 
     @pytest.mark.parametrize(
+        ("stdout", "expected"),
+        [
+            pytest.param("[1]", r"result\[0\] is int", id="result-not-an-object"),
+            pytest.param(
+                '[{"failures": "boom"}]',
+                r"result\[0\]\.failures is str",
+                id="failures-not-an-array",
+            ),
+            pytest.param(
+                '[{"failures": [7]}]',
+                r"result\[0\]\.failures\[0\] is int",
+                id="failure-not-an-object",
+            ),
+            pytest.param(
+                '[{"failures": [{"metadata": [1]}]}]',
+                r"failures\[0\]\.metadata is list",
+                id="metadata-not-an-object",
+            ),
+        ],
+    )
+    def test_malformed_result_elements_are_rejected(
+        self,
+        mocker: pytest_mock.MockFixture,
+        stdout: str,
+        expected: str,
+    ) -> None:
+        """An array of the wrong elements is refused, naming the offender.
+
+        The outer array check says nothing about what is inside it, and the
+        finding conversion reads each element with `.get`. A non-mapping
+        result or failure, a non-list `failures`, or non-mapping `metadata`
+        therefore escaped as a bare `AttributeError` or `TypeError` from deep
+        in the conversion, tagged with neither the tool nor the rule package.
+        """
+        completed = subprocess.CompletedProcess(
+            args=["conftest"], returncode=0, stdout=stdout, stderr=""
+        )
+        mocker.patch.object(runner, "_run_conftest", return_value=completed)
+        mocker.patch.object(runner, "_rule_parameters", return_value={})
+
+        with pytest.raises(OperationalRuleError, match=expected) as exc_info:
+            runner._invoke_conftest("rust-makefile-baseline", typ.cast("typ.Any", {}))
+
+        _assert_operational_context(
+            exc_info.value,
+            operation="invoke-conftest",
+            tool="conftest",
+            resource="rust-makefile-baseline",
+        )
+
+    def test_absent_metadata_keys_still_decode(
+        self,
+        mocker: pytest_mock.MockFixture,
+    ) -> None:
+        """Missing metadata keys fall back rather than being rejected.
+
+        The new validation checks shapes, not completeness: a policy that
+        omits a key still yields a finding through the documented defaults.
+        """
+        completed = subprocess.CompletedProcess(
+            args=["conftest"],
+            returncode=1,
+            stdout='[{"failures": [{"msg": "boom", "metadata": {}}]}]',
+            stderr="",
+        )
+        mocker.patch.object(runner, "_run_conftest", return_value=completed)
+        mocker.patch.object(runner, "_rule_parameters", return_value={})
+
+        results = runner._invoke_conftest(
+            "rust-makefile-baseline", typ.cast("typ.Any", {})
+        )
+        findings = runner._findings_from_results(results)
+
+        assert len(findings) == 1, findings
+        assert findings[0].rule_id == "UNKNOWN", findings[0]
+        assert findings[0].message == "boom", findings[0]
+
+    @pytest.mark.parametrize(
         "returncode",
         [pytest.param(0, id="clean"), pytest.param(1, id="policy-failures")],
     )
@@ -354,14 +433,12 @@ class TestRulePackagesDirIsLazy:
     """The canon rule tree is resolved on use, not on import."""
 
     @pytest.fixture(autouse=True)
-    def _restore_module(self) -> typ.Iterator[None]:
-        """Reload the module again afterwards, and clear its cached root.
-
-        The laziness test reloads `runner` to observe a fresh import. Reload
-        rewrites the module's own dict, so function objects captured before it
-        keep working, but the resolver cache and any patched attribute would
-        otherwise persist into whatever runs next in this worker.
-        """
+    def _restore_module(self) -> cabc.Iterator[None]:
+        """Reload the module and clear its cached root after each test."""
+        # The laziness test reloads `runner` to observe a fresh import. Reload
+        # rewrites the module's own dict, so function objects captured before
+        # it keep working, but the resolver cache and any patched attribute
+        # would otherwise persist into whatever runs next in this worker.
         yield
         importlib.reload(runner)
         runner._rule_packages_dir.cache_clear()

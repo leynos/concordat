@@ -266,13 +266,11 @@ def _run_conftest(argv: list[str], rule_id: str) -> subprocess.CompletedProcess[
 
 
 def _bounded_detail(completed: subprocess.CompletedProcess[str]) -> str:
-    """Return Conftest's diagnostic, truncated to a bounded length.
-
-    The diagnostic is whatever the tool printed, so it can be arbitrarily
-    long — a stack trace, or a whole result document echoed to stderr. Both
-    failure paths that interpolate it into an error message use this, so
-    neither can put unbounded tool output in front of an operator.
-    """
+    """Return Conftest's diagnostic, truncated to a bounded length."""
+    # The diagnostic is whatever the tool printed, so it can be arbitrarily
+    # long — a stack trace, or a whole result document echoed to stderr. Both
+    # failure paths that interpolate it use this, so neither can put unbounded
+    # tool output in front of an operator.
     detail = (completed.stderr or completed.stdout or "").strip()
     if len(detail) > _MAX_ERROR_DETAIL:
         return f"{detail[:_MAX_ERROR_DETAIL]}..."
@@ -364,9 +362,61 @@ def _invoke_conftest(
             tool="conftest",
             resource=rule_id,
         )
-    # The shape is now checked; the cast records what the check established,
-    # matching how `_decode_report` narrows makeutil's JSON.
-    return typ.cast("list[_ConftestResult]", decoded)
+    return [
+        _validated_result(entry, index, rule_id, detail)
+        for index, entry in enumerate(typ.cast("list[object]", decoded))
+    ]
+
+
+def _conftest_shape_error(
+    label: str, rule_id: str, detail: str
+) -> OperationalRuleError:
+    """Return the rejection for a Conftest result of the wrong shape."""
+    message = f"conftest produced no usable output: {label}: {detail}"
+    return OperationalRuleError(
+        message,
+        operation="invoke-conftest",
+        tool="conftest",
+        resource=rule_id,
+    )
+
+
+def _validated_result(
+    entry: object, index: int, rule_id: str, detail: str
+) -> _ConftestResult:
+    """Return one Conftest result, rejecting any element of the wrong shape.
+
+    The outer array check says nothing about its elements, and the consumers
+    read them with `.get`. A non-mapping result, a non-list `failures`, or a
+    non-mapping failure or `metadata` therefore surfaced as a bare
+    `AttributeError` or `TypeError` from the finding conversion — untagged,
+    and naming neither the tool nor the rule package.
+    """
+    if not isinstance(entry, dict):
+        label = f"result[{index}] is {type(entry).__name__}, not an object"
+        raise _conftest_shape_error(label, rule_id, detail)
+    result = typ.cast("dict[str, object]", entry)
+    failures = result.get("failures", [])
+    if not isinstance(failures, list):
+        kind = type(failures).__name__
+        label = f"result[{index}].failures is {kind}, not an array"
+        raise _conftest_shape_error(label, rule_id, detail)
+    for position, failure in enumerate(typ.cast("list[object]", failures)):
+        _validate_failure(
+            failure, f"result[{index}].failures[{position}]", rule_id, detail
+        )
+    return typ.cast("_ConftestResult", result)
+
+
+def _validate_failure(failure: object, label: str, rule_id: str, detail: str) -> None:
+    """Reject a failure entry, or its metadata, that is not an object."""
+    if not isinstance(failure, dict):
+        message = f"{label} is {type(failure).__name__}, not an object"
+        raise _conftest_shape_error(message, rule_id, detail)
+    metadata = typ.cast("dict[str, object]", failure).get("metadata", {})
+    if not isinstance(metadata, dict):
+        message = f"{label}.metadata is {type(metadata).__name__}, not an object"
+        raise _conftest_shape_error(message, rule_id, detail)
 
 
 def _finding_from_failure(failure: _ConftestFailure) -> Finding:
