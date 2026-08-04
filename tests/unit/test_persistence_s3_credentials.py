@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import typing as typ
 
 import pytest
@@ -11,6 +12,25 @@ from concordat import xdg
 
 REGION: typ.Final = "fr-par"
 ENDPOINT: typ.Final = "https://s3.fr-par.scw.cloud"
+
+
+@dataclasses.dataclass(frozen=True)
+class BackendMappingCase:
+    """One vendor's environment variables and the keys they map onto."""
+
+    env: dict[str, str]
+    access_key: str
+    secret_key: str
+
+
+@dataclasses.dataclass(frozen=True)
+class BackendCredentialCase:
+    """One backend credential and session-token resolution scenario."""
+
+    env: dict[str, str]
+    access_key: str
+    secret_key: str
+    session_token: str | None
 
 
 @pytest.fixture
@@ -41,27 +61,36 @@ def captured_client_kwargs(monkeypatch: pytest.MonkeyPatch) -> dict[str, typ.Any
 
 
 @pytest.mark.parametrize(
-    ("env", "expected_access", "expected_secret"),
+    "case",
     [
         pytest.param(
-            {"AWS_ACCESS_KEY_ID": "aws-access", "AWS_SECRET_ACCESS_KEY": "aws-secret"},
-            "aws-access",
-            "aws-secret",
+            BackendMappingCase(
+                env={
+                    "AWS_ACCESS_KEY_ID": "aws-access",
+                    "AWS_SECRET_ACCESS_KEY": "aws-secret",
+                },
+                access_key="aws-access",
+                secret_key="aws-secret",  # noqa: S106
+            ),
             id="aws_credentials",
         ),
         pytest.param(
-            {"SCW_ACCESS_KEY": "scw-access", "SCW_SECRET_KEY": "scw-secret"},
-            "scw-access",
-            "scw-secret",
+            BackendMappingCase(
+                env={"SCW_ACCESS_KEY": "scw-access", "SCW_SECRET_KEY": "scw-secret"},
+                access_key="scw-access",
+                secret_key="scw-secret",  # noqa: S106
+            ),
             id="scw_credentials",
         ),
         pytest.param(
-            {
-                "SPACES_ACCESS_KEY_ID": "spaces-access",
-                "SPACES_SECRET_ACCESS_KEY": "spaces-secret",
-            },
-            "spaces-access",
-            "spaces-secret",
+            BackendMappingCase(
+                env={
+                    "SPACES_ACCESS_KEY_ID": "spaces-access",
+                    "SPACES_SECRET_ACCESS_KEY": "spaces-secret",
+                },
+                access_key="spaces-access",
+                secret_key="spaces-secret",  # noqa: S106
+            ),
             id="spaces_credentials",
         ),
     ],
@@ -69,57 +98,61 @@ def captured_client_kwargs(monkeypatch: pytest.MonkeyPatch) -> dict[str, typ.Any
 def test_default_s3_client_factory_maps_environment_credentials(
     monkeypatch: pytest.MonkeyPatch,
     captured_client_kwargs: dict[str, typ.Any],
-    env: dict[str, str],
-    expected_access: str,
-    expected_secret: str,
+    case: BackendMappingCase,
 ) -> None:
     """The default S3 client factory supports AWS, SCW, and Spaces env vars."""
-    for key, value in env.items():
+    for key, value in case.env.items():
         monkeypatch.setenv(key, value)
 
     persistence_validation._default_s3_client_factory(REGION, ENDPOINT)
 
     assert captured_client_kwargs["service_name"] == "s3"
     kwargs = typ.cast("dict[str, object]", captured_client_kwargs["kwargs"])
-    assert kwargs["aws_access_key_id"] == expected_access
-    assert kwargs["aws_secret_access_key"] == expected_secret
+    assert kwargs["aws_access_key_id"] == case.access_key
+    assert kwargs["aws_secret_access_key"] == case.secret_key
 
 
 @pytest.mark.parametrize(
-    ("env", "expected_access", "expected_secret", "expected_session_token"),
+    "case",
     [
         pytest.param(
-            {
-                "AWS_ACCESS_KEY_ID": "aws-access",
-                "AWS_SECRET_ACCESS_KEY": "aws-secret",
-                "SCW_ACCESS_KEY": "scw-access",
-                "SCW_SECRET_KEY": "scw-secret",
-            },
-            "aws-access",
-            "aws-secret",
-            None,
+            BackendCredentialCase(
+                env={
+                    "AWS_ACCESS_KEY_ID": "aws-access",
+                    "AWS_SECRET_ACCESS_KEY": "aws-secret",
+                    "SCW_ACCESS_KEY": "scw-access",
+                    "SCW_SECRET_KEY": "scw-secret",
+                },
+                access_key="aws-access",
+                secret_key="aws-secret",  # noqa: S106
+                session_token=None,
+            ),
             id="aws-precedes-scw",
         ),
         pytest.param(
-            {
-                "SCW_ACCESS_KEY": "scw-access",
-                "SCW_SECRET_KEY": "scw-secret",
-                "AWS_SESSION_TOKEN": "   ",
-            },
-            "scw-access",
-            "scw-secret",
-            None,
+            BackendCredentialCase(
+                env={
+                    "SCW_ACCESS_KEY": "scw-access",
+                    "SCW_SECRET_KEY": "scw-secret",
+                    "AWS_SESSION_TOKEN": "   ",
+                },
+                access_key="scw-access",
+                secret_key="scw-secret",  # noqa: S106
+                session_token=None,
+            ),
             id="blank-session-token-is-omitted",
         ),
         pytest.param(
-            {
-                "SCW_ACCESS_KEY": "scw-access",
-                "SCW_SECRET_KEY": "scw-secret",
-                "AWS_SESSION_TOKEN": "session-token",
-            },
-            "scw-access",
-            "scw-secret",
-            "session-token",
+            BackendCredentialCase(
+                env={
+                    "SCW_ACCESS_KEY": "scw-access",
+                    "SCW_SECRET_KEY": "scw-secret",
+                    "AWS_SESSION_TOKEN": "session-token",
+                },
+                access_key="scw-access",
+                secret_key="scw-secret",  # noqa: S106
+                session_token="session-token",  # noqa: S106
+            ),
             id="session-token-is-forwarded",
         ),
     ],
@@ -127,10 +160,7 @@ def test_default_s3_client_factory_maps_environment_credentials(
 def test_default_s3_client_factory_applies_backend_and_session_precedence(
     monkeypatch: pytest.MonkeyPatch,
     captured_client_kwargs: dict[str, typ.Any],
-    env: dict[str, str],
-    expected_access: str,
-    expected_secret: str,
-    expected_session_token: str | None,
+    case: BackendCredentialCase,
 ) -> None:
     """Which backend wins, and whether a session token is forwarded.
 
@@ -138,18 +168,18 @@ def test_default_s3_client_factory_applies_backend_and_session_precedence(
     stated together: the AWS/SCW precedence chooses the key pair, and the
     session token is carried only when it survives stripping.
     """
-    for key, value in env.items():
+    for key, value in case.env.items():
         monkeypatch.setenv(key, value)
 
     persistence_validation._default_s3_client_factory(REGION, ENDPOINT)
 
     kwargs = typ.cast("dict[str, object]", captured_client_kwargs["kwargs"])
-    assert kwargs["aws_access_key_id"] == expected_access, kwargs
-    assert kwargs["aws_secret_access_key"] == expected_secret, kwargs
-    if expected_session_token is None:
+    assert kwargs["aws_access_key_id"] == case.access_key, kwargs
+    assert kwargs["aws_secret_access_key"] == case.secret_key, kwargs
+    if case.session_token is None:
         assert "aws_session_token" not in kwargs, kwargs
     else:
-        assert kwargs["aws_session_token"] == expected_session_token, kwargs
+        assert kwargs["aws_session_token"] == case.session_token, kwargs
 
 
 def test_default_s3_client_factory_leaves_credentials_unset_when_missing(
