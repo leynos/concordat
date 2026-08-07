@@ -465,11 +465,11 @@ specifies, but has not shipped, a v0.3.0 that widens QG-001's delegation
 proof from one prerequisite hop to a full static closure over the parsed
 Makefile: the closure's edges are a rule's prerequisites plus any recipe
 line invoking `$(MAKE) <literal-target>` in the same file. That closure is
-cycle-safe and needs no depth bound, because every edge is a fact from the
+cycle-safe and needs no depth bound because every edge is a fact from the
 single parsed file; dynamic edges (`$(MAKE) $(VAR)`, `$(MAKE) -C`, recursive
-make into other files) stay indeterminate, as do includes. Under v0.3.0 the
+make into other files) and includes stay indeterminate. Under v0.3.0 the
 `two_hop` fixture's expectation changes from indeterminate to compliant.
-`build` and `test` targets are kept present in every case so FP-003 stays
+`build` and `test` targets are kept present in every case, so FP-003 stays
 silent and QG-001 is the only variable under test.
 
 This policy suite is not wired into the Makefile. It is run directly with
