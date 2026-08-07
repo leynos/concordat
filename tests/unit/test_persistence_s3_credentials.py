@@ -42,12 +42,10 @@ class CapturedCall(typ.TypedDict, total=False):
 
 
 def _client_kwargs(captured: CapturedCall) -> dict[str, object]:
-    """Return the captured boto3 keyword arguments, or fail describing why.
-
-    Indexing the mapping directly turned "the factory never called boto3"
-    into a `KeyError` from the test body, which names neither the factory nor
-    what was expected of it.
-    """
+    """Return the captured boto3 keyword arguments, or fail describing why."""
+    # Indexing the mapping directly turned "the factory never called boto3"
+    # into a `KeyError` from the test body, which names neither the factory
+    # nor what was expected of it.
     assert "kwargs" in captured, (
         f"the S3 client factory should have called boto3.client, got {captured}"
     )

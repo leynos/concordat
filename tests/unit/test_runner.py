@@ -395,6 +395,10 @@ class TestConftestExitCodes:
             pytest.param([1], id="array"),
             pytest.param({"a": 1}, id="object"),
             pytest.param("abc", id="not-numeric"),
+            # `bool` subclasses `int` and `int()` truncates a float, so both
+            # coerce silently rather than raising.
+            pytest.param(True, id="boolean"),
+            pytest.param(1.5, id="float"),
         ],
     )
     def test_a_metadata_line_that_is_not_a_number_is_rejected(

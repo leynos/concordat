@@ -426,13 +426,20 @@ def _validate_metadata_line(
     """Reject a metadata line number that `int()` could not accept."""
     if "line" not in metadata:
         return
+    line = metadata["line"]
+    # `bool` subclasses `int` and `int()` truncates a float, so neither raises:
+    # `true` and `1.5` would both become line 1. They are rejected here rather
+    # than silently reported as a line the policy never named.
+    if isinstance(line, bool | float):
+        message = f"{label}.metadata.line is not a line number: {line!r}"
+        raise _conftest_shape_error(message, rule_id, detail)
     # `_finding_from_failure` calls `int()` on this. A null, array, object, or
     # non-numeric string raises there instead — after validation has already
     # passed, and with none of the structured context this boundary adds.
     try:
-        int(typ.cast("typ.Any", metadata["line"]))
+        int(typ.cast("typ.Any", line))
     except (TypeError, ValueError) as error:
-        message = f"{label}.metadata.line is not a line number: {metadata['line']!r}"
+        message = f"{label}.metadata.line is not a line number: {line!r}"
         raise _conftest_shape_error(message, rule_id, detail) from error
 
 
