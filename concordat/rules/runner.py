@@ -384,14 +384,12 @@ def _conftest_shape_error(
 def _validated_result(
     entry: object, index: int, rule_id: str, detail: str
 ) -> _ConftestResult:
-    """Return one Conftest result, rejecting any element of the wrong shape.
-
-    The outer array check says nothing about its elements, and the consumers
-    read them with `.get`. A non-mapping result, a non-list `failures`, or a
-    non-mapping failure or `metadata` therefore surfaced as a bare
-    `AttributeError` or `TypeError` from the finding conversion — untagged,
-    and naming neither the tool nor the rule package.
-    """
+    """Return one validated Conftest result."""
+    # The outer array check says nothing about its elements, and the consumers
+    # read them with `.get`. A non-mapping result, a non-list `failures`, or a
+    # non-mapping failure or `metadata` therefore surfaced as a bare
+    # `AttributeError` or `TypeError` from the finding conversion — untagged,
+    # and naming neither the tool nor the rule package.
     if not isinstance(entry, dict):
         label = f"result[{index}] is {type(entry).__name__}, not an object"
         raise _conftest_shape_error(label, rule_id, detail)
@@ -417,6 +415,25 @@ def _validate_failure(failure: object, label: str, rule_id: str, detail: str) ->
     if not isinstance(metadata, dict):
         message = f"{label}.metadata is {type(metadata).__name__}, not an object"
         raise _conftest_shape_error(message, rule_id, detail)
+    _validate_metadata_line(
+        typ.cast("dict[str, object]", metadata), label, rule_id, detail
+    )
+
+
+def _validate_metadata_line(
+    metadata: dict[str, object], label: str, rule_id: str, detail: str
+) -> None:
+    """Reject a metadata line number that `int()` could not accept."""
+    if "line" not in metadata:
+        return
+    # `_finding_from_failure` calls `int()` on this. A null, array, object, or
+    # non-numeric string raises there instead — after validation has already
+    # passed, and with none of the structured context this boundary adds.
+    try:
+        int(typ.cast("typ.Any", metadata["line"]))
+    except (TypeError, ValueError) as error:
+        message = f"{label}.metadata.line is not a line number: {metadata['line']!r}"
+        raise _conftest_shape_error(message, rule_id, detail) from error
 
 
 def _finding_from_failure(failure: _ConftestFailure) -> Finding:

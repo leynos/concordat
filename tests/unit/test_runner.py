@@ -31,6 +31,7 @@ if typ.TYPE_CHECKING:
 
     import pytest_mock
 
+    from concordat.rules.envelope import PolicyEnvelope
     from tests.conftest import CmdMox
 
 
@@ -277,7 +278,9 @@ class TestConftestExitCodes:
         with pytest.raises(
             OperationalRuleError, match="without evaluating"
         ) as exc_info:
-            runner._invoke_conftest("rust-makefile-baseline", typ.cast("typ.Any", {}))
+            runner._invoke_conftest(
+                "rust-makefile-baseline", typ.cast("PolicyEnvelope", {})
+            )
 
         error = exc_info.value
         assert error.operation == "invoke-conftest", error.operation
@@ -316,7 +319,9 @@ class TestConftestExitCodes:
         mocker.patch.object(runner, "_rule_parameters", return_value={})
 
         with pytest.raises(OperationalRuleError, match="no usable output") as exc_info:
-            runner._invoke_conftest("rust-makefile-baseline", typ.cast("typ.Any", {}))
+            runner._invoke_conftest(
+                "rust-makefile-baseline", typ.cast("PolicyEnvelope", {})
+            )
 
         _assert_operational_context(
             exc_info.value,
@@ -367,7 +372,9 @@ class TestConftestExitCodes:
         mocker.patch.object(runner, "_rule_parameters", return_value={})
 
         with pytest.raises(OperationalRuleError, match=expected) as exc_info:
-            runner._invoke_conftest("rust-makefile-baseline", typ.cast("typ.Any", {}))
+            runner._invoke_conftest(
+                "rust-makefile-baseline", typ.cast("PolicyEnvelope", {})
+            )
 
         _assert_operational_context(
             exc_info.value,
@@ -375,6 +382,73 @@ class TestConftestExitCodes:
             tool="conftest",
             resource="rust-makefile-baseline",
         )
+
+    @staticmethod
+    def _metadata_line_document(line: object) -> str:
+        """Return a Conftest result whose single finding carries *line*."""
+        return json.dumps([{"failures": [{"msg": "boom", "metadata": {"line": line}}]}])
+
+    @pytest.mark.parametrize(
+        "line",
+        [
+            pytest.param(None, id="null"),
+            pytest.param([1], id="array"),
+            pytest.param({"a": 1}, id="object"),
+            pytest.param("abc", id="not-numeric"),
+        ],
+    )
+    def test_a_metadata_line_that_is_not_a_number_is_rejected(
+        self,
+        mocker: pytest_mock.MockFixture,
+        line: object,
+    ) -> None:
+        """`line` reaches `int()` in the finding conversion, so it is checked.
+
+        A null, array, object, or non-numeric string raised `TypeError` or
+        `ValueError` there — past this boundary, and carrying none of the
+        structured context it adds.
+        """
+        completed = subprocess.CompletedProcess(
+            args=["conftest"],
+            returncode=1,
+            stdout=self._metadata_line_document(line),
+            stderr="",
+        )
+        mocker.patch.object(runner, "_run_conftest", return_value=completed)
+        mocker.patch.object(runner, "_rule_parameters", return_value={})
+
+        with pytest.raises(OperationalRuleError, match="not a line number") as exc_info:
+            runner._invoke_conftest(
+                "rust-makefile-baseline", typ.cast("PolicyEnvelope", {})
+            )
+
+        _assert_operational_context(
+            exc_info.value,
+            operation="invoke-conftest",
+            tool="conftest",
+            resource="rust-makefile-baseline",
+        )
+
+    def test_a_numeric_string_line_is_accepted(
+        self,
+        mocker: pytest_mock.MockFixture,
+    ) -> None:
+        """A numeric string still coerces, so it is not rejected."""
+        completed = subprocess.CompletedProcess(
+            args=["conftest"],
+            returncode=1,
+            stdout=self._metadata_line_document("12"),
+            stderr="",
+        )
+        mocker.patch.object(runner, "_run_conftest", return_value=completed)
+        mocker.patch.object(runner, "_rule_parameters", return_value={})
+
+        results = runner._invoke_conftest(
+            "rust-makefile-baseline", typ.cast("PolicyEnvelope", {})
+        )
+        findings = runner._findings_from_results(results)
+
+        assert findings[0].line == 12, findings[0]
 
     def test_absent_metadata_keys_still_decode(
         self,
@@ -395,7 +469,7 @@ class TestConftestExitCodes:
         mocker.patch.object(runner, "_rule_parameters", return_value={})
 
         results = runner._invoke_conftest(
-            "rust-makefile-baseline", typ.cast("typ.Any", {})
+            "rust-makefile-baseline", typ.cast("PolicyEnvelope", {})
         )
         findings = runner._findings_from_results(results)
 
@@ -423,7 +497,7 @@ class TestConftestExitCodes:
         mocker.patch.object(runner, "_rule_parameters", return_value={})
 
         results = runner._invoke_conftest(
-            "rust-makefile-baseline", typ.cast("typ.Any", {})
+            "rust-makefile-baseline", typ.cast("PolicyEnvelope", {})
         )
 
         assert results == [{"failures": []}], results
