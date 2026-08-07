@@ -312,8 +312,29 @@ test_absent_gate_remains_noncompliant if {
 # line that is entirely a shell comment executes nothing at all — including
 # any separator inside it.
 
-test_semicolon_terminated_command_is_compliant if {
+# `;` discards the gate's exit status: make sees `cargo test`'s, so a failing
+# gate would not fail the build.
+test_semicolon_separated_command_is_indeterminate if {
 	findings := policy.deny with input as gate_position_input("$(WHITAKER); cargo test")
+	profile(findings) == {["QG-001", "indeterminate"]}
+}
+
+# A pipeline reports the last command's status, not the gate's.
+test_piped_gate_is_indeterminate if {
+	findings := policy.deny with input as gate_position_input("$(WHITAKER) | tee lint.log")
+	profile(findings) == {["QG-001", "indeterminate"]}
+}
+
+# A backgrounded gate leaves the line succeeding regardless of the outcome.
+test_backgrounded_gate_is_indeterminate if {
+	findings := policy.deny with input as gate_position_input("$(WHITAKER) &")
+	profile(findings) == {["QG-001", "indeterminate"]}
+}
+
+# A separator before the gate is harmless: it is still the last command, so
+# its status is the line's.
+test_gate_after_a_separator_is_compliant if {
+	findings := policy.deny with input as gate_position_input("echo linting; $(WHITAKER)")
 	profile(findings) == set()
 }
 

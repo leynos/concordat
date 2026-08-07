@@ -150,13 +150,29 @@ gate_variable_is_simple if regex.match(`^[A-Za-z_][A-Za-z0-9_]*$`, gate_variable
 # whitespace the group requires is absent.
 gate_assignment_prefix := `[A-Za-z_][A-Za-z0-9_]*=("[^"]*"|'[^']*'|[^[:space:]]*)[[:space:]]+`
 
-# The trailing group is what ends the command word. Whitespace and
-# end-of-text are the obvious cases; `;`, `&`, `|` and `)` end it too, and
-# the command still executes — `$(GATE); cargo test`, `$(GATE) && cargo test`
-# and `$(GATE) | tee log` all run the gate.
+# Running the gate is not enough: its exit status has to reach make, or a
+# failing gate does not fail the build. Make checks the status of the whole
+# recipe line, so what follows the gate decides whether it binds.
+#
+#   $(GATE) --all            status is the gate's                   binding
+#   $(GATE) && cargo test    `&&` short-circuits on failure         binding
+#   $(GATE); cargo test      status is `cargo test`'s               MASKED
+#   $(GATE) | tee log        status is `tee`'s                      MASKED
+#   $(GATE) &                backgrounded; the line succeeds        MASKED
+#
+# So the tail after the reference may contain arguments and further
+# `&&`-chained commands, but no `;`, `|` or bare `&`, and it must run to the
+# end of the line. A separator *before* the gate is fine — in
+# `echo x; $(GATE)` the gate is still the last command, so its status binds.
+#
+# The tail must also start at a word boundary — whitespace, or nothing at
+# all. Without that, `echo "a; $(GATE)"` would match: the `;` inside the
+# string anchors the prefix and the closing quote passes as an argument.
+gate_binding_tail := `(([[:space:]][^;|&]*)?(&&[^;|&]*)*)$`
+
 gate_command_pattern := sprintf(
-	`(^|[;&|(])[[:space:]]*[-@+]*[[:space:]]*(%s)*(\$\(%s\)|\$\{%s\})([[:space:]]|[;&|)]|$)`,
-	[gate_assignment_prefix, gate_variable, gate_variable],
+	`(^|[;&|(])[[:space:]]*[-@+]*[[:space:]]*(%s)*(\$\(%s\)|\$\{%s\})%s`,
+	[gate_assignment_prefix, gate_variable, gate_variable, gate_binding_tail],
 ) if gate_variable_is_simple
 
 # A recipe line whose first word is `#` is a shell comment: the whole line is
