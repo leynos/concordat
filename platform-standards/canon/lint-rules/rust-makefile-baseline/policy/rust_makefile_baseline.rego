@@ -170,8 +170,16 @@ gate_assignment_prefix := `[A-Za-z_][A-Za-z0-9_]*=("[^"]*"|'[^']*'|[^[:space:]]*
 # string anchors the prefix and the closing quote passes as an argument.
 gate_binding_tail := `(([[:space:]][^;|&]*)?(&&[^;|&]*)*)$`
 
+# The prefix is start-of-text or a separator that genuinely precedes a
+# command. A bare `|` in the class matched the *second* bar of `||`, so
+# `true || $(GATE)` read as an invocation — but there the gate runs only when
+# the left side fails, and when it succeeds the gate never runs and the line
+# still succeeds. `[^|]\|` consumes the character before the bar instead, so
+# a doubled bar cannot anchor a match. A single `|` still can:
+# `cat f | $(GATE)` puts the gate last in the pipeline, so its status is the
+# line's.
 gate_command_pattern := sprintf(
-	`(^|[;&|(])[[:space:]]*[-@+]*[[:space:]]*(%s)*(\$\(%s\)|\$\{%s\})%s`,
+	`(^|[;&(]|[^|]\|)[[:space:]]*[-@+]*[[:space:]]*(%s)*(\$\(%s\)|\$\{%s\})%s`,
 	[gate_assignment_prefix, gate_variable, gate_variable, gate_binding_tail],
 ) if gate_variable_is_simple
 

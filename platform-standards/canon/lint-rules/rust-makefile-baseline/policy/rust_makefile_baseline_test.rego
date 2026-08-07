@@ -331,6 +331,20 @@ test_backgrounded_gate_is_indeterminate if {
 	profile(findings) == {["QG-001", "indeterminate"]}
 }
 
+# `||` runs the gate only when the left side fails; when it succeeds the gate
+# never runs and the line still succeeds, so the gate does not bind.
+test_or_guarded_gate_is_indeterminate if {
+	findings := policy.deny with input as gate_position_input("true || $(WHITAKER)")
+	profile(findings) == {["QG-001", "indeterminate"]}
+}
+
+# A single pipe is different: the gate is last, so the pipeline reports its
+# status.
+test_gate_at_the_end_of_a_pipeline_is_compliant if {
+	findings := policy.deny with input as gate_position_input("cat list | $(WHITAKER)")
+	profile(findings) == set()
+}
+
 # A separator before the gate is harmless: it is still the last command, so
 # its status is the line's.
 test_gate_after_a_separator_is_compliant if {
