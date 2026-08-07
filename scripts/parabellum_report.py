@@ -76,7 +76,21 @@ def _finding_summary(record: LedgerRecord) -> str:
 
 
 def render_report(ledger_path: pathlib.Path = DEFAULT_LEDGER_PATH) -> str:
-    """Render the campaign baseline report from the ledger."""
+    """Render the campaign baseline report from the ledger.
+
+    Parameters
+    ----------
+    ledger_path:
+        Path to the append-only ledger file. Defaults to
+        ``DEFAULT_LEDGER_PATH``.
+
+    Returns
+    -------
+    str
+        The rendered Markdown report. Where a repository has more than
+        one ledger record, the latest one wins.
+
+    """
     latest = _latest_records(_load_ledger(ledger_path))
     counts: dict[str, int] = {}
     rule_counts: dict[str, int] = {}

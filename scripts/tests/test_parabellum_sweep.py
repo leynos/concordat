@@ -415,6 +415,111 @@ class TestLedgerDecoding:
             "the failure should name the ledger it could not decode"
         )
 
+    @staticmethod
+    def _line(**overrides: object) -> str:
+        """Return one JSON ledger line, with selected fields overridden."""
+        record: dict[str, object] = {
+            "schema_version": 1,
+            "repository": "leynos/x",
+            "commit_sha": "a" * 40,
+            "audited_at": "2026-07-19T16:00:00Z",
+            "rule_package": "rust-makefile-baseline",
+            "rule_version": "0.2.0",
+            "makeutil_rev": "abc",
+            "verdict": "compliant",
+            "findings": [],
+        }
+        record.update(overrides)
+        return json.dumps(record)
+
+    def test_a_line_that_is_not_json_names_the_ledger(
+        self,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """A truncated line is reported against the file, not as a decode error.
+
+        Decoding inside the comprehension let `json.JSONDecodeError` escape
+        naming neither the ledger nor the line number.
+        """
+        ledger_path.write_text("{oops\n", encoding="utf-8")
+
+        with pytest.raises(sweep.OperationalRuleError, match="line 1") as info:
+            sweep._load_ledger(ledger_path)
+
+        assert info.value.operation == "load-ledger", info.value.operation
+        assert info.value.resource == ledger_path, info.value.resource
+
+    @pytest.mark.parametrize(
+        ("overrides", "reason"),
+        [
+            pytest.param({"repository": 7}, "'repository' is int", id="repository"),
+            pytest.param(
+                {"schema_version": "1"},
+                "'schema_version' is str",
+                id="schema-version-string",
+            ),
+            pytest.param(
+                {"schema_version": True},
+                "'schema_version' is bool",
+                id="schema-version-boolean",
+            ),
+            pytest.param({"commit_sha": 7}, "'commit_sha' is int", id="commit-sha"),
+            pytest.param({"findings": "none"}, "'findings' is str", id="findings"),
+            pytest.param(
+                {"exclusion_reason": 7},
+                "'exclusion_reason' is int",
+                id="optional-field",
+            ),
+            pytest.param(
+                {"findings": [7]}, r"findings\[0\] is int", id="finding-entry"
+            ),
+            pytest.param(
+                {"findings": [{"rule_id": "A"}]},
+                "missing 'severity'",
+                id="finding-missing-key",
+            ),
+        ],
+    )
+    def test_malformed_field_types_are_rejected(
+        self,
+        ledger_path: pathlib.Path,
+        overrides: dict[str, object],
+        reason: str,
+    ) -> None:
+        """Key presence is not enough; each field's type is checked too.
+
+        A hand-edited ledger with a numeric `repository` or a string
+        `findings` satisfied the key check and then failed far from here — in
+        the report renderer, or as a `TypeError` mid-sweep.
+        """
+        ledger_path.write_text(self._line(**overrides) + "\n", encoding="utf-8")
+
+        with pytest.raises(sweep.OperationalRuleError, match=reason) as info:
+            sweep._load_ledger(ledger_path)
+
+        assert info.value.operation == "load-ledger", info.value.operation
+        assert info.value.resource == ledger_path, info.value.resource
+
+    def test_a_finding_field_of_the_wrong_type_is_rejected(
+        self,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """A finding's `line` must be a number, as the renderer assumes."""
+        finding = {
+            "rule_id": "QG-001",
+            "severity": "error",
+            "verdict": "noncompliant",
+            "path": "Makefile",
+            "line": "9",
+            "message": "m",
+        }
+        ledger_path.write_text(self._line(findings=[finding]) + "\n", encoding="utf-8")
+
+        with pytest.raises(sweep.OperationalRuleError, match="'line' is str") as info:
+            sweep._load_ledger(ledger_path)
+
+        assert info.value.operation == "load-ledger", info.value.operation
+
     def test_a_complete_record_round_trips(self, ledger_path: pathlib.Path) -> None:
         """A record written by the sweep decodes back unchanged."""
         record = sweep._excluded_record("leynos/gauss", "migration in flight")

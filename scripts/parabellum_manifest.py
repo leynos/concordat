@@ -21,7 +21,17 @@ if typ.TYPE_CHECKING:
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class EstateEntry:
-    """One repository in the campaign inventory."""
+    """One repository in the campaign inventory.
+
+    Attributes
+    ----------
+    name:
+        The repository's name.
+    excluded:
+        The operator-supplied reason this repository is skipped, or
+        ``None`` when it is to be audited.
+
+    """
 
     name: str
     excluded: str | None = None
@@ -29,7 +39,16 @@ class EstateEntry:
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class Estate:
-    """The parsed campaign inventory."""
+    """The parsed campaign inventory.
+
+    Attributes
+    ----------
+    owner:
+        The GitHub owner that every repository in the estate belongs to.
+    repositories:
+        The repository entries declared in the manifest.
+
+    """
 
     owner: str
     repositories: tuple[EstateEntry, ...]
@@ -126,6 +145,26 @@ def load_estate(path: pathlib.Path) -> Estate:
     file is operator-supplied, so a malformed one must surface as an
     operational error naming the manifest, not as a `TypeError` from a
     subscript.
+
+    Parameters
+    ----------
+    path:
+        Path to the estate manifest YAML document.
+
+    Returns
+    -------
+    Estate
+        The parsed owner and repository entries.
+
+    Raises
+    ------
+    OperationalRuleError
+        With ``operation="load-estate-manifest"``, when the document is
+        not a mapping, a required key (``repositories`` or ``owner``) is
+        missing, the ``repositories`` value is not a list, a repository
+        entry is malformed, or an owner or repository name fails its
+        validation pattern.
+
     """
     document = YAML(typ="safe").load(path.read_text(encoding="utf-8"))
     if not isinstance(document, dict):
