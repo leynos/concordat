@@ -119,7 +119,7 @@ def render_report(ledger_path: pathlib.Path = DEFAULT_LEDGER_PATH) -> str:
     )
     lines.extend(["", "Findings by rule:", ""])
     lines.extend(
-        f"- {rule_id}: {rule_counts[rule_id]}" for rule_id in sorted(rule_counts)
+        f"- {_cell(rule_id)}: {rule_counts[rule_id]}" for rule_id in sorted(rule_counts)
     )
     lines.extend(
         [
@@ -136,6 +136,13 @@ def render_report(ledger_path: pathlib.Path = DEFAULT_LEDGER_PATH) -> str:
         record = latest[repository]
         commit = (record["commit_sha"] or "")[:12]
         summary = _finding_summary(record)
-        lines.append(f"| {repository} | {record['verdict']} | {commit} | {summary} |")
+        # Every cell is escaped, not only the free-text one. The ledger is an
+        # editable file and its load path checks types, not charsets, so a
+        # hand-edited `repository`, `verdict`, or `commit_sha` can carry a
+        # pipe or a newline and break the row it sits in.
+        lines.append(
+            f"| {_cell(repository)} | {_cell(record['verdict'])} "
+            f"| {_cell(commit)} | {summary} |"
+        )
     lines.append("")
     return "\n".join(lines)

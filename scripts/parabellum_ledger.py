@@ -179,47 +179,77 @@ _FINDING_FIELD_TYPES: typ.Final = {
 _OPTIONAL_FIELD_TYPES: typ.Final = {"exclusion_reason": str, "error_detail": str}
 
 
-def _require_field(
-    value: object, expected: type, label: str, path: pathlib.Path
-) -> None:
-    """Reject a ledger field whose decoded type is not the one readers assume.
+def _matches_expected_type(value: object, expected: type) -> bool:
+    """Return whether a decoded value has the required ledger field type.
 
     `bool` is excluded from the integer check: it subclasses `int`, so `true`
     would otherwise pass as a schema version or a line number.
     """
-    if isinstance(value, expected) and not (
-        expected is int and isinstance(value, bool)
-    ):
+    if expected is int:
+        if isinstance(value, bool):
+            return False
+        return isinstance(value, int)
+    return isinstance(value, expected)
+
+
+def _require_field(
+    value: object, expected: type, label: str, path: pathlib.Path
+) -> None:
+    """Reject a ledger field whose decoded type is not the one readers assume."""
+    if _matches_expected_type(value, expected):
         return
     message = f"{label} is {type(value).__name__}, not {expected.__name__}"
     raise _ledger_error(message, path)
 
 
+def _validate_standard_record_fields(
+    record: dict[str, object], where: str, path: pathlib.Path
+) -> None:
+    """Check each required scalar field against its declared type."""
+    for field, expected in _LEDGER_FIELD_TYPES.items():
+        _require_field(record[field], expected, f"{where} field {field!r}", path)
+
+
+def _validate_commit_sha(commit_sha: object, where: str, path: pathlib.Path) -> None:
+    """Accept a commit SHA string, or the null an excluded record carries."""
+    if commit_sha is None or isinstance(commit_sha, str):
+        return
+    message = f"{where} field 'commit_sha' is {type(commit_sha).__name__}"
+    raise _ledger_error(message, path)
+
+
+def _validate_optional_record_fields(
+    record: dict[str, object], where: str, path: pathlib.Path
+) -> None:
+    """Check the optional fields that are present, ignoring those absent."""
+    for field, expected in _OPTIONAL_FIELD_TYPES.items():
+        if field in record:
+            _require_field(record[field], expected, f"{where} field {field!r}", path)
+
+
+def _validate_findings(findings: object, where: str, path: pathlib.Path) -> None:
+    """Check the findings list and every serialized finding within it."""
+    if not isinstance(findings, list):
+        message = f"{where} field 'findings' is {type(findings).__name__}, not a list"
+        raise _ledger_error(message, path)
+    for index, finding in enumerate(typ.cast("list[object]", findings)):
+        _validate_finding_fields(finding, f"{where} findings[{index}]", path)
+
+
 def _validate_record_fields(
     record: dict[str, object], path: pathlib.Path, line_number: int
 ) -> None:
-    """Check every field's type, not merely that its key is present.
+    """Check every record field before readers use the record.
 
     Key presence alone let a hand-edited ledger through with a numeric
     `repository` or a string `findings`, which then failed far from here —
     in the report renderer, or as a `TypeError` mid-sweep.
     """
     where = f"ledger {path} line {line_number}"
-    for field, expected in _LEDGER_FIELD_TYPES.items():
-        _require_field(record[field], expected, f"{where} field {field!r}", path)
-    commit_sha = record["commit_sha"]
-    if commit_sha is not None and not isinstance(commit_sha, str):
-        message = f"{where} field 'commit_sha' is {type(commit_sha).__name__}"
-        raise _ledger_error(message, path)
-    for field, expected in _OPTIONAL_FIELD_TYPES.items():
-        if field in record:
-            _require_field(record[field], expected, f"{where} field {field!r}", path)
-    findings = record["findings"]
-    if not isinstance(findings, list):
-        message = f"{where} field 'findings' is {type(findings).__name__}, not a list"
-        raise _ledger_error(message, path)
-    for index, finding in enumerate(typ.cast("list[object]", findings)):
-        _validate_finding_fields(finding, f"{where} findings[{index}]", path)
+    _validate_standard_record_fields(record, where, path)
+    _validate_commit_sha(record["commit_sha"], where, path)
+    _validate_optional_record_fields(record, where, path)
+    _validate_findings(record["findings"], where, path)
 
 
 def _validate_finding_fields(finding: object, label: str, path: pathlib.Path) -> None:

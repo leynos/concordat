@@ -340,6 +340,73 @@ class TestReport:
             f"got {cells[3]!r}"
         )
 
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            pytest.param("repository", "leynos/a | b", id="repository"),
+            pytest.param("verdict", "compliant | x", id="verdict"),
+            pytest.param("commit_sha", "ab|cd" + "e" * 35, id="commit-sha"),
+        ],
+    )
+    def test_a_hand_edited_identifier_cannot_break_the_row(
+        self,
+        ledger_path: pathlib.Path,
+        field: str,
+        value: str,
+    ) -> None:
+        """Identifier cells are escaped too, not only the free-text one.
+
+        The manifest patterns constrain these on the way in, but they govern
+        manifest input, not the ledger — whose load path checks types, not
+        charsets. An edited file can therefore carry a pipe here.
+        """
+        record = self._record("leynos/alpha", "compliant")
+        # Cast for the dynamic key: the parametrized field name is a `str`,
+        # and a TypedDict admits only literal keys.
+        typ.cast("dict[str, object]", record)[field] = value
+        ledger_path.write_text(json.dumps(record) + "\n", encoding="utf-8")
+
+        report = sweep.render_report(ledger_path)
+        row = next(
+            line
+            for line in report.splitlines()
+            if line.startswith("| ")
+            and "compliant" in line
+            and "Repository" not in line
+        )
+
+        assert self._delimiter_count(row) == 5, f"the row should keep four cells: {row}"
+
+    def test_a_hand_edited_rule_id_cannot_inject_a_summary_line(
+        self,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """The findings-by-rule counts escape their rule identifier."""
+        record = self._record("leynos/alpha", "noncompliant")
+        record["findings"] = [
+            {
+                "rule_id": "QG-001\n- injected: 99",
+                "severity": "error",
+                "verdict": "noncompliant",
+                "path": "Makefile",
+                "line": 1,
+                "message": "m",
+            }
+        ]
+        ledger_path.write_text(json.dumps(record) + "\n", encoding="utf-8")
+
+        report = sweep.render_report(ledger_path)
+
+        # `_cell` folds the newline, so the text survives inside the one
+        # legitimate count line rather than becoming a line of its own.
+        injected = [
+            line for line in report.splitlines() if line.startswith("- injected")
+        ]
+        assert not injected, f"the rule id created its own line: {injected}"
+        assert any(
+            line.startswith("- QG-001 - injected: 99:") for line in report.splitlines()
+        ), report
+
     def test_report_uses_latest_record_per_repository(
         self,
         ledger_path: pathlib.Path,

@@ -478,6 +478,24 @@ class TestLedgerDecoding:
                 "missing 'severity'",
                 id="finding-missing-key",
             ),
+            # The other integer field: `bool` must be refused here too, not
+            # only for `schema_version`.
+            pytest.param(
+                {
+                    "findings": [
+                        {
+                            "rule_id": "QG-001",
+                            "severity": "error",
+                            "verdict": "noncompliant",
+                            "path": "Makefile",
+                            "line": True,
+                            "message": "m",
+                        }
+                    ]
+                },
+                "'line' is bool",
+                id="finding-line-boolean",
+            ),
         ],
     )
     def test_malformed_field_types_are_rejected(
