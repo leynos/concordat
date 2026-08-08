@@ -919,9 +919,11 @@ Every `github-api` sensor and actuator must satisfy an operational contract:
   exponential backoff (Section 8.2);
 - defines a stable deduplication key (derived from the target entity and the
   action — for example the pull-request head plus the comment intent, or the
-  alert number plus the issue kind) and performs a check-before-create against
-  that key, so a repeated sweep never posts a duplicate comment, opens a
-  duplicate issue, or inserts a duplicate annotation.
+  alert number plus the issue kind), embeds that key in the effect it creates,
+  and serializes creation behind the atomic boundary specified below, so that
+  at most one effect exists per key even when sweeps overlap. A check followed
+  by a create is not atomic and does not, on its own, prevent duplicates; the
+  boundary, not the check, is what makes the actuator safe.
 
 To support this, each lint rule should be packaged as a directory:
 
@@ -973,6 +975,128 @@ In this model:
 - `mutations` defines the actuator entries executed by remediation tooling;
   each entry's `type` selects a deterministic edit (for example `file-copy`) or
   a `github-api` side effect (for example `comment` or `issue`).
+
+##### Concurrency and idempotency for `github-api` actuators
+
+Auditor sweeps overlap. A scheduled run, a manual `workflow_dispatch`, and a
+re-run of a timed-out job can all be in flight against one repository at once,
+and nothing in GitHub Actions prevents it. Reading "does this comment already
+exist?" and then posting it is two API calls with a window between them, so two
+sweeps can both observe absence and both create. **Check-before-create is
+therefore necessary but not sufficient**, and no actuator may rely on it alone.
+
+Every `github-api` actuator instead creates its effect behind exactly one
+atomic boundary, chosen by whether the underlying GitHub operation is already
+idempotent.
+
+###### Atomic boundary per `github-api` effect type
+
+| **Effect**                               | **Checks**                              | **GitHub operation**                                                               | **Atomic boundary**                                                                                                                                                                                       |
+| ---------------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Secret provisioning                      | CV-003                                  | `PUT /repos/{owner}/{repo}/actions/secrets/{name}` (and the Dependabot equivalent) | **Server-side.** `PUT` is an upsert: repeating it converges on the same state, so no coordination is required.                                                                                            |
+| Repository edit via a remediation branch | DP-002, `file-copy` mutations           | `POST /repos/{owner}/{repo}/git/refs`                                              | **Server-side.** Creating a ref is compare-and-swap: the second caller receives `422 Reference already exists`. The branch name derives from the deduplication key, so the ref *is* the mutual exclusion. |
+| Pull-request comment                     | AM-001                                  | `POST /repos/{owner}/{repo}/issues/{number}/comments`                              | **Single-flight lease.** The REST API accepts no idempotency key and `POST` is not idempotent.                                                                                                            |
+| Tracking issue                           | AM-002, DP-001, LC-001, CV-003 fallback | `POST /repos/{owner}/{repo}/issues`                                                | **Single-flight lease.** As above.                                                                                                                                                                        |
+
+Prefer the server-side boundary wherever the operation supports one; reach for
+a lease only for the `POST` effects that have none.
+
+###### The single-flight lease
+
+The lease needs a durable store that every sweep can reach and that supports an
+atomic create. GitHub itself provides one, so the design adds no external
+dependency: a git ref is created by compare-and-swap, and `POST /git/refs`
+fails with `422` if the ref already exists.
+
+- **Scope.** One lease per `(repository, check ID, deduplication key)`, named
+  `refs/concordat/leases/<check-id>/<sha256(deduplication-key)>` in the target
+  repository. Hashing keeps the ref name valid whatever the key contains.
+- **Owner identity.** The commit the ref points at records the holder: run ID,
+  run attempt, workflow, job, and acquisition timestamp. A stale lease is then
+  attributable to the run that abandoned it.
+- **Acquisition.** `POST /git/refs`. A `201` acquires the lease; a `422`
+  means another worker holds it, and the losing worker does not create the
+  effect. It instead reconciles (below) and reports duplicate suppression.
+- **Expiry and fencing.** The lease commit carries an expiry (the sweep's
+  per-effect deadline plus a margin). A worker that finds an unexpired lease
+  yields. A worker that finds an **expired** lease may steal it with
+  `PATCH /git/refs/{ref}` using `force: false` and the observed SHA, which is a
+  compare-and-swap: if another worker stole it first, the SHA no longer matches
+  and the update fails. The lease commit SHA is the fencing token — the
+  actuator re-reads the ref immediately before creating and proceeds only while
+  the SHA is still its own.
+- **Ordering.** The actuator acquires the boundary **before** the final
+  existence check and the create, never between them. Acquire → re-check →
+  create → record outcome → release.
+- **Release.** Delete the ref once a terminal outcome is recorded. A worker
+  that dies without releasing leaves a lease that expires; expiry only permits
+  a later steal, and never deletes or duplicates an effect that already exists.
+
+Only one actuator execution may create an effect for a given deduplication key.
+Every other execution reports duplicate suppression or reconciliation.
+
+###### Discoverability of the deduplication key
+
+Reconciliation only works if a created effect can be recognized later, so every
+actuator embeds its deduplication key in the artefact it creates: comments and
+issue bodies carry a marker comment (`<!-- concordat:key=<key> -->`), branches
+encode it in the ref name, and secrets in the secret name. The marker is what a
+subsequent sweep queries; an effect that cannot be found by key cannot be
+deduplicated.
+
+###### Retry, unknown outcomes, and partial failure
+
+- **Retryable:** request timeouts, connection failures, `429` (honouring
+  `Retry-After`), and transient `5xx` (`500`, `502`, `503`, `504`). Retries use
+  bounded exponential backoff with full jitter — base 1 s, cap 30 s, at most 5
+  attempts and a total per-effect budget of 2 minutes — after which the attempt
+  is abandoned as retry exhaustion.
+- **Not retryable:** every other `4xx`. `401`/`403` indicate a scope or
+  permission defect and `422` a malformed request; retrying cannot fix either,
+  so both fail fast.
+- **Unknown outcome.** A create whose response is lost — a timeout or a
+  dropped connection after the request was sent — has an *unknown* outcome, not
+  a failed one. The server may have created the effect. The actuator must not
+  retry blindly.
+- **Reconciliation.** After an unknown outcome the actuator queries the
+  authoritative create target (the pull request's comments, the repository's
+  issues, the refs list) filtered by the embedded deduplication key. If the
+  effect is found, the operation is complete and **no second create is
+  issued**. If it is absent, one retry is permitted within the remaining budget.
+- **Partial failure before the create.** A failure after acquiring the lease
+  but before the create leaves no effect: release the lease, record the
+  outcome, and let the next sweep retry from the start.
+- **Partial failure after the create.** Treat as an unknown outcome: reconcile
+  first, then release. If reconciliation itself fails, release the lease and
+  record `reconcile_failed`; the next sweep reconciles again before retrying,
+  which is safe because the key is embedded in any effect that was created.
+
+Each attempt ends in exactly one terminal outcome, emitted as both a structured
+log line and a metric (Section 3.2.2), and carrying the check ID and the
+deduplication key but never a secret value: `created`, `duplicate_suppressed`,
+`reconciled_existing`, `retry_exhausted`, `reconcile_failed`, or
+`shutdown_aborted`.
+
+###### Shutdown
+
+Sweeps are cancellable — a workflow can be cancelled, a runner reclaimed — so
+shutdown is a normal path, not an exception.
+
+- On shutdown the sweep stops accepting new actuator work immediately.
+- In-flight actuators run to a terminal outcome until a documented grace
+  deadline (30 seconds), sufficient to finish a create already in flight or to
+  reconcile an unknown outcome.
+- Work still incomplete at the deadline is abandoned without deleting or
+  duplicating any effect. Its lease is released if the outcome is known to be
+  "nothing created", and otherwise left to expire, since expiry is safe and
+  deletion is not.
+- The next sweep reconciles the deduplication key before retrying, so an
+  effect created just before shutdown is discovered rather than duplicated.
+- Abandoned work emits `shutdown_aborted` with the check ID, deduplication key,
+  and the phase reached (`before_create` or `unknown_outcome`), increments the
+  corresponding metric, and — because an unknown outcome that never reconciled
+  is the one state a human may need to inspect — raises an alert when
+  `shutdown_aborted{phase="unknown_outcome"}` is non-zero over a sweep interval.
 
 ##### Expected use cases and workflows
 
@@ -1679,8 +1803,10 @@ Dependabot runs read different stores).
   automation, the actuator degrades to opening a tracking issue naming the
   absent store. The provisioning command sources the operator-supplied token
   from a secret store and never persists or logs it (per the Section 2.1.2
-  contract), and the tracking-issue fallback is deduplicated on the absent
-  store so a re-run opens no duplicate.
+  contract). Provisioning needs no coordination — `PUT` on a secret is an
+  upsert, so it is idempotent server-side — but the tracking-issue fallback is a
+  `POST`, so it creates behind the single-flight lease keyed on the absent
+  store (Section 2.1.2), and concurrent sweeps yield exactly one issue.
 
 ##### Automerge and workflow health (AM-001, AM-002)
 
@@ -1705,10 +1831,12 @@ load-time failures post no check to any pull request.
   recover). Rebasing cannot clear a non-status blocker such as a missing
   approval, and it re-pushes the branch head, which may dismiss existing
   reviews; the sensor's exclusion of those cases is what keeps the actuator
-  safe. Unloadable workflows get a tracking issue instead. The actuator keys on
-  the pull-request head and checks for an outstanding bot rebase comment before
-  commenting (the check-before-create of Section 2.1.2), so a repeated sweep
-  posts nothing new.
+  safe. Unloadable workflows get a tracking issue instead. Both effects are
+  `POST`s with no server-side idempotency, so both create behind the
+  single-flight lease of Section 2.1.2 — keyed on the pull-request head plus
+  the comment intent for AM-001, and on the workflow ID for AM-002 — and both
+  embed that key in the body they post. Overlapping sweeps therefore yield one
+  comment and one issue, not one per sweep.
 
 ##### Dependency-pin actionability (DP-001, DP-002)
 
@@ -1724,10 +1852,12 @@ git-revision pin on a dependency awaiting a release.
   `TODO(<issue-url>)` comment that resolves to an open issue.
 - **Actuators:** open a migration tracking issue enumerating the blocked
   alerts; insert the `TODO` comment and raise the tracking issue via the
-  comment-preserving TOML remediation provider (Section 2.3). Both actuators
-  are idempotent per Section 2.1.2: the tracking issue and the `TODO`
-  annotation are created only when an equivalent one — keyed on the blocked
-  alert or the git-revision dependency — does not already exist.
+  comment-preserving TOML remediation provider (Section 2.3). The two effects
+  take different boundaries (Section 2.1.2): the `TODO` annotation lands on a
+  remediation branch whose ref name derives from the git-revision dependency,
+  and creating that ref is itself the compare-and-swap, so it needs no lease;
+  the migration issue is a `POST` keyed on the blocked alert and creates behind
+  the single-flight lease.
 
 ##### Dependabot governance (DB-001 through DB-004)
 
@@ -2066,14 +2196,22 @@ each API-backed check carries explicit observability requirements.
   `classify-merge-state`, `comment-rebase`), the target entity IDs (repository
   slug, pull-request number, workflow ID, alert number), the outcome
   (`compliant`, `finding`, `actuated`, `skipped`, `error`), and, for actuators,
-  an idempotency key so a replay is identifiable. Secret **values** are never
-  logged; only secret names and the store they were found in.
+  the deduplication key so a replay is identifiable. Every actuator attempt
+  additionally emits exactly one terminal outcome from the Section 2.1.2
+  vocabulary — `created`, `duplicate_suppressed`, `reconciled_existing`,
+  `retry_exhausted`, `reconcile_failed`, or `shutdown_aborted` — which is what
+  distinguishes a sweep that did nothing because the effect already existed
+  from one that failed. Secret **values** are never logged; only secret names
+  and the store they were found in.
 - **Metrics.** Each sweep publishes bounded, low-cardinality counters and
   histograms: checks run, findings raised, actuators fired, API calls made,
   rate-limit remaining, and sweep duration, labelled by check ID and outcome
-  only (never by repository or entity ID, which would be unbounded). The
-  remaining GitHub API rate-limit budget is recorded so exhaustion is
-  observable before it causes skips.
+  only (never by repository or entity ID, which would be unbounded). Actuator
+  attempts are counted by terminal outcome, so duplicate suppression and
+  reconciliation are visible as normal operation rather than inferred from
+  their absence, and retry exhaustion is countable. The remaining GitHub API
+  rate-limit budget is recorded so exhaustion is observable before it causes
+  skips.
 - **Tracing.** A sweep opens one trace per run with a span per repository and a
   child span per API call, so latency and failures can be attributed across the
   API boundary. Trace and span IDs are included in the structured log lines to
@@ -2081,8 +2219,12 @@ each API-backed check carries explicit observability requirements.
 - **Alerts.** Actionable alerts fire on conditions that SARIF cannot express: a
   sweep that errors or does not complete, an actuator whose API call fails, a
   rate-limit budget below a threshold, and — mirroring AM-002 — a sweep whose
-  own workflow concludes `startup_failure`. Alerts name the check ID and the
-  affected entity so an operator can act without first reproducing the sweep.
+  own workflow concludes `startup_failure`. Two outcomes from the Section 2.1.2
+  vocabulary also alert, because each leaves work in a state no later sweep can
+  infer: `reconcile_failed`, and `shutdown_aborted` with
+  `phase="unknown_outcome"`, where a create may or may not have landed. Alerts
+  name the check ID and the affected entity so an operator can act without
+  first reproducing the sweep.
 
 These requirements are part of the `github-api` sensor and actuator contract
 (Section 2.1.2) and gate the roadmap item that introduces those types (Section
