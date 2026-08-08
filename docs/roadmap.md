@@ -284,11 +284,38 @@ actuators that remediate them. Each check ships as a lint rule package under
   sweep publishes bounded per-check metrics and fires an alert on error or
   incompletion. The package declares least-privilege token scopes; API calls
   carry a request timeout and retry transient failures with exponential
-  backoff; the token and any secret value are never persisted or logged; and
-  each actuator is idempotent via a stable deduplication key with
-  check-before-create, so a second `rule mutate` (or repeated sweep) against
-  the mocked API produces no duplicate comment, issue, or annotation. This item
-  is a prerequisite for CV-003, AM-001, AM-002, DP-001, and DP-002.
+  backoff; and the token and any secret value are never persisted or logged.
+  This item is a prerequisite for CV-003, AM-001, AM-002, DP-001, and DP-002.
+- [ ] Implement the atomic concurrency boundary for `github-api` actuators
+  (design document Section 2.1.2): server-side idempotency where the operation
+  provides it (secret `PUT` upserts, remediation-branch ref creation) and the
+  single-flight git-ref lease elsewhere (comments, issues), with the
+  deduplication key embedded in every created effect so it can be found again.
+  Acceptance, per effect type (comment, issue, and the branch-mediated
+  annotation):
+  - **Concurrent sweeps.** At least two actuator workers start concurrently
+    against a fixture with the same deduplication key. Exactly one external
+    effect exists afterwards, and every non-winning worker terminates in
+    `duplicate_suppressed` or `reconciled_existing` — never in an error.
+  - **Lost response.** A fixture where the server creates the effect but the
+    client times out or loses the response. The worker reconciles against the
+    embedded key, finds the effect, issues no second create, and reports
+    `reconciled_existing`.
+  - **Transient failure.** Fixtures returning `429` (with `Retry-After`) and
+    `503` before succeeding. Retries are bounded by the documented attempt and
+    time budgets, and exactly one effect exists after recovery.
+  - **Permanent failure and retry exhaustion.** A fixture returning `403`
+    fails fast without retrying, and one exhausting the retry budget reports
+    `retry_exhausted`; neither retries unboundedly, and both surface in logs,
+    metrics, and an alert.
+  - **Shutdown.** Fixtures interrupting a worker before the create and after a
+    create with an unknown outcome. Neither deletes nor duplicates an effect:
+    the lease is released or left to expire, `shutdown_aborted` is emitted with
+    the phase reached, and the next sweep reconciles the key before retrying,
+    ending with exactly one effect.
+  - Sequential repeat-sweep tests are retained, but do not stand alone as the
+    idempotency proof: a sequential pass cannot observe the interleaving that
+    check-before-create fails to exclude.
 - [ ] Ship the remaining lint-gate binding rule packages (QG-002, QG-003):
   workflow sensors for the hardened pinned-release install step (version-keyed
   cache, shell-variable indirection, `--locked`, binstall-or-build fallback,
@@ -329,8 +356,10 @@ actuators that remediate them. Each check ships as a lint rule package under
   leaving a fixture blocked by a missing approval untouched; the AM-002
   actuator opens a tracking issue; and a second sweep over the same fixture
   posts no duplicate `@dependabot rebase` comment and opens no duplicate
-  tracking issue (check-before-create keyed on the pull request and the
-  workflow).
+  tracking issue, and — the case a sequential re-run cannot reach — two
+  concurrent sweeps over the same fixture also yield exactly one comment and
+  one issue, the losers reporting `duplicate_suppressed`, via the single-flight
+  lease keyed on the pull-request head and the workflow ID.
 - [ ] Implement the dependency-pin actionability sensors (DP-001, DP-002):
   cross-reference open Dependabot alerts' first patched versions against
   manifest requirements, and detect git-revision pins lacking a
@@ -338,9 +367,10 @@ actuators that remediate them. Each check ships as a lint rule package under
   manifest pinning below a patched version raises DP-001 with the blocked alert
   numbers; the DP-002 actuator inserts the `TODO` via the comment-preserving
   TOML remediation provider and raises the tracking issue; and re-running the
-  actuators is idempotent — no duplicate migration issue, tracking issue, or
-  `TODO` annotation is created when an equivalent one keyed on the alert or
-  git-revision dependency already exists.
+  actuators — sequentially or as two concurrent sweeps — creates no duplicate
+  migration issue, tracking issue, or `TODO` annotation, the issue serialized
+  by the single-flight lease keyed on the alert and the annotation by the
+  remediation-branch ref keyed on the git-revision dependency.
 - [ ] Ship the Dependabot governance rule packages (DB-001 to DB-004):
   manifest-scan sensor diffing package roots against `dependabot.yml` entries,
   cooldown policy checks (tiered for semver ecosystems, `default-days` for
