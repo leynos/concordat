@@ -2,13 +2,17 @@ MDLINT ?= $(shell command -v markdownlint-cli2 2>/dev/null || echo "$(HOME)/.bun
 NIXIE ?= $(shell which nixie)
 MDFORMAT_ALL ?= $(shell which mdformat-all)
 VALE ?= $(shell which vale)
-TOOLS = $(MDFORMAT_ALL) ty $(MDLINT) $(NIXIE) uv
+TOOLS = $(MDFORMAT_ALL) $(MDLINT) $(NIXIE) uv
 VENV_TOOLS = pytest
 ACRONYM_SCRIPT ?= scripts/update_acronym_allowlist.py
 UV_ENV = UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools
 RUFF := $(UV_ENV) uv run ruff
 TYPOS_VERSION ?= 1.48.0
 TYPOS := uv tool run typos@$(TYPOS_VERSION)
+# Pinned so `make typecheck` reports the same diagnostics locally and in
+# CI. An unpinned `ty` drifts between machines and hides real findings.
+TY_VERSION ?= 0.0.65
+TY := uv tool run ty@$(TY_VERSION)
 
 .PHONY: help all clean build build-release lint fmt check-fmt \
         markdownlint nixie spelling test typecheck vale $(TOOLS) $(VENV_TOOLS)
@@ -72,10 +76,10 @@ lint: build ## Run linters
 	$(RUFF) check
 	+$(MAKE) spelling
 
-typecheck: build ty ## Run typechecking
-	ty --version
-	ty check concordat tests
-	PYTHONPATH=scripts ty check scripts
+typecheck: build uv ## Run typechecking
+	$(TY) --version
+	$(TY) check concordat tests
+	PYTHONPATH=scripts $(TY) check scripts
 
 markdownlint: $(MDLINT) ## Lint Markdown files
 	$(MDLINT) '**/*.md'

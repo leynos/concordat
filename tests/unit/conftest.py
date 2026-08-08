@@ -1,4 +1,4 @@
-"""Shared fixtures for persistence unit tests."""
+"""Shared fixtures for the unit suite."""
 
 from __future__ import annotations
 
@@ -12,8 +12,80 @@ import pytest
 
 import concordat.persistence.gitops as gitops
 import concordat.persistence.models as persistence_models
-from concordat import estate_execution
-from concordat.estate import EstateRecord
+from concordat import estate_execution, estate_repository
+from concordat.estate import EstateRecord, RemoteProbe
+
+if typ.TYPE_CHECKING:
+    import unittest.mock as mock
+
+    import pytest_mock
+
+
+@pytest.fixture
+def mock_remote_probe(
+    mocker: pytest_mock.MockFixture,
+) -> typ.Callable[..., mock.Mock]:
+    """Return a factory for mocking estate remote probes."""
+
+    def factory(
+        *,
+        reachable: bool,
+        exists: bool,
+        empty: bool,
+        error: str | None = None,
+    ) -> mock.Mock:
+        probe = RemoteProbe(
+            reachable=reachable,
+            exists=exists,
+            empty=empty,
+            error=error,
+        )
+        return mocker.patch.object(
+            estate_repository, "_probe_remote", return_value=probe
+        )
+
+    return factory
+
+
+@pytest.fixture
+def mock_bootstrap(mocker: pytest_mock.MockFixture) -> mock.Mock:
+    """Mock template bootstrapping during init_estate tests."""
+    return mocker.patch.object(estate_repository, "_bootstrap_template")
+
+
+@pytest.fixture
+def fake_github_client(mocker: pytest_mock.MockFixture) -> mock.Mock:
+    """Patch `_build_client` with a GitHub client that has no repository yet.
+
+    The organisation mock is reachable as
+    ``fake_github_client.organization.return_value`` for tests that assert
+    the repository was created through it.
+    """
+    client = mocker.Mock()
+    client.repository.return_value = None
+    client.organization.return_value = mocker.Mock()
+    mocker.patch.object(estate_repository, "_build_client", return_value=client)
+    return client
+
+
+@pytest.fixture
+def xdg_env(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> dict[str, str]:
+    """Redirect every XDG base into the test's temporary directory.
+
+    Shared so no test reads or writes the developer's real XDG directories,
+    and so an active owner written by one test cannot be observed by another.
+    """
+    mapping = {
+        "XDG_CONFIG_HOME": str(tmp_path / "config"),
+        "XDG_CACHE_HOME": str(tmp_path / "cache"),
+        "XDG_STATE_HOME": str(tmp_path / "state"),
+    }
+    for key, value in mapping.items():
+        monkeypatch.setenv(key, value)
+    return mapping
 
 
 @dataclasses.dataclass(frozen=True)
@@ -103,8 +175,19 @@ def persist_prompts() -> typ.Iterator[str]:
 def persist_monkeypatch_base(
     monkeypatch: pytest.MonkeyPatch,
     persist_repo_setup: tuple[Path, pygit2.Repository, Path, EstateRecord],
+    xdg_env: dict[str, str],
 ) -> None:
-    """Apply shared monkeypatches for persistence repo setup."""
+    """Apply shared isolated-environment setup for persistence tests.
+
+    `xdg_env` is depended on for its ordering, not its value. `persist_estate`
+    reads the active owner and the owner's credentials file, so these tests
+    need those paths pinned to this test's own `tmp_path`: the autouse
+    `_isolated_xdg_bases` in `tests/conftest.py` already keeps every test out
+    of the real home, but it points at a separate factory-made directory, so
+    a test cannot write a credentials file where the code under test will
+    look for it.
+    """
+    del xdg_env
     workdir, _, _, _ = persist_repo_setup
     monkeypatch.setattr(
         estate_execution,
@@ -137,7 +220,11 @@ def persist_test_context(
     persist_monkeypatch_base: None,
     stub_s3: type[StubS3],
 ) -> PersistTestContext:
-    """Bundle common fixtures for persist_estate tests."""
+    """Bundle common fixtures for persist_estate tests.
+
+    XDG isolation arrives through `persist_monkeypatch_base`, which owns the
+    shared environment setup these tests need.
+    """
     workdir, repo, bare, record = persist_repo_setup
     return PersistTestContext(
         workdir=workdir,

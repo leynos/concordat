@@ -1,5 +1,10 @@
 # concordat Users' Guide
 
+For the internal module boundaries behind this CLI — the XDG layout,
+credential resolution order, cache/execution API split, and the rule-run and
+Parabellum sweep contracts — see
+[`docs/developers-guide.md`](developers-guide.md).
+
 ## Overview
 
 The `concordat` command line interface (CLI) helps maintainers enrol Git
@@ -114,14 +119,53 @@ workflows read the same flag before applying changes.
   uv run concordat ls --token "$GITHUB_TOKEN" my-org
   ```
 
+## Configuration, credentials, cache, and state locations
+
+Concordat's local configuration, credentials, caches, and state live under
+the XDG base directories. A single global headline file names the active
+configured owner; per-owner configuration, credentials, estate caches, and
+state are namespaced beneath that owner, while the OpenTofu provider plugin
+cache is shared across owners, since provider binaries are identical
+regardless of owner:
+
+- `$XDG_CONFIG_HOME/concordat/config.yaml` — the **headline** config, global
+  rather than owner-namespaced; its `github_owner` key names the active owner.
+  Manage it with `concordat owner use <owner>` and inspect it with
+  `concordat owner show`.
+- `$XDG_CONFIG_HOME/concordat/owners/<owner>/config.yaml` — that owner's
+  estates and active estate.
+- `$XDG_CONFIG_HOME/concordat/owners/<owner>/credentials.yaml` — optional
+  credential fallbacks, mapping credential environment-variable names
+  (`GITHUB_TOKEN`, `SCW_ACCESS_KEY`, `SCW_SECRET_KEY`, `AWS_*`, `SPACES_*`) to
+  values. Environment variables always win. The file must be `chmod 600`:
+  concordat refuses to read one carrying any group or world permission bit.
+  Concordat never writes this file.
+- `$XDG_CACHE_HOME/concordat/owners/<owner>/estates/<alias>` — estate
+  repository caches.
+- `$XDG_CACHE_HOME/concordat/tofu/plugin-cache` — the shared OpenTofu
+  provider plugin cache (exported as `TF_PLUGIN_CACHE_DIR` unless already set).
+- `$XDG_STATE_HOME/concordat/owners/<owner>/runs/` — throwaway OpenTofu
+  working trees; removed after each run unless `--keep-workdir` is given.
+
+Remote OpenTofu state stored in the configured S3 backend (for example Scaleway
+Object Storage) is unaffected by this layout.
+
+**Migration from the legacy flat format.** Older releases wrote estates
+directly into `$XDG_CONFIG_HOME/concordat/config.yaml` — the same path the
+headline config now occupies. A file found there carrying an `estate` section
+is therefore a legacy configuration: its estates are moved into
+`owners/<owner>/config.yaml` automatically the first time the owner can be
+derived from those records, and the headline file is rewritten with only its
+`github_owner` key and any other non-estate settings.
+
 ## Managing estates
 
 Concordat tracks platform-standards repositories, referred to as *estates*, in
-`$XDG_CONFIG_HOME/concordat/config.yaml` (`~/.config/concordat/config.yaml` on
-most systems). Each estate entry records an alias, the managed `github_owner`,
-the Git URL for the platform-standards repository, the OpenTofu inventory path,
-and the default branch. The CLI uses the **active estate** to determine where
-enrolment PRs should be opened.
+the active owner's configuration file (see the locations section above). Each
+estate entry records an alias, the managed `github_owner`, the Git URL for the
+platform-standards repository, the OpenTofu inventory path, and the default
+branch. The CLI uses the **active estate** to determine where enrolment PRs
+should be opened.
 
 - Bootstrap a new estate from the bundled template:
 
@@ -199,6 +243,54 @@ checkout against the template and optionally copy missing/outdated artefacts.
   uv run python -m scripts.canon_artifacts tui path/to/platform-standards
   ```
 
+## Auditing a checkout against a lint rule package
+
+`concordat artefact rule run` evaluates one canon lint rule package against a
+local checkout and reports structured findings. The first package,
+`rust-makefile-baseline`, audits a Rust repository's root `Makefile` for the
+canonical `build`, `test`, and `lint` targets (FP-003) and for a binding
+Whitaker lint gate (QG-001):
+
+```shell
+concordat artefact rule run rust-makefile-baseline --repo /path/to/checkout
+```
+
+Options:
+
+- `--repo PATH` — the checkout to audit (defaults to the current
+  directory).
+- `--format {table,json}` — output format (defaults to `table`).
+
+Verdicts are three-valued. `compliant` means the finding set is empty;
+`noncompliant` means the policy proved a violation; `indeterminate` means the
+policy could not prove compliance and fails closed (for example, the `Makefile`
+includes other files, or the parse had to recover from syntax errors).
+
+Exit codes: `0` compliant; `1` at least one finding, including indeterminate
+verdicts; `2` operational failure (for example, the pinned `makeutil` or
+`conftest` executable is missing), reported on standard error.
+
+The command requires two external tools on `PATH`: `conftest` and the pinned
+`makeutil` (see
+`platform-standards/canon/lint-rules/rust-makefile-baseline/README.md` for the
+pin and regeneration workflow).
+
+### Sweeping the Rust estate
+
+`scripts/parabellum_sweep.py` audits every repository listed in
+`docs/parabellum/estate.yaml` and appends one record per repository to the
+append-only campaign ledger `docs/parabellum/ledger.jsonl`:
+
+```shell
+uv run python -m scripts.parabellum_sweep [--only a,b] [--limit N] [--force]
+uv run python -m scripts.parabellum_sweep report
+```
+
+A repository already ledgered at its current head commit is skipped unless
+`--force` is given, so an interrupted sweep resumes by re-running the same
+command. The `report` subcommand regenerates
+`docs/parabellum/baseline-report.md` from the ledger.
+
 ## Previewing and applying estate changes
 
 Use the `plan` and `apply` commands to run OpenTofu against the active estate
@@ -213,21 +305,23 @@ without leaving the CLI. Both commands require `GITHUB_TOKEN` and the estate's
   ```
 
   The CLI refreshes the cached estate under
-  `$XDG_CACHE_HOME/concordat/estates/<alias>`, clones it into a temporary
-  directory, writes `terraform.tfvars` with the recorded owner, runs
-  `tofu init -input=false`, and then `tofu plan`. Paths are echoed, so the
-  workspace can be inspected; pass `--keep-workdir` to skip the cleanup step.
-  Concordat preserves OpenTofu's standard CLI plan output (including the
-  per-resource diff), so operators do not need to re-run `tofu plan` manually
-  just to see what would change.
+  `$XDG_CACHE_HOME/concordat/owners/<owner>/estates/<alias>`, clones it into a
+  run directory under `$XDG_STATE_HOME/concordat/owners/<owner>/runs/`, writes
+  `terraform.tfvars` with the recorded owner, runs `tofu init -input=false`,
+  and then `tofu plan`. Paths are echoed, so the workspace can be inspected;
+  pass `--keep-workdir` to skip the cleanup step. Concordat preserves
+  OpenTofu's standard CLI plan output (including the per-resource diff), so
+  operators do not need to re-run `tofu plan` manually just to see what would
+  change.
 
   When `backend/persistence.yaml` exists with `enabled: true`, the CLI adds
   `-backend-config=<path>` to `tofu init`, maps `SCW_ACCESS_KEY`/
-  `SCW_SECRET_KEY` onto `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` when
-  needed, and fails fast if neither pair is present. Standard error (stderr)
-  logs echo the backend bucket, key, region, and config path—never
-  credentials—for traceability. If the manifest is absent or `enabled: false`,
-  `plan` and `apply` keep using the local state layout.
+  `SCW_SECRET_KEY` or `SPACES_ACCESS_KEY_ID`/`SPACES_SECRET_ACCESS_KEY` onto
+  `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` when needed, and fails fast if
+  none of the pairs is present. Standard error (stderr) logs echo the backend
+  bucket, key, region, and config path—never credentials—for traceability.
+  If the manifest is absent or `enabled: false`, `plan` and `apply` keep
+  using the local state layout.
 
 - Reconcile the estate with `concordat apply`. The command requires an explicit
   `--auto-approve` to match OpenTofu's automation guard.
@@ -306,10 +400,13 @@ Remote-state backends rely on environment variables; the CLI simply checks that
 they exist before shelling out to OpenTofu. Export the pair that matches the
 selected provider:
 
-| Provider                | Required variables                           | Optional variables                                                       | Notes                                                                      |
-| ----------------------- | -------------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
-| AWS S3 / Spaces         | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | `AWS_SESSION_TOKEN` (when using temporary credentials such as STS)       | Values are passed straight to OpenTofu's S3 backend.                       |
-| Scaleway Object Storage | `SCW_ACCESS_KEY`, `SCW_SECRET_KEY`           | `AWS_SESSION_TOKEN` (only when Scaleway issues temporary AWS-style keys) | Concordat maps these onto the AWS variable names before invoking OpenTofu. |
+Table 1: Backend environment variables required per storage provider.
+
+| Provider                | Required variables                                 | Optional variables                                                       | Notes                                                                      |
+| ----------------------- | -------------------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| AWS S3                  | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`       | `AWS_SESSION_TOKEN` (when using temporary credentials such as STS)       | Values are passed straight to OpenTofu's S3 backend.                       |
+| Scaleway Object Storage | `SCW_ACCESS_KEY`, `SCW_SECRET_KEY`                 | `AWS_SESSION_TOKEN` (only when Scaleway issues temporary AWS-style keys) | Concordat maps these onto the AWS variable names before invoking OpenTofu. |
+| DigitalOcean Spaces     | `SPACES_ACCESS_KEY_ID`, `SPACES_SECRET_ACCESS_KEY` | `AWS_SESSION_TOKEN` (only when Spaces issues temporary AWS-style keys)   | Concordat maps these onto the AWS variable names before invoking OpenTofu. |
 
 When `AWS_SESSION_TOKEN` is present, Concordat forwards it alongside whichever
 credential pair is selected so temporary AWS STS, Scaleway, or Spaces sessions
@@ -440,19 +537,34 @@ with the following measures:
   operations (read/write/delete on the state prefix).
 - **Server-side encryption (AWS):** Enable SSE-S3 or SSE-KMS on the bucket.
   OpenTofu's S3 backend automatically uses SSE when the bucket enforces it.
-- **Client-side encryption (Scaleway):** Scaleway Object Storage supports SSE-C
-  (customer-provided keys) but not SSE-S3. OpenTofu's S3 backend does not
-  natively support SSE-C, so encryption must happen outside OpenTofu. Wrap
-  `tofu state`/`tofu plan` calls with tooling that encrypts state files before
-  upload, or use external envelope-encryption workflows.
+- **Server-side encryption (Scaleway):** Scaleway Object Storage offers
+  SSE-ONE and SSE-KMS alongside SSE-C, so state can be encrypted at rest.
+  Configure it in the Scaleway provider or bucket configuration rather than
+  through the backend.
+- **Do not set `encrypt = true` on Scaleway or DigitalOcean Spaces:** that
+  flag makes the OpenTofu S3 backend send an AES256 (SSE-S3) header, which
+  neither provider accepts. Concordat omits it for this reason; bucket
+  encryption is configured provider-side instead.
+- **Server-side encryption with a customer-provided key (SSE-C):** OpenTofu's
+  S3 backend supports SSE-C directly through the `sse_customer_key` backend
+  argument, which can be sourced from the `AWS_SSE_CUSTOMER_KEY` environment
+  variable (a 32-byte, base64-encoded key) instead of being written into
+  committed backend configuration. **The key must never be persisted to the
+  repository, the backend file, or logs:** losing it makes the state
+  unreadable, and leaking it defeats the encryption.
+- **Client-side or envelope encryption (optional):** a genuinely separate,
+  independent control from SSE-C, useful whichever provider is in use. Wrap
+  `tofu state`/`tofu plan` calls with tooling that encrypts state before
+  upload.
 - **Audit access logs:** Periodically review bucket access logs to detect
   unauthorized reads or unexpected access patterns.
 
 ### Estate configuration file
 
-Concordat stores estate metadata in `$XDG_CONFIG_HOME/concordat/config.yaml`
-(`~/.config/concordat/config.yaml` when the environment variable is unset). The
-file is regular YAML 1.2 with an `estate` section:
+Concordat stores estate metadata in
+`$XDG_CONFIG_HOME/concordat/owners/<owner>/config.yaml`, where `<owner>` is
+the active owner configured in the headline configuration. The file is
+regular YAML 1.2 with an `estate` section:
 
 ```yaml
 estate:

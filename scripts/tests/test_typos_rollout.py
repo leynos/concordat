@@ -145,6 +145,75 @@ def test_merge_rejects_conflicting_corrections(
         rollout.merge_dictionaries(base, local)
 
 
+def test_local_overlay_withdraws_a_base_ignore_pattern(
+    rollout_modules: tuple[types.ModuleType, types.ModuleType, types.ModuleType],
+) -> None:
+    """A local `remove` drops a base pattern that is too broad for this repo.
+
+    Every other field merges by union, which can only ever widen what is
+    skipped. Withdrawal is what lets a repository check something the shared
+    base chose to ignore.
+    """
+    _, rollout, _ = rollout_modules
+    base = rollout.Dictionary(ignore_patterns=("`[^`\\n]+`", "https?://"))
+    local = rollout.Dictionary(
+        ignore_patterns=("`color`",), removed_patterns=("`[^`\\n]+`",)
+    )
+
+    merged = rollout.merge_dictionaries(base, local)
+
+    assert "`[^`\\n]+`" not in merged.ignore_patterns, merged.ignore_patterns
+    assert "https?://" in merged.ignore_patterns, merged.ignore_patterns
+    assert "`color`" in merged.ignore_patterns, merged.ignore_patterns
+
+
+def test_withdrawing_an_absent_pattern_is_not_an_error(
+    rollout_modules: tuple[types.ModuleType, types.ModuleType, types.ModuleType],
+) -> None:
+    """The shared base may drop a pattern this repository already withdrew.
+
+    That base is maintained elsewhere, so treating a no-op removal as a
+    failure would let an upstream improvement break generation here.
+    """
+    _, rollout, _ = rollout_modules
+    base = rollout.Dictionary(ignore_patterns=("https?://",))
+    local = rollout.Dictionary(removed_patterns=("`[^`\\n]+`",))
+
+    merged = rollout.merge_dictionaries(base, local)
+
+    assert merged.ignore_patterns == ("https?://",), merged.ignore_patterns
+
+
+def test_ignoring_and_removing_the_same_pattern_is_rejected(
+    rollout_modules: tuple[types.ModuleType, types.ModuleType, types.ModuleType],
+) -> None:
+    """An overlay that both adds and withdraws a pattern is contradictory."""
+    _, rollout, _ = rollout_modules
+    local = rollout.Dictionary(
+        ignore_patterns=("`color`",), removed_patterns=("`color`",)
+    )
+
+    with pytest.raises(ValueError, match="both ignores and removes"):
+        rollout.merge_dictionaries(rollout.Dictionary(), local)
+
+
+def test_generated_config_does_not_skip_all_inline_code(
+    rollout_modules: tuple[types.ModuleType, types.ModuleType, types.ModuleType],
+) -> None:
+    """The repository's own generated config checks inline code spans.
+
+    A blanket inline-code exemption hides misspellings in exactly the places
+    that matter most — identifiers, flags, and file names — so its return
+    should fail here rather than be noticed in review.
+    """
+    _, _, generator = rollout_modules
+    rendered = generator.render_config()
+
+    assert "`[^`\\n]+`" not in rendered, (
+        "the blanket inline-code exemption is back in the generated config"
+    )
+
+
 def test_render_and_write_are_deterministic_valid_toml(
     rollout_modules: tuple[types.ModuleType, types.ModuleType, types.ModuleType],
     tmp_path: Path,

@@ -11,7 +11,31 @@ accepted = ["Hashi"] # HashiCorp product-name prefix.
 [words.corrections]
 
 [patterns]
-ignore = []
+# Named exemptions, each an identifier that is spelled by something outside
+# this repository's control. These replace the base's blanket inline-code
+# skip removed below: checking resumes everywhere except these names, so a
+# misspelling in any other code span is now reported.
+ignore = [
+  # A GitHub API field, and the documentation style guide's own example of
+  # keeping US spelling when it is an API name.
+  '`color`',
+  # Symbols defined in this repository.
+  '\bcanon_artifacts\b',
+  # A flag defined by `act`.
+  '--artifact-server-path',
+  # A deliberate misspelling: the OpenTofu guide uses it to show what the
+  # error looks like, so correcting it would destroy the example.
+  '`var\.iamge_id`',
+]
+# The shared base skips every inline-code span. That hides real misspellings
+# in prose that happens to be marked up as code — identifiers, flags, and
+# file names are exactly where a typo is most expensive — so this repository
+# withdraws it. Removing it currently costs nothing: the Markdown sources
+# report no findings without it.
+remove = ['`[^`\n]+`']
 
 [files]
-exclude = [".terraform"] # Shared policy also excludes generated OpenTofu output.
+# Shared policy also excludes generated OpenTofu output; the Parabellum
+# baseline report is generated and quotes commit SHA prefixes that the
+# tokenizer misreads as words.
+exclude = [".terraform", "docs/parabellum/baseline-report.md"]

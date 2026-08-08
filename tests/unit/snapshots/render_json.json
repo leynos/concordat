@@ -1,0 +1,30 @@
+{
+  "rule_package": "rust-makefile-baseline",
+  "verdict": "noncompliant",
+  "findings": [
+    {
+      "rule_id": "FP-003",
+      "severity": "error",
+      "verdict": "noncompliant",
+      "path": "Makefile",
+      "line": 12,
+      "message": "required target 'test' is not defined unconditionally"
+    },
+    {
+      "rule_id": "QG-001",
+      "severity": "error",
+      "verdict": "noncompliant",
+      "path": "Makefile",
+      "line": 27,
+      "message": "the lint recipe ignores errors, so the gate cannot fail the build"
+    },
+    {
+      "rule_id": "QG-001",
+      "severity": "warning",
+      "verdict": "indeterminate",
+      "path": "Makefile",
+      "line": 0,
+      "message": "an include directive makes the gate unprovable"
+    }
+  ]
+}

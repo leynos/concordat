@@ -1,0 +1,5 @@
+# Preserve the source-distribution contents shipped by the previous build
+# backend: the full canon platform-standards tree plus the scripts and tests.
+graft platform-standards
+graft scripts
+graft tests

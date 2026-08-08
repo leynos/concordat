@@ -195,12 +195,15 @@ false-positive rate is acceptable. Exemptions use the existing
   open a matching platform-standards pull request that removes the repository
   from the OpenTofu inventory, so the estate stops targeting it.
 - `concordat estate` bootstraps `platform-standards` repositories from the
-  bundled template, persists aliases in `~/.config/concordat/config.yaml`, and
-  exposes helpers to list, inspect, and select the active estate. The enrolment
-  workflow automatically targets the active estate unless the operator passes
+  bundled template, persists aliases in the owner-namespaced configuration
+  (`$XDG_CONFIG_HOME/concordat/owners/<owner>/config.yaml`, selected by the
+  headline `config.yaml`'s `github_owner`), and exposes helpers to list,
+  inspect, and select the active estate. The enrolment workflow automatically
+  targets the active estate unless the operator passes
   `--platform-standards-url`.
-- `concordat plan` clones the active estate into a temporary workspace, renders
-  the OpenTofu variable file from estate metadata, and invokes OpenTofu via the
+- `concordat plan` clones the active estate into a throwaway per-run workspace
+  under the owner's XDG state home (see the estate cache section), renders the
+  OpenTofu variable file from estate metadata, and invokes OpenTofu via the
   tofupy wrapper. The command preserves OpenTofu's standard CLI plan output
   (including the diff), so operators can review drift without leaving the CLI.
 - `concordat apply` reuses the same machinery but runs OpenTofu apply via the
@@ -215,6 +218,10 @@ false-positive rate is acceptable. Exemptions use the existing
 - Future extensions may scaffold a pull request that adds the reusable
   `priority-sync` workflow to a repository, but the CLI continues to defer
   state changes to IaC.
+
+See [`docs/developers-guide.md`](developers-guide.md) for the CLI's internal
+module boundaries — XDG layout, credential resolution, the cache/execution
+API split, and the rule-run and Parabellum sweep contracts.
 
 ### 2.7 Estate execution workflow
 
@@ -246,11 +253,16 @@ template usage, satisfying the evaluate-mode acceptance criteria.
 #### 2.7.2 Workspace management
 
 - Estate repositories are cached under
-  `$XDG_CACHE_HOME/concordat/estates/<alias>`. `plan`/`apply` issue a fetch and
-  hard reset against this cache before every run.
-- Each execution clones the cached workspace into a temporary directory (e.g.
-  `/tmp/concordat-plan-XXXX`). This keeps the cache clean and makes it easy to
-  tear down state after completion.
+  `$XDG_CACHE_HOME/concordat/owners/<owner>/estates/<alias>`. `plan`/`apply`
+  issue a fetch and hard reset against this cache before every run.
+- Each execution clones the cached workspace into a per-run directory under the
+  configured owner's XDG state home (e.g.
+  `$XDG_STATE_HOME/concordat/owners/<owner>/runs/plan-XXXX`). This keeps the
+  cache clean and makes it easy to tear down state after completion. An owner
+  is always resolvable in normal execution: cache namespacing requires either
+  the estate's `github_owner` or an active owner, and fails closed otherwise.
+  Only the injected `cache_directory` test seam bypasses that requirement, and
+  it is the sole route to the system temporary-directory fallback.
 - Variable files are generated on the fly in the execution directory. At a
   minimum they set `github_owner`. Sensitive values such as `github_token`
   continue to come from the environment unless the user explicitly requests a
@@ -309,8 +321,10 @@ touching module logic.
 
 The delivered CLI follows the workflow above:
 
-- Active estates are refreshed into `$XDG_CACHE_HOME/concordat/estates/<alias>`
-  and copied into a per-run temporary directory. The CLI prints the workspace
+- Active estates are refreshed into
+  `$XDG_CACHE_HOME/concordat/owners/<owner>/estates/<alias>` and copied into a
+  throwaway per-run directory under
+  `$XDG_STATE_HOME/concordat/owners/<owner>/runs`. The CLI prints the workspace
   path at the start of every execution and removes it afterwards unless
   `--keep-workdir` is passed for debugging.
 - `terraform.tfvars` is synthesized with the estate's `github_owner` before
@@ -430,10 +444,13 @@ The CLI also supports the Scaleway-specific aliases `SCW_ACCESS_KEY`/
 OpenTofu. DigitalOcean Spaces operators can rely on `SPACES_ACCESS_KEY_ID`/
 `SPACES_SECRET_ACCESS_KEY`; Concordat applies the same mapping so every
 provider reuses the AWS env var contract. The design deliberately omits
-`encrypt = true` because Scaleway only offers server-side encryption with
-customer-provided keys (SSE-C) and Terraform's backend expects SSE-S3 headers.
-At-rest encryption therefore remains a caller concern (for example, by keeping
-secrets out of state or using client-side encryption).
+`encrypt = true` because Terraform's backend sends an AES256 (SSE-S3) header
+with that flag, and neither Scaleway nor DigitalOcean Spaces accepts it.
+Scaleway also offers SSE-ONE and SSE-KMS in addition to SSE-C, but bucket
+encryption for Scaleway is configured separately rather than through
+Terraform's `encrypt` flag. At-rest encryption therefore remains a caller
+concern (for example, by configuring bucket-side encryption directly,
+keeping secrets out of state, or using client-side encryption).
 
 Every persistence descriptor ships alongside a YAML manifest
 (`platform-standards/tofu/backend/persistence.yaml`) storing a schema version,
@@ -1062,8 +1079,8 @@ In this mode the command would:
 
 - clone or refresh the estate platform-standards repository via the existing
   estate cache machinery, and
-- run operations inside a temporary workspace, consistent with `plan` and
-  `apply`.
+- run operations inside a throwaway per-run workspace under the owner's XDG
+  state home, consistent with `plan` and `apply`.
 
 ###### `rule` commands
 
@@ -1115,6 +1132,19 @@ Commands must return stable exit codes for CI integration.
 | 2         | Out of date or missing artefacts detected (`status` in CI mode)          |
 | 3         | Catalogue integrity failure (template manifest mismatch, invalid schema) |
 | 4         | Mutations planned or applied failed (patch application or policy errors) |
+
+Table 3 is a proposal for the general `artefact` command family and does not
+describe what ships today. The one `artefact` subcommand that is
+implemented, `concordat artefact rule run`, ships a narrower, already-fixed
+scheme instead:
+
+- `0` — compliant.
+- `1` — policy findings, including `indeterminate` (which fails closed).
+- `2` — operational failure.
+
+See [`docs/developers-guide.md`, "Verdicts and exit
+codes"](developers-guide.md#verdicts-and-exit-codes) for the mapping from
+verdict to exit code.
 
 ##### Configuration and locking
 
@@ -1257,18 +1287,103 @@ The formal schema for this file is defined below.
 
 #### Table 2: Schema for `.concordat`
 
-| **Field Path**              | **Data Type** | **Requirement**                      | **Description**                                                                                                                                                                                  |
-| --------------------------- | ------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `enrolled`                  | Boolean       | Required                             | Must be set to `true` to signal that the repository is under Concordat/OpenTofu management.                                                                                                      |
-| `language.primary`          | String        | Required                             | The primary programming language of the repository. Must be a lowercase string (e.g., `python`, `go`, `typescript`). This value drives the selection of language-specific linting, and CI rules. |
-| `language.others`           | Array         | Optional                             | A list of other significant languages present in the repository (e.g., `shell`, `make`).                                                                                                         |
-| `infrastructure.opentofu`   | Boolean       | Optional                             | Set to `true` if the repository contains OpenTofu/Terraform code. This enables checks for `Makefile` targets like `tf-plan`. Defaults to `false`.                                                |
-| `infrastructure.kubernetes` | Boolean       | Optional                             | Set to `true` if the repository contains Kubernetes manifests. This enables Kubernetes-specific validation rules. Defaults to `false`.                                                           |
-| `docs.style`                | String        | Optional                             | The name of the Vale style to apply. Must correspond to a directory name in `platform-standards/canon/docs/Styles/`. Example: `your-house`.                                                      |
-| `libraries`                 | Array[Object] | Optional                             | A list of critical internal libraries consumed by this repository, used for guide parity checks.                                                                                                 |
-| `libraries.name`            | String        | Required (if `libraries` is present) | The name of the consumed library repository (e.g., `acme-lib`).                                                                                                                                  |
-| `libraries.version_tag`     | String        | Required (if `libraries` is present) | The Git tag of the library version being used (e.g., `v2.4.1`). The Auditor uses this to fetch the correct version of the library's user guide for comparison.                                   |
-| `ci.needs_release_workflow` | Boolean       | Optional                             | Set to `true` if the repository should be configured with the canonical release workflow. Defaults to `false`.                                                                                   |
+| **Field Path**              | **Data Type** | **Requirement**                      | **Description**                                                                                                                                                                                                                                                                                                                                                                                                          |
+| --------------------------- | ------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `enrolled`                  | Boolean       | Required                             | Must be set to `true` to signal that the repository is under Concordat/OpenTofu management.                                                                                                                                                                                                                                                                                                                              |
+| `language.primary`          | String        | Required                             | The primary programming language of the repository. Must be a lowercase string (e.g., `python`, `go`, `typescript`). This value drives the selection of language-specific linting, and CI rules.                                                                                                                                                                                                                         |
+| `language.others`           | Array         | Optional                             | A list of other significant languages present in the repository (e.g., `shell`, `make`).                                                                                                                                                                                                                                                                                                                                 |
+| `language.rust.surfaces`    | Array[Object] | Optional; planned for v0.3.0         | Governed Rust surfaces as `{path, role}` entries (`path` names a `Cargo.toml` relative to the repository root; `role` is optional and, when supplied, `workspace` or `crate` (inferred from the parsed manifest when omitted)). Authoritative when present, including the empty list ("no governed Rust"). Absent: a root `Cargo.toml` implies a single root surface. Not part of the shipped v0.2.0 schema; see §2.2.1. |
+| `infrastructure.opentofu`   | Boolean       | Optional                             | Set to `true` if the repository contains OpenTofu/Terraform code. This enables checks for `Makefile` targets like `tf-plan`. Defaults to `false`.                                                                                                                                                                                                                                                                        |
+| `infrastructure.kubernetes` | Boolean       | Optional                             | Set to `true` if the repository contains Kubernetes manifests. This enables Kubernetes-specific validation rules. Defaults to `false`.                                                                                                                                                                                                                                                                                   |
+| `docs.style`                | String        | Optional                             | The name of the Vale style to apply. Must correspond to a directory name in `platform-standards/canon/docs/Styles/`. Example: `your-house`.                                                                                                                                                                                                                                                                              |
+| `libraries`                 | Array[Object] | Optional                             | A list of critical internal libraries consumed by this repository, used for guide parity checks.                                                                                                                                                                                                                                                                                                                         |
+| `libraries.name`            | String        | Required (if `libraries` is present) | The name of the consumed library repository (e.g., `acme-lib`).                                                                                                                                                                                                                                                                                                                                                          |
+| `libraries.version_tag`     | String        | Required (if `libraries` is present) | The Git tag of the library version being used (e.g., `v2.4.1`). The Auditor uses this to fetch the correct version of the library's user guide for comparison.                                                                                                                                                                                                                                                           |
+| `ci.needs_release_workflow` | Boolean       | Optional                             | Set to `true` if the repository should be configured with the canonical release workflow. Defaults to `false`.                                                                                                                                                                                                                                                                                                           |
+
+#### 2.2.1. Nested Rust surfaces and gate reachability (design, not yet shipped)
+
+This subsection specifies planned work for `rust-makefile-baseline` v0.3.0. The
+shipped v0.2.0 rule package, and the QG-001 row in Table 3, still bound gate
+delegation to one prerequisite hop and still sniff a root `Cargo.toml` for
+applicability. Nothing described below is enforced today.
+
+The Parabellum baseline showed that root-`Cargo.toml` sniffing under-covers the
+estate: six repositories carry their Rust in subdirectories (`rust/` workspaces
+in cuprum and prosidy-darn; single crates in femtologging's `rust_extension/`,
+msgspec-crockford's `pycrockford_rs/`, and shared-actions' `rust-toy-app/`;
+agent-template-rust holds only Jinja templates with no live crate). It also
+showed that the "one prerequisite hop" bound on lint-gate delegation is too
+conservative: wildside reaches its gate through two literal `$(MAKE)` hops, and
+whitaker's `lint` never reaches its own suite at all — a fact the one-hop model
+could only report as indeterminate.
+
+Two schema and policy extensions close both gaps.
+
+**Declared Rust surfaces.** The `.concordat` manifest gains an optional
+`language.rust.surfaces` list; each entry requires a `path` (a `Cargo.toml`
+relative to the repository root); `role` is optional and, when supplied, must be
+`workspace` or `crate`. When `role` is omitted, it is inferred from the parsed
+manifest — a `[workspace]` table denotes a `workspace`, otherwise a `crate`:
+
+```yaml
+enrolled: true
+language:
+  primary: python
+  others: [rust]
+  rust:
+    surfaces:
+      - path: rust/Cargo.toml
+        role: workspace
+```
+
+Resolution order: a declared list is authoritative, including the empty list,
+which states "no governed Rust here" (agent-template-rust's case — its
+Jinja-templated crate is governed by template rules, not by the Rust baseline).
+When the block is absent, a root `Cargo.toml` implies a single root surface
+(today's behaviour), and its absence remains an AP-001 finding — which thereby
+becomes an onboarding prompt to declare surfaces rather than a dead end.
+Discovery may propose a surfaces list from observed `**/Cargo.toml` paths
+(excluding fixture and template directories) during bootstrap, but only an
+accepted manifest makes it authoritative. The policy-input envelope carries the
+resolved list additively as `cargo.surfaces[] = {path, parsed}` alongside the
+existing root fields, so the envelope stays at `schema_version: 1`.
+
+**Transitive gate reachability.** QG-001's delegation proof widens from one
+prerequisite hop to a full static closure over the parsed Makefile: the
+reachability graph's edges are a rule's prerequisites plus any recipe line that
+invokes `$(MAKE) <literal-target>` in the same file. The closure is cycle-safe
+and needs no depth bound because every edge is a fact from the single parsed
+file. Dynamic edges (`$(MAKE) $(VAR)`, `$(MAKE) -C`, recursive make into other
+files) stay indeterminate, as do includes. A gate invocation is a reachable
+recipe referencing the gate variable or executable; where surfaces are
+declared, the invocation must be qualified to a surface — either a
+`cd <dir> &&` prefix or a `--manifest-path <path>` flag — and QG-001 requires
+every declared surface's gate to be reachable from `lint`.
+
+`make -C <dir>` is indeterminate in every role, both as a reachability edge
+and as a surface qualifier. The two qualifiers above keep the gate invocation
+inside the file being parsed, so it remains a fact; `-C` instead delegates to a
+Makefile this rule never reads, and accepting it would assert a gate that has
+not been observed. Treating it as proof would need the envelope to carry the
+nested file's parse, which it does not: `build_envelope` parses only the
+checkout's root `Makefile`. A repository that delegates its surface gates
+through `-C` therefore reports indeterminate rather than compliant, in keeping
+with how includes and recovered parses already fail closed.
+
+Consequences across the seven repositories that motivated the change: cuprum,
+femtologging, msgspec-crockford, and shared-actions become governable and their
+existing `cd`/`--manifest-path` delegation is recognized; wildside's two-hop
+`$(MAKE)` chain becomes provably compliant; prosidy-darn's disconnected
+`lint-rust` target becomes a true QG-001 finding (its gate is not reachable from
+`lint`); and whitaker's `lint` becomes a true noncompliant finding rather than
+an indeterminate one, since no reachable recipe invokes the suite.
+agent-template-rust exits the Rust estate by declaring an empty surfaces list.
+The rule package implements this as v0.3.0, updating the `two_hop` fixture's
+expectation from indeterminate to compliant and adding surface-qualified
+fixtures; the same revision should extend the gate-variable check to flag `!=`
+(shell-at-read-time) assignments, which the sanctioned `?=` decision does not
+cover.
 
 ### 2.3 Comment-preserving remediation provider
 
@@ -1362,24 +1477,25 @@ breakdown of what constitutes "compliance" within the framework.
 
 #### Table 3: Auditor check catalogue
 
-| **Check ID** | **Description**                                                                                                                      | **Audit Domain**                | **Implementation Tool**                   | **Default Severity** | **Implementation Phase** |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------- | ----------------------------------------- | -------------------- | ------------------------ |
-| RS-001       | Default branch is named `main`.                                                                                                      | Repository Settings             | Python/GitHub API                         | error                | 1                        |
-| RS-002       | Squash merging is enabled; merge commits and rebase merging are disabled.                                                            | Repository Settings             | Python/GitHub API                         | error                | 1                        |
-| RS-003       | "Delete branch on merge" is enabled.                                                                                                 | Repository Settings             | Python/GitHub API                         | error                | 1                        |
-| BP-001       | Default branch protection enforces admin parity, signed commits, reviews, and strict status checks (including the Auditor).          | Branch Governance               | Python/GitHub API                         | error                | 1                        |
-| PM-001       | Repository permissions route through at least one team with maintain/admin scope and expose no outside collaborators with admin.     | Repository Access Controls      | Python/GitHub API                         | error                | 1                        |
-| LB-001       | Canonical priority labels (`priority/p0`–`priority/p3`) exist with the correct colour and description metadata.                      | Label Governance                | Python/GitHub API                         | warning              | 1                        |
-| CI-001       | The `.github/workflows/ci.yml` file must call the canonical reusable CI workflow.                                                    | CI/CD Integrity                 | OPA/Conftest                              | error                | 1                        |
-| CI-002       | The `.github/workflows/release.yml` file must call the canonical reusable release workflow (if `ci.needs_release_workflow` is true). | CI/CD Integrity                 | OPA/Conftest                              | error                | 2                        |
-| CI-003       | Workflows must not use disallowed third-party GitHub Actions.                                                                        | CI/CD Integrity                 | OPA/Conftest                              | error                | 2                        |
-| FP-001       | A `.editorconfig` file must exist and match the canonical version.                                                                   | File and Content Presence       | Python/Checksum                           | error                | 1                        |
-| FP-002       | An `AGENTS.md` file must exist and contain required sections.                                                                        | File and Content Presence       | Python/Content Check                      | error                | 1                        |
-| FP-003       | A `Makefile` must exist and contain canonical targets (`lint`, `test`, `build`).                                                     | File, and Content Presence      | Python/Content Check                      | error                | 2                        |
-| FP-004       | For Python projects, a `ruff.toml` file must exist.                                                                                  | File, and Content Presence      | OPA/Conftest                              | error                | 1                        |
-| PD-001       | All Markdown files must pass Vale linting against the house style guide.                                                             | Prose and Documentation Quality | Vale                                      | warning              | 2                        |
-| SP-001       | The Open Source Security Foundation Scorecard must achieve a minimum score of 7.0.                                                   | Security Posture                | Open Source Security Foundation Scorecard | warning              | 1                        |
-| LG-001       | The `docs/library-users-guide.md` file must match the canonical version from the consumed library tag.                               | File and Content Presence       | Python/Content Check                      | error                | 4                        |
+| **Check ID** | **Description**                                                                                                                                                                                                                                                                                                                                                                    | **Audit Domain**                | **Implementation Tool**                            | **Default Severity** | **Implementation Phase** |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | -------------------------------------------------- | -------------------- | ------------------------ |
+| RS-001       | Default branch is named `main`.                                                                                                                                                                                                                                                                                                                                                    | Repository Settings             | Python/GitHub API                                  | error                | 1                        |
+| RS-002       | Squash merging is enabled; merge commits and rebase merging are disabled.                                                                                                                                                                                                                                                                                                          | Repository Settings             | Python/GitHub API                                  | error                | 1                        |
+| RS-003       | "Delete branch on merge" is enabled.                                                                                                                                                                                                                                                                                                                                               | Repository Settings             | Python/GitHub API                                  | error                | 1                        |
+| BP-001       | Default branch protection enforces admin parity, signed commits, reviews, and strict status checks (including the Auditor).                                                                                                                                                                                                                                                        | Branch Governance               | Python/GitHub API                                  | error                | 1                        |
+| PM-001       | Repository permissions route through at least one team with maintain/admin scope and expose no outside collaborators with admin.                                                                                                                                                                                                                                                   | Repository Access Controls      | Python/GitHub API                                  | error                | 1                        |
+| LB-001       | Canonical priority labels (`priority/p0`–`priority/p3`) exist with the correct colour and description metadata.                                                                                                                                                                                                                                                                    | Label Governance                | Python/GitHub API                                  | warning              | 1                        |
+| CI-001       | The `.github/workflows/ci.yml` file must call the canonical reusable CI workflow.                                                                                                                                                                                                                                                                                                  | CI/CD Integrity                 | OPA/Conftest                                       | error                | 1                        |
+| CI-002       | The `.github/workflows/release.yml` file must call the canonical reusable release workflow (if `ci.needs_release_workflow` is true).                                                                                                                                                                                                                                               | CI/CD Integrity                 | OPA/Conftest                                       | error                | 2                        |
+| CI-003       | Workflows must not use disallowed third-party GitHub Actions.                                                                                                                                                                                                                                                                                                                      | CI/CD Integrity                 | OPA/Conftest                                       | error                | 2                        |
+| FP-001       | A `.editorconfig` file must exist and match the canonical version.                                                                                                                                                                                                                                                                                                                 | File and Content Presence       | Python/Checksum                                    | error                | 1                        |
+| FP-002       | An `AGENTS.md` file must exist and contain required sections.                                                                                                                                                                                                                                                                                                                      | File and Content Presence       | Python/Content Check                               | error                | 1                        |
+| FP-003       | A root `Makefile` must exist and contain canonical targets (`lint`, `test`, `build`).                                                                                                                                                                                                                                                                                              | File and Content Presence       | makeutil + OPA/Conftest (`rust-makefile-baseline`) | error                | 2                        |
+| FP-004       | For Python projects, a `ruff.toml` file must exist.                                                                                                                                                                                                                                                                                                                                | File and Content Presence       | OPA/Conftest                                       | error                | 1                        |
+| QG-001       | The `Makefile` lint gate must be binding: no ignore-errors or soft-skip lint recipes, and gate delegation provable within one prerequisite hop. The gate variable's `?=` assignment (`WHITAKER ?= whitaker`) is the sanctioned estate pattern and is not a finding. Unprovable constructs (includes, recovered parses, ambiguous `lint` definitions) fail closed as indeterminate. | Quality Gate Integrity          | makeutil + OPA/Conftest (`rust-makefile-baseline`) | error                | 2                        |
+| PD-001       | All Markdown files must pass Vale linting against the house style guide.                                                                                                                                                                                                                                                                                                           | Prose and Documentation Quality | Vale                                               | warning              | 2                        |
+| SP-001       | The Open Source Security Foundation Scorecard must achieve a minimum score of 7.0.                                                                                                                                                                                                                                                                                                 | Security Posture                | Open Source Security Foundation Scorecard          | warning              | 1                        |
+| LG-001       | The `docs/library-users-guide.md` file must match the canonical version from the consumed library tag.                                                                                                                                                                                                                                                                             | File and Content Presence       | Python/Content Check                               | error                | 4                        |
 
 ### 3.2. Implementation design and execution model
 

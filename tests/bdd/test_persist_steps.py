@@ -21,10 +21,9 @@ import concordat.persistence as persistence
 import concordat.persistence.gitops as gitops
 import concordat.persistence.pr as persistence_pr
 import concordat.persistence.validation as persistence_validation
-from concordat import cli
+from concordat import cli, xdg
 from concordat.errors import ConcordatError
 from concordat.estate import EstateRecord, register_estate
-from concordat.estate_cache import cache_root
 
 from .conftest import RunResult
 
@@ -111,10 +110,20 @@ class FakeS3Client:
 def fake_s3(monkeypatch: pytest.MonkeyPatch) -> FakeS3Client:
     """Replace the default S3 client factory with a stub."""
     client = FakeS3Client()
+
+    # `persist_estate` binds `owner` onto the default factory with
+    # `functools.partial`, so a stub standing in for that factory has to
+    # accept it. Only the injected `PersistenceOptions.s3_client_factory`
+    # keeps the bare two-argument signature.
+    def factory(
+        region: str, endpoint: str, *, owner: str | None = None
+    ) -> FakeS3Client:
+        return client
+
     monkeypatch.setattr(
         persistence_validation,
         "_default_s3_client_factory",
-        lambda region, endpoint: client,
+        factory,
     )
     return client
 
@@ -342,7 +351,8 @@ def _estate_path(alias: str, relative: str) -> Path:
 
 
 def _estate_root(alias: str) -> Path:
-    return cache_root() / alias
+    # Estates in these scenarios are registered under owner "example".
+    return xdg.owner_estates_cache_dir("example") / alias
 
 
 @then(parsers.cfparse('backend file "{relative}" contains "{expected}"'))

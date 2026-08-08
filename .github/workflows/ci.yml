@@ -36,7 +36,7 @@ jobs:
 
       - name: Install CLI tools
         run: |
-          for tool in mbake ty ruff; do uv tool install ${tool}; done
+          for tool in mbake ruff; do uv tool install ${tool}; done
           npm install -g markdownlint-cli2
           go install github.com/open-policy-agent/conftest@v0.52.0
 

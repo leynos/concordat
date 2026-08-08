@@ -27,9 +27,10 @@ automation assets.
   catalogue without missing entries.
 - [x] Extend `concordat enrol` so that, in addition to writing `.concordat`, it
   opens a pull request in `platform-standards` adding the repository to the
-  OpenTofu inventory. Acceptance: enrolling a repository produces both the
-  `.concordat` commit (optional push) and a passing IaC PR that runs `tofu fmt`,
-  `tflint`, and `tofu validate`.
+  OpenTofu inventory. Acceptance: when the platform-standards URL (or its
+  environment-variable equivalent) is configured, enrolling a repository
+  produces both the `.concordat` commit (optional push) and a passing IaC PR
+  that runs `tofu fmt`, `tflint`, and `tofu validate`.
 - [x] Teach estates about the GitHub namespace they govern by persisting
   `github_owner` in the concordat config file and rejecting enrolments that
   target other owners. Acceptance: `concordat estate init` records the owner and
@@ -68,7 +69,13 @@ template tree into published platform-standards repositories.
   with a `rule.yaml` entrypoint describing sensor inputs, parameters, and
   mutations. Acceptance: `concordat artefact rule validate <rule-id>` validates
   the rule schema, runs policy tests where present, and surfaces parameter
-  defaults and allowed overrides.
+  defaults and allowed overrides. Progress: the first rule package
+  (`rust-makefile-baseline`, audit-only) exists with `rule.yaml`, a Rego
+  sensor, fixtures, and policy tests, and
+  `concordat artefact rule run <rule-id> --repo PATH --format table` (or
+  `--format json`) evaluates it against a local checkout (Operation
+  Parabellum vertical slice; `docs/execplans/parabellum-vertical-slice.md`).
+  `rule validate` and the mutation vocabulary remain open.
 
 ### 1.3. Ship the estate execution CLI
 

@@ -32,6 +32,7 @@ dev = [
     "pyright",
     "pytest-timeout",
     "betamax",
+    "hypothesis",
     "textual>=8.2.8,<9.0",
 ]
 
@@ -82,7 +83,10 @@ ignore = [
     "D203",
     "D213",
 ]
-per-file-ignores = {"**/test_*.py" = ["S101"]}
+# `assert` is the point of a test, and of the assertion helpers that test
+# modules share; the support pattern covers helper modules whose names cannot
+# start with `test_` without pytest collecting them.
+per-file-ignores = {"**/test_*.py" = ["S101"], "tests/**/*_support.py" = ["S101"]}
 
 [tool.ruff.lint.flake8-import-conventions]
 # Declare the banned `from` imports.
@@ -115,6 +119,9 @@ typing = "typ"
 asyncio_default_fixture_loop_scope = "function"
 # Tests automatically killed after seconds elapsed
 timeout = 30
+# Put the repository root on sys.path so `scripts/tests` can import the
+# `scripts` package without a conftest-time sys.path mutation.
+pythonpath = ["."]
 testpaths = ["scripts/tests", "tests"]
 markers = [
     "integration: marks tests that rely on act or external tooling",
@@ -125,5 +132,28 @@ package = true
 
 
 [build-system]
-requires = ["setuptools>=83.0.0", "wheel"]
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+# Ship the canon lint-rule policy tree inside the installed package so
+# `concordat artefact rule run` works from a wheel, not only a source checkout.
+# `concordat.canon` maps to the out-of-tree `platform-standards/canon` source so
+# its `lint-rules/**` data lands under `concordat/canon/lint-rules` in the wheel;
+# the runner resolves this via `importlib.resources`, with a source fallback.
+[tool.setuptools]
+# List every shipped package explicitly. `concordat.canon` is the out-of-tree
+# policy-data package (mapped and populated below); it must be named here, which
+# rules out `packages.find`, so the in-tree subpackages are listed too.
+packages = [
+    "concordat",
+    "concordat.auditor",
+    "concordat.persistence",
+    "concordat.rules",
+    "concordat.canon",
+]
+
+[tool.setuptools.package-dir]
+"concordat.canon" = "platform-standards/canon"
+
+[tool.setuptools.package-data]
+"concordat.canon" = ["lint-rules/**/*"]

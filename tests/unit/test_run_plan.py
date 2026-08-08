@@ -11,6 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from concordat import xdg
 from concordat.estate_execution import (
     EstateExecutionError,
     ExecutionIO,
@@ -85,6 +86,33 @@ def _run_plan_test(
 
     exit_code, _ = run_plan(_make_record(git_repo.path), options, io_streams)
     return exit_code, io_streams, fake_tofu[-1]
+
+
+def test_run_plan_sources_file_backed_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+    git_repo: GitRepo,
+    fake_tofu: list[typ.Any],
+) -> None:
+    """A file-backed credential absent from the environment reaches the tofu env."""
+    monkeypatch.delenv("SCW_ACCESS_KEY", raising=False)
+    # Seed the owner's credentials file with a value the environment lacks; with
+    # no persistence backend the credential passes straight through to tofu.
+    cred_path = xdg.owner_credentials_path("example")
+    cred_path.parent.mkdir(parents=True, exist_ok=True)
+    cred_path.write_text("SCW_ACCESS_KEY: scw-from-file\n", encoding="utf-8")
+    cred_path.chmod(0o600)
+
+    exit_code, io_streams, tofu = _run_plan_test(git_repo, monkeypatch, fake_tofu)
+
+    # `ExecutionIO` declares the streams as `IO[str]`; the helper always builds
+    # them as `StringIO`, so narrowing recovers the captured stderr for the
+    # failure message.
+    stderr = typ.cast("io.StringIO", io_streams.stderr).getvalue()
+    assert exit_code == 0, stderr
+    assert tofu.env.get("SCW_ACCESS_KEY") == "scw-from-file", (
+        "file-backed credential should reach the tofu environment, got "
+        f"{tofu.env.get('SCW_ACCESS_KEY')!r}"
+    )
 
 
 def test_run_plan_uses_persistence_backend_when_enabled(

@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import os
+import pathlib
 import sys
+import typing as typ
 
-from cyclopts import App
+from cyclopts import App, Parameter
 
+from . import credentials, xdg
 from .enrol import disenrol_repositories, enrol_repositories
-from .errors import ConcordatError
+from .errors import ConcordatError, OperationalRuleError
 from .estate import (
     DEFAULT_BRANCH as ESTATE_DEFAULT_BRANCH,
 )
@@ -23,6 +26,7 @@ from .estate import (
     init_estate,
     list_enrolled_repositories,
     list_estates,
+    migrate_legacy_config,
     set_active_estate,
 )
 from .estate_execution import ExecutionIO, ExecutionOptions, run_apply, run_plan
@@ -34,6 +38,10 @@ app = App()
 
 
 estate_app = App()
+
+artefact_app = App()
+
+rule_app = App()
 
 ERROR_NO_ACTIVE_ESTATE = (
     "No active estate configured. Run `concordat estate init --github-owner "
@@ -59,6 +67,11 @@ ERROR_MISSING_GITHUB_TOKEN = (
 )
 ERROR_AUTO_APPROVE_REQUIRED = "concordat apply requires --auto-approve to continue."
 ENV_SKIP_PLATFORM_PR = "CONCORDAT_SKIP_PLATFORM_PR"
+
+
+def _github_token_fallback() -> str | None:
+    """Resolve the GitHub token: environment first, then credentials file."""
+    return credentials.github_token()
 
 
 def _env_flag(name: str) -> bool:
@@ -136,7 +149,7 @@ def enrol(
 ) -> None:
     """Create the concordat enrolment document in each repository."""
     estate = _require_active_estate()
-    token = github_token or os.getenv("GITHUB_TOKEN")
+    token = github_token or _github_token_fallback()
 
     owner_guard = estate.github_owner
     if not owner_guard:
@@ -166,7 +179,7 @@ def enrol(
 @app.command()
 def ls(*namespaces: str, token: str | None = None) -> None:
     """List SSH URLs for GitHub repositories within the given namespaces."""
-    resolved_token = token or os.getenv("GITHUB_TOKEN")
+    resolved_token = token or _github_token_fallback()
     effective_namespaces = _resolve_namespaces(tuple(namespaces))
 
     urls = list_namespace_repositories(
@@ -190,7 +203,7 @@ def disenrol(
 ) -> None:
     """Mark repositories as no longer enrolled in concordat."""
     estate = _require_active_estate()
-    token = github_token or os.getenv("GITHUB_TOKEN")
+    token = github_token or _github_token_fallback()
 
     owner_guard = estate.github_owner
     if not owner_guard:
@@ -229,7 +242,7 @@ def init(
     yes: bool = False,
 ) -> None:
     """Initialise a platform-standards estate repository."""
-    token = github_token or os.getenv("GITHUB_TOKEN")
+    token = github_token or _github_token_fallback()
     confirmer = (lambda _: True) if yes else None
     record = init_estate(
         alias,
@@ -284,7 +297,7 @@ def persist(
 ) -> None:
     """Configure remote state persistence for an estate."""
     record = _resolve_estate_record(alias)
-    token = github_token or os.getenv("GITHUB_TOKEN")
+    token = github_token or _github_token_fallback()
     bucket_env = os.getenv("CONCORDAT_PERSIST_BUCKET")
     region_env = os.getenv("CONCORDAT_PERSIST_REGION")
     endpoint_env = os.getenv("CONCORDAT_PERSIST_ENDPOINT")
@@ -306,6 +319,55 @@ def persist(
 
 
 app.command(estate_app, name="estate")
+
+
+@rule_app.command(name="run")
+def rule_run(
+    rule_id: str,
+    *,
+    repo: pathlib.Path = pathlib.Path(),
+    output_format: typ.Annotated[
+        typ.Literal["table", "json"],
+        Parameter(name="--format"),
+    ] = "table",
+) -> int:
+    """Audit a local checkout against a canon lint rule package.
+
+    Exit codes: 0 compliant; 1 at least one finding (including
+    indeterminate verdicts, which fail closed); 2 operational failure.
+    """
+    from .rules import render_json, render_table, run_rule
+
+    result = run_rule(rule_id, repo)
+    rendered = render_json(result) if output_format == "json" else render_table(result)
+    print(rendered)
+    return result.exit_code
+
+
+artefact_app.command(rule_app, name="rule")
+app.command(artefact_app, name="artefact")
+
+owner_app = App()
+
+
+@owner_app.command(name="use")
+def owner_use(owner: str) -> None:
+    """Record the active GitHub owner in the headline configuration."""
+    xdg.set_active_owner(owner)
+    print(f"active owner: {owner}")
+
+
+@owner_app.command(name="show")
+def owner_show() -> int:
+    """Print the active GitHub owner."""
+    if owner := xdg.get_active_owner():
+        print(owner)
+        return 0
+    print("no active owner configured; run `concordat owner use <owner>`")
+    return 1
+
+
+app.command(owner_app, name="owner")
 
 
 def _resolve_estate_or_active(
@@ -352,7 +414,7 @@ def _resolve_estate_record(alias: str | None) -> EstateRecord:
 
 
 def _resolve_github_token(explicit: str | None = None) -> str:
-    if not (token := explicit or os.getenv("GITHUB_TOKEN")):
+    if not (token := explicit or _github_token_fallback()):
         raise ConcordatError(ERROR_MISSING_GITHUB_TOKEN)
     return token
 
@@ -404,7 +466,13 @@ def apply(
 def main(argv: list[str] | tuple[str, ...] | None = None) -> int:
     """Entry point for the concordat CLI."""
     try:
+        # One-time, explicit legacy-config migration at the bootstrap boundary,
+        # so `default_config_path()` stays a read-only query for every command.
+        migrate_legacy_config()
         result = app(argv)
+    except OperationalRuleError as error:
+        print(f"concordat: {error}", file=sys.stderr)
+        return 2
     except ConcordatError as error:
         print(f"concordat: {error}")
         return 1

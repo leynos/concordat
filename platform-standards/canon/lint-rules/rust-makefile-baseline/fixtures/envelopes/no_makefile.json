@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "kind": "policy-input/rust-makefile-baseline",
+  "repository": {
+    "path": ".",
+    "name": null
+  },
+  "applicability": {
+    "root_cargo_toml": true,
+    "root_makefile": false
+  },
+  "cargo": {
+    "parsed": {
+      "package": {
+        "name": "fixture",
+        "version": "0.1.0"
+      }
+    }
+  },
+  "makefile": null
+}

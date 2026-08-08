@@ -9,6 +9,7 @@ from tempfile import mkdtemp
 
 import pygit2
 
+from . import xdg
 from .errors import ConcordatError
 from .gitutils import build_remote_callbacks
 
@@ -17,9 +18,12 @@ if typ.TYPE_CHECKING:
 
     from .estate import EstateRecord
 
-XDG_CACHE_HOME = "XDG_CACHE_HOME"
-CACHE_SEGMENT = ("concordat", "estates")
 ERROR_ALIAS_REQUIRED = "Estate alias is required to cache the repository."
+ERROR_OWNER_REQUIRED = (
+    "Cannot namespace the estate cache: the estate has no github_owner and "
+    "no active owner is configured. Run `concordat owner use <owner>` or "
+    "re-register the estate with --github-owner."
+)
 ERROR_BARE_CACHE = "Cached estate {alias!r} is bare; remove {destination} and retry."
 ERROR_MISSING_ORIGIN = (
     "Cached estate is missing the 'origin' remote; remove it and retry."
@@ -31,18 +35,22 @@ class EstateCacheError(ConcordatError):
     """Raised when caching an estate repository fails."""
 
 
-def cache_root(env: dict[str, str] | None = None) -> Path:
-    """Return the directory used for caching estate repositories."""
-    import os
+def cache_destination(
+    record: EstateRecord,
+    cache_directory: Path | None = None,
+) -> Path:
+    """Return the owner-namespaced cache path for *record*.
 
-    source = env if env is not None else os.environ
-    root = source.get(XDG_CACHE_HOME)
-    base = Path(root).expanduser() if root else Path.home() / ".cache"
-    path = base
-    for segment in CACHE_SEGMENT:
-        path /= segment
-    path.mkdir(parents=True, exist_ok=True)
-    return path
+    An explicit *cache_directory* bypasses namespacing (the test seam).
+    Otherwise the record's ``github_owner`` — or the headline active
+    owner — selects ``$XDG_CACHE_HOME/concordat/owners/<owner>/estates``.
+    """
+    if cache_directory is not None:
+        return cache_directory / record.alias
+    owner = record.github_owner or xdg.get_active_owner()
+    if not owner:
+        raise EstateCacheError(ERROR_OWNER_REQUIRED)
+    return xdg.owner_estates_cache_dir(owner) / record.alias
 
 
 def ensure_estate_cache(
@@ -54,7 +62,12 @@ def ensure_estate_cache(
     if not record.alias:
         raise EstateCacheError(ERROR_ALIAS_REQUIRED)
 
-    destination = _cache_destination(record.alias, cache_directory)
+    destination = cache_destination(record, cache_directory)
+    # `cache_destination` is a pure query, so the owner-scoped parent may not
+    # exist yet. It is created here, once, rather than inside
+    # `_open_or_clone_cache`: that only covered the clone branch, and the
+    # directory has to exist before either branch runs.
+    destination.parent.mkdir(parents=True, exist_ok=True)
     callbacks = build_remote_callbacks(record.repo_url)
     repository = _open_or_clone_cache(
         record,
@@ -62,11 +75,6 @@ def ensure_estate_cache(
         callbacks=callbacks,
     )
     return _workdir_from_repository(record.alias, destination, repository)
-
-
-def _cache_destination(alias: str, cache_directory: Path | None) -> Path:
-    root = cache_directory or cache_root()
-    return root / alias
 
 
 def _open_or_clone_cache(
@@ -87,7 +95,6 @@ def _open_or_clone_cache(
             _refresh_cache(repository, record.branch, callbacks)
             return repository
 
-        destination.parent.mkdir(parents=True, exist_ok=True)
         return pygit2.clone_repository(
             record.repo_url,
             str(destination),
@@ -110,11 +117,28 @@ def _workdir_from_repository(
     raise EstateCacheError(detail)
 
 
-def clone_into_temp(cache_path: Path, prefix: str) -> Path:
-    """Copy the cached repository into an isolated temporary directory."""
-    temp_root = Path(mkdtemp(prefix=f"concordat-{prefix}-"))
-    shutil.rmtree(temp_root)
-    shutil.copytree(cache_path, temp_root, symlinks=True)
+def clone_into_temp(
+    cache_path: Path,
+    prefix: str,
+    runs_root: Path | None = None,
+) -> Path:
+    """Copy the cached repository into an isolated working directory.
+
+    With *runs_root* the copy lands in a unique subdirectory of that
+    directory (the owner's XDG state runs area); otherwise it falls back
+    to the system temporary directory.
+    """
+    if runs_root is not None:
+        runs_root.mkdir(parents=True, exist_ok=True)
+        temp_root = Path(mkdtemp(dir=runs_root, prefix=f"{prefix}-"))
+    else:
+        temp_root = Path(mkdtemp(prefix=f"concordat-{prefix}-"))
+    # `mkdtemp` already reserved this directory at mode 0700. Copy into it
+    # rather than deleting and letting `copytree` recreate it: removing it
+    # releases the name for the window before the copy, and recreating it
+    # would take the cache directory's permissions in place of the private
+    # ones `mkdtemp` chose.
+    shutil.copytree(cache_path, temp_root, symlinks=True, dirs_exist_ok=True)
     return temp_root
 
 
