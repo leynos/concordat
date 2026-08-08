@@ -73,8 +73,8 @@ template tree into published platform-standards repositories.
   (`rust-makefile-baseline`, audit-only) exists with `rule.yaml`, a Rego
   sensor, fixtures, and policy tests, and
   `concordat artefact rule run <rule-id> --repo PATH --format table` (or
-  `--format json`) evaluates it against a local checkout (Operation
-  Parabellum vertical slice; `docs/execplans/parabellum-vertical-slice.md`).
+  `--format json`) evaluates it against a local checkout (Operation Parabellum
+  vertical slice; `docs/execplans/parabellum-vertical-slice.md`).
   `rule validate` and the mutation vocabulary remain open.
 
 ### 1.3. Ship the estate execution CLI
@@ -289,14 +289,16 @@ actuators that remediate them. Each check ships as a lint rule package under
   check-before-create, so a second `rule mutate` (or repeated sweep) against
   the mocked API produces no duplicate comment, issue, or annotation. This item
   is a prerequisite for CV-003, AM-001, AM-002, DP-001, and DP-002.
-- [ ] Ship the lint-gate binding rule packages (QG-001 to QG-003): Makefile
-  sensors for soft-skipped or environment-overridable lint targets, workflow
-  sensors for the hardened pinned-release install step (version-keyed cache,
-  shell-variable indirection, `--locked`, binstall-or-build fallback, Cranelift
-  preservation), and a rolling-release detector with a suite-ref-pin mutation.
-  Acceptance: fixtures reproducing the Whitaker rollout defects (soft-skip
-  Makefile, `WHITAKER=true` no-op, git-rev install with stale cache key) each
-  raise the intended finding, and the mutations produce the canonical forms.
+- [ ] Ship the remaining lint-gate binding rule packages (QG-002, QG-003):
+  workflow sensors for the hardened pinned-release install step (version-keyed
+  cache, shell-variable indirection, `--locked`, binstall-or-build fallback,
+  Cranelift preservation), and a rolling-release detector with a suite-ref-pin
+  mutation. QG-001 already ships as `rust-makefile-baseline`, whose doctrine
+  treats the gate variable's `?=` assignment as the sanctioned estate pattern
+  rather than a finding. Acceptance: fixtures reproducing the remaining
+  Whitaker rollout defects (git-rev install with a stale cache key, a
+  rolling-release pin) each raise the intended finding, and the mutations
+  produce the canonical forms.
 - [ ] Ship the test-runner completeness rule package (QG-004): sensors for
   nextest-only suites lacking a doctest target, unlocked test-tool installs,
   and missing `TEST_CMD` fallback; mutations patch the Makefile with

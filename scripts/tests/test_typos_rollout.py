@@ -183,6 +183,7 @@ def test_dictionary_validation_rejects_invalid_documents(
     with pytest.raises(expected_error, match=expected_message):
         rollout.load_dictionary(source)
 
+
 def test_string_lists_are_deduplicated_and_sorted(
     rollout_modules: tuple[types.ModuleType, types.ModuleType, types.ModuleType],
     tmp_path: Path,
@@ -213,6 +214,7 @@ def test_string_lists_are_deduplicated_and_sorted(
         "excluded files must drop the duplicate 'y' and sort lexically"
     )
 
+
 def test_string_lists_default_to_empty_when_keys_are_absent(
     rollout_modules: tuple[types.ModuleType, types.ModuleType, types.ModuleType],
     tmp_path: Path,
@@ -240,6 +242,8 @@ def test_string_lists_default_to_empty_when_keys_are_absent(
     assert dictionary.excluded_files == (), (
         "an absent 'exclude' key must default to the empty tuple"
     )
+
+
 def test_merge_rejects_conflicting_corrections(
     rollout_modules: tuple[types.ModuleType, types.ModuleType, types.ModuleType],
 ) -> None:
