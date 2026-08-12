@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import typing as typ
 
+import pygit2
 import pytest
 from ruamel.yaml import YAML
 
@@ -11,8 +12,6 @@ from concordat import platform_standards
 
 if typ.TYPE_CHECKING:
     from pathlib import Path
-
-    import pygit2
 
 
 def _seed_inventory_with_metadata(inventory: Path, repos: list[str]) -> None:
@@ -102,6 +101,57 @@ def test_apply_inventory_change_commits_and_validates_only_when_mutated(
 
     assert changed is expected_changed
     assert calls == expected_calls
+
+
+def test_apply_inventory_change_commits_the_mutated_inventory(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A changed inventory is committed before its validation boundary runs."""
+    repository = pygit2.init_repository(str(tmp_path))
+    repository.config["user.name"] = "Test User"
+    repository.config["user.email"] = "test@example.com"
+    config = platform_standards.PlatformStandardsConfig(
+        repo_url="https://example.com/platform-standards.git"
+    )
+    inventory_path = tmp_path / config.inventory_path
+    inventory_path.parent.mkdir(parents=True)
+    inventory_path.write_text("schema_version: 1\nrepositories: []\n", encoding="utf-8")
+    repository.index.add(config.inventory_path)
+    repository.index.write()
+    signature = repository.default_signature
+    base_commit_id = repository.create_commit(
+        "HEAD",
+        signature,
+        signature,
+        "seed inventory",
+        repository.index.write_tree(),
+        [],
+    )
+    base_commit = repository[base_commit_id].peel(pygit2.Commit)
+    validated_workdirs: list[Path] = []
+    monkeypatch.setattr(
+        platform_standards,
+        "_validate_tofu_changes",
+        validated_workdirs.append,
+    )
+
+    changed = platform_standards._apply_inventory_change(
+        repository,
+        tmp_path,
+        config,
+        "example/repo",
+        base_commit,
+        verb="enrol",
+        mutate_inventory=platform_standards._update_inventory,
+    )
+
+    commit = repository.head.peel(pygit2.Commit)
+    assert changed is True
+    assert commit.parent_ids == [base_commit.id]
+    assert commit.message == "chore: enrol example/repo via concordat"
+    assert "example/repo" in inventory_path.read_text(encoding="utf-8")
+    assert validated_workdirs == [tmp_path]
 
 
 def test_update_inventory_adds_entry(tmp_path: Path) -> None:
