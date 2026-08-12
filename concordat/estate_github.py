@@ -33,13 +33,11 @@ if typ.TYPE_CHECKING:
 # Both creation paths must offer the same repository, so the options they share
 # are declared once here and unpacked at each call site, leaving only the name
 # path-specific. The proxy keeps the shared mapping immutable.
-_REPOSITORY_OPTIONS: cabc.Mapping[str, object] = types.MappingProxyType(
-    {
-        "private": True,
-        "auto_init": False,
-        "description": "Platform standards repository managed by concordat",
-    }
-)
+_REPOSITORY_OPTIONS: cabc.Mapping[str, object] = types.MappingProxyType({
+    "private": True,
+    "auto_init": False,
+    "description": "Platform standards repository managed by concordat",
+})
 
 # github3 raises a 401 as `AuthenticationFailed` and a 403 as `ForbiddenError`;
 # they are siblings rather than one deriving from the other, so both must be
@@ -89,6 +87,16 @@ def _find_organization(
     An authentication failure here precedes any creation attempt: a rejected
     lookup says nothing about whether *owner* is an organisation, so falling
     through to the personal path would misreport the cause.
+
+    Returns
+    -------
+    github3.orgs.Organization | None
+        Matching organisation, or ``None`` when *owner* is not an organisation.
+
+    Raises
+    ------
+    GitHubOrganizationAuthenticationError
+        If GitHub rejects the organisation lookup.
     """
     try:
         return client.organization(owner)

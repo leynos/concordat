@@ -187,11 +187,11 @@ def _repository_from_dict(payload: dict[str, object]) -> RepositorySnapshot:
         owner=str(payload["owner"]),
         name=str(payload["name"]),
         default_branch=str(payload["default_branch"]),
-        allow_squash_merge=bool(payload.get("allow_squash_merge", False)),
-        allow_merge_commit=bool(payload.get("allow_merge_commit", False)),
-        allow_rebase_merge=bool(payload.get("allow_rebase_merge", False)),
-        allow_auto_merge=bool(payload.get("allow_auto_merge", False)),
-        delete_branch_on_merge=bool(payload.get("delete_branch_on_merge", False)),
+        allow_squash_merge=bool(payload.get("allow_squash_merge")),
+        allow_merge_commit=bool(payload.get("allow_merge_commit")),
+        allow_rebase_merge=bool(payload.get("allow_rebase_merge")),
+        allow_auto_merge=bool(payload.get("allow_auto_merge")),
+        delete_branch_on_merge=bool(payload.get("delete_branch_on_merge")),
     )
 
 
@@ -234,14 +234,14 @@ def _branch_protection_from_dict(payload: dict[str, object]) -> BranchProtection
         bool(signed_commits_field) if isinstance(signed_commits_field, bool) else None
     )
     return BranchProtection(
-        enforce_admins=bool(payload.get("enforce_admins", False)),
+        enforce_admins=bool(payload.get("enforce_admins")),
         require_signed_commits=signed_commits,
-        required_linear_history=bool(payload.get("required_linear_history", False)),
+        required_linear_history=bool(payload.get("required_linear_history")),
         require_conversation_resolution=bool(
-            payload.get("require_conversation_resolution", False)
+            payload.get("require_conversation_resolution")
         ),
-        allows_deletions=bool(payload.get("allows_deletions", False)),
-        allows_force_pushes=bool(payload.get("allows_force_pushes", False)),
+        allows_deletions=bool(payload.get("allows_deletions")),
+        allows_force_pushes=bool(payload.get("allows_force_pushes")),
         status_checks=status_checks,
         pull_request_reviews=reviews,
     )

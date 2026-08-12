@@ -35,18 +35,16 @@ def _write_template_and_manifest(
     manifest_path = template_root / "platform-standards" / "canon" / "manifest.yaml"
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(
-        "\n".join(
-            [
-                "schema_version: 1",
-                "artifacts:",
-                "  - id: python-ruff-config",
-                "    type: lint-config",
-                "    path: platform-standards/canon/lint/python/ruff.toml",
-                "    description: test artifact",
-                f"    sha256: {sha}",
-                "",
-            ]
-        ),
+        "\n".join([
+            "schema_version: 1",
+            "artifacts:",
+            "  - id: python-ruff-config",
+            "    type: lint-config",
+            "    path: platform-standards/canon/lint/python/ruff.toml",
+            "    description: test artifact",
+            f"    sha256: {sha}",
+            "",
+        ]),
         encoding="utf-8",
     )
 
@@ -59,15 +57,13 @@ def _write_manifest_entries(
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     lines: list[str] = ["schema_version: 1", "artifacts:"]
     for entry in entries:
-        lines.extend(
-            [
-                f"  - id: {entry['id']}",
-                f"    type: {entry['type']}",
-                f"    path: {entry['path']}",
-                f"    description: {entry['description']}",
-                f"    sha256: {entry['sha256']}",
-            ]
-        )
+        lines.extend([
+            f"  - id: {entry['id']}",
+            f"    type: {entry['type']}",
+            f"    path: {entry['path']}",
+            f"    description: {entry['description']}",
+            f"    sha256: {entry['sha256']}",
+        ])
     lines.append("")
     manifest_path.write_text("\n".join(lines), encoding="utf-8")
 
@@ -99,15 +95,13 @@ def _setup_multi_artifact_cli_scenario(
             template_root, relative_path, template_content
         )
         sha = hashlib.sha256(template_file.read_bytes()).hexdigest()
-        entries.append(
-            {
-                "id": artifact_id,
-                "type": artifact_type,
-                "path": relative_path,
-                "description": artifact_id,
-                "sha256": sha,
-            }
-        )
+        entries.append({
+            "id": artifact_id,
+            "type": artifact_type,
+            "path": relative_path,
+            "description": artifact_id,
+            "sha256": sha,
+        })
 
         if published_content is None:
             continue

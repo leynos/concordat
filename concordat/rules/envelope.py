@@ -17,7 +17,7 @@ ENVELOPE_KIND: typ.Final = "policy-input/rust-makefile-baseline"
 
 # The parsed Cargo manifest is opaque to the policy (only its presence matters),
 # so it is modelled as an arbitrary TOML table rather than a fixed schema.
-CargoManifest = dict[str, object]
+type CargoManifest = dict[str, object]
 
 
 class CargoPayload(typ.TypedDict):
@@ -78,6 +78,12 @@ def build_envelope(checkout: pathlib.Path) -> PolicyEnvelope:
     Root `Cargo.toml` presence is provisional evidence of Rust
     applicability; the `.concordat` manifest remains the eventual
     authority (see the Parabellum ExecPlan decision log).
+
+    Returns
+    -------
+    PolicyEnvelope
+        Policy input document assembled from the checkout.
+
     """
     cargo_path = checkout / "Cargo.toml"
     makefile_path = checkout / "Makefile"

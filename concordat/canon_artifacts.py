@@ -5,7 +5,7 @@ for canonical artifacts shipped in the Concordat repository, and can compare the
 against a checked-out (published) platform-standards repository.
 """
 
-# ruff: noqa: TRY003
+# ruff: noqa: TRY003  # Domain errors carry operator-facing remediation.
 
 from __future__ import annotations
 
@@ -75,7 +75,7 @@ class CanonManifest:
 
     @property
     def template_root(self) -> Path:
-        """Return the Concordat checkout root containing the manifest."""
+        """Concordat checkout root containing the manifest."""
         return self.manifest_path.parent.parent.parent
 
 
@@ -333,6 +333,11 @@ def sync_artifacts(
     Args:
         comparisons: The artifact comparisons to consider for syncing.
         config: Sync configuration (roots, filters, and dry-run behaviour).
+
+    Returns
+    -------
+    tuple[SyncAction, ...]
+        Actions performed or planned for the selected artifacts.
 
     """
     actions: list[SyncAction] = []

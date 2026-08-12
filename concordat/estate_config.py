@@ -76,6 +76,12 @@ def default_config_path() -> Path:
     no active owner the flat path is returned. Any legacy-flat migration is a
     separate, explicit bootstrap step (see :func:`migrate_legacy_config`), run
     once at the CLI entry point rather than implicitly from this getter.
+
+    Returns
+    -------
+    Path
+        Active-owner configuration path, or the legacy flat path when no owner
+        is active.
     """
     if owner := xdg.get_active_owner():
         return xdg.owner_config_path(owner)
@@ -91,6 +97,17 @@ def _load_legacy_migration() -> (
     returned when an active owner is already configured, the flat config is
     absent, the parsed YAML or estate section is not a mapping, or no owner can
     be derived from the recorded estates.
+
+    Returns
+    -------
+    tuple[Path, dict[str, typ.Any], dict[str, typ.Any], str] | None
+        Legacy path, parsed data, estate section, and owner, or ``None`` when
+        migration does not apply.
+
+    Raises
+    ------
+    EstateError
+        If the legacy configuration cannot be read.
     """
     if xdg.get_active_owner() is not None:
         return None
@@ -174,6 +191,16 @@ def _current_legacy_data(
     write; rewriting the snapshot taken before it would erase the key, or
     delete the file outright when the estate section was its only content,
     leaving the migrated estates unreachable.
+
+    Returns
+    -------
+    dict[str, typ.Any]
+        Current legacy configuration data, or *fallback* when the file is gone.
+
+    Raises
+    ------
+    EstateError
+        If the legacy configuration cannot be read.
     """
     if not legacy.is_file():
         return fallback
@@ -224,6 +251,16 @@ def _derive_owner_from_estates(estate_section: dict[str, typ.Any]) -> str | None
     such a section wholesale into a single owner's namespace would silently
     misplace the other owners' estates, so mixed-owner input is rejected
     rather than migrated under the first owner encountered.
+
+    Returns
+    -------
+    str | None
+        The sole recorded GitHub owner, or ``None`` when it cannot be derived.
+
+    Raises
+    ------
+    EstateError
+        If estates from multiple GitHub owners are mixed in one section.
     """
     estates = estate_section.get(ESTATE_COLLECTION_KEY)
     if not isinstance(estates, dict):
@@ -340,6 +377,11 @@ def _estate_record_from_payload(
     accepted only when it carries a string ``repo_url``; anything else — a
     list, a scalar, or a mapping without a usable URL — is rejected so the
     caller can skip it.
+
+    Returns
+    -------
+    EstateRecord | None
+        Decoded estate record, or ``None`` for unsupported payloads.
     """
     match payload:
         case str():

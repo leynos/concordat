@@ -179,10 +179,9 @@ def _run_cli(arguments: list[str]) -> RunResult:
         return RunResult(
             stdout=buffer_out.getvalue(), stderr="", returncode=int(exc.code or 0)
         )
-    else:
-        return RunResult(
-            stdout=buffer_out.getvalue(), stderr="", returncode=int(result or 0)
-        )
+    return RunResult(
+        stdout=buffer_out.getvalue(), stderr="", returncode=int(result or 0)
+    )
 
 
 def _seed_estate_remote(root: Path) -> Path:

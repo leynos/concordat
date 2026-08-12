@@ -74,6 +74,11 @@ def _attempt_one_import(
     """Attempt to import a single repository, trying repo_name then slug.
 
     Returns True if import succeeded, False otherwise.
+
+    Returns
+    -------
+    bool
+        Whether either import identifier succeeded.
     """
     import_attempts = [repo_name, slug]
     for import_id in import_attempts:
@@ -120,7 +125,8 @@ def _prompt_for_recovery_action(
         exit_code: Current exit code to return if prompting fails.
         latest_result: Latest result to return if prompting fails.
 
-    Returns:
+    Returns
+    -------
         Tuple of (should_proceed, exit_code, latest_result).
         If should_proceed is False, caller should return (exit_code, latest_result).
 
@@ -173,6 +179,11 @@ def handle_apply_import_errors(
 
     Detects GitHub repository existence errors, prompts for import, and retries
     apply. Returns updated exit code and latest result.
+
+    Returns
+    -------
+    tuple[int, SimpleNamespace]
+        The final exit code and latest tofu result.
     """
     exit_code = int(latest_result.returncode)
 
@@ -225,7 +236,8 @@ def _line_matches_any_slug(line: str, slugs: list[str]) -> str | None:
         line: A line from tofu state list output.
         slugs: List of repository slugs to match against.
 
-    Returns:
+    Returns
+    -------
         The line itself if it matches any slug pattern, None otherwise.
 
     """
@@ -318,6 +330,11 @@ def handle_apply_prevent_destroy_errors(
 
     Detects resources blocked by prevent_destroy, prompts for state removal,
     and retries apply. Returns updated exit code and latest result.
+
+    Returns
+    -------
+    tuple[int, SimpleNamespace]
+        The final exit code and latest tofu result.
     """
     exit_code = int(latest_result.returncode)
 

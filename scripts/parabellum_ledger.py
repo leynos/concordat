@@ -306,7 +306,8 @@ def _load_ledger(path: pathlib.Path) -> Ledger:
 
 def _timestamp() -> str:
     return (
-        dt.datetime.now(dt.UTC)
+        dt.datetime
+        .now(dt.UTC)
         .replace(microsecond=0)
         .isoformat()
         .replace("+00:00", "Z")

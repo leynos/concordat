@@ -12,15 +12,13 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-import typos_rollout_cache
+from typos_rollout_cache import CacheTargets as _CacheTargets
+from typos_rollout_cache import RefreshResult
+from typos_rollout_cache import RemoteResponse as _RemoteResponse
+from typos_rollout_cache import atomic_write as _atomic_write
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
-
-RefreshResult = typos_rollout_cache.RefreshResult
-_CacheTargets = typos_rollout_cache.CacheTargets
-_RemoteResponse = typos_rollout_cache.RemoteResponse
-_atomic_write = typos_rollout_cache.atomic_write
 
 SCHEMA_VERSION = 1
 HTTP_NOT_MODIFIED = 304
@@ -37,7 +35,7 @@ SUFFIX_PAIRS = (
 )
 
 
-@dc.dataclass(frozen=True)
+@dc.dataclass(frozen=True, slots=True)
 class Dictionary:
     """Curated words and exclusions used to generate a ``typos`` config."""
 

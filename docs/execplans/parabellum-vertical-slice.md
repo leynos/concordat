@@ -793,8 +793,10 @@ Python signatures that must exist at the end of Milestone D:
 # concordat/rules/makefile_facts.py
 def inspect_makefile(path: Path, *, timeout: float = 10.0) -> MakefileFacts: ...
 
+
 # concordat/rules/envelope.py
 def build_envelope(checkout: Path) -> dict[str, object]: ...
+
 
 # concordat/rules/runner.py
 def run_rule(rule_id: str, checkout: Path) -> RuleRunResult: ...
@@ -804,9 +806,9 @@ def run_rule(rule_id: str, checkout: Path) -> RuleRunResult: ...
 `RuleRunResult` carries `verdict`, `findings`, and `exit_code`.
 
 Rendering is separate from evaluation: `run_rule` returns the structured
-result, and two standalone renderers in `concordat/rules/runner.py` format
-it — the choice of output format is the CLI's concern, not the evaluator's,
-so `run_rule` takes no formatting parameter.
+result, and two standalone renderers in `concordat/rules/runner.py` format it —
+the choice of output format is the CLI's concern, not the evaluator's, so
+`run_rule` takes no formatting parameter.
 
 ```python
 # concordat/rules/runner.py

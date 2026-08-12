@@ -9,6 +9,13 @@ def normalize_endpoint_url(endpoint: str, *, default_scheme: str = "https") -> s
     Persistence endpoints are typically supplied as hostnames, but boto3 expects
     fully qualified URLs (including scheme). When the user omits a scheme, we
     assume HTTPS by default.
+
+    Returns
+    -------
+    str
+        Endpoint URL with an explicit scheme, or an empty string for blank
+        input.
+
     """
     cleaned = endpoint.strip()
     if not cleaned:

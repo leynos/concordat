@@ -1,5 +1,5 @@
 """File persistence helpers for backend and manifest artifacts."""
-# ruff: noqa: TRY003
+# ruff: noqa: TRY003  # Domain errors carry operator-facing remediation.
 
 from __future__ import annotations
 
@@ -101,6 +101,17 @@ def _enforce_existing_policy(
 
     When ``is_same`` is False and ``force`` is False, raises a PersistenceError
     to protect existing files from accidental overwrite.
+
+    Returns
+    -------
+    bool
+        Whether the caller should write the file.
+
+    Raises
+    ------
+    PersistenceError
+        If the file differs and replacement is not forced.
+
     """
     if is_same:
         return False

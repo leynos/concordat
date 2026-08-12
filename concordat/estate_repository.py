@@ -149,6 +149,16 @@ def _plan_reachable_repository(repo_url: str, probe: RemoteProbe) -> RepositoryP
 
     Callers must route only reachable probes here, so no reachability check is
     repeated. A non-empty remote is rejected without contacting GitHub.
+
+    Returns
+    -------
+    RepositoryPlan
+        Plan to use the existing empty repository.
+
+    Raises
+    ------
+    NonEmptyRepositoryError
+        If the reachable remote already contains commits.
     """
     if not probe.empty:
         raise NonEmptyRepositoryError(repo_url)
@@ -172,6 +182,19 @@ def _plan_unreachable_repository(
     A repository GitHub can see but SSH cannot reach is inaccessible rather
     than missing. The constructed client is returned in the plan so
     ``_ensure_repository_exists`` reuses it instead of authenticating twice.
+
+    Returns
+    -------
+    RepositoryPlan
+        Plan to create the missing repository, including the authenticated
+        client used for the lookup.
+
+    Raises
+    ------
+    RepositoryInaccessibleError
+        If GitHub can see the repository but the original remote is unreachable.
+    RepositoryUnreachableError
+        If *slug* is missing and the remote cannot be identified.
     """
     if not slug:
         raise RepositoryUnreachableError(repo_url)
@@ -204,6 +227,18 @@ def _lookup_repository(
     unknown, so it is translated rather than surfaced raw: a rejected call is
     an authentication problem, and anything else means the lookup itself could
     not be completed.
+
+    Returns
+    -------
+    object | None
+        GitHub repository object, or ``None`` when it does not exist.
+
+    Raises
+    ------
+    GitHubAuthenticationError
+        If GitHub rejects the repository lookup.
+    RepositoryUnreachableError
+        If the lookup fails for another GitHub or network reason.
     """
     try:
         return client.repository(owner, name)

@@ -1,5 +1,5 @@
 """Validation of user inputs and remote S3 backends."""
-# ruff: noqa: TRY003
+# ruff: noqa: TRY003  # Domain errors carry operator-facing remediation.
 
 from __future__ import annotations
 
@@ -133,7 +133,7 @@ def _bucket_versioning_status(client: S3Client, bucket: str) -> str | None:
             f"Details: {error}"
         )
         raise PersistenceError(message) from error
-    except boto_exceptions.ClientError as error:  # type: ignore[attr-defined]
+    except boto_exceptions.ClientError as error:  # type: ignore[attr-defined]  # botocore defines ClientError dynamically.
         message = (
             "Versioning check failed: the bucket API rejected the request. "
             "Confirm the bucket exists and the provided credentials can query it. "
@@ -153,7 +153,7 @@ def _perform_s3_operation(
     except boto_exceptions.BotoCoreError as error:
         message = f"{error_message}: {error}"
         raise PersistenceError(message) from error
-    except boto_exceptions.ClientError as error:  # type: ignore[attr-defined]
+    except boto_exceptions.ClientError as error:  # type: ignore[attr-defined]  # botocore defines ClientError dynamically.
         message = f"{error_message}: {error}"
         raise PersistenceError(message) from error
 
@@ -182,6 +182,12 @@ def _credentials_from_environment(env: typ.Mapping[str, str]) -> dict[str, str]:
     Boto3 recognises the AWS_* variables. Concordat also supports alternative
     names for S3-compatible vendors (Scaleway/Spaces) and maps those to the
     boto3 client arguments.
+
+    Returns
+    -------
+    dict[str, str]
+        Credential values mapped to boto3 client argument names.
+
     """
 
     def present(*names: str) -> bool:

@@ -170,15 +170,13 @@ def persist_repo_setup(
 @pytest.fixture
 def persist_prompts() -> typ.Iterator[str]:
     """Return standard prompt responses for persistence flows."""
-    return iter(
-        [
-            "df12",
-            "fr-par",
-            "https://s3.fr-par.scw.cloud",
-            "estates/example/main",
-            "terraform.tfstate",
-        ]
-    )
+    return iter([
+        "df12",
+        "fr-par",
+        "https://s3.fr-par.scw.cloud",
+        "estates/example/main",
+        "terraform.tfstate",
+    ])
 
 
 @pytest.fixture

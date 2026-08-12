@@ -62,7 +62,7 @@ ERROR_OWNER_LOOKUP_FAILED = (
 )
 ERROR_NO_ESTATES = "No estates configured. Run `concordat estate init` first."
 ERROR_MISSING_GITHUB_TOKEN = (
-    "GITHUB_TOKEN is required for concordat plan/apply; "  # noqa: S105
+    "GITHUB_TOKEN is required for concordat plan/apply; "  # noqa: S105  # Error text only; no secret value.
     "pass --github-token or export the environment variable."
 )
 ERROR_AUTO_APPROVE_REQUIRED = "concordat apply requires --auto-approve to continue."
@@ -335,6 +335,12 @@ def rule_run(
 
     Exit codes: 0 compliant; 1 at least one finding (including
     indeterminate verdicts, which fail closed); 2 operational failure.
+
+    Returns
+    -------
+    int
+        Exit code for the audit result.
+
     """
     from .rules import render_json, render_table, run_rule
 

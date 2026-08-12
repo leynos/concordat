@@ -11,7 +11,7 @@ if typ.TYPE_CHECKING:
 Severity = str
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class RepositorySnapshot:
     """Resolved repository settings fetched from the GitHub API."""
 
@@ -26,11 +26,11 @@ class RepositorySnapshot:
 
     @property
     def slug(self) -> str:
-        """Return the owner/repo slug for SARIF reporting."""
+        """Owner/repo slug for SARIF reporting."""
         return f"{self.owner}/{self.name}"
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class RequiredStatusChecks:
     """Minimal representation of GitHub status check requirements."""
 
@@ -38,7 +38,7 @@ class RequiredStatusChecks:
     contexts: tuple[str, ...]
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class RequiredPullRequestReviews:
     """Review requirements configured for branch protection."""
 
@@ -47,7 +47,7 @@ class RequiredPullRequestReviews:
     require_code_owner_reviews: bool
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class BranchProtection:
     """Branch protection details for the default branch."""
 
@@ -61,7 +61,7 @@ class BranchProtection:
     pull_request_reviews: RequiredPullRequestReviews | None
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class TeamPermission:
     """Team permission assignment exposed by the GitHub API."""
 
@@ -69,7 +69,7 @@ class TeamPermission:
     permission: str
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class CollaboratorPermission:
     """Direct collaborator permission assignment."""
 
@@ -78,7 +78,7 @@ class CollaboratorPermission:
     permissions: dict[str, bool]
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class LabelState:
     """GitHub label attributes relevant to Concordat."""
 
@@ -87,7 +87,7 @@ class LabelState:
     description: str
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class AuditContext:
     """Aggregated context handed to each check."""
 
@@ -99,7 +99,7 @@ class AuditContext:
     priority_model: PriorityModel | None
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class CheckDefinition:
     """Metadata describing a Concordat Auditor rule."""
 
@@ -111,7 +111,7 @@ class CheckDefinition:
     help_uri: str | None = None
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class Finding:
     """Single SARIF finding emitted by a check."""
 

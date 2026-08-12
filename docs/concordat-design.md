@@ -220,8 +220,8 @@ false-positive rate is acceptable. Exemptions use the existing
   state changes to IaC.
 
 See [`docs/developers-guide.md`](developers-guide.md) for the CLI's internal
-module boundaries — XDG layout, credential resolution, the cache/execution
-API split, and the rule-run and Parabellum sweep contracts.
+module boundaries — XDG layout, credential resolution, the cache/execution API
+split, and the rule-run and Parabellum sweep contracts.
 
 ### 2.7 Estate execution workflow
 
@@ -447,10 +447,10 @@ provider reuses the AWS env var contract. The design deliberately omits
 `encrypt = true` because Terraform's backend sends an AES256 (SSE-S3) header
 with that flag, and neither Scaleway nor DigitalOcean Spaces accepts it.
 Scaleway also offers SSE-ONE and SSE-KMS in addition to SSE-C, but bucket
-encryption for Scaleway is configured separately rather than through
-Terraform's `encrypt` flag. At-rest encryption therefore remains a caller
-concern (for example, by configuring bucket-side encryption directly,
-keeping secrets out of state, or using client-side encryption).
+encryption for Scaleway is configured separately rather than through Terraform's
+`encrypt` flag. At-rest encryption therefore remains a caller concern (for
+example, by configuring bucket-side encryption directly, keeping secrets out of
+state, or using client-side encryption).
 
 Every persistence descriptor ships alongside a YAML manifest
 (`platform-standards/tofu/backend/persistence.yaml`) storing a schema version,
@@ -1134,17 +1134,16 @@ Commands must return stable exit codes for CI integration.
 | 4         | Mutations planned or applied failed (patch application or policy errors) |
 
 Table 3 is a proposal for the general `artefact` command family and does not
-describe what ships today. The one `artefact` subcommand that is
-implemented, `concordat artefact rule run`, ships a narrower, already-fixed
-scheme instead:
+describe what ships today. The one `artefact` subcommand that is implemented,
+`concordat artefact rule run`, ships a narrower, already-fixed scheme instead:
 
 - `0` — compliant.
 - `1` — policy findings, including `indeterminate` (which fails closed).
 - `2` — operational failure.
 
-See [`docs/developers-guide.md`, "Verdicts and exit
-codes"](developers-guide.md#verdicts-and-exit-codes) for the mapping from
-verdict to exit code.
+See
+[`docs/developers-guide.md`, "Verdicts and exit codes"](developers-guide.md#verdicts-and-exit-codes)
+for the mapping from verdict to exit code.
 
 ##### Configuration and locking
 
@@ -1361,8 +1360,8 @@ declared, the invocation must be qualified to a surface — either a
 `cd <dir> &&` prefix or a `--manifest-path <path>` flag — and QG-001 requires
 every declared surface's gate to be reachable from `lint`.
 
-`make -C <dir>` is indeterminate in every role, both as a reachability edge
-and as a surface qualifier. The two qualifiers above keep the gate invocation
+`make -C <dir>` is indeterminate in every role, both as a reachability edge and
+as a surface qualifier. The two qualifiers above keep the gate invocation
 inside the file being parsed, so it remains a fact; `-C` instead delegates to a
 Makefile this rule never reads, and accepting it would assert a gate that has
 not been observed. Treating it as proof would need the envelope to carry the
