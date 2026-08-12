@@ -270,6 +270,42 @@ def _validate_tofu_changes(workdir: Path) -> None:
     _run_tofu_validate(workdir)
 
 
+def _apply_inventory_change(
+    repository: pygit2.Repository,
+    workdir: Path,
+    config: PlatformStandardsConfig,
+    repo_slug: str,
+    base_commit: pygit2.Commit,
+    *,
+    verb: str,
+    mutate_inventory: typ.Callable[[Path, str], bool],
+) -> bool:
+    """Apply an inventory mutation, commit it, and validate the changes.
+
+    Args:
+        repository: The pygit2 repository object.
+        workdir: Working directory containing the inventory.
+        config: Platform standards configuration.
+        repo_slug: Repository slug being changed.
+        base_commit: The base commit to create the new commit on.
+        verb: Action verb ("enrol" or "disenrol").
+        mutate_inventory: Function to modify inventory (returns True if changed).
+
+    Returns
+    -------
+        True when the inventory changed and was committed and validated, otherwise
+        False.
+
+    """
+    inventory_path = workdir / config.inventory_path
+    if not mutate_inventory(inventory_path, repo_slug):
+        return False
+
+    _commit_inventory_changes(repository, config, repo_slug, base_commit, verb=verb)
+    _validate_tofu_changes(workdir)
+    return True
+
+
 def _ensure_inventory_pr(
     repo_slug: str,
     *,
@@ -279,26 +315,7 @@ def _ensure_inventory_pr(
     expect_present: bool,
     already_message: str,
 ) -> PlatformStandardsResult:
-    """Shared implementation for inventory PR creation (enrol/disenrol).
-
-    Args:
-        repo_slug: Repository slug to add/remove from inventory.
-        config: Platform standards configuration.
-        verb: Action verb ("enrol" or "disenrol").
-        mutate_inventory: Function to modify inventory (returns True if changed).
-        expect_present: Whether slug should be present on base branch for early-out.
-        already_message: Message when inventory mutation returns no change.
-
-    Returns
-    -------
-        PlatformStandardsResult with PR details or early-out explanation.
-
-    Raises
-    ------
-    ConcordatError
-        If the inventory PR operation cannot be completed.
-
-    """
+    """Create an inventory PR for an enrolment or removal change."""
     callbacks = build_remote_callbacks(config.repo_url)
     with TemporaryDirectory(prefix="concordat-platform-") as temp_root:
         repository = pygit2.clone_repository(
@@ -306,7 +323,6 @@ def _ensure_inventory_pr(
             temp_root,
             callbacks=callbacks,
         )
-
         workdir = Path(repository.workdir or temp_root)
         remote = repository.remotes["origin"]
         remote.fetch(callbacks=callbacks)
@@ -335,18 +351,21 @@ def _ensure_inventory_pr(
             branch_name=branch_name,
         )
 
-        inventory_path = workdir / config.inventory_path
-        changed = mutate_inventory(inventory_path, repo_slug)
-        if not changed:
+        if not _apply_inventory_change(
+            repository,
+            workdir,
+            config,
+            repo_slug,
+            base_commit,
+            verb=verb,
+            mutate_inventory=mutate_inventory,
+        ):
             return PlatformStandardsResult(
                 created=False,
                 branch=branch_name,
                 pr_url=None,
                 message=already_message,
             )
-
-        _commit_inventory_changes(repository, config, repo_slug, base_commit, verb=verb)
-        _validate_tofu_changes(workdir)
 
         if not config.github_token:
             raise ConcordatError(ERROR_MISSING_TOKEN)
