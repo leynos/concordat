@@ -67,6 +67,11 @@ def _client_rejecting_personal_creation(
 
     ``me()`` must still identify the expected owner, since the permission
     check precedes the creation call this scenario is about.
+
+    Returns
+    -------
+    github3.GitHub
+        An authenticated client configured to reject repository creation.
     """
     client = mocker.Mock()
     client.me.return_value = mocker.Mock(login="example")

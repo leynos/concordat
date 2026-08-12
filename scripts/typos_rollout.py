@@ -119,6 +119,16 @@ def _merged_ignore_patterns(base: Dictionary, local: Dictionary) -> tuple[str, .
     A removal that matches nothing is not an error: the shared base is
     maintained elsewhere, so it may drop a pattern this repository had
     already withdrawn, and that should not fail generation here.
+
+    Returns
+    -------
+    tuple[str, ...]
+        The merged ignore patterns after removals are applied.
+
+    Raises
+    ------
+    ValueError
+        If a pattern appears in both the overlay's ignore and removal lists.
     """
     removed = set(local.removed_patterns)
     if contradictory := removed & set(local.ignore_patterns):

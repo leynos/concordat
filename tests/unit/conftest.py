@@ -60,6 +60,11 @@ def fake_github_client(mocker: pytest_mock.MockFixture) -> mock.Mock:
     The organisation mock is reachable as
     ``fake_github_client.organization.return_value`` for tests that assert
     the repository was created through it.
+
+    Returns
+    -------
+    mock.Mock
+        The patched GitHub client mock.
     """
     client = mocker.Mock()
     client.repository.return_value = None
@@ -77,6 +82,11 @@ def xdg_env(
 
     Shared so no test reads or writes the developer's real XDG directories,
     and so an active owner written by one test cannot be observed by another.
+
+    Returns
+    -------
+    dict[str, str]
+        The XDG environment mapping installed for the test.
     """
     mapping = {
         "XDG_CONFIG_HOME": str(tmp_path / "config"),
@@ -224,6 +234,11 @@ def persist_test_context(
 
     XDG isolation arrives through `persist_monkeypatch_base`, which owns the
     shared environment setup these tests need.
+
+    Returns
+    -------
+    PersistTestContext
+        The grouped fixtures used by persist-estate tests.
     """
     workdir, repo, bare, record = persist_repo_setup
     return PersistTestContext(

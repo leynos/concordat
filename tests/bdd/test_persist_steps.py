@@ -216,6 +216,11 @@ def given_config_dir(config_dir: Path) -> Path:
 
     Shared by active-estate and explicit --alias persistence scenarios so each
     scenario interacts with its own config namespace.
+
+    Returns
+    -------
+    Path
+        The isolated configuration directory.
     """
     return config_dir
 
