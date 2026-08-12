@@ -313,8 +313,8 @@ actuators that remediate them. Each check ships as a lint rule package under
     time budgets, and exactly one effect exists after recovery.
   - **Permanent failure and retry exhaustion.** A fixture returning `403`
     fails fast without retrying, and one exhausting the retry budget reports
-    `retry_exhausted`; neither retries unboundedly, and both surface in logs,
-    metrics, and an alert.
+    `retry_exhausted`; neither retries unboundedly. Both outcomes surface in
+    logs and metrics, while terminal `retry_exhausted` emits an alert.
   - **Shutdown.** Fixtures interrupting a worker before creation and after a
     creation whose outcome is unknown. Neither deletes nor duplicates an effect:
     the lease is released or left to expire, `shutdown_aborted` is emitted with

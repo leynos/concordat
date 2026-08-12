@@ -2217,12 +2217,15 @@ each API-backed check carries explicit observability requirements.
   API boundary. Trace and span IDs are included in the structured log lines to
   correlate the two.
 - **Alerts.** Actionable alerts fire on conditions that SARIF cannot express: a
-  sweep that errors or does not complete, an actuator whose API call fails, a
-  rate-limit budget below a threshold, and — mirroring AM-002 — a sweep whose
-  own workflow concludes `startup_failure`. Two outcomes from the Section 2.1.2
-  vocabulary also alert, because each leaves work in a state no later sweep can
-  infer: `reconcile_failed`, and `shutdown_aborted` with
-  `phase="unknown_outcome"`, where a create may or may not have landed. Alerts
+  sweep that errors or does not complete, sustained actuator API failures above
+  a defined aggregate threshold, a rate-limit budget below a threshold, and —
+  mirroring AM-002 — a sweep whose own workflow concludes `startup_failure`.
+  Individual API failures are recorded in structured logs, metrics, and traces,
+  rather than alerting on their own. Three terminal outcomes from the Section
+  2.1.2 vocabulary also alert, because each leaves work in a state no later
+  sweep can infer: `retry_exhausted`, `reconcile_failed`, and
+  `shutdown_aborted` with `phase="unknown_outcome"`, where a create may or may
+  not have landed. Alerts
   name the check ID and the affected entity so an operator can act without
   first reproducing the sweep.
 
