@@ -6,10 +6,9 @@ import importlib
 import types
 import typing as typ
 
-from concordat import pure, runtime
+import pytest
 
-if typ.TYPE_CHECKING:
-    import pytest
+from concordat import pure, runtime
 
 
 def test_runtime_uses_native_hello_when_extension_is_available(
@@ -34,10 +33,27 @@ def test_runtime_falls_back_to_pure_hello_when_extension_is_missing(
     """The runtime retains a working Python implementation without the extension."""
 
     def raise_module_not_found(_: str) -> typ.NoReturn:
-        raise ModuleNotFoundError
+        raise ModuleNotFoundError(name="_concordat_rs")
 
     monkeypatch.setattr(runtime.importlib, "import_module", raise_module_not_found)
 
     reloaded_runtime = importlib.reload(runtime)
 
     assert reloaded_runtime.hello is pure.hello
+
+
+def test_runtime_reraises_missing_native_dependency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A native extension dependency failure must remain visible to callers."""
+    error = ModuleNotFoundError(name="native_dependency")
+
+    def raise_dependency_error(_: str) -> typ.NoReturn:
+        raise error
+
+    monkeypatch.setattr(runtime.importlib, "import_module", raise_dependency_error)
+
+    with pytest.raises(ModuleNotFoundError) as raised:
+        importlib.reload(runtime)
+
+    assert raised.value is error

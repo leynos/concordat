@@ -106,9 +106,9 @@ between files so much as separate two concerns that used to share one file.
 `concordat.estate_config.migrate_legacy_config` is the explicit, side-effecting
 migration step, invoked once at CLI bootstrap (`concordat.cli.main`) so that
 `default_config_path` stays a pure read-only query for every command. It is a
-no-op once an active owner is already configured, once the flat file has no
-`estate` section, or once the estate section cannot be attributed to exactly
-one owner:
+no-op once an active owner is already configured or once the flat file has no
+`estate` section. If the estate section cannot be attributed to exactly one
+owner, migration raises an error:
 
 - `_derive_owner_from_estates` collects every `github_owner` recorded across
   the legacy estates. The legacy format permitted estates for more than one

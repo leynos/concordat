@@ -426,6 +426,15 @@ def run_sweep(
 
     Returns the records appended by this invocation.
 
+    Parameters
+    ----------
+    estate_path : pathlib.Path
+        Path to the estate manifest.
+    ledger_path : pathlib.Path
+        Path to the append-only campaign ledger.
+    options : SweepOptions
+        Filters and execution options for the sweep.
+
     Returns
     -------
     Ledger
@@ -467,6 +476,11 @@ def sweep_command(options: SweepCommandOptions = _DEFAULT_COMMAND_OPTIONS) -> in
 
     ``--only`` takes a comma-separated list of repository names;
     ``--limit`` bounds how many repositories are audited this run.
+
+    Parameters
+    ----------
+    options : SweepCommandOptions
+        Parsed command-line options controlling the sweep.
 
     Returns
     -------

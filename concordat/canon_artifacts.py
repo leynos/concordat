@@ -73,7 +73,13 @@ class CanonManifest:
 
     @property
     def template_root(self) -> Path:
-        """Concordat checkout root containing the manifest."""
+        """Concordat checkout root containing the manifest.
+
+        Returns
+        -------
+        Path
+            Concordat checkout root containing the manifest.
+        """
         return self.manifest_path.parent.parent.parent
 
 

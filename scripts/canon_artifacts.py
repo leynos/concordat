@@ -167,22 +167,7 @@ def _determine_sync_ids(
     config: CliSyncConfig,
     comparisons: list[ArtifactComparison],
 ) -> set[str]:
-    """Determine which artifact IDs to sync based on configuration.
-
-    When `all_outdated` is set but no artifacts match the caller's filters (for
-    example, `--types` yields an empty comparison set), this returns an empty
-    set to indicate a no-op rather than raising.
-
-    Returns
-    -------
-    set[str]
-        Artifact IDs selected for synchronization.
-
-    Raises
-    ------
-    CanonArtifactsError
-        If no explicit IDs or outdated artifacts are selected.
-    """
+    """Determine artifact IDs to sync, treating filtered selections as no-ops."""
     if config.all_outdated:
         if not comparisons:
             return set()
