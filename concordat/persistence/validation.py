@@ -186,18 +186,7 @@ def _session_token_from_environment(env: typ.Mapping[str, str]) -> str | None:
 
 
 def _credentials_from_environment(env: typ.Mapping[str, str]) -> dict[str, str]:
-    """Resolve S3 credentials from supported environment variables.
-
-    Boto3 recognises the AWS_* variables. Concordat also supports alternative
-    names for S3-compatible vendors (Scaleway/Spaces) and maps those to the
-    boto3 client arguments.
-
-    Returns
-    -------
-    dict[str, str]
-        Credential values mapped to boto3 client argument names.
-
-    """
+    """Resolve S3 credentials from AWS and supported vendor environment variables."""
 
     def present(*names: str) -> bool:
         return all(env.get(name, "").strip() for name in names)

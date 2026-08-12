@@ -116,19 +116,7 @@ def _owner_mismatch_error(
 
 
 def _render_platform_pr_result(result: PlatformStandardsResult) -> str:
-    """Render the platform inventory PR outcome.
-
-    The active estate inventory (and therefore `concordat estate show`) reflects
-    the estate repository default branch. When concordat opens/updates a feature
-    branch PR in platform-standards, the repository will not appear in the
-    estate inventory until the PR is merged.
-
-    Returns
-    -------
-    str
-        Human-readable outcome message for the platform inventory PR.
-
-    """
+    """Render the platform inventory PR outcome and estate-update implications."""
     if result.created:
         message = "platform PR opened"
         if result.pr_url:
@@ -144,20 +132,7 @@ def _build_status_parts(
     pushed: bool = False,
     platform_pr: PlatformStandardsResult | None = None,
 ) -> list[str]:
-    """Build list of status message parts from base message and optional flags.
-
-    Args:
-        base_message: The initial status message fragment.
-        committed: Whether to append "committed" to the parts.
-        pushed: Whether to append "pushed" to the parts.
-        platform_pr: Optional platform PR result to append.
-
-    Returns
-    -------
-    list[str]
-        List of status message fragments ready for joining.
-
-    """
+    """Build status message parts from a base message and optional flags."""
     parts = [base_message]
     if committed:
         parts.append("committed")
@@ -169,18 +144,7 @@ def _build_status_parts(
 
 
 def _format_outcome(repository: str, status_parts: list[str]) -> str:
-    """Format repository and status parts into a final outcome message.
-
-    Args:
-        repository: The repository specification.
-        status_parts: List of status message fragments.
-
-    Returns
-    -------
-    str
-        Formatted message: "{repository}: {joined parts}"
-
-    """
+    """Format repository and status parts into a final outcome message."""
     status = ", ".join(status_parts)
     return f"{repository}: {status}"
 
@@ -447,19 +411,7 @@ def _execute_platform_pr_operation(
     platform_standards: PlatformStandardsConfig | None,
     operation: typ.Callable[[str, PlatformStandardsConfig], PlatformStandardsResult],
 ) -> PlatformStandardsResult | None:
-    """Execute a platform PR operation with common validation and error handling.
-
-    Args:
-        repo_slug: GitHub repository slug (owner/repo) or None.
-        platform_standards: Platform configuration or None.
-        operation: The platform operation to execute (e.g., ensure_repository_pr).
-
-    Returns
-    -------
-    PlatformStandardsResult | None
-        PlatformStandardsResult if operation was attempted, None if config missing.
-
-    """
+    """Execute a platform PR operation with validation and error handling."""
     if platform_standards is None:
         return None
     if not repo_slug:

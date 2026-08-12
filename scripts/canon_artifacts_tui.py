@@ -99,8 +99,18 @@ class CanonArtifactsApp(App[None]):
         )
         self.action_refresh()
 
+    # pylint: disable=useless-return  # Public action documents its None contract.
     def action_refresh(self) -> None:
-        """Recompute comparisons and rewrite the table rows."""
+        """Recompute comparisons and rewrite the table rows in place.
+
+        The comparison state is refreshed from the manifest and published
+        checkout, then the existing table is cleared and repopulated.
+
+        Returns
+        -------
+        None
+            This method updates the comparison state and table in place.
+        """
         comparisons = list(
             compare_manifest_to_published(
                 self._manifest,
@@ -121,3 +131,6 @@ class CanonArtifactsApp(App[None]):
                 (comparison.published_sha256 or "-")[:12],
                 comparison.artifact.published_relpath().as_posix(),
             )
+        return None  # noqa: RET501  # Public action documents its None contract.
+
+    # pylint: enable=useless-return

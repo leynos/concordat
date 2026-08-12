@@ -112,22 +112,7 @@ def load_dictionary(path: pathlib.Path) -> Dictionary:
 
 
 def _merged_ignore_patterns(base: Dictionary, local: Dictionary) -> tuple[str, ...]:
-    """Union both ignore lists, then withdraw the overlay's removals.
-
-    A removal that matches nothing is not an error: the shared base is
-    maintained elsewhere, so it may drop a pattern this repository had
-    already withdrawn, and that should not fail generation here.
-
-    Returns
-    -------
-    tuple[str, ...]
-        The merged ignore patterns after removals are applied.
-
-    Raises
-    ------
-    ValueError
-        If a pattern appears in both the overlay's ignore and removal lists.
-    """
+    """Merge ignore patterns, applying removals and rejecting contradictions."""
     removed = set(local.removed_patterns)
     if contradictory := removed & set(local.ignore_patterns):
         message = (

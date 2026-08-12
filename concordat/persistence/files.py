@@ -96,22 +96,7 @@ def _enforce_existing_policy(
     is_same: bool,
     force: bool,
 ) -> bool:
-    """Return True if caller should write, False if identical, else raise.
-
-    When ``is_same`` is False and ``force`` is False, raises a PersistenceError
-    to protect existing files from accidental overwrite.
-
-    Returns
-    -------
-    bool
-        Whether the caller should write the file.
-
-    Raises
-    ------
-    PersistenceError
-        If the file differs and replacement is not forced.
-
-    """
+    """Enforce the existing-file policy, raising on an unsafe replacement."""
     if is_same:
         return False
     if not force:
