@@ -282,10 +282,13 @@ actuators that remediate them. Each check ships as a lint rule package under
   `rule mutate` performs the side effect against a mocked API; each emits a
   structured log line carrying the check ID, operation, and entity IDs, and the
   sweep publishes bounded per-check metrics and fires an alert on error or
-  incompletion. The package declares least-privilege token scopes; API calls
-  carry a request timeout and retry transient failures with exponential
-  backoff; and the token and any secret value are never persisted or logged.
-  This item is a prerequisite for CV-003, AM-001, AM-002, DP-001, and DP-002.
+  incompletion. Credentials are accepted only from configured secret stores or
+  environment variables; credentials or secret values supplied through a CLI
+  argument, committed file, backend file, or log are rejected. Token scopes are
+  no broader than the operation permits, and no credential or secret value is
+  persisted or logged. Fixtures cover each prohibited source, a broad-scope
+  token, and CV-003's dual-store secret provisioning. This item is a
+  prerequisite for CV-003, AM-001, AM-002, DP-001, and DP-002.
 - [ ] Implement the atomic concurrency boundary for `github-api` actuators
   (design document Section 2.1.2): server-side idempotency where the operation
   provides it (secret `PUT` upserts, remediation-branch ref creation) and the
@@ -301,6 +304,10 @@ actuators that remediate them. Each check ships as a lint rule package under
     client times out or loses the response. The worker reconciles against the
     embedded key, finds the effect, issues no second create, and reports
     `reconciled_existing`.
+  - **Partial failure (branch-mediated annotation).** A fixture where an
+    intermediate create succeeds but a later call fails. The next sweep
+    reconciles the embedded key, reuses or safely cleans the intermediate state,
+    and completes exactly one final effect without a duplicate.
   - **Transient failure.** Fixtures returning `429` (with `Retry-After`) and
     `503` before succeeding. Retries are bounded by the documented attempt and
     time budgets, and exactly one effect exists after recovery.
@@ -308,8 +315,8 @@ actuators that remediate them. Each check ships as a lint rule package under
     fails fast without retrying, and one exhausting the retry budget reports
     `retry_exhausted`; neither retries unboundedly, and both surface in logs,
     metrics, and an alert.
-  - **Shutdown.** Fixtures interrupting a worker before the create and after a
-    create with an unknown outcome. Neither deletes nor duplicates an effect:
+  - **Shutdown.** Fixtures interrupting a worker before creation and after a
+    creation whose outcome is unknown. Neither deletes nor duplicates an effect:
     the lease is released or left to expire, `shutdown_aborted` is emitted with
     the phase reached, and the next sweep reconciles the key before retrying,
     ending with exactly one effect.
@@ -356,7 +363,7 @@ actuators that remediate them. Each check ships as a lint rule package under
   leaving a fixture blocked by a missing approval untouched; the AM-002
   actuator opens a tracking issue; and a second sweep over the same fixture
   posts no duplicate `@dependabot rebase` comment and opens no duplicate
-  tracking issue, and — the case a sequential re-run cannot reach — two
+  tracking issue, and — a case that a sequential re-run cannot reach — two
   concurrent sweeps over the same fixture also yield exactly one comment and
   one issue, the losers reporting `duplicate_suppressed`, via the single-flight
   lease keyed on the pull-request head and the workflow ID.
@@ -365,12 +372,19 @@ actuators that remediate them. Each check ships as a lint rule package under
   manifest requirements, and detect git-revision pins lacking a
   `TODO(<issue-url>)` resolving to an open issue. Acceptance: a fixture
   manifest pinning below a patched version raises DP-001 with the blocked alert
-  numbers; the DP-002 actuator inserts the `TODO` via the comment-preserving
-  TOML remediation provider and raises the tracking issue; and re-running the
-  actuators — sequentially or as two concurrent sweeps — creates no duplicate
-  migration issue, tracking issue, or `TODO` annotation, the issue serialized
-  by the single-flight lease keyed on the alert and the annotation by the
-  remediation-branch ref keyed on the git-revision dependency.
+  numbers, and the DP-001 actuator opens exactly one migration issue per
+  blocked alert, keyed by the stable alert key and protected by the alert-keyed
+  single-flight lease. The DP-002 actuator inserts the `TODO` annotation
+  through the comment-preserving TOML remediation provider and opens exactly
+  one tracking issue per git-revision dependency, keyed by that stable
+  git-revision key; the annotation is deduplicated by the remediation-branch
+  ref using the same key. Sequential repeat sweeps leave exactly one migration
+  issue, tracking issue, and `TODO` annotation for each corresponding key.
+  Concurrent repeat sweeps produce the same exact-one counts: one migration
+  issue per alert, one tracking issue per git-revision dependency, and one
+  `TODO` annotation per git revision. Migration issues remain protected by the
+  alert-keyed lease, and `TODO` annotations remain deduplicated by the
+  git-revision remediation-branch ref.
 - [ ] Ship the Dependabot governance rule packages (DB-001 to DB-004):
   manifest-scan sensor diffing package roots against `dependabot.yml` entries,
   cooldown policy checks (tiered for semver ecosystems, `default-days` for
@@ -381,14 +395,18 @@ actuators that remediate them. Each check ships as a lint rule package under
   and mutations patch `dependabot.yml` and deploy the canonical workflows.
   Fixtures whose auto-merge or scheduled-audit workflow references the shared
   workflow by a branch (e.g., `@main`) or a mutable tag (e.g., `@latest`) are
-  flagged non-compliant, while a semantic-version tag, major-version pin, or
-  commit SHA passes.
+  flagged non-compliant; a commit SHA passes, and a tag passes only when an
+  immutable-tag mechanism is explicitly verified. Semantic-version and
+  major-version tags do not pass automatically.
 - [ ] Ship the mutation-testing rule package (MT-001): sensors for the
   scheduled workflow calling the pinned shared mutation-testing workflow
   without being merge-blocking; the mutation deploys the canonical workflow.
   Acceptance: a repository without mutation testing raises the finding and the
-  deployed workflow passes `act` validation. A fixture pinning the shared
-  mutation-testing workflow to a branch or mutable tag also raises the finding.
+  deployed workflow passes `act` validation. Fixtures pinning the shared
+  mutation-testing workflow to a branch or mutable tag raise the finding; a
+  commit SHA passes, and a tag passes only when an immutable-tag mechanism is
+  explicitly verified. Semantic-version and major-version tags do not pass
+  automatically.
 
 ### 4.3. Enforce licensing integrity and toolchain baselines
 
