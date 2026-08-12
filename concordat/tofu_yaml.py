@@ -33,6 +33,7 @@ def strip_yaml_directives_for_tofu(contents: str) -> tuple[str, bool]:
 
     Returns
     -------
+    tuple[str, bool]
         A tuple of (sanitized_contents, changed) where changed is True if any
         modifications were made.
 
@@ -92,6 +93,7 @@ def sanitize_yaml_file_for_tofu(path: Path) -> bool:
 
     Returns
     -------
+    bool
         True if the file was modified, False otherwise.
 
     """
@@ -168,6 +170,7 @@ def sanitize_inventory_for_tofu(
 
     Returns
     -------
+    bool
         True if any inventory file was modified, False otherwise.
 
     """

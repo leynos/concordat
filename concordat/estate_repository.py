@@ -145,21 +145,7 @@ def _plan_missing_repository(slug: str | None) -> RepositoryPlan:
 
 
 def _plan_reachable_repository(repo_url: str, probe: RemoteProbe) -> RepositoryPlan:
-    """Plan for a reachable, existing remote; only empty ones are usable.
-
-    Callers must route only reachable probes here, so no reachability check is
-    repeated. A non-empty remote is rejected without contacting GitHub.
-
-    Returns
-    -------
-    RepositoryPlan
-        Plan to use the existing empty repository.
-
-    Raises
-    ------
-    NonEmptyRepositoryError
-        If the reachable remote already contains commits.
-    """
+    """Plan use of a reachable, existing remote when it is empty."""
     if not probe.empty:
         raise NonEmptyRepositoryError(repo_url)
     return RepositoryPlan(
@@ -177,25 +163,7 @@ def _plan_unreachable_repository(
     github_token: str | None,
     client_factory: typ.Callable[[str | None], github3.GitHub] | None,
 ) -> RepositoryPlan:
-    """Plan for an unreachable remote by asking GitHub whether it exists.
-
-    A repository GitHub can see but SSH cannot reach is inaccessible rather
-    than missing. The constructed client is returned in the plan so
-    ``_ensure_repository_exists`` reuses it instead of authenticating twice.
-
-    Returns
-    -------
-    RepositoryPlan
-        Plan to create the missing repository, including the authenticated
-        client used for the lookup.
-
-    Raises
-    ------
-    RepositoryInaccessibleError
-        If GitHub can see the repository but the original remote is unreachable.
-    RepositoryUnreachableError
-        If *slug* is missing and the remote cannot be identified.
-    """
+    """Plan an unreachable remote by asking GitHub whether it exists."""
     if not slug:
         raise RepositoryUnreachableError(repo_url)
     # Identity first, matching `_ensure_repository_exists`: a malformed slug
@@ -219,27 +187,7 @@ def _lookup_repository(
     owner: str,
     name: str,
 ) -> object | None:
-    """Return the GitHub repository *owner*/*name*, or ``None`` when absent.
-
-    ``GitHub.repository`` signals an absent repository by raising rather than
-    returning ``None``, so a ``NotFoundError`` is the answer "it is not there"
-    and must not escape. Every other GitHub failure leaves the remote's state
-    unknown, so it is translated rather than surfaced raw: a rejected call is
-    an authentication problem, and anything else means the lookup itself could
-    not be completed.
-
-    Returns
-    -------
-    object | None
-        GitHub repository object, or ``None`` when it does not exist.
-
-    Raises
-    ------
-    GitHubAuthenticationError
-        If GitHub rejects the repository lookup.
-    RepositoryUnreachableError
-        If the lookup fails for another GitHub or network reason.
-    """
+    """Return the GitHub repository *owner*/*name*, or ``None`` when absent."""
     try:
         return client.repository(owner, name)
     except github3_exceptions.NotFoundError:

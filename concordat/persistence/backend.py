@@ -57,6 +57,7 @@ def session_token_overrides(env: typ.Mapping[str, str]) -> dict[str, str]:
 
     Returns
     -------
+    dict[str, str]
         Dict with AWS_SESSION_TOKEN if present and non-empty, empty dict otherwise.
 
     """
@@ -93,6 +94,7 @@ def resolve_backend_environment(env: typ.Mapping[str, str]) -> dict[str, str]:
 
     Returns
     -------
+    dict[str, str]
         Dict with AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY set.
 
     Raises
@@ -138,6 +140,7 @@ def validate_backend_path(workdir: Path, backend_config_path: str) -> Path:
 
     Returns
     -------
+    Path
         The validated relative path to the backend config file.
 
     Raises
@@ -170,6 +173,7 @@ def build_object_key(descriptor: PersistenceDescriptor) -> str:
 
     Returns
     -------
+    str
         The full S3 object key path.
 
     """
@@ -197,6 +201,12 @@ def get_persistence_runtime(
 
     Returns
     -------
+    tuple[
+        persistence_models.PersistenceDescriptor | None,
+        str | None,
+        str | None,
+        dict[str, str] | None,
+    ]
         A tuple of (descriptor, backend_config, object_key, env_overrides).
         Returns (None, None, None, None) if persistence is disabled or missing.
 

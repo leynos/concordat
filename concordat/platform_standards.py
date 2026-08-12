@@ -92,6 +92,7 @@ def _check_base_branch_enrollment(
 
     Returns
     -------
+    PlatformStandardsResult | None
         PlatformStandardsResult if already in expected state, None otherwise.
 
     """
@@ -137,6 +138,7 @@ def _create_pr_for_inventory_change(
 
     Returns
     -------
+    tuple[str, str]
         Tuple of (pr_url, message).
 
     """
@@ -184,6 +186,7 @@ def _handle_existing_remote_branch(
 
     Returns
     -------
+    PlatformStandardsResult | None
         PlatformStandardsResult if branch exists with change, None otherwise.
 
     """
@@ -293,6 +296,7 @@ def _apply_inventory_change(
 
     Returns
     -------
+    bool
         True when the inventory changed and was committed and validated, otherwise
         False.
 
@@ -489,6 +493,7 @@ def _load_and_validate_inventory_data(path: Path) -> dict[str, typ.Any] | None:
 
     Returns
     -------
+    dict[str, typ.Any] | None
         Dictionary with inventory data if valid, None if file missing or invalid.
 
     """
@@ -514,6 +519,7 @@ def _filter_repository_entries(
 
     Returns
     -------
+    tuple[list[dict[str, typ.Any]], bool]
         Tuple of (filtered_list, changed) where changed is True if removed.
 
     """

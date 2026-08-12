@@ -70,7 +70,7 @@ def _create_repository(
     owner: str,
     name: str,
 ) -> None:
-    """Create a repository in an organisation or for the authenticated user."""
+    """Create a repository in an organization or for the authenticated user."""
     org = _find_organization(client, owner)
     if org:
         _create_organization_repository(org, owner, name)
@@ -82,7 +82,7 @@ def _find_organization(
     client: github3.GitHub,
     owner: str,
 ) -> github3.orgs.Organization | None:
-    """Return the organisation named *owner*, or ``None`` when there is none.
+    """Return the organization named *owner*, or ``None`` when there is none.
 
     An authentication failure here precedes any creation attempt: a rejected
     lookup says nothing about whether *owner* is an organisation, so falling
@@ -91,7 +91,7 @@ def _find_organization(
     Returns
     -------
     github3.orgs.Organization | None
-        Matching organisation, or ``None`` when *owner* is not an organisation.
+        Matching organization, or ``None`` when *owner* is not an organization.
 
     Raises
     ------

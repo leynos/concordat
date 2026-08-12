@@ -147,17 +147,17 @@ def _ledger_record(
 
     Raises
     ------
-    _ledger_error
+    OperationalRuleError
         If the decoded line is not a valid ledger record.
     """
     if not isinstance(decoded, dict):
         message = f"ledger {path} line {line_number} is not a JSON object"
-        raise _ledger_error(message, path)
+        raise OperationalRuleError(message, operation="load-ledger", resource=path)
     record = typ.cast("dict[str, object]", decoded)
     missing = sorted(_LEDGER_REQUIRED_KEYS - record.keys())
     if missing:
         message = f"ledger {path} line {line_number} is missing {missing}"
-        raise _ledger_error(message, path)
+        raise OperationalRuleError(message, operation="load-ledger", resource=path)
     _validate_record_fields(record, path, line_number)
     return typ.cast("LedgerRecord", record)
 

@@ -45,11 +45,22 @@ def _assert_metadata_preserved(data: dict[str, typ.Any]) -> None:
     assert data["labels"] == ["backend", "critical"]
 
 
-def test_apply_inventory_change_skips_commit_and_validation_when_unchanged(
+@pytest.mark.parametrize(
+    ("mutation_result", "expected_changed", "expected_calls"),
+    [
+        pytest.param(False, False, ["mutate"], id="unchanged"),
+        pytest.param(True, True, ["mutate", "commit", "validate"], id="changed"),
+    ],
+)
+def test_apply_inventory_change_commits_and_validates_only_when_mutated(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    *,
+    mutation_result: bool,
+    expected_changed: bool,
+    expected_calls: list[str],
 ) -> None:
-    """A no-op inventory mutation must not commit or validate changes."""
+    """Only commit and validate after an inventory mutation."""
     calls: list[str] = []
     config = platform_standards.PlatformStandardsConfig(
         repo_url="https://example.com/platform-standards.git"
@@ -59,54 +70,7 @@ def test_apply_inventory_change_skips_commit_and_validation_when_unchanged(
         calls.append("mutate")
         assert inventory == tmp_path / config.inventory_path
         assert repo_slug == "example/repo"
-        return False
-
-    def commit_inventory_changes(*args: object, **kwargs: object) -> None:
-        calls.append("commit")
-
-    def validate_tofu_changes(workdir: Path) -> None:
-        calls.append("validate")
-
-    monkeypatch.setattr(
-        platform_standards,
-        "_commit_inventory_changes",
-        commit_inventory_changes,
-    )
-    monkeypatch.setattr(
-        platform_standards,
-        "_validate_tofu_changes",
-        validate_tofu_changes,
-    )
-
-    changed = platform_standards._apply_inventory_change(
-        typ.cast("pygit2.Repository", object()),
-        tmp_path,
-        config,
-        "example/repo",
-        typ.cast("pygit2.Commit", object()),
-        verb="enrol",
-        mutate_inventory=mutate_inventory,
-    )
-
-    assert changed is False
-    assert calls == ["mutate"]
-
-
-def test_apply_inventory_change_commits_before_validation(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """An inventory mutation must be committed before it is validated."""
-    calls: list[str] = []
-    config = platform_standards.PlatformStandardsConfig(
-        repo_url="https://example.com/platform-standards.git"
-    )
-
-    def mutate_inventory(inventory: Path, repo_slug: str) -> bool:
-        calls.append("mutate")
-        assert inventory == tmp_path / config.inventory_path
-        assert repo_slug == "example/repo"
-        return True
+        return mutation_result
 
     def commit_inventory_changes(*args: object, **kwargs: object) -> None:
         calls.append("commit")
@@ -136,8 +100,8 @@ def test_apply_inventory_change_commits_before_validation(
         mutate_inventory=mutate_inventory,
     )
 
-    assert changed is True
-    assert calls == ["mutate", "commit", "validate"]
+    assert changed is expected_changed
+    assert calls == expected_calls
 
 
 def test_update_inventory_adds_entry(tmp_path: Path) -> None:

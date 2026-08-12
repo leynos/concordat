@@ -158,6 +158,7 @@ def _setup_test_environment(
 
     Returns
     -------
+    tuple[list[list[str]], TofuMockBuilder, ExecutionIO, ExecutionOptions]
         Tuple of (calls list, mock_builder, io_streams, options).
 
     """

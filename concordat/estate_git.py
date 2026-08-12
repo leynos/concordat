@@ -56,19 +56,7 @@ def default_template_root() -> Path:
 
 
 def _probe_remote(repo_url: str) -> RemoteProbe:
-    """Report whether *repo_url* can be listed, and whether it holds any refs.
-
-    A remote this cannot reach is reported as ``exists=False`` as well as
-    ``reachable=False``, because listing is the only evidence available here:
-    an unroutable host and an absent repository both surface as one
-    ``GitError``. Callers therefore route an unreachable remote down the
-    missing-remote path, which asks GitHub what is actually there.
-
-    Returns
-    -------
-    RemoteProbe
-        Reachability and emptiness observed for the remote.
-    """
+    """Report whether *repo_url* can be listed and whether it holds refs."""
     callbacks = build_remote_callbacks(repo_url)
     with TemporaryDirectory(prefix="concordat-estate-probe-") as temp_root:
         repository = pygit2.init_repository(temp_root)
@@ -105,16 +93,7 @@ def _collect_inventory(record: EstateRecord) -> list[str]:
 
 
 def _inventory_slugs(entries: cabc.Iterable[object]) -> cabc.Iterator[str]:
-    """Yield the trimmed name of each usable entry, skipping the rest.
-
-    An entry is usable only when it is mapping-shaped and carries a ``name``
-    that is a non-blank string; anything else is inventory noise.
-
-    Yields
-    ------
-    str
-        Trimmed repository name for each usable inventory entry.
-    """
+    """Yield the trimmed name of each usable inventory entry."""
     for entry in entries:
         match entry:
             case {"name": str() as name} if name.strip():
@@ -157,19 +136,7 @@ def _bootstrap_template(
     repo_url: str,
     bootstrap: TemplateBootstrap,
 ) -> None:
-    """Seed *repo_url* from the bundled template as one atomic operation.
-
-    Validates template availability, copies and sanitizes the template,
-    initialises and commits a Git repository, pushes the target branch, and
-    sets the local remote HEAD where applicable.
-
-    Raises
-    ------
-    TemplateMissingError
-        If the bundled template directory is unavailable.
-    TemplatePushError
-        If pushing the bootstrapped repository fails.
-    """
+    """Seed *repo_url* from the bundled template as one atomic operation."""
     branch = bootstrap.branch
     if not bootstrap.template_root.exists():
         raise TemplateMissingError(bootstrap.template_root)
