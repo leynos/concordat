@@ -75,6 +75,16 @@ def _validated_identifier(
     Names from the manifest become URL segments and clone-directory
     components, so they are validated here, at the boundary, rather than
     trusted downstream.
+
+    Returns
+    -------
+    str
+        The validated identifier.
+
+    Raises
+    ------
+    OperationalRuleError
+        If *value* does not match *pattern*.
     """
     if isinstance(value, str) and pattern.fullmatch(value):
         return value
@@ -129,6 +139,16 @@ def _repository_entries(
     Only a list is a repository collection. A scalar raises on iteration and a
     bare string is walked character by character, so both are refused here
     rather than reaching the entry decoding as `TypeError`.
+
+    Returns
+    -------
+    tuple[EstateEntry, ...]
+        The decoded repository entries.
+
+    Raises
+    ------
+    _manifest_error
+        If *repositories* is not a list.
     """
     if not isinstance(repositories, list):
         raise _manifest_error(
@@ -146,6 +166,9 @@ def load_estate(path: pathlib.Path) -> Estate:
     operational error naming the manifest, not as a `TypeError` from a
     subscript.
 
+    Name validation uses ``_validated_identifier`` and reports its own
+    ``OperationalRuleError`` when an owner or repository name is invalid.
+
     Parameters
     ----------
     path:
@@ -158,12 +181,11 @@ def load_estate(path: pathlib.Path) -> Estate:
 
     Raises
     ------
-    OperationalRuleError
+    _manifest_error
         With ``operation="load-estate-manifest"``, when the document is
         not a mapping, a required key (``repositories`` or ``owner``) is
         missing, the ``repositories`` value is not a list, a repository
-        entry is malformed, or an owner or repository name fails its
-        validation pattern.
+        entry is malformed.
 
     """
     document = YAML(typ="safe").load(path.read_text(encoding="utf-8"))

@@ -389,6 +389,11 @@ class _SweepSession:
 
         A head-resolution failure and a completed audit both consume an audit
         slot; an idempotent skip of an already-ledgered commit does not.
+
+        Returns
+        -------
+        bool
+            Whether this entry consumed an audit slot.
         """
         repository = f"{self.owner}/{entry.name}"
         try:
@@ -420,6 +425,11 @@ def run_sweep(
     """Sweep the estate and append new records to the ledger.
 
     Returns the records appended by this invocation.
+
+    Returns
+    -------
+    Ledger
+        Records appended during this invocation.
     """
     estate = load_estate(estate_path)
     session = _SweepSession(
@@ -457,6 +467,11 @@ def sweep_command(options: SweepCommandOptions = _DEFAULT_COMMAND_OPTIONS) -> in
 
     ``--only`` takes a comma-separated list of repository names;
     ``--limit`` bounds how many repositories are audited this run.
+
+    Returns
+    -------
+    int
+        Zero after the sweep completes successfully.
     """
     only_set = (
         {name.strip() for name in options.only.split(",") if name.strip()}

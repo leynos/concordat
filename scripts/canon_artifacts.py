@@ -174,6 +174,16 @@ def _determine_sync_ids(
     When `all_outdated` is set but no artifacts match the caller's filters (for
     example, `--types` yields an empty comparison set), this returns an empty
     set to indicate a no-op rather than raising.
+
+    Returns
+    -------
+    set[str]
+        Artifact IDs selected for synchronization.
+
+    Raises
+    ------
+    CanonArtifactsError
+        If no explicit IDs or outdated artifacts are selected.
     """
     if config.all_outdated:
         if not comparisons:
