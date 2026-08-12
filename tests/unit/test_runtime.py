@@ -28,8 +28,16 @@ def test_runtime_uses_native_hello_when_extension_is_available(
     assert reloaded_runtime.hello is native_hello
 
 
-def test_runtime_falls_back_to_pure_hello_when_extension_is_missing() -> None:
+def test_runtime_falls_back_to_pure_hello_when_extension_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """The runtime retains a working Python implementation without the extension."""
+
+    def raise_module_not_found(_: str) -> typ.NoReturn:
+        raise ModuleNotFoundError
+
+    monkeypatch.setattr(runtime.importlib, "import_module", raise_module_not_found)
+
     reloaded_runtime = importlib.reload(runtime)
 
     assert reloaded_runtime.hello is pure.hello

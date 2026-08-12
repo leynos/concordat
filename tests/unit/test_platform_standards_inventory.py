@@ -129,11 +129,14 @@ def test_apply_inventory_change_commits_the_mutated_inventory(
         [],
     )
     base_commit = repository[base_commit_id].peel(pygit2.Commit)
-    validated_workdirs: list[Path] = []
+    validated_heads: list[pygit2.Oid] = []
+
+    def validate_tofu_changes(workdir: Path) -> None:
+        assert workdir == tmp_path
+        validated_heads.append(repository.head.peel(pygit2.Commit).id)
+
     monkeypatch.setattr(
-        platform_standards,
-        "_validate_tofu_changes",
-        validated_workdirs.append,
+        platform_standards, "_validate_tofu_changes", validate_tofu_changes
     )
 
     changed = platform_standards._apply_inventory_change(
@@ -151,7 +154,7 @@ def test_apply_inventory_change_commits_the_mutated_inventory(
     assert commit.parent_ids == [base_commit.id]
     assert commit.message == "chore: enrol example/repo via concordat"
     assert "example/repo" in inventory_path.read_text(encoding="utf-8")
-    assert validated_workdirs == [tmp_path]
+    assert validated_heads == [commit.id]
 
 
 def test_update_inventory_adds_entry(tmp_path: Path) -> None:
