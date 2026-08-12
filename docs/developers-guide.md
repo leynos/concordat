@@ -14,18 +14,27 @@ everything else is derived from the current source.
 declared in `pyproject.toml` under `[dependency-groups]` as `dev`, and pulls in
 pytest, pytest-xdist, pytest-bdd, pytest-asyncio, pytest-mock, ruff, pyright,
 pytest-timeout, betamax, hypothesis, textual, and the pinned
-`df12-python-lints` v0.2.0 plugin. The `Makefile`'s `build` target runs
+`df12-python-lints` plugin at immutable commit
+`9c835f35b0f1690597ade799c9c6a30bc5922959` (lock metadata version 0.1.0).
+The `Makefile`'s `build` target runs
 `uv sync --group dev` as part of setting up the virtual environment.
 
 `make lint` runs four complementary checks. Ruff provides the fast source-wide
 style and correctness pass, including preview, asynchronous, and
 NumPy-docstring rules. Pylint then runs the selected Lading policy through the
-pinned PyPy shim. A separate CPython 3.14 invocation loads every
-`df12-python-lints` v0.2.0 diagnostic, while retaining Concordat's Python 3.13
+pinned PyPy shim. A separate CPython 3.14 invocation loads every diagnostic
+from the `df12-python-lints` pin, while retaining Concordat's Python 3.13
 semantic baseline for version-gated checks. Finally, `ambrleaks`, provisioned
 from the same immutable release, scans the test tree for unredacted values in
 Syrupy snapshots. The separate df12 process prevents its CPython dependency
 from changing the PyPy-backed Pylint baseline.
+
+## Public runtime boundary
+
+`concordat.hello` is the public greeting entry point. At runtime it selects
+`_concordat_rs.hello` when the optional Rust extension is installed and falls
+back to `.pure.hello` otherwise. `Hello` in `concordat.runtime` is an internal
+typing alias, not part of the public API.
 
 The type checker is pinned, not resolved at run time. `Makefile` declares
 `TY_VERSION ?= 0.0.65` and `TY := uv tool run ty@$(TY_VERSION)`; the
