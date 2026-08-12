@@ -210,16 +210,14 @@ def test_run_plan_sanitizes_inventory_yaml_directives_for_tofu(
     inventory_path = tofu_root / "inventory" / "repositories.yaml"
     inventory_path.parent.mkdir(parents=True, exist_ok=True)
     inventory_path.write_text(
-        "\n".join(
-            [
-                "%YAML 1.2",
-                "---",
-                "schema_version: 1",
-                "repositories: []",
-                "...",
-                "",
-            ]
-        ),
+        "\n".join([
+            "%YAML 1.2",
+            "---",
+            "schema_version: 1",
+            "repositories: []",
+            "...",
+            "",
+        ]),
         encoding="utf-8",
     )
 

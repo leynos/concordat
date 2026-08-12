@@ -16,7 +16,7 @@ EVENT_DIR = WORKFLOW_DIR / "events"
 ACT_ARCH = "linux/amd64"
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class WorkflowMeta:
     """Describe the location of a canonical workflow and its sample event."""
 
@@ -134,7 +134,7 @@ def run(name: str, *, dry_run: bool = False) -> None:
         return
 
     _act_available()
-    subprocess.run(args, check=True)  # noqa: S603
+    subprocess.run(args, check=True)  # noqa: S603  # Fixed argv, no shell.
 
 
 def main() -> None:  # pragma: no cover - exercised via CLI

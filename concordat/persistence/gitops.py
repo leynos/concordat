@@ -1,5 +1,5 @@
 """Git operations for persistence workflow."""
-# ruff: noqa: TRY003
+# ruff: noqa: TRY003  # Domain errors carry operator-facing remediation.
 
 from __future__ import annotations
 

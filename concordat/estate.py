@@ -227,6 +227,18 @@ def _resolve_implicit_config_path(
     with no active owner yet) is committed by the caller after registration
     succeeds, so a failed init leaves ``xdg.get_active_owner()`` unchanged. An
     explicit *config_path* bypasses the owner namespace entirely.
+
+    Returns
+    -------
+    tuple[Path | None, str | None]
+        Configuration path and, when needed, the owner to activate after
+        registration succeeds.
+
+    Raises
+    ------
+    ActiveOwnerMismatchError
+        If an active owner differs from the estate owner on the implicit path.
+
     """
     match (config_path, xdg.get_active_owner()):
         case (Path() as explicit, _):

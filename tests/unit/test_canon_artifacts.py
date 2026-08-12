@@ -43,18 +43,16 @@ def _write_manifest_via_yaml(
 ) -> None:
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(
-        "\n".join(
-            [
-                "schema_version: 1",
-                "artifacts:",
-                f"  - id: {artifact_id}",
-                "    type: lint-config",
-                f"    path: {artifact_path}",
-                "    description: test artifact",
-                f"    sha256: {sha256}",
-                "",
-            ]
-        ),
+        "\n".join([
+            "schema_version: 1",
+            "artifacts:",
+            f"  - id: {artifact_id}",
+            "    type: lint-config",
+            f"    path: {artifact_path}",
+            "    description: test artifact",
+            f"    sha256: {sha256}",
+            "",
+        ]),
         encoding="utf-8",
     )
 
@@ -67,15 +65,13 @@ def _write_manifest_entries(
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     lines: list[str] = ["schema_version: 1", "artifacts:"]
     for artifact in artifacts:
-        lines.extend(
-            [
-                f"  - id: {artifact['id']}",
-                f"    type: {artifact['type']}",
-                f"    path: {artifact['path']}",
-                f"    description: {artifact['description']}",
-                f"    sha256: {artifact['sha256']}",
-            ]
-        )
+        lines.extend([
+            f"  - id: {artifact['id']}",
+            f"    type: {artifact['type']}",
+            f"    path: {artifact['path']}",
+            f"    description: {artifact['description']}",
+            f"    sha256: {artifact['sha256']}",
+        ])
     lines.append("")
     manifest_path.write_text("\n".join(lines), encoding="utf-8")
 
@@ -101,15 +97,13 @@ def _setup_multi_artifact_scenario(
     for artifact_id, relative_path, template_content, published_content in artifacts:
         _write_template_file(root, relative_path, template_content)
         sha = hashlib.sha256(template_content.encode("utf-8")).hexdigest()
-        entries.append(
-            {
-                "id": artifact_id,
-                "type": "lint-config",
-                "path": relative_path,
-                "description": artifact_id,
-                "sha256": sha,
-            }
-        )
+        entries.append({
+            "id": artifact_id,
+            "type": "lint-config",
+            "path": relative_path,
+            "description": artifact_id,
+            "sha256": sha,
+        })
 
         if published_content is None:
             continue
@@ -483,14 +477,12 @@ def test_load_manifest_rejects_non_mapping_artifact_entry(tmp_path: Path) -> Non
     """load_manifest rejects artifacts that are not mappings."""
     manifest_path = tmp_path / "manifest.yaml"
     manifest_path.write_text(
-        "\n".join(
-            [
-                "schema_version: 1",
-                "artifacts:",
-                "  - 1",
-                "",
-            ]
-        ),
+        "\n".join([
+            "schema_version: 1",
+            "artifacts:",
+            "  - 1",
+            "",
+        ]),
         encoding="utf-8",
     )
 
@@ -505,17 +497,15 @@ def test_load_manifest_rejects_missing_artifact_key(tmp_path: Path) -> None:
     """load_manifest rejects artifact entries missing required keys."""
     manifest_path = tmp_path / "manifest.yaml"
     manifest_path.write_text(
-        "\n".join(
-            [
-                "schema_version: 1",
-                "artifacts:",
-                "  - id: missing-key",
-                "    type: lint-config",
-                "    path: platform-standards/canon/lint/python/ruff.toml",
-                "    description: test artifact",
-                "",
-            ]
-        ),
+        "\n".join([
+            "schema_version: 1",
+            "artifacts:",
+            "  - id: missing-key",
+            "    type: lint-config",
+            "    path: platform-standards/canon/lint/python/ruff.toml",
+            "    description: test artifact",
+            "",
+        ]),
         encoding="utf-8",
     )
 

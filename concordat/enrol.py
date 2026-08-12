@@ -121,6 +121,12 @@ def _render_platform_pr_result(result: PlatformStandardsResult) -> str:
     the estate repository default branch. When concordat opens/updates a feature
     branch PR in platform-standards, the repository will not appear in the
     estate inventory until the PR is merged.
+
+    Returns
+    -------
+    str
+        Human-readable outcome message for the platform inventory PR.
+
     """
     if result.created:
         message = "platform PR opened"
@@ -145,7 +151,8 @@ def _build_status_parts(
         pushed: Whether to append "pushed" to the parts.
         platform_pr: Optional platform PR result to append.
 
-    Returns:
+    Returns
+    -------
         List of status message fragments ready for joining.
 
     """
@@ -166,7 +173,8 @@ def _format_outcome(repository: str, status_parts: list[str]) -> str:
         repository: The repository specification.
         status_parts: List of status message fragments.
 
-    Returns:
+    Returns
+    -------
         Formatted message: "{repository}: {joined parts}"
 
     """
@@ -174,7 +182,7 @@ def _format_outcome(repository: str, status_parts: list[str]) -> str:
     return f"{repository}: {status}"
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class EnrollmentOutcome:
     """Captured outcome for a processed repository."""
 
@@ -197,7 +205,7 @@ class EnrollmentOutcome:
         return _format_outcome(self.repository, status_parts)
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class DisenrollmentOutcome:
     """Captured outcome for a processed repository during disenrolment."""
 
@@ -443,7 +451,8 @@ def _execute_platform_pr_operation(
         platform_standards: Platform configuration or None.
         operation: The platform operation to execute (e.g., ensure_repository_pr).
 
-    Returns:
+    Returns
+    -------
         PlatformStandardsResult if operation was attempted, None if config missing.
 
     """
@@ -491,7 +500,7 @@ def _platform_pr_removal_result(
     )
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(slots=True)
 class _RepositoryContext:
     repository: Repository
     location: Path

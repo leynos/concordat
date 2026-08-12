@@ -5,13 +5,13 @@ repository against a checked-out platform-standards repository and can sync
 outdated or missing artifacts.
 """
 
-# ruff: noqa: TRY003
+# ruff: noqa: TRY003  # Domain errors carry operator-facing remediation.
 
 from __future__ import annotations
 
 import dataclasses
-from pathlib import Path  # noqa: TC003
-from typing import Annotated  # noqa: ICN003
+import typing as typ
+from pathlib import Path  # noqa: TC003  # Runtime annotations require this import.
 
 from cyclopts import App, Parameter
 
@@ -94,7 +94,7 @@ def list_artifacts(
 
 @app.command()
 def status(
-    config: Annotated[StatusConfig, Parameter(name="*")],
+    config: typ.Annotated[StatusConfig, Parameter(name="*")],
 ) -> int:
     """Print a table comparing published artifacts against the template."""
     return _render_status(config)
@@ -202,7 +202,7 @@ def _determine_sync_ids(
 
 @app.command()
 def sync(
-    config: Annotated[CliSyncConfig, Parameter(name="*")],
+    config: typ.Annotated[CliSyncConfig, Parameter(name="*")],
 ) -> int:
     """Copy template artifacts into the published checkout."""
     published_root = config.published_root.resolve()

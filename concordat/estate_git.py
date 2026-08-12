@@ -63,6 +63,11 @@ def _probe_remote(repo_url: str) -> RemoteProbe:
     an unroutable host and an absent repository both surface as one
     ``GitError``. Callers therefore route an unreachable remote down the
     missing-remote path, which asks GitHub what is actually there.
+
+    Returns
+    -------
+    RemoteProbe
+        Reachability and emptiness observed for the remote.
     """
     callbacks = build_remote_callbacks(repo_url)
     with TemporaryDirectory(prefix="concordat-estate-probe-") as temp_root:
@@ -104,6 +109,11 @@ def _inventory_slugs(entries: cabc.Iterable[object]) -> cabc.Iterator[str]:
 
     An entry is usable only when it is mapping-shaped and carries a ``name``
     that is a non-blank string; anything else is inventory noise.
+
+    Yields
+    ------
+    str
+        Trimmed repository name for each usable inventory entry.
     """
     for entry in entries:
         match entry:
@@ -152,6 +162,13 @@ def _bootstrap_template(
     Validates template availability, copies and sanitizes the template,
     initialises and commits a Git repository, pushes the target branch, and
     sets the local remote HEAD where applicable.
+
+    Raises
+    ------
+    TemplateMissingError
+        If the bundled template directory is unavailable.
+    TemplatePushError
+        If pushing the bootstrapped repository fails.
     """
     branch = bootstrap.branch
     if not bootstrap.template_root.exists():

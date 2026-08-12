@@ -63,13 +63,11 @@ def platform_origin(tmp_path: pathlib.Path) -> tuple[pathlib.Path, str]:
     seed_repo.config["user.name"] = "Test User"
     seed_repo.config["user.email"] = "test@example.com"
 
-    inventory = "\n".join(
-        [
-            "schema_version: 1",
-            "repositories: []",
-            "",
-        ]
-    )
+    inventory = "\n".join([
+        "schema_version: 1",
+        "repositories: []",
+        "",
+    ])
     _commit_file(
         seed_repo,
         relative_path="tofu/inventory/repositories.yaml",
@@ -181,14 +179,12 @@ def test_ensure_repository_pr_reports_existing_branch_pr_when_not_merged(
     local_branch = work_repo.create_branch(branch_name, base)
     work_repo.checkout(local_branch)
 
-    inventory_with_repo = "\n".join(
-        [
-            "schema_version: 1",
-            "repositories:",
-            "  - name: test-owner/test-repo",
-            "",
-        ]
-    )
+    inventory_with_repo = "\n".join([
+        "schema_version: 1",
+        "repositories:",
+        "  - name: test-owner/test-repo",
+        "",
+    ])
     _commit_file(
         work_repo,
         relative_path="tofu/inventory/repositories.yaml",

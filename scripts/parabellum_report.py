@@ -106,8 +106,10 @@ def render_report(ledger_path: pathlib.Path = DEFAULT_LEDGER_PATH) -> str:
         "Generated from `docs/parabellum/ledger.jsonl` by",
         "`python -m scripts.parabellum_sweep report`. Do not edit by hand.",
         "",
-        f"Rule package: `{RULE_PACKAGE}` v{RULE_VERSION}; "
-        f"makeutil `{MAKEUTIL_REV[:12]}`.",
+        (
+            f"Rule package: `{RULE_PACKAGE}` v{RULE_VERSION}; "
+            f"makeutil `{MAKEUTIL_REV[:12]}`."
+        ),
         "",
         "## Summary",
         "",
@@ -121,17 +123,15 @@ def render_report(ledger_path: pathlib.Path = DEFAULT_LEDGER_PATH) -> str:
     lines.extend(
         f"- {_cell(rule_id)}: {rule_counts[rule_id]}" for rule_id in sorted(rule_counts)
     )
-    lines.extend(
-        [
-            "",
-            "## Repositories",
-            "",
-            "Table 1: Latest verdict and findings per estate repository.",
-            "",
-            "| Repository | Verdict | Commit | Findings |",
-            "| ---------- | ------- | ------ | -------- |",
-        ]
-    )
+    lines.extend([
+        "",
+        "## Repositories",
+        "",
+        "Table 1: Latest verdict and findings per estate repository.",
+        "",
+        "| Repository | Verdict | Commit | Findings |",
+        "| ---------- | ------- | ------ | -------- |",
+    ])
     for repository in sorted(latest):
         record = latest[repository]
         commit = (record["commit_sha"] or "")[:12]

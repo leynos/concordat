@@ -98,37 +98,35 @@ class TestRunRule:
         """Failures map to findings."""
         _write_checkout(tmp_path, cargo=True, makefile=True)
         cmd_mox.mock("makeutil").returns(stdout=json.dumps(MINIMAL_REPORT))
-        conftest_doc = json.dumps(
-            [
-                {
-                    "filename": "envelope.json",
-                    "namespace": "canon.lint_rules.rust_makefile_baseline",
-                    "successes": 12,
-                    "failures": [
-                        {
-                            "msg": 'required Make target "lint" is absent',
-                            "metadata": {
-                                "line": 0,
-                                "path": "Makefile",
-                                "rule_id": "FP-003",
-                                "severity": "error",
-                                "verdict": "noncompliant",
-                            },
+        conftest_doc = json.dumps([
+            {
+                "filename": "envelope.json",
+                "namespace": "canon.lint_rules.rust_makefile_baseline",
+                "successes": 12,
+                "failures": [
+                    {
+                        "msg": 'required Make target "lint" is absent',
+                        "metadata": {
+                            "line": 0,
+                            "path": "Makefile",
+                            "rule_id": "FP-003",
+                            "severity": "error",
+                            "verdict": "noncompliant",
                         },
-                        {
-                            "msg": "cannot prove the gate",
-                            "metadata": {
-                                "line": 3,
-                                "path": "Makefile",
-                                "rule_id": "QG-001",
-                                "severity": "error",
-                                "verdict": "indeterminate",
-                            },
+                    },
+                    {
+                        "msg": "cannot prove the gate",
+                        "metadata": {
+                            "line": 3,
+                            "path": "Makefile",
+                            "rule_id": "QG-001",
+                            "severity": "error",
+                            "verdict": "indeterminate",
                         },
-                    ],
-                }
-            ]
-        )
+                    },
+                ],
+            }
+        ])
         cmd_mox.mock("conftest").returns(exit_code=1, stdout=conftest_doc)
         cmd_mox.replay()
         result = run_rule("rust-makefile-baseline", tmp_path)
@@ -148,15 +146,13 @@ class TestRunRule:
         """Clean run is compliant."""
         _write_checkout(tmp_path, cargo=True, makefile=True)
         cmd_mox.mock("makeutil").returns(stdout=json.dumps(MINIMAL_REPORT))
-        clean_doc = json.dumps(
-            [
-                {
-                    "filename": "envelope.json",
-                    "namespace": "canon.lint_rules.rust_makefile_baseline",
-                    "successes": 14,
-                }
-            ]
-        )
+        clean_doc = json.dumps([
+            {
+                "filename": "envelope.json",
+                "namespace": "canon.lint_rules.rust_makefile_baseline",
+                "successes": 14,
+            }
+        ])
         cmd_mox.mock("conftest").returns(exit_code=0, stdout=clean_doc)
         cmd_mox.replay()
         result = run_rule("rust-makefile-baseline", tmp_path)
@@ -172,27 +168,25 @@ class TestRunRule:
         """Indeterminate only yields indeterminate verdict."""
         _write_checkout(tmp_path, cargo=True, makefile=True)
         cmd_mox.mock("makeutil").returns(stdout=json.dumps(MINIMAL_REPORT))
-        doc = json.dumps(
-            [
-                {
-                    "filename": "envelope.json",
-                    "namespace": "canon.lint_rules.rust_makefile_baseline",
-                    "successes": 13,
-                    "failures": [
-                        {
-                            "msg": "cannot prove the gate",
-                            "metadata": {
-                                "line": 0,
-                                "path": "Makefile",
-                                "rule_id": "QG-001",
-                                "severity": "error",
-                                "verdict": "indeterminate",
-                            },
-                        }
-                    ],
-                }
-            ]
-        )
+        doc = json.dumps([
+            {
+                "filename": "envelope.json",
+                "namespace": "canon.lint_rules.rust_makefile_baseline",
+                "successes": 13,
+                "failures": [
+                    {
+                        "msg": "cannot prove the gate",
+                        "metadata": {
+                            "line": 0,
+                            "path": "Makefile",
+                            "rule_id": "QG-001",
+                            "severity": "error",
+                            "verdict": "indeterminate",
+                        },
+                    }
+                ],
+            }
+        ])
         cmd_mox.mock("conftest").returns(exit_code=1, stdout=doc)
         cmd_mox.replay()
         result = run_rule("rust-makefile-baseline", tmp_path)

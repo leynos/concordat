@@ -320,7 +320,7 @@ def _audit_record(owner: str, entry: EstateEntry) -> LedgerRecord:
     return record
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(slots=True)
 class _SweepSession:
     """Mutable per-invocation state for one estate sweep.
 

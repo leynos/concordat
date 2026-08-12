@@ -57,11 +57,7 @@ class CanonArtifactsApp(App[None]):
     def on_mount(self) -> None:
         """Populate the table on startup."""
         self._table.add_columns("id", "type", "status", "template", "published", "path")
-        self._refresh()
-
-    def action_refresh(self) -> None:
-        """Reload the manifest comparison and update the table."""
-        self._refresh()
+        self.action_refresh()
 
     def action_sync_selected(self) -> None:
         """Sync the currently highlighted artifact when it is missing/outdated."""
@@ -82,7 +78,7 @@ class CanonArtifactsApp(App[None]):
                 ids={comparison.id},
             ),
         )
-        self._refresh()
+        self.action_refresh()
 
     def action_sync_all_outdated(self) -> None:
         """Sync every missing/outdated artifact currently shown."""
@@ -101,9 +97,9 @@ class CanonArtifactsApp(App[None]):
                 ids=outdated_ids,
             ),
         )
-        self._refresh()
+        self.action_refresh()
 
-    def _refresh(self) -> None:
+    def action_refresh(self) -> None:
         """Recompute comparisons and rewrite the table rows."""
         comparisons = list(
             compare_manifest_to_published(

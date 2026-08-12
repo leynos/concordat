@@ -156,7 +156,8 @@ def _setup_test_environment(
 ) -> tuple[list[list[str]], TofuMockBuilder, ExecutionIO, ExecutionOptions]:
     """Set up common test environment for run_apply tests.
 
-    Returns:
+    Returns
+    -------
         Tuple of (calls list, mock_builder, io_streams, options).
 
     """
@@ -209,7 +210,8 @@ def test_run_apply_offers_to_forget_resources_on_prevent_destroy(
     )
 
     tofu_mock = (
-        builder.with_apply_response(stderr=_PREVENT_DESTROY_ERROR, returncode=1)
+        builder
+        .with_apply_response(stderr=_PREVENT_DESTROY_ERROR, returncode=1)
         .with_apply_response(returncode=0)
         .with_state_list_response(stdout=_STATE_LIST_OUTPUT)
         .with_state_rm_response(returncode=0)
@@ -289,7 +291,8 @@ def test_run_apply_prevent_destroy_state_list_no_matches(
     )
 
     tofu_mock = (
-        builder.with_apply_response(stderr=_PREVENT_DESTROY_ERROR, returncode=1)
+        builder
+        .with_apply_response(stderr=_PREVENT_DESTROY_ERROR, returncode=1)
         .with_state_list_response(stdout="")  # Empty state list
         .build(calls)
     )
@@ -314,7 +317,8 @@ def test_run_apply_prevent_destroy_state_rm_failure(
     )
 
     tofu_mock = (
-        builder.with_apply_response(stderr=_PREVENT_DESTROY_ERROR, returncode=1)
+        builder
+        .with_apply_response(stderr=_PREVENT_DESTROY_ERROR, returncode=1)
         .with_state_list_response(stdout=_STATE_LIST_OUTPUT)
         .with_state_rm_response(
             stderr="Error: failed to remove state entry", returncode=1
@@ -342,7 +346,8 @@ def test_run_apply_state_list_returns_nonzero(
     )
 
     tofu_mock = (
-        builder.with_apply_response(stderr=_PREVENT_DESTROY_ERROR, returncode=1)
+        builder
+        .with_apply_response(stderr=_PREVENT_DESTROY_ERROR, returncode=1)
         .with_state_list_response(stderr="Error: failed to list state", returncode=1)
         .build(calls)
     )

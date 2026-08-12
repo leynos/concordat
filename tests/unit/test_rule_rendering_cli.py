@@ -75,30 +75,26 @@ class TestRuleRunCli:
 
         _write_checkout(tmp_path, cargo=True, makefile=True)
         cmd_mox.mock("makeutil").returns(stdout=json.dumps(MINIMAL_REPORT))
-        clean_doc = json.dumps(
-            [
-                {
-                    "filename": "envelope.json",
-                    "namespace": "canon.lint_rules.rust_makefile_baseline",
-                    "successes": 14,
-                }
-            ]
-        )
+        clean_doc = json.dumps([
+            {
+                "filename": "envelope.json",
+                "namespace": "canon.lint_rules.rust_makefile_baseline",
+                "successes": 14,
+            }
+        ])
         cmd_mox.mock("conftest").returns(exit_code=0, stdout=clean_doc)
         cmd_mox.replay()
         try:
-            exit_code = cli.main(
-                [
-                    "artefact",
-                    "rule",
-                    "run",
-                    "rust-makefile-baseline",
-                    "--repo",
-                    str(tmp_path),
-                    "--format",
-                    "json",
-                ]
-            )
+            exit_code = cli.main([
+                "artefact",
+                "rule",
+                "run",
+                "rust-makefile-baseline",
+                "--repo",
+                str(tmp_path),
+                "--format",
+                "json",
+            ])
         except SystemExit as exc:
             exit_code = int(exc.code or 0)
         cmd_mox.verify()

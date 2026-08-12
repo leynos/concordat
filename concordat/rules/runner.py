@@ -28,6 +28,11 @@ def _resolve_rule_packages_dir() -> pathlib.Path:
     ``pyproject.toml``), reachable via ``importlib.resources``. A source
     checkout keeps them in the sibling ``platform-standards`` tree, so that
     layout is used as a fallback.
+
+    Returns
+    -------
+    pathlib.Path
+        Directory containing the canon lint-rule packages.
     """
     packaged = importlib.resources.files("concordat") / "canon" / "lint-rules"
     if isinstance(packaged, pathlib.Path) and packaged.is_dir():
@@ -138,7 +143,7 @@ class RuleRunResult:
 
     @property
     def exit_code(self) -> int:
-        """Return 0 when compliant; 1 when any finding exists (fail closed)."""
+        """Process exit code: 0 when compliant, otherwise 1 (fail closed)."""
         return 0 if self.verdict == VERDICT_COMPLIANT else 1
 
 
@@ -174,6 +179,16 @@ def _rule_package_dir(rule_id: str) -> pathlib.Path:
     The packages root is resolved here rather than at import, so a missing or
     unreadable rule tree fails when a rule is run rather than when the module
     is imported — importing the CLI should not depend on the policy tree.
+
+    Returns
+    -------
+    pathlib.Path
+        Directory containing the requested rule package.
+
+    Raises
+    ------
+    OperationalRuleError
+        If *rule_id* is invalid or its package directory is unavailable.
     """
     # Validation first: a malformed identifier is a local error, and must not
     # cost the packages-root lookup (which touches the filesystem) to reject.
@@ -210,6 +225,16 @@ def _rule_parameters(rule_dir: pathlib.Path) -> dict[str, typ.Any]:
     The policies read their tunables from ``data.parameters``; without this
     the manifest's declared defaults would be inert and only the ``default``
     rules baked into the Rego would ever apply.
+
+    Returns
+    -------
+    dict[str, typ.Any]
+        Parameter defaults declared by the rule manifest.
+
+    Raises
+    ------
+    OperationalRuleError
+        If the rule manifest cannot be read or is malformed.
     """
     manifest_path = rule_dir / "rule.yaml"
     if not manifest_path.is_file():
@@ -287,6 +312,12 @@ def _require_policy_exit_code(
     A higher status means Conftest could not evaluate it — a malformed policy,
     a bad flag, a missing file — and it may still print well-formed JSON on
     stdout. Decoding that would report an operational failure as a clean run.
+
+    Raises
+    ------
+    OperationalRuleError
+        If Conftest exits without producing a policy verdict.
+
     """
     if completed.returncode in POLICY_EXIT_CODES:
         return
@@ -545,14 +576,12 @@ def render_table(result: RuleRunResult) -> str:
     widths = [max(len(row[column]) for row in rows) for column in range(3)]
     lines = [header]
     lines.extend(
-        "  ".join(
-            (
-                row[0].ljust(widths[0]),
-                row[1].ljust(widths[1]),
-                row[2].ljust(widths[2]),
-                row[3],
-            )
-        )
+        "  ".join((
+            row[0].ljust(widths[0]),
+            row[1].ljust(widths[1]),
+            row[2].ljust(widths[2]),
+            row[3],
+        ))
         for row in rows
     )
     return "\n".join(lines)

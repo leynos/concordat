@@ -11,7 +11,7 @@ from ruamel.yaml import YAML
 yaml = YAML(typ="safe")
 
 
-@dc.dataclass(frozen=True)
+@dc.dataclass(frozen=True, slots=True)
 class PriorityLabel:
     """Single canonical label entry."""
 
@@ -21,7 +21,7 @@ class PriorityLabel:
     description: str
 
 
-@dc.dataclass(frozen=True)
+@dc.dataclass(frozen=True, slots=True)
 class PriorityFieldOption:
     """Projects v2 field option derived from the canonical model."""
 
@@ -29,7 +29,7 @@ class PriorityFieldOption:
     display_name: str
 
 
-@dc.dataclass(frozen=True)
+@dc.dataclass(frozen=True, slots=True)
 class PriorityField:
     """Projects v2 field contract."""
 
@@ -38,7 +38,7 @@ class PriorityField:
     options: tuple[PriorityFieldOption, ...]
 
 
-@dc.dataclass(frozen=True)
+@dc.dataclass(frozen=True, slots=True)
 class PriorityModel:
     """Top-level model consumed by the Auditor."""
 
@@ -105,7 +105,7 @@ def load_priority_model(path: pathlib.Path | None) -> PriorityModel:
     if not target.exists():
         return _DEFAULT_MODEL
 
-    data = yaml.load(target.read_text())
+    data = yaml.load(target.read_text(encoding="utf-8"))
     try:
         schema_version = int(data["schema_version"])
     except (KeyError, TypeError, ValueError) as error:

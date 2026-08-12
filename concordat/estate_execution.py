@@ -20,7 +20,9 @@ from .errors import ConcordatError
 from .estate_cache import (
     EstateCacheError,
     clone_into_temp,
-    ensure_estate_cache,
+)
+from .estate_cache import (
+    ensure_estate_cache as _ensure_estate_cache_original,
 )
 from .tofu_github_errors import (
     detect_missing_repo_imports as _detect_missing_repo_imports,
@@ -96,8 +98,6 @@ class EstateExecutionError(ConcordatError):
 
 
 # Make EstateCacheError raise as EstateExecutionError for backward compatibility.
-# Store original function reference before wrapping.
-_ensure_estate_cache_original = ensure_estate_cache
 
 
 def _wrap_cache_error[T, **P](func: typ.Callable[P, T]) -> typ.Callable[P, T]:
@@ -117,7 +117,7 @@ ensure_estate_cache: typ.Callable[..., Path] = _wrap_cache_error(
 )
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class ExecutionOptions:
     """User-configurable knobs for running tofu against an estate."""
 
@@ -129,7 +129,7 @@ class ExecutionOptions:
     environment: cabc.Mapping[str, str] | None = None
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class ExecutionIO:
     """Output streams used by the tofu runner."""
 
@@ -137,7 +137,7 @@ class ExecutionIO:
     stderr: typ.IO[str]
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class WorkspaceContext:
     """Workspace directory paths for tofu operations."""
 
@@ -145,7 +145,7 @@ class WorkspaceContext:
     tofu_dir: Path
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class ExecutionContext:
     """Execution environment for tofu commands."""
 
@@ -154,7 +154,7 @@ class ExecutionContext:
     env: dict[str, str]
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class PersistenceRuntime:
     """Runtime data for invoking tofu with a remote backend."""
 
@@ -185,6 +185,11 @@ def estate_workspace(
     *cache_directory* seam: injecting a cache directory bypasses the
     owner-required cache resolution, so an ownerless record can get that far
     and land in the system temporary directory instead.
+
+    Yields
+    ------
+    Path
+        Isolated working-tree path for the estate operation.
     """
     cache_path = ensure_estate_cache(record, cache_directory=cache_directory)
     runs_root: Path | None = None
@@ -258,6 +263,11 @@ def _prepare_execution_environment(options: ExecutionOptions) -> dict[str, str]:
     credential fallbacks (environment variables win), and the shared
     OpenTofu provider plugin cache is enabled unless the caller already
     set one.
+
+    Returns
+    -------
+    dict[str, str]
+        Environment mapping prepared for OpenTofu invocation.
     """
     env_source = _credentials.credential_environment(
         owner=options.github_owner or None,
@@ -281,6 +291,11 @@ def _setup_tofu_workspace(
 
     Sanitizes inventory, writes tfvars, configures backend, and initialises the
     tofu wrapper. Returns backend arguments and tofu instance.
+
+    Returns
+    -------
+    tuple[list[str], Tofu]
+        Backend command-line arguments and the initialised tofu wrapper.
     """
     sanitized_inventory = _sanitize_inventory_for_tofu(
         workspace.root,
@@ -320,6 +335,11 @@ def _execute_apply_command(
 
     Runs apply, then handles import and prevent_destroy errors if they occur.
     Returns the final exit code.
+
+    Returns
+    -------
+    int
+        Final OpenTofu apply exit code after recovery handling.
     """
     result = invoke_tofu_command_with_result(tofu, list(args), io)
     exit_code = int(result.returncode)
