@@ -297,7 +297,7 @@ def _setup_tofu_workspace(
 ) -> tuple[list[str], Tofu]:
     """Prepare the workspace for tofu execution.
 
-    Sanitizes inventory, writes tfvars, configures backend, and initialises the
+    Sanitizes inventory, writes tfvars, configures backend, and initializes the
     tofu wrapper. Returns backend arguments and tofu instance.
 
     Returns

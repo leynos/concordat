@@ -147,13 +147,15 @@ def _repository_entries(
 
     Raises
     ------
-    _manifest_error
+    OperationalRuleError
         If *repositories* is not a list.
     """
     if not isinstance(repositories, list):
-        raise _manifest_error(
-            path,
-            f"has a `repositories` value that is not a list: {repositories!r}",
+        raise OperationalRuleError(  # noqa: TRY003  # Domain error identifies the malformed manifest.
+            f"estate manifest {path} has a `repositories` value that is not "
+            f"a list: {repositories!r}",
+            operation="load-estate-manifest",
+            resource=path,
         )
     return tuple(_repository_entry(item, path) for item in repositories)
 
@@ -181,7 +183,7 @@ def load_estate(path: pathlib.Path) -> Estate:
 
     Raises
     ------
-    _manifest_error
+    OperationalRuleError
         With ``operation="load-estate-manifest"``, when the document is
         not a mapping, a required key (``repositories`` or ``owner``) is
         missing, the ``repositories`` value is not a list, a repository
@@ -190,13 +192,18 @@ def load_estate(path: pathlib.Path) -> Estate:
     """
     document = YAML(typ="safe").load(path.read_text(encoding="utf-8"))
     if not isinstance(document, dict):
-        raise _manifest_error(
-            path,
-            f"is not a mapping: {type(document).__name__}",
+        raise OperationalRuleError(  # noqa: TRY003  # Domain error identifies the malformed manifest.
+            f"estate manifest {path} is not a mapping: {type(document).__name__}",
+            operation="load-estate-manifest",
+            resource=path,
         )
     for key in ("repositories", "owner"):
         if key not in document:
-            raise _manifest_error(path, f"is missing key {key!r}")
+            raise OperationalRuleError(  # noqa: TRY003  # Domain error identifies the malformed manifest.
+                f"estate manifest {path} is missing key {key!r}",
+                operation="load-estate-manifest",
+                resource=path,
+            )
     entries = _repository_entries(document["repositories"], path)
     owner = _validated_identifier(document["owner"], _OWNER_PATTERN, "owner", path)
     return Estate(owner=owner, repositories=entries)

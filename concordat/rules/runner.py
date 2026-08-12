@@ -143,7 +143,13 @@ class RuleRunResult:
 
     @property
     def exit_code(self) -> int:
-        """Process exit code: 0 when compliant, otherwise 1 (fail closed)."""
+        """Process exit code: 0 when compliant, otherwise 1 (fail closed).
+
+        Returns
+        -------
+        int
+            ``0`` when compliant; otherwise ``1``.
+        """
         return 0 if self.verdict == VERDICT_COMPLIANT else 1
 
 

@@ -154,6 +154,7 @@ def _build_status_parts(
 
     Returns
     -------
+    list[str]
         List of status message fragments ready for joining.
 
     """
@@ -176,6 +177,7 @@ def _format_outcome(repository: str, status_parts: list[str]) -> str:
 
     Returns
     -------
+    str
         Formatted message: "{repository}: {joined parts}"
 
     """
@@ -454,6 +456,7 @@ def _execute_platform_pr_operation(
 
     Returns
     -------
+    PlatformStandardsResult | None
         PlatformStandardsResult if operation was attempted, None if config missing.
 
     """

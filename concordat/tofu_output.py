@@ -22,6 +22,7 @@ def normalize_init_result(result: object) -> SimpleNamespace:
 
     Returns
     -------
+    SimpleNamespace
         SimpleNamespace with stdout, stderr, and returncode.
 
     """
@@ -36,6 +37,7 @@ def normalize_plan_result(result: object) -> SimpleNamespace:
 
     Returns
     -------
+    SimpleNamespace
         SimpleNamespace with stdout, stderr, and returncode.
 
     """
@@ -69,6 +71,7 @@ def normalize_apply_result(result: object) -> SimpleNamespace:
 
     Returns
     -------
+    SimpleNamespace
         SimpleNamespace with stdout, stderr, and returncode.
 
     """
@@ -106,6 +109,7 @@ def _summarize_tofu_log(
 
     Returns
     -------
+    tuple[str, str, bool]
         A tuple of (stdout, stderr, errored).
 
     """
@@ -144,6 +148,7 @@ def _format_tofu_diagnostics(errors: list[object], warnings: list[object]) -> st
 
     Returns
     -------
+    str
         Formatted string for terminal output.
 
     """
@@ -176,6 +181,7 @@ def normalize_tofu_result(verb: str, result: object) -> SimpleNamespace:
 
     Returns
     -------
+    SimpleNamespace
         SimpleNamespace with stdout, stderr, and returncode attributes.
 
     """

@@ -34,7 +34,7 @@ dev = [
     "betamax",
     "hypothesis",
     "textual>=8.2.8,<9.0",
-    "df12-python-lints @ git+https://github.com/leynos/df12-python-lints.git@v0.2.0",
+    "df12-python-lints @ git+https://github.com/leynos/df12-python-lints.git@9c835f35b0f1690597ade799c9c6a30bc5922959",
 ]
 
 [tool.pyright]

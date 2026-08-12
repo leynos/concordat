@@ -124,15 +124,17 @@ incidental:
   migrated, owner-scoped file. Setting it only *after* the owner-scoped write
   is complete means a reader never observes an active owner whose file is not
   yet populated.
-- Cleanup is the only step allowed to fail, because it is placed last. Were
-  the legacy section removed first, a failure between that removal and the
-  owner-scoped write would leave the estates in neither place the CLI looks:
-  the flat file no longer holds them, and no active owner yet selects the
-  owner-scoped file — an unrecoverable state, since the migration loader then
-  finds no estate section to retry from. With cleanup last, a failure there
-  instead leaves the estate data duplicated (already live in the owner-scoped
-  file, still present in the stale legacy section) — duplicated but reachable
-  beats complete but invisible.
+- Owner-scoped writing and `set_active_owner` may fail, but both occur before
+  legacy removal, so the legacy section remains available for recovery. Once
+  the owner-scoped location is active, cleanup is the only failure tolerated:
+  it is deliberately last. Were the legacy section removed first, a failure
+  between that removal and the owner-scoped write would leave the estates in
+  neither place the CLI looks: the flat file no longer holds them, and no
+  active owner yet selects the owner-scoped file — an unrecoverable state,
+  since the migration loader then finds no estate section to retry from. With
+  cleanup last, a failure there instead leaves the estate data duplicated
+  (already live in the owner-scoped file, still present in the stale legacy
+  section) — duplicated but reachable beats complete but invisible.
 
 Because the legacy file and the headline config are one and the same, step 2
 (`set_active_owner`) writes into the very file step 3 is about to edit. Cleanup

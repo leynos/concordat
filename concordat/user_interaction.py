@@ -22,6 +22,7 @@ def prompt_yes_no(message: str, output: typ.IO[str] | None = None) -> bool:
 
     Returns
     -------
+    bool
         True if the user responded with 'y' or 'yes', False otherwise.
 
     """
@@ -40,6 +41,7 @@ def can_prompt() -> bool:
 
     Returns
     -------
+    bool
         True if stdin is connected to a TTY, False otherwise.
 
     """

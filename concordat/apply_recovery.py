@@ -127,6 +127,7 @@ def _prompt_for_recovery_action(
 
     Returns
     -------
+    tuple[bool, int, SimpleNamespace]
         Tuple of (should_proceed, exit_code, latest_result).
         If should_proceed is False, caller should return (exit_code, latest_result).
 
@@ -238,6 +239,7 @@ def _line_matches_any_slug(line: str, slugs: list[str]) -> str | None:
 
     Returns
     -------
+    str | None
         The line itself if it matches any slug pattern, None otherwise.
 
     """
