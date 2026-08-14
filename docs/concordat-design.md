@@ -2222,10 +2222,12 @@ each API-backed check carries explicit observability requirements.
   mirroring AM-002 — a sweep whose own workflow concludes `startup_failure`.
   Individual API failures are recorded in structured logs, metrics, and traces,
   rather than alerting on their own. Three terminal outcomes from the Section
-  2.1.2 vocabulary also alert, because each leaves work in a state no later
-  sweep can infer: `retry_exhausted`, `reconcile_failed`, and
-  `shutdown_aborted` with `phase="unknown_outcome"`, where a create may or may
-  not have landed. Alerts
+  2.1.2 vocabulary also alert: `retry_exhausted` when a known retryable `429` or
+  `5xx` response exhausts its retry budget, `reconcile_failed`, and
+  `shutdown_aborted` with `phase="unknown_outcome"`. `retry_exhausted` is a
+  known failure and does not mean a create may have landed; only
+  `reconcile_failed` and `shutdown_aborted` with `phase="unknown_outcome"` may
+  indicate that a create may or may not have landed. Alerts
   name the check ID and the affected entity so an operator can act without
   first reproducing the sweep.
 

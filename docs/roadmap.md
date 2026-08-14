@@ -281,14 +281,20 @@ actuators that remediate them. Each check ships as a lint rule package under
   `rule run` executes an authenticated query against a recorded fixture and
   `rule mutate` performs the side effect against a mocked API; each emits a
   structured log line carrying the check ID, operation, and entity IDs, and the
-  sweep publishes bounded per-check metrics and fires an alert on error or
-  incompletion. Credentials are accepted only from configured secret stores or
-  environment variables; credentials or secret values supplied through a CLI
-  argument, committed file, backend file, or log are rejected. Token scopes are
-  no broader than the operation permits, and no credential or secret value is
-  persisted or logged. Fixtures cover each prohibited source, a broad-scope
-  token, and CV-003's dual-store secret provisioning. This item is a
-  prerequisite for CV-003, AM-001, AM-002, DP-001, and DP-002.
+  sweep publishes bounded per-check metrics and fires alerts only for incomplete
+  sweeps, sustained aggregate API failures above a defined threshold, a
+  rate-limit budget below a defined threshold, and the specified terminal
+  outcomes: `retry_exhausted` for a known retryable `429` or `5xx` response
+  exhausting its retry budget, `reconcile_failed`, and `shutdown_aborted` with
+  `phase="unknown_outcome"`. Individual API failures go to structured logs,
+  metrics, and traces without alerting. Credentials are accepted only from
+  configured secret stores or environment variables; credentials or secret
+  values supplied through a CLI argument, committed file, backend file, or log
+  are rejected. Token scopes are no broader than the operation permits, and no
+  credential or secret value is persisted or logged. Fixtures cover each
+  prohibited source, a broad-scope token, and CV-003's dual-store secret
+  provisioning. This item is a prerequisite for CV-003, AM-001, AM-002, DP-001,
+  and DP-002.
 - [ ] Implement the atomic concurrency boundary for `github-api` actuators
   (design document Section 2.1.2): server-side idempotency where the operation
   provides it (secret `PUT` upserts, remediation-branch ref creation) and the
