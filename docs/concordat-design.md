@@ -931,12 +931,12 @@ Every `github-api` sensor and actuator must satisfy an operational contract:
 
 The operation credential contract is deliberately explicit:
 
-| Operation                         | Credential and permitted scope                                                     |
-| --------------------------------- | ---------------------------------------------------------------------------------- |
-| Auditor snapshot acquisition      | Separate read-only Auditor token; read-only repository/API access.                 |
-| Comments and tracking issues      | Actuator token with `issues:write` or `pull-requests:write`, as appropriate.       |
-| Git-ref leases and branch effects | Separate actuator token with `contents:write`.                                    |
-| Secret provisioning                | Separately scoped actuator token for the selected secret store.                    |
+| Operation                         | Credential and permitted scope                                               |
+| --------------------------------- | ---------------------------------------------------------------------------- |
+| Auditor snapshot acquisition      | Separate read-only Auditor token; read-only repository/API access.           |
+| Comments and tracking issues      | Actuator token with `issues:write` or `pull-requests:write`, as appropriate. |
+| Git-ref leases and branch effects | Separate actuator token with `contents:write`.                               |
+| Secret provisioning               | Separately scoped actuator token for the selected secret store.              |
 
 Before a sweep starts, a preflight permission check rejects credentials that
 are insufficient for their operation or broader than its permitted scope.
@@ -1011,12 +1011,12 @@ idempotent.
 
 ###### Atomic boundary per `github-api` effect type
 
-| **Effect**                               | **Checks**                              | **GitHub operation**                                                               | **Atomic boundary**                                                                                                                                                                                       |
-| ---------------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Secret provisioning                      | CV-003                                  | `PUT /repos/{owner}/{repo}/actions/secrets/{name}` (and the Dependabot equivalent) | **Server-side.** `PUT` is an upsert: repeating it converges on the same state, so no coordination is required.                                                                                            |
+| **Effect**                               | **Checks**                              | **GitHub operation**                                                               | **Atomic boundary**                                                                                                                                                                       |
+| ---------------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Secret provisioning                      | CV-003                                  | `PUT /repos/{owner}/{repo}/actions/secrets/{name}` (and the Dependabot equivalent) | **Server-side.** `PUT` is an upsert: repeating it converges on the same state, so no coordination is required.                                                                            |
 | Repository edit via a remediation branch | DP-002, `file-copy` mutations           | `POST /repos/{owner}/{repo}/git/refs`                                              | **Server-side.** Creating a ref is compare-and-swap: the second caller receives `409 Conflict`. The branch name derives from the deduplication key, so the ref *is* the mutual exclusion. |
-| Pull-request comment                     | AM-001                                  | `POST /repos/{owner}/{repo}/issues/{number}/comments`                              | **Single-flight lease.** The REST API accepts no idempotency key and `POST` is not idempotent.                                                                                                            |
-| Tracking issue                           | AM-002, DP-001, LC-001, CV-003 fallback | `POST /repos/{owner}/{repo}/issues`                                                | **Single-flight lease.** As above.                                                                                                                                                                        |
+| Pull-request comment                     | AM-001                                  | `POST /repos/{owner}/{repo}/issues/{number}/comments`                              | **Single-flight lease.** The REST API accepts no idempotency key and `POST` is not idempotent.                                                                                            |
+| Tracking issue                           | AM-002, DP-001, LC-001, CV-003 fallback | `POST /repos/{owner}/{repo}/issues`                                                | **Single-flight lease.** As above.                                                                                                                                                        |
 
 Prefer the server-side boundary wherever the operation supports one; reach for
 a lease only for the `POST` effects that have none.
@@ -2176,10 +2176,10 @@ next-sweep recovery. The model asserts that:
   vocabulary; and
 - logs, metrics, and alerts expose the required outcome without secret values.
 
-After every generated operation, an oracle compares the implementation with
-the reference model for effects, lease ownership and fencing, create count,
-retry count and remaining budget, terminal outcome, and emitted logs, metrics,
-and alerts. Shrinking must produce a short reproducible trace, including the
+After every generated operation, an oracle compares the implementation with the
+reference model for effects, lease ownership and fencing, create count, retry
+count and remaining budget, terminal outcome, and emitted logs, metrics, and
+alerts. Shrinking must produce a short reproducible trace, including the
 delayed stale-worker-after-final-read and lease-steal interleaving, so a
 failure identifies the smallest violating sequence. The observability oracle
 follows Section 3.2.2, and the required fixture and CI reproduction are tracked
@@ -2301,14 +2301,13 @@ each API-backed check carries explicit observability requirements.
   Individual API failures are recorded in structured logs, metrics, and traces,
   rather than alerting on their own. Three terminal outcomes from the Section
   2.1.2 vocabulary also alert: `retry_exhausted` when known no-dispatch
-  transient or known retryable `429`/`5xx` responses exhaust their retry
-  budget, `reconcile_failed`, and `shutdown_aborted` with
-  `phase="unknown_outcome"`. `retry_exhausted` is a known failure and does not
-  mean a create may have landed; only `reconcile_failed` and
-  `shutdown_aborted` with `phase="unknown_outcome"` may indicate that a create
-  may or may not have landed. Alerts
-  name the check ID and the affected entity so an operator can act without
-  first reproducing the sweep.
+  transient or known retryable `429`/`5xx` responses exhaust their retry budget,
+  `reconcile_failed`, and `shutdown_aborted` with `phase="unknown_outcome"`.
+  `retry_exhausted` is a known failure and does not mean a create may have
+  landed; only `reconcile_failed` and `shutdown_aborted` with
+  `phase="unknown_outcome"` may indicate that a create may or may not have
+  landed. Alerts name the check ID and the affected entity so an operator can
+  act without first reproducing the sweep.
 
 These requirements are part of the `github-api` sensor and actuator contract
 (Section 2.1.2) and gate the roadmap item that introduces those types (Section

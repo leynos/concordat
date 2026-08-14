@@ -281,25 +281,23 @@ actuators that remediate them. Each check ships as a lint rule package under
   `rule run` executes an authenticated query against a recorded fixture and
   `rule mutate` performs the side effect against a mocked API; each emits a
   structured log line carrying the check ID, operation, and entity IDs, and the
-  sweep publishes bounded per-check metrics and fires alerts only for incomplete
-  sweeps, sustained aggregate API failures above a defined threshold, a
-  rate-limit budget below a defined threshold, and the specified terminal
-  outcomes: `retry_exhausted` for known no-dispatch or known retryable `429` or
-  `5xx` responses exhausting their retry budget, `reconcile_failed`, and
-  `shutdown_aborted` with
-  `phase="unknown_outcome"`. Individual API failures go to structured logs,
-  metrics, and traces without alerting. The read-only Auditor acquisition
-  credential is separate from actuator execution credentials. Credentials are
-  accepted only from configured secret stores or securely injected environment
-  variables; credentials or secret
-  values supplied through a CLI argument, committed file, backend file, or log
-  are rejected. A preflight permission check rejects insufficient or
-  excessively broad credentials before a sweep. Token scopes are no broader
-  than the operation permits, and no credential or secret value is persisted or
-  logged. Fixtures cover each prohibited source, a broad-scope token,
-  preflight rejection, and CV-003's dual-store secret
-  provisioning. This item is a prerequisite for CV-003, AM-001, AM-002, DP-001,
-  and DP-002.
+  sweep publishes bounded per-check metrics and fires alerts only for
+  incomplete sweeps, sustained aggregate API failures above a defined
+  threshold, a rate-limit budget below a defined threshold, and the specified
+  terminal outcomes: `retry_exhausted` for known no-dispatch or known retryable
+  `429` or `5xx` responses exhausting their retry budget, `reconcile_failed`,
+  and `shutdown_aborted` with `phase="unknown_outcome"`. Individual API
+  failures go to structured logs, metrics, and traces without alerting. The
+  read-only Auditor acquisition credential is separate from actuator execution
+  credentials. Credentials are accepted only from configured secret stores or
+  securely injected environment variables; credentials or secret values
+  supplied through a CLI argument, committed file, backend file, or log are
+  rejected. A preflight permission check rejects insufficient or excessively
+  broad credentials before a sweep. Token scopes are no broader than the
+  operation permits, and no credential or secret value is persisted or logged.
+  Fixtures cover each prohibited source, a broad-scope token, preflight
+  rejection, and CV-003's dual-store secret provisioning. This item is a
+  prerequisite for CV-003, AM-001, AM-002, DP-001, and DP-002.
 - [ ] Implement the atomic concurrency boundary for `github-api` actuators
   (design document Section 2.1.2): server-side idempotency where the operation
   provides it (secret `PUT` upserts, remediation-branch ref creation) and the
@@ -355,9 +353,9 @@ actuators that remediate them. Each check ships as a lint rule package under
 - [ ] Add the required `github-api` actuator state-machine property test
   (design document Section 3.1.4), in addition to the named fixtures above.
   Hypothesis (or an equivalent property framework) generates interleavings of
-  at least two workers for one key across comments, tracking issues, and
-  branch annotations as applicable, including retries, lease expiry and steal,
-  lost responses, partial failures, reconciliation failures, and shutdown.
+  at least two workers for one key across comments, tracking issues, and branch
+  annotations as applicable, including retries, lease expiry and steal, lost
+  responses, partial failures, reconciliation failures, and shutdown.
   Acceptance requires the reference-model invariants and oracle comparison for
   effects, lease/fencing, create count, retries and budget, terminal outcome,
   and logs, metrics, and alerts after every operation. A fixed Hypothesis seed
