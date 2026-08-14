@@ -284,15 +284,20 @@ actuators that remediate them. Each check ships as a lint rule package under
   sweep publishes bounded per-check metrics and fires alerts only for incomplete
   sweeps, sustained aggregate API failures above a defined threshold, a
   rate-limit budget below a defined threshold, and the specified terminal
-  outcomes: `retry_exhausted` for a known retryable `429` or `5xx` response
-  exhausting its retry budget, `reconcile_failed`, and `shutdown_aborted` with
+  outcomes: `retry_exhausted` for known no-dispatch or known retryable `429` or
+  `5xx` responses exhausting their retry budget, `reconcile_failed`, and
+  `shutdown_aborted` with
   `phase="unknown_outcome"`. Individual API failures go to structured logs,
-  metrics, and traces without alerting. Credentials are accepted only from
-  configured secret stores or environment variables; credentials or secret
+  metrics, and traces without alerting. The read-only Auditor acquisition
+  credential is separate from actuator execution credentials. Credentials are
+  accepted only from configured secret stores or securely injected environment
+  variables; credentials or secret
   values supplied through a CLI argument, committed file, backend file, or log
-  are rejected. Token scopes are no broader than the operation permits, and no
-  credential or secret value is persisted or logged. Fixtures cover each
-  prohibited source, a broad-scope token, and CV-003's dual-store secret
+  are rejected. A preflight permission check rejects insufficient or
+  excessively broad credentials before a sweep. Token scopes are no broader
+  than the operation permits, and no credential or secret value is persisted or
+  logged. Fixtures cover each prohibited source, a broad-scope token,
+  preflight rejection, and CV-003's dual-store secret
   provisioning. This item is a prerequisite for CV-003, AM-001, AM-002, DP-001,
   and DP-002.
 - [ ] Implement the atomic concurrency boundary for `github-api` actuators
@@ -306,29 +311,57 @@ actuators that remediate them. Each check ships as a lint rule package under
     against a fixture with the same deduplication key. Exactly one external
     effect exists afterwards, and every non-winning worker terminates in
     `duplicate_suppressed` or `reconciled_existing` — never in an error.
+  - **Server-idempotent secret replay.** Concurrent and replayed `PUT` fixtures
+    for both the Actions and Dependabot secret stores converge to the same
+    final value and state. They expect no single winner and no lease; lease
+    assertions remain scoped to the non-idempotent tracking-issue fallback.
   - **Lost response.** A fixture where the server creates the effect but the
     client times out or loses the response. The worker reconciles against the
     embedded key, finds the effect, issues no second create, and reports
     `reconciled_existing`.
+  - **Dispatch distinction.** Separate fixtures cover a known no-dispatch
+    transient `5xx`, which may retry directly, and a possibly-applied
+    post-dispatch `5xx`, which must reconcile the embedded key before any
+    retry. Recovery leaves exactly one final effect.
+  - **Fenced stale worker.** A fixture delays a stale worker after its final
+    existence read, steals its lease from another worker, and then attempts
+    the create. The stale worker is fenced from creating; the accepted result
+    has exactly one final effect and preserves reconciliation.
   - **Partial failure (branch-mediated annotation).** A fixture where an
     intermediate create succeeds but a later call fails. The next sweep
     reconciles the embedded key, reuses or safely cleans the intermediate state,
     and completes exactly one final effect without a duplicate.
-  - **Transient failure.** Fixtures returning `429` (with `Retry-After`) and
-    `503` before succeeding. Retries are bounded by the documented attempt and
-    time budgets, and exactly one effect exists after recovery.
+  - **Transient failure.** Fixtures returning `429` (with `Retry-After`) and a
+    known no-dispatch `503` before succeeding. Retries are bounded by the
+    documented attempt and time budgets, and exactly one effect exists after
+    recovery.
   - **Permanent failure and retry exhaustion.** A fixture returning `403`
-    fails fast without retrying, and one exhausting the retry budget reports
-    `retry_exhausted`; neither retries unboundedly. Both outcomes surface in
-    logs and metrics, while terminal `retry_exhausted` emits an alert.
+    fails fast without retrying, and a known no-dispatch fixture exhausting the
+    retry budget reports `retry_exhausted`; neither retries unboundedly. Both
+    outcomes surface in logs and metrics, while terminal `retry_exhausted`
+    emits an alert.
   - **Shutdown.** Fixtures interrupting a worker before creation and after a
     creation whose outcome is unknown. Neither deletes nor duplicates an effect:
     the lease is released or left to expire, `shutdown_aborted` is emitted with
     the phase reached, and the next sweep reconciles the key before retrying,
     ending with exactly one effect.
+  - **Terminal accounting.** Every actuator attempt emits exactly one terminal
+    outcome, including attempts ending in reconciliation-required unknown
+    state; logs and metrics never contain secret values.
   - Sequential repeat-sweep tests are retained, but do not stand alone as the
     idempotency proof: a sequential pass cannot observe the interleaving that
     check-before-create fails to exclude.
+- [ ] Add the required `github-api` actuator state-machine property test
+  (design document Section 3.1.4), in addition to the named fixtures above.
+  Hypothesis (or an equivalent property framework) generates interleavings of
+  at least two workers for one key across comments, tracking issues, and
+  branch annotations as applicable, including retries, lease expiry and steal,
+  lost responses, partial failures, reconciliation failures, and shutdown.
+  Acceptance requires the reference-model invariants and oracle comparison for
+  effects, lease/fencing, create count, retries and budget, terminal outcome,
+  and logs, metrics, and alerts after every operation. A fixed Hypothesis seed
+  is printed on CI failure, and the failing sequence is reproducible through
+  the normal test framework.
 - [ ] Ship the remaining lint-gate binding rule packages (QG-002, QG-003):
   workflow sensors for the hardened pinned-release install step (version-keyed
   cache, shell-variable indirection, `--locked`, binstall-or-build fallback,

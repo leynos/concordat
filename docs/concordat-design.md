@@ -883,14 +883,15 @@ A “lint rule” in Concordat is a sensor plus mutation logic:
 - sensor: the detector that decides compliance. Two sensor types exist:
   - `conftest`: an OpenTofu/Conftest (Open Policy Agent, OPA) evaluation over
     structured inputs (the format the spike implemented), and
-  - `github-api`: an authenticated GitHub API query whose response is reduced
-    to findings by the Auditor. Some quality-gate checks (for example the
-    dual-store secret check CV-003, the automerge and workflow-health sweeps
-    AM-001 and AM-002, and the dependency-pin actionability checks DP-001 and
-    DP-002) cannot be expressed as Conftest over a static input tree, because
-    they must read live repository state — secret-store listings, pull-request
-    merge-state, ruleset contexts, and security alerts — that no checkout
-    contains.
+  - `github-api`: a fallible network-acquisition adapter that uses the
+    Auditor's read-only credentials to retrieve live GitHub state into a
+    snapshot, followed by pure sensor and finding-reduction logic over that
+    snapshot. Some quality-gate checks (for example the dual-store secret
+    check CV-003, the automerge and workflow-health sweeps AM-001 and AM-002,
+    and the dependency-pin actionability checks DP-001 and DP-002) cannot be
+    expressed as Conftest over a static input tree, because they must read live
+    repository state — secret-store listings, pull-request merge-state,
+    ruleset contexts, and security alerts — that no checkout contains.
 - configuration: parameters that allow the same rule logic to be reused with
   different baselines, and
 - mutation (actuator): the remediation. Two actuator types exist:
@@ -912,9 +913,12 @@ Every `github-api` sensor and actuator must satisfy an operational contract:
 
 - runs with least-privilege GitHub token scopes (per the permissions model,
   Section 8.1);
-- sources its token from a secret store, never from a command-line argument or
-  an environment dump, and never persists or logs the token or any secret value
-  (redaction per Section 3.2.2);
+- keeps the read-only Auditor acquisition credential separate from actuator
+  execution credentials;
+- sources credentials only from a configured secret store or a securely
+  injected environment variable, never from a command-line argument,
+  committed/backend file, or log, and never persists or logs a token or secret
+  value (redaction per Section 3.2.2);
 - sets a request timeout on every API call and retries transient failures with
   exponential backoff (Section 8.2);
 - defines a stable deduplication key (derived from the target entity and the
@@ -924,6 +928,22 @@ Every `github-api` sensor and actuator must satisfy an operational contract:
   at most one effect exists per key even when sweeps overlap. A check followed
   by a create is not atomic and does not, on its own, prevent duplicates; the
   boundary, not the check, is what makes the actuator safe.
+
+The operation credential contract is deliberately explicit:
+
+| Operation                         | Credential and permitted scope                                                     |
+| --------------------------------- | ---------------------------------------------------------------------------------- |
+| Auditor snapshot acquisition      | Separate read-only Auditor token; read-only repository/API access.                 |
+| Comments and tracking issues      | Actuator token with `issues:write` or `pull-requests:write`, as appropriate.       |
+| Git-ref leases and branch effects | Separate actuator token with `contents:write`.                                    |
+| Secret provisioning                | Separately scoped actuator token for the selected secret store.                    |
+
+Before a sweep starts, a preflight permission check rejects credentials that
+are insufficient for their operation or broader than its permitted scope.
+Credentials may come only from configured secret stores or securely injected
+environment variables. They must never be supplied as CLI arguments, stored in
+committed or backend files, or written to logs. Secret **values** remain
+excluded from snapshots, logs, metrics, traces, and error payloads.
 
 To support this, each lint rule should be packaged as a directory:
 
@@ -994,7 +1014,7 @@ idempotent.
 | **Effect**                               | **Checks**                              | **GitHub operation**                                                               | **Atomic boundary**                                                                                                                                                                                       |
 | ---------------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Secret provisioning                      | CV-003                                  | `PUT /repos/{owner}/{repo}/actions/secrets/{name}` (and the Dependabot equivalent) | **Server-side.** `PUT` is an upsert: repeating it converges on the same state, so no coordination is required.                                                                                            |
-| Repository edit via a remediation branch | DP-002, `file-copy` mutations           | `POST /repos/{owner}/{repo}/git/refs`                                              | **Server-side.** Creating a ref is compare-and-swap: the second caller receives `422 Reference already exists`. The branch name derives from the deduplication key, so the ref *is* the mutual exclusion. |
+| Repository edit via a remediation branch | DP-002, `file-copy` mutations           | `POST /repos/{owner}/{repo}/git/refs`                                              | **Server-side.** Creating a ref is compare-and-swap: the second caller receives `409 Conflict`. The branch name derives from the deduplication key, so the ref *is* the mutual exclusion. |
 | Pull-request comment                     | AM-001                                  | `POST /repos/{owner}/{repo}/issues/{number}/comments`                              | **Single-flight lease.** The REST API accepts no idempotency key and `POST` is not idempotent.                                                                                                            |
 | Tracking issue                           | AM-002, DP-001, LC-001, CV-003 fallback | `POST /repos/{owner}/{repo}/issues`                                                | **Single-flight lease.** As above.                                                                                                                                                                        |
 
@@ -1006,7 +1026,8 @@ a lease only for the `POST` effects that have none.
 The lease needs a durable store that every sweep can reach and that supports an
 atomic create. GitHub itself provides one, so the design adds no external
 dependency: a git ref is created by compare-and-swap, and `POST /git/refs`
-fails with `422` if the ref already exists.
+returns `409 Conflict` if the ref already exists. A `422` is validation or
+abuse handling and is an error, never a duplicate-suppression signal.
 
 - **Scope.** One lease per `(repository, check ID, deduplication key)`, named
   `refs/concordat/leases/<check-id>/<sha256(deduplication-key)>` in the target
@@ -1014,20 +1035,25 @@ fails with `422` if the ref already exists.
 - **Owner identity.** The commit the ref points at records the holder: run ID,
   run attempt, workflow, job, and acquisition timestamp. A stale lease is then
   attributable to the run that abandoned it.
-- **Acquisition.** `POST /git/refs`. A `201` acquires the lease; a `422`
+- **Acquisition.** `POST /git/refs`. A `201` acquires the lease; a `409`
   means another worker holds it, and the losing worker does not create the
-  effect. It instead reconciles (below) and reports duplicate suppression.
+  effect. It instead reconciles (below) and reports duplicate suppression. A
+  `422` is a validation or abuse error and fails the attempt.
 - **Expiry and fencing.** The lease commit carries an expiry (the sweep's
   per-effect deadline plus a margin). A worker that finds an unexpired lease
   yields. A worker that finds an **expired** lease may steal it with
   `PATCH /git/refs/{ref}` using `force: false` and the observed SHA, which is a
   compare-and-swap: if another worker stole it first, the SHA no longer matches
-  and the update fails. The lease commit SHA is the fencing token — the
-  actuator re-reads the ref immediately before creating and proceeds only while
-  the SHA is still its own.
-- **Ordering.** The actuator acquires the boundary **before** the final
-  existence check and the create, never between them. Acquire → re-check →
-  create → record outcome → release.
+  and the update fails. The lease commit SHA is the fencing token.
+- **Ordering.** The final existence check and every non-server-idempotent
+  create, including a permitted retry, MUST be inside the same atomic fencing
+  boundary. A final git-ref read alone is insufficient: a stale worker can be
+  delayed after that read and create after its lease is stolen. The worker must
+  hold a valid lease and fencing token through the full create attempt and any
+  permitted retry. Where a direct non-idempotent GitHub `POST` cannot prove
+  that fence, the actuator must use a fenced effect-side idempotency or
+  serialization mechanism before dispatch. Acquire → final re-check → fenced
+  create → reconcile/record outcome → release.
 - **Release.** Delete the ref once a terminal outcome is recorded. A worker
   that dies without releasing leaves a lease that expires; expiry only permits
   a later steal, and never deletes or duplicates an effect that already exists.
@@ -1047,17 +1073,22 @@ deduplicated.
 ###### Retry, unknown outcomes, and partial failure
 
 - **Retryable:** request timeouts, connection failures, `429` (honouring
-  `Retry-After`), and transient `5xx` (`500`, `502`, `503`, `504`). Retries use
-  bounded exponential backoff with full jitter — base 1 s, cap 30 s, at most 5
-  attempts and a total per-effect budget of 2 minutes — after which the attempt
-  is abandoned as retry exhaustion.
+  `Retry-After`), and a known no-dispatch transient `5xx` (`500`, `502`, `503`,
+  `504`). Retries use bounded exponential backoff with full jitter — base 1 s,
+  cap 30 s, at most 5 attempts and a total per-effect budget of 2 minutes.
 - **Not retryable:** every other `4xx`. `401`/`403` indicate a scope or
-  permission defect and `422` a malformed request; retrying cannot fix either,
-  so both fail fast.
-- **Unknown outcome.** A create whose response is lost — a timeout or a
-  dropped connection after the request was sent — has an *unknown* outcome, not
-  a failed one. The server may have created the effect. The actuator must not
-  retry blindly.
+  permission defect and `422` a validation or abuse error; retrying cannot fix
+  either, so both fail fast. A `409` is duplicate contention only at the
+  compare-and-swap lease/ref boundary.
+- **Post-dispatch `5xx`.** A `5xx` received after a non-idempotent `POST` was
+  dispatched is an unknown outcome, like a lost response. Reconcile the
+  embedded key before any retry; retry only when authoritative reconciliation
+  confirms absence and budget remains. A `5xx` known not to have been
+  dispatched is a known transient and may retry directly.
+- **Unknown outcome.** A create whose response is lost — a timeout, dropped
+  connection, or post-dispatch `5xx` — has an *unknown* outcome, not a failed
+  one. The server may have created the effect. Mark the operation
+  `reconciliation_required` and do not retry blindly.
 - **Reconciliation.** After an unknown outcome the actuator queries the
   authoritative create target (the pull request's comments, the repository's
   issues, the refs list) filtered by the embedded deduplication key. If the
@@ -1066,10 +1097,17 @@ deduplicated.
 - **Partial failure before the create.** A failure after acquiring the lease
   but before the create leaves no effect: release the lease, record the
   outcome, and let the next sweep retry from the start.
-- **Partial failure after the create.** Treat as an unknown outcome: reconcile
-  first, then release. If reconciliation itself fails, release the lease and
-  record `reconcile_failed`; the next sweep reconciles again before retrying,
-  which is safe because the key is embedded in any effect that was created.
+- **Partial failure after the create.** Treat as an unknown outcome: mark
+  `reconciliation_required`, reconcile first, then release. If reconciliation
+  itself fails, release the lease and record `reconcile_failed`; the next sweep
+  reconciles again before retrying, which is safe because the key is embedded
+  in any effect that was created.
+
+`retry_exhausted` is reserved for known no-dispatch transient failures and
+known retryable `429`/`5xx` responses whose retry budget is exhausted. An
+unknown post-dispatch outcome is never converted into `retry_exhausted` merely
+because its budget ran out; it remains reconciliation-required or
+`reconcile_failed`.
 
 Each attempt ends in exactly one terminal outcome, emitted as both a structured
 log line and a metric (Section 3.2.2), and carrying the check ID and the
@@ -2109,6 +2147,43 @@ ordering, so property tests plus CrossHair contracts give full-coverage
 confidence without the proof-maintenance cost. Proofs are reserved for genuine
 lemmas, which this domain does not introduce.
 
+##### GitHub API actuator state-machine contract
+
+The `github-api` actuator contract requires a Hypothesis
+`RuleBasedStateMachine` (or an equivalent state-machine property framework).
+The harness uses a deterministic fake API, a virtual clock, an injected retry
+scheduler, and controllable cancellation; it never calls GitHub or sleeps in
+real time. Its reference model has one deduplication key and multiple workers,
+with these dimensions: effect absent or present; lease absent, held, expired,
+or stolen; create not sent, known success, or unknown; remaining retry budget;
+and normal or shutdown mode.
+
+The generated operations include acquire, acquisition loss, expiry and steal,
+final existence check, create, lost response, post-dispatch timeout or `5xx`,
+reconciliation success/absence/failure, permitted retry, release, shutdown,
+grace expiry, and next-sweep recovery. The model asserts that:
+
+- at most one effect exists per key;
+- final precheck and non-idempotent create are one atomic fenced operation;
+- a lease loser never creates, while server-idempotent operations converge
+  without a lease;
+- reconciliation precedes every create after an unknown outcome;
+- non-retryable `4xx` responses fail fast and retry/time budgets are bounded;
+- shutdown honours its grace boundary, leaves unknown leases to expire, and a
+  later sweep recovers safely;
+- every attempt has exactly one terminal outcome from the Section 2.1.2
+  vocabulary; and
+- logs, metrics, and alerts expose the required outcome without secret values.
+
+After every generated operation, an oracle compares the implementation with
+the reference model for effects, lease ownership and fencing, create count,
+retry count and remaining budget, terminal outcome, and emitted logs, metrics,
+and alerts. Shrinking must produce a short reproducible trace, including the
+delayed stale-worker-after-final-read and lease-steal interleaving, so a
+failure identifies the smallest violating sequence. The observability oracle
+follows Section 3.2.2, and the required fixture and CI reproduction are tracked
+in roadmap Section 4.2.
+
 ### 3.2. Implementation design and execution model
 
 The Auditor will be implemented as a composite GitHub Action, primarily written
@@ -2202,7 +2277,9 @@ each API-backed check carries explicit observability requirements.
   `retry_exhausted`, `reconcile_failed`, or `shutdown_aborted` — which is what
   distinguishes a sweep that did nothing because the effect already existed
   from one that failed. Secret **values** are never logged; only secret names
-  and the store they were found in.
+  and the store they were found in. An unknown or post-dispatch failure is
+  marked `reconciliation_required`; that marker is not itself a terminal
+  outcome.
 - **Metrics.** Each sweep publishes bounded, low-cardinality counters and
   histograms: checks run, findings raised, actuators fired, API calls made,
   rate-limit remaining, and sweep duration, labelled by check ID and outcome
@@ -2222,12 +2299,13 @@ each API-backed check carries explicit observability requirements.
   mirroring AM-002 — a sweep whose own workflow concludes `startup_failure`.
   Individual API failures are recorded in structured logs, metrics, and traces,
   rather than alerting on their own. Three terminal outcomes from the Section
-  2.1.2 vocabulary also alert: `retry_exhausted` when a known retryable `429` or
-  `5xx` response exhausts its retry budget, `reconcile_failed`, and
-  `shutdown_aborted` with `phase="unknown_outcome"`. `retry_exhausted` is a
-  known failure and does not mean a create may have landed; only
-  `reconcile_failed` and `shutdown_aborted` with `phase="unknown_outcome"` may
-  indicate that a create may or may not have landed. Alerts
+  2.1.2 vocabulary also alert: `retry_exhausted` when known no-dispatch
+  transient or known retryable `429`/`5xx` responses exhaust their retry
+  budget, `reconcile_failed`, and `shutdown_aborted` with
+  `phase="unknown_outcome"`. `retry_exhausted` is a known failure and does not
+  mean a create may have landed; only `reconcile_failed` and
+  `shutdown_aborted` with `phase="unknown_outcome"` may indicate that a create
+  may or may not have landed. Alerts
   name the check ID and the affected entity so an operator can act without
   first reproducing the sweep.
 
