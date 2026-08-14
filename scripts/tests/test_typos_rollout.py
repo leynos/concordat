@@ -241,6 +241,7 @@ def test_dictionary_validation_rejects_invalid_documents(
         ),
     ],
 )
+@pytest.mark.integration
 def test_configured_typos_enforces_spelling_policy(
     tmp_path: Path,
     case: SpellingFixtureCase,
