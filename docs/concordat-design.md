@@ -2159,9 +2159,10 @@ or stolen; create not sent, known success, or unknown; remaining retry budget;
 and normal or shutdown mode.
 
 The generated operations include acquire, acquisition loss, expiry and steal,
-final existence check, create, lost response, post-dispatch timeout or `5xx`,
-reconciliation success/absence/failure, permitted retry, release, shutdown,
-grace expiry, and next-sweep recovery. The model asserts that:
+final existence check, create, timeout, connection failure, `429`, transient
+`5xx`, non-retryable `4xx`, lost response, reconciliation
+success/absence/failure, permitted retry, release, shutdown, grace expiry, and
+next-sweep recovery. The model asserts that:
 
 - at most one effect exists per key;
 - final precheck and non-idempotent create are one atomic fenced operation;

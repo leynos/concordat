@@ -345,9 +345,10 @@ actuators that remediate them. Each check ships as a lint rule package under
     the lease is released or left to expire, `shutdown_aborted` is emitted with
     the phase reached, and the next sweep reconciles the key before retrying,
     ending with exactly one effect.
-  - **Terminal accounting.** Every actuator attempt emits exactly one terminal
-    outcome, including attempts ending in reconciliation-required unknown
-    state; logs and metrics never contain secret values.
+  - **Terminal accounting.** `reconciliation_required` remains a non-terminal
+    state. Every completed actuator attempt emits exactly one terminal outcome
+    from the Section 2.1.2 vocabulary; logs and metrics never contain secret
+    values.
   - Sequential repeat-sweep tests are retained, but do not stand alone as the
     idempotency proof: a sequential pass cannot observe the interleaving that
     check-before-create fails to exclude.
