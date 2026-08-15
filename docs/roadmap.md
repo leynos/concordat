@@ -277,18 +277,20 @@ actuators that remediate them. Each check ships as a lint rule package under
   static input tree cannot express checks that read live repository state, and
   deterministic-edit mutations cannot post comments or open issues. Acceptance:
   `concordat artefact rule validate` accepts a package declaring
-  `sensor.type: github-api` and `github-api` actuators (`comment`, `issue`);
-  `rule run` executes an authenticated query against a recorded fixture and
-  `rule mutate` performs the side effect against a mocked API; each emits a
-  structured log line carrying the check ID, operation, and entity IDs, and the
-  sweep publishes bounded per-check metrics and fires alerts only for
-  incomplete sweeps, sustained aggregate API failures above a defined
-  threshold, a rate-limit budget below a defined threshold, and the specified
-  terminal outcomes: `retry_exhausted` for known no-dispatch or known retryable
-  `429` or `5xx` responses exhausting their retry budget, `reconcile_failed`,
-  and `shutdown_aborted` with `phase="unknown_outcome"`. Individual API
-  failures go to structured logs, metrics, and traces without alerting. The
-  read-only Auditor acquisition credential is separate from actuator execution
+  `sensor.type: github-api` and `github-api` actuators (`comment`, `issue`); a
+  live `rule run` uses the read-only Auditor credential for authenticated
+  GitHub API acquisition, while a replay `rule run` reads a recorded JSON
+  snapshot from its local path and makes zero network calls; `rule mutate`
+  performs the side effect against a mocked API; each emits a structured log
+  line carrying the check ID, operation, and entity IDs, and the sweep
+  publishes bounded per-check metrics and fires alerts only for incomplete
+  sweeps, sustained aggregate API failures above a defined threshold, a
+  rate-limit budget below a defined threshold, and the specified terminal
+  outcomes: `retry_exhausted` for known no-dispatch or known retryable `429` or
+  `5xx` responses exhausting their retry budget, `reconcile_failed`, and
+  `shutdown_aborted` with `phase="unknown_outcome"`. Individual API failures go
+  to structured logs, metrics, and traces without alerting. The read-only
+  Auditor acquisition credential is separate from actuator execution
   credentials. Credentials are accepted only from configured secret stores or
   securely injected environment variables; credentials or secret values
   supplied through a CLI argument, committed file, backend file, or log are
@@ -314,17 +316,26 @@ actuators that remediate them. Each check ships as a lint rule package under
     final value and state. They expect no single winner and no lease; lease
     assertions remain scoped to the non-idempotent tracking-issue fallback.
   - **Lost response.** A fixture where the server creates the effect but the
-    client times out or loses the response. The worker reconciles against the
-    embedded key, finds the effect, issues no second create, and reports
+    client loses the response. The worker reconciles against the embedded key,
+    finds the effect, issues no second create, and reports
     `reconciled_existing`.
-  - **Dispatch distinction.** Separate fixtures cover a known no-dispatch
-    transient `5xx`, which may retry directly, and a possibly-applied
-    post-dispatch `5xx`, which must reconcile the embedded key before any
+  - **Timeout and connection-loss dispatch distinction.** Separate fixtures
+    cover pre-dispatch timeout and connection loss, which are known transients
+    that may retry directly within budget, and post-dispatch timeout and
+    connection loss, which are unknown outcomes that require reconciliation of
+    the embedded key before any retry; if reconciliation finds the effect, no
+    second create is issued, and if absent, one retry is permitted within
+    budget. Recovery leaves exactly one final effect, with an uncertain
+    dispatch state following the post-dispatch path.
+  - **5xx dispatch distinction.** Separate fixtures cover a known no-dispatch
+    transient `5xx`, which may retry directly, and a post-dispatch `5xx`, whose
+    outcome is unknown and which must reconcile the embedded key before any
     retry. Recovery leaves exactly one final effect.
   - **Fenced stale worker.** A fixture delays a stale worker after its final
-    existence read, steals its lease from another worker, and then attempts
-    the create. The stale worker is fenced from creating; the accepted result
-    has exactly one final effect and preserves reconciliation.
+    existence read; another worker explicitly steals the stale worker's lease,
+    then the stale worker attempts creation. The stale worker is fenced from
+    creating; the accepted result has exactly one final effect and preserves
+    reconciliation.
   - **Partial failure (branch-mediated annotation).** A fixture where an
     intermediate create succeeds but a later call fails. The next sweep
     reconciles the embedded key, reuses or safely cleans the intermediate state,
@@ -347,6 +358,13 @@ actuators that remediate them. Each check ships as a lint rule package under
     state. Every completed actuator attempt emits exactly one terminal outcome
     from the Section 2.1.2 vocabulary; logs and metrics never contain secret
     values.
+  - **CV-003 partial store failure.** A fixture where the first secret store
+    succeeds and the second fails is partial completion, not one atomic
+    failure: reconciliation re-reads both Actions and Dependabot stores, and
+    replay converges both to the intended state before retrying or recovering
+    only the missing or failed store. Each attempt has one valid terminal
+    outcome, and secret values never appear in logs, process arguments, or
+    temporary files.
   - Sequential repeat-sweep tests are retained, but do not stand alone as the
     idempotency proof: a sequential pass cannot observe the interleaving that
     check-before-create fails to exclude.
@@ -390,7 +408,10 @@ actuators that remediate them. Each check ships as a lint rule package under
   repository whose guard secret exists in only one store is reported with the
   absent store named; `concordat` gains a provisioning command that sets an
   operator-supplied token in both stores. The provisioning command sources the
-  token from a secret store and never persists or logs it — the acceptance test
+  token from a secret store and never persists or logs it. Recovery and replay
+  cover first-store success followed by second-store failure by re-reading both
+  Actions and Dependabot stores, converging each to the intended state, and
+  retrying or recovering only the missing or failed store. The acceptance test
   asserts the token appears in no log line, process argument, or temporary file.
 - [ ] Implement the automerge-jam and workflow-health sensors (AM-001,
   AM-002) as scheduled Auditor sweeps: Dependabot pull requests `BLOCKED`

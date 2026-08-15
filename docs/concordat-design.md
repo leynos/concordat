@@ -1011,15 +1011,23 @@ idempotent.
 
 ###### Atomic boundary per `github-api` effect type
 
-| **Effect**                               | **Checks**                              | **GitHub operation**                                                               | **Atomic boundary**                                                                                                                                                                       |
-| ---------------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Secret provisioning                      | CV-003                                  | `PUT /repos/{owner}/{repo}/actions/secrets/{name}` (and the Dependabot equivalent) | **Server-side.** `PUT` is an upsert: repeating it converges on the same state, so no coordination is required.                                                                            |
-| Repository edit via a remediation branch | DP-002, `file-copy` mutations           | `POST /repos/{owner}/{repo}/git/refs`                                              | **Server-side.** Creating a ref is compare-and-swap: the second caller receives `409 Conflict`. The branch name derives from the deduplication key, so the ref *is* the mutual exclusion. |
-| Pull-request comment                     | AM-001                                  | `POST /repos/{owner}/{repo}/issues/{number}/comments`                              | **Single-flight lease.** The REST API accepts no idempotency key and `POST` is not idempotent.                                                                                            |
-| Tracking issue                           | AM-002, DP-001, LC-001, CV-003 fallback | `POST /repos/{owner}/{repo}/issues`                                                | **Single-flight lease.** As above.                                                                                                                                                        |
+| **Effect**                               | **Checks**                              | **GitHub operation**                                                                         | **Atomic boundary**                                                                                                                                                                       |
+| ---------------------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Secret provisioning (per store)          | CV-003                                  | `PUT /repos/{owner}/{repo}/actions/secrets/{name}` or the equivalent Dependabot secret `PUT` | **Server-side per store.** Each `PUT` is an upsert: repeating it converges that store on the same state, so no coordination is required for that individual operation.                    |
+| Repository edit via a remediation branch | DP-002, `file-copy` mutations           | `POST /repos/{owner}/{repo}/git/refs`                                                        | **Server-side.** Creating a ref is compare-and-swap: the second caller receives `409 Conflict`. The branch name derives from the deduplication key, so the ref *is* the mutual exclusion. |
+| Pull-request comment                     | AM-001                                  | `POST /repos/{owner}/{repo}/issues/{number}/comments`                                        | **Single-flight lease.** The REST API accepts no idempotency key and `POST` is not idempotent.                                                                                            |
+| Tracking issue                           | AM-002, DP-001, LC-001, CV-003 fallback | `POST /repos/{owner}/{repo}/issues`                                                          | **Single-flight lease.** As above.                                                                                                                                                        |
 
 Prefer the server-side boundary wherever the operation supports one; reach for
 a lease only for the `POST` effects that have none.
+
+CV-003 is composite orchestration, not one atomic effect. The Actions and
+Dependabot secret-store `PUT` operations are independently idempotent. If the
+first store succeeds and the other store fails, the result is partial
+completion: reconciliation re-reads both stores, and replay converges each
+store to the desired state. Retry or recovery then targets only the missing or
+failed store; it does not pretend that the composite was atomic or overwrite
+the secret that already succeeded.
 
 ###### The single-flight lease
 
@@ -1072,10 +1080,13 @@ deduplicated.
 
 ###### Retry, unknown outcomes, and partial failure
 
-- **Retryable:** request timeouts, connection failures, `429` (honouring
-  `Retry-After`), and a known no-dispatch transient `5xx` (`500`, `502`, `503`,
-  `504`). Retries use bounded exponential backoff with full jitter — base 1 s,
-  cap 30 s, at most 5 attempts and a total per-effect budget of 2 minutes.
+- **Pre-dispatch timeout or connection failure.** When the client knows the
+  request was not dispatched, the failure is a known transient and is directly
+  retryable within the existing attempt and time budgets. Other retryable
+  failures are `429` (honouring `Retry-After`) and a known no-dispatch transient
+  `5xx` (`500`, `502`, `503`, `504`). Retries use bounded exponential backoff
+  with full jitter — base 1 s, cap 30 s, at most 5 attempts and a total
+  per-effect budget of 2 minutes.
 - **Not retryable:** every other `4xx`. `401`/`403` indicate a scope or
   permission defect and `422` a validation or abuse error; retrying cannot fix
   either, so both fail fast. A `409` is duplicate contention only at the
@@ -1085,10 +1096,17 @@ deduplicated.
   embedded key before any retry; retry only when authoritative reconciliation
   confirms absence and budget remains. A `5xx` known not to have been
   dispatched is a known transient and may retry directly.
+- **Post-dispatch timeout or connection failure.** If dispatch occurred before
+  a timeout or connection loss, the outcome is unknown. Mark the operation
+  `reconciliation_required`, reconcile the embedded key before any retry, and
+  retry only when authoritative reconciliation confirms absence and budget
+  remains. If dispatch state cannot be established, treat the failure as
+  post-dispatch and follow this path.
 - **Unknown outcome.** A create whose response is lost — a timeout, dropped
   connection, or post-dispatch `5xx` — has an *unknown* outcome, not a failed
-  one. The server may have created the effect. Mark the operation
-  `reconciliation_required` and do not retry blindly.
+  one, when the request may have been dispatched. The server may have created
+  the effect. Mark the operation `reconciliation_required` and do not retry
+  blindly.
 - **Reconciliation.** After an unknown outcome the actuator queries the
   authoritative create target (the pull request's comments, the repository's
   issues, the refs list) filtered by the embedded deduplication key. If the
@@ -2156,18 +2174,26 @@ scheduler, and controllable cancellation; it never calls GitHub or sleeps in
 real time. Its reference model has one deduplication key and multiple workers,
 with these dimensions: effect absent or present; lease absent, held, expired,
 or stolen; create not sent, known success, or unknown; remaining retry budget;
-and normal or shutdown mode.
+and normal or shutdown mode. For CV-003, the Actions and Dependabot stores are
+modelled independently, including the state where the first store has succeeded
+and the other store has failed.
 
 The generated operations include acquire, acquisition loss, expiry and steal,
 final existence check, create, timeout, connection failure, `429`, transient
 `5xx`, non-retryable `4xx`, lost response, reconciliation
-success/absence/failure, permitted retry, release, shutdown, grace expiry, and
-next-sweep recovery. The model asserts that:
+success/absence/failure, Actions and Dependabot secret `PUT`, first-store
+success, second-store failure, store re-read, replay convergence, permitted
+retry, release, shutdown, grace expiry, and next-sweep recovery. The model
+asserts that:
 
 - at most one effect exists per key;
 - final precheck and non-idempotent create are one atomic fenced operation;
 - a lease loser never creates, while server-idempotent operations converge
   without a lease;
+- each secret-store `PUT` converges independently; after partial CV-003
+  completion, reconciliation re-reads both stores and replay updates only the
+  missing or failed store, preserving the successful secret and never treating
+  the composite as one atomic effect;
 - reconciliation precedes every create after an unknown outcome;
 - non-retryable `4xx` responses fail fast and retry/time budgets are bounded;
 - shutdown honours its grace boundary, leaves unknown leases to expire, and a
