@@ -1032,10 +1032,13 @@ the secret that already succeeded.
 ###### The single-flight lease
 
 The lease needs a durable store that every sweep can reach and that supports an
-atomic create. GitHub itself provides one, so the design adds no external
-dependency: a git ref is created by compare-and-swap, and `POST /git/refs`
-returns `409 Conflict` if the ref already exists. A `422` is validation or
-abuse handling and is an error, never a duplicate-suppression signal.
+atomic create and conditional claim. GitHub itself provides the initial
+acquisition boundary, so a git ref can remain the lease's initial acquisition:
+`POST /git/refs` returns `409 Conflict` if the ref already exists. GitHub's ref
+update API does not provide an expected-old-SHA predicate for expiry takeover;
+`force: false` only prevents non-fast-forward updates. A git ref therefore
+cannot implement lease takeover by itself. A `422` is validation or abuse
+handling and is an error, never a duplicate-suppression signal.
 
 - **Scope.** One lease per `(repository, check ID, deduplication key)`, named
   `refs/concordat/leases/<check-id>/<sha256(deduplication-key)>` in the target
@@ -1049,22 +1052,29 @@ abuse handling and is an error, never a duplicate-suppression signal.
   `422` is a validation or abuse error and fails the attempt.
 - **Expiry and fencing.** The lease commit carries an expiry (the sweep's
   per-effect deadline plus a margin). A worker that finds an unexpired lease
-  yields. A worker that finds an **expired** lease may steal it with
-  `PATCH /git/refs/{ref}` using `force: false` and the observed SHA, which is a
-  compare-and-swap: if another worker stole it first, the SHA no longer matches
-  and the update fails. The lease commit SHA is the fencing token.
+  yields. A worker that finds an **expired** lease may take it over only
+  through an atomic conditional lease-claim operation supplied by the lease
+  store or an effect-side serialization mechanism. The operation validates the
+  expected current lease version/SHA, then commits the new owner and fencing
+  token atomically; a competing claim fails that conditional validation. The
+  resulting lease version or committed lease SHA is the fencing token.
 - **Ordering.** The final existence check and every non-server-idempotent
   create, including a permitted retry, MUST be inside the same atomic fencing
   boundary. A final git-ref read alone is insufficient: a stale worker can be
-  delayed after that read and create after its lease is stolen. The worker must
-  hold a valid lease and fencing token through the full create attempt and any
-  permitted retry. Where a direct non-idempotent GitHub `POST` cannot prove
-  that fence, the actuator must use a fenced effect-side idempotency or
-  serialization mechanism before dispatch. Acquire → final re-check → fenced
-  create → reconcile/record outcome → release.
-- **Release.** Delete the ref once a terminal outcome is recorded. A worker
-  that dies without releasing leaves a lease that expires; expiry only permits
-  a later steal, and never deletes or duplicates an effect that already exists.
+  delayed after that read and create after its lease is taken over. The worker
+  must hold a valid lease and fencing token through the full create attempt and
+  any permitted retry. A stale worker that loses the fenced claim cannot
+  create. Where no conditional lease-claim operation is available, the actuator
+  must use server-side idempotency or effect-side serialization; it must not
+  automatically create through an expired or taken-over lease without that
+  protection. Acquire → final re-check → fenced create → reconcile/record
+  outcome → release.
+- **Release.** Once a terminal outcome is recorded, only the current fenced
+  lease owner may release the lease, using the same conditional claim/release
+  mechanism to validate the current lease version/SHA. A stale worker must
+  leave a successor's lease untouched. A worker that dies without releasing
+  leaves a lease that expires; expiry only permits a later conditional claim,
+  and never deletes or duplicates an effect that already exists.
 
 Only one actuator execution may create an effect for a given deduplication key.
 Every other execution reports duplicate suppression or reconciliation.
@@ -2173,14 +2183,14 @@ The harness uses a deterministic fake API, a virtual clock, an injected retry
 scheduler, and controllable cancellation; it never calls GitHub or sleeps in
 real time. Its reference model has one deduplication key and multiple workers,
 with these dimensions: effect absent or present; lease absent, held, expired,
-or stolen; create not sent, known success, or unknown; remaining retry budget;
-and normal or shutdown mode. For CV-003, the Actions and Dependabot stores are
-modelled independently, including the state where the first store has succeeded
-and the other store has failed.
+or conditionally claimed; create not sent, known success, or unknown; remaining
+retry budget; and normal or shutdown mode. For CV-003, the Actions and
+Dependabot stores are modelled independently, including the state where the
+first store has succeeded and the other store has failed.
 
-The generated operations include acquire, acquisition loss, expiry and steal,
-final existence check, create, timeout, connection failure, `429`, transient
-`5xx`, non-retryable `4xx`, lost response, reconciliation
+The generated operations include acquire, acquisition loss, expiry, conditional
+claim, final existence check, create, timeout, connection failure, `429`,
+transient `5xx`, non-retryable `4xx`, lost response, reconciliation
 success/absence/failure, Actions and Dependabot secret `PUT`, first-store
 success, second-store failure, store re-read, replay convergence, permitted
 retry, release, shutdown, grace expiry, and next-sweep recovery. The model
@@ -2188,8 +2198,10 @@ asserts that:
 
 - at most one effect exists per key;
 - final precheck and non-idempotent create are one atomic fenced operation;
-- a lease loser never creates, while server-idempotent operations converge
-  without a lease;
+- a lease loser never creates; an expiry takeover validates the expected lease
+  version/SHA and issues a new fencing token atomically; a stale worker that
+  loses that fenced claim never creates, while server-idempotent operations
+  converge without a lease;
 - each secret-store `PUT` converges independently; after partial CV-003
   completion, reconciliation re-reads both stores and replay updates only the
   missing or failed store, preserving the successful secret and never treating
@@ -2206,7 +2218,7 @@ After every generated operation, an oracle compares the implementation with the
 reference model for effects, lease ownership and fencing, create count, retry
 count and remaining budget, terminal outcome, and emitted logs, metrics, and
 alerts. Shrinking must produce a short reproducible trace, including the
-delayed stale-worker-after-final-read and lease-steal interleaving, so a
+delayed stale-worker-after-final-read and conditional-claim interleaving, so a
 failure identifies the smallest violating sequence. The observability oracle
 follows Section 3.2.2, and the required fixture and CI reproduction are tracked
 in roadmap Section 4.2.

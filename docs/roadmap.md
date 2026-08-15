@@ -315,7 +315,7 @@ actuators that remediate them. Each check ships as a lint rule package under
     for both the Actions and Dependabot secret stores converge to the same
     final value and state. They expect no single winner and no lease; lease
     assertions remain scoped to the non-idempotent tracking-issue fallback.
-  - **Lost response.** A fixture where the server creates the effect but the
+  - **Lost response.** A fixture where the server creates the effect, but the
     client loses the response. The worker reconciles against the embedded key,
     finds the effect, issues no second create, and reports
     `reconciled_existing`.
@@ -332,10 +332,11 @@ actuators that remediate them. Each check ships as a lint rule package under
     outcome is unknown and which must reconcile the embedded key before any
     retry. Recovery leaves exactly one final effect.
   - **Fenced stale worker.** A fixture delays a stale worker after its final
-    existence read; another worker explicitly steals the stale worker's lease,
-    then the stale worker attempts creation. The stale worker is fenced from
-    creating; the accepted result has exactly one final effect and preserves
-    reconciliation.
+    existence read; after expiry, a second worker uses the lease store's atomic
+    conditional claim with the expected current lease version/SHA and commits
+    a new owner and fencing token, then the stale worker attempts creation. The
+    stale worker is blocked from creating; the accepted result has exactly one
+    final effect and preserves reconciliation.
   - **Partial failure (branch-mediated annotation).** A fixture where an
     intermediate create succeeds but a later call fails. The next sweep
     reconciles the embedded key, reuses or safely cleans the intermediate state,
@@ -372,13 +373,19 @@ actuators that remediate them. Each check ships as a lint rule package under
   (design document Section 3.1.4), in addition to the named fixtures above.
   Hypothesis (or an equivalent property framework) generates interleavings of
   at least two workers for one key across comments, tracking issues, and branch
-  annotations as applicable, including retries, lease expiry and steal, lost
-  responses, partial failures, reconciliation failures, and shutdown.
-  Acceptance requires the reference-model invariants and oracle comparison for
-  effects, lease/fencing, create count, retries and budget, terminal outcome,
-  and logs, metrics, and alerts after every operation. A fixed Hypothesis seed
-  is printed on CI failure, and the failing sequence is reproducible through
-  the normal test framework.
+  annotations as applicable, including retries, lease expiry, conditional
+  claims, lost responses, partial failures, reconciliation failures, and
+  shutdown. Acceptance requires the reference-model invariants and oracle
+  comparison for effects, lease/fencing, create count, retries and budget,
+  terminal outcome, and logs, metrics, and alerts after every operation. A
+  fixed Hypothesis seed is printed on CI failure, and the failing sequence is
+  reproducible through the normal test framework. For CV-003, generated
+  operations also include concurrent and replayed Actions and Dependabot secret
+  `PUT` interleavings. The property test requires independent per-store
+  convergence, including first-store-success/second-store-failure partial
+  completion and recovery, makes no lease or single-winner assumption for
+  `PUT`, and asserts exactly one terminal outcome per attempt plus secret-safe
+  logs and metrics.
 - [ ] Ship the remaining lint-gate binding rule packages (QG-002, QG-003):
   workflow sensors for the hardened pinned-release install step (version-keyed
   cache, shell-variable indirection, `--locked`, binstall-or-build fallback,
