@@ -924,10 +924,13 @@ Every `github-api` sensor and actuator must satisfy an operational contract:
 - defines a stable deduplication key (derived from the target entity and the
   action — for example the pull-request head plus the comment intent, or the
   alert number plus the issue kind), embeds that key in the effect it creates,
-  and serializes creation behind the atomic boundary specified below, so that
-  at most one effect exists per key even when sweeps overlap. A check followed
-  by a create is not atomic and does not, on its own, prevent duplicates; the
-  boundary, not the check, is what makes the actuator safe.
+  and serializes each non-idempotent `POST` behind the atomic boundary
+  specified below, so that at most one external effect exists for each
+  `(deduplication key, effect type)` pair even when sweeps overlap.
+  Server-idempotent `PUT` effects are additionally scoped to their target store
+  and may be replayed as upserts. A check followed by a create is not atomic
+  and does not, on its own, prevent duplicates; the boundary, not the check, is
+  what makes the actuator safe.
 
 The operation credential contract is deliberately explicit:
 
@@ -1014,7 +1017,7 @@ idempotent.
 | **Effect**                               | **Checks**                              | **GitHub operation**                                                                         | **Atomic boundary**                                                                                                                                                                       |
 | ---------------------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Secret provisioning (per store)          | CV-003                                  | `PUT /repos/{owner}/{repo}/actions/secrets/{name}` or the equivalent Dependabot secret `PUT` | **Server-side per store.** Each `PUT` is an upsert: repeating it converges that store on the same state, so no coordination is required for that individual operation.                    |
-| Repository edit via a remediation branch | DP-002, `file-copy` mutations           | `POST /repos/{owner}/{repo}/git/refs`                                                        | **Server-side.** Creating a ref is compare-and-swap: the second caller receives `409 Conflict`. The branch name derives from the deduplication key, so the ref *is* the mutual exclusion. |
+| Repository edit via a remediation branch | DP-002, `file-copy` mutations           | `POST /repos/{owner}/{repo}/git/refs`                                                        | **Server-side.** Creating a ref is create-if-absent: the second caller receives `409 Conflict`. The branch name derives from the deduplication key, so the ref *is* the mutual exclusion. |
 | Pull-request comment                     | AM-001                                  | `POST /repos/{owner}/{repo}/issues/{number}/comments`                                        | **Single-flight lease.** The REST API accepts no idempotency key and `POST` is not idempotent.                                                                                            |
 | Tracking issue                           | AM-002, DP-001, LC-001, CV-003 fallback | `POST /repos/{owner}/{repo}/issues`                                                          | **Single-flight lease.** As above.                                                                                                                                                        |
 
@@ -1100,7 +1103,7 @@ deduplicated.
 - **Not retryable:** every other `4xx`. `401`/`403` indicate a scope or
   permission defect and `422` a validation or abuse error; retrying cannot fix
   either, so both fail fast. A `409` is duplicate contention only at the
-  compare-and-swap lease/ref boundary.
+  create-if-absent ref or conditional lease-claim boundary.
 - **Post-dispatch `5xx`.** A `5xx` received after a non-idempotent `POST` was
   dispatched is an unknown outcome, like a lost response. Reconcile the
   embedded key before any retry; retry only when authoritative reconciliation
@@ -1921,9 +1924,9 @@ git-revision pin on a dependency awaiting a release.
   comment-preserving TOML remediation provider (Section 2.3). The two effects
   take different boundaries (Section 2.1.2): the `TODO` annotation lands on a
   remediation branch whose ref name derives from the git-revision dependency,
-  and creating that ref is itself the compare-and-swap, so it needs no lease;
-  the migration issue is a `POST` keyed on the blocked alert and creates behind
-  the single-flight lease.
+  and creating that ref is itself create-if-absent, so it needs no lease; the
+  migration issue is a `POST` keyed on the blocked alert and creates behind the
+  single-flight lease.
 
 ##### Dependabot governance (DB-001 through DB-004)
 
@@ -1940,12 +1943,13 @@ Dependabot pull request regardless of its content.
   projects, workflow directories) and diff them against `dependabot.yml` update
   entries; policy-check cooldown blocks per ecosystem; verify the auto-merge
   workflow calls the shared reusable workflow pinned per the Section 8.3
-  contract (a semantic-version tag at minimum, preferably an immutable commit
-  SHA or major-version pin; branch and mutable-tag references are
-  non-compliant) with the prescribed `pull_request_target` permission set;
-  detect audit steps that run for the Dependabot actor, paired with a presence
-  check for the scheduled audit workflow — verifying its pin the same way —
-  that covers merged results instead.
+  contract (only an immutable commit SHA or an explicitly verified immutable
+  tag mechanism is compliant; branches and unverified tags, including mutable,
+  semantic-version, and major-version tags, are non-compliant) with the
+  prescribed `pull_request_target` permission set; detect audit steps that run
+  for the Dependabot actor, paired with a presence check for the scheduled
+  audit workflow — verifying its pin the same way — that covers merged results
+  instead.
 - **Actuators:** comment-preserving patches adding missing `dependabot.yml`
   directories and cooldown blocks, and file-copies of the canonical auto-merge
   and scheduled-audit workflows.
@@ -1961,8 +1965,10 @@ degenerate case).
 
 - **Sensors:** file presence and policy checks that a scheduled workflow
   exists, calls the shared mutation-testing workflow pinned per the Section 8.3
-  contract (semantic-version tag at minimum; branch and mutable-tag references
-  non-compliant), and is not wired into required pull-request checks.
+  contract (only an immutable commit SHA or an explicitly verified immutable
+  tag mechanism is compliant; branches and unverified tags, including mutable,
+  semantic-version, and major-version tags, are non-compliant), and is not
+  wired into required pull-request checks.
 - **Actuators:** file-copy of the canonical scheduled mutation-testing
   workflow from `canon/`.
 
@@ -2182,11 +2188,14 @@ The `github-api` actuator contract requires a Hypothesis
 The harness uses a deterministic fake API, a virtual clock, an injected retry
 scheduler, and controllable cancellation; it never calls GitHub or sleeps in
 real time. Its reference model has one deduplication key and multiple workers,
-with these dimensions: effect absent or present; lease absent, held, expired,
-or conditionally claimed; create not sent, known success, or unknown; remaining
-retry budget; and normal or shutdown mode. For CV-003, the Actions and
-Dependabot stores are modelled independently, including the state where the
-first store has succeeded and the other store has failed.
+with these dimensions: effects absent or present per
+`(deduplication key, effect type)` pair, with a target-store dimension for
+CV-003 `PUT` effects; lease absent, held, expired, or conditionally claimed;
+create not sent, known success, or unknown; remaining retry budget; and normal
+or shutdown mode. For CV-003, the Actions and Dependabot stores are modelled
+independently, so one shared key may converge to one desired state in each
+store, including the state where the first store has succeeded and the other
+store has failed.
 
 The generated operations include acquire, acquisition loss, expiry, conditional
 claim, final existence check, create, timeout, connection failure, `429`,
@@ -2196,7 +2205,10 @@ success, second-store failure, store re-read, replay convergence, permitted
 retry, release, shutdown, grace expiry, and next-sweep recovery. The model
 asserts that:
 
-- at most one effect exists per key;
+- at most one external effect exists for each non-idempotent `POST`
+  `(deduplication key, effect type)` pair; server-idempotent CV-003 `PUT`
+  operations may be replayed and converge independently to one state per target
+  store, without a single-winner assertion;
 - final precheck and non-idempotent create are one atomic fenced operation;
 - a lease loser never creates; an expiry takeover validates the expected lease
   version/SHA and issues a new fencing token atomically; a stale worker that
@@ -2215,13 +2227,14 @@ asserts that:
 - logs, metrics, and alerts expose the required outcome without secret values.
 
 After every generated operation, an oracle compares the implementation with the
-reference model for effects, lease ownership and fencing, create count, retry
-count and remaining budget, terminal outcome, and emitted logs, metrics, and
-alerts. Shrinking must produce a short reproducible trace, including the
-delayed stale-worker-after-final-read and conditional-claim interleaving, so a
-failure identifies the smallest violating sequence. The observability oracle
-follows Section 3.2.2, and the required fixture and CI reproduction are tracked
-in roadmap Section 4.2.
+reference model for effects and API create/`PUT` call counts scoped by
+deduplication key and effect type, with a target-store dimension for CV-003;
+lease ownership and fencing; retry count and remaining budget; terminal
+outcome; and emitted logs, metrics, and alerts. Shrinking must produce a short
+reproducible trace, including the delayed stale-worker-after-final-read and
+conditional-claim interleaving, so a failure identifies the smallest violating
+sequence. The observability oracle follows Section 3.2.2, and the required
+fixture and CI reproduction are tracked in roadmap Section 4.2.
 
 ### 3.2. Implementation design and execution model
 
@@ -2479,8 +2492,12 @@ policies used for this validation will be sourced from the checked-out
 Example policies that must be implemented include:
 
 - A policy that parses `.github/workflows/ci.yml`, and asserts that it contains
-  a `jobs.*.uses` key pointing to a versioned, canonical reusable workflow
-  (e.g., `org/platform-standards/.github/workflows/ci.yml@v1`).
+  a `jobs.*.uses` key pointing to a canonical reusable workflow pinned to an
+  immutable commit SHA or an explicitly verified immutable-tag mechanism (e.g.,
+  `org/platform-standards/.github/workflows/ci.yml@<commit-sha>`). Branches are
+  non-compliant. Tags, including mutable, semantic-version, or major-version
+  tags such as `@v1`, are non-compliant unless an immutable-tag mechanism
+  explicitly verifies their immutability.
 - A policy that validates the structure of a `renovate.json` file to ensure that
   only approved package managers, and update schedules are configured.
 - A policy, which runs conditionally based on the `language.primary` field in
@@ -2791,16 +2808,11 @@ the principle of least privilege.
   CI check on all pull requests to the `platform-standards` repository to
   prevent regressions in policy logic.11
 
-- **Versioning:** Reusable workflows must be versioned using semantic versioning
-  tags (e.g., `v1`, `v1.1.0`). Consumer repositories should pin to a major
-  version tag (e.g., `@v1`) to receive non-breaking updates automatically,
-  while breaking changes must be introduced under a new major version (e.g.,
-  `@v2`), and rolled out deliberately. Using a specific commit SHA is the
-  safest option for maximum stability and security.14 A semantic-version tag is
-  the minimum acceptable reference; an immutable commit SHA or a major-version
-  tag is preferred. Branch references (e.g., `@main`) and other mutable or
-  floating references (e.g., `@latest`) are not acceptable and must be reported
-  as non-compliant.
+- **Versioning:** Reusable workflows must be pinned to an immutable commit SHA
+  or an explicitly verified immutable-tag mechanism. Branch references (e.g.,
+  `@main`) are non-compliant. Tags, including mutable or floating tags (e.g.,
+  `@latest`), semantic-version tags, and major-version tags (e.g., `@v1`), are
+  non-compliant unless the mechanism explicitly verifies their immutability.14
 
 ## Works cited
 

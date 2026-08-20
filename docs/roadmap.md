@@ -308,8 +308,9 @@ actuators that remediate them. Each check ships as a lint rule package under
   Acceptance, per effect type (comment, issue, and the branch-mediated
   annotation):
   - **Concurrent sweeps.** At least two actuator workers start concurrently
-    against a fixture with the same deduplication key. Exactly one external
-    effect exists afterwards, and every non-winning worker terminates in
+    against a fixture with the same deduplication key. For each non-idempotent
+    `POST` effect type, exactly one external effect exists afterwards, and
+    every non-winning worker terminates in
     `duplicate_suppressed` or `reconciled_existing` — never in an error.
   - **Server-idempotent secret replay.** Concurrent and replayed `PUT` fixtures
     for both the Actions and Dependabot secret stores converge to the same
@@ -376,16 +377,17 @@ actuators that remediate them. Each check ships as a lint rule package under
   annotations as applicable, including retries, lease expiry, conditional
   claims, lost responses, partial failures, reconciliation failures, and
   shutdown. Acceptance requires the reference-model invariants and oracle
-  comparison for effects, lease/fencing, create count, retries and budget,
-  terminal outcome, and logs, metrics, and alerts after every operation. A
-  fixed Hypothesis seed is printed on CI failure, and the failing sequence is
-  reproducible through the normal test framework. For CV-003, generated
-  operations also include concurrent and replayed Actions and Dependabot secret
-  `PUT` interleavings. The property test requires independent per-store
-  convergence, including first-store-success/second-store-failure partial
-  completion and recovery, makes no lease or single-winner assumption for
-  `PUT`, and asserts exactly one terminal outcome per attempt plus secret-safe
-  logs and metrics.
+  comparison for effects and create/`PUT` call counts scoped by deduplication
+  key and effect type, with a target-store dimension for CV-003; lease/fencing;
+  retries and budget; terminal outcome; and logs, metrics, and alerts after
+  every operation. A fixed Hypothesis seed is printed on CI failure, and the
+  failing sequence is reproducible through the normal test framework. For
+  CV-003, generated operations also include concurrent and replayed Actions and
+  Dependabot secret `PUT` interleavings. The property test requires independent
+  per-store convergence, including first-store-success/second-store-failure
+  partial completion and recovery, makes no lease or single-winner assumption
+  for `PUT`, and asserts exactly one terminal outcome per attempt plus
+  secret-safe logs and metrics.
 - [ ] Ship the remaining lint-gate binding rule packages (QG-002, QG-003):
   workflow sensors for the hardened pinned-release install step (version-keyed
   cache, shell-variable indirection, `--locked`, binstall-or-build fallback,
