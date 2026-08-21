@@ -890,7 +890,7 @@ A “lint rule” in Concordat is a sensor plus mutation logic:
     quality-gate checks (for example the dual-store secret check CV-003, the
     automerge and workflow-health sweeps AM-001 and AM-002, and the
     dependency-pin actionability checks DP-001 and DP-002) cannot be expressed
-    as Conftest over a static input tree, because their snapshots contain live
+    as Conftest over a static input tree because their snapshots contain live
     repository state — secret-store listings, pull-request merge-state,
     ruleset contexts, and security alerts — that no checkout contains. The
     separate `rule acquire` command or service obtains those snapshots.
