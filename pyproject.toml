@@ -47,21 +47,6 @@ line-length = 88
 [tool.skylos.gate]
 strict = true
 
-[tool.skylos.whitelist]
-names = []
-
-[tool.skylos.whitelist.documented]
-"RefreshResult" = "Re-exported by typos_rollout for the spelling configuration refresh contract."
-"_refresh" = "Called by CanonArtifactsApp lifecycle and action methods to update its table."
-"action_sync_all_outdated" = "Textual dispatches this action from the sync-all key binding."
-"action_sync_selected" = "Textual dispatches this action from the selected-artifact key binding."
-"action_refresh" = "Textual dispatches this action from the refresh key binding."
-"BINDINGS" = "Textual reads this class variable to register the interactive key bindings."
-"render" = "Called by concordat.cli to present enrollment outcomes to the operator."
-"_format_outcome" = "Called by the enrollment and disenrollment outcome render methods."
-"published_path" = "Called by compare_manifest_to_published to resolve each artifact published path."
-"template_path" = "Called by compare_manifest_to_published to resolve each artifact template path."
-
 [tool.ruff.lint]
 select = [
     "F",        # Pyflakes rules
@@ -175,3 +160,17 @@ packages = [
 
 [tool.setuptools.package-data]
 "concordat.canon" = ["lint-rules/**/*"]
+
+[tool.skylos.whitelist]
+names = [
+    "RefreshResult",
+    "_refresh",
+    "action_sync_all_outdated",
+    "action_sync_selected",
+    "action_refresh",
+    "BINDINGS",
+    "render",
+    "_format_outcome",
+    "published_path",
+    "template_path",
+]

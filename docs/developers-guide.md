@@ -51,12 +51,14 @@ the runtime caller. When an entry-point rule cannot describe the boundary, add
 a narrow named exception instead:
 
 ```shell
-make skylos-allow NAME=symbol REASON="Loaded by the verified runtime registry"
+make skylos-allow NAME=symbol
 ```
 
-The target refuses empty names and reasons, and records the exception in the
-version-controlled Skylos allow list. Do not add bulk or unexplained
-exceptions; remove an exception when its runtime boundary disappears.
+The target refuses empty names and records the exception in the
+version-controlled Skylos allow list. Skylos accepts the name only, so record
+the verified caller and its evidence in the reviewing change. Do not add bulk
+or unexplained exceptions; remove an exception when its runtime boundary
+disappears.
 
 ## XDG layout and owner namespaces
 

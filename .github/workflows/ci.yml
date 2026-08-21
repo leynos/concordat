@@ -11,6 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TOFU_VERSION: "1.10.7"
+      MAKEUTIL_REVISION: "29fc5a1634ffbaa18a773eed9dff1b2838a45d9c"
+      MAKEUTIL_TOOLCHAIN: "nightly-2026-05-28"
     steps:
       - name: Check out repository
         # v4
@@ -39,6 +41,16 @@ jobs:
           for tool in mbake ruff; do uv tool install ${tool}; done
           npm install -g markdownlint-cli2
           go install github.com/open-policy-agent/conftest@v0.52.0
+
+      - name: Install Makefile parser
+        run: |
+          rustup toolchain install "${MAKEUTIL_TOOLCHAIN}" --profile minimal
+          RUSTFLAGS="-Zpolonius=next" cargo +"${MAKEUTIL_TOOLCHAIN}" install \
+            --git https://github.com/leynos/makeutil \
+            --rev "${MAKEUTIL_REVISION}" \
+            --locked \
+            --force \
+            makeutil
 
       - name: Install OpenTofu
         run: |

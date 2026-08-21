@@ -14,14 +14,13 @@ TYPOS := uv tool run typos@$(TYPOS_VERSION)
 TY_VERSION ?= 0.0.65
 TY := uv tool run ty@$(TY_VERSION)
 SKYLOS_VERSION = 4.33.2
-SKYLOS = $(UV_ENV) uv tool run --from 'skylos==$(SKYLOS_VERSION)' skylos \
-	--config-file pyproject.toml
-SKYLOS_WHITELIST = $(UV_ENV) uv tool run --from 'skylos==$(SKYLOS_VERSION)' \
-	skylos whitelist
+SKYLOS_COMMAND = $(UV_ENV) uv tool run --from 'skylos==$(SKYLOS_VERSION)' skylos
+SKYLOS = $(SKYLOS_COMMAND) --config-file pyproject.toml
+SKYLOS_WHITELIST = $(SKYLOS_COMMAND) whitelist
 SKYLOS_PRODUCTION_TARGETS ?= concordat scripts
 
 .PHONY: help all clean build build-release lint fmt check-fmt \
-        markdownlint nixie spelling skylos-allow test typecheck vale $(TOOLS) \
+	        markdownlint nixie spelling skylos-allow makeutil test typecheck vale $(TOOLS) \
         $(VENV_TOOLS)
 
 .DEFAULT_GOAL := all
@@ -85,11 +84,9 @@ lint: build ## Run linters
 	$(SKYLOS) $(SKYLOS_PRODUCTION_TARGETS) --category dead_code --gate --format concise --no-upload --no-provenance --no-grep-verify
 
 skylos-allow: export SKYLOS_NAME = $(value NAME)
-skylos-allow: export SKYLOS_REASON = $(value REASON)
 skylos-allow: ## Document one named Skylos exception, not an entry point
 	@test -n "$${SKYLOS_NAME}" || { printf "Error: NAME is required for a named whitelist exception\\n" >&2; exit 2; }
-	@test -n "$${SKYLOS_REASON}" || { printf "Error: REASON is required for a named whitelist exception\\n" >&2; exit 2; }
-	$(SKYLOS_WHITELIST) "$${SKYLOS_NAME}" --reason "$${SKYLOS_REASON}"
+	$(SKYLOS_WHITELIST) "$${SKYLOS_NAME}"
 
 typecheck: build uv ## Run typechecking
 	$(TY) --version
@@ -113,7 +110,10 @@ vale: $(VALE) $(ACRONYM_SCRIPT) ## Check prose
 	uv run --with "git+https://github.com/leynos/concordat-vale.git" $(ACRONYM_SCRIPT)
 	$(VALE) --no-global .
 
-test: build uv $(VENV_TOOLS) ## Run tests
+makeutil: ## Verify the Makefile parser used by contract tests
+	$(call ensure_tool,$@)
+
+test: build uv $(VENV_TOOLS) makeutil ## Run tests
 	$(UV_ENV) uv run pytest -v -n auto
 
 help: ## Show available targets
