@@ -13,9 +13,15 @@ TYPOS := uv tool run typos@$(TYPOS_VERSION)
 # CI. An unpinned `ty` drifts between machines and hides real findings.
 TY_VERSION ?= 0.0.65
 TY := uv tool run ty@$(TY_VERSION)
+SKYLOS_VERSION = 4.33.2
+SKYLOS_COMMAND = $(UV_ENV) uv tool run --from 'skylos==$(SKYLOS_VERSION)' skylos
+SKYLOS = $(SKYLOS_COMMAND) --config-file pyproject.toml
+SKYLOS_WHITELIST = $(SKYLOS_COMMAND) whitelist
+SKYLOS_PRODUCTION_TARGETS ?= concordat scripts
 
 .PHONY: help all clean build build-release lint fmt check-fmt \
-        markdownlint nixie spelling test typecheck vale $(TOOLS) $(VENV_TOOLS)
+	        markdownlint nixie spelling skylos-allow makeutil test typecheck vale $(TOOLS) \
+        $(VENV_TOOLS)
 
 .DEFAULT_GOAL := all
 
@@ -75,6 +81,12 @@ check-fmt: build ## Verify formatting
 lint: build ## Run linters
 	$(RUFF) check
 	+$(MAKE) spelling
+	$(SKYLOS) $(SKYLOS_PRODUCTION_TARGETS) --category dead_code --gate --format concise --no-upload --no-provenance --no-grep-verify
+
+skylos-allow: export SKYLOS_NAME = $(value NAME)
+skylos-allow: ## Document one named Skylos exception, not an entry point
+	@test -n "$${SKYLOS_NAME}" || { printf "Error: NAME is required for a named whitelist exception\\n" >&2; exit 2; }
+	$(SKYLOS_WHITELIST) "$${SKYLOS_NAME}"
 
 typecheck: build uv ## Run typechecking
 	$(TY) --version
@@ -98,7 +110,10 @@ vale: $(VALE) $(ACRONYM_SCRIPT) ## Check prose
 	uv run --with "git+https://github.com/leynos/concordat-vale.git" $(ACRONYM_SCRIPT)
 	$(VALE) --no-global .
 
-test: build uv $(VENV_TOOLS) ## Run tests
+makeutil: ## Verify the Makefile parser used by contract tests
+	$(call ensure_tool,$@)
+
+test: build uv $(VENV_TOOLS) makeutil ## Run tests
 	$(UV_ENV) uv run pytest -v -n auto
 
 help: ## Show available targets

@@ -29,6 +29,37 @@ tools whose presence `make` verifies with `command -v` — because it is
 fetched on demand at the pinned version via `uv tool run` instead of being
 expected to already be on `PATH`.
 
+## Linting and dead-code detection
+
+Run the complete local lint gate with:
+
+```shell
+make lint
+```
+
+The target runs Ruff, the en-GB spelling policy, and a blocking Skylos 4.33.2
+dead-code scan over the production `concordat` and `scripts` packages. Skylos
+is provisioned separately from the application environment and uses the
+reviewed `pyproject.toml` configuration. The scan does not upload source,
+collect provenance, use LLM analysis, or model test references as production
+uses.
+
+Treat each Skylos report as a dead-code candidate. Remove confirmed dead code.
+For a verified dynamic runtime entry point, add a precise rule in
+`[tool.skylos.dead_code]` with the fully qualified symbol, its actual type, and
+the runtime caller. When an entry-point rule cannot describe the boundary, add
+a narrow named exception instead:
+
+```shell
+make skylos-allow NAME=symbol
+```
+
+The target refuses empty names and records the exception in the
+version-controlled Skylos allow list. Skylos accepts the name only, so record
+the verified caller and its evidence in the reviewing change. Do not add bulk
+or unexplained exceptions; remove an exception when its runtime boundary
+disappears.
+
 ## XDG layout and owner namespaces
 
 `concordat/xdg.py` is the single source of truth for where concordat reads

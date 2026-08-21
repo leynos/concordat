@@ -44,6 +44,9 @@ include = ["concordat"]
 [tool.ruff]
 line-length = 88
 
+[tool.skylos.gate]
+strict = true
+
 [tool.ruff.lint]
 select = [
     "F",        # Pyflakes rules
@@ -157,3 +160,17 @@ packages = [
 
 [tool.setuptools.package-data]
 "concordat.canon" = ["lint-rules/**/*"]
+
+[tool.skylos.whitelist]
+names = [
+    "RefreshResult",
+    "_refresh",
+    "action_sync_all_outdated",
+    "action_sync_selected",
+    "action_refresh",
+    "BINDINGS",
+    "render",
+    "_format_outcome",
+    "published_path",
+    "template_path",
+]
