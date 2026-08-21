@@ -385,16 +385,7 @@ class _SweepSession:
         return False
 
     def _sweep_auditable_entry(self, entry: EstateEntry) -> bool:
-        """Audit one non-excluded entry and report audit-slot consumption.
-
-        A head-resolution failure and a completed audit both consume an audit
-        slot; an idempotent skip of an already-ledgered commit does not.
-
-        Returns
-        -------
-        bool
-            Whether this entry consumed an audit slot.
-        """
+        """Process one auditable entry and report whether it consumed an audit slot."""
         repository = f"{self.owner}/{entry.name}"
         try:
             head = resolve_head(self.owner, entry.name)
