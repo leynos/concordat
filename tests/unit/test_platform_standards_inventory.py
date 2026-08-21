@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import typing as typ
+from pathlib import Path
+from unittest import mock
 
+import pygit2
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 from ruamel.yaml import YAML
 
 from concordat import platform_standards
-
-if typ.TYPE_CHECKING:
-    from pathlib import Path
 
 
 def _seed_inventory_with_metadata(inventory: Path, repos: list[str]) -> None:
@@ -41,6 +43,181 @@ def _assert_metadata_preserved(data: dict[str, typ.Any]) -> None:
     assert data["schema_version"] == 1
     assert data["metadata"] == {"owner": "team-a", "environment": "production"}
     assert data["labels"] == ["backend", "critical"]
+
+
+@pytest.mark.parametrize(
+    ("mutation_result", "expected_changed", "expected_calls"),
+    [
+        pytest.param(False, False, ["mutate"], id="unchanged"),
+        pytest.param(True, True, ["mutate", "commit", "validate"], id="changed"),
+    ],
+)
+def test_apply_inventory_change_commits_and_validates_only_when_mutated(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    *,
+    mutation_result: bool,
+    expected_changed: bool,
+    expected_calls: list[str],
+) -> None:
+    """Only commit and validate after an inventory mutation."""
+    calls: list[str] = []
+    config = platform_standards.PlatformStandardsConfig(
+        repo_url="https://example.com/platform-standards.git"
+    )
+
+    def mutate_inventory(inventory: Path, repo_slug: str) -> bool:
+        calls.append("mutate")
+        assert inventory == tmp_path / config.inventory_path, (
+            "mutator should receive the configured inventory path"
+        )
+        assert repo_slug == "example/repo", "mutator should receive the repository slug"
+        return mutation_result
+
+    def commit_inventory_changes(*args: object, **kwargs: object) -> None:
+        calls.append("commit")
+
+    def validate_tofu_changes(workdir: Path) -> None:
+        assert workdir == tmp_path, "validation should run in the repository worktree"
+        calls.append("validate")
+
+    monkeypatch.setattr(
+        platform_standards,
+        "_commit_inventory_changes",
+        commit_inventory_changes,
+    )
+    monkeypatch.setattr(
+        platform_standards,
+        "_validate_tofu_changes",
+        validate_tofu_changes,
+    )
+
+    changed = platform_standards._apply_inventory_change(
+        typ.cast("pygit2.Repository", object()),
+        tmp_path,
+        config,
+        "example/repo",
+        typ.cast("pygit2.Commit", object()),
+        verb="enrol",
+        mutate_inventory=mutate_inventory,
+    )
+
+    assert changed is expected_changed
+    assert calls == expected_calls
+
+
+@given(mutation_results=st.lists(st.booleans(), min_size=1, max_size=20))
+def test_apply_inventory_change_follows_the_mutation_trace(
+    mutation_results: list[bool],
+) -> None:
+    """Commit and validate exactly after a changed mutation."""
+    calls: list[str] = []
+    mutations = iter(mutation_results)
+    config = platform_standards.PlatformStandardsConfig(
+        repo_url="https://example.com/platform-standards.git"
+    )
+
+    def mutate_inventory(inventory: Path, repo_slug: str) -> bool:
+        calls.append("mutate")
+        assert inventory == Path("workspace") / config.inventory_path
+        assert repo_slug == "example/repo"
+        return next(mutations)
+
+    def commit_inventory_changes(*args: object, **kwargs: object) -> None:
+        calls.append("commit")
+
+    def validate_tofu_changes(workdir: Path) -> None:
+        assert workdir == Path("workspace")
+        calls.append("validate")
+
+    with (
+        mock.patch.object(
+            platform_standards,
+            "_commit_inventory_changes",
+            commit_inventory_changes,
+        ),
+        mock.patch.object(
+            platform_standards,
+            "_validate_tofu_changes",
+            validate_tofu_changes,
+        ),
+    ):
+        changed = [
+            platform_standards._apply_inventory_change(
+                typ.cast("pygit2.Repository", object()),
+                Path("workspace"),
+                config,
+                "example/repo",
+                typ.cast("pygit2.Commit", object()),
+                verb="enrol",
+                mutate_inventory=mutate_inventory,
+            )
+            for _ in mutation_results
+        ]
+
+    expected_calls = [
+        call
+        for mutation_result in mutation_results
+        for call in (
+            ("mutate", "commit", "validate") if mutation_result else ("mutate",)
+        )
+    ]
+    assert changed == mutation_results
+    assert calls == expected_calls
+
+
+def test_apply_inventory_change_commits_the_mutated_inventory(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A changed inventory is committed before its validation boundary runs."""
+    repository = pygit2.init_repository(str(tmp_path))
+    repository.config["user.name"] = "Test User"
+    repository.config["user.email"] = "test@example.com"
+    config = platform_standards.PlatformStandardsConfig(
+        repo_url="https://example.com/platform-standards.git"
+    )
+    inventory_path = tmp_path / config.inventory_path
+    inventory_path.parent.mkdir(parents=True)
+    inventory_path.write_text("schema_version: 1\nrepositories: []\n", encoding="utf-8")
+    repository.index.add(config.inventory_path)
+    repository.index.write()
+    signature = repository.default_signature
+    base_commit_id = repository.create_commit(
+        "HEAD",
+        signature,
+        signature,
+        "seed inventory",
+        repository.index.write_tree(),
+        [],
+    )
+    base_commit = repository[base_commit_id].peel(pygit2.Commit)
+    validated_heads: list[pygit2.Oid] = []
+
+    def validate_tofu_changes(workdir: Path) -> None:
+        assert workdir == tmp_path, "validation should run in the repository worktree"
+        validated_heads.append(repository.head.peel(pygit2.Commit).id)
+
+    monkeypatch.setattr(
+        platform_standards, "_validate_tofu_changes", validate_tofu_changes
+    )
+
+    changed = platform_standards._apply_inventory_change(
+        repository,
+        tmp_path,
+        config,
+        "example/repo",
+        base_commit,
+        verb="enrol",
+        mutate_inventory=platform_standards._update_inventory,
+    )
+
+    commit = repository.head.peel(pygit2.Commit)
+    assert changed is True
+    assert commit.parent_ids == [base_commit.id]
+    assert commit.message == "chore: enrol example/repo via concordat"
+    assert "example/repo" in inventory_path.read_text(encoding="utf-8")
+    assert validated_heads == [commit.id]
 
 
 def test_update_inventory_adds_entry(tmp_path: Path) -> None:

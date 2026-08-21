@@ -9,6 +9,25 @@ UV_ENV = UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools
 RUFF := $(UV_ENV) uv run ruff
 TYPOS_VERSION ?= 1.48.0
 TYPOS := uv tool run typos@$(TYPOS_VERSION)
+# Keep Pylint independent from the project virtual environment.  The PyPy shim
+# makes the baseline Pylint policy available on every supported host.
+PYLINT_PYTHON ?= pypy
+PYLINT_TARGETS ?= concordat scripts tests
+PYLINT_PYPY_SHIM_REF ?= 726d09f968b4d729ee4b29c71fc732e744854f3b
+PYLINT_PYPY_SHIM = git+https://github.com/leynos/pylint-pypy-shim.git@$(PYLINT_PYPY_SHIM_REF)
+PYLINT = $(UV_ENV) uv tool run --python $(PYLINT_PYTHON) --from '$(PYLINT_PYPY_SHIM)' pylint-pypy
+# Run the df12 plugin in a separate CPython 3.14 process.  Keeping its
+# dependency out of the PyPy shim avoids interpreter and plugin version skew.
+DF12_PYTHON_LINTS_REF ?= 9c835f35b0f1690597ade799c9c6a30bc5922959
+DF12_PYTHON_LINTS = git+https://github.com/leynos/df12-python-lints.git@$(DF12_PYTHON_LINTS_REF)
+DF12_PYTHON ?= 3.14
+DF12_PYLINT_TARGETS ?= concordat scripts
+DF12_PYLINT_MESSAGES = R9101,C9102,R9103,R9104,C9105,C9106,C9107,R9108,R9109,R9110,R9111,R9112,C9112
+DF12_PYLINT = $(UV_ENV) uv run --isolated --python $(DF12_PYTHON) --with '$(DF12_PYTHON_LINTS)' pylint \
+	--disable=all --load-plugins=df12_python_lints --py-version=3.13 \
+	--enable=$(DF12_PYLINT_MESSAGES)
+AMBRLEAKS = $(UV_ENV) uv tool run --python $(DF12_PYTHON) \
+	--from '$(DF12_PYTHON_LINTS)' ambrleaks
 # Pinned so `make typecheck` reports the same diagnostics locally and in
 # CI. An unpinned `ty` drifts between machines and hides real findings.
 TY_VERSION ?= 0.0.65
@@ -74,6 +93,9 @@ check-fmt: build ## Verify formatting
 
 lint: build ## Run linters
 	$(RUFF) check
+	$(PYLINT) $(PYLINT_TARGETS)
+	$(DF12_PYLINT) $(DF12_PYLINT_TARGETS)
+	$(AMBRLEAKS) tests
 	+$(MAKE) spelling
 
 typecheck: build uv ## Run typechecking
@@ -98,7 +120,7 @@ vale: $(VALE) $(ACRONYM_SCRIPT) ## Check prose
 	uv run --with "git+https://github.com/leynos/concordat-vale.git" $(ACRONYM_SCRIPT)
 	$(VALE) --no-global .
 
-test: build uv $(VENV_TOOLS) ## Run tests
+test: build spelling uv $(VENV_TOOLS) ## Run tests
 	$(UV_ENV) uv run pytest -v -n auto
 
 help: ## Show available targets

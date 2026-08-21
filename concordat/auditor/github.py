@@ -41,13 +41,11 @@ class GithubClient:
         self.api_url = api_url.rstrip("/")
         self.timeout = timeout
         self.session = requests.Session()
-        self.session.headers.update(
-            {
-                "Authorization": f"Bearer {token}",
-                "Accept": "application/vnd.github+json",
-                "User-Agent": "concordat-auditor",
-            }
-        )
+        self.session.headers.update({
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "concordat-auditor",
+        })
 
     def repository(self, owner: str, name: str) -> RepositorySnapshot:
         """Return repository metadata used by the repository checks."""

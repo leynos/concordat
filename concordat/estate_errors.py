@@ -235,10 +235,10 @@ class ActiveOwnerMismatchError(EstateError):
 
 
 class GitHubOrganizationAuthenticationError(GitHubAuthenticationError):
-    """Raised when organisation-level auth fails."""
+    """Raised when organization-level auth fails."""
 
     def __init__(self, owner: str) -> None:
-        """Initialise the error with the organisation owner."""
+        """Initialise the error with the organization owner."""
         message = (
             f"GitHub authentication failed accessing organization {owner!r}. "
             "Ensure GITHUB_TOKEN includes the 'repo' scope and is valid."

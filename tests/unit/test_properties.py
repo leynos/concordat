@@ -31,6 +31,11 @@ def _is_valid_owner(owner: str) -> bool:
     Written from the rule — alphanumeric ends, alphanumerics and hyphens
     within — rather than from `xdg._OWNER_PATTERN`, so a change to the
     pattern is a change this can detect.
+
+    Returns
+    -------
+    bool
+        Whether *owner* satisfies the grammar.
     """
     if not owner:
         return False
@@ -204,6 +209,11 @@ def _record(repository: str, verdict: str, sha: str | None) -> sweep.LedgerRecor
 
     Built through `_base_record` rather than by hand, so the generated
     histories carry every required key and stay valid `LedgerRecord` values.
+
+    Returns
+    -------
+    sweep.LedgerRecord
+        A complete ledger record with the requested fields varied.
     """
     record = sweep._base_record(repository)
     record["verdict"] = verdict

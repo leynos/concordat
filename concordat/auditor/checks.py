@@ -384,21 +384,17 @@ def _run_permissions(context: AuditContext) -> list[Finding]:
                 resource=resource,
             )
         )
-    findings.extend(
-        [
-            Finding(
-                rule_id="PM-001",
-                message=(
-                    f"Outside collaborator {collaborator.login} has admin access."
-                ),
-                level="error",
-                resource=resource,
-                properties={"login": collaborator.login},
-            )
-            for collaborator in context.collaborators
-            if collaborator.permissions.get("admin", False)
-        ]
-    )
+    findings.extend([
+        Finding(
+            rule_id="PM-001",
+            message=(f"Outside collaborator {collaborator.login} has admin access."),
+            level="error",
+            resource=resource,
+            properties={"login": collaborator.login},
+        )
+        for collaborator in context.collaborators
+        if collaborator.permissions.get("admin", False)
+    ])
     return findings
 
 

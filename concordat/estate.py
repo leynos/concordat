@@ -218,16 +218,7 @@ def _resolve_implicit_config_path(
     config_path: Path | None,
     estate_owner: str,
 ) -> tuple[Path | None, str | None]:
-    """Resolve the estate config path and the owner to activate on success.
-
-    The duplicate-alias check and the eventual registration must read and
-    write the same owner-namespaced file, so the path is resolved up front and
-    any active-owner mismatch is rejected here. The active owner is NOT mutated:
-    the returned ``owner_to_activate`` (non-``None`` only on the implicit path
-    with no active owner yet) is committed by the caller after registration
-    succeeds, so a failed init leaves ``xdg.get_active_owner()`` unchanged. An
-    explicit *config_path* bypasses the owner namespace entirely.
-    """
+    """Resolve the estate config path and owner to activate on success."""
     match (config_path, xdg.get_active_owner()):
         case (Path() as explicit, _):
             return explicit, None

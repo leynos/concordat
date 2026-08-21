@@ -301,12 +301,11 @@ def _run_cli(arguments: list[str]) -> RunResult:
             stderr=buffer_err.getvalue(),
             returncode=int(exc.code or 0),
         )
-    else:
-        return RunResult(
-            stdout=buffer_out.getvalue(),
-            stderr=buffer_err.getvalue(),
-            returncode=int(result or 0),
-        )
+    return RunResult(
+        stdout=buffer_out.getvalue(),
+        stderr=buffer_err.getvalue(),
+        returncode=int(result or 0),
+    )
 
 
 @when(parsers.cfparse("I run concordat {command:w}"))

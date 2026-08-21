@@ -1,9 +1,8 @@
 # concordat Users' Guide
 
-For the internal module boundaries behind this CLI — the XDG layout,
-credential resolution order, cache/execution API split, and the rule-run and
-Parabellum sweep contracts — see
-[`docs/developers-guide.md`](developers-guide.md).
+For the internal module boundaries behind this CLI — the XDG layout, credential
+resolution order, cache/execution API split, and the rule-run and Parabellum
+sweep contracts — see [`docs/developers-guide.md`](developers-guide.md).
 
 ## Overview
 
@@ -23,6 +22,14 @@ workflows read the same flag before applying changes.
    ```
 
 2. Invoke the CLI with `uv run` to ensure the correct environment is used.
+
+## Runtime implementation
+
+The public `concordat.hello` entry point uses the optional Rust implementation
+when `_concordat_rs` is available and falls back to the pure-Python
+implementation when that extension is absent. If importing the extension raises
+`ModuleNotFoundError` for another module or dependency, that exception is raised
+to the caller rather than being mistaken for a missing extension.
 
 ## Enrolling repositories
 
@@ -121,12 +128,11 @@ workflows read the same flag before applying changes.
 
 ## Configuration, credentials, cache, and state locations
 
-Concordat's local configuration, credentials, caches, and state live under
-the XDG base directories. A single global headline file names the active
-configured owner; per-owner configuration, credentials, estate caches, and
-state are namespaced beneath that owner, while the OpenTofu provider plugin
-cache is shared across owners, since provider binaries are identical
-regardless of owner:
+Concordat's local configuration, credentials, caches, and state live under the
+XDG base directories. A single global headline file names the active configured
+owner; per-owner configuration, credentials, estate caches, and state are
+namespaced beneath that owner, while the OpenTofu provider plugin cache is
+shared across owners, since provider binaries are identical regardless of owner:
 
 - `$XDG_CONFIG_HOME/concordat/config.yaml` — the **headline** config, global
   rather than owner-namespaced; its `github_owner` key names the active owner.
@@ -319,9 +325,9 @@ without leaving the CLI. Both commands require `GITHUB_TOKEN` and the estate's
   `SCW_SECRET_KEY` or `SPACES_ACCESS_KEY_ID`/`SPACES_SECRET_ACCESS_KEY` onto
   `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` when needed, and fails fast if
   none of the pairs is present. Standard error (stderr) logs echo the backend
-  bucket, key, region, and config path—never credentials—for traceability.
-  If the manifest is absent or `enabled: false`, `plan` and `apply` keep
-  using the local state layout.
+  bucket, key, region, and config path—never credentials—for traceability. If
+  the manifest is absent or `enabled: false`, `plan` and `apply` keep using the
+  local state layout.
 
 - Reconcile the estate with `concordat apply`. The command requires an explicit
   `--auto-approve` to match OpenTofu's automation guard.
@@ -554,17 +560,16 @@ with the following measures:
   unreadable, and leaking it defeats the encryption.
 - **Client-side or envelope encryption (optional):** a genuinely separate,
   independent control from SSE-C, useful whichever provider is in use. Wrap
-  `tofu state`/`tofu plan` calls with tooling that encrypts state before
-  upload.
+  `tofu state`/`tofu plan` calls with tooling that encrypts state before upload.
 - **Audit access logs:** Periodically review bucket access logs to detect
   unauthorized reads or unexpected access patterns.
 
 ### Estate configuration file
 
 Concordat stores estate metadata in
-`$XDG_CONFIG_HOME/concordat/owners/<owner>/config.yaml`, where `<owner>` is
-the active owner configured in the headline configuration. The file is
-regular YAML 1.2 with an `estate` section:
+`$XDG_CONFIG_HOME/concordat/owners/<owner>/config.yaml`, where `<owner>` is the
+active owner configured in the headline configuration. The file is regular YAML
+1.2 with an `estate` section:
 
 ```yaml
 estate:

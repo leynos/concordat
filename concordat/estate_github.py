@@ -33,13 +33,11 @@ if typ.TYPE_CHECKING:
 # Both creation paths must offer the same repository, so the options they share
 # are declared once here and unpacked at each call site, leaving only the name
 # path-specific. The proxy keeps the shared mapping immutable.
-_REPOSITORY_OPTIONS: cabc.Mapping[str, object] = types.MappingProxyType(
-    {
-        "private": True,
-        "auto_init": False,
-        "description": "Platform standards repository managed by concordat",
-    }
-)
+_REPOSITORY_OPTIONS: cabc.Mapping[str, object] = types.MappingProxyType({
+    "private": True,
+    "auto_init": False,
+    "description": "Platform standards repository managed by concordat",
+})
 
 # github3 raises a 401 as `AuthenticationFailed` and a 403 as `ForbiddenError`;
 # they are siblings rather than one deriving from the other, so both must be
@@ -72,7 +70,7 @@ def _create_repository(
     owner: str,
     name: str,
 ) -> None:
-    """Create a repository in an organisation or for the authenticated user."""
+    """Create a repository in an organization or for the authenticated user."""
     org = _find_organization(client, owner)
     if org:
         _create_organization_repository(org, owner, name)
@@ -84,11 +82,21 @@ def _find_organization(
     client: github3.GitHub,
     owner: str,
 ) -> github3.orgs.Organization | None:
-    """Return the organisation named *owner*, or ``None`` when there is none.
+    """Return the organization named *owner*, or ``None`` when there is none.
 
     An authentication failure here precedes any creation attempt: a rejected
-    lookup says nothing about whether *owner* is an organisation, so falling
+    lookup says nothing about whether *owner* is an organization, so falling
     through to the personal path would misreport the cause.
+
+    Returns
+    -------
+    github3.orgs.Organization | None
+        Matching organization, or ``None`` when *owner* is not an organization.
+
+    Raises
+    ------
+    GitHubOrganizationAuthenticationError
+        If GitHub rejects the organization lookup.
     """
     try:
         return client.organization(owner)
@@ -103,7 +111,7 @@ def _create_organization_repository(
     owner: str,
     name: str,
 ) -> None:
-    """Create *name* inside the *owner* organisation."""
+    """Create *name* inside the *owner* organization."""
     try:
         org.create_repository(name, **_REPOSITORY_OPTIONS)
     except _REJECTED as error:

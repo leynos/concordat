@@ -31,7 +31,9 @@ def strip_yaml_directives_for_tofu(contents: str) -> tuple[str, bool]:
     This function performs a minimal, surgical rewrite that only strips markers
     at the beginning/end of the file so we do not rewrite the entire document.
 
-    Returns:
+    Returns
+    -------
+    tuple[str, bool]
         A tuple of (sanitized_contents, changed) where changed is True if any
         modifications were made.
 
@@ -89,7 +91,9 @@ def sanitize_yaml_file_for_tofu(path: Path) -> bool:
     Args:
         path: Path to a YAML file to sanitize in-place.
 
-    Returns:
+    Returns
+    -------
+    bool
         True if the file was modified, False otherwise.
 
     """
@@ -115,6 +119,12 @@ def _build_inventory_candidates(
 
     Returns paths in both workspace root and tofu working directory,
     adjusting the inventory path if it starts with the tofu dirname.
+
+    Returns
+    -------
+    list[Path]
+        Candidate inventory paths to inspect.
+
     """
     candidates: list[Path] = [workspace_root / inventory_path]
     if tofu_workdir.resolve() != workspace_root.resolve():
@@ -129,6 +139,12 @@ def _sanitize_candidates(candidates: list[Path]) -> bool:
     """Sanitize all existing inventory files in the candidates list.
 
     Returns True if any file was modified, False otherwise.
+
+    Returns
+    -------
+    bool
+        Whether any candidate file was modified.
+
     """
     changed = False
     for candidate in candidates:
@@ -152,7 +168,9 @@ def sanitize_inventory_for_tofu(
         tofu_workdir: Directory containing tofu configuration.
         inventory_path: Relative path to the inventory file.
 
-    Returns:
+    Returns
+    -------
+    bool
         True if any inventory file was modified, False otherwise.
 
     """

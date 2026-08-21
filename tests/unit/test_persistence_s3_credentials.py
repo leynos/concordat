@@ -65,6 +65,11 @@ def captured_client_kwargs(
     owner tree to this test's `tmp_path` for the same reason — the factory
     falls back to the active owner's credentials file when no `owner=` is
     given, and that lookup must not find one written by another test.
+
+    Returns
+    -------
+    CapturedCall
+        The captured boto3 service name and keyword arguments.
     """
     del xdg_env
     for variable in (

@@ -320,7 +320,7 @@ def _audit_record(owner: str, entry: EstateEntry) -> LedgerRecord:
     return record
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(slots=True)
 class _SweepSession:
     """Mutable per-invocation state for one estate sweep.
 
@@ -385,11 +385,7 @@ class _SweepSession:
         return False
 
     def _sweep_auditable_entry(self, entry: EstateEntry) -> bool:
-        """Audit one non-excluded entry and report audit-slot consumption.
-
-        A head-resolution failure and a completed audit both consume an audit
-        slot; an idempotent skip of an already-ledgered commit does not.
-        """
+        """Process one auditable entry and report whether it consumed an audit slot."""
         repository = f"{self.owner}/{entry.name}"
         try:
             head = resolve_head(self.owner, entry.name)
@@ -420,6 +416,20 @@ def run_sweep(
     """Sweep the estate and append new records to the ledger.
 
     Returns the records appended by this invocation.
+
+    Parameters
+    ----------
+    estate_path : pathlib.Path
+        Path to the estate manifest.
+    ledger_path : pathlib.Path
+        Path to the append-only campaign ledger.
+    options : SweepOptions
+        Filters and execution options for the sweep.
+
+    Returns
+    -------
+    Ledger
+        Records appended during this invocation.
     """
     estate = load_estate(estate_path)
     session = _SweepSession(
@@ -457,6 +467,16 @@ def sweep_command(options: SweepCommandOptions = _DEFAULT_COMMAND_OPTIONS) -> in
 
     ``--only`` takes a comma-separated list of repository names;
     ``--limit`` bounds how many repositories are audited this run.
+
+    Parameters
+    ----------
+    options : SweepCommandOptions
+        Parsed command-line options controlling the sweep.
+
+    Returns
+    -------
+    int
+        Zero after the sweep completes successfully.
     """
     only_set = (
         {name.strip() for name in options.only.split(",") if name.strip()}

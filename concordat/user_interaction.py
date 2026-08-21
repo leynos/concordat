@@ -20,7 +20,9 @@ def prompt_yes_no(message: str, output: typ.IO[str] | None = None) -> bool:
         message: The prompt message to display.
         output: Output stream for the prompt (defaults to stderr).
 
-    Returns:
+    Returns
+    -------
+    bool
         True if the user responded with 'y' or 'yes', False otherwise.
 
     """
@@ -37,7 +39,9 @@ def prompt_yes_no(message: str, output: typ.IO[str] | None = None) -> bool:
 def can_prompt() -> bool:
     """Check if interactive prompting is available.
 
-    Returns:
+    Returns
+    -------
+    bool
         True if stdin is connected to a TTY, False otherwise.
 
     """

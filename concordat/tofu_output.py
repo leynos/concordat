@@ -20,7 +20,9 @@ def normalize_init_result(result: object) -> SimpleNamespace:
     Args:
         result: The result from tofupy.init(), typically a boolean.
 
-    Returns:
+    Returns
+    -------
+    SimpleNamespace
         SimpleNamespace with stdout, stderr, and returncode.
 
     """
@@ -33,7 +35,9 @@ def normalize_plan_result(result: object) -> SimpleNamespace:
     Args:
         result: The result from tofupy.plan(), a (PlanLog, Plan) tuple.
 
-    Returns:
+    Returns
+    -------
+    SimpleNamespace
         SimpleNamespace with stdout, stderr, and returncode.
 
     """
@@ -65,7 +69,9 @@ def normalize_apply_result(result: object) -> SimpleNamespace:
     Args:
         result: The result from tofupy.apply(), an ApplyLog.
 
-    Returns:
+    Returns
+    -------
+    SimpleNamespace
         SimpleNamespace with stdout, stderr, and returncode.
 
     """
@@ -101,7 +107,9 @@ def _summarize_tofu_log(
         verb: The tofu command verb (plan, apply, etc.).
         log: The structured log object from tofupy.
 
-    Returns:
+    Returns
+    -------
+    tuple[str, str, bool]
         A tuple of (stdout, stderr, errored).
 
     """
@@ -138,7 +146,9 @@ def _format_tofu_diagnostics(errors: list[object], warnings: list[object]) -> st
         errors: List of error diagnostic objects.
         warnings: List of warning diagnostic objects.
 
-    Returns:
+    Returns
+    -------
+    str
         Formatted string for terminal output.
 
     """
@@ -169,7 +179,9 @@ def normalize_tofu_result(verb: str, result: object) -> SimpleNamespace:
         verb: The tofu command verb (init, plan, apply, etc.).
         result: The result from tofupy command execution.
 
-    Returns:
+    Returns
+    -------
+    SimpleNamespace
         SimpleNamespace with stdout, stderr, and returncode attributes.
 
     """
