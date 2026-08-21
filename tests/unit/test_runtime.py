@@ -8,6 +8,7 @@ import typing as typ
 
 import pytest
 
+import concordat
 from concordat import pure, runtime
 
 
@@ -24,10 +25,13 @@ def test_runtime_uses_native_hello_when_extension_is_available(
         with monkeypatch.context() as context:
             context.setattr(runtime.importlib, "import_module", lambda _: native_module)
             reloaded_runtime = importlib.reload(runtime)
+            reloaded_concordat = importlib.reload(concordat)
 
             assert reloaded_runtime.hello is native_hello
+            assert reloaded_concordat.hello is native_hello
     finally:
         importlib.reload(runtime)
+        importlib.reload(concordat)
 
 
 def test_runtime_falls_back_to_pure_hello_when_extension_is_missing(
@@ -42,10 +46,13 @@ def test_runtime_falls_back_to_pure_hello_when_extension_is_missing(
         with monkeypatch.context() as context:
             context.setattr(runtime.importlib, "import_module", raise_module_not_found)
             reloaded_runtime = importlib.reload(runtime)
+            reloaded_concordat = importlib.reload(concordat)
 
             assert reloaded_runtime.hello is pure.hello
+            assert reloaded_concordat.hello is pure.hello
     finally:
         importlib.reload(runtime)
+        importlib.reload(concordat)
 
 
 def test_runtime_reraises_missing_native_dependency(
@@ -67,3 +74,4 @@ def test_runtime_reraises_missing_native_dependency(
             assert raised.value is error
     finally:
         importlib.reload(runtime)
+        importlib.reload(concordat)
