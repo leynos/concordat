@@ -282,17 +282,20 @@ actuators that remediate them. Each check ships as a lint rule package under
   credential for fallible authenticated GitHub API acquisition and writes a
   snapshot, while `rule run` reads a supplied local snapshot (including replay)
   and makes zero network calls; it rejects a missing snapshot without
-  attempting network access even when credentials are present; `rule mutate`
-  performs the side effect against a mocked API; each emits a structured log
-  line carrying the check ID, operation, and entity IDs, and the sweep
-  publishes bounded per-check metrics and fires alerts only for incomplete
-  sweeps, sustained aggregate API failures above a defined threshold, a
-  rate-limit budget below a defined threshold, and the specified terminal
-  outcomes: `retry_exhausted` for known no-dispatch or known retryable `429` or
-  `5xx` responses exhausting their retry budget, `reconcile_failed`, and
-  `shutdown_aborted` with `phase="unknown_outcome"`. Individual API failures go
-  to structured logs, metrics, and traces without alerting. The read-only
-  Auditor acquisition credential is separate from actuator execution
+  attempting network access even when credentials are present. A fixture that
+  fails after fetching some entities but before publishing the snapshot reports
+  an operational failure, writes no partial snapshot file, and proves that
+  `rule run` never observes a partial or truncated snapshot from the failed
+  acquisition; `rule mutate` performs the side effect against a mocked API;
+  each emits a structured log line carrying the check ID, operation, and entity
+  IDs, and the sweep publishes bounded per-check metrics and fires alerts only
+  for incomplete sweeps, sustained aggregate API failures above a defined
+  threshold, a rate-limit budget below a defined threshold, and the specified
+  terminal outcomes: `retry_exhausted` for known no-dispatch or known retryable
+  `429` or `5xx` responses exhausting their retry budget, `reconcile_failed`,
+  and `shutdown_aborted` with `phase="unknown_outcome"`. Individual API
+  failures go to structured logs, metrics, and traces without alerting. The
+  read-only Auditor acquisition credential is separate from actuator execution
   credentials. Credentials are accepted only from configured secret stores or
   securely injected environment variables; credentials or secret values
   supplied through a CLI argument, committed file, backend file, or log are
