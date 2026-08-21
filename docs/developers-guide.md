@@ -33,8 +33,36 @@ from changing the PyPy-backed Pylint baseline.
 
 `concordat.hello` is the public greeting entry point. At runtime it selects
 `_concordat_rs.hello` when the optional Rust extension is installed and falls
-back to `.pure.hello` otherwise. `Hello` in `concordat.runtime` is an internal
-typing alias, not part of the public API.
+back to `.pure.hello` only when importing `_concordat_rs` itself raises
+`ModuleNotFoundError`. A missing dependency reported while importing the native
+extension is re-raised, so packaging and environment failures remain visible.
+`Hello` in `concordat.runtime` is an internal typing alias, not part of the
+public API.
+
+## Platform-standards inventory mutation boundary
+
+`_apply_inventory_change` defines the sequencing contract for inventory pull
+request changes:
+
+1. Call the supplied mutation with the configured inventory path and repository
+   slug.
+2. If it reports no change, return without creating a commit or running
+   validation.
+3. Commit the changed inventory.
+4. Run the validation boundary (`tofu fmt`, its check mode, `tflint`, and
+   `tofu validate`).
+
+The helper returns `True` only after a changed inventory has been committed and
+validated.
+
+## Canonical artefact TUI refresh boundary
+
+The canonical-artefact TUI's `action_refresh` method recomputes comparisons
+from the manifest and published checkout using the existing filters, updates
+the comparison state, and clears and repopulates the mounted `DataTable` in
+place. Refresh therefore reuses the existing application and table rather than
+replacing either widget; the refresh and sync key bindings depend on that
+mounted table.
 
 The type checker is pinned, not resolved at run time. `Makefile` declares
 `TY_VERSION ?= 0.0.65` and `TY := uv tool run ty@$(TY_VERSION)`; the

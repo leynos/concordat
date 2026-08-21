@@ -23,6 +23,14 @@ workflows read the same flag before applying changes.
 
 2. Invoke the CLI with `uv run` to ensure the correct environment is used.
 
+## Runtime implementation
+
+The public `concordat.hello` entry point uses the optional Rust implementation
+when `_concordat_rs` is available and falls back to the pure-Python
+implementation when that extension is absent. If importing the extension raises
+`ModuleNotFoundError` for another module or dependency, that exception is raised
+to the caller rather than being mistaken for a missing extension.
+
 ## Enrolling repositories
 
 - Enrol one or more repositories by passing their paths:

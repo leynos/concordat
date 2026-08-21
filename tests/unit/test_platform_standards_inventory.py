@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 import typing as typ
+from pathlib import Path
+from unittest import mock
 
 import pygit2
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 from ruamel.yaml import YAML
 
 from concordat import platform_standards
-
-if typ.TYPE_CHECKING:
-    from pathlib import Path
 
 
 def _seed_inventory_with_metadata(inventory: Path, repos: list[str]) -> None:
@@ -102,6 +103,66 @@ def test_apply_inventory_change_commits_and_validates_only_when_mutated(
     )
 
     assert changed is expected_changed
+    assert calls == expected_calls
+
+
+@given(mutation_results=st.lists(st.booleans(), min_size=1, max_size=20))
+def test_apply_inventory_change_follows_the_mutation_trace(
+    mutation_results: list[bool],
+) -> None:
+    """Commit and validate exactly after a changed mutation."""
+    calls: list[str] = []
+    mutations = iter(mutation_results)
+    config = platform_standards.PlatformStandardsConfig(
+        repo_url="https://example.com/platform-standards.git"
+    )
+
+    def mutate_inventory(inventory: Path, repo_slug: str) -> bool:
+        calls.append("mutate")
+        assert inventory == Path("workspace") / config.inventory_path
+        assert repo_slug == "example/repo"
+        return next(mutations)
+
+    def commit_inventory_changes(*args: object, **kwargs: object) -> None:
+        calls.append("commit")
+
+    def validate_tofu_changes(workdir: Path) -> None:
+        assert workdir == Path("workspace")
+        calls.append("validate")
+
+    with (
+        mock.patch.object(
+            platform_standards,
+            "_commit_inventory_changes",
+            commit_inventory_changes,
+        ),
+        mock.patch.object(
+            platform_standards,
+            "_validate_tofu_changes",
+            validate_tofu_changes,
+        ),
+    ):
+        changed = [
+            platform_standards._apply_inventory_change(
+                typ.cast("pygit2.Repository", object()),
+                Path("workspace"),
+                config,
+                "example/repo",
+                typ.cast("pygit2.Commit", object()),
+                verb="enrol",
+                mutate_inventory=mutate_inventory,
+            )
+            for _ in mutation_results
+        ]
+
+    expected_calls = [
+        call
+        for mutation_result in mutation_results
+        for call in (
+            ("mutate", "commit", "validate") if mutation_result else ("mutate",)
+        )
+    ]
+    assert changed == mutation_results
     assert calls == expected_calls
 
 
