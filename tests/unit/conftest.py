@@ -57,7 +57,7 @@ def mock_bootstrap(mocker: pytest_mock.MockFixture) -> mock.Mock:
 def fake_github_client(mocker: pytest_mock.MockFixture) -> mock.Mock:
     """Patch `_build_client` with a GitHub client that has no repository yet.
 
-    The organisation mock is reachable as
+    The organization mock is reachable as
     ``fake_github_client.organization.return_value`` for tests that assert
     the repository was created through it.
 

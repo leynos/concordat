@@ -85,7 +85,7 @@ def _find_organization(
     """Return the organization named *owner*, or ``None`` when there is none.
 
     An authentication failure here precedes any creation attempt: a rejected
-    lookup says nothing about whether *owner* is an organisation, so falling
+    lookup says nothing about whether *owner* is an organization, so falling
     through to the personal path would misreport the cause.
 
     Returns
@@ -96,7 +96,7 @@ def _find_organization(
     Raises
     ------
     GitHubOrganizationAuthenticationError
-        If GitHub rejects the organisation lookup.
+        If GitHub rejects the organization lookup.
     """
     try:
         return client.organization(owner)
@@ -111,7 +111,7 @@ def _create_organization_repository(
     owner: str,
     name: str,
 ) -> None:
-    """Create *name* inside the *owner* organisation."""
+    """Create *name* inside the *owner* organization."""
     try:
         org.create_repository(name, **_REPOSITORY_OPTIONS)
     except _REJECTED as error:

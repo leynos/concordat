@@ -303,7 +303,7 @@ def _setup_tofu_workspace(
     Returns
     -------
     tuple[list[str], Tofu]
-        Backend command-line arguments and the initialised tofu wrapper.
+        Backend command-line arguments and the initialized tofu wrapper.
     """
     sanitized_inventory = _sanitize_inventory_for_tofu(
         workspace.root,
