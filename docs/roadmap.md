@@ -73,8 +73,8 @@ template tree into published platform-standards repositories.
   (`rust-makefile-baseline`, audit-only) exists with `rule.yaml`, a Rego
   sensor, fixtures, and policy tests, and
   `concordat artefact rule run <rule-id> --repo PATH --format table` (or
-  `--format json`) evaluates it against a local checkout (Operation
-  Parabellum vertical slice; `docs/execplans/parabellum-vertical-slice.md`).
+  `--format json`) evaluates it against a local checkout (Operation Parabellum
+  vertical slice; `docs/execplans/parabellum-vertical-slice.md`).
   `rule validate` and the mutation vocabulary remain open.
 
 ### 1.3. Ship the estate execution CLI
@@ -263,3 +263,291 @@ Scale Concordat with self-service and targeted automation.
   retire redundant checks and capture new governance requirements. Acceptance:
   each quarter concludes with an action list approved by the platform steering
   group.
+
+### 4.2. Enforce quality-gate integrity
+
+Deliver the Quality-Gate Integrity audit domain (design document Section
+3.1.1): sensors that detect quality gates which cannot fail or never run, and
+actuators that remediate them. Each check ships as a lint rule package under
+`canon/lint-rules/` per the Section 2.1.2 format.
+
+- [ ] Add the `github-api` sensor and actuator types to the lint rule package
+  contract (Section 2.1.2) before shipping any API-backed check, including the
+  observability requirements of Section 3.2.2. The `conftest` sensor over a
+  static input tree cannot express checks that read live repository state, and
+  deterministic-edit mutations cannot post comments or open issues. Acceptance:
+  `concordat artefact rule validate` accepts a package declaring
+  `sensor.type: github-api` and `github-api` actuators (`comment`, `issue`); an
+  explicit `rule acquire` command or service uses the read-only Auditor
+  credential for fallible authenticated GitHub API acquisition and writes a
+  snapshot, while `rule run` reads a supplied local snapshot (including replay)
+  and makes zero network calls; it rejects a missing snapshot without
+  attempting network access even when credentials are present. A fixture that
+  fails after fetching some entities but before publishing the snapshot reports
+  an operational failure, writes no partial snapshot file, and proves that
+  `rule run` never observes a partial or truncated snapshot from the failed
+  acquisition; `rule mutate` performs the side effect against a mocked API;
+  each emits a structured log line carrying the check ID, operation, and entity
+  IDs, and the sweep publishes bounded per-check metrics and fires alerts only
+  for incomplete sweeps, sustained aggregate API failures above a defined
+  threshold, a rate-limit budget below a defined threshold, and the specified
+  terminal outcomes: `retry_exhausted` for known no-dispatch or known retryable
+  `429` or `5xx` responses exhausting their retry budget, `reconcile_failed`,
+  and `shutdown_aborted` with `phase="unknown_outcome"`. Individual API
+  failures go to structured logs, metrics, and traces without alerting. The
+  read-only Auditor acquisition credential is separate from actuator execution
+  credentials. Credentials are accepted only from configured secret stores or
+  securely injected environment variables; credentials or secret values
+  supplied through a CLI argument, committed file, backend file, or log are
+  rejected. A preflight permission check rejects insufficient or excessively
+  broad credentials before a sweep. Token scopes are no broader than the
+  operation permits, and no credential or secret value is persisted or logged.
+  Fixtures cover each prohibited source, a broad-scope token, preflight
+  rejection, and CV-003's dual-store secret provisioning. This item is a
+  prerequisite for CV-003, AM-001, AM-002, DP-001, and DP-002.
+- [ ] Implement the atomic concurrency boundary for `github-api` actuators
+  (design document Section 2.1.2): server-side idempotency where the operation
+  provides it (secret `PUT` upserts, remediation-branch ref creation) and the
+  single-flight git-ref lease elsewhere (comments, issues), with the
+  deduplication key embedded in every created effect so it can be found again.
+  Acceptance, per effect type (comment, issue, and the branch-mediated
+  annotation):
+  - **Concurrent sweeps.** At least two actuator workers start concurrently
+    against a fixture with the same deduplication key. For each non-idempotent
+    `POST` effect type, exactly one external effect exists afterwards, and
+    every non-winning worker terminates in
+    `duplicate_suppressed` or `reconciled_existing` — never in an error.
+  - **Server-idempotent secret replay.** Concurrent and replayed `PUT` fixtures
+    for both the Actions and Dependabot secret stores converge to the same
+    final value and state. They expect no single winner and no lease; lease
+    assertions remain scoped to the non-idempotent tracking-issue fallback.
+  - **Lost response.** A fixture where the server creates the effect, but the
+    client loses the response. The worker reconciles against the embedded key,
+    finds the effect, issues no second create, and reports
+    `reconciled_existing`.
+  - **Timeout and connection-loss dispatch distinction.** Separate fixtures
+    cover pre-dispatch timeout and connection loss, which are known transients
+    that may retry directly within budget, and post-dispatch timeout and
+    connection loss, which are unknown outcomes that require reconciliation of
+    the embedded key before any retry; if reconciliation finds the effect, no
+    second create is issued, and if absent, one retry is permitted within
+    budget. Recovery leaves exactly one final effect, with an uncertain
+    dispatch state following the post-dispatch path.
+  - **5xx dispatch distinction.** Separate fixtures cover a known no-dispatch
+    transient `5xx`, which may retry directly, and a post-dispatch `5xx`, whose
+    outcome is unknown and which must reconcile the embedded key before any
+    retry. Recovery leaves exactly one final effect.
+  - **Fenced stale worker.** A fixture delays a stale worker after its final
+    existence read; after expiry, a second worker uses the lease store's atomic
+    conditional claim with the expected current lease version/SHA and commits
+    a new owner and fencing token, then the stale worker attempts creation. The
+    stale worker is blocked from creating; the accepted result has exactly one
+    final effect and preserves reconciliation.
+  - **Partial failure (branch-mediated annotation).** A fixture where an
+    intermediate create succeeds but a later call fails. The next sweep
+    reconciles the embedded key, reuses or safely cleans the intermediate state,
+    and completes exactly one final effect without a duplicate.
+  - **Transient failure.** Fixtures returning `429` (with `Retry-After`) and a
+    known no-dispatch `503` before succeeding. Retries are bounded by the
+    documented attempt and time budgets, and exactly one effect exists after
+    recovery.
+  - **Permanent failure and retry exhaustion.** A fixture returning `403`
+    fails fast without retrying, and a known no-dispatch fixture exhausting the
+    retry budget reports `retry_exhausted`; neither retries unboundedly. Both
+    outcomes surface in logs and metrics, while terminal `retry_exhausted`
+    emits an alert.
+  - **Shutdown.** Fixtures interrupting a worker before creation and after a
+    creation whose outcome is unknown. Neither deletes nor duplicates an effect:
+    the lease is released or left to expire, `shutdown_aborted` is emitted with
+    the phase reached, and the next sweep reconciles the key before retrying,
+    ending with exactly one effect.
+  - **Terminal accounting.** `reconciliation_required` remains a non-terminal
+    state. Every completed actuator attempt emits exactly one terminal outcome
+    from the Section 2.1.2 vocabulary; logs and metrics never contain secret
+    values.
+  - **CV-003 partial store failure.** A fixture where the first secret store
+    succeeds and the second fails is partial completion, not one atomic
+    failure: reconciliation re-reads both Actions and Dependabot stores, and
+    replay converges both to the intended state before retrying or recovering
+    only the missing or failed store. Each attempt has one valid terminal
+    outcome, and secret values never appear in logs, process arguments, or
+    temporary files.
+  - Sequential repeat-sweep tests are retained, but do not stand alone as the
+    idempotency proof: a sequential pass cannot observe the interleaving that
+    check-before-create fails to exclude.
+- [ ] Add the required `github-api` actuator state-machine property test
+  (design document Section 3.1.4), in addition to the named fixtures above.
+  Hypothesis (or an equivalent property framework) generates interleavings of
+  at least two workers for one key across comments, tracking issues, and branch
+  annotations as applicable, including retries, lease expiry, conditional
+  claims, lost responses, partial failures, reconciliation failures, shutdown,
+  and a stale worker releasing after another worker conditionally claims the
+  expired lease. Acceptance requires the reference-model invariants and oracle
+  comparison for effects and create/`PUT` call counts scoped by deduplication
+  key and effect type, with a target-store dimension for CV-003; lease/fencing;
+  retries and budget; terminal outcome; and logs, metrics, alerts, trace
+  attributes, structured error payloads, and recorded snapshots after every
+  operation. The oracle rejects the stale release, preserves the successor's
+  lease and fencing, and verifies that the stale worker creates no effect. It
+  also requires secret values to be absent from every observable channel. A
+  fixed Hypothesis seed is printed on CI failure, and the failing sequence is
+  reproducible through the normal test framework. For CV-003, generated
+  operations also include concurrent and replayed Actions and Dependabot secret
+  `PUT` interleavings. The property test requires independent per-store
+  convergence, including first-store-success/second-store-failure partial
+  completion and recovery, makes no lease or single-winner assumption for
+  `PUT`, and asserts exactly one terminal outcome per attempt plus secret-safe
+  logs, metrics, alerts, trace attributes, structured error payloads, and
+  recorded snapshots.
+- [ ] Ship the remaining lint-gate binding rule packages (QG-002, QG-003):
+  workflow sensors for the hardened pinned-release install step (version-keyed
+  cache, shell-variable indirection, `--locked`, binstall-or-build fallback,
+  Cranelift preservation), and a rolling-release detector with a suite-ref-pin
+  mutation. QG-001 already ships as `rust-makefile-baseline`, whose doctrine
+  treats the gate variable's `?=` assignment as the sanctioned estate pattern
+  rather than a finding. Acceptance: fixtures reproducing the remaining
+  Whitaker rollout defects (git-rev install with a stale cache key, a
+  rolling-release pin) each raise the intended finding, and the mutations
+  produce the canonical forms.
+- [ ] Ship the test-runner completeness rule package (QG-004): sensors for
+  nextest-only suites lacking a doctest target, unlocked test-tool installs,
+  and missing `TEST_CMD` fallback; mutations patch the Makefile with
+  `TEST_CMD`, a `test-doc` target, and aggregate wiring. Acceptance: a fixture
+  whose doctests are never executed is detected, and the mutated Makefile runs
+  doctests under `make test`.
+- [ ] Ship the coverage-pipeline rule packages (CV-001, CV-002, CV-004):
+  pull-request jobs must gate via `cs-coverage check` with `fetch-depth: 0`, a
+  `project-url`, and `*.info` LCOV naming; a main-only push workflow must
+  upload; exactly one ratcheting invocation per job with the baseline written
+  on main. Acceptance: fixtures for upload-from-PR, missing main workflow,
+  summary-only pins, and PR-scoped baselines each raise findings; mutations
+  emit the canonical coverage-main workflow and job patches.
+- [ ] Implement the dual-store secret sensor (CV-003) in the Auditor:
+  enumerate secret names in the Actions and Dependabot stores via the GitHub
+  API and cross-reference every `if: env.X != ''` workflow guard. Acceptance: a
+  repository whose guard secret exists in only one store is reported with the
+  absent store named; `concordat` gains a provisioning command that sets an
+  operator-supplied token in both stores. The provisioning command sources the
+  token from a secret store and never persists or logs it. Recovery and replay
+  cover first-store success followed by second-store failure by re-reading both
+  Actions and Dependabot stores, converging each to the intended state, and
+  retrying or recovering only the missing or failed store. The acceptance test
+  asserts the token appears in no log line, process argument, or temporary file.
+- [ ] Implement the automerge-jam and workflow-health sensors (AM-001,
+  AM-002) as scheduled Auditor sweeps: Dependabot pull requests `BLOCKED`
+  specifically by a stale or timed-out required status check (with all other
+  merge requirements satisfied), and workflows whose recent runs uniformly
+  conclude `startup_failure`. Acceptance: the AM-001 sensor classifies the
+  block cause and comments `@dependabot rebase` only on stale-check jams,
+  leaving a fixture blocked by a missing approval untouched; the AM-002
+  actuator opens a tracking issue; and a second sweep over the same fixture
+  posts no duplicate `@dependabot rebase` comment and opens no duplicate
+  tracking issue, and — a case that a sequential re-run cannot reach — two
+  concurrent sweeps over the same fixture also yield exactly one comment and
+  one issue, the losers reporting `duplicate_suppressed`, via the single-flight
+  lease keyed on the pull-request head and the workflow ID.
+- [ ] Implement the dependency-pin actionability sensors (DP-001, DP-002):
+  cross-reference open Dependabot alerts' first patched versions against
+  manifest requirements, and detect git-revision pins lacking a
+  `TODO(<issue-url>)` resolving to an open issue. Acceptance: a fixture
+  manifest pinning below a patched version raises DP-001 with the blocked alert
+  numbers, and the DP-001 actuator opens exactly one migration issue per
+  blocked alert, keyed by the stable alert key and protected by the alert-keyed
+  single-flight lease. The DP-002 actuator inserts the `TODO` annotation
+  through the comment-preserving TOML remediation provider and opens exactly
+  one tracking issue per git-revision dependency, keyed by that stable
+  git-revision key; the annotation is deduplicated by the remediation-branch
+  ref using the same key. Sequential repeat sweeps leave exactly one migration
+  issue, tracking issue, and `TODO` annotation for each corresponding key.
+  Concurrent repeat sweeps produce the same exact-one counts: one migration
+  issue per alert, one tracking issue per git-revision dependency, and one
+  `TODO` annotation per git revision. Migration issues remain protected by the
+  alert-keyed lease, and `TODO` annotations remain deduplicated by the
+  git-revision remediation-branch ref.
+- [ ] Ship the Dependabot governance rule packages (DB-001 to DB-004):
+  manifest-scan sensor diffing package roots against `dependabot.yml` entries,
+  cooldown policy checks (tiered for semver ecosystems, `default-days` for
+  non-semver), pinned shared auto-merge workflow verification, and detection of
+  lockfile-wide audit steps gating Dependabot pull requests paired with a
+  scheduled-audit presence check. Acceptance: fixtures reproducing the estate
+  defects (uncovered workspace member, deadlocking audit gate) raise findings,
+  and mutations patch `dependabot.yml` and deploy the canonical workflows.
+  Fixtures whose auto-merge or scheduled-audit workflow references the shared
+  workflow by a branch (e.g., `@main`) or a mutable tag (e.g., `@latest`) are
+  flagged non-compliant; a commit SHA passes, and a tag passes only when an
+  immutable-tag mechanism is explicitly verified. Semantic-version and
+  major-version tags do not pass automatically.
+- [ ] Ship the mutation-testing rule package (MT-001): sensors for the
+  scheduled workflow calling the pinned shared mutation-testing workflow
+  without being merge-blocking; the mutation deploys the canonical workflow.
+  Acceptance: a repository without mutation testing raises the finding and the
+  deployed workflow passes `act` validation. Fixtures pinning the shared
+  mutation-testing workflow to a branch or mutable tag raise the finding; a
+  commit SHA passes, and a tag passes only when an immutable-tag mechanism is
+  explicitly verified. Semantic-version and major-version tags do not pass
+  automatically.
+
+### 4.3. Enforce licensing integrity and toolchain baselines
+
+Deliver the Licensing Integrity and Toolchain Baseline audit domains (design
+document Sections 3.1.2 and 3.1.3): licence presence, currency, and
+declared-licence consistency for every repository, and language toolchain
+floors pinned to the `leynos/agent-template-python` and
+`leynos/agent-template-rust` templates. Each check ships as a lint rule package
+under `canon/lint-rules/` per the Section 2.1.2 format.
+
+- [ ] Ship the licensing rule packages (LC-001 to LC-003): root `LICENSE`
+  presence, copyright year matched against the latest commit's committer year,
+  and SPDX identity of each `LICENSE` cross-referenced against manifest and
+  README declarations under the nearest-ancestor rule. Acceptance: fixtures for
+  a missing `LICENSE`, a stale year range, and a manifest declaring a different
+  licence from its governing `LICENSE` each raise the intended finding; the
+  LC-002 mutation extends the year range, and LC-001 degrades to a tracking
+  issue when no manifest names a licence. The LC-002 year comparator and the
+  LC-003 nearest-ancestor resolver carry Hypothesis property tests for the
+  invariants in Section 3.1.4 (totality and monotonicity of resolution, LC-002
+  mutation idempotence), with mutmut confirming the properties bite.
+- [ ] Build the Python applicability sensor and vendor the
+  `agent-template-python` baseline: enumerate `*.py` files, `pyproject.toml`
+  manifests, Python-invoking workflow steps, and Ansible plugin directories;
+  extract the template's ruff and pylint baselines at a pinned tag into
+  rule-package data. Acceptance: fixtures modelling incidental Python (a Rust
+  repository with helper scripts, a Python-implemented GitHub Action, an
+  Ansible collection) are all detected as in scope, and the vendored baseline
+  regenerates deterministically from the pinned tag.
+- [ ] Ship the Python formatting and linting rule packages (PY-001 to
+  PY-005): ruff format and check wiring bound into the format and lint gates,
+  pylint present via `pylint-pypy-shim`, and both configurations matching or
+  exceeding the vendored template baseline. Acceptance: fixtures with a missing
+  format target, a soft-skipped lint step, a disabled template rule, and an
+  over-broad ignore list each raise findings; mutations patch the configuration
+  without disturbing comments.
+- [ ] Ship the Python documentation, version-floor, and tooling rule packages
+  (PY-006 to PY-010): interrogate at `fail-under = 100`, a `requires-python`
+  floor of at least 3.12, version declarations reconciled against that floor
+  (scalar declarations equal the floor; every matrix entry sits at or above the
+  floor, which need not itself appear), and pytest-xdist and ty wiring with the
+  exemption path honoured. Acceptance: a fixture declaring 3.11 in CI against a
+  3.12 manifest floor raises PY-008 naming the divergent file, while fixtures
+  whose CI matrix tests 3.12 and 3.13, and whose matrix begins at 3.13, both
+  raise nothing against a `requires-python >=3.12` floor; an exempted fixture
+  downgrades PY-009 to `note`. The PY-008 version-reconciliation comparator
+  carries Hypothesis property tests for the floor and matrix invariants of
+  Section 3.1.4 (including the metamorphic relations: a version above the floor
+  never becomes a finding, a version below it always does).
+- [ ] Ship the Rust formatting and linting rule packages (RT-001 to RT-005):
+  rustfmt wiring and template-matched configuration, clippy presence with
+  `[lints]` entries at the template level or stricter, and Whitaker presence
+  delegating gate bindingness to `rust-makefile-baseline`. Acceptance: fixtures
+  with drifted `rustfmt.toml` keys and a downgraded `[lints]` entry each raise
+  findings; mutations restore the canonical values comment-preservingly.
+- [ ] Ship the Rust toolchain and acceleration rule packages (RT-006 to
+  RT-011): nightly pins no older than one year, required toolchain components,
+  mold and Cranelift development configuration, Polonius-next for
+  application-only repositories, and nextest via the canonical `TEST_CMD`
+  fallback. Acceptance: fixtures for a stale nightly, a missing `rust-analyzer`
+  component, and a binary-only crate without Polonius-next each raise findings;
+  RT-006 opens a tracking issue rather than patching the pin, and the RT-011
+  mutation reuses the QG-004 Makefile patch. The RT-006 nightly-age comparator
+  carries a Hypothesis property test asserting the one-year boundary of Section
+  3.1.4.

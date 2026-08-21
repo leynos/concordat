@@ -137,8 +137,11 @@ Two reusable modules extend `platform-standards/tofu`:
    `tofu apply` performs upserts for missing options.
 
 Both modules execute in the standard OpenTofu runner and respect the apply
-workflow already defined in the design: nightly plans surface drift; a manual
-`workflow_dispatch` runs `tofu apply` after review.
+workflow already defined in the design: nightly plans surface drift via a
+read-only `tofu plan -detailed-exitcode` run (exit status `2` on a successful
+plan indicates drift; exit status `1` indicates plan execution failure and is
+treated as an error, not drift); a manual `workflow_dispatch` runs `tofu apply`
+after review.
 
 ### 2.4 Sync workflow between labels and Projects
 
@@ -155,9 +158,11 @@ synchronization:
 - Resolves legacy labels listed in `aliases` by swapping them for the canonical
   key.
 
-Target repositories include a thin caller workflow pinning to a tagged version
-of the reusable definition. Authentication uses a repository-scoped Personal
-Access Token with `issues:write`, and `projects:write` permissions.
+Target repositories include a thin caller workflow referencing the reusable
+definition via an immutable commit SHA or an explicitly verified immutable-tag
+mechanism. Branches and unverified tags are non-compliant. Authentication uses
+a repository-scoped Personal Access Token with `issues:write`, and
+`projects:write` permissions.
 
 ### 2.5 Auditor enforcement and rulesets
 
@@ -220,8 +225,8 @@ false-positive rate is acceptable. Exemptions use the existing
   state changes to IaC.
 
 See [`docs/developers-guide.md`](developers-guide.md) for the CLI's internal
-module boundaries — XDG layout, credential resolution, the cache/execution
-API split, and the rule-run and Parabellum sweep contracts.
+module boundaries — XDG layout, credential resolution, the cache/execution API
+split, and the rule-run and Parabellum sweep contracts.
 
 ### 2.7 Estate execution workflow
 
@@ -447,10 +452,10 @@ provider reuses the AWS env var contract. The design deliberately omits
 `encrypt = true` because Terraform's backend sends an AES256 (SSE-S3) header
 with that flag, and neither Scaleway nor DigitalOcean Spaces accepts it.
 Scaleway also offers SSE-ONE and SSE-KMS in addition to SSE-C, but bucket
-encryption for Scaleway is configured separately rather than through
-Terraform's `encrypt` flag. At-rest encryption therefore remains a caller
-concern (for example, by configuring bucket-side encryption directly,
-keeping secrets out of state, or using client-side encryption).
+encryption for Scaleway is configured separately rather than through Terraform's
+`encrypt` flag. At-rest encryption therefore remains a caller concern (for
+example, by configuring bucket-side encryption directly, keeping secrets out of
+state, or using client-side encryption).
 
 Every persistence descriptor ships alongside a YAML manifest
 (`platform-standards/tofu/backend/persistence.yaml`) storing a schema version,
@@ -476,11 +481,12 @@ optional keys (such as `notification_topic`) as unset values. Section 2.8.4
 details the alerting and disaster-recovery flows that consume these attributes.
 
 Every backend bucket—AWS, DigitalOcean, or Scaleway—must enable versioning
-before the CLI writes any state. The command performs a `HeadBucket`+
-`GetBucketVersioning` check via boto3, emits a blocking error if versioning is
-disabled, and surfaces a warning (not an error) when Object Lock is absent.
-Object Lock (the WORM/immutability feature) hardens retention but is orthogonal
-to Terraform's `.tflock` mutexes.
+before the CLI writes any state. The command calls `GetBucketVersioning` via
+boto3 and raises a blocking error if versioning is disabled, then verifies
+write access with a temporary `put_object`/`delete_object` probe against the
+bucket. Object Lock (the write-once-read-many immutability feature) hardens
+retention but is orthogonal to Terraform's `.tflock` mutexes and is left to
+operator discretion; the CLI does not inspect it.
 
 #### 2.8.2 `estate persist` interactive workflow
 
@@ -876,11 +882,85 @@ available to detect local edits that preserve the SemVer value.
 
 A “lint rule” in Concordat is a sensor plus mutation logic:
 
-- sensor: an OpenTofu/Conftest (Open Policy Agent, OPA) evaluation over
-  structured inputs,
+- sensor: the detector that decides compliance. Two sensor types exist:
+  - `conftest`: an OpenTofu/Conftest (Open Policy Agent, OPA) evaluation over
+    structured inputs (the format the spike implemented), and
+  - `github-api`: a pure evaluation over an injected or local snapshot of
+    GitHub state. It never reads credentials or makes network calls. Some
+    quality-gate checks (for example the dual-store secret check CV-003, the
+    automerge and workflow-health sweeps AM-001 and AM-002, and the
+    dependency-pin actionability checks DP-001 and DP-002) cannot be expressed
+    as Conftest over a static input tree because their snapshots contain live
+    repository state — secret-store listings, pull-request merge-state,
+    ruleset contexts, and security alerts — that no checkout contains. The
+    separate `rule acquire` command or service obtains those snapshots.
 - configuration: parameters that allow the same rule logic to be reused with
   different baselines, and
-- mutation: deterministic edits that bring the target into compliance.
+- mutation (actuator): the remediation. Two actuator types exist:
+  - deterministic edits (`file-copy`, comment-preserving TOML patches) that
+    bring a checkout into compliance, and
+  - `github-api` actuators that perform an authenticated side effect the
+    Auditor cannot express as a repository edit — posting a comment (for
+    example `@dependabot rebase`), opening or updating a tracking issue, or
+    provisioning a secret.
+
+The `conftest` sensor with deterministic-edit mutations is the format the
+canonical-artefact spike implemented and validated; the `github-api` sensor and
+actuator types are a required extension of the package contract, specified here
+so that snapshot-based `rule run` and `rule mutate` have a defined execution
+path for the API-backed checks. Their delivery is sequenced ahead of those
+check packages in the roadmap (Section 4.2).
+
+Every `github-api` sensor must satisfy an operational contract:
+
+- accepts only an injected or local snapshot and performs pure finding
+  reduction; it never reads credentials or makes network calls;
+
+The separate `rule acquire` command or service must:
+
+- use the least-privilege, read-only Auditor credential (per the permissions
+  model, Section 8.1), kept separate from actuator execution credentials;
+- source credentials only from a configured secret store or a securely
+  injected environment variable, never from a command-line argument,
+  committed/backend file, or log;
+- sets a request timeout on every API call and retries transient failures with
+  exponential backoff (Section 8.2);
+- report an operational failure instead of producing a partial snapshot when
+  acquisition cannot complete.
+
+Every `github-api` actuator must:
+
+- run with its least-privilege operation-specific token scope;
+- source credentials only from a configured secret store or a securely
+  injected environment variable, never from a command-line argument,
+  committed/backend file, or log, and never persist or log a token or secret
+  value (redaction per Section 3.2.2);
+- defines a stable deduplication key (derived from the target entity and the
+  action — for example the pull-request head plus the comment intent, or the
+  alert number plus the issue kind), embeds that key in the effect it creates,
+  and serializes each non-idempotent `POST` behind the atomic boundary
+  specified below, so that at most one external effect exists for each
+  `(deduplication key, effect type)` pair even when sweeps overlap.
+  Server-idempotent `PUT` effects are additionally scoped to their target store
+  and may be replayed as upserts. A check followed by a create is not atomic
+  and does not, on its own, prevent duplicates; the boundary, not the check, is
+  what makes the actuator safe.
+
+The operation credential contract is deliberately explicit:
+
+| Operation                         | Credential and permitted scope                                               |
+| --------------------------------- | ---------------------------------------------------------------------------- |
+| Auditor snapshot acquisition      | Separate read-only Auditor token; read-only repository/API access.           |
+| Comments and tracking issues      | Actuator token with `issues:write` or `pull-requests:write`, as appropriate. |
+| Git-ref leases and branch effects | Separate actuator token with `contents:write`.                               |
+| Secret provisioning               | Separately scoped actuator token for the selected secret store.              |
+
+Before a sweep starts, a preflight permission check rejects credentials that
+are insufficient for their operation or broader than its permitted scope.
+Credentials may come only from configured secret stores or securely injected
+environment variables. They must never be supplied as CLI arguments, stored in
+committed or backend files, or written to logs. Secret **values** remain
+excluded from snapshots, logs, metrics, traces, and error payloads.
 
 To support this, each lint rule should be packaged as a directory:
 
@@ -927,9 +1007,179 @@ mutations:
 In this model:
 
 - `version` is the SemVer version of the rule package.
+- `sensor.type` selects the detector (`conftest` or `github-api`).
 - `parameters` defines the configuration surface area and defaults.
-- `mutations` defines deterministic actions that can be executed by
-  remediation tooling.
+- `mutations` defines the actuator entries executed by remediation tooling;
+  each entry's `type` selects a deterministic edit (for example `file-copy`) or
+  a `github-api` side effect (for example `comment` or `issue`).
+
+##### Concurrency and idempotency for `github-api` actuators
+
+Auditor sweeps overlap. A scheduled run, a manual `workflow_dispatch`, and a
+re-run of a timed-out job can all be in flight against one repository at once,
+and nothing in GitHub Actions prevents it. Reading "does this comment already
+exist?" and then posting it is two API calls with a window between them, so two
+sweeps can both observe absence and both create. **Check-before-create is
+therefore necessary but not sufficient**, and no actuator may rely on it alone.
+
+Every `github-api` actuator instead creates its effect behind exactly one
+atomic boundary, chosen by whether the underlying GitHub operation is already
+idempotent.
+
+###### Atomic boundary per `github-api` effect type
+
+| **Effect**                               | **Checks**                              | **GitHub operation**                                                                         | **Atomic boundary**                                                                                                                                                                       |
+| ---------------------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Secret provisioning (per store)          | CV-003                                  | `PUT /repos/{owner}/{repo}/actions/secrets/{name}` or the equivalent Dependabot secret `PUT` | **Server-side per store.** Each `PUT` is an upsert: repeating it converges that store on the same state, so no coordination is required for that individual operation.                    |
+| Repository edit via a remediation branch | DP-002, `file-copy` mutations           | `POST /repos/{owner}/{repo}/git/refs`                                                        | **Server-side.** Creating a ref is create-if-absent: the second caller receives `409 Conflict`. The branch name derives from the deduplication key, so the ref *is* the mutual exclusion. |
+| Pull-request comment                     | AM-001                                  | `POST /repos/{owner}/{repo}/issues/{number}/comments`                                        | **Single-flight lease.** The REST API accepts no idempotency key and `POST` is not idempotent.                                                                                            |
+| Tracking issue                           | AM-002, DP-001, LC-001, CV-003 fallback | `POST /repos/{owner}/{repo}/issues`                                                          | **Single-flight lease.** As above.                                                                                                                                                        |
+
+Prefer the server-side boundary wherever the operation supports one; reach for
+a lease only for the `POST` effects that have none.
+
+CV-003 is composite orchestration, not one atomic effect. The Actions and
+Dependabot secret-store `PUT` operations are independently idempotent. If the
+first store succeeds and the other store fails, the result is partial
+completion: reconciliation re-reads both stores, and replay converges each
+store to the desired state. Retry or recovery then targets only the missing or
+failed store; it does not pretend that the composite was atomic or overwrite
+the secret that already succeeded.
+
+###### The single-flight lease
+
+The lease needs a durable store that every sweep can reach and that supports
+atomic creation and a conditional claim. GitHub itself provides the initial
+acquisition boundary, so a git ref can remain the lease's initial acquisition:
+`POST /git/refs` returns `409 Conflict` if the ref already exists. GitHub's ref
+update API does not provide an expected-old-SHA predicate for expiry takeover;
+`force: false` only prevents non-fast-forward updates. A git ref therefore
+cannot implement lease takeover by itself. A `422` is validation or abuse
+handling and is an error, never a duplicate-suppression signal.
+
+- **Scope.** One lease per `(repository, check ID, deduplication key)`, named
+  `refs/concordat/leases/<check-id>/<sha256(deduplication-key)>` in the target
+  repository. Hashing keeps the ref name valid whatever the key contains.
+- **Owner identity.** The commit the ref points at records the holder: run ID,
+  run attempt, workflow, job, and acquisition timestamp. A stale lease is then
+  attributable to the run that abandoned it.
+- **Acquisition.** `POST /git/refs`. A `201` acquires the lease; a `409`
+  means another worker holds it, and the losing worker does not create the
+  effect. It instead reconciles (below) and reports duplicate suppression. A
+  `422` is a validation or abuse error and fails the attempt.
+- **Expiry and fencing.** The lease commit carries an expiry (the sweep's
+  per-effect deadline plus a margin). A worker that finds an unexpired lease
+  yields. A worker that finds an **expired** lease may take it over only
+  through an atomic conditional lease-claim operation supplied by the lease
+  store or an effect-side serialization mechanism. The operation validates the
+  expected current lease version/SHA, then commits the new owner and fencing
+  token atomically; a competing claim fails that conditional validation. The
+  resulting lease version or committed lease SHA is the fencing token.
+- **Ordering.** The final existence check and every non-server-idempotent
+  create, including a permitted retry, MUST be inside the same atomic fencing
+  boundary. A final git-ref read alone is insufficient: a stale worker can be
+  delayed after that read and create after its lease is taken over. The worker
+  must hold a valid lease and fencing token through the full create attempt and
+  any permitted retry. A stale worker that loses the fenced claim cannot
+  create. Where no conditional lease-claim operation is available, the actuator
+  must use server-side idempotency or effect-side serialization; it must not
+  automatically create through an expired or taken-over lease without that
+  protection. Acquire → final re-check → fenced create → reconcile/record
+  outcome → release.
+- **Release.** Once a terminal outcome is recorded, only the current fenced
+  lease owner may release the lease, using the same conditional claim/release
+  mechanism to validate the current lease version/SHA. A stale worker must
+  leave a successor's lease untouched. A worker that dies without releasing
+  leaves a lease that expires; expiry only permits a later conditional claim,
+  and never deletes or duplicates an effect that already exists.
+
+Only one actuator execution may create an effect for a given deduplication key.
+Every other execution reports duplicate suppression or reconciliation.
+
+###### Discoverability of the deduplication key
+
+Reconciliation only works if a created effect can be recognized later, so every
+actuator embeds its deduplication key in the artefact it creates: comments and
+issue bodies carry a marker comment (`<!-- concordat:key=<key> -->`), branches
+encode it in the ref name, and secrets in the secret name. The marker is what a
+subsequent sweep queries; an effect that cannot be found by key cannot be
+deduplicated.
+
+###### Retry, unknown outcomes, and partial failure
+
+- **Pre-dispatch timeout or connection failure.** When the client knows the
+  request was not dispatched, the failure is a known transient and is directly
+  retryable within the existing attempt and time budgets. Other retryable
+  failures are `429` (honouring `Retry-After`) and a known no-dispatch transient
+  `5xx` (`500`, `502`, `503`, `504`). Retries use bounded exponential backoff
+  with full jitter — base 1 s, cap 30 s, at most 5 attempts and a total
+  per-effect budget of 2 minutes.
+- **Not retryable:** every other `4xx`. `401`/`403` indicate a scope or
+  permission defect and `422` a validation or abuse error; retrying cannot fix
+  either, so both fail fast. A `409` is duplicate contention only at the
+  create-if-absent ref or conditional lease-claim boundary.
+- **Post-dispatch `5xx`.** A `5xx` received after a non-idempotent `POST` was
+  dispatched is an unknown outcome, like a lost response. Reconcile the
+  embedded key before any retry; retry only when authoritative reconciliation
+  confirms absence and budget remains. A `5xx` known not to have been
+  dispatched is a known transient and may retry directly.
+- **Post-dispatch timeout or connection failure.** If dispatch occurred before
+  a timeout or connection loss, the outcome is unknown. Mark the operation
+  `reconciliation_required`, reconcile the embedded key before any retry, and
+  retry only when authoritative reconciliation confirms absence and budget
+  remains. If dispatch state cannot be established, treat the failure as
+  post-dispatch and follow this path.
+- **Unknown outcome.** A create whose response is lost — a timeout, dropped
+  connection, or post-dispatch `5xx` — has an *unknown* outcome, not a failed
+  one, when the request may have been dispatched. The server may have created
+  the effect. Mark the operation `reconciliation_required` and do not retry
+  blindly.
+- **Reconciliation.** After an unknown outcome the actuator queries the
+  authoritative create target (the pull request's comments, the repository's
+  issues, the refs list) filtered by the embedded deduplication key. If the
+  effect is found, the operation is complete and **no second create is
+  issued**. If it is absent, one retry is permitted within the remaining budget.
+- **Partial failure before the create.** A failure after acquiring the lease
+  but before the create leaves no effect: release the lease, record the
+  outcome, and let the next sweep retry from the start.
+- **Partial failure after the create.** Treat as an unknown outcome: mark
+  `reconciliation_required`, reconcile first, then release. If reconciliation
+  itself fails, release the lease and record `reconcile_failed`; the next sweep
+  reconciles again before retrying, which is safe because the key is embedded
+  in any effect that was created.
+
+`retry_exhausted` is reserved for known no-dispatch transient failures and
+known retryable `429`/`5xx` responses whose retry budget is exhausted. An
+unknown post-dispatch outcome is never converted into `retry_exhausted` merely
+because its budget ran out; it remains reconciliation-required or
+`reconcile_failed`.
+
+Each attempt ends in exactly one terminal outcome, emitted as both a structured
+log line and a metric (Section 3.2.2), and carrying the check ID and the
+deduplication key but never a secret value: `created`, `duplicate_suppressed`,
+`reconciled_existing`, `retry_exhausted`, `reconcile_failed`, or
+`shutdown_aborted`.
+
+###### Shutdown
+
+Sweeps are cancellable — a workflow can be cancelled, a runner reclaimed — so
+shutdown is a normal path, not an exception.
+
+- On shutdown the sweep stops accepting new actuator work immediately.
+- In-flight actuators run to a terminal outcome until a documented grace
+  deadline (30 seconds), sufficient to finish a create already in flight or to
+  reconcile an unknown outcome.
+- Work still incomplete at the deadline is abandoned without deleting or
+  duplicating any effect. Its lease is released if the outcome is known to be
+  "nothing created", and otherwise left to expire, since expiry is safe and
+  deletion is not.
+- The next sweep reconciles the deduplication key before retrying, so an
+  effect created just before shutdown is discovered rather than duplicated.
+- Abandoned work emits `shutdown_aborted` with the check ID, deduplication key,
+  and the phase reached (`before_create` or `unknown_outcome`), increments the
+  corresponding metric, and — because an unknown outcome that never reconciled
+  is the one state a human may need to inspect — raises an alert when
+  `shutdown_aborted{phase="unknown_outcome"}` is non-zero over a sweep interval.
 
 ##### Expected use cases and workflows
 
@@ -1095,7 +1345,8 @@ concordat artefact rule config show <rule-id> --estate <alias>
 concordat artefact rule config set <rule-id> <key>=<value> --estate <alias>
 concordat artefact rule config reset <rule-id> [<key>...] --estate <alias>
 
-concordat artefact rule run <rule-id> --repo <path>
+concordat artefact rule acquire <rule-id> --repo <path> --snapshot <path>
+concordat artefact rule run <rule-id> --repo <path> [--snapshot <path>]
 concordat artefact rule mutate <rule-id> --repo <path>
 ```
 
@@ -1106,8 +1357,13 @@ Expected behaviour:
   rule policy tests (where present).
 - `rule config` operates on estate configuration and supports a “defaults plus
   overrides” model.
+- `rule acquire` is the explicit, fallible live GitHub acquisition step. It
+  uses the read-only Auditor credential to write the requested snapshot and
+  reports operational failure without invoking `rule run`.
 - `rule run` evaluates the sensor for a target repository and produces findings
-  without changes.
+  without changes. For a `github-api` rule, the runner supplies an injected or
+  local snapshot (including replay input); the command makes no network calls,
+  even when credentials are present.
 - `rule mutate` produces deterministic edits (patches) for remediation tooling.
 
 ##### Output formats
@@ -1134,17 +1390,16 @@ Commands must return stable exit codes for CI integration.
 | 4         | Mutations planned or applied failed (patch application or policy errors) |
 
 Table 3 is a proposal for the general `artefact` command family and does not
-describe what ships today. The one `artefact` subcommand that is
-implemented, `concordat artefact rule run`, ships a narrower, already-fixed
-scheme instead:
+describe what ships today. The one `artefact` subcommand that is implemented,
+`concordat artefact rule run`, ships a narrower, already-fixed scheme instead:
 
 - `0` — compliant.
 - `1` — policy findings, including `indeterminate` (which fails closed).
 - `2` — operational failure.
 
-See [`docs/developers-guide.md`, "Verdicts and exit
-codes"](developers-guide.md#verdicts-and-exit-codes) for the mapping from
-verdict to exit code.
+See
+[`docs/developers-guide.md`, "Verdicts and exit codes"](developers-guide.md#verdicts-and-exit-codes)
+for the mapping from verdict to exit code.
 
 ##### Configuration and locking
 
@@ -1361,8 +1616,8 @@ declared, the invocation must be qualified to a surface — either a
 `cd <dir> &&` prefix or a `--manifest-path <path>` flag — and QG-001 requires
 every declared surface's gate to be reachable from `lint`.
 
-`make -C <dir>` is indeterminate in every role, both as a reachability edge
-and as a surface qualifier. The two qualifiers above keep the gate invocation
+`make -C <dir>` is indeterminate in every role, both as a reachability edge and
+as a surface qualifier. The two qualifiers above keep the gate invocation
 inside the file being parsed, so it remains a fact; `-C` instead delegates to a
 Makefile this rule never reads, and accepting it would assert a gate that has
 not been observed. Treating it as proof would need the envelope to carry the
@@ -1470,6 +1725,28 @@ The primary audit domains are:
    Foundation Scorecard tool. The numeric score and specific findings from
    Scorecard are incorporated into the Auditor's overall report, providing a
    consistent, organization-wide security baseline.
+6. **Quality-Gate Integrity:** Verifies that the quality gates a repository
+   claims to run actually execute and bind: lint suites that cannot be silently
+   skipped, coverage pipelines that reach their consumers, test runners that
+   execute every test class (including doctests), automerge machinery that
+   cannot jam on stale third-party checks, and dependency pins that stay
+   actionable. The checks in this domain were distilled from the 2026 Whitaker
+   lint, CodeScene coverage, Dependabot auto-merge, and mutation-testing estate
+   rollouts, where each defect class below was observed in production
+   repositories.
+7. **Licensing Integrity:** Verifies that every repository carries a
+   `LICENSE` file at its root, that the copyright year tracks the most recent
+   commit, and that licence declarations in manifests and the README agree with
+   the `LICENSE` text that governs them (the file at the same level, or the
+   nearest ancestor).
+8. **Toolchain Baseline:** Verifies that each language's formatting,
+   linting, documentation-coverage, typechecking, and test-runner tooling is
+   present and configured at least as strictly as the estate templates
+   (`leynos/agent-template-python` and `leynos/agent-template-rust`). The
+   domain applies wherever the language appears, including incidental use:
+   helper scripts inside a Rust repository, GitHub Actions implemented in
+   Python, and Ansible modules all bring a repository into scope for the Python
+   checks.
 
 The following table serves as the master list of requirements for the Auditor.
 It defines the scope of work for implementation, and provides an itemized
@@ -1490,12 +1767,502 @@ breakdown of what constitutes "compliance" within the framework.
 | CI-003       | Workflows must not use disallowed third-party GitHub Actions.                                                                                                                                                                                                                                                                                                                      | CI/CD Integrity                 | OPA/Conftest                                       | error                | 2                        |
 | FP-001       | A `.editorconfig` file must exist and match the canonical version.                                                                                                                                                                                                                                                                                                                 | File and Content Presence       | Python/Checksum                                    | error                | 1                        |
 | FP-002       | An `AGENTS.md` file must exist and contain required sections.                                                                                                                                                                                                                                                                                                                      | File and Content Presence       | Python/Content Check                               | error                | 1                        |
-| FP-003       | A root `Makefile` must exist and contain canonical targets (`lint`, `test`, `build`).                                                                                                                                                                                                                                                                                              | File and Content Presence       | makeutil + OPA/Conftest (`rust-makefile-baseline`) | error                | 2                        |
-| FP-004       | For Python projects, a `ruff.toml` file must exist.                                                                                                                                                                                                                                                                                                                                | File and Content Presence       | OPA/Conftest                                       | error                | 1                        |
-| QG-001       | The `Makefile` lint gate must be binding: no ignore-errors or soft-skip lint recipes, and gate delegation provable within one prerequisite hop. The gate variable's `?=` assignment (`WHITAKER ?= whitaker`) is the sanctioned estate pattern and is not a finding. Unprovable constructs (includes, recovered parses, ambiguous `lint` definitions) fail closed as indeterminate. | Quality Gate Integrity          | makeutil + OPA/Conftest (`rust-makefile-baseline`) | error                | 2                        |
+| FP-003       | A `Makefile` must exist and contain canonical targets (`lint`, `test`, `build`).                                                                                                                                                                                                                                                                                                   | File, and Content Presence      | Python/Content Check                               | error                | 2                        |
+| FP-004       | For Python projects, a `ruff.toml` file must exist.                                                                                                                                                                                                                                                                                                                                | File, and Content Presence      | OPA/Conftest                                       | error                | 1                        |
+| QG-001       | The `Makefile` lint gate must be binding: no ignore-errors or soft-skip lint recipes, and gate delegation provable within one prerequisite hop. The gate variable's `?=` assignment (`WHITAKER ?= whitaker`) is the sanctioned estate pattern and is not a finding. Unprovable constructs (includes, recovered parses, ambiguous `lint` definitions) fail closed as indeterminate. | Quality-Gate Integrity          | makeutil + OPA/Conftest (`rust-makefile-baseline`) | error                | 2                        |
 | PD-001       | All Markdown files must pass Vale linting against the house style guide.                                                                                                                                                                                                                                                                                                           | Prose and Documentation Quality | Vale                                               | warning              | 2                        |
 | SP-001       | The Open Source Security Foundation Scorecard must achieve a minimum score of 7.0.                                                                                                                                                                                                                                                                                                 | Security Posture                | Open Source Security Foundation Scorecard          | warning              | 1                        |
 | LG-001       | The `docs/library-users-guide.md` file must match the canonical version from the consumed library tag.                                                                                                                                                                                                                                                                             | File and Content Presence       | Python/Content Check                               | error                | 4                        |
+| QG-002       | Lint tooling is installed from a pinned release via the hardened step: version-keyed cache, shell-variable indirection in `run:` blocks, `--locked`, binstall-or-build fallback, `--cranelift` preserved where the repository builds with Cranelift.                                                                                                                               | Quality-Gate Integrity          | OPA/Conftest                                       | error                | 4                        |
+| QG-003       | The lint suite itself is pinned (e.g. `whitaker-installer --ref <tag>`), not floating on a rolling release.                                                                                                                                                                                                                                                                        | Quality-Gate Integrity          | OPA/Conftest                                       | warning              | 4                        |
+| QG-004       | Test invocation uses the canonical `TEST_CMD` nextest fallback, test-tool installs pass `--locked`, and doctests are executed by a dedicated target (nextest does not run them).                                                                                                                                                                                                   | Quality-Gate Integrity          | OPA/Conftest + Makefile parse                      | warning              | 4                        |
+| CV-001       | The pull-request coverage job drives the CodeScene gate with `cs-coverage check` (`mode: check`, `project-url`, `fetch-depth: 0`, LCOV named `*.info`); `upload` is never attempted from pull requests.                                                                                                                                                                            | Quality-Gate Integrity          | OPA/Conftest                                       | error                | 4                        |
+| CV-002       | A push-to-main (and only main) workflow uploads coverage to CodeScene (`mode: upload`).                                                                                                                                                                                                                                                                                            | Quality-Gate Integrity          | OPA/Conftest + file presence                       | error                | 4                        |
+| CV-003       | Every secret referenced by a guarded workflow step exists in BOTH the Actions and Dependabot secret stores (guards silently skip when the secret is absent).                                                                                                                                                                                                                       | Quality-Gate Integrity          | Python/GitHub API                                  | error                | 4                        |
+| CV-004       | The coverage ratchet is enabled: exactly one ratcheting `generate-coverage` invocation per job, with the authoritative baseline written by the main-branch workflow.                                                                                                                                                                                                               | Quality-Gate Integrity          | OPA/Conftest                                       | warning              | 4                        |
+| AM-001       | No open Dependabot pull request is `BLOCKED` specifically because a stale or timed-out required status check is poisoning the rollup, with every other merge requirement (approvals, conversations, ruleset conditions) already satisfied.                                                                                                                                         | Quality-Gate Integrity          | Python/GitHub API                                  | warning              | 4                        |
+| AM-002       | No workflow's recent runs all conclude `startup_failure` (an unloadable workflow file failing silently on every trigger).                                                                                                                                                                                                                                                          | Quality-Gate Integrity          | Python/GitHub API                                  | error                | 4                        |
+| DP-001       | Open Dependabot security alerts are actionable: no manifest requirement pins a dependency below the first patched version of an open alert.                                                                                                                                                                                                                                        | Quality-Gate Integrity          | Python/GitHub API + manifest parse                 | error                | 4                        |
+| DP-002       | Git-revision dependency pins carry a `TODO(<issue-url>)` comment and an open tracking issue.                                                                                                                                                                                                                                                                                       | Quality-Gate Integrity          | OPA/Conftest + Python/GitHub API                   | warning              | 4                        |
+| DB-001       | `dependabot.yml` covers every package ecosystem and directory in the repository (each Cargo workspace member, Python project, and `github-actions`).                                                                                                                                                                                                                               | Quality-Gate Integrity          | Python/manifest scan                               | error                | 4                        |
+| DB-002       | Dependabot cooldown configuration matches estate policy: tiered cooldowns for semver ecosystems, `default-days` only for non-semver ecosystems.                                                                                                                                                                                                                                    | Quality-Gate Integrity          | OPA/Conftest                                       | warning              | 4                        |
+| DB-003       | Dependabot auto-merge is wired through the pinned shared reusable workflow with the prescribed `pull_request_target` permissions.                                                                                                                                                                                                                                                  | Quality-Gate Integrity          | OPA/Conftest                                       | warning              | 4                        |
+| DB-004       | Lockfile-wide dependency audits do not gate Dependabot pull requests, and a scheduled audit workflow exists to cover the gap.                                                                                                                                                                                                                                                      | Quality-Gate Integrity          | OPA/Conftest                                       | warning              | 4                        |
+| MT-001       | A scheduled mutation-testing workflow exists and calls the pinned shared mutation-testing workflow; mutation testing is scheduled, not merge-blocking.                                                                                                                                                                                                                             | Quality-Gate Integrity          | OPA/Conftest + file presence                       | warning              | 4                        |
+| LC-001       | A `LICENSE` file exists at the repository root.                                                                                                                                                                                                                                                                                                                                    | Licensing Integrity             | Python/file presence                               | error                | 4                        |
+| LC-002       | The `LICENSE` copyright year matches the year of the most recent commit.                                                                                                                                                                                                                                                                                                           | Licensing Integrity             | Python/git + content check                         | warning              | 4                        |
+| LC-003       | Licence declarations in manifests (`Cargo.toml`, `pyproject.toml`, `package.json`) and the README match the SPDX identity of the `LICENSE` file at the same level or the nearest ancestor level.                                                                                                                                                                                   | Licensing Integrity             | Python/SPDX match + manifest parse                 | error                | 4                        |
+| PY-001       | Python formatting is enforced by ruff: `ruff format` is wired into the format and format-check targets and runs in CI.                                                                                                                                                                                                                                                             | Toolchain Baseline              | OPA/Conftest + Makefile parse                      | error                | 4                        |
+| PY-002       | Ruff linting is present: a ruff configuration exists and `ruff check` runs in the lint gate.                                                                                                                                                                                                                                                                                       | Toolchain Baseline              | OPA/Conftest + Makefile parse                      | error                | 4                        |
+| PY-003       | Ruff lint standards match or exceed `leynos/agent-template-python`: the template's enabled rules are a subset of the repository's, and per-file ignores are no broader.                                                                                                                                                                                                            | Toolchain Baseline              | OPA/Conftest + TOML parse                          | error                | 4                        |
+| PY-004       | Pylint linting is present via `pylint-pypy-shim` and runs in the lint gate.                                                                                                                                                                                                                                                                                                        | Toolchain Baseline              | OPA/Conftest + Makefile parse                      | error                | 4                        |
+| PY-005       | Pylint standards match or exceed `leynos/agent-template-python`: every check the template enables is enabled, and the disable list is no broader.                                                                                                                                                                                                                                  | Toolchain Baseline              | OPA/Conftest + TOML parse                          | error                | 4                        |
+| PY-006       | Interrogate is present and requires 100 per cent documentation coverage (`fail-under = 100`).                                                                                                                                                                                                                                                                                      | Toolchain Baseline              | OPA/Conftest + TOML parse                          | error                | 4                        |
+| PY-007       | The minimum supported Python version is at least 3.12 (`requires-python = ">=3.12"`).                                                                                                                                                                                                                                                                                              | Toolchain Baseline              | OPA/Conftest + TOML parse                          | error                | 4                        |
+| PY-008       | The `requires-python` floor is honoured everywhere: scalar version declarations (scripts, tool `target-version`, README and guides) equal the floor, and every version-matrix entry (CI, `setup-python`) is at or above the floor — the floor itself need not appear in a matrix.                                                                                                  | Toolchain Baseline              | Python/multi-file scan                             | error                | 4                        |
+| PY-009       | pytest-xdist multiplexes the test suite unless the repository holds a recorded exemption.                                                                                                                                                                                                                                                                                          | Toolchain Baseline              | OPA/Conftest + TOML parse                          | warning              | 4                        |
+| PY-010       | ty performs typechecking unless the repository holds a recorded exemption.                                                                                                                                                                                                                                                                                                         | Toolchain Baseline              | OPA/Conftest + Makefile parse                      | error                | 4                        |
+| RT-001       | Rust formatting is enforced by rustfmt: format and format-check targets exist and run in CI.                                                                                                                                                                                                                                                                                       | Toolchain Baseline              | OPA/Conftest + Makefile parse                      | error                | 4                        |
+| RT-002       | The rustfmt configuration matches `leynos/agent-template-rust`.                                                                                                                                                                                                                                                                                                                    | Toolchain Baseline              | Python/Checksum + TOML parse                       | error                | 4                        |
+| RT-003       | Clippy linting is present and runs in the lint gate.                                                                                                                                                                                                                                                                                                                               | Toolchain Baseline              | OPA/Conftest + Makefile parse                      | error                | 4                        |
+| RT-004       | Clippy standards match or exceed `leynos/agent-template-rust`: every `[lints]` entry the template sets is present at the same or a stricter level.                                                                                                                                                                                                                                 | Toolchain Baseline              | OPA/Conftest + TOML parse                          | error                | 4                        |
+| RT-005       | Whitaker linting is present, integrated per the `rust-makefile-baseline` rule package.                                                                                                                                                                                                                                                                                             | Toolchain Baseline              | OPA/Conftest + Makefile parse                      | error                | 4                        |
+| RT-006       | A nightly channel pinned in `rust-toolchain.toml` is dated within the last year.                                                                                                                                                                                                                                                                                                   | Toolchain Baseline              | Python/TOML parse + date check                     | warning              | 4                        |
+| RT-007       | The pinned toolchain includes the `clippy`, `rustfmt`, and `rust-analyzer` components.                                                                                                                                                                                                                                                                                             | Toolchain Baseline              | OPA/Conftest + TOML parse                          | error                | 4                        |
+| RT-008       | The mold linker is configured for development builds unless the repository holds a recorded exemption.                                                                                                                                                                                                                                                                             | Toolchain Baseline              | OPA/Conftest + TOML parse                          | warning              | 4                        |
+| RT-009       | The Cranelift codegen backend is configured for development builds unless the repository holds a recorded exemption.                                                                                                                                                                                                                                                               | Toolchain Baseline              | OPA/Conftest + TOML parse                          | warning              | 4                        |
+| RT-010       | The Polonius-next borrow checker is enabled when the repository exposes only application targets (no publishable library targets).                                                                                                                                                                                                                                                 | Toolchain Baseline              | OPA/Conftest + manifest parse                      | warning              | 4                        |
+| RT-011       | nextest runs the test suite unless the repository holds a recorded exemption.                                                                                                                                                                                                                                                                                                      | Toolchain Baseline              | OPA/Conftest + Makefile parse                      | error                | 4                        |
+
+#### 3.1.1 Quality-gate integrity: sensors and actuators
+
+Each check in the Quality-Gate Integrity domain is delivered as a lint rule
+package (Section 2.1.2): a sensor that detects the defect, parameters that
+adapt it per repository, and a mutation (actuator) that remediates it. Checks
+whose defect lives in the checkout (the Makefile, workflow YAML, or a manifest)
+use the `conftest` sensor with deterministic-edit actuators; checks whose
+defect lives in live repository state (CV-003, AM-001, AM-002, DP-001, DP-002)
+use `rule acquire` snapshots with the `github-api` sensor and actuator types,
+which the Section 2.1.2 contract defines for this purpose. The motivating
+incidents come from the 2026 Whitaker lint rollout (30+ repositories) and the
+CodeScene coverage rollout; every rule below corresponds to a defect actually
+found in the estate.
+
+##### Lint-gate binding (QG-001, QG-002, QG-003)
+
+Several repositories carried lint steps that could not fail: Makefiles ran the
+Whitaker suite only `if command -v whitaker` succeeded, and CI installed the
+linter from a stale git revision whose cache key never rotated. QG-001 has
+since shipped as the `rust-makefile-baseline` rule package, which also settled
+the doctrine for the gate variable: `WHITAKER ?= whitaker` is the sanctioned
+estate pattern — a local override is permitted because CI installs the real
+binary — and is deliberately not a finding. QG-002 and QG-003 extend the gate
+from the Makefile to the install step.
+
+- **Sensors:** parse the Makefile for conditional lint invocation in
+  gate-critical targets (the shipped QG-001 sensor); evaluate workflow YAML for
+  the hardened install step (release-pinned installer, cache keyed by the
+  version variable, plain shell variables rather than inline `${{ env }}`
+  interpolation in `run:` blocks — a zizmor template-injection finding —
+  `--locked` on binstall and its fallback, `--cranelift` retained where
+  `.cargo/config.toml` selects the Cranelift backend); flag installs that track
+  a rolling release once ref-pinning is available upstream.
+- **Actuators:** comment-preserving patches replacing soft-skip recipes
+  with the canonical mandatory form, and file patches replacing bespoke install
+  steps with the canonical hardened step from `canon/`.
+
+##### Test-runner completeness (QG-004)
+
+nextest does not execute doctests. A repository whose Makefile and CI both
+invoked `cargo nextest run` had never executed its doctests at all; they were
+discovered only when a dedicated `test-doc` target was added. Tool installs
+without `--locked` also began hard-failing when cargo-nextest 0.9.140
+introduced its locked-build tripwire.
+
+- **Sensors:** detect nextest-only test targets with no accompanying
+  `cargo test --doc` invocation; detect `cargo binstall`/`cargo install` of
+  test tooling without `--locked`; verify the Makefile uses the canonical
+  `TEST_CMD` fallback so machines without nextest degrade to `cargo test`
+  rather than failing.
+- **Actuators:** Makefile patches adding the `TEST_CMD` variable, a
+  `test-doc` target, and the aggregate-target wiring.
+
+##### Coverage pipeline reach (CV-001 through CV-004)
+
+The CodeScene rollout found repositories that generated coverage and then
+discarded it, uploads keyed to synthetic merge commits, an upload verb that the
+provider rejects outside analysed branches ("CodeScene only analyse the
+following branches: (main)"), reports stripped of per-line records by
+`--summary-only`, and guard conditions that skipped uploads forever because the
+secret was set in only one of GitHub's two secret stores (Actions and
+Dependabot runs read different stores).
+
+- **Sensors:** workflow policies asserting the PR coverage job runs
+  `cs-coverage check` with a `fetch-depth: 0` checkout, a `project-url`, and an
+  `*.info`-named LCOV report; a push-to-main workflow exists whose only trigger
+  is `main` and whose final step is `mode: upload`; the coverage-action pin is
+  at or after the shared-actions revision that preserves line records; exactly
+  one `with-ratchet` invocation per job with the baseline written by the main
+  workflow (Actions caches saved on a pull-request branch are invisible to
+  other branches, so a PR-only ratchet compares against nothing). The
+  secret-store sensor lists secret names via the GitHub API for both stores and
+  cross-references every `if: env.X != ''` guard in the repository's workflows.
+- **Actuators:** canonical `coverage-main.yml` file-copy, coverage-job
+  patches, and a `concordat`-driven secret provisioning command that sets an
+  operator-supplied token in both stores; where the token is not available to
+  automation, the actuator degrades to opening a tracking issue naming the
+  absent store. The provisioning command sources the operator-supplied token
+  from a secret store and never persists or logs it (per the Section 2.1.2
+  contract). Provisioning needs no coordination — `PUT` on a secret is an
+  upsert, so it is idempotent server-side — but the tracking-issue fallback is a
+  `POST`, so it creates behind the single-flight lease keyed on the absent
+  store (Section 2.1.2), and concurrent sweeps yield exactly one issue.
+
+##### Automerge and workflow health (AM-001, AM-002)
+
+Dependabot pull requests sat `BLOCKED` for months with every required check
+green because a timed-out third-party check poisoned the status rollup that the
+automerge gate reads; separately, a release dry-run workflow had concluded
+`startup_failure` on every trigger since May without anyone noticing, because
+load-time failures post no check to any pull request.
+
+- **Sensors:** scheduled GitHub API sweeps that classify why each open
+  Dependabot pull request is `BLOCKED` before flagging it. A `BLOCKED`
+  `mergeStateStatus` has many causes — a missing approval, an unresolved
+  conversation, a merge-queue or other ruleset condition, as well as a stale or
+  failed required status check — so the sensor inspects the status rollup and
+  reports a jam only when a required-check context (per the ruleset
+  configuration) is the offending element and every other merge requirement is
+  already satisfied. A run-history scan separately flags workflows whose recent
+  runs uniformly conclude `startup_failure`.
+- **Actuators:** commenting `@dependabot rebase` only on pull requests the
+  sensor confirmed are jammed by a stale required check (safe and idempotent —
+  a stale check is immutable for a given head commit, so only a fresh head can
+  recover). Rebasing cannot clear a non-status blocker such as a missing
+  approval, and it re-pushes the branch head, which may dismiss existing
+  reviews; the sensor's exclusion of those cases is what keeps the actuator
+  safe. Unloadable workflows get a tracking issue instead. Both effects are
+  `POST`s with no server-side idempotency, so both create behind the
+  single-flight lease of Section 2.1.2 — keyed on the pull-request head plus
+  the comment intent for AM-001, and on the workflow ID for AM-002 — and both
+  embed that key in the body they post. Overlapping sweeps therefore yield one
+  comment and one issue, not one per sweep.
+
+##### Dependency-pin actionability (DP-001, DP-002)
+
+Thirteen security alerts accumulated against one repository because its
+manifest pinned `diesel-async = "0.7"` while the fixes lived in 0.9 —
+Dependabot's lockfile-only bumps could never apply, and its pull requests
+failed CI indefinitely. The eventual migration also required a temporary
+git-revision pin on a dependency awaiting a release.
+
+- **Sensors:** cross-reference open Dependabot alerts' first patched
+  versions against manifest version requirements to find pins that make an
+  alert unactionable; parse manifests for git-revision dependencies lacking a
+  `TODO(<issue-url>)` comment that resolves to an open issue.
+- **Actuators:** open a migration tracking issue enumerating the blocked
+  alerts; insert the `TODO` comment and raise the tracking issue via the
+  comment-preserving TOML remediation provider (Section 2.3). The two effects
+  take different boundaries (Section 2.1.2): the `TODO` annotation lands on a
+  remediation branch whose ref name derives from the git-revision dependency,
+  and creating that ref is itself create-if-absent, so it needs no lease; the
+  migration issue is a `POST` keyed on the blocked alert and creates behind the
+  single-flight lease.
+
+##### Dependabot governance (DB-001 through DB-004)
+
+The estate rollouts repeatedly found Dependabot blind spots: adding a new
+workspace crate without a matching `dependabot.yml` directory silently excluded
+it from updates (one repository guards this with a repo-layout test — the
+sensor generalizes that guard); cooldown configuration drifted between
+ecosystems until policy fixed tiered cooldowns for semver ecosystems and
+`default-days` for non-semver ones; and lockfile-wide `cargo audit` gates
+deadlocked auto-merge, because a newly published advisory fails every open
+Dependabot pull request regardless of its content.
+
+- **Sensors:** enumerate package roots (Cargo workspace members, Python
+  projects, workflow directories) and diff them against `dependabot.yml` update
+  entries; policy-check cooldown blocks per ecosystem; verify the auto-merge
+  workflow calls the shared reusable workflow pinned per the Section 8.3
+  contract (only an immutable commit SHA or an explicitly verified immutable
+  tag mechanism is compliant; branches and unverified tags, including mutable,
+  semantic-version, and major-version tags, are non-compliant) with the
+  prescribed `pull_request_target` permission set; detect audit steps that run
+  for the Dependabot actor, paired with a presence check for the scheduled
+  audit workflow — verifying its pin the same way — that covers merged results
+  instead.
+- **Actuators:** comment-preserving patches adding missing `dependabot.yml`
+  directories and cooldown blocks, and file-copies of the canonical auto-merge
+  and scheduled-audit workflows.
+
+##### Mutation-testing coverage (MT-001)
+
+Mutation testing was rolled out estate-wide as a scheduled job calling a shared
+reusable workflow. It is deliberately not merge-blocking — mutation runs are
+long and their findings are advisory — so the defect class is absence:
+repositories that never run it accumulate assertion-free tests that coverage
+metrics cannot expose (the doctests-never-ran incident in QG-004 being the
+degenerate case).
+
+- **Sensors:** file presence and policy checks that a scheduled workflow
+  exists, calls the shared mutation-testing workflow pinned per the Section 8.3
+  contract (only an immutable commit SHA or an explicitly verified immutable
+  tag mechanism is compliant; branches and unverified tags, including mutable,
+  semantic-version, and major-version tags, are non-compliant), and is not
+  wired into required pull-request checks.
+- **Actuators:** file-copy of the canonical scheduled mutation-testing
+  workflow from `canon/`.
+
+#### 3.1.2 Licensing integrity: sensors and actuators
+
+The licensing checks generalize routine estate findings rather than a single
+rollout: `LICENSE` copyright lines frozen at the year a repository was created,
+and manifests whose `license` field disagreed with the `LICENSE` text they
+shipped beside. Both defects are invisible to CI — nothing fails when a licence
+declaration drifts — so they accumulate until an external consumer notices. As
+elsewhere in the domain catalogue, each check ships as a lint rule package
+(Section 2.1.2) with a sensor, parameters, and a mutation.
+
+##### Licence presence and currency (LC-001, LC-002)
+
+Every repository must carry a `LICENSE` file at its root, and its copyright
+statement must not lag the repository's activity.
+
+- **Sensors:** file presence for `LICENSE` at the repository root
+  (LC-001); for LC-002, parse the copyright line's year (or the upper bound of
+  a year range) and compare it against the commit year of the most recent
+  commit on the default branch — the committer date, not the author date, since
+  rebases update only the former.
+- **Actuators:** the LC-002 mutation is a textual patch extending the
+  year or year range to the latest commit year. The LC-001 actuator is a
+  file-copy of the canonical licence text only when the intended licence
+  identity can be established from manifest metadata (a `license` field naming
+  a known SPDX identifier); where the identity cannot be established, choosing
+  a licence is a legal decision that automation must not make, so the actuator
+  degrades to opening a tracking issue.
+
+##### Declared-licence consistency (LC-003)
+
+A licence declaration is only as good as its agreement with the licence text
+that governs it. In a repository with nested packages, the governing text is the
+`LICENSE` file at the package's own level if one exists, otherwise the nearest
+ancestor's.
+
+- **Sensors:** identify each `LICENSE` file's SPDX identity by matching
+  its text against the SPDX licence templates; collect declarations from
+  `Cargo.toml` (`license`), `pyproject.toml` (`license` and the licence
+  classifiers), `package.json` (`license`), and README licence statements and
+  badges; resolve each declaration against the governing `LICENSE` per the
+  nearest-ancestor rule and flag disagreements.
+- **Actuators:** manifest corrections apply through the
+  comment-preserving remediation providers (Section 2.3). README statements are
+  prose, and prose edits are not mechanically safe, so README mismatches
+  degrade to a tracking issue quoting the conflicting statements.
+
+#### 3.1.3 Toolchain baseline: sensors and actuators
+
+The toolchain checks encode the estate templates —
+`leynos/agent-template-python` and `leynos/agent-template-rust` — as auditable
+floors. Two design decisions shape the whole domain:
+
+- **Applicability is content-driven, not manifest-driven.** The Python
+  checks apply wherever Python exists, including incidental use: helper scripts
+  inside a primarily-Rust repository (`leynos/wildside`), GitHub Actions
+  implemented in Python (`leynos/whitaker`, `leynos/shared-actions`), and
+  Ansible modules (`leynos/dev-env-rocky`). The applicability sensor enumerates
+  `*.py` files, `pyproject.toml` manifests, workflow steps invoking Python, and
+  Ansible plugin directories; a repository matching any of these is in scope.
+- **"Match or exceed" compares against vendored template data, not the
+  live template.** Each comparison rule pins the template repository at a tag
+  and vendors the extracted baseline (rule selections, disable lists, rustfmt
+  keys, `[lints]` tables) as rule-package data, the same pattern
+  `rust-makefile-baseline` uses for its fixture envelopes. The sensor therefore
+  never fetches the template at audit time, and a template change becomes a
+  versioned rule-package release that estates adopt deliberately.
+
+Repositories opt out of the "unless specifically excepted" checks (PY-009,
+PY-010, RT-008, RT-009, RT-011) through `standards-exemptions.yaml`; a
+recorded, unexpired exemption downgrades the finding to `note`, per the
+existing exemption contract.
+
+##### Python formatting and linting (PY-001 to PY-005)
+
+- **Sensors:** Makefile and workflow policies verify that `ruff format`
+  backs the format target, that `ruff format --check` (or equivalent) runs in
+  CI, and that `ruff check` and pylint (via `pylint-pypy-shim`) both run in the
+  lint gate — binding, per the QG-001 discipline, not soft-skipped.
+  Configuration policies compare the repository's ruff and pylint configuration
+  against the vendored template baseline: the template's enabled rules must be
+  a subset of the repository's, and ignore or disable lists must be no broader.
+- **Actuators:** comment-preserving TOML patches enable missing rules
+  and narrow over-broad ignore lists; Makefile patches add missing format and
+  lint wiring in the canonical form. Where a repository has no Python tooling
+  at all, the mutation seeds the canonical `ruff.toml` and pylint configuration
+  from `canon/lint/python/`.
+
+##### Python documentation and version-floor consistency (PY-006 to PY-008)
+
+- **Sensors:** configuration policies verify interrogate is configured
+  with `fail-under = 100` and runs in the lint gate (PY-006), and that
+  `requires-python` declares at least 3.12 (PY-007). The PY-008 sensor is a
+  multi-file scan that reconciles every Python version declaration against the
+  manifest's `requires-python` floor. It distinguishes single-value
+  declarations from ranges: a scalar floor declaration — a tool's
+  `target-version`, a script version guard, or a version statement in the
+  README and the users' and developers' guides — must equal the floor, whereas
+  a version set that legitimately spans a supported range — a CI test matrix or
+  the `setup-python` inputs — need only keep every entry at or above the floor.
+  The floor itself need not appear in a matrix: a `>=3.12` floor tested against
+  `3.12` and `3.13`, and one tested against `3.13` alone, are both compliant,
+  because `requires-python` states the minimum version a consumer may use, not
+  the set a repository must test. Only an entry below the floor — `3.11`
+  against a `>=3.12` floor, say — is flagged.
+- **Actuators:** TOML patches for the manifest-held declarations;
+  CI-workflow patches aligning matrix entries. Prose version statements degrade
+  to a tracking issue listing each divergent location, since the correct fix
+  may be either the prose or the floor.
+
+##### Python test and typecheck tooling (PY-009, PY-010)
+
+- **Sensors:** verify pytest-xdist is a test dependency and the test
+  target passes worker options (for example `-n auto`) unless an exemption is
+  recorded (PY-009); verify ty is present and wired into a typecheck target
+  that runs in CI (PY-010).
+- **Actuators:** dependency-group and Makefile patches adding the
+  missing wiring in the canonical form.
+
+##### Rust formatting and linting (RT-001 to RT-005)
+
+- **Sensors:** Makefile and workflow policies verify rustfmt backs the
+  format targets and a format check runs in CI (RT-001), and that clippy and
+  the Whitaker suite run in the lint gate (RT-003, RT-005 — the latter
+  delegating bindingness to the `rust-makefile-baseline` package, which already
+  owns QG-001). Configuration policies compare `rustfmt.toml` against the
+  vendored template copy key by key (RT-002), and require every `[lints]` entry
+  the template sets to be present at the same or a stricter level (RT-004).
+- **Actuators:** comment-preserving TOML patches for `rustfmt.toml` and
+  `[lints]` drift; Makefile patches adding missing format and lint wiring;
+  file-copy of the canonical Whitaker install step from `canon/` where absent.
+
+##### Rust toolchain currency (RT-006, RT-007)
+
+Nightly pins rot silently: nothing fails when a `rust-toolchain.toml` nightly
+date ages past the point where current tooling supports it.
+
+- **Sensors:** parse `rust-toolchain.toml`; when the channel is a dated
+  nightly, compare the date against the audit date and flag pins older than one
+  year (RT-006); verify the `components` list includes `clippy`, `rustfmt`, and
+  `rust-analyzer` (RT-007).
+- **Actuators:** RT-007 is a comment-preserving TOML patch adding the
+  missing components. RT-006 degrades to a tracking issue: advancing a nightly
+  pin can change lint and borrow-checker behaviour, so the bump needs a human
+  to shepherd the fallout.
+
+##### Rust build and test acceleration (RT-008 to RT-011)
+
+- **Sensors:** parse `.cargo/config.toml` for the mold linker (RT-008)
+  and the Cranelift codegen backend on the development profile (RT-009),
+  honouring recorded exemptions; determine target exposure from `Cargo.toml` —
+  a repository whose crates expose no publishable library targets
+  (`publish = false` or binary-only) must enable the Polonius-next borrow
+  checker, since nightly flags are safe when no downstream consumer builds the
+  crates on stable (RT-010); verify the test target uses nextest, via the
+  canonical `TEST_CMD` fallback that QG-004 already prescribes (RT-011).
+- **Actuators:** comment-preserving TOML patches to
+  `.cargo/config.toml` adding the linker, codegen, and borrow-checker
+  configuration in the canonical form; the RT-011 mutation reuses the QG-004
+  Makefile patch.
+
+#### 3.1.4 Verifying the reconciliation invariants
+
+Several checks reduce to a pure comparator over a small structured input, where
+example-based tests leave the interesting boundaries unexercised. These
+comparators carry invariants that must hold for every input, so they are
+verified with property-based tests rather than a handful of fixtures:
+
+- **PY-008 version reconciliation.** For a floor `F` and a version set `S`, the
+  result is compliant if and only if `min(S) >= F`, and a scalar declaration is
+  compliant if and only if it equals `F`. The property tests assert this
+  directly and encode the metamorphic relations that motivated the review:
+  adding a version above `F` to a compliant matrix keeps it compliant (higher
+  versions are never findings), and lowering any entry below `F` makes it
+  non-compliant.
+- **LC-002 copyright currency.** For a declared year (or the upper bound of a
+  year range) `Y` and a latest-commit year `C`, compliance holds if and only if
+  `Y == C`; the mutation that extends the range must be idempotent when
+  reapplied and must never lower the bound.
+- **LC-003 nearest-ancestor resolution.** For a manifest at path `P` and a set
+  of `LICENSE` paths, the governing licence is the one at the deepest ancestor
+  of `P`; the resolver must be total (a repository-root `LICENSE` governs every
+  path) and monotonic (adding a deeper `LICENSE` can only move the governing
+  file downward).
+- **RT-006 nightly-pin age.** For an audit date `A` and a pinned nightly date
+  `N`, the pin is stale if and only if `A - N > 365` days; the boundary at
+  exactly one year is asserted explicitly.
+
+Recommended tooling, in order of leverage:
+
+- **Hypothesis** is the primary adversary for these Python comparators:
+  strategies generate arbitrary floors, version sets, year ranges, and path
+  trees, and the tests assert the invariants and metamorphic relations above.
+- **CrossHair** verifies the totality and ordering contracts of the pure
+  comparators (for example that the LC-003 resolver never returns `None` for a
+  path under a root `LICENSE`), catching partiality that random sampling may
+  miss.
+- **mutmut** runs against the comparator modules to confirm the property tests
+  actually bite; a surviving mutant in a comparator is promoted to a new
+  property or example.
+
+The Rego policies keep using their existing Conftest test files (the
+`policy/*_test.rego` fixtures already required by the package format); those
+are example-based by construction and are not a property-testing target.
+Heavier formal proof (Kani or Verus) is deliberately **not** recommended here:
+these comparators contain no unbounded lemma, only bounded arithmetic and
+ordering, so property tests plus CrossHair contracts give full-coverage
+confidence without the proof-maintenance cost. Proofs are reserved for genuine
+lemmas, which this domain does not introduce.
+
+##### GitHub API actuator state-machine contract
+
+The `github-api` actuator contract requires a Hypothesis
+`RuleBasedStateMachine` (or an equivalent state-machine property framework).
+The harness uses a deterministic fake API, a virtual clock, an injected retry
+scheduler, and controllable cancellation; it never calls GitHub or sleeps in
+real time. Its reference model has one deduplication key and multiple workers,
+with these dimensions: effects absent or present per
+`(deduplication key, effect type)` pair, with a target-store dimension for
+CV-003 `PUT` effects; lease absent, held, expired, or conditionally claimed;
+create not sent, known success, or unknown; remaining retry budget; and normal
+or shutdown mode. For CV-003, the Actions and Dependabot stores are modelled
+independently, so one shared key may converge to one desired state in each
+store, including the state where the first store has succeeded and the other
+store has failed.
+
+The generated operations include acquire, acquisition loss, expiry, conditional
+claim, final existence check, create, timeout, connection failure, `429`,
+transient `5xx`, non-retryable `4xx`, lost response, reconciliation
+success/absence/failure, Actions and Dependabot secret `PUT`, first-store
+success, second-store failure, store re-read, replay convergence, permitted
+retry, release, stale release after worker B conditionally claims worker A's
+expired lease, shutdown, grace expiry, and next-sweep recovery. The model
+asserts that:
+
+- at most one external effect exists for each non-idempotent `POST`
+  `(deduplication key, effect type)` pair; server-idempotent CV-003 `PUT`
+  operations may be replayed and converge independently to one state per target
+  store, without a single-winner assertion;
+- final precheck and non-idempotent create are one atomic fenced operation;
+- a lease loser never creates; an expiry takeover validates the expected lease
+  version/SHA and issues a new fencing token atomically; a stale worker that
+  loses that fenced claim never creates, and a stale release is rejected while
+  worker B's claimed lease and fencing remain intact; server-idempotent
+  operations converge without a lease;
+- each secret-store `PUT` converges independently; after partial CV-003
+  completion, reconciliation re-reads both stores and replay updates only the
+  missing or failed store, preserving the successful secret and never treating
+  the composite as one atomic effect;
+- reconciliation precedes every create after an unknown outcome;
+- non-retryable `4xx` responses fail fast and retry/time budgets are bounded;
+- shutdown honours its grace boundary, leaves unknown leases to expire, and a
+  later sweep recovers safely;
+- every attempt has exactly one terminal outcome from the Section 2.1.2
+  vocabulary; and
+- logs, metrics, alerts, trace attributes, and structured error payloads expose
+  the required outcome; secret values are absent from those channels and from
+  recorded snapshots.
+
+After every generated operation, an oracle compares the implementation with the
+reference model for effects and API create/`PUT` call counts scoped by
+deduplication key and effect type, with a target-store dimension for CV-003;
+lease ownership and fencing; retry count and remaining budget; terminal
+outcome; and emitted logs, metrics, alerts, trace attributes, structured error
+payloads, and recorded snapshots. The observability oracle asserts that secret
+values are absent from every one of those channels. Shrinking must produce a
+short reproducible trace, including the delayed stale-worker-after-final-read,
+the stale-release-after-conditional-claim, and conditional-claim interleaving,
+so a failure identifies the smallest violating sequence. The observability
+oracle follows Section 3.2.2, and the required fixture and CI reproduction are
+tracked in roadmap Section 4.2.
 
 ### 3.2. Implementation design and execution model
 
@@ -1567,6 +2334,64 @@ action nightly (`0 5 * * *`) with permissions limited to `contents: read` and
 `security-events: write`. A manual `workflow_dispatch` input set allows teams
 to supply a fixture snapshot and skip the upload (`upload_sarif=false`), which
 keeps local smoke tests hermetic.
+
+#### 3.2.2 Observability for API-backed sensors and actuators
+
+The `conftest` checks are deterministic functions of a checkout and surface
+entirely through SARIF, so the Code Scanning dashboard is sufficient
+observability for them. The `github-api` sensors and actuators (CV-003, AM-001,
+AM-002, DP-001, DP-002) are different: the sensors consume snapshots produced by
+`rule acquire`, while the acquisition service and actuators make authenticated
+network calls. Actuators additionally take side effects (comments, issues,
+secret provisioning). A silent failure there is invisible in SARIF — the AM-002
+`startup_failure` incident is precisely a check that failed with no signal — so
+each API-backed check carries explicit observability requirements.
+
+- **Structured logs.** Every API operation emits a structured (JSON) log line
+  carrying the check ID, the operation (for example `list-secrets`,
+  `classify-merge-state`, `comment-rebase`), the target entity IDs (repository
+  slug, pull-request number, workflow ID, alert number), the outcome
+  (`compliant`, `finding`, `actuated`, `skipped`, `error`), and, for actuators,
+  the deduplication key so a replay is identifiable. Every actuator attempt
+  additionally emits exactly one terminal outcome from the Section 2.1.2
+  vocabulary — `created`, `duplicate_suppressed`, `reconciled_existing`,
+  `retry_exhausted`, `reconcile_failed`, or `shutdown_aborted` — which is what
+  distinguishes a sweep that did nothing because the effect already existed
+  from one that failed. Secret **values** are never logged; only secret names
+  and the store they were found in. An unknown or post-dispatch failure is
+  marked `reconciliation_required`; that marker is not itself a terminal
+  outcome.
+- **Metrics.** Each sweep publishes bounded, low-cardinality counters and
+  histograms: checks run, findings raised, actuators fired, API calls made,
+  rate-limit remaining, and sweep duration, labelled by check ID and outcome
+  only (never by repository or entity ID, which would be unbounded). Actuator
+  attempts are counted by terminal outcome, so duplicate suppression and
+  reconciliation are visible as normal operation rather than inferred from
+  their absence, and retry exhaustion is countable. The remaining GitHub API
+  rate-limit budget is recorded so exhaustion is observable before it causes
+  skips.
+- **Tracing.** A sweep opens one trace per run with a span per repository and a
+  child span per API call, so latency and failures can be attributed across the
+  API boundary. Trace and span IDs are included in the structured log lines to
+  correlate the two.
+- **Alerts.** Actionable alerts fire on conditions that SARIF cannot express: a
+  sweep that errors or does not complete, sustained actuator API failures above
+  a defined aggregate threshold, a rate-limit budget below a threshold, and —
+  mirroring AM-002 — a sweep whose own workflow concludes `startup_failure`.
+  Individual API failures are recorded in structured logs, metrics, and traces,
+  rather than alerting on their own. Three terminal outcomes from the Section
+  2.1.2 vocabulary also alert: `retry_exhausted` when known no-dispatch
+  transient or known retryable `429`/`5xx` responses exhaust their retry budget,
+  `reconcile_failed`, and `shutdown_aborted` with `phase="unknown_outcome"`.
+  `retry_exhausted` is a known failure and does not mean a create may have
+  landed; only `reconcile_failed` and `shutdown_aborted` with
+  `phase="unknown_outcome"` may indicate that a create may or may not have
+  landed. Alerts name the check ID and the affected entity so an operator can
+  act without first reproducing the sweep.
+
+These requirements are part of the `github-api` sensor and actuator contract
+(Section 2.1.2) and gate the roadmap item that introduces those types (Section
+4.2), so no API-backed check ships without them.
 
 ### 3.3. Reporting mechanism: SARIF integration with GitHub code scanning
 
@@ -1696,8 +2521,12 @@ policies used for this validation will be sourced from the checked-out
 Example policies that must be implemented include:
 
 - A policy that parses `.github/workflows/ci.yml`, and asserts that it contains
-  a `jobs.*.uses` key pointing to a versioned, canonical reusable workflow
-  (e.g., `org/platform-standards/.github/workflows/ci.yml@v1`).
+  a `jobs.*.uses` key pointing to a canonical reusable workflow pinned to an
+  immutable commit SHA or an explicitly verified immutable-tag mechanism (e.g.,
+  `org/platform-standards/.github/workflows/ci.yml@<commit-sha>`). Branches are
+  non-compliant. Tags, including mutable, semantic-version, or major-version
+  tags such as `@v1`, are non-compliant unless an immutable-tag mechanism
+  explicitly verifies their immutability.
 - A policy that validates the structure of a `renovate.json` file to ensure that
   only approved package managers, and update schedules are configured.
 - A policy, which runs conditionally based on the `language.primary` field in
@@ -1783,11 +2612,12 @@ specific build arguments, or whether a release is needed) without needing to
 copy, paste, and maintain the complex underlying workflow logic.14
 
 Target repositories will contain only minimal "caller" workflows. These simple
-YAML files will primarily consist of a `jobs.*.uses` key that points to the
-versioned, reusable workflow in the `platform-standards` repository, and a
-`with` block to pass the required inputs. This pattern drastically reduces
-maintenance overhead, and ensures that updates to CI/CD logic can be rolled out
-centrally.
+YAML files will primarily consist of a `jobs.*.uses` key that points to a
+canonical reusable workflow in the `platform-standards` repository, pinned to
+an immutable commit SHA or an explicitly verified immutable-tag mechanism, and a
+`with` block to pass the required inputs. Branches and mutable or unverified
+tags are non-compliant. This pattern drastically reduces maintenance overhead,
+and ensures that updates to CI/CD logic can be rolled out centrally.
 
 ## 6. Scaled remediation and change management
 
@@ -2008,12 +2838,11 @@ the principle of least privilege.
   CI check on all pull requests to the `platform-standards` repository to
   prevent regressions in policy logic.11
 
-- **Versioning:** Reusable workflows must be versioned using semantic versioning
-  tags (e.g., `v1`, `v1.1.0`). Consumer repositories should pin to a major
-  version tag (e.g., `@v1`) to receive non-breaking updates automatically,
-  while breaking changes must be introduced under a new major version (e.g.,
-  `@v2`), and rolled out deliberately. Using a specific commit SHA is the
-  safest option for maximum stability and security.14
+- **Versioning:** Reusable workflows must be pinned to an immutable commit SHA
+  or an explicitly verified immutable-tag mechanism. Branch references (e.g.,
+  `@main`) are non-compliant. Tags, including mutable or floating tags (e.g.,
+  `@latest`), semantic-version tags, and major-version tags (e.g., `@v1`), are
+  non-compliant unless the mechanism explicitly verifies their immutability.14
 
 ## Works cited
 

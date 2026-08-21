@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import ast
+import dataclasses
 import email.message
 import importlib
 import json
 import os
+import shutil
+import subprocess
 import tomllib
 import typing as typ
 import urllib.error
@@ -19,6 +22,7 @@ if typ.TYPE_CHECKING:
     import types
 
 SCRIPT_DIRECTORY = Path(__file__).resolve().parents[1]
+REPOSITORY_ROOT = SCRIPT_DIRECTORY.parent
 
 
 def test_rollout_scripts_support_python_313() -> None:
@@ -51,6 +55,24 @@ def _dictionary_text(stem: str = "organ") -> str:
         + '"]\n\n[words]\naccepted = []\n\n[words.corrections]\n\n'
         + "[patterns]\nignore = []\n\n[files]\nexclude = []\n"
     )
+
+
+@dataclasses.dataclass(frozen=True)
+class InvalidDictionaryCase:
+    """One malformed shared-dictionary document and its expected failure."""
+
+    document: str
+    expected_error: type[Exception]
+    expected_message: str
+
+
+@dataclasses.dataclass(frozen=True)
+class SpellingFixtureCase:
+    """One Markdown fixture checked by the repository's typos configuration."""
+
+    document: str
+    expected_returncode: int
+    expected_output: str | None = None
 
 
 def test_rollout_generates_oxford_corrections(
@@ -111,26 +133,206 @@ def test_https_failure_reuses_valid_tracked_config(
     assert result.cache == tracked_config
 
 
+@pytest.mark.parametrize(
+    "case",
+    [
+        pytest.param(
+            InvalidDictionaryCase(
+                _dictionary_text().replace("schema = 1", "schema = 2"),
+                ValueError,
+                "unsupported dictionary schema",
+            ),
+            id="schema-mismatch",
+        ),
+        pytest.param(
+            InvalidDictionaryCase(
+                _dictionary_text().replace(
+                    '[oxford]\nstems = ["organ"]', 'oxford = "bad"'
+                ),
+                TypeError,
+                "'oxford' must be a table",
+            ),
+            id="oxford-not-a-table",
+        ),
+        pytest.param(
+            InvalidDictionaryCase(
+                _dictionary_text().replace('stems = ["organ"]', "stems = [1]"),
+                TypeError,
+                "'stems' must be a list of strings",
+            ),
+            id="stems-non-string-member",
+        ),
+        # A string-list key holding a bare string is not a list.
+        pytest.param(
+            InvalidDictionaryCase(
+                _dictionary_text().replace('stems = ["organ"]', 'stems = "organ"'),
+                TypeError,
+                "'stems' must be a list of strings",
+            ),
+            id="stems-not-a-list",
+        ),
+        # Every string-list field rejects non-string members, not just stems.
+        pytest.param(
+            InvalidDictionaryCase(
+                _dictionary_text().replace("accepted = []", "accepted = [1]"),
+                TypeError,
+                "'accepted' must be a list of strings",
+            ),
+            id="accepted-non-string-member",
+        ),
+        pytest.param(
+            InvalidDictionaryCase(
+                _dictionary_text().replace("ignore = []", "ignore = [2]"),
+                TypeError,
+                "'ignore' must be a list of strings",
+            ),
+            id="ignore-non-string-member",
+        ),
+        pytest.param(
+            InvalidDictionaryCase(
+                _dictionary_text().replace("exclude = []", "exclude = [3]"),
+                TypeError,
+                "'exclude' must be a list of strings",
+            ),
+            id="exclude-non-string-member",
+        ),
+        pytest.param(
+            InvalidDictionaryCase(
+                _dictionary_text().replace(
+                    "[words.corrections]", "[words.corrections]\nteh = 1"
+                ),
+                TypeError,
+                "word corrections must map strings to strings",
+            ),
+            id="correction-non-string-value",
+        ),
+    ],
+)
 def test_dictionary_validation_rejects_invalid_documents(
     rollout_modules: tuple[types.ModuleType, types.ModuleType, types.ModuleType],
     tmp_path: Path,
+    case: InvalidDictionaryCase,
 ) -> None:
     """Schema, table, string-list and correction types remain validated."""
     _, rollout, _ = rollout_modules
     source = tmp_path / "base.toml"
-    invalid_documents = (
-        _dictionary_text().replace("schema = 1", "schema = 2"),
-        _dictionary_text().replace('[oxford]\nstems = ["organ"]', 'oxford = "bad"'),
-        _dictionary_text().replace('stems = ["organ"]', "stems = [1]"),
-        _dictionary_text().replace(
-            "[words.corrections]", "[words.corrections]\nteh = 1"
+    source.write_text(case.document, encoding="utf-8")
+
+    with pytest.raises(case.expected_error, match=case.expected_message):
+        rollout.load_dictionary(source)
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        pytest.param(
+            SpellingFixtureCase("The mold linker builds quickly.\n", 0),
+            id="allowlisted-linker-name",
         ),
+        pytest.param(
+            SpellingFixtureCase("`var.iamge_id` is a documented error example.\n", 0),
+            id="ignored-documentation-example",
+        ),
+        pytest.param(
+            SpellingFixtureCase(
+                "`recieve` must remain visible to typos.\n", 2, "recieve"
+            ),
+            id="inline-code-is-checked",
+        ),
+    ],
+)
+@pytest.mark.integration
+def test_configured_typos_enforces_spelling_policy(
+    tmp_path: Path,
+    case: SpellingFixtureCase,
+) -> None:
+    """The generated configuration retains reviewed spelling-policy exceptions."""
+    fixture = tmp_path / "spelling-fixture.md"
+    fixture.write_text(case.document, encoding="utf-8")
+    uv = shutil.which("uv")
+    assert uv is not None, "the test suite requires the uv executable"
+
+    completed = subprocess.run(  # noqa: S603 - fixed argv invokes the configured checker
+        [
+            uv,
+            "tool",
+            "run",
+            "typos@1.48.0",
+            "--config",
+            str(REPOSITORY_ROOT / "typos.toml"),
+            "--force-exclude",
+            str(fixture),
+        ],
+        capture_output=True,
+        check=False,
+        cwd=REPOSITORY_ROOT,
+        text=True,
+    )
+    output = completed.stdout + completed.stderr
+
+    assert completed.returncode == case.expected_returncode, output
+    if case.expected_output is not None:
+        assert case.expected_output in output
+
+
+def test_string_lists_are_deduplicated_and_sorted(
+    rollout_modules: tuple[types.ModuleType, types.ModuleType, types.ModuleType],
+    tmp_path: Path,
+) -> None:
+    """Every string-list field is deduplicated and lexically sorted on load."""
+    _, rollout, _ = rollout_modules
+    source = tmp_path / "base.toml"
+    source.write_text(
+        'schema = 1\n\n[oxford]\nstems = ["organ", "cathode", "organ"]\n\n'
+        '[words]\naccepted = ["zeta", "alpha", "zeta"]\n\n[words.corrections]\n\n'
+        '[patterns]\nignore = ["b", "a", "b"]\n\n'
+        '[files]\nexclude = ["y", "x", "y"]\n',
+        encoding="utf-8",
     )
 
-    for document in invalid_documents:
-        source.write_text(document, encoding="utf-8")
-        with pytest.raises((TypeError, ValueError)):
-            rollout.load_dictionary(source)
+    dictionary = rollout.load_dictionary(source)
+
+    assert dictionary.stems == ("cathode", "organ"), (
+        "stems must drop the duplicate 'organ' and sort lexically"
+    )
+    assert dictionary.accepted == ("alpha", "zeta"), (
+        "accepted must drop the duplicate 'zeta' and sort lexically"
+    )
+    assert dictionary.ignore_patterns == ("a", "b"), (
+        "ignore patterns must drop the duplicate 'b' and sort lexically"
+    )
+    assert dictionary.excluded_files == ("x", "y"), (
+        "excluded files must drop the duplicate 'y' and sort lexically"
+    )
+
+
+def test_string_lists_default_to_empty_when_keys_are_absent(
+    rollout_modules: tuple[types.ModuleType, types.ModuleType, types.ModuleType],
+    tmp_path: Path,
+) -> None:
+    """Absent string-list keys fall back to empty tuples rather than failing."""
+    _, rollout, _ = rollout_modules
+    source = tmp_path / "base.toml"
+    source.write_text(
+        "schema = 1\n\n[oxford]\n\n[words]\n\n[words.corrections]\n\n"
+        "[patterns]\n\n[files]\n",
+        encoding="utf-8",
+    )
+
+    dictionary = rollout.load_dictionary(source)
+
+    assert dictionary.stems == (), (
+        "an absent 'stems' key must default to the empty tuple"
+    )
+    assert dictionary.accepted == (), (
+        "an absent 'accepted' key must default to the empty tuple"
+    )
+    assert dictionary.ignore_patterns == (), (
+        "an absent 'ignore' key must default to the empty tuple"
+    )
+    assert dictionary.excluded_files == (), (
+        "an absent 'exclude' key must default to the empty tuple"
+    )
 
 
 def test_merge_rejects_conflicting_corrections(
