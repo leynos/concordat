@@ -1,6 +1,6 @@
 """Unit tests for the GitHub API helpers in `concordat.estate_github`.
 
-Client construction and the organisation/personal repository-creation paths are
+Client construction and the organization/personal repository-creation paths are
 exercised directly; the provisioning flow that drives them is covered by the
 `init_estate` suite.
 """
@@ -29,33 +29,33 @@ if typ.TYPE_CHECKING:
 type Rejection = type[github3_exceptions.ResponseError]
 
 
-def _client_rejecting_organisation_lookup(
+def _client_rejecting_organization_lookup(
     mocker: pytest_mock.MockFixture,
     rejection: Rejection,
 ) -> github3.GitHub:
-    """Return a client whose organisation lookup is rejected."""
+    """Return a client whose organization lookup is rejected."""
     client = mocker.Mock()
     client.organization.side_effect = rejection(mocker.Mock())
     return client
 
 
-def _look_up_organisation(client: github3.GitHub) -> None:
-    """Resolve the organisation that would own the estate repository."""
+def _look_up_organization(client: github3.GitHub) -> None:
+    """Resolve the organization that would own the estate repository."""
     estate_github._find_organization(client, "example")
 
 
-def _organisation_rejecting_creation(
+def _organization_rejecting_creation(
     mocker: pytest_mock.MockFixture,
     rejection: Rejection,
 ) -> github3.orgs.Organization:
-    """Return an organisation that refuses to create a repository."""
+    """Return an organization that refuses to create a repository."""
     org = mocker.Mock()
     org.create_repository.side_effect = rejection(mocker.Mock())
     return org
 
 
-def _create_organisation_repository(org: github3.orgs.Organization) -> None:
-    """Create the estate repository inside an organisation."""
+def _create_organization_repository(org: github3.orgs.Organization) -> None:
+    """Create the estate repository inside an organization."""
     estate_github._create_organization_repository(org, "example", "core")
 
 
@@ -98,7 +98,7 @@ class AuthenticationFailureScenario:
 
 
 class TestCreateRepository:
-    """Contracts of the organisation/personal repository-creation helpers.
+    """Contracts of the organization/personal repository-creation helpers.
 
     The helpers live in ``estate_github``; ``_create_repository`` remains the
     orchestration seam that ``estate_repository`` re-exports and tests patch.
@@ -125,19 +125,19 @@ class TestCreateRepository:
         [
             pytest.param(
                 AuthenticationFailureScenario(
-                    setup=_client_rejecting_organisation_lookup,
-                    invoke=_look_up_organisation,
+                    setup=_client_rejecting_organization_lookup,
+                    invoke=_look_up_organization,
                     error_type=estate.GitHubOrganizationAuthenticationError,
                 ),
-                id="organisation-lookup",
+                id="organization-lookup",
             ),
             pytest.param(
                 AuthenticationFailureScenario(
-                    setup=_organisation_rejecting_creation,
-                    invoke=_create_organisation_repository,
+                    setup=_organization_rejecting_creation,
+                    invoke=_create_organization_repository,
                     error_type=estate.GitHubRepositoryCreationAuthenticationError,
                 ),
-                id="organisation-creation",
+                id="organization-creation",
             ),
             pytest.param(
                 AuthenticationFailureScenario(
@@ -158,7 +158,7 @@ class TestCreateRepository:
         """Each rejected call reports the error naming its own boundary.
 
         The boundaries share a rejection but not a diagnosis: a refused lookup
-        says nothing about whether the owner is an organisation, so each keeps
+        says nothing about whether the owner is an organization, so each keeps
         a distinct error class. Both a 401 and a 403 must translate, since
         github3 models them as unrelated siblings.
         """
@@ -167,25 +167,25 @@ class TestCreateRepository:
         with pytest.raises(scenario.error_type):
             scenario.invoke(subject)
 
-    def test_missing_organisation_returns_none(
+    def test_missing_organization_returns_none(
         self,
         mocker: pytest_mock.MockFixture,
     ) -> None:
-        """A NotFound organisation selects the personal-owner path."""
+        """A NotFound organization selects the personal-owner path."""
         client = mocker.Mock()
         client.organization.side_effect = github3_exceptions.NotFoundError(
             mocker.Mock()
         )
 
         assert estate_github._find_organization(client, "example") is None, (
-            "a missing organisation should resolve to None"
+            "a missing organization should resolve to None"
         )
 
-    def test_organisation_path_never_touches_personal_methods(
+    def test_organization_path_never_touches_personal_methods(
         self,
         mocker: pytest_mock.MockFixture,
     ) -> None:
-        """An existing organisation short-circuits the personal-owner path."""
+        """An existing organization short-circuits the personal-owner path."""
         client = mocker.Mock()
         org = mocker.Mock()
         client.organization.return_value = org
@@ -224,7 +224,7 @@ class TestCreateRepository:
         self,
         mocker: pytest_mock.MockFixture,
     ) -> None:
-        """A missing organisation creates the repository for its owner."""
+        """A missing organization creates the repository for its owner."""
         client = mocker.Mock()
         client.organization.side_effect = github3_exceptions.NotFoundError(
             mocker.Mock()
