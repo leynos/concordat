@@ -883,15 +883,15 @@ A “lint rule” in Concordat is a sensor plus mutation logic:
 - sensor: the detector that decides compliance. Two sensor types exist:
   - `conftest`: an OpenTofu/Conftest (Open Policy Agent, OPA) evaluation over
     structured inputs (the format the spike implemented), and
-  - `github-api`: a fallible network-acquisition adapter that uses the
-    Auditor's read-only credentials to retrieve live GitHub state into a
-    snapshot, followed by pure sensor and finding-reduction logic over that
-    snapshot. Some quality-gate checks (for example the dual-store secret
-    check CV-003, the automerge and workflow-health sweeps AM-001 and AM-002,
-    and the dependency-pin actionability checks DP-001 and DP-002) cannot be
-    expressed as Conftest over a static input tree, because they must read live
+  - `github-api`: a pure evaluation over an injected or local snapshot of
+    GitHub state. It never reads credentials or makes network calls. Some
+    quality-gate checks (for example the dual-store secret check CV-003, the
+    automerge and workflow-health sweeps AM-001 and AM-002, and the
+    dependency-pin actionability checks DP-001 and DP-002) cannot be expressed
+    as Conftest over a static input tree, because their snapshots contain live
     repository state — secret-store listings, pull-request merge-state,
-    ruleset contexts, and security alerts — that no checkout contains.
+    ruleset contexts, and security alerts — that no checkout contains. The
+    separate `rule acquire` command or service obtains those snapshots.
 - configuration: parameters that allow the same rule logic to be reused with
   different baselines, and
 - mutation (actuator): the remediation. Two actuator types exist:
@@ -905,22 +905,34 @@ A “lint rule” in Concordat is a sensor plus mutation logic:
 The `conftest` sensor with deterministic-edit mutations is the format the
 canonical-artefact spike implemented and validated; the `github-api` sensor and
 actuator types are a required extension of the package contract, specified here
-so that `rule run` and `rule mutate` have a defined execution path for the
-API-backed checks. Their delivery is sequenced ahead of those check packages in
-the roadmap (Section 4.2).
+so that snapshot-based `rule run` and `rule mutate` have a defined execution
+path for the API-backed checks. Their delivery is sequenced ahead of those
+check packages in the roadmap (Section 4.2).
 
-Every `github-api` sensor and actuator must satisfy an operational contract:
+Every `github-api` sensor must satisfy an operational contract:
 
-- runs with least-privilege GitHub token scopes (per the permissions model,
-  Section 8.1);
-- keeps the read-only Auditor acquisition credential separate from actuator
-  execution credentials;
-- sources credentials only from a configured secret store or a securely
+- accepts only an injected or local snapshot and performs pure finding
+  reduction; it never reads credentials or makes network calls;
+
+The separate `rule acquire` command or service must:
+
+- use the least-privilege, read-only Auditor credential (per the permissions
+  model, Section 8.1), kept separate from actuator execution credentials;
+- source credentials only from a configured secret store or a securely
   injected environment variable, never from a command-line argument,
-  committed/backend file, or log, and never persists or logs a token or secret
-  value (redaction per Section 3.2.2);
+  committed/backend file, or log;
 - sets a request timeout on every API call and retries transient failures with
   exponential backoff (Section 8.2);
+- report an operational failure instead of producing a partial snapshot when
+  acquisition cannot complete.
+
+Every `github-api` actuator must:
+
+- run with its least-privilege operation-specific token scope;
+- source credentials only from a configured secret store or a securely
+  injected environment variable, never from a command-line argument,
+  committed/backend file, or log, and never persist or log a token or secret
+  value (redaction per Section 3.2.2);
 - defines a stable deduplication key (derived from the target entity and the
   action — for example the pull-request head plus the comment intent, or the
   alert number plus the issue kind), embeds that key in the effect it creates,
@@ -1331,7 +1343,8 @@ concordat artefact rule config show <rule-id> --estate <alias>
 concordat artefact rule config set <rule-id> <key>=<value> --estate <alias>
 concordat artefact rule config reset <rule-id> [<key>...] --estate <alias>
 
-concordat artefact rule run <rule-id> --repo <path>
+concordat artefact rule acquire <rule-id> --repo <path> --snapshot <path>
+concordat artefact rule run <rule-id> --repo <path> [--snapshot <path>]
 concordat artefact rule mutate <rule-id> --repo <path>
 ```
 
@@ -1342,8 +1355,13 @@ Expected behaviour:
   rule policy tests (where present).
 - `rule config` operates on estate configuration and supports a “defaults plus
   overrides” model.
+- `rule acquire` is the explicit, fallible live GitHub acquisition step. It
+  uses the read-only Auditor credential to write the requested snapshot and
+  reports operational failure without invoking `rule run`.
 - `rule run` evaluates the sensor for a target repository and produces findings
-  without changes.
+  without changes. For a `github-api` rule, the runner supplies an injected or
+  local snapshot (including replay input); the command makes no network calls,
+  even when credentials are present.
 - `rule mutate` produces deterministic edits (patches) for remediation tooling.
 
 ##### Output formats
@@ -1802,10 +1820,11 @@ adapt it per repository, and a mutation (actuator) that remediates it. Checks
 whose defect lives in the checkout (the Makefile, workflow YAML, or a manifest)
 use the `conftest` sensor with deterministic-edit actuators; checks whose
 defect lives in live repository state (CV-003, AM-001, AM-002, DP-001, DP-002)
-use the `github-api` sensor and actuator types, which the Section 2.1.2
-contract defines for this purpose. The motivating incidents come from the 2026
-Whitaker lint rollout (30+ repositories) and the CodeScene coverage rollout;
-every rule below corresponds to a defect actually found in the estate.
+use `rule acquire` snapshots with the `github-api` sensor and actuator types,
+which the Section 2.1.2 contract defines for this purpose. The motivating
+incidents come from the 2026 Whitaker lint rollout (30+ repositories) and the
+CodeScene coverage rollout; every rule below corresponds to a defect actually
+found in the estate.
 
 ##### Lint-gate binding (QG-001, QG-002, QG-003)
 
@@ -2319,9 +2338,10 @@ keeps local smoke tests hermetic.
 The `conftest` checks are deterministic functions of a checkout and surface
 entirely through SARIF, so the Code Scanning dashboard is sufficient
 observability for them. The `github-api` sensors and actuators (CV-003, AM-001,
-AM-002, DP-001, DP-002) are different: they run as scheduled sweeps, make
-authenticated network calls, and take side effects (comments, issues, secret
-provisioning). A silent failure there is invisible in SARIF — the AM-002
+AM-002, DP-001, DP-002) are different: the sensors consume snapshots produced by
+`rule acquire`, while the acquisition service and actuators make authenticated
+network calls. Actuators additionally take side effects (comments, issues,
+secret provisioning). A silent failure there is invisible in SARIF — the AM-002
 `startup_failure` incident is precisely a check that failed with no signal — so
 each API-backed check carries explicit observability requirements.
 

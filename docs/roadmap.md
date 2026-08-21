@@ -277,10 +277,12 @@ actuators that remediate them. Each check ships as a lint rule package under
   static input tree cannot express checks that read live repository state, and
   deterministic-edit mutations cannot post comments or open issues. Acceptance:
   `concordat artefact rule validate` accepts a package declaring
-  `sensor.type: github-api` and `github-api` actuators (`comment`, `issue`); a
-  live `rule run` uses the read-only Auditor credential for authenticated
-  GitHub API acquisition, while a replay `rule run` reads a recorded JSON
-  snapshot from its local path and makes zero network calls; `rule mutate`
+  `sensor.type: github-api` and `github-api` actuators (`comment`, `issue`); an
+  explicit `rule acquire` command or service uses the read-only Auditor
+  credential for fallible authenticated GitHub API acquisition and writes a
+  snapshot, while `rule run` reads a supplied local snapshot (including replay)
+  and makes zero network calls; it rejects a missing snapshot without
+  attempting network access even when credentials are present; `rule mutate`
   performs the side effect against a mocked API; each emits a structured log
   line carrying the check ID, operation, and entity IDs, and the sweep
   publishes bounded per-check metrics and fires alerts only for incomplete
