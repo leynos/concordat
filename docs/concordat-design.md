@@ -158,9 +158,11 @@ synchronization:
 - Resolves legacy labels listed in `aliases` by swapping them for the canonical
   key.
 
-Target repositories include a thin caller workflow pinning to a tagged version
-of the reusable definition. Authentication uses a repository-scoped Personal
-Access Token with `issues:write`, and `projects:write` permissions.
+Target repositories include a thin caller workflow referencing the reusable
+definition via an immutable commit SHA or an explicitly verified immutable-tag
+mechanism. Branches and unverified tags are non-compliant. Authentication uses
+a repository-scoped Personal Access Token with `issues:write`, and
+`projects:write` permissions.
 
 ### 2.5 Auditor enforcement and rulesets
 
