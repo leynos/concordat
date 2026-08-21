@@ -1034,8 +1034,8 @@ the secret that already succeeded.
 
 ###### The single-flight lease
 
-The lease needs a durable store that every sweep can reach and that supports an
-atomic create and conditional claim. GitHub itself provides the initial
+The lease needs a durable store that every sweep can reach and that supports
+atomic creation and a conditional claim. GitHub itself provides the initial
 acquisition boundary, so a git ref can remain the lease's initial acquisition:
 `POST /git/refs` returns `409 Conflict` if the ref already exists. GitHub's ref
 update API does not provide an expected-old-SHA predicate for expiry takeover;
@@ -2202,7 +2202,8 @@ claim, final existence check, create, timeout, connection failure, `429`,
 transient `5xx`, non-retryable `4xx`, lost response, reconciliation
 success/absence/failure, Actions and Dependabot secret `PUT`, first-store
 success, second-store failure, store re-read, replay convergence, permitted
-retry, release, shutdown, grace expiry, and next-sweep recovery. The model
+retry, release, stale release after worker B conditionally claims worker A's
+expired lease, shutdown, grace expiry, and next-sweep recovery. The model
 asserts that:
 
 - at most one external effect exists for each non-idempotent `POST`
@@ -2212,8 +2213,9 @@ asserts that:
 - final precheck and non-idempotent create are one atomic fenced operation;
 - a lease loser never creates; an expiry takeover validates the expected lease
   version/SHA and issues a new fencing token atomically; a stale worker that
-  loses that fenced claim never creates, while server-idempotent operations
-  converge without a lease;
+  loses that fenced claim never creates, and a stale release is rejected while
+  worker B's claimed lease and fencing remain intact; server-idempotent
+  operations converge without a lease;
 - each secret-store `PUT` converges independently; after partial CV-003
   completion, reconciliation re-reads both stores and replay updates only the
   missing or failed store, preserving the successful secret and never treating
@@ -2224,17 +2226,22 @@ asserts that:
   later sweep recovers safely;
 - every attempt has exactly one terminal outcome from the Section 2.1.2
   vocabulary; and
-- logs, metrics, and alerts expose the required outcome without secret values.
+- logs, metrics, alerts, trace attributes, and structured error payloads expose
+  the required outcome; secret values are absent from those channels and from
+  recorded snapshots.
 
 After every generated operation, an oracle compares the implementation with the
 reference model for effects and API create/`PUT` call counts scoped by
 deduplication key and effect type, with a target-store dimension for CV-003;
 lease ownership and fencing; retry count and remaining budget; terminal
-outcome; and emitted logs, metrics, and alerts. Shrinking must produce a short
-reproducible trace, including the delayed stale-worker-after-final-read and
-conditional-claim interleaving, so a failure identifies the smallest violating
-sequence. The observability oracle follows Section 3.2.2, and the required
-fixture and CI reproduction are tracked in roadmap Section 4.2.
+outcome; and emitted logs, metrics, alerts, trace attributes, structured error
+payloads, and recorded snapshots. The observability oracle asserts that secret
+values are absent from every one of those channels. Shrinking must produce a
+short reproducible trace, including the delayed stale-worker-after-final-read,
+the stale-release-after-conditional-claim, and conditional-claim interleaving,
+so a failure identifies the smallest violating sequence. The observability
+oracle follows Section 3.2.2, and the required fixture and CI reproduction are
+tracked in roadmap Section 4.2.
 
 ### 3.2. Implementation design and execution model
 
@@ -2583,11 +2590,12 @@ specific build arguments, or whether a release is needed) without needing to
 copy, paste, and maintain the complex underlying workflow logic.14
 
 Target repositories will contain only minimal "caller" workflows. These simple
-YAML files will primarily consist of a `jobs.*.uses` key that points to the
-versioned, reusable workflow in the `platform-standards` repository, and a
-`with` block to pass the required inputs. This pattern drastically reduces
-maintenance overhead, and ensures that updates to CI/CD logic can be rolled out
-centrally.
+YAML files will primarily consist of a `jobs.*.uses` key that points to a
+canonical reusable workflow in the `platform-standards` repository, pinned to
+an immutable commit SHA or an explicitly verified immutable-tag mechanism, and a
+`with` block to pass the required inputs. Branches and mutable or unverified
+tags are non-compliant. This pattern drastically reduces maintenance overhead,
+and ensures that updates to CI/CD logic can be rolled out centrally.
 
 ## 6. Scaled remediation and change management
 
