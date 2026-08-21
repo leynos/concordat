@@ -103,7 +103,6 @@ def _owner_slug_missing_error(specification: str) -> ConcordatError:
 
 
 def _owner_mismatch_error(
-    specification: str,
     slug: str,
     github_owner: str,
 ) -> ConcordatError:
@@ -707,7 +706,7 @@ def _require_allowed_owner(
         raise ConcordatError(detail)
     repo_owner, _, _ = slug.partition("/")
     if repo_owner.lower() != expected_owner.lower():
-        raise _owner_mismatch_error(specification, slug, expected_owner)
+        raise _owner_mismatch_error(slug, expected_owner)
     return slug
 
 
