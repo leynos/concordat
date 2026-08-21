@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from textual.widgets import DataTable
 
 from concordat.canon_artifacts import (
     ArtifactComparison,
@@ -59,12 +60,13 @@ async def test_refresh_action_recomputes_mounted_application_rows(
     )
 
     async with app.run_test() as pilot:
-        assert app._table.row_count == 1
+        table = app.query_one(DataTable)
+        assert table.row_count == 1, "refresh test requires one initial table row"
 
         await pilot.press("r")
 
-        assert app._table.row_count == 2
-        assert [comparison.id for comparison in app._comparisons] == [
+        assert table.row_count == 2, "refresh should replace the table with two rows"
+        assert [table.get_row_at(index)[0] for index in range(table.row_count)] == [
             "first",
             "second",
-        ]
+        ], "refresh should display the recomputed comparison IDs"
