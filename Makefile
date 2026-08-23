@@ -14,10 +14,12 @@ TYPOS := uv tool run typos@$(TYPOS_VERSION)
 TY_VERSION ?= 0.0.65
 TY := uv tool run ty@$(TY_VERSION)
 SKYLOS_VERSION = 4.33.2
-SKYLOS_COMMAND = $(UV_ENV) uv tool run --from 'skylos==$(SKYLOS_VERSION)' skylos
-SKYLOS = $(SKYLOS_COMMAND) --config-file pyproject.toml
-SKYLOS_WHITELIST = $(SKYLOS_COMMAND) whitelist
+# Skylos parses source using its own Python AST, so Python 3.14 prevents
+# phantom dead-code findings from syntax older tool runtimes cannot parse.
+SKYLOS_CLI = $(UV_ENV) uv tool run --python 3.14 --from 'skylos==$(SKYLOS_VERSION)' skylos
+SKYLOS = $(SKYLOS_CLI) --config-file pyproject.toml
 SKYLOS_PRODUCTION_TARGETS ?= concordat scripts
+SKYLOS_EXCLUDE_FOLDERS ?= tests
 
 .PHONY: help all clean build build-release lint fmt check-fmt \
 	        markdownlint nixie spelling skylos-allow makeutil test typecheck vale $(TOOLS) \
@@ -81,12 +83,14 @@ check-fmt: build ## Verify formatting
 lint: build ## Run linters
 	$(RUFF) check
 	+$(MAKE) spelling
-	$(SKYLOS) $(SKYLOS_PRODUCTION_TARGETS) --category dead_code --gate --format concise --no-upload --no-provenance --no-grep-verify
+	$(SKYLOS) $(SKYLOS_PRODUCTION_TARGETS) --exclude $(SKYLOS_EXCLUDE_FOLDERS) --category dead_code --gate --format concise --no-upload --no-provenance --no-grep-verify
 
-skylos-allow: export SKYLOS_NAME = $(value NAME)
+skylos-allow: export SKYLOS_SYMBOL = $(value SYMBOL)
+skylos-allow: export SKYLOS_REASON = $(value REASON)
 skylos-allow: ## Document one named Skylos exception, not an entry point
-	@test -n "$${SKYLOS_NAME}" || { printf "Error: NAME is required for a named whitelist exception\\n" >&2; exit 2; }
-	$(SKYLOS_WHITELIST) "$${SKYLOS_NAME}"
+	@test -n "$${SKYLOS_SYMBOL}" || { printf "Error: SYMBOL is required for a named whitelist exception\\n" >&2; exit 2; }
+	@test -n "$${SKYLOS_REASON}" || { printf "Error: REASON is required for a named whitelist exception\\n" >&2; exit 2; }
+	$(SKYLOS_CLI) whitelist "$${SKYLOS_SYMBOL}" --reason "$${SKYLOS_REASON}"
 
 typecheck: build uv ## Run typechecking
 	$(TY) --version

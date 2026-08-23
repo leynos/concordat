@@ -47,6 +47,20 @@ line-length = 88
 [tool.skylos.gate]
 strict = true
 
+[[tool.skylos.dead_code.entrypoints]]
+type = "method"
+full_name = [
+    "scripts.canon_artifacts_tui.CanonArtifactsApp.action_refresh",
+    "scripts.canon_artifacts_tui.CanonArtifactsApp.action_sync_selected",
+    "scripts.canon_artifacts_tui.CanonArtifactsApp.action_sync_all_outdated",
+]
+reason = "Textual dispatches these actions through the application's bindings."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "variable"
+full_name = "scripts.canon_artifacts_tui.CanonArtifactsApp.BINDINGS"
+reason = "Textual reads the class binding table when it initialises the application."
+
 [tool.ruff.lint]
 select = [
     "F",        # Pyflakes rules
@@ -161,16 +175,10 @@ packages = [
 [tool.setuptools.package-data]
 "concordat.canon" = ["lint-rules/**/*"]
 
-[tool.skylos.whitelist]
-names = [
-    "RefreshResult",
-    "_refresh",
-    "action_sync_all_outdated",
-    "action_sync_selected",
-    "action_refresh",
-    "BINDINGS",
-    "render",
-    "_format_outcome",
-    "published_path",
-    "template_path",
-]
+[tool.skylos.whitelist.documented]
+"RefreshResult" = "Re-exported by typos_rollout and used by generate_typos_config."
+"_refresh" = "Called by Textual lifecycle and action callbacks after framework dispatch."
+"render" = "Called by the CLI when it prints enrollment outcomes."
+"_format_outcome" = "Called by both enrollment outcome render methods."
+"published_path" = "Called by compare_manifest_to_published for each artifact."
+"template_path" = "Called by compare_manifest_to_published for each artifact."
