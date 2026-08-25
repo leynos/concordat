@@ -112,6 +112,10 @@ jobs:
         with:
           output-path: coverage.xml
           format: cobertura
+          # The v1 cache predates the current serial coverage measurement.
+          # Rotate only the Python baseline path to rebase the ratchet on
+          # the complete current suite.
+          baseline-python-file: .coverage-baseline.python-v2
           pytest-workers: ''
           with-ratchet: 'true'
 

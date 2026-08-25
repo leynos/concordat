@@ -26,6 +26,7 @@ REPOSITORY_ROOT = Path(__file__).parents[2]
 _MAKEUTIL_COMMAND: typ.Final = ("makeutil", "parse", "Makefile")
 _MAKEUTIL_REVISION: typ.Final = "29fc5a1634ffbaa18a773eed9dff1b2838a45d9c"
 _MAKEUTIL_TOOLCHAIN: typ.Final = "nightly-2026-05-28"
+_COVERAGE_BASELINE_PYTHON_FILE: typ.Final = ".coverage-baseline.python-v2"
 _MAKEUTIL_INSTALL_TOKENS: typ.Final = (
     "rustup",
     "toolchain",
@@ -241,13 +242,13 @@ def _run_skylos_allow_with_stub(
     uv_stub.chmod(0o755)
     environment: dict[str, str] = dict(os.environ)
     environment["SKYLOS_ARGUMENTS_PATH"] = str(arguments_path)
+    environment["SYMBOL"] = symbol
+    environment["REASON"] = reason
     command: tuple[str, ...] = (
         _MAKE_EXECUTABLE,
         "--no-print-directory",
         f"UV_ENV=PATH={directory}:{environment['PATH']}",
         "skylos-allow",
-        f"SYMBOL={symbol}",
-        f"REASON={reason}",
     )
     completed = subprocess.run(  # noqa: S603 - Fixed Make target and temporary stub.
         command,
@@ -400,6 +401,8 @@ def test_skylos_allow_dry_run_preserves_the_whitelist_command_contract() -> None
 
 @given(symbol=_SKYLOS_ARGUMENT_TEXT, reason=_SKYLOS_ARGUMENT_TEXT)
 @example(symbol="symbol with spaces;$", reason="reason with $hell & 'quotes'")
+@example(symbol="0", reason=" ")
+@example(symbol="0", reason=" 0")
 @settings(max_examples=25, deadline=None)
 def test_skylos_allow_forwards_non_empty_generated_arguments(
     symbol: str, reason: str
@@ -492,6 +495,18 @@ def test_ci_installs_makeutil_for_every_full_suite() -> None:
     assert lint_step.get("run") == "make lint", (
         "CI lint step must invoke the shared Makefile lint target"
     )
+    pull_request_coverage = _sole_workflow_step("lint-test", "Generate coverage")
+    pull_request_coverage_inputs = _mapping(
+        pull_request_coverage.get("with"),
+        subject="pull-request coverage action inputs",
+    )
+    assert pull_request_coverage_inputs.get("pytest-workers") == "", (
+        "pull-request coverage must run pytest serially for a stable ratchet"
+    )
+    assert (
+        pull_request_coverage_inputs.get("baseline-python-file")
+        == _COVERAGE_BASELINE_PYTHON_FILE
+    ), "pull-request coverage must use the reset Python ratchet baseline"
     coverage = _workflow_job(".github/workflows/coverage-main.yml", "coverage-upload")
     _assert_makeutil_environment(coverage, contract="main coverage Makeutil contract")
     coverage_parser = _sole_workflow_step(
@@ -502,3 +517,18 @@ def test_ci_installs_makeutil_for_every_full_suite() -> None:
     _assert_makeutil_installation(
         coverage_parser.get("run"), contract="main coverage Makeutil-install contract"
     )
+    main_coverage = _sole_workflow_step(
+        "coverage-upload",
+        "Generate coverage",
+        workflow_path=".github/workflows/coverage-main.yml",
+    )
+    main_coverage_inputs = _mapping(
+        main_coverage.get("with"), subject="main coverage action inputs"
+    )
+    assert main_coverage_inputs.get("pytest-workers") == "", (
+        "main coverage must run pytest serially for a stable ratchet"
+    )
+    assert (
+        main_coverage_inputs.get("baseline-python-file")
+        == _COVERAGE_BASELINE_PYTHON_FILE
+    ), "main coverage must use the reset Python ratchet baseline"

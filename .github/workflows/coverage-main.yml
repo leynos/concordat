@@ -49,6 +49,9 @@ jobs:
         with:
           output-path: coverage.xml
           format: cobertura
+          # Keep this path aligned with pull-request coverage. The v1 cache
+          # predates the current serial coverage measurement.
+          baseline-python-file: .coverage-baseline.python-v2
           pytest-workers: ''
           with-ratchet: 'true'
 
