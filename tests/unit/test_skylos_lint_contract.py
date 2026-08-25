@@ -16,7 +16,10 @@ import subprocess
 import tomllib
 import typing as typ
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
+from hypothesis import example, given, settings
+from hypothesis import strategies as st
 from ruamel.yaml import YAML
 
 REPOSITORY_ROOT = Path(__file__).parents[2]
@@ -63,6 +66,14 @@ _DOCUMENTED_FALSE_POSITIVES: typ.Final = frozenset(
         "render",
         "template_path",
     }
+)
+_SKYLOS_ARGUMENT_TEXT: typ.Final = st.text(
+    alphabet=(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 "
+        "\t$;&|*?[]{}()<>!\\\"'`"
+    ),
+    min_size=1,
+    max_size=24,
 )
 
 
@@ -210,6 +221,53 @@ def _run_skylos_allow(*arguments: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _run_skylos_allow_with_stub(
+    symbol: str, reason: str, directory: Path
+) -> tuple[str, ...]:
+    """Run the whitelist target against a non-mutating ``uv`` argument recorder."""
+    arguments_path = directory / "arguments.json"
+    uv_stub = directory / "uv"
+    uv_stub.write_text(
+        "#!/usr/bin/env python3\n"
+        "import json\n"
+        "import os\n"
+        "import sys\n"
+        "from pathlib import Path\n\n"
+        'Path(os.environ["SKYLOS_ARGUMENTS_PATH"]).write_text(\n'
+        "    json.dumps(sys.argv[1:]), encoding='utf-8'\n"
+        ")\n",
+        encoding="utf-8",
+    )
+    uv_stub.chmod(0o755)
+    environment: dict[str, str] = dict(os.environ)
+    environment["SKYLOS_ARGUMENTS_PATH"] = str(arguments_path)
+    command: tuple[str, ...] = (
+        _MAKE_EXECUTABLE,
+        "--no-print-directory",
+        f"UV_ENV=PATH={directory}:{environment['PATH']}",
+        "skylos-allow",
+        f"SYMBOL={symbol}",
+        f"REASON={reason}",
+    )
+    completed = subprocess.run(  # noqa: S603 - Fixed Make target and temporary stub.
+        command,
+        capture_output=True,
+        check=False,
+        cwd=REPOSITORY_ROOT,
+        env=environment,
+        text=True,
+    )
+    assert completed.returncode == 0, (
+        "Skylos whitelist property must accept non-empty generated arguments: "
+        f"{completed.stderr}"
+    )
+    assert arguments_path.exists(), (
+        "Skylos whitelist property must invoke the temporary uv recorder"
+    )
+    arguments = json.loads(arguments_path.read_text(encoding="utf-8"))
+    return _text_sequence(arguments, subject="recorded Skylos arguments")
+
+
 def _assert_makeutil_installation(command: object, *, contract: str) -> None:
     """Assert that ``command`` installs the pinned Makeutil parser."""
     assert isinstance(command, str), (
@@ -338,6 +396,33 @@ def test_skylos_allow_dry_run_preserves_the_whitelist_command_contract() -> None
         'skylos whitelist "${SKYLOS_SYMBOL}" --reason "${SKYLOS_REASON}"'
         in completed.stdout
     ), "Skylos whitelist dry-run must preserve subcommand argument order"
+
+
+@given(symbol=_SKYLOS_ARGUMENT_TEXT, reason=_SKYLOS_ARGUMENT_TEXT)
+@example(symbol="symbol with spaces;$", reason="reason with $hell & 'quotes'")
+@settings(max_examples=25, deadline=None)
+def test_skylos_allow_forwards_non_empty_generated_arguments(
+    symbol: str, reason: str
+) -> None:
+    """Every generated argument reaches Skylos as one whitelist argument."""
+    with TemporaryDirectory() as temporary_directory:
+        forwarded = _run_skylos_allow_with_stub(
+            symbol, reason, Path(temporary_directory)
+        )
+
+    assert forwarded == (
+        "tool",
+        "run",
+        "--python",
+        "3.14",
+        "--from",
+        "skylos==4.33.2",
+        "skylos",
+        "whitelist",
+        symbol,
+        "--reason",
+        reason,
+    ), "Skylos whitelist property must forward each generated value exactly once"
 
 
 def test_skylos_configuration_models_runtime_and_documented_boundaries() -> None:

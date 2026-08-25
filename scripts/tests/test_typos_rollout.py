@@ -47,13 +47,16 @@ def rollout_modules_fixture(
     return cache, rollout, generator
 
 
-def _dictionary_text(stem: str = "organ") -> str:
+def _dictionary_text(
+    stem: str = "organ", *, ignore_patterns: tuple[str, ...] = ()
+) -> str:
     """Return a minimal valid shared-dictionary document."""
+    ignore = ", ".join(f"'{pattern}'" for pattern in ignore_patterns)
     return (
         'schema = 1\n\n[oxford]\nstems = ["'
         + stem
         + '"]\n\n[words]\naccepted = []\n\n[words.corrections]\n\n'
-        + "[patterns]\nignore = []\n\n[files]\nexclude = []\n"
+        + f"[patterns]\nignore = [{ignore}]\n\n[files]\nexclude = []\n"
     )
 
 
@@ -406,7 +409,7 @@ def test_local_policy_preserves_inline_code_removal(
     """The generated configuration retains the committed inline-code policy."""
     _, rollout, generator = rollout_modules
     (tmp_path / ".typos-oxendict-base.toml").write_text(
-        _dictionary_text(), encoding="utf-8"
+        _dictionary_text(ignore_patterns=(r"`[^`\n]+`",)), encoding="utf-8"
     )
     (tmp_path / "typos.local.toml").write_text(
         (REPOSITORY_ROOT / "typos.local.toml").read_text(encoding="utf-8"),
@@ -418,6 +421,9 @@ def test_local_policy_preserves_inline_code_removal(
 
     assert "`[^`\\n]+`" not in config["default"]["extend-ignore-re"], (
         "committed inline-code removal must survive generated configuration"
+    )
+    assert r"\bcanon_artifacts\b" in config["default"]["extend-ignore-re"], (
+        "committed local ignore patterns must survive generated configuration"
     )
 
 

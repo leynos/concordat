@@ -163,7 +163,7 @@ Makefile targets:
 | ---------------- | ----------------------------------------- |
 | `make fmt`       | Format Python and Markdown sources        |
 | `make lint`      | Run Ruff, spelling, and Skylos lint tiers |
-| `make typecheck` | Run pyright type checker                  |
+| `make typecheck` | Run ty type checker                       |
 | `make test`      | Run the test suite                        |
 | `make check-fmt` | Verify formatting without changing files  |
 | `make spelling`  | Enforce shared en-GB-oxendict spelling    |
