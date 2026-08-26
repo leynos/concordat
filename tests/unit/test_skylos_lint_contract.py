@@ -27,6 +27,7 @@ _MAKEUTIL_COMMAND: typ.Final = ("makeutil", "parse", "Makefile")
 _MAKEUTIL_REVISION: typ.Final = "29fc5a1634ffbaa18a773eed9dff1b2838a45d9c"
 _MAKEUTIL_TOOLCHAIN: typ.Final = "nightly-2026-05-28"
 _COVERAGE_BASELINE_PYTHON_FILE: typ.Final = ".coverage-baseline.python-v2"
+_HYPOTHESIS_REQUIREMENT: typ.Final = "hypothesis>=6.165.10,<7.0"
 _MAKEUTIL_INSTALL_TOKENS: typ.Final = (
     "rustup",
     "toolchain",
@@ -68,13 +69,18 @@ _DOCUMENTED_FALSE_POSITIVES: typ.Final = frozenset(
         "template_path",
     }
 )
-_SKYLOS_ARGUMENT_TEXT: typ.Final = st.text(
-    alphabet=(
-        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 "
-        "\t$;&|*?[]{}()<>!\\\"'`"
+_SKYLOS_ARGUMENT_TEXT: typ.Final = st.builds(
+    lambda prefix, content, suffix: prefix + content + suffix,
+    st.text(alphabet=" \t", max_size=4),
+    st.text(
+        alphabet=(
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+            "_$;&|*?[]{}()<>!\\\"'`"
+        ),
+        min_size=1,
+        max_size=24,
     ),
-    min_size=1,
-    max_size=24,
+    st.text(alphabet=" \t", max_size=4),
 )
 
 
@@ -205,13 +211,22 @@ def _sole_workflow_step(
     return matches[0]
 
 
-def _run_skylos_allow(*arguments: str) -> subprocess.CompletedProcess[str]:
-    """Run the non-mutating whitelist validation boundary."""
+def _run_skylos_allow(
+    *, symbol: str | None = None, reason: str | None = None
+) -> subprocess.CompletedProcess[str]:
+    """Run the non-mutating whitelist validation boundary through its environment."""
     environment: dict[str, str] = dict(os.environ)
     environment["NAME"] = "wsl-hostname"
-    environment.pop("REASON", None)
-    environment.pop("SYMBOL", None)
-    command: tuple[str, ...] = (_MAKE_EXECUTABLE, "skylos-allow", *arguments)
+    for variable, value in (("SYMBOL", symbol), ("REASON", reason)):
+        if value is None:
+            environment.pop(variable, None)
+        else:
+            environment[variable] = value
+    command: tuple[str, ...] = (
+        _MAKE_EXECUTABLE,
+        "--no-print-directory",
+        "skylos-allow",
+    )
     return subprocess.run(  # noqa: S603 - Fixed Make target and arguments.
         command,
         capture_output=True,
@@ -222,13 +237,15 @@ def _run_skylos_allow(*arguments: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def _run_skylos_allow_with_stub(
+def _run_skylos_allow_with_recorder(
     symbol: str, reason: str, directory: Path
 ) -> tuple[str, ...]:
-    """Run the whitelist target against a non-mutating ``uv`` argument recorder."""
+    """Run the whitelist target against a non-mutating Skylos recorder."""
+    configuration_path = REPOSITORY_ROOT / "pyproject.toml"
+    configuration_before = configuration_path.read_bytes()
     arguments_path = directory / "arguments.json"
-    uv_stub = directory / "uv"
-    uv_stub.write_text(
+    recorder = directory / "skylos-recorder"
+    recorder.write_text(
         "#!/usr/bin/env python3\n"
         "import json\n"
         "import os\n"
@@ -239,18 +256,19 @@ def _run_skylos_allow_with_stub(
         ")\n",
         encoding="utf-8",
     )
-    uv_stub.chmod(0o755)
+    recorder.chmod(0o755)
     environment: dict[str, str] = dict(os.environ)
     environment["SKYLOS_ARGUMENTS_PATH"] = str(arguments_path)
+    environment["NAME"] = "wsl-hostname"
     environment["SYMBOL"] = symbol
     environment["REASON"] = reason
     command: tuple[str, ...] = (
         _MAKE_EXECUTABLE,
         "--no-print-directory",
-        f"UV_ENV=PATH={directory}:{environment['PATH']}",
+        f"SKYLOS_CLI={recorder}",
         "skylos-allow",
     )
-    completed = subprocess.run(  # noqa: S603 - Fixed Make target and temporary stub.
+    completed = subprocess.run(  # noqa: S603 - Fixed Make target and temporary recorder.
         command,
         capture_output=True,
         check=False,
@@ -263,7 +281,10 @@ def _run_skylos_allow_with_stub(
         f"{completed.stderr}"
     )
     assert arguments_path.exists(), (
-        "Skylos whitelist property must invoke the temporary uv recorder"
+        "Skylos whitelist property must invoke the temporary Skylos recorder"
+    )
+    assert configuration_path.read_bytes() == configuration_before, (
+        "Skylos whitelist forwarding tests must not mutate pyproject.toml"
     )
     arguments = json.loads(arguments_path.read_text(encoding="utf-8"))
     return _text_sequence(arguments, subject="recorded Skylos arguments")
@@ -356,71 +377,42 @@ def test_whitelist_target_uses_skylos_subcommand_contract() -> None:
     ], "Skylos whitelist command must dispatch before SYMBOL and --reason"
 
 
-def test_skylos_allow_requires_symbol_and_reason() -> None:
-    """Incomplete whitelist input must fail before invoking Skylos."""
-    for arguments, expected_error in (
-        ((), "Error: SYMBOL is required for a named whitelist exception"),
-        (
-            ("SYMBOL=handler",),
-            "Error: REASON is required for a named whitelist exception",
-        ),
+@given(value=st.text(alphabet=" \t", min_size=1, max_size=8))
+@settings(max_examples=25, deadline=None)
+def test_skylos_allow_rejects_missing_or_whitespace_values(value: str) -> None:
+    """Missing inputs and whitespace-only values must fail despite WSL ``NAME``."""
+    for symbol, reason, missing_name in (
+        (None, None, "SYMBOL"),
+        ("handler", None, "REASON"),
+        (value, "verified runtime caller", "SYMBOL"),
+        ("handler", value, "REASON"),
     ):
-        completed = _run_skylos_allow(*arguments)
+        completed = _run_skylos_allow(symbol=symbol, reason=reason)
         assert completed.returncode == 2, (
-            "Skylos whitelist boundary must reject missing required input with exit 2"
+            f"Skylos whitelist boundary must reject missing {missing_name} with exit 2"
         )
-        assert expected_error in completed.stderr, (
-            "Skylos whitelist boundary must name the missing required input"
+        assert (
+            f"Error: {missing_name} is required for a named whitelist exception"
+            in completed.stderr
+        ), (
+            f"Skylos whitelist boundary must name the missing {missing_name} despite "
+            "the injected WSL NAME value"
         )
-
-
-def test_skylos_allow_dry_run_preserves_the_whitelist_command_contract() -> None:
-    """A complete dry run must expose the command without writing an exception."""
-    command: tuple[str, ...] = (
-        _MAKE_EXECUTABLE,
-        "--dry-run",
-        "skylos-allow",
-        "SYMBOL=handler",
-        "REASON=Loaded by plugin registry",
-    )
-    completed = subprocess.run(  # noqa: S603 - Fixed dry-run Make command.
-        command,
-        capture_output=True,
-        check=False,
-        cwd=REPOSITORY_ROOT,
-        text=True,
-    )
-    assert completed.returncode == 0, (
-        "Skylos whitelist dry-run contract must accept complete input"
-    )
-    assert (
-        'skylos whitelist "${SKYLOS_SYMBOL}" --reason "${SKYLOS_REASON}"'
-        in completed.stdout
-    ), "Skylos whitelist dry-run must preserve subcommand argument order"
 
 
 @given(symbol=_SKYLOS_ARGUMENT_TEXT, reason=_SKYLOS_ARGUMENT_TEXT)
-@example(symbol="symbol with spaces;$", reason="reason with $hell & 'quotes'")
-@example(symbol="0", reason=" ")
-@example(symbol="0", reason=" 0")
+@example(symbol=" $(handler);* ", reason=' Loaded "$plugin" | registry\t')
 @settings(max_examples=25, deadline=None)
 def test_skylos_allow_forwards_non_empty_generated_arguments(
     symbol: str, reason: str
 ) -> None:
     """Every generated argument reaches Skylos as one whitelist argument."""
     with TemporaryDirectory() as temporary_directory:
-        forwarded = _run_skylos_allow_with_stub(
+        forwarded = _run_skylos_allow_with_recorder(
             symbol, reason, Path(temporary_directory)
         )
 
     assert forwarded == (
-        "tool",
-        "run",
-        "--python",
-        "3.14",
-        "--from",
-        "skylos==4.33.2",
-        "skylos",
         "whitelist",
         symbol,
         "--reason",
@@ -432,6 +424,15 @@ def test_skylos_configuration_models_runtime_and_documented_boundaries() -> None
     """Runtime callers need typed entries; remaining reports need reasons."""
     with (REPOSITORY_ROOT / "pyproject.toml").open("rb") as configuration_file:
         configuration = tomllib.load(configuration_file)
+    dependency_groups = _mapping(
+        configuration.get("dependency-groups"), subject="dependency groups"
+    )
+    assert _HYPOTHESIS_REQUIREMENT in _text_sequence(
+        dependency_groups.get("dev"), subject="development dependencies"
+    ), (
+        "Skylos forwarding contracts must use a bounded Hypothesis development "
+        "dependency"
+    )
     tool = _mapping(configuration.get("tool"), subject="tool configuration")
     skylos = _mapping(tool.get("skylos"), subject="Skylos configuration")
     gate = _mapping(skylos.get("gate"), subject="Skylos gate configuration")

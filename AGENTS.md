@@ -89,9 +89,10 @@ When implementing changes, adhere to the following testing procedures:
       `make skylos-allow SYMBOL=symbol REASON="verified runtime caller"`.
       `NAME` is unavailable because WSL injects it with the host name. Record
       the verified runtime caller and how it was confirmed in the reviewing
-      change. Prefer a precise typed Skylos entry-point rule when it can
-      describe the runtime boundary; use the documented allow list only when
-      that model cannot describe the boundary.
+      change. Both values must contain a non-whitespace character. Prefer a
+      precise typed Skylos entry-point rule when it can describe the runtime
+      boundary; use the documented allow list only when that model cannot
+      describe the boundary.
     - **Formatting:** Adheres to formatting standards (run `make check-fmt` to
       verify, use `make fmt` to apply formatting).
     - **Typechecking:** Passes type checking (`make typecheck`).

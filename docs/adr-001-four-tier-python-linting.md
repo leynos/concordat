@@ -33,7 +33,8 @@ caller, prefer a typed `[tool.skylos.dead_code]` entry-point rule with its full
 symbol name and caller-specific reason. Add a documented allow-list entry only
 when that type-based model cannot represent a verified boundary. The helper
 requires `SYMBOL` and `REASON`; it deliberately does not use `NAME`, which WSL
-sets to the host name.
+sets to the host name. Both helper values must include a non-whitespace
+character, preventing empty-looking allow-list entries.
 
 ## Consequences
 

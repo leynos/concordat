@@ -57,11 +57,12 @@ a narrow named exception instead:
 make skylos-allow SYMBOL=symbol REASON="Loaded by plugin registry"
 ```
 
-The target requires both values and records the reason in the version-controlled
-Skylos documented allow list. Use `SYMBOL`, not `NAME`: WSL injects `NAME` with
-the host name. Record the verified caller and its evidence in the reviewing
-change. Do not add bulk or unexplained exceptions; remove an exception when its
-runtime boundary disappears.
+The target requires both values to contain at least one non-whitespace
+character and records the reason in the version-controlled Skylos documented
+allow list. Use `SYMBOL`, not `NAME`: WSL injects `NAME` with the host name.
+Record the verified caller and its evidence in the reviewing change. Do not add
+bulk or unexplained exceptions; remove an exception when its runtime boundary
+disappears.
 
 The Makefile uses `$(SKYLOS_CLI)` only for subcommands and keeps scan-only
 options such as `--config-file` in `$(SKYLOS)`. This keeps
