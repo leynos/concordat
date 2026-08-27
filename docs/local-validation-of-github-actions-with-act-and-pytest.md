@@ -174,6 +174,7 @@ loop:
 ```python
 from cmd_mox import CmdMox
 
+
 def test_record(tmp_path: Path) -> None:
     artifact_dir = tmp_path / "act-artifacts"
     with CmdMox() as mox:
@@ -183,7 +184,6 @@ def test_record(tmp_path: Path) -> None:
         assert code == 0, logs
         mox.verify()
         assert gh.call_count == 1
-
 ```
 
 - **Replay** deterministically with mocks. Configure expectations using the
@@ -202,7 +202,6 @@ def test_replay(tmp_path: Path, cmd_mox) -> None:
     code, _, logs = run_act(artifact_dir=artifact_dir)
     assert code == 0, logs
     cmd_mox.verify()
-
 ```
 
 ## Concordat Auditor workflow harness

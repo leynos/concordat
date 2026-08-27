@@ -139,15 +139,25 @@ def _ledger_record(
     The ledger is append-only and read back on every sweep, so a truncated or
     hand-edited line has to surface as an operational error rather than be
     trusted into the typed flow by a cast.
+
+    Returns
+    -------
+    LedgerRecord
+        The validated decoded ledger record.
+
+    Raises
+    ------
+    OperationalRuleError
+        If the decoded line is not a valid ledger record.
     """
     if not isinstance(decoded, dict):
         message = f"ledger {path} line {line_number} is not a JSON object"
-        raise _ledger_error(message, path)
+        raise OperationalRuleError(message, operation="load-ledger", resource=path)
     record = typ.cast("dict[str, object]", decoded)
     missing = sorted(_LEDGER_REQUIRED_KEYS - record.keys())
     if missing:
         message = f"ledger {path} line {line_number} is missing {missing}"
-        raise _ledger_error(message, path)
+        raise OperationalRuleError(message, operation="load-ledger", resource=path)
     _validate_record_fields(record, path, line_number)
     return typ.cast("LedgerRecord", record)
 
@@ -184,6 +194,11 @@ def _matches_expected_type(value: object, expected: type) -> bool:
 
     `bool` is excluded from the integer check: it subclasses `int`, so `true`
     would otherwise pass as a schema version or a line number.
+
+    Returns
+    -------
+    bool
+        Whether *value* has the expected type.
     """
     if expected is int:
         if isinstance(value, bool):
@@ -291,7 +306,8 @@ def _load_ledger(path: pathlib.Path) -> Ledger:
 
 def _timestamp() -> str:
     return (
-        dt.datetime.now(dt.UTC)
+        dt.datetime
+        .now(dt.UTC)
         .replace(microsecond=0)
         .isoformat()
         .replace("+00:00", "Z")
@@ -341,6 +357,11 @@ def _finding_record(finding: Finding) -> FindingRecord:
 
     `dataclasses.asdict` returns `dict[str, Any]`, which would defeat the
     point of the record types.
+
+    Returns
+    -------
+    FindingRecord
+        The typed serialized representation of *finding*.
     """
     return {
         "rule_id": finding.rule_id,

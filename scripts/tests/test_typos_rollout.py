@@ -519,7 +519,7 @@ def test_http_refresh_uses_validators_and_preserves_newer_cache(
 
     def open_response(request: urllib.request.Request, *, timeout: float) -> Response:
         """Capture the request passed to the network boundary."""
-        assert timeout == 30.0
+        assert timeout == pytest.approx(30.0)
         requests.append(request)
         return Response()
 

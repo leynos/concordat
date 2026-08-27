@@ -1,5 +1,4 @@
 """Validation of user inputs and remote S3 backends."""
-# ruff: noqa: TRY003
 
 from __future__ import annotations
 
@@ -46,21 +45,29 @@ def _validate_inputs(
 def _validate_path_safety(path: str, field_name: str) -> None:
     """Ensure path segments do not include traversal elements."""
     if ".." in path.split("/"):
-        raise PersistenceError(f"{field_name} may not include directory traversals.")
+        raise PersistenceError(  # noqa: TRY003  # Domain error identifies invalid input.
+            f"{field_name} may not include directory traversals."
+        )
 
 
 def _validate_key_suffix_not_empty(key_suffix: str) -> None:
     """Ensure the key suffix is not empty or whitespace only."""
     if not key_suffix.strip():
-        raise PersistenceError("Key suffix is required.")
+        raise PersistenceError(  # noqa: TRY003  # Domain error identifies required input.
+            "Key suffix is required."
+        )
 
 
 def _validate_required_fields(descriptor: PersistenceDescriptor) -> None:
     """Ensure required descriptor fields are populated."""
     if not descriptor.bucket:
-        raise PersistenceError("Bucket is required.")
+        raise PersistenceError(  # noqa: TRY003  # Domain error identifies required input.
+            "Bucket is required."
+        )
     if not descriptor.region:
-        raise PersistenceError("Region is required.")
+        raise PersistenceError(  # noqa: TRY003  # Domain error identifies required input.
+            "Region is required."
+        )
 
 
 def _check_endpoint_scheme(endpoint: str, *, allow_insecure: bool) -> None:
@@ -72,12 +79,12 @@ def _check_endpoint_scheme(endpoint: str, *, allow_insecure: bool) -> None:
         return
 
     if "://" not in endpoint:
-        raise PersistenceError(
+        raise PersistenceError(  # noqa: TRY003  # Domain error provides operator remediation.
             "Endpoint must include an https:// scheme (for example, "
             "https://s3.example.com)."
         )
 
-    raise PersistenceError(
+    raise PersistenceError(  # noqa: TRY003  # Domain error provides operator remediation.
         "Endpoint must use HTTPS (for example, https://s3.example.com)."
     )
 
@@ -87,7 +94,9 @@ def _validate_endpoint_protocol(
 ) -> None:
     """Ensure endpoints use HTTPS unless explicitly allowed for dev use."""
     if not (endpoint := endpoint.strip()):
-        raise PersistenceError("Endpoint is required.")
+        raise PersistenceError(  # noqa: TRY003  # Domain error identifies required input.
+            "Endpoint is required."
+        )
     endpoint = normalize_endpoint_url(endpoint)
     _check_endpoint_scheme(endpoint, allow_insecure=allow_insecure_endpoint)
 
@@ -133,7 +142,7 @@ def _bucket_versioning_status(client: S3Client, bucket: str) -> str | None:
             f"Details: {error}"
         )
         raise PersistenceError(message) from error
-    except boto_exceptions.ClientError as error:  # type: ignore[attr-defined]
+    except boto_exceptions.ClientError as error:  # type: ignore[attr-defined]  # botocore defines ClientError dynamically.
         message = (
             "Versioning check failed: the bucket API rejected the request. "
             "Confirm the bucket exists and the provided credentials can query it. "
@@ -153,7 +162,7 @@ def _perform_s3_operation(
     except boto_exceptions.BotoCoreError as error:
         message = f"{error_message}: {error}"
         raise PersistenceError(message) from error
-    except boto_exceptions.ClientError as error:  # type: ignore[attr-defined]
+    except boto_exceptions.ClientError as error:  # type: ignore[attr-defined]  # botocore defines ClientError dynamically.
         message = f"{error_message}: {error}"
         raise PersistenceError(message) from error
 
@@ -177,12 +186,7 @@ def _session_token_from_environment(env: typ.Mapping[str, str]) -> str | None:
 
 
 def _credentials_from_environment(env: typ.Mapping[str, str]) -> dict[str, str]:
-    """Resolve S3 credentials from supported environment variables.
-
-    Boto3 recognises the AWS_* variables. Concordat also supports alternative
-    names for S3-compatible vendors (Scaleway/Spaces) and maps those to the
-    boto3 client arguments.
-    """
+    """Resolve S3 credentials from AWS and supported vendor environment variables."""
 
     def present(*names: str) -> bool:
         return all(env.get(name, "").strip() for name in names)

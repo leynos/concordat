@@ -30,6 +30,11 @@ class TestReport:
         introduce a key the ledger schema does not define. `audited_at` is a
         *required* field and gets its own parameter: the latest-record test
         varies it, which is not the same thing as supplying an optional detail.
+
+        Returns
+        -------
+        sweep.LedgerRecord
+            A complete ledger record for the test.
         """
         finding: sweep.FindingRecord = {
             "rule_id": "QG-001",
@@ -204,6 +209,11 @@ class TestReport:
 
         A bare `row.count("|")` would count the escaping as a delimiter and
         so could not tell a broken row from a correctly escaped one.
+
+        Returns
+        -------
+        int
+            The number of unescaped cell delimiters in *row*.
         """
         count = 0
         escaped = False

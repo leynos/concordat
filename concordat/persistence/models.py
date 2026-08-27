@@ -1,5 +1,4 @@
 """Data structures and shared constants for persistence workflow."""
-# ruff: noqa: TRY003
 
 from __future__ import annotations
 
@@ -59,7 +58,7 @@ class S3Client(typ.Protocol):
         """Delete an object from the bucket."""
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class PersistenceDescriptor:
     """Machine-readable manifest describing the remote state backend."""
 
@@ -80,10 +79,12 @@ class PersistenceDescriptor:
             return None
         loaded = _yaml.load(path.read_text(encoding="utf-8")) or {}
         if not isinstance(loaded, dict):
-            raise PersistenceError(f"Invalid persistence manifest at {path}")
+            raise PersistenceError(  # noqa: TRY003  # Domain error provides operator remediation.
+                f"Invalid persistence manifest at {path}"
+            )
         schema_version = int(loaded.get("schema_version", 0))
         if schema_version > PERSISTENCE_SCHEMA_VERSION:
-            raise PersistenceError(
+            raise PersistenceError(  # noqa: TRY003  # Domain error provides operator remediation.
                 "Unsupported persistence manifest "
                 f"schema_version={schema_version} at {path}; maximum supported "
                 f"schema_version is {PERSISTENCE_SCHEMA_VERSION}"
@@ -130,7 +131,7 @@ class PersistenceDescriptor:
         return payload
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class PersistenceResult:
     """Outcome of running the persistence workflow."""
 
@@ -154,7 +155,7 @@ class PersistenceResult:
         return "; ".join(parts)
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class PersistenceFiles:
     """Backend and manifest file contents to persist."""
 
@@ -164,7 +165,7 @@ class PersistenceFiles:
     manifest_contents: dict[str, typ.Any]
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class PersistenceOptions:
     """Optional configuration and callbacks for persistence workflow."""
 
@@ -184,7 +185,7 @@ class PersistenceOptions:
     no_input: bool = False
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class PullRequestContext:
     """Context for opening a pull request."""
 
@@ -196,7 +197,7 @@ class PullRequestContext:
     pr_opener: typ.Callable[..., str | None] | None = None
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class PersistencePaths:
     """Resolved paths for manifest and backend files."""
 
@@ -204,7 +205,7 @@ class PersistencePaths:
     backend_path: Path
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class WorkspaceContext:
     """Working directory and repository for persistence operations."""
 
@@ -212,7 +213,7 @@ class WorkspaceContext:
     repository: pygit2.Repository
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class FinalizationContext:
     """Data needed to finalize persistence results and PR creation."""
 

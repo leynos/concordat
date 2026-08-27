@@ -139,6 +139,16 @@ def _run_makeutil(
 
     The subprocess runs with the Makefile's directory as its working
     directory so the recorded ``source.path`` stays repository-relative.
+
+    Returns
+    -------
+    subprocess.CompletedProcess[str]
+        Completed makeutil process result.
+
+    Raises
+    ------
+    _makeutil_error
+        If makeutil cannot be started.
     """
     try:
         return subprocess.run(  # noqa: S603 - fixed argv, no shell
@@ -260,6 +270,11 @@ def _require_bool(value: object, label: str, path: pathlib.Path) -> None:
     Checked before `isinstance(value, int)` would matter: `bool` is a subclass
     of `int`, so an explicit type check is what keeps `1` from passing as
     `True`.
+
+    Raises
+    ------
+    _malformed
+        If *value* is not a boolean.
     """
     if not isinstance(value, bool):
         raise _malformed(label, path)
@@ -277,6 +292,11 @@ def _require_location(value: object, label: str, path: pathlib.Path) -> None:
 
     The policy uses ``start_line`` as a finding's reported line. A bool would
     satisfy `isinstance(..., int)`, so it is excluded explicitly.
+
+    Raises
+    ------
+    _malformed
+        If *value* lacks a valid integer ``start_line``.
     """
     location = _require_object(value, label, path)
     start_line = location.get("start_line")
@@ -350,6 +370,12 @@ def inspect_makefile(path: pathlib.Path, *, timeout: float = 10.0) -> MakefileFa
     ``variables``/``includes`` shapes — is validated before exit-code/status
     agreement. The decoded mapping is only narrowed to :class:`MakeutilReport`
     once every required shape has been checked.
+
+    Returns
+    -------
+    MakefileFacts
+        Validated Makefile facts from the makeutil report.
+
     """
     completed = _run_makeutil(path, timeout)
     _validate_exit_code(completed, path)

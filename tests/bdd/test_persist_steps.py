@@ -179,10 +179,9 @@ def _run_cli(arguments: list[str]) -> RunResult:
         return RunResult(
             stdout=buffer_out.getvalue(), stderr="", returncode=int(exc.code or 0)
         )
-    else:
-        return RunResult(
-            stdout=buffer_out.getvalue(), stderr="", returncode=int(result or 0)
-        )
+    return RunResult(
+        stdout=buffer_out.getvalue(), stderr="", returncode=int(result or 0)
+    )
 
 
 def _seed_estate_remote(root: Path) -> Path:
@@ -216,6 +215,11 @@ def given_config_dir(config_dir: Path) -> Path:
 
     Shared by active-estate and explicit --alias persistence scenarios so each
     scenario interacts with its own config namespace.
+
+    Returns
+    -------
+    Path
+        The isolated configuration directory.
     """
     return config_dir
 

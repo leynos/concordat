@@ -122,6 +122,12 @@ def credential_environment(
     Environment variables always win; file values only fill gaps. When
     *owner* is omitted the headline active owner scopes the file; with no
     resolvable owner the environment passes through unchanged.
+
+    Returns
+    -------
+    dict[str, str]
+        Environment values with file-backed credentials filling missing keys.
+
     """
     source = _environ(env)
     merged = dict(source)
