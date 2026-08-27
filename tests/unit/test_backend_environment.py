@@ -8,13 +8,11 @@ import typing as typ
 
 import pytest
 
-from concordat.estate_execution import (
-    EstateExecutionError,
-    _resolve_backend_environment,
-)
 from concordat.persistence.backend import (
     ALL_BACKEND_ENV_VARS,
     AWS_SESSION_TOKEN_VAR,
+    BackendConfigurationError,
+    resolve_backend_environment,
 )
 
 
@@ -95,7 +93,7 @@ def test_resolve_backend_environment_precedence(
     for key in delete_keys:
         monkeypatch.delenv(key, raising=False)
 
-    resolved = _resolve_backend_environment(os.environ)
+    resolved = resolve_backend_environment(os.environ)
 
     assert resolved == expected_overrides
 
@@ -170,7 +168,7 @@ def test_resolve_backend_environment_session_token_handling(
     if test_case.session_token is not None:
         monkeypatch.setenv(AWS_SESSION_TOKEN_VAR, test_case.session_token)
 
-    resolved = _resolve_backend_environment(os.environ)
+    resolved = resolve_backend_environment(os.environ)
 
     assert resolved["AWS_ACCESS_KEY_ID"] == test_case.expected_access
     assert resolved["AWS_SECRET_ACCESS_KEY"] == test_case.expected_secret
@@ -193,7 +191,7 @@ def test_resolve_backend_environment_ignores_blank_scw_and_uses_spaces(
     monkeypatch.setenv("SPACES_ACCESS_KEY_ID", "spaces-access")
     monkeypatch.setenv("SPACES_SECRET_ACCESS_KEY", "spaces-secret")
 
-    resolved = _resolve_backend_environment(os.environ)
+    resolved = resolve_backend_environment(os.environ)
 
     assert resolved == {
         "AWS_ACCESS_KEY_ID": "spaces-access",
@@ -213,5 +211,5 @@ def test_resolve_backend_environment_raises_when_all_aliases_blank(
     monkeypatch.setenv("SPACES_ACCESS_KEY_ID", "")
     monkeypatch.setenv("SPACES_SECRET_ACCESS_KEY", "  ")
 
-    with pytest.raises(EstateExecutionError):
-        _resolve_backend_environment(os.environ)
+    with pytest.raises(BackendConfigurationError):
+        resolve_backend_environment(os.environ)

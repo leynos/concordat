@@ -117,14 +117,6 @@ ensure_estate_cache: typ.Callable[..., Path] = _wrap_cache_error(
 )
 
 
-def _resolve_backend_environment(env: typ.Mapping[str, str]) -> dict[str, str]:
-    """Resolve backend environment with EstateExecutionError on failure."""
-    try:
-        return persistence_backend.resolve_backend_environment(env)
-    except persistence_backend.BackendConfigurationError as error:
-        raise EstateExecutionError(str(error)) from error
-
-
 @dataclasses.dataclass(frozen=True)
 class ExecutionOptions:
     """User-configurable knobs for running tofu against an estate."""

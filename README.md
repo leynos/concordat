@@ -147,6 +147,10 @@ For the full story, head to the docs:
   workflows
 - [Design document](docs/concordat-design.md) – Architecture and design
   decisions
+- [Developers' guide](docs/developers-guide.md) – Local gates and contributor
+  workflows
+- [ADR-001: Four-tier Python linting](docs/adr-001-four-tier-python-linting.md)
+  – Lint architecture and dead-code policy
 - [OpenTofu coding standards](docs/opentofu-coding-standards.md) – House rules
   for writing OpenTofu code
 
@@ -155,14 +159,14 @@ For the full story, head to the docs:
 Concordat follows the conventions in [AGENTS.md](AGENTS.md). The most useful
 Makefile targets:
 
-| Target           | Description                              |
-| ---------------- | ---------------------------------------- |
-| `make fmt`       | Format Python and Markdown sources       |
-| `make lint`      | Run ruff linter                          |
-| `make typecheck` | Run pyright type checker                 |
-| `make test`      | Run the test suite                       |
-| `make check-fmt` | Verify formatting without changing files |
-| `make spelling`  | Enforce shared en-GB-oxendict spelling   |
+| Target           | Description                               |
+| ---------------- | ----------------------------------------- |
+| `make fmt`       | Format Python and Markdown sources        |
+| `make lint`      | Run Ruff, spelling, and Skylos lint tiers |
+| `make typecheck` | Run ty type checker                       |
+| `make test`      | Run the test suite                        |
+| `make check-fmt` | Verify formatting without changing files  |
+| `make spelling`  | Enforce shared en-GB-oxendict spelling    |
 
 Run all quality gates before committing:
 

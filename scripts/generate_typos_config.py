@@ -37,11 +37,6 @@ def dictionary_from_cache(repository: Path = REPOSITORY_ROOT) -> rollout.Diction
     return dictionary
 
 
-def render_config(repository: Path = REPOSITORY_ROOT) -> str:
-    """Render deterministic configuration from the populated local cache."""
-    return rollout.render_typos_config(dictionary_from_cache(repository))
-
-
 def _tracked_remote_fallback(
     source: str | Path,
     destination: Path,

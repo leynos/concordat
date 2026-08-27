@@ -13,9 +13,17 @@ TYPOS := uv tool run typos@$(TYPOS_VERSION)
 # CI. An unpinned `ty` drifts between machines and hides real findings.
 TY_VERSION ?= 0.0.65
 TY := uv tool run ty@$(TY_VERSION)
+SKYLOS_VERSION = 4.33.2
+# Skylos parses source using its own Python AST, so Python 3.14 prevents
+# phantom dead-code findings from syntax older tool runtimes cannot parse.
+SKYLOS_CLI = $(UV_ENV) uv tool run --python 3.14 --from 'skylos==$(SKYLOS_VERSION)' skylos
+SKYLOS = $(SKYLOS_CLI) --config-file pyproject.toml
+SKYLOS_PRODUCTION_TARGETS ?= concordat scripts
+SKYLOS_EXCLUDE_FOLDERS ?= tests
 
 .PHONY: help all clean build build-release lint fmt check-fmt \
-        markdownlint nixie spelling test typecheck vale $(TOOLS) $(VENV_TOOLS)
+	        markdownlint nixie spelling skylos-allow makeutil test typecheck vale $(TOOLS) \
+        $(VENV_TOOLS)
 
 .DEFAULT_GOAL := all
 
@@ -75,6 +83,14 @@ check-fmt: build ## Verify formatting
 lint: build ## Run linters
 	$(RUFF) check
 	+$(MAKE) spelling
+	$(SKYLOS) $(SKYLOS_PRODUCTION_TARGETS) --exclude $(SKYLOS_EXCLUDE_FOLDERS) --category dead_code --gate --format concise --no-upload --no-provenance --no-grep-verify
+
+skylos-allow: export SKYLOS_SYMBOL = $(value SYMBOL)
+skylos-allow: export SKYLOS_REASON = $(value REASON)
+skylos-allow: ## Document one named Skylos exception, not an entry point
+	@case "$${SKYLOS_SYMBOL}" in *[![:space:]]*) ;; *) printf "Error: SYMBOL is required for a named whitelist exception\\n" >&2; exit 2;; esac
+	@case "$${SKYLOS_REASON}" in *[![:space:]]*) ;; *) printf "Error: REASON is required for a named whitelist exception\\n" >&2; exit 2;; esac
+	$(SKYLOS_CLI) whitelist "$${SKYLOS_SYMBOL}" --reason "$${SKYLOS_REASON}"
 
 typecheck: build uv ## Run typechecking
 	$(TY) --version
@@ -98,7 +114,10 @@ vale: $(VALE) $(ACRONYM_SCRIPT) ## Check prose
 	uv run --with "git+https://github.com/leynos/concordat-vale.git" $(ACRONYM_SCRIPT)
 	$(VALE) --no-global .
 
-test: build uv $(VENV_TOOLS) ## Run tests
+makeutil: ## Verify the Makefile parser used by contract tests
+	$(call ensure_tool,$@)
+
+test: build uv $(VENV_TOOLS) makeutil ## Run tests
 	$(UV_ENV) uv run pytest -v -n auto
 
 help: ## Show available targets

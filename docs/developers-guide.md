@@ -29,6 +29,58 @@ tools whose presence `make` verifies with `command -v` — because it is
 fetched on demand at the pinned version via `uv tool run` instead of being
 expected to already be on `PATH`.
 
+## Linting and dead-code detection
+
+Run the complete local lint gate with:
+
+```shell
+make lint
+```
+
+The target has four sequential source-lint tiers: Ruff, shared spelling-policy
+refresh, pinned `typos` enforcement, and a blocking Skylos 4.33.2 dead-code
+scan. Skylos scans only the production `concordat` and `scripts` packages and
+excludes `tests`, so test-only references do not keep production symbols live.
+It is provisioned separately from the application environment with Python
+3.14. Skylos parses source with its own runtime AST, so the pin prevents
+phantom findings when the project uses syntax an older parser cannot read. The
+scan does not upload source, collect provenance, use LLM analysis, or model
+test references as production uses.
+
+Treat each Skylos report as a dead-code candidate. Remove confirmed dead code.
+For a verified dynamic runtime entry point, add a precise rule in
+`[tool.skylos.dead_code]` with the fully qualified symbol, its actual type, and
+the runtime caller. When an entry-point rule cannot describe the boundary, add
+a narrow named exception instead:
+
+```shell
+make skylos-allow SYMBOL=symbol REASON="Loaded by plugin registry"
+```
+
+The target requires both values to contain at least one non-whitespace
+character and records the reason in the version-controlled Skylos documented
+allow list. Use `SYMBOL`, not `NAME`: WSL injects `NAME` with the host name.
+Record the verified caller and its evidence in the reviewing change. Do not add
+bulk or unexplained exceptions; remove an exception when its runtime boundary
+disappears.
+
+The Makefile uses `$(SKYLOS_CLI)` only for subcommands and keeps scan-only
+options such as `--config-file` in `$(SKYLOS)`. This keeps
+`skylos whitelist <symbol> --reason <reason>` in the command order that
+Skylos requires.
+
+The Skylos Makefile contracts are parsed by pinned `makeutil` during
+`make test`. Install the same toolchain locally before running the full suite:
+
+```shell
+rustup toolchain install nightly-2026-05-28 --profile minimal
+RUSTFLAGS="-Zpolonius=next" cargo +nightly-2026-05-28 install \
+  --git https://github.com/leynos/makeutil \
+  --rev 29fc5a1634ffbaa18a773eed9dff1b2838a45d9c \
+  --locked --force makeutil
+make test
+```
+
 ## XDG layout and owner namespaces
 
 `concordat/xdg.py` is the single source of truth for where concordat reads
