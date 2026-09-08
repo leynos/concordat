@@ -24,6 +24,16 @@ if typ.TYPE_CHECKING:
     from tests.conftest import CmdMox
 
 
+def _write_surface_path_declaration(checkout: pathlib.Path, path: str) -> pathlib.Path:
+    """Write one test-only `.concordat` declaration for a supplied path."""
+    manifest_path = checkout / ".concordat"
+    manifest_path.write_text(
+        f"language:\n  rust:\n    surfaces:\n      - path: {path}\n",
+        encoding="utf-8",
+    )
+    return manifest_path
+
+
 class TestBuildEnvelope:
     """Envelope construction from a checkout directory."""
 
@@ -274,11 +284,7 @@ class TestBuildEnvelope:
     ) -> None:
         """Unsafe manifest paths cannot reach the checkout filesystem."""
         tmp_path.mkdir(exist_ok=True)
-        manifest_path = tmp_path / ".concordat"
-        manifest_path.write_text(
-            f"language:\n  rust:\n    surfaces:\n      - path: {path}\n",
-            encoding="utf-8",
-        )
+        manifest_path = _write_surface_path_declaration(tmp_path, path)
 
         with pytest.raises(
             OperationalRuleError, match="repository-relative"
@@ -297,10 +303,9 @@ class TestBuildEnvelope:
     ) -> None:
         """Control characters are rejected before filesystem path handling."""
         tmp_path.mkdir(exist_ok=True)
-        manifest_path = tmp_path / ".concordat"
-        manifest_path.write_text(
-            f'language:\n  rust:\n    surfaces:\n      - path: "Cargo{escaped}.toml"\n',
-            encoding="utf-8",
+        manifest_path = _write_surface_path_declaration(
+            tmp_path,
+            f'"Cargo{escaped}.toml"',
         )
 
         with pytest.raises(
