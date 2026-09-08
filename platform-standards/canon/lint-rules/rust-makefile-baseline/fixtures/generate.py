@@ -26,12 +26,22 @@ MAKEFILES_DIR = FIXTURES_DIR / "makefiles"
 ENVELOPES_DIR = FIXTURES_DIR / "envelopes"
 
 CARGO_PARSED: typ.Final = {"package": {"name": "fixture", "version": "0.1.0"}}
-ROOT_SURFACE: typ.Final = {
+
+
+class Surface(typ.TypedDict):
+    """One generated Cargo surface in a policy-envelope fixture."""
+
+    path: str
+    role: str
+    parsed: dict[str, object]
+
+
+ROOT_SURFACE: typ.Final[Surface] = {
     "path": "Cargo.toml",
     "role": "crate",
     "parsed": CARGO_PARSED,
 }
-NESTED_SURFACE: typ.Final = {
+NESTED_SURFACE: typ.Final[Surface] = {
     "path": "rust/Cargo.toml",
     "role": "workspace",
     "parsed": {"workspace": {"members": []}},
@@ -94,7 +104,7 @@ def build_envelope(
     *,
     makefile: dict[str, object] | None,
     root_cargo_toml: bool = True,
-    surfaces: list[dict[str, object]] | None = None,
+    surfaces: list[Surface] | None = None,
     rust_surfaces_declared: bool = False,
 ) -> dict[str, object]:
     """Wrap a makeutil report in a policy-input/v1 envelope."""

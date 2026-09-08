@@ -420,13 +420,14 @@ Terms used below:
   target that runs `$(WHITAKER)` after clippy.
 - FP-003: "a root `Makefile` must exist and define canonical `build`,
   `test`, and `lint` targets" (design document §3.1, severity error).
-- QG-001: "the lint gate must be binding" — introduced by this plan. The
-  first provable subset: no ignore-errors (`-`) prefix on lint-path recipes; no
-  `command -v`/`which` existence guards or `|| true` suppression in lint-path
-  recipes; the `lint` target must reach a `$(WHITAKER)` invocation directly or
-  through exactly one prerequisite hop; any `include` directive renders the
-  rule indeterminate. The `WHITAKER ?=` override is the sanctioned estate
-  pattern (policy v0.2.0 decision) and is deliberately not a finding.
+- QG-001: "the lint gate must be binding". The current v0.3.0 package proves
+  the complete static closure from `lint` through prerequisites and literal,
+  failure-propagating same-file `$(MAKE) target` commands. It rejects ignored
+  errors and guards, and treats includes, conditionals, dynamic recursion, and
+  other unproved shell forms as indeterminate. The `WHITAKER ?=` override is
+  the sanctioned estate pattern (policy v0.2.0 decision) and is deliberately
+  not a finding. The one-hop wording in earlier milestone evidence records the
+  historical v0.2.0 boundary, not the current package.
 - Campaign ledger: an append-only JSON Lines file, one record per audited
   repository per commit, from which the baseline report is derived.
 

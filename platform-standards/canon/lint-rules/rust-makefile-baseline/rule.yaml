@@ -2,9 +2,9 @@ schema_version: 1
 id: rust-makefile-baseline
 name: Rust Makefile baseline
 description: >-
-  Audits every governed Rust Cargo surface and its root Makefile for the
-  canonical build, test, and lint targets (FP-003) and a binding Whitaker
-  lint gate (QG-001).
+  Audits one root Makefile for canonical build, test, and lint targets
+  (FP-003), plus a binding Whitaker lint gate qualified for every governed
+  Rust Cargo surface (QG-001).
   Audit-only: this rule declares no mutations.
 version: 0.3.0
 sensor:

@@ -272,8 +272,24 @@ verdicts; `2` operational failure (for example, the pinned `makeutil` or
 
 For Rust below the repository root, declare each `Cargo.toml` in `.concordat`
 under `language.rust.surfaces`. The declaration is authoritative; an empty list
-states that no Rust surface is governed. See the rule package README for the
-surface-qualified gate requirement.
+states that no Rust surface is governed, while an absent declaration retains
+the root-`Cargo.toml` compatibility fallback. For example:
+
+```yaml
+language:
+  rust:
+    surfaces:
+      - path: rust/Cargo.toml
+```
+
+The root `Makefile` remains the only Makefile audited. It must define the
+canonical targets and qualify Whitaker for every declared surface: use a direct
+`cd rust && $(WHITAKER)` command or a direct literal
+`$(WHITAKER) --manifest-path rust/Cargo.toml` argument. When a checkout governs
+both `Cargo.toml` and `rust/Cargo.toml`, the root surface still needs a gate
+that runs in the root context. The rule proves only prerequisites and complete,
+literal same-file `$(MAKE) target` chains; conditionals, dynamic recursion,
+includes, and ambiguous shell forms are indeterminate.
 
 The command requires two external tools on `PATH`: `conftest` and the pinned
 `makeutil` (see

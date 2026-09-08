@@ -440,5 +440,5 @@ class TestBuildEnvelope:
         with pytest.raises(OperationalRuleError, match=r"rust/Cargo\.toml") as exc_info:
             build_envelope(tmp_path)
 
-        assert exc_info.value.operation == "resolve-rust-surfaces"
-        assert exc_info.value.resource == tmp_path / ".concordat"
+        assert exc_info.value.operation == "resolve-rust-surfaces", exc_info.value
+        assert exc_info.value.resource == tmp_path / ".concordat", exc_info.value

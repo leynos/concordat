@@ -79,4 +79,4 @@ artifacts:
     description: >
       Rule package manifest (sensor wiring, parameters, defaults) for
       rust-makefile-baseline.
-    sha256: 458b98488f3ec5757a17ef4a7d14dad2d66ed5715068e1a822ffafb71e07fa1b
+    sha256: 3250b28ee20c7dd14761fc77678318c49524467069a38259527fdc57f8d2254f

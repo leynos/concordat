@@ -25,7 +25,7 @@ OPERATION_RESOLVE_SURFACES: typ.Final = "resolve-rust-surfaces"
 OPERATION_PARSE_CARGO: typ.Final = "parse-cargo-toml"
 SURFACE_ROLES: typ.Final = frozenset({"workspace", "crate"})
 
-CargoManifest = dict[str, object]
+type CargoManifest = dict[str, object]
 
 
 class CargoSurface(typ.TypedDict):
@@ -276,9 +276,31 @@ def _root_cargo_toml_exists(cargo_path: pathlib.Path) -> bool:
 def resolve_rust_surfaces(checkout: pathlib.Path) -> RustSurfaceResolution:
     """Resolve the governed Rust surfaces for *checkout*.
 
-    A declared list in `.concordat` is authoritative.  In its absence, a root
+    Parameters
+    ----------
+    checkout:
+        Repository root containing an optional `.concordat` declaration and
+        Cargo manifests.
+
+    Returns
+    -------
+    RustSurfaceResolution
+        Whether a declaration was present and every governed, parsed Cargo
+        surface. An explicit empty declaration returns no surfaces.
+
+    Raises
+    ------
+    OperationalRuleError
+        If a declaration is malformed, unsafe, duplicated, escapes the
+        checkout, contains a control character, cannot be read, or names an
+        unreadable or invalid Cargo manifest.
+
+    Notes
+    -----
+    A declared list in `.concordat` is authoritative. In its absence, a root
     `Cargo.toml` is the compatibility fallback; no root file resolves to no
     surfaces so policy can emit the established AP-001 onboarding finding.
+
     """
     manifest_path = checkout / CONCORDAT_FILENAME
     declared_context = SurfaceResolutionContext(

@@ -116,7 +116,7 @@ test_include_makes_qg001_indeterminate if {
 	profile(findings) == {["QG-001", "indeterminate"]}
 }
 
-test_two_hop_delegation_is_compliant if {
+test_two_hop_fixture_delegation_is_compliant if {
 	findings := policy.deny with input as data.fixtures.two_hop
 	count(findings) == 0
 }
