@@ -10,6 +10,7 @@ repositories retain their current audit behaviour.
 from __future__ import annotations
 
 import pathlib
+import stat
 import tomllib
 import typing as typ
 
@@ -81,12 +82,16 @@ def _as_mapping(
 
 def _load_manifest(manifest_path: pathlib.Path) -> dict[str, object] | None:
     """Load `.concordat`, retaining absence as distinct from an empty document."""
-    if not manifest_path.is_file():
-        return None
     try:
         text = manifest_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    except (OSError, UnicodeDecodeError, ValueError) as error:
+        message = f"cannot parse {manifest_path}: {error}"
+        raise _resolution_error(message, manifest_path) from error
+    try:
         loaded: object = YAML(typ="safe").load(text)
-    except (OSError, UnicodeDecodeError, ValueError, YAMLError) as error:
+    except YAMLError as error:
         message = f"cannot parse {manifest_path}: {error}"
         raise _resolution_error(message, manifest_path) from error
     if loaded is None:
@@ -127,6 +132,9 @@ def _declaration_path(
     if not isinstance(path, str):
         message = f"a language.rust.surfaces entry in {manifest_path} needs a path"
         raise _resolution_error(message, manifest_path)
+    if _contains_control_character(path):
+        message = "a language.rust.surfaces path must not contain control characters"
+        raise _resolution_error(message, manifest_path)
     relative_path = pathlib.PurePosixPath(path)
     if not _is_safe_manifest_path(relative_path):
         message = (
@@ -134,7 +142,15 @@ def _declaration_path(
             f"{MANIFEST_FILENAME}: {path!r}"
         )
         raise _resolution_error(message, manifest_path)
-    return path
+    # Preserve one spelling for every accepted manifest.  The envelope and
+    # policy use this value as an identity, so equivalent lexical paths must
+    # not evade duplicate detection or surface qualification.
+    return relative_path.as_posix()
+
+
+def _contains_control_character(value: str) -> bool:
+    """Return whether an untrusted declaration contains an ASCII control code."""
+    return any(ord(character) < 32 or ord(character) == 127 for character in value)
 
 
 def _is_safe_manifest_path(path: pathlib.PurePosixPath) -> bool:
@@ -237,6 +253,26 @@ def _resolved_surface(
     }
 
 
+def _root_cargo_toml_exists(cargo_path: pathlib.Path) -> bool:
+    """Return whether the root Cargo manifest is a regular file.
+
+    Missing files preserve the established no-Rust fallback. Other filesystem
+    failures cannot safely be treated as absence.
+    """
+    try:
+        mode = cargo_path.stat().st_mode
+    except FileNotFoundError:
+        return False
+    except OSError as error:
+        message = f"cannot inspect {cargo_path}: {error}"
+        raise OperationalRuleError(
+            message,
+            operation=OPERATION_RESOLVE_SURFACES,
+            resource=cargo_path,
+        ) from error
+    return stat.S_ISREG(mode)
+
+
 def resolve_rust_surfaces(checkout: pathlib.Path) -> RustSurfaceResolution:
     """Resolve the governed Rust surfaces for *checkout*.
 
@@ -266,7 +302,7 @@ def resolve_rust_surfaces(checkout: pathlib.Path) -> RustSurfaceResolution:
         return RustSurfaceResolution(declared=True, surfaces=tuple(surfaces))
 
     root_cargo_path = checkout / MANIFEST_FILENAME
-    if not root_cargo_path.is_file():
+    if not _root_cargo_toml_exists(root_cargo_path):
         return RustSurfaceResolution(declared=False, surfaces=())
     fallback_context = SurfaceResolutionContext(
         checkout=checkout,

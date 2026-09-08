@@ -34,20 +34,45 @@ envelope_ok if input.schema_version == 1
 # `cargo.surfaces` is additive within envelope schema 1.  Retain a root
 # surface for envelopes produced by v0.2.0, so replaying recorded evidence
 # cannot turn an audited Rust checkout into an unmeasured clean result.
-cargo_surfaces := input.cargo.surfaces if input.cargo.surfaces
+cargo_input := object.get(input, "cargo", {})
+
+cargo_input_is_valid if is_object(cargo_input)
+
+cargo_surfaces_present if {
+	cargo_input_is_valid
+	some key in object.keys(cargo_input)
+	key == "surfaces"
+}
+
+invalid_cargo_surfaces if not cargo_input_is_valid
+
+invalid_cargo_surfaces if {
+	cargo_surfaces_present
+	not is_array(cargo_input.surfaces)
+}
+
+cargo_surfaces := cargo_input.surfaces if {
+	cargo_surfaces_present
+	is_array(cargo_input.surfaces)
+}
 
 cargo_surfaces := [{"path": "Cargo.toml"}] if {
-	not input.cargo.surfaces
+	cargo_input_is_valid
+	not cargo_surfaces_present
 	input.applicability.root_cargo_toml == true
 }
 
 cargo_surfaces := [] if {
-	not input.cargo.surfaces
+	cargo_input_is_valid
+	not cargo_surfaces_present
 	input.applicability.root_cargo_toml != true
 }
 
+cargo_surfaces := [] if invalid_cargo_surfaces
+
 applicable if {
 	envelope_ok
+	not invalid_cargo_surfaces
 	count(cargo_surfaces) > 0
 }
 
@@ -70,6 +95,16 @@ deny contains f if {
 
 deny contains f if {
 	envelope_ok
+	invalid_cargo_surfaces
+	f := finding(
+		"EN-001", "indeterminate", 0,
+		"policy input cargo must be an object and cargo.surfaces an array when present",
+	)
+}
+
+deny contains f if {
+	envelope_ok
+	not invalid_cargo_surfaces
 	not rust_surfaces_declared
 	count(cargo_surfaces) == 0
 	f := finding(
@@ -138,17 +173,32 @@ static_make_recipe_is_binding(recipe) if {
 	regex.match(static_make_recipe_pattern, recipe.text)
 }
 
+# The complete recipe grammar proves that every `&&` segment executes a
+# literal recursive Make command. Extract each target from its own anchored
+# segment, not from the recipe text as a whole: a quoted environment value can
+# contain `$(MAKE) hidden` without invoking that target.
+static_make_segment_target(segment, target) if {
+	matches := regex.find_all_string_submatch_n(
+		sprintf(
+			`^[[:space:]]*[-@+]*[[:space:]]*(%s)*\$\(MAKE\)[[:space:]]+([A-Za-z0-9_.-]+)[[:space:]]*$`,
+			[gate_assignment_prefix],
+		),
+		segment,
+		1,
+	)
+	count(matches) == 1
+	target == matches[0][3]
+}
+
 static_make_target(recipe, target) if {
 	static_make_recipe_is_binding(recipe)
-	matches := regex.find_all_string_submatch_n(
-		`\$\(MAKE\)[[:space:]]+([A-Za-z0-9_.-]+)`, recipe.text, -1,
-	)
-	some match in matches
-	matched_target := match[1]
-	target == matched_target
+	some segment in split(recipe.text, "&&")
+	static_make_segment_target(segment, target)
 }
 
 recipe_mentions_make(recipe) if contains(recipe.text, "$(MAKE)")
+
+recipe_mentions_make(recipe) if contains(recipe.text, "${MAKE}")
 
 target_edges[target] contains next if {
 	some rule in input.makefile.rules
@@ -320,7 +370,15 @@ gate_reachable if {
 # direct commands are deliberately indeterminate below.
 surface_is_root(surface) if surface.path == "Cargo.toml"
 
-surface_qualified(recipe, surface) if surface_is_root(surface)
+# The root Makefile starts in the root directory, but an explicitly nested
+# context changes the gate process directory or manifest. A root surface must
+# therefore prove a gate invocation that does not claim another declared
+# surface; otherwise one nested invocation would falsely credit both surfaces.
+surface_qualified(recipe, surface) if {
+	surface_is_root(surface)
+	recipe_invokes_gate(recipe)
+	not nested_surface_context_candidate(recipe)
+}
 
 surface_qualified(recipe, surface) if {
 	not surface_is_root(surface)
@@ -377,6 +435,12 @@ surface_context_candidate(recipe, surface) if {
 	not surface_is_root(surface)
 	surface_directory := trim_suffix(surface.path, "/Cargo.toml")
 	contains(recipe.text, sprintf("cd %s", [surface_directory]))
+}
+
+nested_surface_context_candidate(recipe) if {
+	some surface in cargo_surfaces
+	not surface_is_root(surface)
+	surface_context_candidate(recipe, surface)
 }
 
 surface_context_candidate(recipe, surface) if {

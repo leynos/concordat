@@ -298,6 +298,23 @@ Hard invariants. Violation requires escalation, not workarounds.
   create false compliance. Direct `cd`/manifest-path gate shapes and complete
   literal recursive-Make `&&` chains are provable; every other relevant shape
   fails closed as indeterminate. Date/Author: 2026-09-08, issue #116 review.
+- Decision: surface identity uses normalized repository-relative POSIX paths,
+  and a root surface needs a gate that does not explicitly select a nested
+  declared surface. Recursive Make edges are extracted from anchored command
+  segments, never from quoted environment values. Rationale: lexical aliases,
+  nested working directories, and text in assignment values otherwise create
+  false compliance. Evidence: Codex review threads 3957489038, 3957489044,
+  and 3957489052; the focused red cases are recorded before repair. Date/
+  Author: 2026-09-08, issue #116 follow-up review.
+- Decision: policy replay validates the optional v0.3 `cargo.surfaces` field
+  before counting it, while a missing field continues to select the v0.2 root
+  fallback. The resolver distinguishes missing filesystem entries from failed
+  reads and rejects control characters before constructing paths or reporting
+  them. Rationale: malformed historical evidence and permission failures are
+  unmeasured states, never evidence of a clean audit. Evidence: CodeRabbit
+  threads 3957571570, 3957571583, and pre-merge architecture/security rows;
+  observed-red logs under `/tmp/concordat-nested-rust-surfaces-*`. Date/Author:
+  2026-09-08, issue #116 review remediation.
 
 ## Outcomes & retrospective
 

@@ -50,6 +50,13 @@ test_multiple_binding_recursive_makes_are_compliant if {
 	count(findings) == 0
 }
 
+# A quoted environment value can mention a recursive Make target without
+# executing it. Only the command-position target contributes a closure edge.
+test_quoted_environment_make_target_is_not_reachable if {
+	findings := policy.deny with input as data.fixtures.static_make_quoted_env
+	profile(findings) == {["QG-001", "noncompliant"]}
+}
+
 # -- FP-003 ----------------------------------------------------------------
 
 test_missing_makefile_is_fp003 if {
@@ -139,10 +146,28 @@ test_declared_empty_surfaces_have_no_findings if {
 	count(findings) == 0
 }
 
+# A v0.3 envelope that carries a malformed surface field is evidence that
+# cannot be evaluated. It must receive a structured finding, not an evaluator
+# failure or legacy root fallback.
+invalid_surfaces_envelope(surfaces) := object.union(
+	data.fixtures.compliant,
+	{"cargo": {"parsed": {"package": {"name": "fixture"}}, "surfaces": surfaces}},
+)
+
+test_null_surfaces_are_an_indeterminate_envelope_error if {
+	findings := policy.deny with input as invalid_surfaces_envelope(null)
+	profile(findings) == {["EN-001", "indeterminate"]}
+}
+
+test_scalar_surfaces_are_an_indeterminate_envelope_error if {
+	findings := policy.deny with input as invalid_surfaces_envelope(1)
+	profile(findings) == {["EN-001", "indeterminate"]}
+}
+
 # The v0.3 envelope field is additive within schema version 1. A stored v0.2
 # evidence envelope must retain its root-Cargo applicability when replayed.
 legacy_v02_envelope := object.union(
-	data.fixtures.compliant,
+	object.remove(data.fixtures.compliant, {"applicability", "cargo"}),
 	{
 		"applicability": {"root_cargo_toml": true, "root_makefile": true},
 		"cargo": {"parsed": {"package": {"name": "fixture"}}},
@@ -152,6 +177,8 @@ legacy_v02_envelope := object.union(
 test_v02_envelope_retains_root_surface_compatibility if {
 	findings := policy.deny with input as legacy_v02_envelope
 	count(findings) == 0
+	surfaces := policy.cargo_surfaces with input as legacy_v02_envelope
+	surfaces == [{"path": "Cargo.toml"}]
 }
 
 test_unknown_schema_version_is_rejected if {
@@ -252,6 +279,14 @@ test_surface_without_qualified_gate_is_noncompliant if {
 	contains(f.msg, "rust/Cargo.toml")
 }
 
+# A nested `cd` gate cannot audit a simultaneously declared root manifest.
+test_nested_gate_does_not_qualify_a_root_surface if {
+	findings := policy.deny with input as data.fixtures.mixed_root_nested
+	profile(findings) == {["QG-001", "noncompliant"]}
+	some f in findings
+	contains(f.msg, "Cargo.toml")
+}
+
 # Surface context must be proved from a command-shaped recipe. The two decoys
 # both execute `pwd` at the root, but a substring-only check mistakes their
 # printed or assigned text for `cd rust &&`.
@@ -292,6 +327,14 @@ test_manifest_path_comparison_is_literal if {
 		"$(WHITAKER) --manifest-path rustxxCargo.toml",
 	)
 	profile(findings) == {["QG-001", "noncompliant"]}
+}
+
+test_brace_manifest_path_is_compliant if {
+	findings := policy.deny with input as manifest_surface_input(
+		"rust/Cargo.toml",
+		"${WHITAKER} --manifest-path rust/Cargo.toml",
+	)
+	profile(findings) == set()
 }
 
 # A conditional rule inside the static closure can make the gate disappear at
@@ -366,6 +409,21 @@ gate_position_input(text) := object.union(
 		make_rule(["lint"], [], [{"ordinal": 0, "text": text, "silent": false, "ignore_errors": false, "always_execute": false, "location": loc}]),
 	]})},
 )
+
+brace_recursive_make_input := object.union(
+	data.fixtures.compliant,
+	{"makefile": object.union(data.fixtures.compliant.makefile, {"rules": [
+		make_rule(["build"], [], [gate_recipe_text("cargo build")]),
+		make_rule(["test"], [], [gate_recipe_text("cargo test")]),
+		make_rule(["lint"], [], [gate_recipe_text("${MAKE} lint-rust")]),
+		make_rule(["lint-rust"], [], [gate_recipe]),
+	]})},
+)
+
+test_brace_recursive_make_is_indeterminate if {
+	findings := policy.deny with input as brace_recursive_make_input
+	profile(findings) == {["QG-001", "indeterminate"]}
+}
 
 test_paren_command_position_is_compliant if {
 	findings := policy.deny with input as gate_position_input("$(WHITAKER) --all")

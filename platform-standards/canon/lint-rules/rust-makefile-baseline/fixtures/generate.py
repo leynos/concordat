@@ -26,6 +26,11 @@ MAKEFILES_DIR = FIXTURES_DIR / "makefiles"
 ENVELOPES_DIR = FIXTURES_DIR / "envelopes"
 
 CARGO_PARSED: typ.Final = {"package": {"name": "fixture", "version": "0.1.0"}}
+ROOT_SURFACE: typ.Final = {
+    "path": "Cargo.toml",
+    "role": "crate",
+    "parsed": CARGO_PARSED,
+}
 NESTED_SURFACE: typ.Final = {
     "path": "rust/Cargo.toml",
     "role": "workspace",
@@ -34,6 +39,7 @@ NESTED_SURFACE: typ.Final = {
 
 # Only this fixture is expected to parse with recovery (makeutil exit 1).
 RECOVERED_FIXTURE: typ.Final = "recovered"
+MIXED_SURFACE_FIXTURES: typ.Final = frozenset({"mixed_root_nested"})
 
 
 class MakeutilFixtureError(RuntimeError):
@@ -94,11 +100,7 @@ def build_envelope(
     """Wrap a makeutil report in a policy-input/v1 envelope."""
     resolved_surfaces = surfaces
     if resolved_surfaces is None:
-        resolved_surfaces = (
-            [{"path": "Cargo.toml", "role": "crate", "parsed": CARGO_PARSED}]
-            if root_cargo_toml
-            else []
-        )
+        resolved_surfaces = [ROOT_SURFACE] if root_cargo_toml else []
     return {
         "schema_version": 1,
         "kind": "policy-input/rust-makefile-baseline",
@@ -138,7 +140,10 @@ def main() -> None:
         key = makefile_path.stem.replace("-", "_")
         surfaces = None
         rust_surfaces_declared = False
-        if key.startswith("surface_"):
+        if key in MIXED_SURFACE_FIXTURES:
+            surfaces = [ROOT_SURFACE, NESTED_SURFACE]
+            rust_surfaces_declared = True
+        elif key.startswith("surface_"):
             surfaces = [NESTED_SURFACE]
             rust_surfaces_declared = True
         envelopes[key] = build_envelope(
