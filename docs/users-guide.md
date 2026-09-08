@@ -247,9 +247,9 @@ checkout against the template and optionally copy missing/outdated artefacts.
 
 `concordat artefact rule run` evaluates one canon lint rule package against a
 local checkout and reports structured findings. The first package,
-`rust-makefile-baseline`, audits a Rust repository's root `Makefile` for the
-canonical `build`, `test`, and `lint` targets (FP-003) and for a binding
-Whitaker lint gate (QG-001):
+`rust-makefile-baseline`, audits every governed Rust Cargo surface and the root
+`Makefile` for canonical `build`, `test`, and `lint` targets (FP-003), plus a
+binding Whitaker lint gate (QG-001):
 
 ```shell
 concordat artefact rule run rust-makefile-baseline --repo /path/to/checkout
@@ -269,6 +269,11 @@ includes other files, or the parse had to recover from syntax errors).
 Exit codes: `0` compliant; `1` at least one finding, including indeterminate
 verdicts; `2` operational failure (for example, the pinned `makeutil` or
 `conftest` executable is missing), reported on standard error.
+
+For Rust below the repository root, declare each `Cargo.toml` in `.concordat`
+under `language.rust.surfaces`. The declaration is authoritative; an empty list
+states that no Rust surface is governed. See the rule package README for the
+surface-qualified gate requirement.
 
 The command requires two external tools on `PATH`: `conftest` and the pinned
 `makeutil` (see

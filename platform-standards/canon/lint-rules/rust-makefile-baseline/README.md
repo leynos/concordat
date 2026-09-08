@@ -1,24 +1,27 @@
 # rust-makefile-baseline
 
-Audits a Rust repository's root `Makefile` against the estate baseline. The
-sensor is a Conftest/Rego policy evaluated over a `policy-input/v1` envelope
-built by `concordat artefact rule run`; Makefile facts come from the pinned
-`makeutil parse` command, never from reparsing Make syntax.
+Audits the governed Rust Cargo surfaces and root `Makefile` against the estate
+baseline. The sensor is a Conftest/Rego policy evaluated over a
+`policy-input/v1` envelope built by `concordat artefact rule run`; Makefile
+facts come from the pinned `makeutil parse` command, never from reparsing Make
+syntax.
 
 ## Checks
 
 - **FP-003** (error): the root `Makefile` must exist and define each of
   the required targets (`build`, `test`, `lint` by default) unconditionally — a
   target wrapped entirely in `ifdef`/`ifeq` blocks does not count.
-- **QG-001** (error): the lint gate must be binding. Noncompliant when a
-  lint-path recipe ignores errors (`-` prefix), carries a `command -v`/`which`
-  existence guard, or suppresses failure with `|| true`, or when no recipe
-  anywhere invokes the gate. The gate variable's `?=` assignment
-  (`WHITAKER ?= whitaker`) is the sanctioned estate pattern — local override
-  permitted, CI installs the real binary — and is deliberately not a finding
-  (doctrine decision, 2026-07-19).
-- **AP-001** (error, indeterminate): the checkout has no root
-  `Cargo.toml`, so Rust applicability cannot be established.
+- **QG-001** (error): the lint gate must be binding. The policy follows the
+  complete static prerequisite and literal `$(MAKE) target` closure from
+  `lint`. It is noncompliant when a reachable recipe ignores errors (`-`
+  prefix), carries a `command -v`/`which` existence guard, suppresses failure
+  with `|| true`, or no reachable recipe invokes the gate. The gate variable's
+  `?=` assignment (`WHITAKER ?= whitaker`) is the sanctioned estate pattern —
+  local override permitted, CI installs the real binary — and is deliberately
+  not a finding (doctrine decision, 2026-07-19).
+- **AP-001** (error, indeterminate): no `language.rust.surfaces` list was
+  declared and the checkout has no root `Cargo.toml`, so Rust applicability
+  cannot be established.
 - **EN-001** (error, indeterminate): the policy-input envelope has an
   unknown schema version.
 
@@ -29,8 +32,25 @@ Findings carry a three-valued `verdict`:
 - `noncompliant` — the policy proved a violation.
 - `indeterminate` — the policy could not prove compliance and fails
   closed. Triggers: any `include` directive, a recovered (error-tolerant)
-  parse, duplicate or double-colon `lint` rules, or gate delegation deeper than
-  one prerequisite hop.
+  parse, duplicate or double-colon `lint` rules, or dynamic recursive Make.
+
+## Declaring nested Rust
+
+Declare non-root Cargo manifests in `.concordat`. The list is authoritative, so
+an explicit empty list opts the checkout out of Rust governance. A nested
+surface needs a gate invocation qualified by `cd <directory> &&` or
+`--manifest-path <path>`; every declared surface must be reachable from `lint`.
+The additive `cargo.surfaces` envelope field preserves v0.2 schema-1 replay by
+falling back to a root surface only when that field is absent; a v0.3 explicit
+empty list never takes that fallback.
+
+```yaml
+language:
+  rust:
+    surfaces:
+      - path: rust/Cargo.toml
+        role: workspace
+```
 
 A repository is `compliant` only when the finding set is empty.
 

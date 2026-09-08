@@ -86,6 +86,22 @@ def given_rust_checkout_with_makefile(checkout: pathlib.Path) -> None:
     given_rust_checkout(checkout)
 
 
+@given("a checkout with a declared nested Cargo workspace")
+def given_declared_nested_rust_checkout(checkout: pathlib.Path) -> None:
+    """Create a mixed-language checkout with one governed Rust workspace."""
+    rust_directory = checkout / "rust"
+    rust_directory.mkdir(parents=True)
+    (checkout / ".concordat").write_text(
+        "language:\n  rust:\n    surfaces:\n      - path: rust/Cargo.toml\n",
+        encoding="utf-8",
+    )
+    (rust_directory / "Cargo.toml").write_text(
+        "[workspace]\nmembers = []\n",
+        encoding="utf-8",
+    )
+    (checkout / "Makefile").write_text("lint:\n\twhitaker --all\n")
+
+
 @given(parsers.cfparse('makeutil reports the "{fixture}" fixture facts'))
 def given_makeutil_fixture(cmd_mox: CmdMox, fixture: str) -> None:
     """Program the fake makeutil with a checked-in fixture report."""

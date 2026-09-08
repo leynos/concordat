@@ -166,17 +166,18 @@ class TestParseMakefile:
 
 
 class TestSyntheticEnvelopes:
-    """The two envelopes with no Makefile behind them."""
+    """The envelopes with no Makefile behind them."""
 
-    def test_both_synthetic_cases_are_present(
+    def test_all_synthetic_cases_are_present(
         self,
         generate: types.ModuleType,
     ) -> None:
-        """`no_makefile` and `not_rust` are generated without a fixture."""
+        """Synthetic applicability cases are generated without a fixture."""
         assert set(generate.synthetic_envelopes()) == {
+            "declared_empty",
             "no_makefile",
             "not_rust",
-        }, "both synthetic envelopes should be generated without a fixture"
+        }, "synthetic envelopes should be generated without a fixture"
 
     @pytest.mark.parametrize(
         ("key", "root_cargo_toml"),
@@ -206,6 +207,18 @@ class TestSyntheticEnvelopes:
         cargo = typ.cast("dict[str, object]", envelope["cargo"])
         expected_cargo = generate.CARGO_PARSED if root_cargo_toml else None
         assert cargo["parsed"] == expected_cargo, envelope
+
+    def test_declared_empty_is_an_authoritative_non_rust_case(
+        self,
+        generate: types.ModuleType,
+    ) -> None:
+        """An explicit empty list differs from an absent root manifest."""
+        envelope = generate.synthetic_envelopes()["declared_empty"]
+        applicability = typ.cast("dict[str, object]", envelope["applicability"])
+        cargo = typ.cast("dict[str, object]", envelope["cargo"])
+
+        assert applicability["rust_surfaces_declared"] is True, envelope
+        assert cargo["surfaces"] == [], envelope
 
 
 class TestMain:
@@ -242,10 +255,11 @@ class TestMain:
         self,
         generated: pathlib.Path,
     ) -> None:
-        """One envelope per `.mk` input, plus the two synthetic ones."""
+        """One envelope per `.mk` input, plus the synthetic cases."""
         written = {path.name for path in (generated / "envelopes").iterdir()}
         assert written == {
             "alpha.json",
+            "declared_empty.json",
             "soft_skip.json",
             "no_makefile.json",
             "not_rust.json",
@@ -276,9 +290,13 @@ class TestMain:
         bundle = json.loads((generated / "data.json").read_text(encoding="utf-8"))
         fixtures = typ.cast("dict[str, object]", bundle["fixtures"])
 
-        assert set(fixtures) == {"alpha", "soft_skip", "no_makefile", "not_rust"}, (
-            f"the bundle should hold every generated envelope, got {set(fixtures)}"
-        )
+        assert set(fixtures) == {
+            "alpha",
+            "declared_empty",
+            "soft_skip",
+            "no_makefile",
+            "not_rust",
+        }, f"the bundle should hold every generated envelope, got {set(fixtures)}"
         for key, envelope in fixtures.items():
             on_disk = json.loads(
                 (generated / "envelopes" / f"{key}.json").read_text(encoding="utf-8")

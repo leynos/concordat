@@ -25,6 +25,16 @@ test_one_hop_delegation_is_compliant if {
 	count(findings) == 0
 }
 
+test_literal_recursive_make_delegation_is_compliant if {
+	findings := policy.deny with input as data.fixtures.static_recursive
+	count(findings) == 0
+}
+
+test_dynamic_recursive_make_is_indeterminate if {
+	findings := policy.deny with input as data.fixtures.dynamic_recursive
+	profile(findings) == {["QG-001", "indeterminate"]}
+}
+
 # -- FP-003 ----------------------------------------------------------------
 
 test_missing_makefile_is_fp003 if {
@@ -81,10 +91,9 @@ test_include_makes_qg001_indeterminate if {
 	profile(findings) == {["QG-001", "indeterminate"]}
 }
 
-test_two_hop_delegation_is_indeterminate if {
+test_two_hop_delegation_is_compliant if {
 	findings := policy.deny with input as data.fixtures.two_hop
-	count(findings) == 1
-	profile(findings) == {["QG-001", "indeterminate"]}
+	count(findings) == 0
 }
 
 test_duplicate_lint_rules_are_indeterminate if {
@@ -107,6 +116,26 @@ test_not_rust_is_single_applicability_finding if {
 	profile(findings) == {["AP-001", "indeterminate"]}
 }
 
+test_declared_empty_surfaces_have_no_findings if {
+	findings := policy.deny with input as data.fixtures.declared_empty
+	count(findings) == 0
+}
+
+# The v0.3 envelope field is additive within schema version 1. A stored v0.2
+# evidence envelope must retain its root-Cargo applicability when replayed.
+legacy_v02_envelope := object.union(
+	data.fixtures.compliant,
+	{
+		"applicability": {"root_cargo_toml": true, "root_makefile": true},
+		"cargo": {"parsed": {"package": {"name": "fixture"}}},
+	},
+)
+
+test_v02_envelope_retains_root_surface_compatibility if {
+	findings := policy.deny with input as legacy_v02_envelope
+	count(findings) == 0
+}
+
 test_unknown_schema_version_is_rejected if {
 	findings := policy.deny with input as {"schema_version": 2}
 	count(findings) == 1
@@ -115,11 +144,10 @@ test_unknown_schema_version_is_rejected if {
 
 # -- bounded reachability contract -----------------------------------------
 #
-# QG-001 proves gate delegation within one prerequisite hop. These enumerate
-# `lint` chains of increasing depth over one envelope, so the boundary between
-# "provable" and "indeterminate" is pinned rather than sampled: depth 0 and 1
-# are compliant, and everything deeper fails closed. `build` and `test` are
-# kept in every case so FP-003 stays silent and QG-001 is the only variable.
+# QG-001 proves the complete static closure from `lint`. These enumerate
+# increasingly deep literal prerequisite chains, so the closure stays pinned
+# rather than sampled. `build` and `test` are kept in every case so FP-003
+# stays silent and QG-001 is the only variable.
 
 loc := {"start_byte": 0, "end_byte": 1, "start_line": 1, "start_column": 1, "end_line": 1, "end_column": 1}
 
@@ -179,19 +207,31 @@ test_one_hop_delegation_is_compliant if {
 	count(findings) == 0
 }
 
-test_two_hop_delegation_is_indeterminate if {
+test_two_hop_delegation_is_compliant if {
 	findings := policy.deny with input as chain_input(2)
-	profile(findings) == {["QG-001", "indeterminate"]}
+	count(findings) == 0
 }
 
-test_three_hop_delegation_is_indeterminate if {
+test_three_hop_delegation_is_compliant if {
 	findings := policy.deny with input as chain_input(3)
-	profile(findings) == {["QG-001", "indeterminate"]}
+	count(findings) == 0
 }
 
-test_four_hop_delegation_is_indeterminate if {
+test_four_hop_delegation_is_compliant if {
 	findings := policy.deny with input as chain_input(4)
-	profile(findings) == {["QG-001", "indeterminate"]}
+	count(findings) == 0
+}
+
+test_surface_qualified_gate_is_compliant if {
+	findings := policy.deny with input as data.fixtures.surface_qualified
+	count(findings) == 0
+}
+
+test_surface_without_qualified_gate_is_noncompliant if {
+	findings := policy.deny with input as data.fixtures.surface_unqualified
+	profile(findings) == {["QG-001", "noncompliant"]}
+	some f in findings
+	contains(f.msg, "rust/Cargo.toml")
 }
 
 # -- gate references must be Make variable references -----------------------

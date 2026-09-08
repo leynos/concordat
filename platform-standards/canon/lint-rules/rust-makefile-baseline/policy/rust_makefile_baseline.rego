@@ -31,10 +31,27 @@ finding(rule_id, verdict, line, msg) := {
 
 envelope_ok if input.schema_version == 1
 
-applicable if {
-	envelope_ok
+# `cargo.surfaces` is additive within envelope schema 1.  Retain a root
+# surface for envelopes produced by v0.2.0, so replaying recorded evidence
+# cannot turn an audited Rust checkout into an unmeasured clean result.
+cargo_surfaces := input.cargo.surfaces if input.cargo.surfaces
+
+cargo_surfaces := [{"path": "Cargo.toml"}] if {
+	not input.cargo.surfaces
 	input.applicability.root_cargo_toml == true
 }
+
+cargo_surfaces := [] if {
+	not input.cargo.surfaces
+	input.applicability.root_cargo_toml != true
+}
+
+applicable if {
+	envelope_ok
+	count(cargo_surfaces) > 0
+}
+
+rust_surfaces_declared if input.applicability.rust_surfaces_declared == true
 
 has_makefile if {
 	applicable
@@ -53,10 +70,11 @@ deny contains f if {
 
 deny contains f if {
 	envelope_ok
-	input.applicability.root_cargo_toml != true
+	not rust_surfaces_declared
+	count(cargo_surfaces) == 0
 	f := finding(
 		"AP-001", "indeterminate", 0,
-		"root Cargo.toml is absent; the repository is not provably a Rust project",
+		"no governed Cargo.toml surface is declared and root Cargo.toml is absent",
 	)
 }
 
@@ -101,16 +119,61 @@ rules_defining(target) := [rule |
 
 lint_rules := rules_defining("lint")
 
-lint_prerequisites contains prerequisite if {
-	some rule in lint_rules
-	some prerequisite in rule.prerequisites
+# Every target in the static closure from `lint` is a potential gate location.
+# Prerequisites and literal same-file `$(MAKE) target` recipes are the only
+# edges the fact model can prove.  `graph.reachable` handles cycles without a
+# depth bound; dynamic recursive Make remains an indeterminate boundary below.
+static_make_target(recipe) := target if {
+	matches := regex.find_all_string_submatch_n(
+		`\$\(MAKE\)[[:space:]]+([A-Za-z0-9_.-]+)([[:space:]]|$)`,
+		recipe.text,
+		-1,
+	)
+	some match in matches
+	target := match[1]
 }
 
-lint_path_rule(rule) if "lint" in rule.targets
+target_edges[target] contains next if {
+	some rule in input.makefile.rules
+	some target in rule.targets
+	some next in rule.prerequisites
+}
+
+target_edges[target] contains next if {
+	some rule in input.makefile.rules
+	some target in rule.targets
+	some recipe in rule.recipes
+	next := static_make_target(recipe)
+}
+
+known_targets := {target |
+	some rule in input.makefile.rules
+	some target in rule.targets
+}
+
+target_graph := {target: object.get(target_edges, target, []) |
+	some target in known_targets
+}
+
+lint_reachable_targets contains "lint"
+
+lint_reachable_targets contains target if {
+	some target in graph.reachable(target_graph, {"lint"})
+}
 
 lint_path_rule(rule) if {
-	some target in rule.targets
-	target in lint_prerequisites
+	some target in lint_reachable_targets
+	target in rule.targets
+}
+
+dynamic_make_delegation if {
+	some rule in input.makefile.rules
+	lint_path_rule(rule)
+	some recipe in rule.recipes
+	regex.match(
+		`(\$\(MAKE\)|\$\{MAKE\})[[:space:]]+(\$\(|-C)`,
+		recipe.text,
+	)
 }
 
 # Only a Make variable reference counts as mentioning the gate. Matching the
@@ -214,6 +277,32 @@ gate_reachable if {
 	recipe_invokes_gate(recipe)
 }
 
+# A root surface runs from the parsed root Makefile by construction.  Every
+# nested surface must make that working-directory or manifest-path boundary
+# explicit, so a single gate cannot accidentally be credited to every crate.
+surface_is_root(surface) if surface.path == "Cargo.toml"
+
+surface_qualified(recipe, surface) if surface_is_root(surface)
+
+surface_qualified(recipe, surface) if {
+	not surface_is_root(surface)
+	surface_directory := trim_suffix(surface.path, "/Cargo.toml")
+	contains(recipe.text, sprintf("cd %s &&", [surface_directory]))
+}
+
+surface_qualified(recipe, surface) if {
+	not surface_is_root(surface)
+	contains(recipe.text, sprintf("--manifest-path %s", [surface.path]))
+}
+
+surface_gate_reachable(surface) if {
+	some rule in input.makefile.rules
+	lint_path_rule(rule)
+	some recipe in rule.recipes
+	recipe_invokes_gate(recipe)
+	surface_qualified(recipe, surface)
+}
+
 includes_present if count(input.makefile.includes) > 0
 
 parse_recovered if input.makefile.parse.status != "complete"
@@ -232,6 +321,7 @@ gate_provable if {
 	not includes_present
 	not parse_recovered
 	not lint_definitions_ambiguous
+	not dynamic_make_delegation
 }
 
 deny contains f if {
@@ -241,6 +331,18 @@ deny contains f if {
 		"QG-001", "indeterminate",
 		input.makefile.includes[0].location.start_line,
 		"Makefile includes other files; the lint gate cannot be proven binding",
+	)
+}
+
+deny contains f if {
+	has_makefile
+	not includes_present
+	not parse_recovered
+	not lint_definitions_ambiguous
+	dynamic_make_delegation
+	f := finding(
+		"QG-001", "indeterminate", 0,
+		"the lint target reaches dynamic recursive Make; gate reachability cannot be proven",
 	)
 }
 
@@ -333,10 +435,20 @@ deny contains f if {
 deny contains f if {
 	gate_provable
 	gate_invoked_somewhere
-	count(lint_rules) > 0
 	not gate_reachable
 	f := finding(
-		"QG-001", "indeterminate", 0,
-		"the lint target does not reach the gate within one prerequisite hop",
+		"QG-001", "noncompliant", 0,
+		"the lint target does not reach the gate through its static closure",
+	)
+}
+
+deny contains f if {
+	gate_provable
+	gate_reachable
+	some surface in cargo_surfaces
+	not surface_gate_reachable(surface)
+	f := finding(
+		"QG-001", "noncompliant", 0,
+		sprintf("the lint target does not reach a gate qualified for %q", [surface.path]),
 	)
 }

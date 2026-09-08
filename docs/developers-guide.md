@@ -298,13 +298,15 @@ rule-run subcommand exposed as `concordat artefact rule run <rule-id>`.
 
 `build_envelope` (in `envelope.py`) assembles a `policy-input/
 rust-makefile-baseline` document (schema version 1) describing one local
-checkout: whether a root `Cargo.toml` and `Makefile` exist, the parsed
-`Cargo.toml` table (or `None`), and the validated `makeutil` report for the
-`Makefile` (or `None`). Root `Cargo.toml` presence is documented as
-*provisional* evidence of Rust applicability — the `.concordat` manifest
-remains the eventual authority, per the module docstring, which points at
-"the Parabellum ExecPlan decision log" for that decision. This document is
-handed to Conftest as the input under audit.
+checkout: root `Cargo.toml` and `Makefile` compatibility facts, the resolved
+`cargo.surfaces` list, and the validated `makeutil` report for the root
+`Makefile` (or `None`). `rust_surfaces.resolve_rust_surfaces` is the shared
+Rust applicability boundary: `.concordat` `language.rust.surfaces` is
+authoritative, including an empty list, while an absent declaration retains the
+root-`Cargo.toml` fallback. This document is handed to Conftest as the input
+under audit. The added `cargo.surfaces` field is backward-compatible within
+schema version 1: policy replay of a v0.2 envelope without it retains the root
+surface when `root_cargo_toml` is true.
 
 ### Tool dependencies
 

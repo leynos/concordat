@@ -1547,7 +1547,7 @@ The formal schema for this file is defined below.
 | `enrolled`                  | Boolean       | Required                             | Must be set to `true` to signal that the repository is under Concordat/OpenTofu management.                                                                                                                                                                                                                                                                                                                              |
 | `language.primary`          | String        | Required                             | The primary programming language of the repository. Must be a lowercase string (e.g., `python`, `go`, `typescript`). This value drives the selection of language-specific linting, and CI rules.                                                                                                                                                                                                                         |
 | `language.others`           | Array         | Optional                             | A list of other significant languages present in the repository (e.g., `shell`, `make`).                                                                                                                                                                                                                                                                                                                                 |
-| `language.rust.surfaces`    | Array[Object] | Optional; planned for v0.3.0         | Governed Rust surfaces as `{path, role}` entries (`path` names a `Cargo.toml` relative to the repository root; `role` is optional and, when supplied, `workspace` or `crate` (inferred from the parsed manifest when omitted)). Authoritative when present, including the empty list ("no governed Rust"). Absent: a root `Cargo.toml` implies a single root surface. Not part of the shipped v0.2.0 schema; see §2.2.1. |
+| `language.rust.surfaces`    | Array[Object] | Optional                             | Governed Rust surfaces as `{path, role}` entries (`path` names a `Cargo.toml` relative to the repository root; `role` is optional and, when supplied, `workspace` or `crate` (inferred from the parsed manifest when omitted)). Authoritative when present, including the empty list ("no governed Rust"). Absent: a root `Cargo.toml` implies a single root surface. Introduced in v0.3.0; see §2.2.1.                  |
 | `infrastructure.opentofu`   | Boolean       | Optional                             | Set to `true` if the repository contains OpenTofu/Terraform code. This enables checks for `Makefile` targets like `tf-plan`. Defaults to `false`.                                                                                                                                                                                                                                                                        |
 | `infrastructure.kubernetes` | Boolean       | Optional                             | Set to `true` if the repository contains Kubernetes manifests. This enables Kubernetes-specific validation rules. Defaults to `false`.                                                                                                                                                                                                                                                                                   |
 | `docs.style`                | String        | Optional                             | The name of the Vale style to apply. Must correspond to a directory name in `platform-standards/canon/docs/Styles/`. Example: `your-house`.                                                                                                                                                                                                                                                                              |
@@ -1556,12 +1556,12 @@ The formal schema for this file is defined below.
 | `libraries.version_tag`     | String        | Required (if `libraries` is present) | The Git tag of the library version being used (e.g., `v2.4.1`). The Auditor uses this to fetch the correct version of the library's user guide for comparison.                                                                                                                                                                                                                                                           |
 | `ci.needs_release_workflow` | Boolean       | Optional                             | Set to `true` if the repository should be configured with the canonical release workflow. Defaults to `false`.                                                                                                                                                                                                                                                                                                           |
 
-#### 2.2.1. Nested Rust surfaces and gate reachability (design, not yet shipped)
+#### 2.2.1. Nested Rust surfaces and gate reachability
 
-This subsection specifies planned work for `rust-makefile-baseline` v0.3.0. The
-shipped v0.2.0 rule package, and the QG-001 row in Table 3, still bound gate
-delegation to one prerequisite hop and still sniff a root `Cargo.toml` for
-applicability. Nothing described below is enforced today.
+`rust-makefile-baseline` v0.3.0 resolves declared Rust surfaces and checks the
+complete static Make reachability closure. The v0.2.0 root-only applicability
+and one-hop gate boundary remain relevant only when interpreting historical
+baseline reports.
 
 The Parabellum baseline showed that root-`Cargo.toml` sniffing under-covers the
 estate: six repositories carry their Rust in subdirectories (`rust/` workspaces
@@ -1601,8 +1601,8 @@ becomes an onboarding prompt to declare surfaces rather than a dead end.
 Discovery may propose a surfaces list from observed `**/Cargo.toml` paths
 (excluding fixture and template directories) during bootstrap, but only an
 accepted manifest makes it authoritative. The policy-input envelope carries the
-resolved list additively as `cargo.surfaces[] = {path, parsed}` alongside the
-existing root fields, so the envelope stays at `schema_version: 1`.
+resolved list additively as `cargo.surfaces[] = {path, role, parsed}` alongside
+the existing root fields, so the envelope stays at `schema_version: 1`.
 
 **Transitive gate reachability.** QG-001's delegation proof widens from one
 prerequisite hop to a full static closure over the parsed Makefile: the
@@ -1636,9 +1636,8 @@ an indeterminate one, since no reachable recipe invokes the suite.
 agent-template-rust exits the Rust estate by declaring an empty surfaces list.
 The rule package implements this as v0.3.0, updating the `two_hop` fixture's
 expectation from indeterminate to compliant and adding surface-qualified
-fixtures; the same revision should extend the gate-variable check to flag `!=`
-(shell-at-read-time) assignments, which the sanctioned `?=` decision does not
-cover.
+fixtures. The sanctioned `?=` decision does not authorize shell-at-read-time
+`!=` assignments; their treatment remains a separate policy change.
 
 ### 2.3 Comment-preserving remediation provider
 
