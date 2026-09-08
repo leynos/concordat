@@ -298,13 +298,18 @@ rule-run subcommand exposed as `concordat artefact rule run <rule-id>`.
 
 `build_envelope` (in `envelope.py`) assembles a `policy-input/
 rust-makefile-baseline` document (schema version 1) describing one local
-checkout: whether a root `Cargo.toml` and `Makefile` exist, the parsed
-`Cargo.toml` table (or `None`), and the validated `makeutil` report for the
-`Makefile` (or `None`). Root `Cargo.toml` presence is documented as
-*provisional* evidence of Rust applicability — the `.concordat` manifest
-remains the eventual authority, per the module docstring, which points at
-"the Parabellum ExecPlan decision log" for that decision. This document is
-handed to Conftest as the input under audit.
+checkout: root `Cargo.toml` and `Makefile` compatibility facts, the resolved
+`cargo.surfaces` list, and the validated `makeutil` report for the root
+`Makefile` (or `None`). `rust_surfaces.resolve_rust_surfaces` is the shared
+Rust applicability boundary: `.concordat` `language.rust.surfaces` is
+authoritative, including an empty list, while an absent declaration retains the
+root-`Cargo.toml` fallback. This document is handed to Conftest as the input
+under audit. The added `cargo.surfaces` field is backward-compatible within
+schema version 1: policy replay of a v0.2 envelope without it retains the root
+surface when `root_cargo_toml` is true. A present `cargo.surfaces` field must
+be an array and `cargo` must be an object; malformed recorded evidence yields a
+structured EN-001 indeterminate finding instead of silently selecting the
+fallback or causing the policy evaluator to fail.
 
 ### Tool dependencies
 
@@ -496,33 +501,39 @@ each property is derived from the documented rule instead. The file covers:
 - **ledger record selection** (`TestLedgerSelection`) — over a generated
   append-only history, the latest record for a repository is the last one
   appended.
+- **Rust Makefile closure** (`test_rust_makefile_baseline_properties.py`) —
+  generated unconditional prerequisite and literal recursive-Make relations
+  are checked through the real Conftest runner against an independent
+  breadth-first search. The local test-only graph builder is scoped to this
+  one policy's input envelope; it is not a second Makefile parser for other
+  packages. Named cases retain the reachable, unreachable, cyclic, and
+  multi-command behaviours the property intentionally samples. A bounded
+  control-character property also proves the resolver rejects declarations
+  before path resolution reaches the Cargo filesystem boundary.
 
 `test_a_component_joined_to_a_root_stays_inside_it` joins a generated name
 to a real directory rather than a `tmp_path` fixture: Hypothesis rejects
 function-scoped fixtures, since they would be created once and then shared
 across every generated example rather than being fresh per example.
 
-### The bounded Rego reachability test
+### The static Rego reachability test
 
 The rule package's `policy/rust_makefile_baseline_test.rego`, under the
 `-- bounded reachability contract --` banner, enumerates `lint` prerequisite
 chains of increasing depth over one envelope. In the shipped
-`rust-makefile-baseline` v0.2.0 rule package, QG-001 proves gate delegation
-within one prerequisite hop, so this suite pins the boundary between
-"provable" and "indeterminate" rather than sampling it: depth 0 (a direct
-gate invocation) and depth 1 (one hop of delegation) are compliant, and
-every deeper chain is indeterminate. This one-hop bound is the semantics of
-the shipped v0.2.0 rule package only. `docs/concordat-design.md` §2.2.1
-specifies, but has not shipped, a v0.3.0 that widens QG-001's delegation
-proof from one prerequisite hop to a full static closure over the parsed
-Makefile: the closure's edges are a rule's prerequisites plus any recipe
-line invoking `$(MAKE) <literal-target>` in the same file. That closure is
-cycle-safe and needs no depth bound because every edge is a fact from the
-single parsed file; dynamic edges (`$(MAKE) $(VAR)`, `$(MAKE) -C`, recursive
-make into other files) and includes stay indeterminate. Under v0.3.0 the
-`two_hop` fixture's expectation changes from indeterminate to compliant.
-`build` and `test` targets are kept present in every case, so FP-003 stays
-silent and QG-001 is the only variable under test.
+`rust-makefile-baseline` v0.3.0 rule package, QG-001 proves the complete
+static closure over the parsed root Makefile. The closure's edges are a rule's
+prerequisites plus a complete, literal same-file `$(MAKE) <target>` command
+chain joined with `&&`. It is cycle-safe and has no depth bound because each
+edge is a parsed fact. A conditional rule on the closure, dynamic recursion
+such as `$(MAKE) $(VAR)` or `$(MAKE) -C`, includes, quoted assignment values,
+and other ambiguous shell forms are indeterminate rather than guessed.
+
+The suite keeps `build` and `test` targets present in every case so FP-003
+stays silent and QG-001 is the only variable under test. It also covers
+root-versus-nested surface context: a root surface cannot be credited by a
+nested `cd` command, while a nested surface needs a direct `cd` context or a
+literal manifest path.
 
 This policy suite is not wired into the Makefile. It is run directly with
 Conftest:

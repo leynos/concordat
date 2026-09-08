@@ -164,8 +164,31 @@ Hard invariants. Violation requires escalation, not workarounds.
   counted the sanctioned `WHITAKER ?=` convention as a violation; after rule
   package v0.2.0 removed that deny and the estate was re-swept, the current
   baseline reads 5 noncompliant, 8 indeterminate, 39 compliant.
+- [x] (2026-09-08) Issue #116 v0.3.0 source remediation: the shared declared
+  Rust-surface resolver and additive envelope fields now underpin the Rust
+  Makefile package. Its static closure accepts only complete literal
+  `$(MAKE) target` chains joined by `&&`; conditional closure records and
+  unproved shell context stay indeterminate. Focused policy evidence is green;
+  repository gates and independent semantic review remain required before
+  publication.
+- [ ] (2026-09-08) Issue #116 Batch 3: replace repeated known-target scans with
+  per-recipe literal recursive-Make target sets, then prove the resulting
+  closure through deterministic Rego cases and a bounded independent
+  Conftest/Hypothesis graph oracle. Drafted separately from the completed
+  boundary and documentation batches; recursive-edge mutation-strength,
+  generated-artefact, repository-gate, and semantic-review evidence remain
+  pending.
 
 ## Surprises & discoveries
+
+- Observation: Rego function parameters are input-only, so an apparently
+  predicate-shaped output argument cannot bind a target while a set
+  comprehension calls it unbound. Evidence: two actual Conftest compiler
+  failures during Batch 3: an unsafe variable followed by a redeclared
+  argument. Impact: the literal segment extractor is now a value-returning
+  function, and source-level review alone is insufficient evidence for a
+  policy-language refactor; compile the exact pinned policy before broader
+  semantic acceptance. Date: 2026-09-08, issue #116 Batch 3.
 
 - Observation: `makeutil` is further along than the conversation that seeded
   this plan assumed — the branch implements the entire ADR-0001 scope with 82
@@ -220,6 +243,12 @@ Hard invariants. Violation requires escalation, not workarounds.
   belongs to the retrospective, not to mid-campaign adjustment. Resolved after
   completion: `?=` is sanctioned, so the remediation wave described here was
   never owed — see the Decision log entry on rule package v0.2.0.
+- Observation: makeutil schema 1 records each rule's conditional ancestry but
+  not its evaluated branch or a shell AST/current directory. Evidence: the
+  `conditional-stage`, surface-context, and static-recursion decoy fixtures
+  added for issue #116. Impact: v0.3.0 credits only a direct, literal proof;
+  reachable conditional rules, shell-looking context text, and recursive Make
+  commands without proven error propagation are QG-001 indeterminate.
 
 ## Decision log
 
@@ -279,6 +308,36 @@ Hard invariants. Violation requires escalation, not workarounds.
   and reinstalling downward would disturb other projects on this machine. If a
   syntax incompatibility surfaces in CI, escalate rather than diverge the
   policy. Date/Author: 2026-07-19, Fable (Milestone A).
+- Decision: v0.3.0 treats parsed Make facts as the sole proof boundary; it does
+  not reconstruct shell semantics. Rationale: a substring for `cd <dir>` or
+  `$(MAKE) target` can occur in an `echo`, assignment, or masked command and
+  create false compliance. Direct `cd`/manifest-path gate shapes and complete
+  literal recursive-Make `&&` chains are provable; every other relevant shape
+  fails closed as indeterminate. Date/Author: 2026-09-08, issue #116 review.
+- Decision: surface identity uses normalized repository-relative POSIX paths,
+  and a root surface needs a gate that does not explicitly select a nested
+  declared surface. Recursive Make edges are extracted from anchored command
+  segments, never from quoted environment values. Rationale: lexical aliases,
+  nested working directories, and text in assignment values otherwise create
+  false compliance. Evidence: Codex review threads 3957489038, 3957489044,
+  and 3957489052; the focused red cases are recorded before repair. Date/
+  Author: 2026-09-08, issue #116 follow-up review.
+- Decision: policy replay validates the optional v0.3 `cargo.surfaces` field
+  before counting it, while a missing field continues to select the v0.2 root
+  fallback. The resolver distinguishes missing filesystem entries from failed
+  reads and rejects control characters before constructing paths or reporting
+  them. Rationale: malformed historical evidence and permission failures are
+  unmeasured states, never evidence of a clean audit. Evidence: CodeRabbit
+  threads 3957571570, 3957571583, and pre-merge architecture/security rows;
+  observed-red logs under `/tmp/concordat-nested-rust-surfaces-*`. Date/Author:
+  2026-09-08, issue #116 review remediation.
+- Decision: Batch 3 represents literal recursive-Make children as a set per
+  binding recipe before intersecting it with parsed targets. Rationale: the
+  previous target-by-target predicate rescanned the same command for every
+  declared target; a set preserves multiple `&&` children and removes that
+  repeated relation scan. Independent generated tests use only fact relations
+  and a breadth-first oracle, leaving shell grammar to adversarial Rego
+  fixtures. Date/Author: 2026-09-08, issue #116 review remediation.
 
 ## Outcomes & retrospective
 
@@ -324,9 +383,13 @@ point.
 
 Follow-ups deliberately left open: `rule validate`, the mutation vocabulary and
 remediation wave, and a tagged makeutil release with binstall assets.
-Nested-Cargo applicability and transitive gate reachability are now designed
-(design document §2.2.1, `language.rust.surfaces` plus static `$(MAKE)`
-closure); implementation is scoped as rule package v0.3.0.
+Nested-Cargo applicability and transitive gate reachability are delivered as
+rule package v0.3.0 (design document §2.2.1). The implementation resolves the
+authoritative `language.rust.surfaces` list, preserves the root-manifest
+fallback only when the list is absent, and proves literal static `$(MAKE)`
+closure while treating dynamic delegation as indeterminate. The package's
+fixture, unit, BDD, policy, and repository-gate evidence are being recorded
+with the implementation commit.
 
 Resolved after completion (2026-07-19, user decision): the `?=` question.
 `WHITAKER ?= whitaker` is the sanctioned estate pattern — local override
@@ -380,13 +443,14 @@ Terms used below:
   target that runs `$(WHITAKER)` after clippy.
 - FP-003: "a root `Makefile` must exist and define canonical `build`,
   `test`, and `lint` targets" (design document §3.1, severity error).
-- QG-001: "the lint gate must be binding" — introduced by this plan. The
-  first provable subset: no ignore-errors (`-`) prefix on lint-path recipes; no
-  `command -v`/`which` existence guards or `|| true` suppression in lint-path
-  recipes; the `lint` target must reach a `$(WHITAKER)` invocation directly or
-  through exactly one prerequisite hop; any `include` directive renders the
-  rule indeterminate. The `WHITAKER ?=` override is the sanctioned estate
-  pattern (policy v0.2.0 decision) and is deliberately not a finding.
+- QG-001: "the lint gate must be binding". The current v0.3.0 package proves
+  the complete static closure from `lint` through prerequisites and literal,
+  failure-propagating same-file `$(MAKE) target` commands. It rejects ignored
+  errors and guards, and treats includes, conditionals, dynamic recursion, and
+  other unproved shell forms as indeterminate. The `WHITAKER ?=` override is
+  the sanctioned estate pattern (policy v0.2.0 decision) and is deliberately
+  not a finding. The one-hop wording in earlier milestone evidence records the
+  historical v0.2.0 boundary, not the current package.
 - Campaign ledger: an append-only JSON Lines file, one record per audited
   repository per commit, from which the baseline report is derived.
 

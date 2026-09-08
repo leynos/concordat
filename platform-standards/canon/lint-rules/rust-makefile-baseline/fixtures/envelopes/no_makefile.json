@@ -7,7 +7,8 @@
   },
   "applicability": {
     "root_cargo_toml": true,
-    "root_makefile": false
+    "root_makefile": false,
+    "rust_surfaces_declared": false
   },
   "cargo": {
     "parsed": {
@@ -15,7 +16,19 @@
         "name": "fixture",
         "version": "0.1.0"
       }
-    }
+    },
+    "surfaces": [
+      {
+        "path": "Cargo.toml",
+        "role": "crate",
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        }
+      }
+    ]
   },
   "makefile": null
 }

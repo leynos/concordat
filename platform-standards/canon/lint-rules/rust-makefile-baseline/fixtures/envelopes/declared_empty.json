@@ -8,7 +8,7 @@
   "applicability": {
     "root_cargo_toml": false,
     "root_makefile": false,
-    "rust_surfaces_declared": false
+    "rust_surfaces_declared": true
   },
   "cargo": {
     "parsed": null,

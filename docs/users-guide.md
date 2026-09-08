@@ -247,9 +247,9 @@ checkout against the template and optionally copy missing/outdated artefacts.
 
 `concordat artefact rule run` evaluates one canon lint rule package against a
 local checkout and reports structured findings. The first package,
-`rust-makefile-baseline`, audits a Rust repository's root `Makefile` for the
-canonical `build`, `test`, and `lint` targets (FP-003) and for a binding
-Whitaker lint gate (QG-001):
+`rust-makefile-baseline`, audits every governed Rust Cargo surface and the root
+`Makefile` for canonical `build`, `test`, and `lint` targets (FP-003), plus a
+binding Whitaker lint gate (QG-001):
 
 ```shell
 concordat artefact rule run rust-makefile-baseline --repo /path/to/checkout
@@ -269,6 +269,27 @@ includes other files, or the parse had to recover from syntax errors).
 Exit codes: `0` compliant; `1` at least one finding, including indeterminate
 verdicts; `2` operational failure (for example, the pinned `makeutil` or
 `conftest` executable is missing), reported on standard error.
+
+For Rust below the repository root, declare each `Cargo.toml` in `.concordat`
+under `language.rust.surfaces`. The declaration is authoritative; an empty list
+states that no Rust surface is governed, while an absent declaration retains
+the root-`Cargo.toml` compatibility fallback. For example:
+
+```yaml
+language:
+  rust:
+    surfaces:
+      - path: rust/Cargo.toml
+```
+
+The root `Makefile` remains the only Makefile audited. It must define the
+canonical targets and qualify Whitaker for every declared surface: use a direct
+`cd rust && $(WHITAKER)` command or a direct literal
+`$(WHITAKER) --manifest-path rust/Cargo.toml` argument. When a checkout governs
+both `Cargo.toml` and `rust/Cargo.toml`, the root surface still needs a gate
+that runs in the root context. The rule proves only prerequisites and complete,
+literal same-file `$(MAKE) target` chains; conditionals, dynamic recursion,
+includes, and ambiguous shell forms are indeterminate.
 
 The command requires two external tools on `PATH`: `conftest` and the pinned
 `makeutil` (see

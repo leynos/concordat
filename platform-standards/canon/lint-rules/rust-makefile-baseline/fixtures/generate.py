@@ -27,8 +27,29 @@ ENVELOPES_DIR = FIXTURES_DIR / "envelopes"
 
 CARGO_PARSED: typ.Final = {"package": {"name": "fixture", "version": "0.1.0"}}
 
+
+class Surface(typ.TypedDict):
+    """One generated Cargo surface in a policy-envelope fixture."""
+
+    path: str
+    role: str
+    parsed: dict[str, object]
+
+
+ROOT_SURFACE: typ.Final[Surface] = {
+    "path": "Cargo.toml",
+    "role": "crate",
+    "parsed": CARGO_PARSED,
+}
+NESTED_SURFACE: typ.Final[Surface] = {
+    "path": "rust/Cargo.toml",
+    "role": "workspace",
+    "parsed": {"workspace": {"members": []}},
+}
+
 # Only this fixture is expected to parse with recovery (makeutil exit 1).
 RECOVERED_FIXTURE: typ.Final = "recovered"
+MIXED_SURFACE_FIXTURES: typ.Final = frozenset({"mixed_root_nested"})
 
 
 class MakeutilFixtureError(RuntimeError):
@@ -83,8 +104,13 @@ def build_envelope(
     *,
     makefile: dict[str, object] | None,
     root_cargo_toml: bool = True,
+    surfaces: list[Surface] | None = None,
+    rust_surfaces_declared: bool = False,
 ) -> dict[str, object]:
     """Wrap a makeutil report in a policy-input/v1 envelope."""
+    resolved_surfaces = surfaces
+    if resolved_surfaces is None:
+        resolved_surfaces = [ROOT_SURFACE] if root_cargo_toml else []
     return {
         "schema_version": 1,
         "kind": "policy-input/rust-makefile-baseline",
@@ -92,8 +118,12 @@ def build_envelope(
         "applicability": {
             "root_cargo_toml": root_cargo_toml,
             "root_makefile": makefile is not None,
+            "rust_surfaces_declared": rust_surfaces_declared,
         },
-        "cargo": {"parsed": CARGO_PARSED} if root_cargo_toml else {"parsed": None},
+        "cargo": {
+            "parsed": CARGO_PARSED if root_cargo_toml else None,
+            "surfaces": resolved_surfaces,
+        },
         "makefile": makefile,
     }
 
@@ -103,6 +133,12 @@ def synthetic_envelopes() -> dict[str, dict[str, object]]:
     return {
         "no_makefile": build_envelope(makefile=None),
         "not_rust": build_envelope(makefile=None, root_cargo_toml=False),
+        "declared_empty": build_envelope(
+            makefile=None,
+            root_cargo_toml=False,
+            surfaces=[],
+            rust_surfaces_declared=True,
+        ),
     }
 
 
@@ -112,7 +148,20 @@ def main() -> None:
     envelopes = synthetic_envelopes()
     for makefile_path in sorted(MAKEFILES_DIR.glob("*.mk")):
         key = makefile_path.stem.replace("-", "_")
-        envelopes[key] = build_envelope(makefile=parse_makefile(makefile_path))
+        surfaces = None
+        rust_surfaces_declared = False
+        if key in MIXED_SURFACE_FIXTURES:
+            surfaces = [ROOT_SURFACE, NESTED_SURFACE]
+            rust_surfaces_declared = True
+        elif key.startswith("surface_"):
+            surfaces = [NESTED_SURFACE]
+            rust_surfaces_declared = True
+        envelopes[key] = build_envelope(
+            makefile=parse_makefile(makefile_path),
+            root_cargo_toml=surfaces is None,
+            surfaces=surfaces,
+            rust_surfaces_declared=rust_surfaces_declared,
+        )
     for key, envelope in envelopes.items():
         target = ENVELOPES_DIR / f"{key}.json"
         target.write_text(json.dumps(envelope, indent=2) + "\n")

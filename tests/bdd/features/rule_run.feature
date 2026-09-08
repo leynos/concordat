@@ -1,6 +1,14 @@
 Feature: Rust Makefile baseline rule run
   Auditing a local checkout against the rust-makefile-baseline rule package.
 
+  Scenario: declared nested Rust surface is audited
+    Given a checkout with a declared nested Cargo workspace
+    And makeutil reports the "surface_qualified" fixture facts
+    And conftest reports no failures
+    When I run the rule against the checkout
+    Then the exit status is 0
+    And the table output reports zero findings
+
   Scenario: compliant repository
     Given a checkout with a root Cargo.toml
     And makeutil reports the "compliant" fixture facts

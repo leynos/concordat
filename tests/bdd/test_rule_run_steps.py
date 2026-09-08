@@ -11,6 +11,7 @@ import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from concordat import cli
+from concordat.rules import runner
 
 from .conftest import RunResult
 
@@ -30,6 +31,7 @@ ENVELOPES_DIR = (
     / "fixtures"
     / "envelopes"
 )
+MAKEFILES_DIR = ENVELOPES_DIR.parent / "makefiles"
 
 CARGO_STUB = '[package]\nname = "fixture"\nversion = "0.1.0"\n'
 
@@ -84,6 +86,64 @@ def given_rust_checkout(checkout: pathlib.Path) -> None:
 def given_rust_checkout_with_makefile(checkout: pathlib.Path) -> None:
     """Create a checkout containing a root Cargo.toml and Makefile."""
     given_rust_checkout(checkout)
+
+
+@given("a checkout with a declared nested Cargo workspace")
+def given_declared_nested_rust_checkout(checkout: pathlib.Path) -> None:
+    """Create a mixed-language checkout with one governed Rust workspace."""
+    rust_directory = checkout / "rust"
+    rust_directory.mkdir(parents=True)
+    (checkout / ".concordat").write_text(
+        "language:\n  rust:\n    surfaces:\n      - path: rust/Cargo.toml\n",
+        encoding="utf-8",
+    )
+    (rust_directory / "Cargo.toml").write_text(
+        "[workspace]\nmembers = []\n",
+        encoding="utf-8",
+    )
+    (checkout / "Makefile").write_text(
+        (MAKEFILES_DIR / "surface-qualified.mk").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+
+def test_declared_nested_checkout_forwards_qualified_policy_input(
+    checkout: pathlib.Path,
+    cmd_mox: CmdMox,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Nested checkout facts reach Conftest with their surface context intact."""
+    given_declared_nested_rust_checkout(checkout)
+
+    fixture_envelope = json.loads(
+        (ENVELOPES_DIR / "surface_qualified.json").read_text(encoding="utf-8")
+    )
+    fixture_makefile = fixture_envelope["makefile"]
+    assert (checkout / "Makefile").read_text(encoding="utf-8") == (
+        MAKEFILES_DIR / "surface-qualified.mk"
+    ).read_text(encoding="utf-8")
+    cmd_mox.mock("makeutil").returns(stdout=json.dumps(fixture_makefile))
+
+    def assert_qualified_conftest_input(
+        argv: list[str],
+        rule_id: str,
+    ) -> subprocess.CompletedProcess[str]:
+        """Return a clean result only after checking the generated envelope."""
+        assert rule_id == RULE_ID, rule_id
+        assert argv[-1].endswith("envelope.json"), argv
+        envelope = json.loads(pathlib.Path(argv[-1]).read_text(encoding="utf-8"))
+        cargo = typ.cast("dict[str, object]", envelope["cargo"])
+        assert cargo["surfaces"] == fixture_envelope["cargo"]["surfaces"], cargo
+        assert envelope["makefile"] == fixture_makefile, envelope["makefile"]
+        return subprocess.CompletedProcess(argv, 0, _conftest_result([]), "")
+
+    monkeypatch.setattr(runner, "_run_conftest", assert_qualified_conftest_input)
+    cmd_mox.replay()
+
+    result = runner.run_rule(RULE_ID, checkout)
+
+    cmd_mox.verify()
+    assert result.verdict == "compliant", result
 
 
 @given(parsers.cfparse('makeutil reports the "{fixture}" fixture facts'))

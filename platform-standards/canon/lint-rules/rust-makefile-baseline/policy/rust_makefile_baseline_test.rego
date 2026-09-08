@@ -25,6 +25,45 @@ test_one_hop_delegation_is_compliant if {
 	count(findings) == 0
 }
 
+test_literal_recursive_make_delegation_is_compliant if {
+	findings := policy.deny with input as data.fixtures.static_recursive
+	count(findings) == 0
+}
+
+test_dynamic_recursive_make_is_indeterminate if {
+	findings := policy.deny with input as data.fixtures.dynamic_recursive
+	profile(findings) == {["QG-001", "indeterminate"]}
+}
+
+test_echoed_recursive_make_is_indeterminate if {
+	findings := policy.deny with input as data.fixtures.static_make_echo_decoy
+	profile(findings) == {["QG-001", "indeterminate"]}
+}
+
+test_masked_recursive_make_is_indeterminate if {
+	findings := policy.deny with input as data.fixtures.static_make_masked_decoy
+	profile(findings) == {["QG-001", "indeterminate"]}
+}
+
+test_multiple_binding_recursive_makes_are_compliant if {
+	findings := policy.deny with input as data.fixtures.static_make_multiple
+	count(findings) == 0
+}
+
+# A quoted environment value can mention a recursive Make target without
+# executing it. Only the command-position target contributes a closure edge.
+test_quoted_environment_make_target_is_not_reachable if {
+	findings := policy.deny with input as data.fixtures.static_make_quoted_env
+	profile(findings) == {["QG-001", "noncompliant"]}
+}
+
+# A binding recipe exposes every command-position recursive target as one
+# relation, without evaluating shell-like decoys or depending on target order.
+test_binding_recipe_extracts_multiple_static_targets if {
+	targets := policy.static_make_targets({"text": "$(MAKE) stage-a && $(MAKE) stage-b"})
+	targets == {"stage-a", "stage-b"}
+}
+
 # -- FP-003 ----------------------------------------------------------------
 
 test_missing_makefile_is_fp003 if {
@@ -44,8 +83,11 @@ test_missing_lint_target_is_fp003_and_qg001 if {
 
 test_conditional_lint_target_is_fp003 if {
 	findings := policy.deny with input as data.fixtures.conditional_lint
-	count(findings) == 1
-	profile(findings) == {["FP-003", "noncompliant"]}
+	count(findings) == 2
+	profile(findings) == {
+		["FP-003", "noncompliant"],
+		["QG-001", "indeterminate"],
+	}
 }
 
 # -- QG-001 noncompliant ---------------------------------------------------
@@ -81,10 +123,9 @@ test_include_makes_qg001_indeterminate if {
 	profile(findings) == {["QG-001", "indeterminate"]}
 }
 
-test_two_hop_delegation_is_indeterminate if {
+test_two_hop_fixture_delegation_is_compliant if {
 	findings := policy.deny with input as data.fixtures.two_hop
-	count(findings) == 1
-	profile(findings) == {["QG-001", "indeterminate"]}
+	count(findings) == 0
 }
 
 test_duplicate_lint_rules_are_indeterminate if {
@@ -107,6 +148,46 @@ test_not_rust_is_single_applicability_finding if {
 	profile(findings) == {["AP-001", "indeterminate"]}
 }
 
+test_declared_empty_surfaces_have_no_findings if {
+	findings := policy.deny with input as data.fixtures.declared_empty
+	count(findings) == 0
+}
+
+# A v0.3 envelope that carries a malformed surface field is evidence that
+# cannot be evaluated. It must receive a structured finding, not an evaluator
+# failure or legacy root fallback.
+invalid_surfaces_envelope(surfaces) := object.union(
+	data.fixtures.compliant,
+	{"cargo": {"parsed": {"package": {"name": "fixture"}}, "surfaces": surfaces}},
+)
+
+test_null_surfaces_are_an_indeterminate_envelope_error if {
+	findings := policy.deny with input as invalid_surfaces_envelope(null)
+	profile(findings) == {["EN-001", "indeterminate"]}
+}
+
+test_scalar_surfaces_are_an_indeterminate_envelope_error if {
+	findings := policy.deny with input as invalid_surfaces_envelope(1)
+	profile(findings) == {["EN-001", "indeterminate"]}
+}
+
+# The v0.3 envelope field is additive within schema version 1. A stored v0.2
+# evidence envelope must retain its root-Cargo applicability when replayed.
+legacy_v02_envelope := object.union(
+	object.remove(data.fixtures.compliant, {"applicability", "cargo"}),
+	{
+		"applicability": {"root_cargo_toml": true, "root_makefile": true},
+		"cargo": {"parsed": {"package": {"name": "fixture"}}},
+	},
+)
+
+test_v02_envelope_retains_root_surface_compatibility if {
+	findings := policy.deny with input as legacy_v02_envelope
+	count(findings) == 0
+	surfaces := policy.cargo_surfaces with input as legacy_v02_envelope
+	surfaces == [{"path": "Cargo.toml"}]
+}
+
 test_unknown_schema_version_is_rejected if {
 	findings := policy.deny with input as {"schema_version": 2}
 	count(findings) == 1
@@ -115,11 +196,10 @@ test_unknown_schema_version_is_rejected if {
 
 # -- bounded reachability contract -----------------------------------------
 #
-# QG-001 proves gate delegation within one prerequisite hop. These enumerate
-# `lint` chains of increasing depth over one envelope, so the boundary between
-# "provable" and "indeterminate" is pinned rather than sampled: depth 0 and 1
-# are compliant, and everything deeper fails closed. `build` and `test` are
-# kept in every case so FP-003 stays silent and QG-001 is the only variable.
+# QG-001 proves the complete static closure from `lint`. These enumerate
+# increasingly deep literal prerequisite chains, so the closure stays pinned
+# rather than sampled. `build` and `test` are kept in every case so FP-003
+# stays silent and QG-001 is the only variable.
 
 loc := {"start_byte": 0, "end_byte": 1, "start_line": 1, "start_column": 1, "end_line": 1, "end_column": 1}
 
@@ -164,9 +244,18 @@ chain(depth) := array.concat(
 	stage_rules(depth),
 )
 
-chain_input(depth) := object.union(
+input_with_rules(rules) := object.union(
 	data.fixtures.compliant,
-	{"makefile": object.union(data.fixtures.compliant.makefile, {"rules": chain(depth)})},
+	{"makefile": object.union(data.fixtures.compliant.makefile, {"rules": rules})},
+)
+
+chain_input(depth) := input_with_rules(chain(depth))
+
+recursive_make_recipe(targets) := object.union(
+	gate_recipe,
+	{
+		"text": concat(" && ", [sprintf("$(MAKE) %s", [target]) | some target in targets]),
+	},
 )
 
 test_direct_gate_invocation_is_compliant if {
@@ -179,18 +268,123 @@ test_one_hop_delegation_is_compliant if {
 	count(findings) == 0
 }
 
-test_two_hop_delegation_is_indeterminate if {
+test_two_hop_delegation_is_compliant if {
 	findings := policy.deny with input as chain_input(2)
-	profile(findings) == {["QG-001", "indeterminate"]}
+	count(findings) == 0
 }
 
-test_three_hop_delegation_is_indeterminate if {
+test_three_hop_delegation_is_compliant if {
 	findings := policy.deny with input as chain_input(3)
+	count(findings) == 0
+}
+
+test_four_hop_delegation_is_compliant if {
+	findings := policy.deny with input as chain_input(4)
+	count(findings) == 0
+}
+
+# A literal recursive edge and an ordinary prerequisite edge share the same
+# closure. The cycle must not prevent the separate gate target being reached.
+test_mixed_recursive_and_prerequisite_closure_is_compliant if {
+	rules := [
+		make_rule(["build"], [], [{"ordinal": 0, "text": "cargo build", "silent": false, "ignore_errors": false, "always_execute": false, "location": loc}]),
+		make_rule(["test"], [], [{"ordinal": 0, "text": "cargo test", "silent": false, "ignore_errors": false, "always_execute": false, "location": loc}]),
+		make_rule(["lint"], ["prepare"], []),
+		make_rule(["prepare"], [], [recursive_make_recipe(["cycle", "gate"])]),
+		make_rule(["cycle"], ["prepare"], []),
+		make_rule(["gate"], [], [gate_recipe]),
+	]
+	findings := policy.deny with input as input_with_rules(rules)
+	count(findings) == 0
+}
+
+# A valid gate outside lint's closure cannot credit the lint target.
+test_unreachable_gate_is_noncompliant if {
+	rules := [
+		make_rule(["build"], [], [{"ordinal": 0, "text": "cargo build", "silent": false, "ignore_errors": false, "always_execute": false, "location": loc}]),
+		make_rule(["test"], [], [{"ordinal": 0, "text": "cargo test", "silent": false, "ignore_errors": false, "always_execute": false, "location": loc}]),
+		make_rule(["lint"], [], [{"ordinal": 0, "text": "cargo clippy", "silent": false, "ignore_errors": false, "always_execute": false, "location": loc}]),
+		make_rule(["isolated"], [], [gate_recipe]),
+	]
+	findings := policy.deny with input as input_with_rules(rules)
+	profile(findings) == {["QG-001", "noncompliant"]}
+}
+
+test_surface_qualified_gate_is_compliant if {
+	findings := policy.deny with input as data.fixtures.surface_qualified
+	count(findings) == 0
+}
+
+test_surface_without_qualified_gate_is_noncompliant if {
+	findings := policy.deny with input as data.fixtures.surface_unqualified
+	profile(findings) == {["QG-001", "noncompliant"]}
+	some f in findings
+	contains(f.msg, "rust/Cargo.toml")
+}
+
+# A nested `cd` gate cannot audit a simultaneously declared root manifest.
+test_nested_gate_does_not_qualify_a_root_surface if {
+	findings := policy.deny with input as data.fixtures.mixed_root_nested
+	profile(findings) == {["QG-001", "noncompliant"]}
+	some f in findings
+	contains(f.msg, "Cargo.toml")
+}
+
+# Surface context must be proved from a command-shaped recipe. The two decoys
+# both execute `pwd` at the root, but a substring-only check mistakes their
+# printed or assigned text for `cd rust &&`.
+test_echoed_surface_context_is_indeterminate if {
+	findings := policy.deny with input as data.fixtures.surface_echo_decoy
 	profile(findings) == {["QG-001", "indeterminate"]}
 }
 
-test_four_hop_delegation_is_indeterminate if {
-	findings := policy.deny with input as chain_input(4)
+test_assigned_surface_context_is_indeterminate if {
+	findings := policy.deny with input as data.fixtures.surface_assignment_decoy
+	profile(findings) == {["QG-001", "indeterminate"]}
+}
+
+# Declared manifest paths can contain regex metacharacters. Their qualification
+# comparison must stay literal after the direct command shape has been proved.
+manifest_surface_input(path, recipe) := object.union(
+	gate_position_input(recipe),
+	{
+		"applicability": {
+			"root_cargo_toml": false,
+			"root_makefile": true,
+			"rust_surfaces_declared": true,
+		},
+		"cargo": {
+			"parsed": null,
+			"surfaces": [{
+				"path": path,
+				"role": "workspace",
+				"parsed": {"workspace": {"members": []}},
+			}],
+		},
+	},
+)
+
+test_manifest_path_comparison_is_literal if {
+	findings := policy.deny with input as manifest_surface_input(
+		"rust.x/Cargo.toml",
+		"$(WHITAKER) --manifest-path rustxxCargo.toml",
+	)
+	profile(findings) == {["QG-001", "noncompliant"]}
+}
+
+test_brace_manifest_path_is_compliant if {
+	findings := policy.deny with input as manifest_surface_input(
+		"rust/Cargo.toml",
+		"${WHITAKER} --manifest-path rust/Cargo.toml",
+	)
+	profile(findings) == set()
+}
+
+# A conditional rule inside the static closure can make the gate disappear at
+# execution time. Makeutil records conditional ancestry but not the condition
+# outcome, so the policy must fail closed rather than credit its gate recipe.
+test_conditional_stage_is_indeterminate if {
+	findings := policy.deny with input as data.fixtures.conditional_stage
 	profile(findings) == {["QG-001", "indeterminate"]}
 }
 
@@ -258,6 +452,21 @@ gate_position_input(text) := object.union(
 		make_rule(["lint"], [], [{"ordinal": 0, "text": text, "silent": false, "ignore_errors": false, "always_execute": false, "location": loc}]),
 	]})},
 )
+
+brace_recursive_make_input := object.union(
+	data.fixtures.compliant,
+	{"makefile": object.union(data.fixtures.compliant.makefile, {"rules": [
+		make_rule(["build"], [], [gate_recipe_text("cargo build")]),
+		make_rule(["test"], [], [gate_recipe_text("cargo test")]),
+		make_rule(["lint"], [], [gate_recipe_text("${MAKE} lint-rust")]),
+		make_rule(["lint-rust"], [], [gate_recipe]),
+	]})},
+)
+
+test_brace_recursive_make_is_indeterminate if {
+	findings := policy.deny with input as brace_recursive_make_input
+	profile(findings) == {["QG-001", "indeterminate"]}
+}
 
 test_paren_command_position_is_compliant if {
 	findings := policy.deny with input as gate_position_input("$(WHITAKER) --all")
