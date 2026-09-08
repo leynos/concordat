@@ -171,8 +171,24 @@ Hard invariants. Violation requires escalation, not workarounds.
   unproved shell context stay indeterminate. Focused policy evidence is green;
   repository gates and independent semantic review remain required before
   publication.
+- [ ] (2026-09-08) Issue #116 Batch 3: replace repeated known-target scans with
+  per-recipe literal recursive-Make target sets, then prove the resulting
+  closure through deterministic Rego cases and a bounded independent
+  Conftest/Hypothesis graph oracle. Drafted separately from the completed
+  boundary and documentation batches; recursive-edge mutation-strength,
+  generated-artefact, repository-gate, and semantic-review evidence remain
+  pending.
 
 ## Surprises & discoveries
+
+- Observation: Rego function parameters are input-only, so an apparently
+  predicate-shaped output argument cannot bind a target while a set
+  comprehension calls it unbound. Evidence: two actual Conftest compiler
+  failures during Batch 3: an unsafe variable followed by a redeclared
+  argument. Impact: the literal segment extractor is now a value-returning
+  function, and source-level review alone is insufficient evidence for a
+  policy-language refactor; compile the exact pinned policy before broader
+  semantic acceptance. Date: 2026-09-08, issue #116 Batch 3.
 
 - Observation: `makeutil` is further along than the conversation that seeded
   this plan assumed — the branch implements the entire ADR-0001 scope with 82
@@ -315,6 +331,13 @@ Hard invariants. Violation requires escalation, not workarounds.
   threads 3957571570, 3957571583, and pre-merge architecture/security rows;
   observed-red logs under `/tmp/concordat-nested-rust-surfaces-*`. Date/Author:
   2026-09-08, issue #116 review remediation.
+- Decision: Batch 3 represents literal recursive-Make children as a set per
+  binding recipe before intersecting it with parsed targets. Rationale: the
+  previous target-by-target predicate rescanned the same command for every
+  declared target; a set preserves multiple `&&` children and removes that
+  repeated relation scan. Independent generated tests use only fact relations
+  and a breadth-first oracle, leaving shell grammar to adversarial Rego
+  fixtures. Date/Author: 2026-09-08, issue #116 review remediation.
 
 ## Outcomes & retrospective
 

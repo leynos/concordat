@@ -501,6 +501,15 @@ each property is derived from the documented rule instead. The file covers:
 - **ledger record selection** (`TestLedgerSelection`) — over a generated
   append-only history, the latest record for a repository is the last one
   appended.
+- **Rust Makefile closure** (`test_rust_makefile_baseline_properties.py`) —
+  generated unconditional prerequisite and literal recursive-Make relations
+  are checked through the real Conftest runner against an independent
+  breadth-first search. The local test-only graph builder is scoped to this
+  one policy's input envelope; it is not a second Makefile parser for other
+  packages. Named cases retain the reachable, unreachable, cyclic, and
+  multi-command behaviours the property intentionally samples. A bounded
+  control-character property also proves the resolver rejects declarations
+  before path resolution reaches the Cargo filesystem boundary.
 
 `test_a_component_joined_to_a_root_stays_inside_it` joins a generated name
 to a real directory rather than a `tmp_path` fixture: Hypothesis rejects

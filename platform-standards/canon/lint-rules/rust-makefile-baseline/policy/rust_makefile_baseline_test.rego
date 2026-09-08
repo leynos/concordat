@@ -57,6 +57,13 @@ test_quoted_environment_make_target_is_not_reachable if {
 	profile(findings) == {["QG-001", "noncompliant"]}
 }
 
+# A binding recipe exposes every command-position recursive target as one
+# relation, without evaluating shell-like decoys or depending on target order.
+test_binding_recipe_extracts_multiple_static_targets if {
+	targets := policy.static_make_targets({"text": "$(MAKE) stage-a && $(MAKE) stage-b"})
+	targets == {"stage-a", "stage-b"}
+}
+
 # -- FP-003 ----------------------------------------------------------------
 
 test_missing_makefile_is_fp003 if {
@@ -237,9 +244,18 @@ chain(depth) := array.concat(
 	stage_rules(depth),
 )
 
-chain_input(depth) := object.union(
+input_with_rules(rules) := object.union(
 	data.fixtures.compliant,
-	{"makefile": object.union(data.fixtures.compliant.makefile, {"rules": chain(depth)})},
+	{"makefile": object.union(data.fixtures.compliant.makefile, {"rules": rules})},
+)
+
+chain_input(depth) := input_with_rules(chain(depth))
+
+recursive_make_recipe(targets) := object.union(
+	gate_recipe,
+	{
+		"text": concat(" && ", [sprintf("$(MAKE) %s", [target]) | some target in targets]),
+	},
 )
 
 test_direct_gate_invocation_is_compliant if {
@@ -265,6 +281,33 @@ test_three_hop_delegation_is_compliant if {
 test_four_hop_delegation_is_compliant if {
 	findings := policy.deny with input as chain_input(4)
 	count(findings) == 0
+}
+
+# A literal recursive edge and an ordinary prerequisite edge share the same
+# closure. The cycle must not prevent the separate gate target being reached.
+test_mixed_recursive_and_prerequisite_closure_is_compliant if {
+	rules := [
+		make_rule(["build"], [], [{"ordinal": 0, "text": "cargo build", "silent": false, "ignore_errors": false, "always_execute": false, "location": loc}]),
+		make_rule(["test"], [], [{"ordinal": 0, "text": "cargo test", "silent": false, "ignore_errors": false, "always_execute": false, "location": loc}]),
+		make_rule(["lint"], ["prepare"], []),
+		make_rule(["prepare"], [], [recursive_make_recipe(["cycle", "gate"])]),
+		make_rule(["cycle"], ["prepare"], []),
+		make_rule(["gate"], [], [gate_recipe]),
+	]
+	findings := policy.deny with input as input_with_rules(rules)
+	count(findings) == 0
+}
+
+# A valid gate outside lint's closure cannot credit the lint target.
+test_unreachable_gate_is_noncompliant if {
+	rules := [
+		make_rule(["build"], [], [{"ordinal": 0, "text": "cargo build", "silent": false, "ignore_errors": false, "always_execute": false, "location": loc}]),
+		make_rule(["test"], [], [{"ordinal": 0, "text": "cargo test", "silent": false, "ignore_errors": false, "always_execute": false, "location": loc}]),
+		make_rule(["lint"], [], [{"ordinal": 0, "text": "cargo clippy", "silent": false, "ignore_errors": false, "always_execute": false, "location": loc}]),
+		make_rule(["isolated"], [], [gate_recipe]),
+	]
+	findings := policy.deny with input as input_with_rules(rules)
+	profile(findings) == {["QG-001", "noncompliant"]}
 }
 
 test_surface_qualified_gate_is_compliant if {

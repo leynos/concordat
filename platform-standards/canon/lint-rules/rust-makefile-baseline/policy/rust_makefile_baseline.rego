@@ -162,8 +162,9 @@ lint_rules := rules_defining("lint")
 # sequence of literal recursive commands joined by `&&`; other shell shapes
 # are indeterminate below rather than guessed.
 #
-# This is a relation rather than a complete function because one recipe can
-# safely invoke more than one literal child Make target in an `&&` chain.
+# A binding recipe can invoke more than one literal child Make target in an
+# `&&` chain. Extract that set once, then intersect it with the parsed target
+# declarations when constructing the closure.
 static_make_recipe_pattern := sprintf(
 	`^[[:space:]]*[-@+]*[[:space:]]*(%s)*\$\(MAKE\)[[:space:]]+[A-Za-z0-9_.-]+([[:space:]]*&&[[:space:]]*(%s)*\$\(MAKE\)[[:space:]]+[A-Za-z0-9_.-]+)*[[:space:]]*$`,
 	[gate_assignment_prefix, gate_assignment_prefix],
@@ -177,7 +178,7 @@ static_make_recipe_is_binding(recipe) if {
 # literal recursive Make command. Extract each target from its own anchored
 # segment, not from the recipe text as a whole: a quoted environment value can
 # contain `$(MAKE) hidden` without invoking that target.
-static_make_segment_target(segment, target) if {
+static_make_segment_target(segment) := target if {
 	matches := regex.find_all_string_submatch_n(
 		sprintf(
 			`^[[:space:]]*[-@+]*[[:space:]]*(%s)*\$\(MAKE\)[[:space:]]+([A-Za-z0-9_.-]+)[[:space:]]*$`,
@@ -187,13 +188,13 @@ static_make_segment_target(segment, target) if {
 		1,
 	)
 	count(matches) == 1
-	target == matches[0][3]
+	target := matches[0][3]
 }
 
-static_make_target(recipe, target) if {
+static_make_targets(recipe) := {target |
 	static_make_recipe_is_binding(recipe)
 	some segment in split(recipe.text, "&&")
-	static_make_segment_target(segment, target)
+	target := static_make_segment_target(segment)
 }
 
 recipe_mentions_make(recipe) if contains(recipe.text, "$(MAKE)")
@@ -210,8 +211,8 @@ target_edges[target] contains next if {
 	some rule in input.makefile.rules
 	some target in rule.targets
 	some recipe in rule.recipes
-	some next in known_targets
-	static_make_target(recipe, next)
+	some next in static_make_targets(recipe)
+	next in known_targets
 }
 
 known_targets := {target |
