@@ -551,3 +551,93 @@ under `canon/lint-rules/` per the Section 2.1.2 format.
   mutation reuses the QG-004 Makefile patch. The RT-006 nightly-age comparator
   carries a Hypothesis property test asserting the one-year boundary of Section
   3.1.4.
+
+### 4.4. Enforce trivial shell and tested Python automation
+
+Deliver the `shell-snippet-baseline` rule package proposed in [RFC 0001: Keep
+shell snippets trivial](rfcs/0001-trivial-shell-snippets.md). Reject shell with
+cyclomatic complexity of three or greater, and reject every loop independently
+of its score. Behaviour beyond trivial conditionals belongs in external Python
+scripts with Cyclopts-backed environment inputs, normal Python quality gates,
+and upstream cmd-mox command tests. All items below remain implementation work;
+the RFC alone does not activate enforcement.
+
+Build on the Section 1.2 local rule runner. Coordinate gate facts with Sections
+4.2 and 4.3, without depending on unrelated live-API actuators. Complete the
+profile, discovery, Python contract, and package work before enforcing the rule.
+
+- [ ] Implement the pinned shell parser adapter and versioned
+  `concordat-shell-cc/v1` fact schema. Acceptance: test-first fixtures reproduce
+  every score and loop result in RFC Sections 4 and 10, including `M = 2`
+  passing the complexity check, `M = 3` failing, and a single loop failing
+  independently. Detect loops in functions, substitutions, and literal nested
+  shell; retain one decision budget across each complete authoring unit.
+  `ERROR`, `MISSING`, unknown syntax, and resource limits produce explicit
+  analysis gaps rather than clean scores. Hypothesis and mutation tests cover
+  decision monotonicity, quoted data, loop rejection, the threshold boundary,
+  and parser-recovery failures.
+- [ ] Add source-mapped workflow and local-composite-action discovery.
+  Acceptance: both YAML extensions, literal/folded/quoted scalars, anchors,
+  aliases, shell-default precedence, container defaults, working directories,
+  and mixed runner matrices have fixtures. Findings identify the original file
+  and source range, including CRLF and Unicode input. Direct expression
+  interpolation into executable text and inline replacement programs raise the
+  intended findings; unsupported shells remain indeterminate. Parsing hostile
+  fixtures executes no repository code and makes no network calls.
+- [ ] Add standalone-shell and GNU Make authoring-unit discovery, reusing the
+  existing makeutil boundary. Acceptance: tracked shell files, shebangs,
+  extensionless referenced scripts, local `source` calls, complete target
+  recipes, `$(shell ...)`, and `!=` bodies appear in the inventory. Fixtures
+  cover prefixes, continuations, `.ONESHELL`, `$$`, static includes, unknown
+  expansions, cycles, and symlink escape without invoking Make or a shell. Two
+  decisions on separate recipe lines still produce `M = 3`. Any missing makeutil
+  facts receive an upstream extension rather than a second Make parser in
+  Concordat.
+- [ ] Complete package-manager and container-build discovery. Acceptance:
+  supported `package.json` scripts and shell-form container instructions,
+  including statically recognized shell invocations in exec form, produce
+  source-mapped facts. Effective shell overrides and unknown executors have
+  fixtures. The inventory accounts for analysed, explicitly excluded, and
+  unresolved sources across every mandatory RFC surface; missing adapters or
+  unresolved executable boundaries cannot yield an estate-wide clean claim.
+- [ ] Integrate the real cmd-mox development dependency and Python migration
+  test pattern. Acceptance: lock a compatible package, remove or rename the
+  local fixture that shadows upstream cmd-mox, and prove the new fixture
+  intercepts an actual child-process boundary. A reference external script has
+  typed Cyclopts environment bindings and tests for valid, missing, malformed,
+  empty, defaulted, and CLI-override inputs, plus command success and failure.
+  Tests assert argument boundaries, environment, directory, output, status, and
+  unexpected calls. `make test`, `make lint`, `make check-fmt`, and `make
+  typecheck` include the script and tests without weaker exclusions.
+- [ ] Implement static Python input and quality-gate contract extraction.
+  Acceptance: resolve checked-in scripts from effective caller directories,
+  recognize used Cyclopts bindings and approved local wrappers, and connect
+  scripts and tests to effective repository gate configuration. Fixtures for
+  unused imports, argv-only automation inputs, missing scripts, excluded tests,
+  ignored gate failures, and fake cmd_mox fixtures cannot pass by name alone.
+  Unknown dynamic bindings or gate wiring are indeterminate; pure functions need
+  no artificial command mock. The collector never imports audited scripts or
+  runs test collection, and does not claim that static wiring proves test
+  execution or meaningful assertions.
+- [ ] Publish the Conftest/Rego package and integrate typed builder dispatch.
+  Acceptance: `concordat artefact rule run shell-snippet-baseline --repo PATH`
+  works in source checkouts and installed wheels, with table and JSON output,
+  the correct policy namespace, stable SH-001 through SH-004 findings, and exit
+  statuses 0, 1, and 2 matching the existing runner contract. A workflow-only
+  repository does not require Cargo or makeutil. Register integrity metadata in
+  the canonical manifest; validate the new envelope, missing facts, empty
+  inventories, mixed verdicts, and deterministic output. Keep
+  `rust-makefile-baseline` behaviour unchanged. Update the design check
+  catalogue, scripting standards, and users' guide, and support `rule validate`
+  when that shared command ships. The initial package declares no mutations.
+- [ ] Audit reference repositories and adopt the rule in Concordat before
+  enabling merge enforcement. Acceptance: a pinned-revision report covers
+  Concordat, Python, Rust-with-helper-scripts, composite-action, and
+  container/package-script examples, recording unresolved sources as well as
+  violations. Migrate Concordat's findings through characterization tests,
+  external Python entry points, and upstream cmd-mox tests; record all normal
+  Python and documentation gate results. The final mandatory check blocks
+  violations, analysis gaps, and operational failures without raising the
+  complexity ceiling, allowing loops, or hiding findings in a baseline file.
+  Keep estate rollout and semantic script migrations in reviewed,
+  repository-specific pull requests rather than automatic shell translation.
