@@ -1610,11 +1610,20 @@ reachability graph's edges are a rule's prerequisites plus any recipe line that
 invokes `$(MAKE) <literal-target>` in the same file. The closure is cycle-safe
 and needs no depth bound because every edge is a fact from the single parsed
 file. Dynamic edges (`$(MAKE) $(VAR)`, `$(MAKE) -C`, recursive make into other
-files) stay indeterminate, as do includes. A gate invocation is a reachable
-recipe referencing the gate variable or executable; where surfaces are
-declared, the invocation must be qualified to a surface — either a
-`cd <dir> &&` prefix or a `--manifest-path <path>` flag — and QG-001 requires
-every declared surface's gate to be reachable from `lint`.
+files) stay indeterminate, as do includes. Literal recursion is an edge only
+when its complete recipe is a sequence of literal `$(MAKE) target` commands
+joined by `&&`: that proves each child runs and propagates failure. An `echo`
+or an error-masking `|| true` that merely contains `$(MAKE)` is indeterminate,
+not an edge. A rule with conditional ancestry anywhere in the static closure
+is likewise indeterminate because `makeutil` records the branch but cannot
+prove that it executes.
+
+A gate invocation is a reachable recipe referencing the gate variable or
+executable; where surfaces are declared, the invocation must be qualified to a
+surface — either a direct `cd <dir> && $(WHITAKER)` command or a direct
+`$(WHITAKER) --manifest-path <path>` argument — and QG-001 requires every
+declared surface's gate to be reachable from `lint`. Surface-looking text in an
+`echo`, assignment, or other shell context is indeterminate instead of proof.
 
 `make -C <dir>` is indeterminate in every role, both as a reachability edge and
 as a surface qualifier. The two qualifiers above keep the gate invocation

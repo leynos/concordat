@@ -13,7 +13,10 @@ syntax.
   target wrapped entirely in `ifdef`/`ifeq` blocks does not count.
 - **QG-001** (error): the lint gate must be binding. The policy follows the
   complete static prerequisite and literal `$(MAKE) target` closure from
-  `lint`. It is noncompliant when a reachable recipe ignores errors (`-`
+  `lint`. A recursive edge is proven only for a complete sequence of literal
+  `$(MAKE) target` commands joined by `&&`; a textual reference, or a command
+  whose error can be masked, is not an edge. It is noncompliant when a
+  reachable recipe ignores errors (`-`
   prefix), carries a `command -v`/`which` existence guard, suppresses failure
   with `|| true`, or no reachable recipe invokes the gate. The gate variable's
   `?=` assignment (`WHITAKER ?= whitaker`) is the sanctioned estate pattern —
@@ -32,14 +35,18 @@ Findings carry a three-valued `verdict`:
 - `noncompliant` — the policy proved a violation.
 - `indeterminate` — the policy could not prove compliance and fails
   closed. Triggers: any `include` directive, a recovered (error-tolerant)
-  parse, duplicate or double-colon `lint` rules, or dynamic recursive Make.
+  parse, duplicate or double-colon `lint` rules, a conditional rule in the
+  static `lint` closure, or dynamic/unproven recursive Make.
 
 ## Declaring nested Rust
 
 Declare non-root Cargo manifests in `.concordat`. The list is authoritative, so
 an explicit empty list opts the checkout out of Rust governance. A nested
-surface needs a gate invocation qualified by `cd <directory> &&` or
-`--manifest-path <path>`; every declared surface must be reachable from `lint`.
+surface needs a direct gate invocation qualified by `cd <directory> &&` or a
+direct `--manifest-path <path>` argument. The policy does not parse shell:
+surface-looking text in an `echo`, assignment, quoted value, or other command
+is indeterminate rather than proof. Every declared surface must be reachable
+from `lint`.
 The additive `cargo.surfaces` envelope field preserves v0.2 schema-1 replay by
 falling back to a root surface only when that field is absent; a v0.3 explicit
 empty list never takes that fallback.

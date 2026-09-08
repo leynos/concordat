@@ -35,6 +35,21 @@ test_dynamic_recursive_make_is_indeterminate if {
 	profile(findings) == {["QG-001", "indeterminate"]}
 }
 
+test_echoed_recursive_make_is_indeterminate if {
+	findings := policy.deny with input as data.fixtures.static_make_echo_decoy
+	profile(findings) == {["QG-001", "indeterminate"]}
+}
+
+test_masked_recursive_make_is_indeterminate if {
+	findings := policy.deny with input as data.fixtures.static_make_masked_decoy
+	profile(findings) == {["QG-001", "indeterminate"]}
+}
+
+test_multiple_binding_recursive_makes_are_compliant if {
+	findings := policy.deny with input as data.fixtures.static_make_multiple
+	count(findings) == 0
+}
+
 # -- FP-003 ----------------------------------------------------------------
 
 test_missing_makefile_is_fp003 if {
@@ -54,8 +69,11 @@ test_missing_lint_target_is_fp003_and_qg001 if {
 
 test_conditional_lint_target_is_fp003 if {
 	findings := policy.deny with input as data.fixtures.conditional_lint
-	count(findings) == 1
-	profile(findings) == {["FP-003", "noncompliant"]}
+	count(findings) == 2
+	profile(findings) == {
+		["FP-003", "noncompliant"],
+		["QG-001", "indeterminate"],
+	}
 }
 
 # -- QG-001 noncompliant ---------------------------------------------------
@@ -232,6 +250,56 @@ test_surface_without_qualified_gate_is_noncompliant if {
 	profile(findings) == {["QG-001", "noncompliant"]}
 	some f in findings
 	contains(f.msg, "rust/Cargo.toml")
+}
+
+# Surface context must be proved from a command-shaped recipe. The two decoys
+# both execute `pwd` at the root, but a substring-only check mistakes their
+# printed or assigned text for `cd rust &&`.
+test_echoed_surface_context_is_indeterminate if {
+	findings := policy.deny with input as data.fixtures.surface_echo_decoy
+	profile(findings) == {["QG-001", "indeterminate"]}
+}
+
+test_assigned_surface_context_is_indeterminate if {
+	findings := policy.deny with input as data.fixtures.surface_assignment_decoy
+	profile(findings) == {["QG-001", "indeterminate"]}
+}
+
+# Declared manifest paths can contain regex metacharacters. Their qualification
+# comparison must stay literal after the direct command shape has been proved.
+manifest_surface_input(path, recipe) := object.union(
+	gate_position_input(recipe),
+	{
+		"applicability": {
+			"root_cargo_toml": false,
+			"root_makefile": true,
+			"rust_surfaces_declared": true,
+		},
+		"cargo": {
+			"parsed": null,
+			"surfaces": [{
+				"path": path,
+				"role": "workspace",
+				"parsed": {"workspace": {"members": []}},
+			}],
+		},
+	},
+)
+
+test_manifest_path_comparison_is_literal if {
+	findings := policy.deny with input as manifest_surface_input(
+		"rust.x/Cargo.toml",
+		"$(WHITAKER) --manifest-path rustxxCargo.toml",
+	)
+	profile(findings) == {["QG-001", "noncompliant"]}
+}
+
+# A conditional rule inside the static closure can make the gate disappear at
+# execution time. Makeutil records conditional ancestry but not the condition
+# outcome, so the policy must fail closed rather than credit its gate recipe.
+test_conditional_stage_is_indeterminate if {
+	findings := policy.deny with input as data.fixtures.conditional_stage
+	profile(findings) == {["QG-001", "indeterminate"]}
 }
 
 # -- gate references must be Make variable references -----------------------

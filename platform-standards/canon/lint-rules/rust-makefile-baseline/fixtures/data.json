@@ -495,6 +495,273 @@
         "includes": []
       }
     },
+    "conditional_stage": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-makefile-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "root_makefile": true,
+        "rust_surfaces_declared": false
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "conditional-stage.mk",
+          "sha256": "19cbd4eaae2bc1e72d0e4827bd1642232a02a424e82b0cf6a6345c667204fed5",
+          "byte_length": 180
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 1,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "build",
+              "test",
+              "lint",
+              "stage"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 22,
+              "end_byte": 53,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 5,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 2,
+            "targets": [
+              "build"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "cargo build --all-targets",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 60,
+                  "end_byte": 87,
+                  "start_line": 6,
+                  "start_column": 1,
+                  "end_line": 7,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 53,
+              "end_byte": 88,
+              "start_line": 5,
+              "start_column": 1,
+              "end_line": 8,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 3,
+            "targets": [
+              "test"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "cargo nextest run",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 94,
+                  "end_byte": 113,
+                  "start_line": 9,
+                  "start_column": 1,
+                  "end_line": 10,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 88,
+              "end_byte": 114,
+              "start_line": 8,
+              "start_column": 1,
+              "end_line": 11,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 4,
+            "targets": [
+              "lint"
+            ],
+            "prerequisites": [
+              "stage"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 114,
+              "end_byte": 127,
+              "start_line": 11,
+              "start_column": 1,
+              "end_line": 13,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 5,
+            "targets": [
+              "stage"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "@:",
+                "silent": true,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 134,
+                  "end_byte": 138,
+                  "start_line": 14,
+                  "start_column": 1,
+                  "end_line": 15,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 127,
+              "end_byte": 139,
+              "start_line": 13,
+              "start_column": 1,
+              "end_line": 16,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 6,
+            "targets": [
+              "stage"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [
+              {
+                "kind": "ifdef",
+                "expression": "CI",
+                "branch": "if",
+                "location": {
+                  "start_byte": 139,
+                  "end_byte": 148,
+                  "start_line": 16,
+                  "start_column": 1,
+                  "end_line": 17,
+                  "end_column": 1
+                }
+              }
+            ],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(WHITAKER) --all",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 155,
+                  "end_byte": 174,
+                  "start_line": 18,
+                  "start_column": 1,
+                  "end_line": 19,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 148,
+              "end_byte": 174,
+              "start_line": 17,
+              "start_column": 1,
+              "end_line": 19,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "WHITAKER",
+            "operator": "?=",
+            "raw_value": "whitaker",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 21,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      }
+    },
     "duplicate_lint": {
       "schema_version": 1,
       "kind": "policy-input/rust-makefile-baseline",
@@ -1908,6 +2175,740 @@
         "includes": []
       }
     },
+    "static_make_echo_decoy": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-makefile-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "root_makefile": true,
+        "rust_surfaces_declared": false
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "static-make-echo-decoy.mk",
+          "sha256": "1f267d5afe47c4bb2dbd8e6f6deaa4dce2f15f73bf17fd71362a5dbd81065f49",
+          "byte_length": 167
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 1,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "build",
+              "test",
+              "lint",
+              "stage"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 22,
+              "end_byte": 53,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 5,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 2,
+            "targets": [
+              "build"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "cargo build --all-targets",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 60,
+                  "end_byte": 87,
+                  "start_line": 6,
+                  "start_column": 1,
+                  "end_line": 7,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 53,
+              "end_byte": 88,
+              "start_line": 5,
+              "start_column": 1,
+              "end_line": 8,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 3,
+            "targets": [
+              "test"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "cargo nextest run",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 94,
+                  "end_byte": 113,
+                  "start_line": 9,
+                  "start_column": 1,
+                  "end_line": 10,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 88,
+              "end_byte": 114,
+              "start_line": 8,
+              "start_column": 1,
+              "end_line": 11,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 4,
+            "targets": [
+              "lint"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "echo $(MAKE) stage",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 120,
+                  "end_byte": 140,
+                  "start_line": 12,
+                  "start_column": 1,
+                  "end_line": 13,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 114,
+              "end_byte": 141,
+              "start_line": 11,
+              "start_column": 1,
+              "end_line": 14,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 5,
+            "targets": [
+              "stage"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(WHITAKER) --all",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 148,
+                  "end_byte": 167,
+                  "start_line": 15,
+                  "start_column": 1,
+                  "end_line": 16,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 141,
+              "end_byte": 167,
+              "start_line": 14,
+              "start_column": 1,
+              "end_line": 16,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "WHITAKER",
+            "operator": "?=",
+            "raw_value": "whitaker",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 21,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      }
+    },
+    "static_make_masked_decoy": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-makefile-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "root_makefile": true,
+        "rust_surfaces_declared": false
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "static-make-masked-decoy.mk",
+          "sha256": "1af5e15b94e1dcad27e1f1ba1e5decdcfe159e2d156476a2d0edede950bbe301",
+          "byte_length": 170
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 1,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "build",
+              "test",
+              "lint",
+              "stage"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 22,
+              "end_byte": 53,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 5,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 2,
+            "targets": [
+              "build"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "cargo build --all-targets",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 60,
+                  "end_byte": 87,
+                  "start_line": 6,
+                  "start_column": 1,
+                  "end_line": 7,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 53,
+              "end_byte": 88,
+              "start_line": 5,
+              "start_column": 1,
+              "end_line": 8,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 3,
+            "targets": [
+              "test"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "cargo nextest run",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 94,
+                  "end_byte": 113,
+                  "start_line": 9,
+                  "start_column": 1,
+                  "end_line": 10,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 88,
+              "end_byte": 114,
+              "start_line": 8,
+              "start_column": 1,
+              "end_line": 11,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 4,
+            "targets": [
+              "lint"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(MAKE) stage || true",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 120,
+                  "end_byte": 143,
+                  "start_line": 12,
+                  "start_column": 1,
+                  "end_line": 13,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 114,
+              "end_byte": 144,
+              "start_line": 11,
+              "start_column": 1,
+              "end_line": 14,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 5,
+            "targets": [
+              "stage"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(WHITAKER) --all",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 151,
+                  "end_byte": 170,
+                  "start_line": 15,
+                  "start_column": 1,
+                  "end_line": 16,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 144,
+              "end_byte": 170,
+              "start_line": 14,
+              "start_column": 1,
+              "end_line": 16,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "WHITAKER",
+            "operator": "?=",
+            "raw_value": "whitaker",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 21,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      }
+    },
+    "static_make_multiple": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-makefile-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "root_makefile": true,
+        "rust_surfaces_declared": false
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "static-make-multiple.mk",
+          "sha256": "ebd0fd823bc07305722abb55194192eac30bd92c33e526c00a21c2b7d3d2cbf1",
+          "byte_length": 245
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 1,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "build",
+              "test",
+              "lint",
+              "lint-first",
+              "lint-second"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 22,
+              "end_byte": 70,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 5,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 2,
+            "targets": [
+              "build"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "cargo build --all-targets",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 77,
+                  "end_byte": 104,
+                  "start_line": 6,
+                  "start_column": 1,
+                  "end_line": 7,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 70,
+              "end_byte": 105,
+              "start_line": 5,
+              "start_column": 1,
+              "end_line": 8,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 3,
+            "targets": [
+              "test"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "cargo nextest run",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 111,
+                  "end_byte": 130,
+                  "start_line": 9,
+                  "start_column": 1,
+                  "end_line": 10,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 105,
+              "end_byte": 131,
+              "start_line": 8,
+              "start_column": 1,
+              "end_line": 11,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 4,
+            "targets": [
+              "lint"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(MAKE) lint-first && $(MAKE) lint-second",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 137,
+                  "end_byte": 180,
+                  "start_line": 12,
+                  "start_column": 1,
+                  "end_line": 13,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 131,
+              "end_byte": 181,
+              "start_line": 11,
+              "start_column": 1,
+              "end_line": 14,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 5,
+            "targets": [
+              "lint-first"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(WHITAKER) --all",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 193,
+                  "end_byte": 212,
+                  "start_line": 15,
+                  "start_column": 1,
+                  "end_line": 16,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 181,
+              "end_byte": 213,
+              "start_line": 14,
+              "start_column": 1,
+              "end_line": 17,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 6,
+            "targets": [
+              "lint-second"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(WHITAKER) --all",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 226,
+                  "end_byte": 245,
+                  "start_line": 18,
+                  "start_column": 1,
+                  "end_line": 19,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 213,
+              "end_byte": 245,
+              "start_line": 17,
+              "start_column": 1,
+              "end_line": 19,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "WHITAKER",
+            "operator": "?=",
+            "raw_value": "whitaker",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 21,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      }
+    },
     "static_recursive": {
       "schema_version": 1,
       "kind": "policy-input/rust-makefile-baseline",
@@ -2344,6 +3345,390 @@
             "location": {
               "start_byte": 0,
               "end_byte": 21,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      }
+    },
+    "surface_assignment_decoy": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-makefile-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": false,
+        "root_makefile": true,
+        "rust_surfaces_declared": true
+      },
+      "cargo": {
+        "parsed": null,
+        "surfaces": [
+          {
+            "path": "rust/Cargo.toml",
+            "role": "workspace",
+            "parsed": {
+              "workspace": {
+                "members": []
+              }
+            }
+          }
+        ]
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "surface-assignment-decoy.mk",
+          "sha256": "b01038537e38d1cf846490dbb21f59e17a28812bab9a31c2bc53574e0cb42694",
+          "byte_length": 186
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 1,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "build",
+              "test",
+              "lint"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 17,
+              "end_byte": 42,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 5,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 2,
+            "targets": [
+              "build"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "cargo build --manifest-path rust/Cargo.toml",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 49,
+                  "end_byte": 94,
+                  "start_line": 6,
+                  "start_column": 1,
+                  "end_line": 7,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 42,
+              "end_byte": 95,
+              "start_line": 5,
+              "start_column": 1,
+              "end_line": 8,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 3,
+            "targets": [
+              "test"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "cargo test --manifest-path rust/Cargo.toml",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 101,
+                  "end_byte": 145,
+                  "start_line": 9,
+                  "start_column": 1,
+                  "end_line": 10,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 95,
+              "end_byte": 146,
+              "start_line": 8,
+              "start_column": 1,
+              "end_line": 11,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 4,
+            "targets": [
+              "lint"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "CONTEXT=\"cd rust &&\" $(WHITAKER)",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 152,
+                  "end_byte": 186,
+                  "start_line": 12,
+                  "start_column": 1,
+                  "end_line": 13,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 146,
+              "end_byte": 186,
+              "start_line": 11,
+              "start_column": 1,
+              "end_line": 13,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "WHITAKER",
+            "operator": "?=",
+            "raw_value": "pwd",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 16,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      }
+    },
+    "surface_echo_decoy": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-makefile-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": false,
+        "root_makefile": true,
+        "rust_surfaces_declared": true
+      },
+      "cargo": {
+        "parsed": null,
+        "surfaces": [
+          {
+            "path": "rust/Cargo.toml",
+            "role": "workspace",
+            "parsed": {
+              "workspace": {
+                "members": []
+              }
+            }
+          }
+        ]
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "surface-echo-decoy.mk",
+          "sha256": "32a79727d0aa55faa8e4da1eafd2ad735b5c6dcebeb62208e00a6aa2de8dd4de",
+          "byte_length": 181
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 1,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "build",
+              "test",
+              "lint"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 17,
+              "end_byte": 42,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 5,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 2,
+            "targets": [
+              "build"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "cargo build --manifest-path rust/Cargo.toml",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 49,
+                  "end_byte": 94,
+                  "start_line": 6,
+                  "start_column": 1,
+                  "end_line": 7,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 42,
+              "end_byte": 95,
+              "start_line": 5,
+              "start_column": 1,
+              "end_line": 8,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 3,
+            "targets": [
+              "test"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "cargo test --manifest-path rust/Cargo.toml",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 101,
+                  "end_byte": 145,
+                  "start_line": 9,
+                  "start_column": 1,
+                  "end_line": 10,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 95,
+              "end_byte": 146,
+              "start_line": 8,
+              "start_column": 1,
+              "end_line": 11,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 4,
+            "targets": [
+              "lint"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "echo cd rust && $(WHITAKER)",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 152,
+                  "end_byte": 181,
+                  "start_line": 12,
+                  "start_column": 1,
+                  "end_line": 13,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 146,
+              "end_byte": 181,
+              "start_line": 11,
+              "start_column": 1,
+              "end_line": 13,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "WHITAKER",
+            "operator": "?=",
+            "raw_value": "pwd",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 16,
               "start_line": 1,
               "start_column": 1,
               "end_line": 2,

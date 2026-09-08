@@ -120,18 +120,35 @@ rules_defining(target) := [rule |
 lint_rules := rules_defining("lint")
 
 # Every target in the static closure from `lint` is a potential gate location.
-# Prerequisites and literal same-file `$(MAKE) target` recipes are the only
-# edges the fact model can prove.  `graph.reachable` handles cycles without a
-# depth bound; dynamic recursive Make remains an indeterminate boundary below.
-static_make_target(recipe) := target if {
+# Prerequisites and a complete, literal same-file `$(MAKE) target` command are
+# the only edges the fact model can prove. A reference inside `echo`, or a
+# recursive command followed by `|| true`, does not execute a child Make with
+# a status that reaches its parent. The policy deliberately accepts the narrow
+# sequence of literal recursive commands joined by `&&`; other shell shapes
+# are indeterminate below rather than guessed.
+#
+# This is a relation rather than a complete function because one recipe can
+# safely invoke more than one literal child Make target in an `&&` chain.
+static_make_recipe_pattern := sprintf(
+	`^[[:space:]]*[-@+]*[[:space:]]*(%s)*\$\(MAKE\)[[:space:]]+[A-Za-z0-9_.-]+([[:space:]]*&&[[:space:]]*(%s)*\$\(MAKE\)[[:space:]]+[A-Za-z0-9_.-]+)*[[:space:]]*$`,
+	[gate_assignment_prefix, gate_assignment_prefix],
+)
+
+static_make_recipe_is_binding(recipe) if {
+	regex.match(static_make_recipe_pattern, recipe.text)
+}
+
+static_make_target(recipe, target) if {
+	static_make_recipe_is_binding(recipe)
 	matches := regex.find_all_string_submatch_n(
-		`\$\(MAKE\)[[:space:]]+([A-Za-z0-9_.-]+)([[:space:]]|$)`,
-		recipe.text,
-		-1,
+		`\$\(MAKE\)[[:space:]]+([A-Za-z0-9_.-]+)`, recipe.text, -1,
 	)
 	some match in matches
-	target := match[1]
+	matched_target := match[1]
+	target == matched_target
 }
+
+recipe_mentions_make(recipe) if contains(recipe.text, "$(MAKE)")
 
 target_edges[target] contains next if {
 	some rule in input.makefile.rules
@@ -143,7 +160,8 @@ target_edges[target] contains next if {
 	some rule in input.makefile.rules
 	some target in rule.targets
 	some recipe in rule.recipes
-	next := static_make_target(recipe)
+	some next in known_targets
+	static_make_target(recipe, next)
 }
 
 known_targets := {target |
@@ -166,6 +184,15 @@ lint_path_rule(rule) if {
 	target in rule.targets
 }
 
+# Makeutil reports conditional ancestry but not whether a branch will execute.
+# A conditional rule within the closure might contain the only gate, so no
+# clean result can be inferred from its text.
+conditional_lint_path if {
+	some rule in input.makefile.rules
+	lint_path_rule(rule)
+	count(rule.conditions) > 0
+}
+
 dynamic_make_delegation if {
 	some rule in input.makefile.rules
 	lint_path_rule(rule)
@@ -174,6 +201,15 @@ dynamic_make_delegation if {
 		`(\$\(MAKE\)|\$\{MAKE\})[[:space:]]+(\$\(|-C)`,
 		recipe.text,
 	)
+}
+
+unproven_static_make_delegation if {
+	some rule in input.makefile.rules
+	lint_path_rule(rule)
+	some recipe in rule.recipes
+	recipe_mentions_make(recipe)
+	not static_make_recipe_is_binding(recipe)
+	not dynamic_make_delegation
 }
 
 # Only a Make variable reference counts as mentioning the gate. Matching the
@@ -277,9 +313,11 @@ gate_reachable if {
 	recipe_invokes_gate(recipe)
 }
 
-# A root surface runs from the parsed root Makefile by construction.  Every
-# nested surface must make that working-directory or manifest-path boundary
-# explicit, so a single gate cannot accidentally be credited to every crate.
+# A root surface runs from the parsed root Makefile by construction. Every
+# nested surface needs a command-shaped working-directory or manifest-path
+# boundary, so a text value such as `echo cd rust` cannot credit a root gate to
+# every crate. The policy does not parse shell, so forms outside these strict
+# direct commands are deliberately indeterminate below.
 surface_is_root(surface) if surface.path == "Cargo.toml"
 
 surface_qualified(recipe, surface) if surface_is_root(surface)
@@ -287,12 +325,72 @@ surface_qualified(recipe, surface) if surface_is_root(surface)
 surface_qualified(recipe, surface) if {
 	not surface_is_root(surface)
 	surface_directory := trim_suffix(surface.path, "/Cargo.toml")
-	contains(recipe.text, sprintf("cd %s &&", [surface_directory]))
+	gate_variable_is_simple
+	matches := regex.find_all_string_submatch_n(
+		sprintf(
+			`^[[:space:]]*[-@+]*[[:space:]]*cd[[:space:]]+([^[:space:];|&]+)[[:space:]]+&&[[:space:]]*(\$\(%s\)|\$\{%s\})%s`,
+			[gate_variable, gate_variable, gate_binding_tail],
+		),
+		recipe.text,
+		1,
+	)
+	count(matches) == 1
+	matches[0][1] == surface_directory
+}
+
+direct_manifest_path(recipe, manifest_path) if {
+	gate_variable_is_simple
+	matches := regex.find_all_string_submatch_n(
+		sprintf(
+			`^[[:space:]]*[-@+]*[[:space:]]*\$\(%s\)([[:space:]]+[^[:space:];|&]+)*[[:space:]]+--manifest-path[[:space:]]+([^[:space:];|&]+)[[:space:]]*$`,
+			[gate_variable],
+		),
+		recipe.text,
+		1,
+	)
+	count(matches) == 1
+	captured_path := matches[0][2]
+	manifest_path == captured_path
+}
+
+direct_manifest_path(recipe, manifest_path) if {
+	gate_variable_is_simple
+	matches := regex.find_all_string_submatch_n(
+		sprintf(
+			`^[[:space:]]*[-@+]*[[:space:]]*\$\{%s\}([[:space:]]+[^[:space:];|&]+)*[[:space:]]+--manifest-path[[:space:]]+([^[:space:];|&]+)[[:space:]]*$`,
+			[gate_variable],
+		),
+		recipe.text,
+		1,
+	)
+	count(matches) == 1
+	captured_path := matches[0][2]
+	manifest_path == captured_path
 }
 
 surface_qualified(recipe, surface) if {
 	not surface_is_root(surface)
+	direct_manifest_path(recipe, surface.path)
+}
+
+surface_context_candidate(recipe, surface) if {
+	not surface_is_root(surface)
+	surface_directory := trim_suffix(surface.path, "/Cargo.toml")
+	contains(recipe.text, sprintf("cd %s", [surface_directory]))
+}
+
+surface_context_candidate(recipe, surface) if {
+	not surface_is_root(surface)
 	contains(recipe.text, sprintf("--manifest-path %s", [surface.path]))
+}
+
+surface_context_ambiguous(surface) if {
+	some rule in input.makefile.rules
+	lint_path_rule(rule)
+	some recipe in rule.recipes
+	recipe_invokes_gate(recipe)
+	surface_context_candidate(recipe, surface)
+	not surface_qualified(recipe, surface)
 }
 
 surface_gate_reachable(surface) if {
@@ -321,7 +419,9 @@ gate_provable if {
 	not includes_present
 	not parse_recovered
 	not lint_definitions_ambiguous
+	not conditional_lint_path
 	not dynamic_make_delegation
+	not unproven_static_make_delegation
 }
 
 deny contains f if {
@@ -339,10 +439,25 @@ deny contains f if {
 	not includes_present
 	not parse_recovered
 	not lint_definitions_ambiguous
+	not conditional_lint_path
 	dynamic_make_delegation
 	f := finding(
 		"QG-001", "indeterminate", 0,
 		"the lint target reaches dynamic recursive Make; gate reachability cannot be proven",
+	)
+}
+
+deny contains f if {
+	has_makefile
+	not includes_present
+	not parse_recovered
+	not lint_definitions_ambiguous
+	not conditional_lint_path
+	not dynamic_make_delegation
+	unproven_static_make_delegation
+	f := finding(
+		"QG-001", "indeterminate", 0,
+		"the lint target reaches an unproven recursive Make invocation; gate reachability cannot be proven",
 	)
 }
 
@@ -363,6 +478,18 @@ deny contains f if {
 	f := finding(
 		"QG-001", "indeterminate", 0,
 		"the lint target has multiple or double-colon definitions",
+	)
+}
+
+deny contains f if {
+	has_makefile
+	not includes_present
+	not parse_recovered
+	not lint_definitions_ambiguous
+	conditional_lint_path
+	f := finding(
+		"QG-001", "indeterminate", 0,
+		"the lint target reaches a conditional Make rule; gate execution cannot be proven",
 	)
 }
 
@@ -446,9 +573,24 @@ deny contains f if {
 	gate_provable
 	gate_reachable
 	some surface in cargo_surfaces
+	not surface_context_ambiguous(surface)
 	not surface_gate_reachable(surface)
 	f := finding(
 		"QG-001", "noncompliant", 0,
 		sprintf("the lint target does not reach a gate qualified for %q", [surface.path]),
+	)
+}
+
+deny contains f if {
+	gate_provable
+	gate_reachable
+	some surface in cargo_surfaces
+	surface_context_ambiguous(surface)
+	f := finding(
+		"QG-001", "indeterminate", 0,
+		sprintf(
+			"the lint target reaches an ambiguous gate context for %q",
+			[surface.path],
+		),
 	)
 }

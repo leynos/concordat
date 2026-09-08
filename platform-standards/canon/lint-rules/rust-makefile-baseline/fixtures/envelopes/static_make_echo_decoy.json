@@ -1,0 +1,233 @@
+{
+  "schema_version": 1,
+  "kind": "policy-input/rust-makefile-baseline",
+  "repository": {
+    "path": ".",
+    "name": null
+  },
+  "applicability": {
+    "root_cargo_toml": true,
+    "root_makefile": true,
+    "rust_surfaces_declared": false
+  },
+  "cargo": {
+    "parsed": {
+      "package": {
+        "name": "fixture",
+        "version": "0.1.0"
+      }
+    },
+    "surfaces": [
+      {
+        "path": "Cargo.toml",
+        "role": "crate",
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        }
+      }
+    ]
+  },
+  "makefile": {
+    "schema_version": 1,
+    "tool": {
+      "name": "makeutil",
+      "version": "0.1.0",
+      "parser": "makefile-lossless",
+      "parser_version": "0.3.40"
+    },
+    "source": {
+      "path": "static-make-echo-decoy.mk",
+      "sha256": "1f267d5afe47c4bb2dbd8e6f6deaa4dce2f15f73bf17fd71362a5dbd81065f49",
+      "byte_length": 167
+    },
+    "parse": {
+      "status": "complete",
+      "diagnostics": []
+    },
+    "rules": [
+      {
+        "ordinal": 1,
+        "targets": [
+          ".PHONY"
+        ],
+        "prerequisites": [
+          "build",
+          "test",
+          "lint",
+          "stage"
+        ],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [],
+        "location": {
+          "start_byte": 22,
+          "end_byte": 53,
+          "start_line": 3,
+          "start_column": 1,
+          "end_line": 5,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 2,
+        "targets": [
+          "build"
+        ],
+        "prerequisites": [],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "cargo build --all-targets",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 60,
+              "end_byte": 87,
+              "start_line": 6,
+              "start_column": 1,
+              "end_line": 7,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 53,
+          "end_byte": 88,
+          "start_line": 5,
+          "start_column": 1,
+          "end_line": 8,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 3,
+        "targets": [
+          "test"
+        ],
+        "prerequisites": [],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "cargo nextest run",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 94,
+              "end_byte": 113,
+              "start_line": 9,
+              "start_column": 1,
+              "end_line": 10,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 88,
+          "end_byte": 114,
+          "start_line": 8,
+          "start_column": 1,
+          "end_line": 11,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 4,
+        "targets": [
+          "lint"
+        ],
+        "prerequisites": [],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "echo $(MAKE) stage",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 120,
+              "end_byte": 140,
+              "start_line": 12,
+              "start_column": 1,
+              "end_line": 13,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 114,
+          "end_byte": 141,
+          "start_line": 11,
+          "start_column": 1,
+          "end_line": 14,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 5,
+        "targets": [
+          "stage"
+        ],
+        "prerequisites": [],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "$(WHITAKER) --all",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 148,
+              "end_byte": 167,
+              "start_line": 15,
+              "start_column": 1,
+              "end_line": 16,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 141,
+          "end_byte": 167,
+          "start_line": 14,
+          "start_column": 1,
+          "end_line": 16,
+          "end_column": 1
+        }
+      }
+    ],
+    "variables": [
+      {
+        "ordinal": 0,
+        "name": "WHITAKER",
+        "operator": "?=",
+        "raw_value": "whitaker",
+        "exported": false,
+        "overridden": false,
+        "define_block": false,
+        "conditions": [],
+        "location": {
+          "start_byte": 0,
+          "end_byte": 21,
+          "start_line": 1,
+          "start_column": 1,
+          "end_line": 2,
+          "end_column": 1
+        }
+      }
+    ],
+    "includes": []
+  }
+}

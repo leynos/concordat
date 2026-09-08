@@ -164,6 +164,13 @@ Hard invariants. Violation requires escalation, not workarounds.
   counted the sanctioned `WHITAKER ?=` convention as a violation; after rule
   package v0.2.0 removed that deny and the estate was re-swept, the current
   baseline reads 5 noncompliant, 8 indeterminate, 39 compliant.
+- [x] (2026-09-08) Issue #116 v0.3.0 source remediation: the shared declared
+  Rust-surface resolver and additive envelope fields now underpin the Rust
+  Makefile package. Its static closure accepts only complete literal
+  `$(MAKE) target` chains joined by `&&`; conditional closure records and
+  unproved shell context stay indeterminate. Focused policy evidence is green;
+  repository gates and independent semantic review remain required before
+  publication.
 
 ## Surprises & discoveries
 
@@ -220,6 +227,12 @@ Hard invariants. Violation requires escalation, not workarounds.
   belongs to the retrospective, not to mid-campaign adjustment. Resolved after
   completion: `?=` is sanctioned, so the remediation wave described here was
   never owed — see the Decision log entry on rule package v0.2.0.
+- Observation: makeutil schema 1 records each rule's conditional ancestry but
+  not its evaluated branch or a shell AST/current directory. Evidence: the
+  `conditional-stage`, surface-context, and static-recursion decoy fixtures
+  added for issue #116. Impact: v0.3.0 credits only a direct, literal proof;
+  reachable conditional rules, shell-looking context text, and recursive Make
+  commands without proven error propagation are QG-001 indeterminate.
 
 ## Decision log
 
@@ -279,6 +292,12 @@ Hard invariants. Violation requires escalation, not workarounds.
   and reinstalling downward would disturb other projects on this machine. If a
   syntax incompatibility surfaces in CI, escalate rather than diverge the
   policy. Date/Author: 2026-07-19, Fable (Milestone A).
+- Decision: v0.3.0 treats parsed Make facts as the sole proof boundary; it does
+  not reconstruct shell semantics. Rationale: a substring for `cd <dir>` or
+  `$(MAKE) target` can occur in an `echo`, assignment, or masked command and
+  create false compliance. Direct `cd`/manifest-path gate shapes and complete
+  literal recursive-Make `&&` chains are provable; every other relevant shape
+  fails closed as indeterminate. Date/Author: 2026-09-08, issue #116 review.
 
 ## Outcomes & retrospective
 
