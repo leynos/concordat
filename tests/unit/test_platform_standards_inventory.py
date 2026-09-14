@@ -46,10 +46,10 @@ def _assert_metadata_preserved(data: dict[str, typ.Any]) -> None:
 
 
 @pytest.mark.parametrize(
-    ("mutation_result", "expected_changed", "expected_calls"),
+    ("mutation_result", "expected_calls"),
     [
-        pytest.param(False, False, ["mutate"], id="unchanged"),
-        pytest.param(True, True, ["mutate", "commit", "validate"], id="changed"),
+        pytest.param(False, ["mutate"], id="unchanged"),
+        pytest.param(True, ["mutate", "commit", "validate"], id="changed"),
     ],
 )
 def test_apply_inventory_change_commits_and_validates_only_when_mutated(
@@ -57,7 +57,6 @@ def test_apply_inventory_change_commits_and_validates_only_when_mutated(
     tmp_path: Path,
     *,
     mutation_result: bool,
-    expected_changed: bool,
     expected_calls: list[str],
 ) -> None:
     """Only commit and validate after an inventory mutation."""
@@ -102,7 +101,7 @@ def test_apply_inventory_change_commits_and_validates_only_when_mutated(
         mutate_inventory=mutate_inventory,
     )
 
-    assert changed is expected_changed
+    assert changed is mutation_result
     assert calls == expected_calls
 
 
