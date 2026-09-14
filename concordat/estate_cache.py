@@ -44,6 +44,17 @@ def cache_destination(
     An explicit *cache_directory* bypasses namespacing (the test seam).
     Otherwise the record's ``github_owner`` — or the headline active
     owner — selects ``$XDG_CACHE_HOME/concordat/owners/<owner>/estates``.
+
+    Returns
+    -------
+    Path
+        Cache directory path for the estate.
+
+    Raises
+    ------
+    EstateCacheError
+        If no owner is available for cache namespacing.
+
     """
     if cache_directory is not None:
         return cache_directory / record.alias
@@ -127,6 +138,12 @@ def clone_into_temp(
     With *runs_root* the copy lands in a unique subdirectory of that
     directory (the owner's XDG state runs area); otherwise it falls back
     to the system temporary directory.
+
+    Returns
+    -------
+    Path
+        Path to the isolated working directory.
+
     """
     if runs_root is not None:
         runs_root.mkdir(parents=True, exist_ok=True)

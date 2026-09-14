@@ -120,5 +120,4 @@ def _fetch_namespace(client: _RepositoryClient, namespace: str) -> list[str]:
         raise _connection_error(error) from error
     except GitHubError as error:
         raise _github_api_error(error) from error
-    else:
-        return ssh_urls
+    return ssh_urls

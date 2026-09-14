@@ -47,28 +47,22 @@ _MAKEUTIL_INSTALL_TOKENS: typ.Final = (
     "--force",
     "makeutil",
 )
-_TEXTUAL_ACTIONS: typ.Final = frozenset(
-    {
-        "scripts.canon_artifacts_tui.CanonArtifactsApp.action_refresh",
-        "scripts.canon_artifacts_tui.CanonArtifactsApp.action_sync_selected",
-        "scripts.canon_artifacts_tui.CanonArtifactsApp.action_sync_all_outdated",
-    }
-)
-_TEXTUAL_BINDINGS: typ.Final = frozenset(
-    {
-        "scripts.canon_artifacts_tui.CanonArtifactsApp.BINDINGS",
-    }
-)
-_DOCUMENTED_FALSE_POSITIVES: typ.Final = frozenset(
-    {
-        "RefreshResult",
-        "_format_outcome",
-        "_refresh",
-        "published_path",
-        "render",
-        "template_path",
-    }
-)
+_TEXTUAL_ACTIONS: typ.Final = frozenset({
+    "scripts.canon_artifacts_tui.CanonArtifactsApp.action_refresh",
+    "scripts.canon_artifacts_tui.CanonArtifactsApp.action_sync_selected",
+    "scripts.canon_artifacts_tui.CanonArtifactsApp.action_sync_all_outdated",
+})
+_TEXTUAL_BINDINGS: typ.Final = frozenset({
+    "scripts.canon_artifacts_tui.CanonArtifactsApp.BINDINGS",
+})
+_DOCUMENTED_FALSE_POSITIVES: typ.Final = frozenset({
+    "RefreshResult",
+    "_format_outcome",
+    "_refresh",
+    "published_path",
+    "render",
+    "template_path",
+})
 _SKYLOS_ARGUMENT_TEXT: typ.Final = st.builds(
     lambda prefix, content, suffix: prefix + content + suffix,
     st.text(alphabet=" \t", max_size=4),

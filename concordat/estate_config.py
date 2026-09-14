@@ -76,6 +76,12 @@ def default_config_path() -> Path:
     no active owner the flat path is returned. Any legacy-flat migration is a
     separate, explicit bootstrap step (see :func:`migrate_legacy_config`), run
     once at the CLI entry point rather than implicitly from this getter.
+
+    Returns
+    -------
+    Path
+        Active-owner configuration path, or the legacy flat path when no owner
+        is active.
     """
     if owner := xdg.get_active_owner():
         return xdg.owner_config_path(owner)
@@ -85,13 +91,7 @@ def default_config_path() -> Path:
 def _load_legacy_migration() -> (
     tuple[Path, dict[str, typ.Any], dict[str, typ.Any], str] | None
 ):
-    """Return the legacy migration inputs, or ``None`` when none applies.
-
-    The tuple is ``(legacy, full_data, estate_section, owner)``. ``None`` is
-    returned when an active owner is already configured, the flat config is
-    absent, the parsed YAML or estate section is not a mapping, or no owner can
-    be derived from the recorded estates.
-    """
+    """Return legacy migration inputs, or ``None`` when none applies."""
     if xdg.get_active_owner() is not None:
         return None
     legacy = xdg.config_root() / CONFIG_FILENAME
@@ -166,15 +166,7 @@ def _current_legacy_data(
     legacy: Path,
     fallback: dict[str, typ.Any],
 ) -> dict[str, typ.Any]:
-    """Return the legacy file's contents as they stand now.
-
-    The legacy flat config and the XDG headline config are the same file, so
-    :func:`xdg.set_active_owner` writes the active-owner key into it. Cleanup
-    must therefore drop the estate section from what is on disk *after* that
-    write; rewriting the snapshot taken before it would erase the key, or
-    delete the file outright when the estate section was its only content,
-    leaving the migrated estates unreachable.
-    """
+    """Return the legacy file's current contents, or *fallback* if absent."""
     if not legacy.is_file():
         return fallback
     try:
@@ -218,13 +210,7 @@ def migrate_legacy_config() -> None:
 
 
 def _derive_owner_from_estates(estate_section: dict[str, typ.Any]) -> str | None:
-    """Return the sole github_owner recorded in a legacy estate section.
-
-    The legacy flat format permitted estates for more than one owner. Moving
-    such a section wholesale into a single owner's namespace would silently
-    misplace the other owners' estates, so mixed-owner input is rejected
-    rather than migrated under the first owner encountered.
-    """
+    """Return the sole GitHub owner recorded in a legacy estate section."""
     estates = estate_section.get(ESTATE_COLLECTION_KEY)
     if not isinstance(estates, dict):
         return None
@@ -334,13 +320,7 @@ def _estate_record_from_payload(
     alias: str,
     payload: object,
 ) -> EstateRecord | None:
-    """Decode one persisted estate payload, or reject an unsupported one.
-
-    A bare string is the legacy shorthand for a repository URL. A mapping is
-    accepted only when it carries a string ``repo_url``; anything else — a
-    list, a scalar, or a mapping without a usable URL — is rejected so the
-    caller can skip it.
-    """
+    """Decode one persisted estate payload, or reject an unsupported one."""
     match payload:
         case str():
             return EstateRecord(alias=alias, repo_url=payload)

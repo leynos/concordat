@@ -14,6 +14,7 @@ import collections
 import copy
 import dataclasses
 import json
+import string
 import typing as typ
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -226,7 +227,7 @@ def test_policy_matches_the_independent_generated_graph(case: ReachabilityCase) 
 
 
 @settings(max_examples=12, deadline=None)
-@given(st.text(alphabet="abcdefghijklmnopqrstuvwxyz", min_size=1, max_size=12))
+@given(st.text(alphabet=string.ascii_lowercase, min_size=1, max_size=12))
 def test_declared_surface_path_is_emitted_canonically(segment: str) -> None:
     """Equivalent dot-segment declarations emit one canonical surface identity."""
     with TemporaryDirectory(prefix="concordat-surface-property-") as temporary_root:

@@ -258,6 +258,16 @@ def _root_cargo_toml_exists(cargo_path: pathlib.Path) -> bool:
 
     Missing files preserve the established no-Rust fallback. Other filesystem
     failures cannot safely be treated as absence.
+
+    Returns
+    -------
+    bool
+        Whether the root Cargo manifest is a regular file.
+
+    Raises
+    ------
+    OperationalRuleError
+        If the Cargo manifest cannot be inspected.
     """
     try:
         mode = cargo_path.stat().st_mode
@@ -290,7 +300,7 @@ def resolve_rust_surfaces(checkout: pathlib.Path) -> RustSurfaceResolution:
 
     Raises
     ------
-    OperationalRuleError
+    _resolution_error
         If a declaration is malformed, unsafe, duplicated, escapes the
         checkout, contains a control character, cannot be read, or names an
         unreadable or invalid Cargo manifest.

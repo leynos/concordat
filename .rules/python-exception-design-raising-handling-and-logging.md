@@ -15,6 +15,7 @@ vendor leakage.
 class PaymentsError(Exception):
     """All payment-layer errors."""
 
+
 class CardDeclinedError(PaymentsError):  # ✅ ends with Error (pep8-naming N818)
     def __init__(self, code: str, *, retry_after: int | None = None):
         super().__init__(f"Card declined ({code})")
@@ -50,7 +51,9 @@ types, `ValueError` for bad values, and so on), or domain-specific classes.
 try:
     token = decode_jwt(payload)
 except jwt.InvalidTokenError as exc:
-    raise AuthenticationError("Invalid session token") from exc  # ✅ Ruff Tryceratops rule TRY201
+    raise AuthenticationError(
+        "Invalid session token"
+    ) from exc  # ✅ Ruff Tryceratops rule TRY201
 ```
 
 When transforming low‑level failures into domain errors, `raise … from …`
@@ -115,13 +118,14 @@ duplication and clarifies intent.
 
 ```python
 import logging
+
 logger = logging.getLogger(__name__)
 
 # ❌ flake8-logging issues
-logging.warning(f"failed for {user_id}")        # f-string (flake8-logging LOG004/LOG014)
-logging.warning("failed for %s" % user_id)      # %-formatting (flake8-logging LOG007)
-logging.warn("deprecated")                       # warn() (flake8-logging LOG009)
-logging.error("bad root logger")                 # root logger usage (flake8-logging LOG015)
+logging.warning(f"failed for {user_id}")  # f-string (flake8-logging LOG004/LOG014)
+logging.warning("failed for %s" % user_id)  # %-formatting (flake8-logging LOG007)
+logging.warn("deprecated")  # warn() (flake8-logging LOG009)
+logging.error("bad root logger")  # root logger usage (flake8-logging LOG015)
 
 # ✅ Correct
 logger.warning("Failed for user_id=%s", user_id)  # lazy interpolation
@@ -205,7 +209,7 @@ def charge(amount_pennies: int, card_token: str) -> str:
     try:
         return gateway.charge(amount_pennies, card_token)
     except gateway.Timeout as exc:
-        raise PaymentsError("Gateway timeout") from exc      # ✅ Tryceratops rule TRY201
+        raise PaymentsError("Gateway timeout") from exc  # ✅ Tryceratops rule TRY201
     except gateway.CardDeclined as exc:
         raise CardDeclinedError(exc.code, retry_after=60) from exc
 ```
@@ -228,6 +232,7 @@ def must_have_key(d: dict, key: str) -> None:
     if key not in d:
         msg = f"Missing required key: {key!r}"
         raise KeyError(msg)
+
 
 logger.info("Dispatching order_id=%s to shop_id=%s", order_id, shop_id)  # structured
 ```

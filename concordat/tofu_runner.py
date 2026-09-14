@@ -36,6 +36,12 @@ def resolve_tofu_workdir(workspace_root: Path) -> Path:
     the bundled `platform-standards` template). Some tests and legacy layouts
     place configuration at the repository root, so we fall back to the root when
     `tofu/` is absent or does not appear to contain OpenTofu files.
+
+    Returns
+    -------
+    Path
+        Directory containing the OpenTofu root module.
+
     """
     candidate = workspace_root / TOFU_DIRNAME
     if not candidate.is_dir():

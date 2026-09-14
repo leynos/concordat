@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 import typing as typ
-from pathlib import Path  # noqa: TC003
+from pathlib import Path  # noqa: TC003  # Runtime annotations require this import.
 
 from concordat.errors import ConcordatError
 from concordat.persistence import models as persistence_models
@@ -24,7 +24,7 @@ SPACES_BACKEND_ENV = (
     "SPACES_ACCESS_KEY_ID",
     "SPACES_SECRET_ACCESS_KEY",
 )
-AWS_SESSION_TOKEN_VAR = "AWS_SESSION_TOKEN"  # noqa: S105
+AWS_SESSION_TOKEN_VAR = "AWS_SESSION_TOKEN"  # noqa: S105  # Environment-variable name, not a credential.
 
 # All backend environment variables for iteration.
 ALL_BACKEND_ENV_VARS = (
@@ -55,7 +55,9 @@ def session_token_overrides(env: typ.Mapping[str, str]) -> dict[str, str]:
     Args:
         env: Environment mapping to check for session token.
 
-    Returns:
+    Returns
+    -------
+    dict[str, str]
         Dict with AWS_SESSION_TOKEN if present and non-empty, empty dict otherwise.
 
     """
@@ -90,11 +92,15 @@ def resolve_backend_environment(env: typ.Mapping[str, str]) -> dict[str, str]:
     Args:
         env: Environment mapping to search for credentials.
 
-    Returns:
+    Returns
+    -------
+    dict[str, str]
         Dict with AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY set.
 
-    Raises:
-        BackendConfigurationError: If no valid credentials are found.
+    Raises
+    ------
+    BackendConfigurationError
+        If no valid credentials are found.
 
     """
 
@@ -132,11 +138,15 @@ def validate_backend_path(workdir: Path, backend_config_path: str) -> Path:
         workdir: The workspace root directory.
         backend_config_path: Relative path to the backend config file.
 
-    Returns:
+    Returns
+    -------
+    Path
         The validated relative path to the backend config file.
 
-    Raises:
-        BackendConfigurationError: If the path escapes the workspace or is missing.
+    Raises
+    ------
+    BackendConfigurationError
+        If the path escapes the workspace or is missing.
 
     """
     backend_path = (workdir / backend_config_path).resolve()
@@ -161,7 +171,9 @@ def build_object_key(descriptor: PersistenceDescriptor) -> str:
     Args:
         descriptor: Persistence descriptor with key_prefix and key_suffix.
 
-    Returns:
+    Returns
+    -------
+    str
         The full S3 object key path.
 
     """
@@ -187,13 +199,21 @@ def get_persistence_runtime(
         tofu_workdir: Directory containing tofu configuration.
         env: Environment mapping for credential resolution.
 
-    Returns:
+    Returns
+    -------
+    tuple[
+        persistence_models.PersistenceDescriptor | None,
+        str | None,
+        str | None,
+        dict[str, str] | None,
+    ]
         A tuple of (descriptor, backend_config, object_key, env_overrides).
         Returns (None, None, None, None) if persistence is disabled or missing.
 
-    Raises:
-        BackendConfigurationError: If the manifest is invalid or credentials
-            are missing.
+    Raises
+    ------
+    BackendConfigurationError
+        If the manifest is invalid or credentials are missing.
 
     """
     manifest_path = workspace_root / persistence_models.MANIFEST_FILENAME

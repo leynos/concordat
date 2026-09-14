@@ -5,13 +5,11 @@ repository against a checked-out platform-standards repository and can sync
 outdated or missing artifacts.
 """
 
-# ruff: noqa: TRY003
-
 from __future__ import annotations
 
 import dataclasses
-from pathlib import Path  # noqa: TC003
-from typing import Annotated  # noqa: ICN003
+import typing as typ
+from pathlib import Path  # noqa: TC003  # Runtime annotations require this import.
 
 from cyclopts import App, Parameter
 
@@ -94,7 +92,7 @@ def list_artifacts(
 
 @app.command()
 def status(
-    config: Annotated[StatusConfig, Parameter(name="*")],
+    config: typ.Annotated[StatusConfig, Parameter(name="*")],
 ) -> int:
     """Print a table comparing published artifacts against the template."""
     return _render_status(config)
@@ -169,12 +167,7 @@ def _determine_sync_ids(
     config: CliSyncConfig,
     comparisons: list[ArtifactComparison],
 ) -> set[str]:
-    """Determine which artifact IDs to sync based on configuration.
-
-    When `all_outdated` is set but no artifacts match the caller's filters (for
-    example, `--types` yields an empty comparison set), this returns an empty
-    set to indicate a no-op rather than raising.
-    """
+    """Determine artifact IDs to sync, treating filtered selections as no-ops."""
     if config.all_outdated:
         if not comparisons:
             return set()
@@ -185,14 +178,14 @@ def _determine_sync_ids(
         }
     if config.artifact_ids:
         return set(config.artifact_ids)
-    raise CanonArtifactsError(
+    raise CanonArtifactsError(  # noqa: TRY003  # Domain error provides operator remediation.
         "No artifacts selected for sync. Pass explicit IDs or use --all-outdated."
     )
 
 
 @app.command()
 def sync(
-    config: Annotated[CliSyncConfig, Parameter(name="*")],
+    config: typ.Annotated[CliSyncConfig, Parameter(name="*")],
 ) -> int:
     """Copy template artifacts into the published checkout."""
     published_root = config.published_root.resolve()
@@ -242,7 +235,7 @@ def tui(
     try:
         from scripts.canon_artifacts_tui import CanonArtifactsApp
     except ModuleNotFoundError as exc:  # pragma: no cover
-        raise CanonArtifactsError(
+        raise CanonArtifactsError(  # noqa: TRY003  # Domain error provides operator remediation.
             "Textual is required for `tui`. Install dev dependencies via "
             "`make build` or `uv sync --group dev`."
         ) from exc

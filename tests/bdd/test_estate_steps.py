@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import io
 import typing as typ
 from contextlib import redirect_stdout
@@ -30,19 +31,13 @@ scenarios("features/estate.feature")
 @pytest.fixture
 def betamax_recorder() -> typ.Iterator[typ.Callable[[str, requests.Session], None]]:
     """Provide a helper for starting betamax sessions."""
-    contexts: list[typ.Any] = []
+    with contextlib.ExitStack() as stack:
 
-    def start(name: str, session: requests.Session) -> None:
-        recorder = Betamax(session, cassette_library_dir=str(CASSETTE_DIR))
-        ctx = recorder.use_cassette(name)
-        ctx.__enter__()
-        contexts.append(ctx)
+        def start(name: str, session: requests.Session) -> None:
+            recorder = Betamax(session, cassette_library_dir=str(CASSETTE_DIR))
+            stack.enter_context(recorder.use_cassette(name))
 
-    yield start
-
-    while contexts:
-        ctx = contexts.pop()
-        ctx.__exit__(None, None, None)
+        yield start
 
 
 def _run_cli(arguments: list[str]) -> RunResult:
@@ -60,10 +55,7 @@ def _run_cli(arguments: list[str]) -> RunResult:
         return RunResult(
             stdout=buffer.getvalue(), stderr="", returncode=int(exc.code or 0)
         )
-    else:
-        return RunResult(
-            stdout=buffer.getvalue(), stderr="", returncode=int(result or 0)
-        )
+    return RunResult(stdout=buffer.getvalue(), stderr="", returncode=int(result or 0))
 
 
 @given("an empty concordat config directory", target_fixture="config_dir")
@@ -296,17 +288,15 @@ def when_run_estate_init_local(
     cli_invocation: dict[str, RunResult],
 ) -> None:
     """Initialise an estate using the local remote."""
-    cli_invocation["result"] = _run_cli(
-        [
-            "estate",
-            "init",
-            alias,
-            str(local_remote_path),
-            "--github-owner",
-            owner,
-            "--yes",
-        ]
-    )
+    cli_invocation["result"] = _run_cli([
+        "estate",
+        "init",
+        alias,
+        str(local_remote_path),
+        "--github-owner",
+        owner,
+        "--yes",
+    ])
 
 
 @then("the CLI prints")

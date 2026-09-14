@@ -11,7 +11,7 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
 
-@dc.dataclass(frozen=True)
+@dc.dataclass(frozen=True, slots=True)
 class RefreshResult:
     """Describe whether the untracked shared dictionary cache changed."""
 
@@ -19,7 +19,7 @@ class RefreshResult:
     cache: pathlib.Path
 
 
-@dc.dataclass(frozen=True)
+@dc.dataclass(frozen=True, slots=True)
 class CacheTargets:
     """Group the untracked dictionary cache and metadata sidecar paths."""
 
@@ -35,7 +35,7 @@ class RemoteResponse(typ.Protocol):
 
     def read(self) -> bytes:
         """Read the response body."""
-        ...
+        pass
 
 
 def atomic_write(path: pathlib.Path, content: bytes) -> None:

@@ -48,12 +48,12 @@ _yaml.indent(mapping=2, sequence=4, offset=2)
 _yaml.sort_base_mapping_type_on_output = False
 
 ERROR_MISSING_TOKEN = (
-    "GITHUB_TOKEN is required to open the platform-standards pull request"  # noqa: S105
+    "GITHUB_TOKEN is required to open the platform-standards pull request"  # noqa: S105  # Error text only; no secret value.
 )
 ERROR_SLUG = "Unable to determine GitHub slug from URL"
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(slots=True)
 class PlatformStandardsConfig:
     """Configuration for interacting with the platform-standards repository."""
 
@@ -63,7 +63,7 @@ class PlatformStandardsConfig:
     github_token: str | None = None
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class PlatformStandardsResult:
     """Outcome of attempting to open a platform-standards pull request."""
 
@@ -90,7 +90,9 @@ def _check_base_branch_enrollment(
         branch_name: Branch name for the result.
         expect_present: If True, return early when present; if False, when absent.
 
-    Returns:
+    Returns
+    -------
+    PlatformStandardsResult | None
         PlatformStandardsResult if already in expected state, None otherwise.
 
     """
@@ -134,7 +136,9 @@ def _create_pr_for_inventory_change(
         branch_name: Branch name for the PR.
         verb: Action verb ("enrol" or "disenrol").
 
-    Returns:
+    Returns
+    -------
+    tuple[str, str]
         Tuple of (pr_url, message).
 
     """
@@ -180,7 +184,9 @@ def _handle_existing_remote_branch(
         expect_present: If True (enrol), slug present; if False (disenrol), absent.
         verb: Action verb ("enrol" or "disenrol").
 
-    Returns:
+    Returns
+    -------
+    PlatformStandardsResult | None
         PlatformStandardsResult if branch exists with change, None otherwise.
 
     """
@@ -267,6 +273,43 @@ def _validate_tofu_changes(workdir: Path) -> None:
     _run_tofu_validate(workdir)
 
 
+def _apply_inventory_change(
+    repository: pygit2.Repository,
+    workdir: Path,
+    config: PlatformStandardsConfig,
+    repo_slug: str,
+    base_commit: pygit2.Commit,
+    *,
+    verb: str,
+    mutate_inventory: typ.Callable[[Path, str], bool],
+) -> bool:
+    """Apply an inventory mutation, commit it, and validate the changes.
+
+    Args:
+        repository: The pygit2 repository object.
+        workdir: Working directory containing the inventory.
+        config: Platform standards configuration.
+        repo_slug: Repository slug being changed.
+        base_commit: The base commit to create the new commit on.
+        verb: Action verb ("enrol" or "disenrol").
+        mutate_inventory: Function to modify inventory (returns True if changed).
+
+    Returns
+    -------
+    bool
+        True when the inventory changed and was committed and validated, otherwise
+        False.
+
+    """
+    inventory_path = workdir / config.inventory_path
+    if not mutate_inventory(inventory_path, repo_slug):
+        return False
+
+    _commit_inventory_changes(repository, config, repo_slug, base_commit, verb=verb)
+    _validate_tofu_changes(workdir)
+    return True
+
+
 def _ensure_inventory_pr(
     repo_slug: str,
     *,
@@ -276,20 +319,7 @@ def _ensure_inventory_pr(
     expect_present: bool,
     already_message: str,
 ) -> PlatformStandardsResult:
-    """Shared implementation for inventory PR creation (enrol/disenrol).
-
-    Args:
-        repo_slug: Repository slug to add/remove from inventory.
-        config: Platform standards configuration.
-        verb: Action verb ("enrol" or "disenrol").
-        mutate_inventory: Function to modify inventory (returns True if changed).
-        expect_present: Whether slug should be present on base branch for early-out.
-        already_message: Message when inventory mutation returns no change.
-
-    Returns:
-        PlatformStandardsResult with PR details or early-out explanation.
-
-    """
+    """Create an inventory PR for an enrolment or removal change."""
     callbacks = build_remote_callbacks(config.repo_url)
     with TemporaryDirectory(prefix="concordat-platform-") as temp_root:
         repository = pygit2.clone_repository(
@@ -297,7 +327,6 @@ def _ensure_inventory_pr(
             temp_root,
             callbacks=callbacks,
         )
-
         workdir = Path(repository.workdir or temp_root)
         remote = repository.remotes["origin"]
         remote.fetch(callbacks=callbacks)
@@ -326,18 +355,21 @@ def _ensure_inventory_pr(
             branch_name=branch_name,
         )
 
-        inventory_path = workdir / config.inventory_path
-        changed = mutate_inventory(inventory_path, repo_slug)
-        if not changed:
+        if not _apply_inventory_change(
+            repository,
+            workdir,
+            config,
+            repo_slug,
+            base_commit,
+            verb=verb,
+            mutate_inventory=mutate_inventory,
+        ):
             return PlatformStandardsResult(
                 created=False,
                 branch=branch_name,
                 pr_url=None,
                 message=already_message,
             )
-
-        _commit_inventory_changes(repository, config, repo_slug, base_commit, verb=verb)
-        _validate_tofu_changes(workdir)
 
         if not config.github_token:
             raise ConcordatError(ERROR_MISSING_TOKEN)
@@ -395,6 +427,11 @@ def _load_inventory_data(path: Path) -> dict[str, typ.Any]:
     Always returns a dict with at least schema_version and repositories keys,
     even if the file doesn't exist or contains invalid data.
 
+    Returns
+    -------
+    dict[str, typ.Any]
+        Normalized inventory mapping.
+
     """
     if not path.exists():
         return {"schema_version": 1, "repositories": []}
@@ -413,6 +450,11 @@ def _build_canonical_inventory(
     """Build canonical inventory dict with schema_version and repositories first.
 
     Preserves any extra keys from the original data that aren't in the base structure.
+
+    Returns
+    -------
+    dict[str, typ.Any]
+        Canonical inventory mapping with stable key ordering.
 
     """
     schema_version = int(data.get("schema_version", 1) or 1)
@@ -449,7 +491,9 @@ def _update_inventory(path: Path, repo_slug: str) -> bool:
 def _load_and_validate_inventory_data(path: Path) -> dict[str, typ.Any] | None:
     """Load and validate inventory file structure, returning data or None.
 
-    Returns:
+    Returns
+    -------
+    dict[str, typ.Any] | None
         Dictionary with inventory data if valid, None if file missing or invalid.
 
     """
@@ -473,7 +517,9 @@ def _filter_repository_entries(
         repos_raw: Raw repositories value from YAML (may be any type).
         repo_slug: Repository slug to remove.
 
-    Returns:
+    Returns
+    -------
+    tuple[list[dict[str, typ.Any]], bool]
         Tuple of (filtered_list, changed) where changed is True if removed.
 
     """
@@ -515,7 +561,7 @@ def _remove_inventory(path: Path, repo_slug: str) -> bool:
 
 
 def _run_cmd(args: list[str], *, cwd: Path) -> None:
-    subprocess.run(  # noqa: S603
+    subprocess.run(  # noqa: S603  # Fixed argv, no shell.
         args,
         check=True,
         cwd=str(cwd),
@@ -570,8 +616,15 @@ def _resolve_branch_commit(
 ) -> pygit2.Commit:
     """Return the commit for either a local or remote branch reference.
 
-    Raises:
-        KeyError: If branch exists neither locally nor as origin/{branch_name}.
+    Returns
+    -------
+    pygit2.Commit
+        Commit resolved from the local or remote branch reference.
+
+    Raises
+    ------
+    KeyError
+        If branch exists neither locally nor as origin/{branch_name}.
 
     """
     try:
@@ -640,6 +693,11 @@ def _checkout_pr_branch(
     When a prior concordat run already pushed the branch, recreating it from the
     base branch can lead to non-fast-forward push failures. Reusing the remote
     branch keeps the push linear and updates any existing PR.
+
+    Returns
+    -------
+    pygit2.Commit
+        Commit checked out as the base of the work branch.
     """
     remote = repository.remotes["origin"]
     remote.fetch(callbacks=callbacks)
@@ -674,9 +732,15 @@ def _open_or_fetch_pull_request(
 ) -> _PullRequest:
     """Create a pull request, or return the existing one for the same head.
 
-    Raises:
-        github3.exceptions.UnprocessableEntity: If PR creation fails and no
-            existing PR is found for the same head branch.
+    Returns
+    -------
+    _PullRequest
+        Existing or newly created pull request.
+
+    Raises
+    ------
+    ImportError
+        If the installed github3 package lacks the expected exception type.
 
     """
     github3_exceptions = getattr(github3, "exceptions", None)

@@ -1,8 +1,8 @@
 # flake8-return Style Guide (Python 3.13)
 
-The `flake8-return` rules ensure consistent and explicit return behaviour while
-keeping functions clear in intent and free from unnecessary control flow.
-Follow these rules:
+The `flake8-return` rules ensure consistent and explicit return behaviour. They
+keep functions clear in intent and free from unnecessary control flow. Follow
+these rules:
 
 ## R501 — Avoid Explicit `return None` if It's the Only Return
 
@@ -10,6 +10,7 @@ Follow these rules:
 # BAD:
 def func():
     return None
+
 
 # GOOD:
 def func():
@@ -30,6 +31,7 @@ def func(x):
         return x
     # implicitly returns None (bad)
 
+
 # GOOD:
 def func(x):
     if x > 0:
@@ -41,14 +43,15 @@ Ensure all branches explicitly return a value if any branch does.
 
 ______________________________________________________________________
 
-## R503 — Add an Explicit Return at the End
+## R503 — Add an Explicit Return at the End When a Function May Return a Value
 
 ```python
 # BAD:
 def func(x):
     if x > 0:
         return x
-    # no return (bad)
+    # missing terminal return (bad)
+
 
 # GOOD:
 def func(x):
@@ -57,7 +60,17 @@ def func(x):
     return -1
 ```
 
-Don't rely on implicit `None`—always return something at the end.
+Don't rely on implicit `None` if the function may return a value elsewhere—always
+return something at the end.
+
+Functions whose only possible result is `None` do not need a final bare `return`:
+
+```python
+# GOOD:
+def func():
+    do_something()
+    # implicit None is fine here
+```
 
 ______________________________________________________________________
 
@@ -68,6 +81,7 @@ ______________________________________________________________________
 def func():
     result = compute()
     return result
+
 
 # GOOD:
 def func():
@@ -114,9 +128,9 @@ for x in xs:
     log()
 ```
 
-These rules apply to regular, and `async def` functions alike.
+These rules apply to regular and `async def` functions alike.
 
 ______________________________________________________________________
 
-Use the `flake8-return` rules to enforce predictable return logic. Doing so
-enhances readability and correctness.
+Use the `flake8-return` rules to enforce predictable and clean return logic,
+enhancing readability and correctness.

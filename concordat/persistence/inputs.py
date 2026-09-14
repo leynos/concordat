@@ -1,5 +1,4 @@
 """User input collection and descriptor construction."""
-# ruff: noqa: TRY003
 
 from __future__ import annotations
 
@@ -89,7 +88,7 @@ def _collect_single_input(
     if default:
         return default
 
-    raise PersistenceError(
+    raise PersistenceError(  # noqa: TRY003  # Domain error provides operator remediation.
         f"{label} is required in non-interactive mode; provide a flag or "
         "environment variable."
     )
@@ -106,7 +105,9 @@ def _prompt_with_default(
         return response
     if default:
         return default
-    raise PersistenceError(f"{label} is required.")
+    raise PersistenceError(  # noqa: TRY003  # Domain error identifies required input.
+        f"{label} is required."
+    )
 
 
 def _build_descriptor(

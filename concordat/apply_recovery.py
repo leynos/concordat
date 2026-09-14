@@ -71,10 +71,7 @@ def _attempt_one_import(
     repo_name: str,
     slug: str,
 ) -> bool:
-    """Attempt to import a single repository, trying repo_name then slug.
-
-    Returns True if import succeeded, False otherwise.
-    """
+    """Attempt to import a repository using its name, then its slug."""
     import_attempts = [repo_name, slug]
     for import_id in import_attempts:
         callbacks.write_stream_output(
@@ -110,21 +107,7 @@ def _prompt_for_recovery_action(
     exit_code: int,
     latest_result: SimpleNamespace,
 ) -> tuple[bool, int, SimpleNamespace]:
-    """Prompt user for recovery action approval.
-
-    Args:
-        prompt_message: The message to display to the user.
-        non_interactive_message: Message to show when prompting is not possible.
-        context: Recovery execution context.
-        callbacks: Recovery callback functions.
-        exit_code: Current exit code to return if prompting fails.
-        latest_result: Latest result to return if prompting fails.
-
-    Returns:
-        Tuple of (should_proceed, exit_code, latest_result).
-        If should_proceed is False, caller should return (exit_code, latest_result).
-
-    """
+    """Prompt for recovery approval and return whether to proceed."""
     if not callbacks.can_prompt():
         callbacks.write_stream_output(context.io.stderr, non_interactive_message)
         return False, exit_code, latest_result
@@ -173,6 +156,11 @@ def handle_apply_import_errors(
 
     Detects GitHub repository existence errors, prompts for import, and retries
     apply. Returns updated exit code and latest result.
+
+    Returns
+    -------
+    tuple[int, SimpleNamespace]
+        The final exit code and latest tofu result.
     """
     exit_code = int(latest_result.returncode)
 
@@ -219,16 +207,7 @@ def handle_apply_import_errors(
 
 
 def _line_matches_any_slug(line: str, slugs: list[str]) -> str | None:
-    """Check if a non-empty line matches any slug pattern.
-
-    Args:
-        line: A line from tofu state list output.
-        slugs: List of repository slugs to match against.
-
-    Returns:
-        The line itself if it matches any slug pattern, None otherwise.
-
-    """
+    """Return a non-empty state-list line when it matches a repository slug."""
     stripped = line.strip()
     if not stripped:
         return None
@@ -318,6 +297,11 @@ def handle_apply_prevent_destroy_errors(
 
     Detects resources blocked by prevent_destroy, prompts for state removal,
     and retries apply. Returns updated exit code and latest result.
+
+    Returns
+    -------
+    tuple[int, SimpleNamespace]
+        The final exit code and latest tofu result.
     """
     exit_code = int(latest_result.returncode)
 

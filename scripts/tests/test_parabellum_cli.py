@@ -48,13 +48,11 @@ class TestSweepCommand:
             ledger_path: pathlib.Path,
             options: sweep.SweepOptions,
         ) -> sweep.Ledger:
-            calls.append(
-                {
-                    "estate_path": estate_path,
-                    "ledger_path": ledger_path,
-                    "options": options,
-                }
-            )
+            calls.append({
+                "estate_path": estate_path,
+                "ledger_path": ledger_path,
+                "options": options,
+            })
             return []
 
         monkeypatch.setattr(sweep, "run_sweep", fake_run_sweep)
@@ -78,19 +76,17 @@ class TestSweepCommand:
         """Every top-level flag is parsed and forwarded unchanged."""
         calls = self._capture(monkeypatch)
 
-        exit_code = self._invoke(
-            [
-                "--only",
-                "statelet",
-                "--limit",
-                "1",
-                "--force",
-                "--estate",
-                str(estate_path),
-                "--ledger",
-                str(ledger_path),
-            ]
-        )
+        exit_code = self._invoke([
+            "--only",
+            "statelet",
+            "--limit",
+            "1",
+            "--force",
+            "--estate",
+            str(estate_path),
+            "--ledger",
+            str(ledger_path),
+        ])
 
         assert exit_code == 0, exit_code
         assert len(calls) == 1, calls
@@ -133,16 +129,14 @@ class TestSweepCommand:
         """
         calls = self._capture(monkeypatch)
 
-        self._invoke(
-            [
-                "--only",
-                only,
-                "--estate",
-                str(tmp_path / "estate.yaml"),
-                "--ledger",
-                str(tmp_path / "ledger.jsonl"),
-            ]
-        )
+        self._invoke([
+            "--only",
+            only,
+            "--estate",
+            str(tmp_path / "estate.yaml"),
+            "--ledger",
+            str(tmp_path / "ledger.jsonl"),
+        ])
 
         assert len(calls) == 1, calls
         assert calls[0]["options"].only == expected, calls[0]
@@ -176,14 +170,12 @@ class TestSweepCommand:
             lambda **_kwargs: [{"repository": "leynos/statelet"}],
         )
 
-        self._invoke(
-            [
-                "--estate",
-                str(estate_path),
-                "--ledger",
-                str(ledger_path),
-            ]
-        )
+        self._invoke([
+            "--estate",
+            str(estate_path),
+            "--ledger",
+            str(ledger_path),
+        ])
 
         captured = capsys.readouterr().out
         assert f"appended 1 record(s) to {ledger_path}" in captured, captured

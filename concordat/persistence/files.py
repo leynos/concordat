@@ -1,5 +1,4 @@
 """File persistence helpers for backend and manifest artifacts."""
-# ruff: noqa: TRY003
 
 from __future__ import annotations
 
@@ -97,13 +96,11 @@ def _enforce_existing_policy(
     is_same: bool,
     force: bool,
 ) -> bool:
-    """Return True if caller should write, False if identical, else raise.
-
-    When ``is_same`` is False and ``force`` is False, raises a PersistenceError
-    to protect existing files from accidental overwrite.
-    """
+    """Enforce the existing-file policy, raising on an unsafe replacement."""
     if is_same:
         return False
     if not force:
-        raise PersistenceError(f"{path} already exists; rerun with --force to replace.")
+        raise PersistenceError(  # noqa: TRY003  # Domain error provides operator remediation.
+            f"{path} already exists; rerun with --force to replace."
+        )
     return True

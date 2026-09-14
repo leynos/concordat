@@ -49,9 +49,11 @@ ______________________________________________________________________
 ```python
 import cyclopts
 
+
 def greet(name: str, count: int = 1):
     for _ in range(count):
         print(f"Hello, {name}!")
+
 
 if __name__ == "__main__":
     cyclopts.run(greet)
@@ -68,17 +70,21 @@ from cyclopts import App
 
 app = App(help="Demo multi‑command app")
 
+
 @app.command
 def fizz(n: int):
     print(f"FIZZ: {n}")
+
 
 @app.command(alias="buzz")
 def buzz_renamed(n: int):
     print(f"BUZZ: {n}")
 
+
 @app.default
 def main():
     print("Use a subcommand; try --help")
+
 
 if __name__ == "__main__":
     app()
@@ -101,13 +107,13 @@ from cyclopts import App, Parameter
 
 app = App()
 
+
 @app.command
 def build(
     *,
     profile: Annotated[str, Parameter(name=["--profile", "-p"])],
     out_dir: Annotated[str, Parameter(name="--out-dir", alias=["-o"])],
-):
-    ...
+): ...
 ```
 
 - **Docstrings** should document the *Python variable names*, even if CLI names
@@ -128,6 +134,7 @@ from typing import Annotated
 from cyclopts import App, Parameter
 
 app = App()
+
 
 @app.default
 def main(verbose: Annotated[int, Parameter(alias="-v", count=True)] = 0):
@@ -174,6 +181,7 @@ from cyclopts import App, Parameter, Token, validators
 app = App()
 UNITS = {"kb": 1024, "mb": 1024**2, "gb": 1024**3}
 
+
 def bytesize(_type, tokens: Sequence[Token]) -> int:
     s = tokens[0].value.lower()
     try:
@@ -182,9 +190,13 @@ def bytesize(_type, tokens: Sequence[Token]) -> int:
         number, suffix = s[:-2], s[-2:]
         return int(number) * UNITS[suffix]
 
+
 @app.command
-def zero(size: Annotated[int, Parameter(converter=bytesize)], *,
-         at_least: Annotated[int, Parameter(validator=validators.Number(gte=0))] = 0):
+def zero(
+    size: Annotated[int, Parameter(converter=bytesize)],
+    *,
+    at_least: Annotated[int, Parameter(validator=validators.Number(gte=0))] = 0,
+):
     assert size >= at_least, "size below minimum"
 ```
 
@@ -208,11 +220,13 @@ from cyclopts import App, Parameter
 
 app = App()
 
+
 @dataclass
 class User:
     name: str
     age: int
     region: Literal["us", "ca"] = "us"
+
 
 @app.default
 def show(user: Annotated[User, Parameter(name="*")]):
@@ -234,15 +248,19 @@ from typing import Annotated
 from cyclopts import App, Group, Parameter, validators
 
 app = App()
-vehicle = Group("Vehicle (choose one)",
-                validator=validators.LimitedChoice(),
-                default_parameter=Parameter(negative=""))
+vehicle = Group(
+    "Vehicle (choose one)",
+    validator=validators.LimitedChoice(),
+    default_parameter=Parameter(negative=""),
+)
+
 
 @app.command
-def create(*,
-           car: Annotated[bool, Parameter(group=vehicle)] = False,
-           truck: Annotated[bool, Parameter(group=vehicle)] = False):
-    ...
+def create(
+    *,
+    car: Annotated[bool, Parameter(group=vehicle)] = False,
+    truck: Annotated[bool, Parameter(group=vehicle)] = False,
+): ...
 ```
 
 Set `Group.sort_key` or use `Group.create_ordered()` to control panel ordering
@@ -268,6 +286,7 @@ For packaged apps:
 
 ```python
 from cyclopts import App
+
 app = App(name="myapp")
 app.register_install_completion_command()  # adds --install-completion
 if __name__ == "__main__":
@@ -300,9 +319,11 @@ from cyclopts import App, config
 app = App(
     name="character-counter",
     config=[
-        config.Toml("pyproject.toml",
-                    root_keys=["tool", "character-counter"],
-                    search_parents=True),
+        config.Toml(
+            "pyproject.toml",
+            root_keys=["tool", "character-counter"],
+            search_parents=True,
+        ),
         config.Env("CHAR_COUNTER_"),
     ],
 )
@@ -342,10 +363,15 @@ ______________________________________________________________________
 ## 11) Calling apps, exits, and return values
 
 ```python
-app = App(result_action="return_value")   # don’t sys.exit; return value instead
+app = App(result_action="return_value")  # don’t sys.exit; return value instead
+
+
 @app.command
-def add(a: int, b: int) -> int: return a + b
-rv = app(["add", "2", "3"])           # 5
+def add(a: int, b: int) -> int:
+    return a + b
+
+
+rv = app(["add", "2", "3"])  # 5
 ```
 
 When `result_action` is not set, Cyclopts mirrors installed entry‑point
@@ -371,15 +397,19 @@ from cyclopts import App, Parameter
 
 app = App()
 
+
 @app.command
 def whoami(user: str):
     print(user)
 
+
 @app.meta.default
-def launcher(*tokens: Annotated[str, Parameter(show=False, allow_leading_hyphen=True)],
-            user: str):
+def launcher(
+    *tokens: Annotated[str, Parameter(show=False, allow_leading_hyphen=True)], user: str
+):
     # do auth / logging / inject defaults here
     app(tokens)  # forward to the real app
+
 
 if __name__ == "__main__":
     app.meta()
@@ -413,9 +443,11 @@ from cyclopts import App
 
 app = App(result_action="return_value")
 
+
 @app.command
 def add(a: int, b: int) -> int:
     return a + b
+
 
 def test_add():
     assert app(["add", "2", "3"]) == 5
@@ -449,12 +481,14 @@ app = App(
 )
 
 paths = Group.create_ordered("Paths")
-opts  = Group.create_ordered("Options")
+opts = Group.create_ordered("Options")
+
 
 @dataclass
 class Resize:
     width: int
     height: int
+
 
 @Parameter(name="*")
 @dataclass
@@ -462,12 +496,17 @@ class Global:
     verbose: bool = False
     profile: Literal["debug", "release"] = "debug"
 
+
 @app.command(group="Transforms")
-def resize(src: Annotated[Path, Parameter(group=paths, validator=validators.Path(exists=True))],
-           dst: Annotated[Path, Parameter(group=paths)],
-           *,
-           size: Annotated[Resize, Parameter(name="size")],
-           global_: Annotated[Global, Parameter(name="*")]):
+def resize(
+    src: Annotated[
+        Path, Parameter(group=paths, validator=validators.Path(exists=True))
+    ],
+    dst: Annotated[Path, Parameter(group=paths)],
+    *,
+    size: Annotated[Resize, Parameter(name="size")],
+    global_: Annotated[Global, Parameter(name="*")],
+):
     """Resize an image.
 
     Parameters
@@ -484,8 +523,11 @@ def resize(src: Annotated[Path, Parameter(group=paths, validator=validators.Path
         Verbose logging.
     """
     if global_.verbose:
-        print(f"Resizing {src} -> {dst} to {size.width}×{size.height} [{global_.profile}]")
+        print(
+            f"Resizing {src} -> {dst} to {size.width}×{size.height} [{global_.profile}]"
+        )
     # process...
+
 
 if __name__ == "__main__":
     app()
