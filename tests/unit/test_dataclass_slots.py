@@ -278,7 +278,11 @@ def test_recent_dataclasses_store_their_declared_fields_in_slots(
     slots = typ.cast("tuple[str, ...]", model_type.__dict__["__slots__"])
     instance = object.__new__(model_type)
 
-    assert actual_fields == expected_fields
-    assert slots == expected_fields
+    assert actual_fields == expected_fields, (
+        f"{model_type.__name__} field contract did not match the expected fields"
+    )
+    assert slots == expected_fields, (
+        f"{model_type.__name__} slot contract did not match the expected fields"
+    )
     with pytest.raises(AttributeError):
         object.__setattr__(instance, "undeclared_field", None)

@@ -119,15 +119,19 @@ def test_apply_inventory_change_follows_the_mutation_trace(
 
     def mutate_inventory(inventory: Path, repo_slug: str) -> bool:
         calls.append("mutate")
-        assert inventory == Path("workspace") / config.inventory_path
-        assert repo_slug == "example/repo"
+        assert inventory == Path("workspace") / config.inventory_path, (
+            "mutator should receive the configured inventory path"
+        )
+        assert repo_slug == "example/repo", "mutator should receive the repository slug"
         return next(mutations)
 
     def commit_inventory_changes(*args: object, **kwargs: object) -> None:
         calls.append("commit")
 
     def validate_tofu_changes(workdir: Path) -> None:
-        assert workdir == Path("workspace")
+        assert workdir == Path("workspace"), (
+            "validation should run in the configured inventory worktree"
+        )
         calls.append("validate")
 
     with (
@@ -162,8 +166,12 @@ def test_apply_inventory_change_follows_the_mutation_trace(
             ("mutate", "commit", "validate") if mutation_result else ("mutate",)
         )
     ]
-    assert changed == mutation_results
-    assert calls == expected_calls
+    assert changed == mutation_results, (
+        "each inventory mutation result should be reflected in the helper trace"
+    )
+    assert calls == expected_calls, (
+        "changed mutations should commit before validation in the recorded trace"
+    )
 
 
 def test_apply_inventory_change_commits_the_mutated_inventory(

@@ -23,7 +23,6 @@ workflows read the same flag before applying changes.
 
 2. Invoke the CLI with `uv run` to ensure the correct environment is used.
 
-
 ## Runtime implementation
 
 The public `concordat.hello` entry point uses the optional Rust implementation

@@ -19,15 +19,40 @@ pytest-timeout, betamax, hypothesis, textual, and the pinned
 The `Makefile`'s `build` target runs
 `uv sync --group dev` as part of setting up the virtual environment.
 
-`make lint` runs four complementary checks. Ruff provides the fast source-wide
-style and correctness pass, including preview, asynchronous, and
-NumPy-docstring rules. Pylint then runs the selected Lading policy through the
-pinned PyPy shim. A separate CPython 3.14 invocation loads every diagnostic
+`make lint` runs the source and snapshot checks sequentially. Ruff provides the
+fast source-wide style and correctness pass, including preview, asynchronous,
+and NumPy-docstring rules. Pylint then runs the selected Lading policy through
+the pinned PyPy shim. A separate CPython 3.14 invocation loads every diagnostic
 from the `df12-python-lints` pin, while retaining Concordat's Python 3.13
-semantic baseline for version-gated checks. Finally, `ambrleaks`, provisioned
-from the same immutable release, scans the test tree for unredacted values in
-Syrupy snapshots. The separate df12 process prevents its CPython dependency
-from changing the PyPy-backed Pylint baseline.
+semantic baseline for version-gated checks. `ambrleaks`, provisioned from the
+same immutable release, scans the test tree for unredacted values in Syrupy
+snapshots. The spelling subtarget refreshes the shared policy and runs pinned
+`typos`. Finally, the blocking Skylos 4.33.2 dead-code scan covers only the
+production `concordat` and `scripts` packages and excludes `tests`, so test-only
+references do not keep production symbols live. The separate df12 process
+prevents its CPython dependency from changing the PyPy-backed Pylint baseline.
+
+Treat each Skylos report as a dead-code candidate. Remove confirmed dead code.
+For a verified dynamic runtime entry point, add a precise rule in
+`[tool.skylos.dead_code]` with the fully qualified symbol, its actual type, and
+the runtime caller. When an entry-point rule cannot describe the boundary, add
+a narrow named exception instead:
+
+```shell
+make skylos-allow SYMBOL=symbol REASON="Loaded by plugin registry"
+```
+
+The target requires both values to contain at least one non-whitespace
+character and records the reason in the version-controlled Skylos documented
+allow list. Use `SYMBOL`, not `NAME`: WSL injects `NAME` with the host name.
+Record the verified caller and its evidence in the reviewing change. Do not add
+bulk or unexplained exceptions; remove an exception when its runtime boundary
+disappears.
+
+The Makefile uses `$(SKYLOS_CLI)` only for subcommands and keeps scan-only
+options such as `--config-file` in `$(SKYLOS)`. This keeps
+`skylos whitelist <symbol> --reason <reason>` in the command order that Skylos
+requires.
 
 ## Public runtime boundary
 
@@ -292,14 +317,20 @@ rule-run subcommand exposed as `concordat artefact rule run <rule-id>`.
 ### The policy envelope
 
 `build_envelope` (in `envelope.py`) assembles a
-`policy-input/ rust-makefile-baseline` document (schema version 1) describing
-one local checkout: whether a root `Cargo.toml` and `Makefile` exist, the parsed
-`Cargo.toml` table (or `None`), and the validated `makeutil` report for the
-`Makefile` (or `None`). Root `Cargo.toml` presence is documented as
-*provisional* evidence of Rust applicability — the `.concordat` manifest
-remains the eventual authority, per the module docstring, which points at "the
-Parabellum ExecPlan decision log" for that decision. This document is handed to
-Conftest as the input under audit.
+`policy-input/rust-makefile-baseline` document (schema version 1) describing
+one local checkout: root `Cargo.toml` and `Makefile` compatibility facts, the
+resolved `cargo.surfaces` list, and the validated `makeutil` report for the
+root `Makefile` (or `None`). `rust_surfaces.resolve_rust_surfaces` is the
+shared Rust applicability boundary: `.concordat`
+`language.rust.surfaces` is authoritative, including an empty list, while an
+absent declaration retains the root-`Cargo.toml` fallback. This document is
+handed to Conftest as the input under audit. The added `cargo.surfaces` field is
+backward-compatible within schema version 1: policy replay of a v0.2 envelope
+without it retains the root surface when `root_cargo_toml` is true. A present
+`cargo.surfaces` field must be an array and `cargo` must be an object;
+malformed recorded evidence yields a structured EN-001 indeterminate finding
+instead of silently selecting the fallback or causing the policy evaluator to
+fail.
 
 ### Tool dependencies
 

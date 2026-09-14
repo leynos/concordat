@@ -82,22 +82,7 @@ def _find_organization(
     client: github3.GitHub,
     owner: str,
 ) -> github3.orgs.Organization | None:
-    """Return the organization named *owner*, or ``None`` when there is none.
-
-    An authentication failure here precedes any creation attempt: a rejected
-    lookup says nothing about whether *owner* is an organization, so falling
-    through to the personal path would misreport the cause.
-
-    Returns
-    -------
-    github3.orgs.Organization | None
-        Matching organization, or ``None`` when *owner* is not an organization.
-
-    Raises
-    ------
-    GitHubOrganizationAuthenticationError
-        If GitHub rejects the organization lookup.
-    """
+    """Return the named organization or None; translate auth failures to errors."""
     try:
         return client.organization(owner)
     except github3_exceptions.NotFoundError:

@@ -257,18 +257,7 @@ def _initialize_tofu(workdir: Path, env: typ.Mapping[str, str]) -> Tofu:
 
 
 def _prepare_execution_environment(options: ExecutionOptions) -> dict[str, str]:
-    """Compose the base environment for tofu invocation.
-
-    The process environment is overlaid with the owner's file-backed
-    credential fallbacks (environment variables win), and the shared
-    OpenTofu provider plugin cache is enabled unless the caller already
-    set one.
-
-    Returns
-    -------
-    dict[str, str]
-        Environment mapping prepared for OpenTofu invocation.
-    """
+    """Compose the OpenTofu environment with credential fallbacks and plugin cache."""
     env_source = _credentials.credential_environment(
         owner=options.github_owner or None,
     )
@@ -287,16 +276,7 @@ def _setup_tofu_workspace(
     record: EstateRecord,
     execution: ExecutionContext,
 ) -> tuple[list[str], Tofu]:
-    """Prepare the workspace for tofu execution.
-
-    Sanitizes inventory, writes tfvars, configures backend, and initializes the
-    tofu wrapper. Returns backend arguments and tofu instance.
-
-    Returns
-    -------
-    tuple[list[str], Tofu]
-        Backend command-line arguments and the initialized tofu wrapper.
-    """
+    """Sanitize the workspace, configure its backend, and initialize OpenTofu."""
     sanitized_inventory = _sanitize_inventory_for_tofu(
         workspace.root,
         workspace.tofu_dir,
@@ -331,16 +311,7 @@ def _execute_apply_command(
     tofu_workdir: Path,
     io: ExecutionIO,
 ) -> int:
-    """Execute tofu apply with automatic error recovery.
-
-    Runs apply, then handles import and prevent_destroy errors if they occur.
-    Returns the final exit code.
-
-    Returns
-    -------
-    int
-        Final OpenTofu apply exit code after recovery handling.
-    """
+    """Execute OpenTofu apply with automatic import and prevent_destroy recovery."""
     result = invoke_tofu_command_with_result(tofu, list(args), io)
     exit_code = int(result.returncode)
     latest_result = result

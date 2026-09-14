@@ -53,6 +53,11 @@ def build_envelope(checkout: pathlib.Path) -> PolicyEnvelope:
     A `.concordat` `language.rust.surfaces` declaration is authoritative,
     including an empty list.  Repositories without that declaration retain
     the historic root-`Cargo.toml` compatibility fallback.
+
+    Returns
+    -------
+    PolicyEnvelope
+        The policy input document assembled from the checkout.
     """
     cargo_path = checkout / "Cargo.toml"
     makefile_path = checkout / "Makefile"

@@ -27,8 +27,12 @@ def test_runtime_uses_native_hello_when_extension_is_available(
             reloaded_runtime = importlib.reload(runtime)
             reloaded_concordat = importlib.reload(concordat)
 
-            assert reloaded_runtime.hello is native_hello
-            assert reloaded_concordat.hello is native_hello
+            assert reloaded_runtime.hello is native_hello, (
+                "runtime should select the native Rust hello backend"
+            )
+            assert reloaded_concordat.hello is native_hello, (
+                "concordat.hello should re-export the native Rust hello backend"
+            )
     finally:
         importlib.reload(runtime)
         importlib.reload(concordat)
@@ -48,8 +52,12 @@ def test_runtime_falls_back_to_pure_hello_when_extension_is_missing(
             reloaded_runtime = importlib.reload(runtime)
             reloaded_concordat = importlib.reload(concordat)
 
-            assert reloaded_runtime.hello is pure.hello
-            assert reloaded_concordat.hello is pure.hello
+            assert reloaded_runtime.hello is pure.hello, (
+                "runtime should select the pure-Python hello fallback"
+            )
+            assert reloaded_concordat.hello is pure.hello, (
+                "concordat.hello should re-export the pure-Python hello fallback"
+            )
     finally:
         importlib.reload(runtime)
         importlib.reload(concordat)
@@ -71,7 +79,9 @@ def test_runtime_reraises_missing_native_dependency(
             with pytest.raises(ModuleNotFoundError) as raised:
                 importlib.reload(runtime)
 
-            assert raised.value is error
+            assert raised.value is error, (
+                "runtime should propagate the original dependency ModuleNotFoundError"
+            )
     finally:
         importlib.reload(runtime)
         importlib.reload(concordat)
