@@ -35,6 +35,13 @@ test_prerequisite_and_recursive_delegation_is_compliant if {
 	count(findings) == 0
 }
 
+# A `$(shell command -v ...)` probe whose fallback names `$(HOME)` still
+# reads as the tool in command position.
+test_nested_shell_probe_is_compliant if {
+	findings := policy.deny with input as data.fixtures.probe_nested
+	count(findings) == 0
+}
+
 test_repository_additions_to_the_baseline_config_are_compliant if {
 	findings := policy.deny with input as data.fixtures.config_extended
 	count(findings) == 0

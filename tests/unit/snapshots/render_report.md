@@ -19,8 +19,8 @@ Findings by rule:
 
 Table 1: Latest verdict and findings per estate repository.
 
-| Repository | Verdict | Commit | Findings |
-| ---------- | ------- | ------ | -------- |
-| leynos/alpha | compliant | aaaaaaaaaaaa | none |
-| leynos/beta | noncompliant | bbbbbbbbbbbb | QG-001 (noncompliant) soft-skipped lint gate |
-| leynos/gauss | excluded |  | test-framework migration in flight |
+| Repository   | Verdict      | Commit       | Findings                                     |
+| ------------ | ------------ | ------------ | -------------------------------------------- |
+| leynos/alpha | compliant    | aaaaaaaaaaaa | none                                         |
+| leynos/beta  | noncompliant | bbbbbbbbbbbb | QG-001 (noncompliant) soft-skipped lint gate |
+| leynos/gauss | excluded     |              | test-framework migration in flight           |

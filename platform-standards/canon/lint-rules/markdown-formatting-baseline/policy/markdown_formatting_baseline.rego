@@ -308,9 +308,11 @@ closure_provable(root) if {
 # The command word may be the literal tool name, optionally under a directory,
 # or a `$(shell command -v <tool> ...)` / `$(shell which <tool> ...)` probe:
 # the estate pattern `MDLINT ?= $(shell command -v markdownlint-cli2 ...)`
-# expands to that probe in command position.
+# expands to that probe in command position. The probe's fallback may name
+# one nested Make reference such as `$(HOME)`, so one level of parentheses
+# is allowed inside it before the closing parenthesis.
 tool_word(tool) := sprintf(
-	`(([^[:space:];|&()]*/)?%s|\$\(shell[[:space:]]+(command -v|which)[[:space:]]+%s[^)]*\))`,
+	`(([^[:space:];|&()]*/)?%s|\$\(shell[[:space:]]+(command -v|which)[[:space:]]+%s([^()]|\([^()]*\))*\))`,
 	[tool, tool],
 )
 
