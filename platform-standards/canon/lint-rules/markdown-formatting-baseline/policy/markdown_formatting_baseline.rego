@@ -159,7 +159,24 @@ brace_replacements := {sprintf("${%s}", [name]): value |
 	some name, value in variable_value
 }
 
-replacements := object.union(paren_replacements, brace_replacements)
+# Make exports the process environment as variables, so `$(HOME)` in a
+# recipe is defined even though no Makefile assigns it. The shell receives
+# the same value through `$HOME`, so the reference is rewritten to that
+# spelling: it then reads as an ordinary path component rather than as an
+# unresolved variable, and a tool under `$(HOME)/.cargo/bin/` is still the
+# command word.
+environment_variables := {"HOME", "PATH", "PWD", "SHELL", "TMPDIR", "USER"}
+
+environment_replacements := {reference: sprintf("$%s", [name]) |
+	some name in environment_variables
+	not single_valued(name)
+	some reference in [sprintf("$(%s)", [name]), sprintf("${%s}", [name])]
+}
+
+replacements := object.union(
+	environment_replacements,
+	object.union(paren_replacements, brace_replacements),
+)
 
 expand(text) := strings.replace_n(
 	replacements,

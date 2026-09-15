@@ -47,6 +47,7 @@ EXPECTED_PROFILES: typ.Final[dict[str, Profile]] = {
     "literal_tools": frozenset(),
     "delegated": frozenset(),
     "probe_nested": frozenset(),
+    "home_prefixed": frozenset(),
     "config_extended": frozenset(),
     "no_markdown": frozenset(),
     "no_makefile": frozenset({("FP-003", "noncompliant")}),
