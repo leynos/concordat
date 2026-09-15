@@ -1,0 +1,127 @@
+"""Unit tests for policy-input dispatch in the rule runner.
+
+A rule manifest names the envelope its sensor evaluates under `sensor.input`.
+The runner must assemble that document — and only that document — for the
+checkout, default to the Rust kind for a manifest that predates the field,
+and refuse a kind this build cannot build rather than guessing.
+"""
+
+from __future__ import annotations
+
+import json
+import pathlib
+import subprocess
+import typing as typ
+
+import pytest
+
+from concordat.errors import OperationalRuleError
+from concordat.rules import runner
+from tests.unit.rule_test_support import MINIMAL_REPORT
+
+if typ.TYPE_CHECKING:
+    import pytest_mock
+
+    from tests.conftest import CmdMox
+
+
+def _write_package(
+    root: pathlib.Path, rule_id: str, manifest: str | None
+) -> pathlib.Path:
+    """Create a rule package skeleton with an optional manifest."""
+    package = root / rule_id
+    (package / "policy").mkdir(parents=True)
+    if manifest is not None:
+        (package / "rule.yaml").write_text(manifest, encoding="utf-8")
+    return package
+
+
+class TestEnvelopeBuilder:
+    """`_envelope_builder` resolves the manifest's declared input kind."""
+
+    def test_missing_manifest_defaults_to_the_rust_envelope(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A package without `rule.yaml` keeps the historic Rust input."""
+        package = _write_package(tmp_path, "legacy-rule", None)
+        assert runner._envelope_builder(package) is runner.build_envelope
+
+    def test_manifest_without_input_defaults_to_the_rust_envelope(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A manifest predating `sensor.input` keeps the historic Rust input."""
+        package = _write_package(tmp_path, "legacy-rule", "sensor:\n  type: conftest\n")
+        assert runner._envelope_builder(package) is runner.build_envelope
+
+    def test_declared_markdown_input_selects_the_markdown_builder(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """The Markdown kind maps to the Markdown envelope builder."""
+        package = _write_package(
+            tmp_path,
+            "prose-rule",
+            "sensor:\n  input: policy-input/markdown-formatting-baseline\n",
+        )
+        assert runner._envelope_builder(package) is runner.build_markdown_envelope
+
+    @pytest.mark.parametrize(
+        "declared",
+        [
+            pytest.param("policy-input/unknown", id="unknown-kind"),
+            pytest.param("[not, a, string]", id="wrong-type"),
+        ],
+    )
+    def test_unbuildable_input_kind_is_refused(
+        self, tmp_path: pathlib.Path, declared: str
+    ) -> None:
+        """A kind this build cannot assemble is an operational error."""
+        package = _write_package(
+            tmp_path, "odd-rule", f"sensor:\n  input: {declared}\n"
+        )
+        with pytest.raises(OperationalRuleError, match="declares the policy input"):
+            runner._envelope_builder(package)
+
+    def test_shipped_packages_declare_their_inputs(self) -> None:
+        """Both shipped manifests resolve to the builder for their own kind."""
+        rust = runner._rule_package_dir("rust-makefile-baseline")
+        markdown = runner._rule_package_dir("markdown-formatting-baseline")
+        assert runner._envelope_builder(rust) is runner.build_envelope
+        assert runner._envelope_builder(markdown) is runner.build_markdown_envelope
+
+
+class TestRunRuleDispatch:
+    """`run_rule` sends the declared envelope kind to Conftest."""
+
+    def test_markdown_rule_receives_a_markdown_envelope(
+        self,
+        tmp_path: pathlib.Path,
+        cmd_mox: CmdMox,
+        mocker: pytest_mock.MockFixture,
+    ) -> None:
+        """The envelope written for Conftest carries the Markdown kind and facts."""
+        checkout = tmp_path / "checkout"
+        checkout.mkdir()
+        (checkout / "README.md").write_text("# Hi\n", encoding="utf-8")
+        (checkout / "Makefile").write_text("fmt:\n\tmdtablefix --in-place\n")
+        cmd_mox.mock("makeutil").returns(stdout=json.dumps(MINIMAL_REPORT))
+        seen: dict[str, object] = {}
+
+        def capture(argv: list[str], rule_id: str) -> subprocess.CompletedProcess[str]:
+            seen["envelope"] = json.loads(pathlib.Path(argv[-1]).read_text())
+            seen["namespace"] = argv[argv.index("--namespace") + 1]
+            return subprocess.CompletedProcess(
+                argv, 0, json.dumps([{"failures": []}]), ""
+            )
+
+        mocker.patch.object(runner, "_run_conftest", side_effect=capture)
+        cmd_mox.replay()
+
+        result = runner.run_rule("markdown-formatting-baseline", checkout)
+
+        cmd_mox.verify()
+        assert result.verdict == "compliant", result
+        envelope = typ.cast("dict[str, object]", seen["envelope"])
+        assert envelope["kind"] == "policy-input/markdown-formatting-baseline", envelope
+        assert envelope["makefile"] == MINIMAL_REPORT, envelope
+        assert "cargo" not in envelope, envelope
+        assert seen["namespace"] == "canon.lint_rules.markdown_formatting_baseline"

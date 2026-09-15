@@ -28,8 +28,8 @@ workflows read the same flag before applying changes.
 The public `concordat.hello` entry point uses the optional Rust implementation
 when `_concordat_rs` is available and falls back to the pure-Python
 implementation when that extension is absent. If importing the extension raises
-`ModuleNotFoundError` for another module or dependency, that exception is raised
-to the caller rather than being mistaken for a missing extension.
+`ModuleNotFoundError` for another module or dependency, that exception is
+raised to the caller rather than being mistaken for a missing extension.
 
 ## Enrolling repositories
 
@@ -301,6 +301,67 @@ The command requires two external tools on `PATH`: `conftest` and the pinned
 `makeutil` (see
 `platform-standards/canon/lint-rules/rust-makefile-baseline/README.md` for the
 pin and regeneration workflow).
+
+### Auditing Markdown formatting wiring
+
+The `markdown-formatting-baseline` package audits how a checkout formats and
+lints its Markdown, using `leynos/netsuke` as the reference wiring:
+
+```shell
+concordat artefact rule run markdown-formatting-baseline --repo /path/to/checkout
+```
+
+It applies wherever a Markdown file exists outside dependency, build, and tool
+cache directories, and reports:
+
+- **FP-003** — the root `Makefile` exists and defines `fmt` and `check-fmt`.
+- **PD-002** — a recipe reachable from `check-fmt` runs
+  `mdtablefix --check --git --include-untracked`, and its exit status reaches
+  Make.
+- **PD-003** — a recipe reachable from `fmt` runs
+  `mdtablefix --in-place --git --include-untracked` directly, not through the
+  `mdformat-all` wrapper.
+- **PD-004** — a recipe reachable from `fmt` runs `markdownlint-cli2 --fix`
+  directly, not through the `mdformat-all` wrapper.
+- **PD-005** — `.markdownlint-cli2.jsonc` exists and carries the baseline
+  `config` entries verbatim plus every baseline `ignores` glob. Further rules
+  and globs may be added; the canonical file to copy is
+  `platform-standards/canon/lint/markdown/.markdownlint-cli2.jsonc`.
+- **PD-006** — CI lints Markdown through `DavidAnson/markdownlint-cli2-action`
+  pinned to a full commit SHA with `globs: '**/*.md'`. A workflow step that
+  installs or runs `markdownlint-cli2` from a shell, or drives
+  `make markdownlint`, is noncompliant.
+
+The Makefile checks expand Make variables that are assigned exactly once and
+unconditionally, so `$(MDTABLEFIX) --check $(MDTABLEFIX_SELECT)` is audited
+through its values. The tool must be the command word of its segment; a mention
+inside `echo`, an assignment, or a comment does not count. A variable the rule
+cannot resolve, a conditional rule or `include` on the path, or a workflow it
+cannot decode is reported as `indeterminate`.
+
+The canonical recipes are:
+
+```makefile
+MDTABLEFIX ?= mdtablefix
+MDTABLEFIX_SELECT = --git --include-untracked
+MDTABLEFIX_RULES = --wrap --renumber --breaks --ellipsis --fences
+
+fmt:
+	$(MDTABLEFIX) --in-place $(MDTABLEFIX_SELECT) $(MDTABLEFIX_RULES)
+	@unset FORCE_COLOR; $(MDLINT) --fix "**/*.md"
+
+check-fmt:
+	$(MDTABLEFIX) --check $(MDTABLEFIX_SELECT) $(MDTABLEFIX_RULES)
+```
+
+and the canonical CI step is:
+
+```yaml
+      - name: Lint Markdown
+        uses: DavidAnson/markdownlint-cli2-action@4580e1612f6407034edd6c0e4e316d725920867b  # v24.2.0
+        with:
+          globs: '**/*.md'
+```
 
 ### Sweeping the Rust estate
 

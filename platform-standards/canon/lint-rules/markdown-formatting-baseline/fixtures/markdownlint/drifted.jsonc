@@ -1,0 +1,19 @@
+{
+  "config": {
+    "MD004": { "style": "asterisk" },
+    "MD010": { "code_blocks": false },
+    "MD013": {
+      "line_length": 100,
+      "code_block_line_length": 120,
+      "tables": false,
+      "headings": false
+    }
+  },
+  "ignores": [
+    "**/.venv/**",
+    "**/node_modules/**",
+    "**/target/**",
+    ".terraform/**",
+    ".uv-cache/**"
+  ]
+}

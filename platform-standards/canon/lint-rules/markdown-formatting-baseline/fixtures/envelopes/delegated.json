@@ -1,0 +1,358 @@
+{
+  "schema_version": 1,
+  "kind": "policy-input/markdown-formatting-baseline",
+  "repository": {
+    "path": ".",
+    "name": null
+  },
+  "applicability": {
+    "markdown_files": true,
+    "root_makefile": true,
+    "markdownlint_config": true,
+    "workflows_dir": true
+  },
+  "makefile": {
+    "schema_version": 1,
+    "tool": {
+      "name": "makeutil",
+      "version": "0.1.0",
+      "parser": "makefile-lossless",
+      "parser_version": "0.3.40"
+    },
+    "source": {
+      "path": "Makefile",
+      "sha256": "342c9464f7f393dab807792dc8770ec468a674fd2df38ee3c997ac59b7f31916",
+      "byte_length": 369
+    },
+    "parse": {
+      "status": "complete",
+      "diagnostics": []
+    },
+    "rules": [
+      {
+        "ordinal": 2,
+        "targets": [
+          ".PHONY"
+        ],
+        "prerequisites": [
+          "fmt",
+          "fmt-md",
+          "check-fmt",
+          "check-fmt-md"
+        ],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [],
+        "location": {
+          "start_byte": 72,
+          "end_byte": 115,
+          "start_line": 4,
+          "start_column": 1,
+          "end_line": 6,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 3,
+        "targets": [
+          "fmt"
+        ],
+        "prerequisites": [
+          "fmt-python"
+        ],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "$(MAKE) fmt-md",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 131,
+              "end_byte": 147,
+              "start_line": 7,
+              "start_column": 1,
+              "end_line": 8,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 115,
+          "end_byte": 148,
+          "start_line": 6,
+          "start_column": 1,
+          "end_line": 9,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 4,
+        "targets": [
+          "fmt-python"
+        ],
+        "prerequisites": [],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "ruff format",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 160,
+              "end_byte": 173,
+              "start_line": 10,
+              "start_column": 1,
+              "end_line": 11,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 148,
+          "end_byte": 174,
+          "start_line": 9,
+          "start_column": 1,
+          "end_line": 12,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 5,
+        "targets": [
+          "fmt-md"
+        ],
+        "prerequisites": [],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "$(MDTABLEFIX) --in-place $(MDTABLEFIX_SELECT)",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 182,
+              "end_byte": 229,
+              "start_line": 13,
+              "start_column": 1,
+              "end_line": 14,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "text": "markdownlint-cli2 --fix \"**/*.md\"",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 229,
+              "end_byte": 264,
+              "start_line": 14,
+              "start_column": 1,
+              "end_line": 15,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 174,
+          "end_byte": 265,
+          "start_line": 12,
+          "start_column": 1,
+          "end_line": 16,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 6,
+        "targets": [
+          "check-fmt"
+        ],
+        "prerequisites": [
+          "check-fmt-md"
+        ],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "ruff format --check",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 289,
+              "end_byte": 310,
+              "start_line": 17,
+              "start_column": 1,
+              "end_line": 18,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 265,
+          "end_byte": 311,
+          "start_line": 16,
+          "start_column": 1,
+          "end_line": 19,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 7,
+        "targets": [
+          "check-fmt-md"
+        ],
+        "prerequisites": [],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "$(MDTABLEFIX) --check $(MDTABLEFIX_SELECT)",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 325,
+              "end_byte": 369,
+              "start_line": 20,
+              "start_column": 1,
+              "end_line": 21,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 311,
+          "end_byte": 369,
+          "start_line": 19,
+          "start_column": 1,
+          "end_line": 21,
+          "end_column": 1
+        }
+      }
+    ],
+    "variables": [
+      {
+        "ordinal": 0,
+        "name": "MDTABLEFIX",
+        "operator": "?=",
+        "raw_value": "mdtablefix",
+        "exported": false,
+        "overridden": false,
+        "define_block": false,
+        "conditions": [],
+        "location": {
+          "start_byte": 0,
+          "end_byte": 25,
+          "start_line": 1,
+          "start_column": 1,
+          "end_line": 2,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "MDTABLEFIX_SELECT",
+        "operator": "=",
+        "raw_value": "--git --include-untracked",
+        "exported": false,
+        "overridden": false,
+        "define_block": false,
+        "conditions": [],
+        "location": {
+          "start_byte": 25,
+          "end_byte": 71,
+          "start_line": 2,
+          "start_column": 1,
+          "end_line": 3,
+          "end_column": 1
+        }
+      }
+    ],
+    "includes": []
+  },
+  "markdownlint": {
+    "path": ".markdownlint-cli2.jsonc",
+    "parsed": {
+      "config": {
+        "MD004": {
+          "style": "dash"
+        },
+        "MD010": {
+          "code_blocks": false
+        },
+        "MD013": {
+          "line_length": 80,
+          "code_block_line_length": 120,
+          "tables": false,
+          "headings": false
+        },
+        "MD029": {
+          "style": "ordered"
+        }
+      },
+      "ignores": [
+        "**/.venv/**",
+        ".vtcode/**",
+        "**/node_modules/**",
+        "**/target/**",
+        ".terraform/**",
+        ".uv-cache/**",
+        "memories/**",
+        "CRUSH.md"
+      ]
+    },
+    "error": null
+  },
+  "alternate_markdownlint_configs": [],
+  "workflows": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "parsed": {
+        "name": "CI",
+        "on": {
+          "push": {
+            "branches": [
+              "main"
+            ]
+          },
+          "pull_request": null
+        },
+        "jobs": {
+          "lint-test": {
+            "runs-on": "ubuntu-latest",
+            "steps": [
+              {
+                "name": "Check out repository",
+                "uses": "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0"
+              },
+              {
+                "name": "Check formatting",
+                "run": "make check-fmt"
+              },
+              {
+                "name": "Lint Markdown",
+                "uses": "DavidAnson/markdownlint-cli2-action@4580e1612f6407034edd6c0e4e316d725920867b",
+                "with": {
+                  "globs": "**/*.md"
+                }
+              }
+            ]
+          }
+        }
+      },
+      "error": null
+    }
+  ]
+}

@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "kind": "policy-input/markdown-formatting-baseline",
+  "repository": {
+    "path": ".",
+    "name": null
+  },
+  "applicability": {
+    "markdown_files": true,
+    "root_makefile": false,
+    "markdownlint_config": true,
+    "workflows_dir": true
+  },
+  "makefile": null,
+  "markdownlint": {
+    "path": ".markdownlint-cli2.jsonc",
+    "parsed": {
+      "config": {
+        "MD004": {
+          "style": "dash"
+        },
+        "MD010": {
+          "code_blocks": false
+        },
+        "MD013": {
+          "line_length": 80,
+          "code_block_line_length": 120,
+          "tables": false,
+          "headings": false
+        },
+        "MD029": {
+          "style": "ordered"
+        }
+      },
+      "ignores": [
+        "**/.venv/**",
+        ".vtcode/**",
+        "**/node_modules/**",
+        "**/target/**",
+        ".terraform/**",
+        ".uv-cache/**",
+        "memories/**",
+        "CRUSH.md"
+      ]
+    },
+    "error": null
+  },
+  "alternate_markdownlint_configs": [],
+  "workflows": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "parsed": {
+        "name": "CI",
+        "on": {
+          "push": {
+            "branches": [
+              "main"
+            ]
+          },
+          "pull_request": null
+        },
+        "jobs": {
+          "lint-test": {
+            "runs-on": "ubuntu-latest",
+            "steps": [
+              {
+                "name": "Check out repository",
+                "uses": "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0"
+              },
+              {
+                "name": "Check formatting",
+                "run": "make check-fmt"
+              },
+              {
+                "name": "Lint Markdown",
+                "uses": "DavidAnson/markdownlint-cli2-action@4580e1612f6407034edd6c0e4e316d725920867b",
+                "with": {
+                  "globs": "**/*.md"
+                }
+              }
+            ]
+          }
+        }
+      },
+      "error": null
+    }
+  ]
+}

@@ -1,0 +1,88 @@
+schema_version: 1
+id: markdown-formatting-baseline
+name: Markdown formatting baseline
+description: >-
+  Audits the Markdown formatting and linting wiring of one checkout: the
+  root Makefile's fmt and check-fmt targets must call mdtablefix and
+  markdownlint-cli2 directly over the Git-selected Markdown set (PD-002 to
+  PD-004), .markdownlint-cli2.jsonc must carry the estate baseline (PD-005),
+  and CI must lint Markdown through the pinned markdownlint-cli2 action
+  (PD-006). Audit-only: this rule declares no mutations.
+version: 0.1.0
+sensor:
+  type: conftest
+  input: policy-input/markdown-formatting-baseline
+  policy: policy/
+  tests:
+    - policy/
+  data:
+    - fixtures/data.json
+parameters:
+  schema:
+    type: object
+    additionalProperties: false
+    properties:
+      required_targets:
+        type: array
+        items:
+          type: string
+        description: Targets the root Makefile must define unconditionally.
+      mdtablefix_select_flags:
+        type: array
+        items:
+          type: string
+        description: >-
+          Flags every mdtablefix invocation must pass to select the Markdown
+          files Git tracks plus the untracked files Git does not ignore.
+      markdownlint_action:
+        type: string
+        description: The GitHub Action that must lint Markdown in CI.
+      markdownlint_globs:
+        type: string
+        description: The `globs` input the action must receive.
+      markdownlint_config_path:
+        type: string
+        description: The markdownlint-cli2 configuration file name.
+      markdownlint_config:
+        type: object
+        description: >-
+          Rule settings `.markdownlint-cli2.jsonc` must carry verbatim under
+          `config`; further rules may be added alongside them.
+      markdownlint_ignores:
+        type: array
+        items:
+          type: string
+        description: >-
+          Globs `.markdownlint-cli2.jsonc` must list under `ignores`; further
+          globs may be added alongside them.
+  defaults:
+    required_targets:
+      - fmt
+      - check-fmt
+    mdtablefix_select_flags:
+      - --git
+      - --include-untracked
+    markdownlint_action: DavidAnson/markdownlint-cli2-action
+    markdownlint_globs: "**/*.md"
+    markdownlint_config_path: .markdownlint-cli2.jsonc
+    markdownlint_config:
+      MD004:
+        style: dash
+      MD010:
+        code_blocks: false
+      MD013:
+        line_length: 80
+        code_block_line_length: 120
+        tables: false
+        headings: false
+      MD029:
+        style: ordered
+    markdownlint_ignores:
+      - "**/.venv/**"
+      - ".vtcode/**"
+      - "**/node_modules/**"
+      - "**/target/**"
+      - ".terraform/**"
+      - ".uv-cache/**"
+      - "memories/**"
+      - CRUSH.md

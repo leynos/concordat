@@ -1,0 +1,18 @@
+---
+name: CI
+
+on:  # yamllint disable-line rule:truthy
+  pull_request:
+
+jobs:
+  lint-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      - name: Install CLI tools
+        run: |
+          npm install -g markdownlint-cli2
+
+      - name: Lint Markdown
+        run: make markdownlint

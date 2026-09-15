@@ -1614,9 +1614,9 @@ files) stay indeterminate, as do includes. Literal recursion is an edge only
 when its complete recipe is a sequence of literal `$(MAKE) target` commands
 joined by `&&`: that proves each child runs and propagates failure. An `echo`
 or an error-masking `|| true` that merely contains `$(MAKE)` is indeterminate,
-not an edge. A rule with conditional ancestry anywhere in the static closure
-is likewise indeterminate because `makeutil` records the branch but cannot
-prove that it executes.
+not an edge. A rule with conditional ancestry anywhere in the static closure is
+likewise indeterminate because `makeutil` records the branch but cannot prove
+that it executes.
 
 A gate invocation is a reachable recipe referencing the gate variable or
 executable; where surfaces are declared, the invocation must be qualified to a
@@ -1779,6 +1779,11 @@ breakdown of what constitutes "compliance" within the framework.
 | FP-004       | For Python projects, a `ruff.toml` file must exist.                                                                                                                                                                                                                                                                                                                                | File, and Content Presence      | OPA/Conftest                                            | error                | 1                        |
 | QG-001       | The `Makefile` lint gate must be binding: no ignore-errors or soft-skip lint recipes, and gate delegation provable within one prerequisite hop. The gate variable's `?=` assignment (`WHITAKER ?= whitaker`) is the sanctioned estate pattern and is not a finding. Unprovable constructs (includes, recovered parses, ambiguous `lint` definitions) fail closed as indeterminate. | Quality-Gate Integrity          | makeutil + OPA/Conftest (`rust-makefile-baseline`)      | error                | 2                        |
 | PD-001       | All Markdown files must pass Vale linting against the house style guide.                                                                                                                                                                                                                                                                                                           | Prose and Documentation Quality | Vale                                                    | warning              | 2                        |
+| PD-002       | A recipe reachable from `check-fmt` runs `mdtablefix --check --git --include-untracked` directly and bindingly.                                                                                                                                                                                                                                                                    | Prose and Documentation Quality | Conftest (`markdown-formatting-baseline`)          | error                | 2                        |
+| PD-003       | A recipe reachable from `fmt` runs `mdtablefix --in-place --git --include-untracked` directly rather than via the `mdformat-all` wrapper.                                                                                                                                                                                                                                          | Prose and Documentation Quality | Conftest (`markdown-formatting-baseline`)          | error                | 2                        |
+| PD-004       | A recipe reachable from `fmt` runs `markdownlint-cli2 --fix` directly rather than via the `mdformat-all` wrapper.                                                                                                                                                                                                                                                                  | Prose and Documentation Quality | Conftest (`markdown-formatting-baseline`)          | error                | 2                        |
+| PD-005       | `.markdownlint-cli2.jsonc` exists and carries the baseline `config` entries verbatim and every baseline `ignores` glob.                                                                                                                                                                                                                                                            | Prose and Documentation Quality | Conftest (`markdown-formatting-baseline`)          | error                | 2                        |
+| PD-006       | CI lints Markdown through `DavidAnson/markdownlint-cli2-action` pinned to a full commit SHA with `globs: '**/*.md'`; no workflow lints Markdown from a shell step.                                                                                                                                                                                                                 | Prose and Documentation Quality | Conftest (`markdown-formatting-baseline`)          | error                | 2                        |
 | SP-001       | The Open Source Security Foundation Scorecard must achieve a minimum score of 7.0.                                                                                                                                                                                                                                                                                                 | Security Posture                | Open Source Security Foundation Scorecard               | warning              | 1                        |
 | LG-001       | The `docs/library-users-guide.md` file must match the canonical version from the consumed library tag.                                                                                                                                                                                                                                                                             | File and Content Presence       | Python/Content Check                                    | error                | 4                        |
 | QG-002       | Lint tooling is installed from a pinned release via the hardened step: version-keyed cache, shell-variable indirection in `run:` blocks, `--locked`, binstall-or-build fallback, `--cranelift` preserved where the repository builds with Cranelift.                                                                                                                               | Quality-Gate Integrity          | OPA/Conftest                                            | error                | 4                        |
@@ -2132,6 +2137,37 @@ existing exemption contract.
   that runs in CI (PY-010).
 - **Actuators:** dependency-group and Makefile patches adding the
   missing wiring in the canonical form.
+
+##### Markdown formatting and linting (PD-002 to PD-006)
+
+The estate's Markdown pipeline is `mdtablefix` for structure and wrapping,
+`markdownlint-cli2` for the remaining rules, and the upstream
+`DavidAnson/markdownlint-cli2-action` in CI, with `leynos/netsuke` as the
+reference wiring. Two defects motivated the checks: the `mdformat-all` wrapper
+hid both tools behind a script whose file selection and flags no policy could
+read, and `make check-fmt` targets that formatted Python but never checked
+Markdown let unformatted prose reach `main`. These checks have shipped as the
+`markdown-formatting-baseline` rule package.
+
+- **Sensors:** a Makefile policy over `makeutil` facts follows the static
+  closure from `fmt` and `check-fmt`, expands single-valued Make variables, and
+  proves each tool as a binding command word with the required flags (`--check`
+  or `--in-place`, plus `--git --include-untracked`, and `--fix` for
+  markdownlint-cli2); a mention of `mdformat-all` on the `fmt` path is
+  noncompliant. A configuration policy decodes `.markdownlint-cli2.jsonc` as
+  JSONC and requires the vendored baseline `config` entries verbatim and every
+  baseline `ignores` glob, permitting repository additions. A workflow policy
+  decodes every file under `.github/workflows`, requires the action pinned to a
+  full commit SHA with `globs: '**/*.md'`, and flags any `run:` step that
+  installs or invokes `markdownlint-cli2` or drives `make markdownlint`. An
+  unresolvable Make variable, a conditional or `include` in the closure, an
+  undecodable file, or a job that calls a reusable workflow is indeterminate.
+- **Actuators:** file-copy of the canonical `.markdownlint-cli2.jsonc` from
+  `canon/lint/markdown/`; Makefile patches replacing the wrapper with the direct
+  `mdtablefix` and `markdownlint-cli2` recipes; workflow patches replacing
+  shell-installed linting with the canonical action step. The package currently
+  ships audit-only; the mutations follow the shared mutation vocabulary
+  (Section 2.1.2).
 
 ##### Rust formatting and linting (RT-001 to RT-005)
 

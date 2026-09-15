@@ -565,6 +565,17 @@ the Section 2.1.2 format.
   carries Hypothesis property tests for the floor and matrix invariants of
   Section 3.1.4 (including the metamorphic relations: a version above the floor
   never becomes a finding, a version below it always does).
+- [x] Ship the Markdown formatting rule package (PD-002 to PD-006): `fmt`
+  and `check-fmt` call `mdtablefix` and `markdownlint-cli2` directly over the
+  Git-selected Markdown set, `.markdownlint-cli2.jsonc` carries the estate
+  baseline, and CI lints Markdown through the pinned
+  `DavidAnson/markdownlint-cli2-action`. Acceptance: fixtures for the
+  `mdformat-all` wrapper, missing select flags, soft-skipped tools, drifted
+  configuration, and shell-installed CI linting each raise findings; the
+  canonical `.markdownlint-cli2.jsonc` ships under `canon/lint/markdown/`.
+  Progress: shipped audit-only as `markdown-formatting-baseline` with a Rego
+  sensor, generated fixtures, policy tests, and runner dispatch on the
+  manifest's declared `sensor.input` kind; mutations remain open.
 - [ ] Ship the Rust formatting and linting rule packages (RT-001 to RT-005):
   rustfmt wiring and template-matched configuration, clippy presence with
   `[lints]` entries at the template level or stricter, and Whitaker presence
