@@ -14,7 +14,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from concordat.rules.jsonc import JsoncError, loads_jsonc
+from concordat.rules.jsonc import JsoncError, _is_trailing_comma, loads_jsonc
 
 
 class TestLoadsJsonc:
@@ -76,6 +76,21 @@ class TestLoadsJsonc:
         """Only comments and trailing commas are relaxed; JSON5 is not."""
         with pytest.raises(JsoncError):
             loads_jsonc("{'a': 1}")
+
+
+@pytest.mark.parametrize(
+    ("text", "index", "expected"),
+    [
+        pytest.param('["a",]', 4, True, id="before-bracket"),
+        pytest.param('{"a": 1,\n  }', 7, True, id="whitespace-then-brace"),
+        pytest.param('["a", "b"]', 4, False, id="before-value"),
+        pytest.param('["a",', 4, False, id="end-of-text"),
+        pytest.param('["a"]', 3, False, id="not-a-comma"),
+    ],
+)
+def test_is_trailing_comma_contract(text: str, index: int, expected: bool) -> None:  # noqa: FBT001
+    """A comma is trailing only when whitespace alone separates it from `}` or `]`."""
+    assert _is_trailing_comma(text, index) is expected
 
 
 _json_scalars = st.none() | st.booleans() | st.integers() | st.text()

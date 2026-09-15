@@ -33,6 +33,9 @@ PACKAGE_DIR = (
 )
 ENVELOPES_DIR = PACKAGE_DIR / "fixtures" / "envelopes"
 
+# The repository-relative path and one-based line a finding cites.
+FailureLocation = tuple[str, int]
+
 
 def _load_generator() -> types.ModuleType:
     """Import the package's `fixtures/generate.py` by path."""
@@ -67,11 +70,11 @@ def _conftest_result(failures: list[dict[str, object]]) -> str:
 def _failure(
     rule_id: str,
     verdict: str,
-    path: str,
-    line: int,
+    location: FailureLocation,
     msg: str,
 ) -> dict[str, object]:
     """Build one conftest failure entry in the observed metadata shape."""
+    path, line = location
     return {
         "msg": msg,
         "metadata": {
@@ -125,15 +128,13 @@ def given_conftest_wrapper(cmd_mox: CmdMox) -> None:
         _failure(
             "PD-002",
             "noncompliant",
-            "Makefile",
-            0,
+            ("Makefile", 0),
             'no recipe reachable from "check-fmt" runs mdtablefix',
         ),
         _failure(
             "PD-003",
             "noncompliant",
-            "Makefile",
-            8,
+            ("Makefile", 8),
             '"fmt"-path recipe delegates to the mdformat-all wrapper; '
             "call mdtablefix directly",
         ),
@@ -147,8 +148,7 @@ def given_conftest_malformed_config(cmd_mox: CmdMox) -> None:
     failure = _failure(
         "PD-005",
         "indeterminate",
-        ".markdownlint-cli2.jsonc",
-        0,
+        (".markdownlint-cli2.jsonc", 0),
         ".markdownlint-cli2.jsonc could not be decoded: invalid JSON at line 4",
     )
     cmd_mox.mock("conftest").returns(exit_code=1, stdout=_conftest_result([failure]))
@@ -160,8 +160,7 @@ def given_conftest_shell_lint(cmd_mox: CmdMox) -> None:
     failure = _failure(
         "PD-006",
         "noncompliant",
-        ".github/workflows/ci.yml",
-        0,
+        (".github/workflows/ci.yml", 0),
         'job "lint-test" lints Markdown from a shell step (Lint Markdown); '
         "use DavidAnson/markdownlint-cli2-action",
     )
