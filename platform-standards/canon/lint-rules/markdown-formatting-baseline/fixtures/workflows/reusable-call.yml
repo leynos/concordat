@@ -1,0 +1,10 @@
+---
+name: CI
+
+on:  # yamllint disable-line rule:truthy
+  pull_request:
+
+jobs:
+  canon:
+    uses: leynos/platform-standards/.github/workflows/ci.yml@main
+    secrets: inherit

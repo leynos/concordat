@@ -15,9 +15,9 @@ declared in `pyproject.toml` under `[dependency-groups]` as `dev`, and pulls in
 pytest, pytest-xdist, pytest-bdd, pytest-asyncio, pytest-mock, ruff, pyright,
 pytest-timeout, betamax, hypothesis, textual, and the pinned
 `df12-python-lints` plugin at immutable commit
-`9c835f35b0f1690597ade799c9c6a30bc5922959` (lock metadata version 0.1.0).
-The `Makefile`'s `build` target runs
-`uv sync --group dev` as part of setting up the virtual environment.
+`9c835f35b0f1690597ade799c9c6a30bc5922959` (lock metadata version 0.1.0). The
+`Makefile`'s `build` target runs `uv sync --group dev` as part of setting up
+the virtual environment.
 
 `make lint` runs the source and snapshot checks sequentially. Ruff provides the
 fast source-wide style and correctness pass, including preview, asynchronous,
@@ -28,9 +28,10 @@ semantic baseline for version-gated checks. `ambrleaks`, provisioned from the
 same immutable release, scans the test tree for unredacted values in Syrupy
 snapshots. The spelling subtarget refreshes the shared policy and runs pinned
 `typos`. Finally, the blocking Skylos 4.33.2 dead-code scan covers only the
-production `concordat` and `scripts` packages and excludes `tests`, so test-only
-references do not keep production symbols live. The separate df12 process
-prevents its CPython dependency from changing the PyPy-backed Pylint baseline.
+production `concordat` and `scripts` packages and excludes `tests`, so
+test-only references do not keep production symbols live. The separate df12
+process prevents its CPython dependency from changing the PyPy-backed Pylint
+baseline.
 
 Treat each Skylos report as a dead-code candidate. Remove confirmed dead code.
 For a verified dynamic runtime entry point, add a precise rule in
@@ -319,18 +320,43 @@ rule-run subcommand exposed as `concordat artefact rule run <rule-id>`.
 `build_envelope` (in `envelope.py`) assembles a
 `policy-input/rust-makefile-baseline` document (schema version 1) describing
 one local checkout: root `Cargo.toml` and `Makefile` compatibility facts, the
-resolved `cargo.surfaces` list, and the validated `makeutil` report for the
-root `Makefile` (or `None`). `rust_surfaces.resolve_rust_surfaces` is the
-shared Rust applicability boundary: `.concordat`
-`language.rust.surfaces` is authoritative, including an empty list, while an
-absent declaration retains the root-`Cargo.toml` fallback. This document is
-handed to Conftest as the input under audit. The added `cargo.surfaces` field is
-backward-compatible within schema version 1: policy replay of a v0.2 envelope
-without it retains the root surface when `root_cargo_toml` is true. A present
-`cargo.surfaces` field must be an array and `cargo` must be an object;
-malformed recorded evidence yields a structured EN-001 indeterminate finding
-instead of silently selecting the fallback or causing the policy evaluator to
-fail.
+resolved `cargo.surfaces` list, and the validated `makeutil` report for the root
+`Makefile` (or `None`). `rust_surfaces.resolve_rust_surfaces` is the shared
+Rust applicability boundary: `.concordat` `language.rust.surfaces` is
+authoritative, including an empty list, while an absent declaration retains the
+root-`Cargo.toml` fallback. This document is handed to Conftest as the input
+under audit. The added `cargo.surfaces` field is backward-compatible within
+schema version 1: policy replay of a v0.2 envelope without it retains the root
+surface when `root_cargo_toml` is true. A present `cargo.surfaces` field must
+be an array and `cargo` must be an object; malformed recorded evidence yields a
+structured EN-001 indeterminate finding instead of silently selecting the
+fallback or causing the policy evaluator to fail.
+
+### Policy-input kinds and dispatch
+
+Each rule manifest names the envelope its sensor evaluates under `sensor.input`.
+`runner._envelope_builder` reads that field and looks the builder up in
+`ENVELOPE_BUILDERS`; a manifest without the field defaults to the Rust kind, so
+the first rule package keeps working unchanged, and an unknown kind is an
+`OperationalRuleError` rather than a guess. Two kinds exist:
+
+- `policy-input/rust-makefile-baseline` — `envelope.build_envelope`, above.
+- `policy-input/markdown-formatting-baseline` —
+  `markdown_envelope.build_markdown_envelope`. Alongside the same `makeutil`
+  report for the root `Makefile`, it carries `.markdownlint-cli2.jsonc` decoded
+  by `concordat/rules/jsonc.py` (comments and trailing commas stripped outside
+  string literals, then strict JSON), the names of any alternate markdownlint
+  configuration files present, and every workflow under `.github/workflows`
+  decoded as YAML 1.2. A file that exists but cannot be decoded is carried with
+  its `error` so the policy reports an indeterminate finding; a file that
+  cannot be opened at all is operational. Applicability is content-driven: any
+  Markdown file outside the pruned dependency, build, and cache directories
+  brings the checkout into scope.
+
+The Markdown package's `fixtures/generate.py` lays each scenario out as a
+temporary checkout and records what `build_markdown_envelope` produces, so the
+checked-in envelopes are exactly the production builder's output;
+`tests/unit/test_markdown_fixture_generator.py` fails if they drift.
 
 ### Tool dependencies
 

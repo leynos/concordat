@@ -1,0 +1,163 @@
+{
+  "schema_version": 1,
+  "kind": "policy-input/markdown-formatting-baseline",
+  "repository": {
+    "path": ".",
+    "name": null
+  },
+  "applicability": {
+    "markdown_files": true,
+    "root_makefile": true,
+    "markdownlint_config": true,
+    "workflows_dir": true
+  },
+  "makefile": {
+    "schema_version": 1,
+    "tool": {
+      "name": "makeutil",
+      "version": "0.1.0",
+      "parser": "makefile-lossless",
+      "parser_version": "0.3.40"
+    },
+    "source": {
+      "path": "Makefile",
+      "sha256": "aee12492609e4a86e4670ccf0a94254e2a16de3d2c0fc50bf48cde8c90e7a62c",
+      "byte_length": 32
+    },
+    "parse": {
+      "status": "complete",
+      "diagnostics": []
+    },
+    "rules": [
+      {
+        "ordinal": 0,
+        "targets": [
+          ".PHONY"
+        ],
+        "prerequisites": [
+          "lint"
+        ],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [],
+        "location": {
+          "start_byte": 0,
+          "end_byte": 14,
+          "start_line": 1,
+          "start_column": 1,
+          "end_line": 3,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 1,
+        "targets": [
+          "lint"
+        ],
+        "prerequisites": [],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "ruff check",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 20,
+              "end_byte": 32,
+              "start_line": 4,
+              "start_column": 1,
+              "end_line": 5,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 14,
+          "end_byte": 32,
+          "start_line": 3,
+          "start_column": 1,
+          "end_line": 5,
+          "end_column": 1
+        }
+      }
+    ],
+    "variables": [],
+    "includes": []
+  },
+  "markdownlint": {
+    "path": ".markdownlint-cli2.jsonc",
+    "parsed": {
+      "config": {
+        "MD004": {
+          "style": "dash"
+        },
+        "MD010": {
+          "code_blocks": false
+        },
+        "MD013": {
+          "line_length": 80,
+          "code_block_line_length": 120,
+          "tables": false,
+          "headings": false
+        },
+        "MD029": {
+          "style": "ordered"
+        }
+      },
+      "ignores": [
+        "**/.venv/**",
+        ".vtcode/**",
+        "**/node_modules/**",
+        "**/target/**",
+        ".terraform/**",
+        ".uv-cache/**",
+        "memories/**",
+        "CRUSH.md"
+      ]
+    },
+    "error": null
+  },
+  "alternate_markdownlint_configs": [],
+  "workflows": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "parsed": {
+        "name": "CI",
+        "on": {
+          "push": {
+            "branches": [
+              "main"
+            ]
+          },
+          "pull_request": null
+        },
+        "jobs": {
+          "lint-test": {
+            "runs-on": "ubuntu-latest",
+            "steps": [
+              {
+                "name": "Check out repository",
+                "uses": "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0"
+              },
+              {
+                "name": "Check formatting",
+                "run": "make check-fmt"
+              },
+              {
+                "name": "Lint Markdown",
+                "uses": "DavidAnson/markdownlint-cli2-action@4580e1612f6407034edd6c0e4e316d725920867b",
+                "with": {
+                  "globs": "**/*.md"
+                }
+              }
+            ]
+          }
+        }
+      },
+      "error": null
+    }
+  ]
+}

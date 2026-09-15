@@ -1,0 +1,27 @@
+{
+  // Repository additions on top of the estate baseline are permitted.
+  "config": {
+    "MD004": { "style": "dash" },
+    "MD010": { "code_blocks": false },
+    "MD013": {
+      "line_length": 80,
+      "code_block_line_length": 120,
+      "tables": false,
+      "headings": false
+    },
+    "MD029": { "style": "ordered" },
+    "MD033": false,
+  },
+  "ignores": [
+    "**/.venv/**",
+    ".vtcode/**",
+    "**/node_modules/**",
+    "**/target/**",
+    ".terraform/**",
+    ".uv-cache/**",
+    "memories/**",
+    "CRUSH.md",
+    /* checked-in renderer output */
+    "tests/unit/snapshots/**",
+  ],
+}
