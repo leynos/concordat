@@ -99,11 +99,30 @@ def _strip_comments(text: str) -> str:
     return "".join(out)
 
 
+def _is_trailing_comma(text: str, index: int) -> bool:
+    """Return whether the comma at *index* directly precedes `}` or `]`.
+
+    Only whitespace may separate the comma from the closing bracket; a comma
+    followed by anything else, or by the end of the text, is not trailing.
+
+    Returns
+    -------
+    bool
+        ``True`` for a trailing comma, ``False`` otherwise.
+    """
+    if text[index] != ",":
+        return False
+    lookahead = index + 1
+    while lookahead < len(text) and text[lookahead].isspace():
+        lookahead += 1
+    return lookahead < len(text) and text[lookahead] in "}]"
+
+
 def _strip_trailing_commas(text: str) -> str:
     """Return *text* with commas that directly precede `}` or `]` removed.
 
-    Only commas outside string literals are considered, and only whitespace
-    may separate the comma from the closing bracket.
+    Only commas outside string literals are considered; every other
+    character is copied unchanged.
 
     Returns
     -------
@@ -113,19 +132,13 @@ def _strip_trailing_commas(text: str) -> str:
     out: list[str] = []
     index = 0
     while index < len(text):
-        char = text[index]
-        if char == '"':
+        if text[index] == '"':
             index = _skip_string(text, index, out)
-            continue
-        if char == ",":
-            lookahead = index + 1
-            while lookahead < len(text) and text[lookahead].isspace():
-                lookahead += 1
-            if lookahead < len(text) and text[lookahead] in "}]":
-                index += 1
-                continue
-        out.append(char)
-        index += 1
+        elif _is_trailing_comma(text, index):
+            index += 1
+        else:
+            out.append(text[index])
+            index += 1
     return "".join(out)
 
 

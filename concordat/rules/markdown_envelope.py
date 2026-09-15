@@ -129,10 +129,13 @@ def _has_markdown_files(checkout: pathlib.Path) -> bool:
         )
         for name in files:
             candidate = pathlib.Path(root) / name
-            if candidate.suffix.lower() in MARKDOWN_SUFFIXES and (
-                candidate.is_file() and not candidate.is_symlink()
-            ):
-                return True
+            if candidate.suffix.lower() not in MARKDOWN_SUFFIXES:
+                continue
+            if not candidate.is_file():
+                continue
+            if candidate.is_symlink():
+                continue
+            return True
     return False
 
 

@@ -20,6 +20,7 @@ from concordat.rules.markdown_envelope import (
     ENVELOPE_KIND,
     MarkdownlintConfig,
     WorkflowFile,
+    _has_markdown_files,
     build_markdown_envelope,
 )
 from tests.unit.rule_test_support import MINIMAL_REPORT
@@ -96,6 +97,38 @@ class TestApplicability:
         (tmp_path / "CRUSH.md").symlink_to(tmp_path / "AGENTS.txt")
         envelope = build_markdown_envelope(tmp_path)
         assert envelope["applicability"]["markdown_files"] is False, envelope
+
+
+class TestHasMarkdownFiles:
+    """Only a regular Markdown file brings a checkout into scope."""
+
+    def test_regular_markdown_file_counts(self, tmp_path: pathlib.Path) -> None:
+        """A regular `.md` file is governed Markdown."""
+        (tmp_path / "README.md").write_text("# Hi\n")
+        assert _has_markdown_files(tmp_path) is True
+
+    def test_non_markdown_file_alone_does_not_count(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A file with another suffix is not Markdown."""
+        (tmp_path / "notes.txt").write_text("hi\n")
+        assert _has_markdown_files(tmp_path) is False
+
+    def test_symlinked_markdown_alone_does_not_count(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A `.md` symbolic link is judged by its target, not the link."""
+        (tmp_path / "AGENTS.txt").write_text("agents\n")
+        (tmp_path / "CRUSH.md").symlink_to(tmp_path / "AGENTS.txt")
+        assert _has_markdown_files(tmp_path) is False
+
+    def test_regular_markdown_counts_beside_a_symlink(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A regular `.md` file still counts when a `.md` link also exists."""
+        (tmp_path / "AGENTS.md").write_text("# Agents\n")
+        (tmp_path / "CRUSH.md").symlink_to(tmp_path / "AGENTS.md")
+        assert _has_markdown_files(tmp_path) is True
 
 
 class TestMakefileFacts:
