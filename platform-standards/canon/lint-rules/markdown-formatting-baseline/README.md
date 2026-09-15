@@ -61,6 +61,10 @@ an assignment value, or a comment is not an invocation. The status binds when
 the tool's arguments run to the end of the line or to `&&`; a following `;`,
 `|`, bare `&`, `|| true`, or the `-` prefix masks it and is noncompliant.
 
+`$(HOME)` and the other process-environment variables (`PATH`, `PWD`, `SHELL`,
+`TMPDIR`, `USER`) are rewritten to their shell spelling, so a tool under
+`$(HOME)/.cargo/bin/` still reads as the command word.
+
 The policy does not parse shell. A variable it cannot resolve, a conditional
 rule or `include` in the closure, a recovered parse, or a dynamic recursive
 Make invocation is reported as `indeterminate` rather than guessed. Flags

@@ -76,6 +76,7 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "literal_tools": Scenario(makefile="literal-tools"),
     "delegated": Scenario(makefile="delegated"),
     "probe_nested": Scenario(makefile="probe-nested"),
+    "home_prefixed": Scenario(makefile="home-prefixed"),
     "config_extended": Scenario(markdownlint="extended"),
     "no_markdown": Scenario(markdown=False, makefile=None, markdownlint=None),
     # -- Makefile findings -------------------------------------------------
