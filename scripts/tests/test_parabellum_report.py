@@ -164,11 +164,9 @@ class TestReport:
 
         report = sweep.render_report(ledger_path)
 
-        row = next(
-            line for line in report.splitlines() if line.startswith("| leynos/alpha ")
-        )
-        assert row.rstrip().endswith("| none |"), row
-        assert row.count("|") == 5, f"the row should keep four cells: {row}"
+        cells = self._row_cells(report, "leynos/alpha")
+        assert cells[-1] == "none", cells
+        assert len(cells) == 4, f"the row should keep four cells: {cells}"
 
     def test_report_command_writes_the_rendered_report(
         self,
@@ -417,6 +415,26 @@ class TestReport:
             line.startswith("- QG-001 - injected: 99:") for line in report.splitlines()
         ), report
 
+    def test_table_columns_are_aligned(self, tmp_path: pathlib.Path) -> None:
+        """Every table line pads its cells to the column's widest cell.
+
+        The generated report then already satisfies `mdtablefix --check`, so
+        `make check-fmt` does not rewrite the checked-in snapshot.
+        """
+        ledger_path = tmp_path / "ledger.jsonl"
+        records = [
+            self._record("leynos/alpha", "compliant"),
+            self._record("leynos/beta-longer-name", "indeterminate"),
+        ]
+        ledger_path.write_text("".join(json.dumps(record) + "\n" for record in records))
+        report = sweep.render_report(ledger_path)
+        table = [line for line in report.splitlines() if line.startswith("|")]
+        assert len({len(line) for line in table}) == 1, table
+        header, delimiter = table[0], table[1]
+        for cell, dashes in zip(header.split("|"), delimiter.split("|"), strict=True):
+            assert len(cell) == len(dashes), (header, delimiter)
+            assert set(dashes.strip()) <= {"-"}, delimiter
+
     def test_report_uses_latest_record_per_repository(
         self,
         ledger_path: pathlib.Path,
@@ -438,13 +456,13 @@ class TestReport:
         ]
         ledger_path.write_text("".join(json.dumps(record) + "\n" for record in records))
         report = sweep.render_report(ledger_path)
-        assert "| leynos/alpha | compliant |" in report, (
+        assert self._row_cells(report, "leynos/alpha")[1] == "compliant", (
             "alpha's latest (compliant) record should win over its earlier one"
         )
-        assert "| leynos/beta | indeterminate |" in report, (
+        assert self._row_cells(report, "leynos/beta")[1] == "indeterminate", (
             "beta should be reported as indeterminate"
         )
-        assert "| leynos/gamma | excluded |" in report, (
+        assert self._row_cells(report, "leynos/gamma")[1] == "excluded", (
             "gamma should be reported as excluded"
         )
         assert "compliant: 1" in report, (

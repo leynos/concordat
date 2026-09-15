@@ -319,9 +319,9 @@ Hard invariants. Violation requires escalation, not workarounds.
   declared surface. Recursive Make edges are extracted from anchored command
   segments, never from quoted environment values. Rationale: lexical aliases,
   nested working directories, and text in assignment values otherwise create
-  false compliance. Evidence: Codex review threads 3957489038, 3957489044,
-  and 3957489052; the focused red cases are recorded before repair. Date/
-  Author: 2026-09-08, issue #116 follow-up review.
+  false compliance. Evidence: Codex review threads 3957489038, 3957489044, and
+  3957489052; the focused red cases are recorded before repair. Date/ Author:
+  2026-09-08, issue #116 follow-up review.
 - Decision: policy replay validates the optional v0.3 `cargo.surfaces` field
   before counting it, while a missing field continues to select the v0.2 root
   fallback. The resolver distinguishes missing filesystem entries from failed

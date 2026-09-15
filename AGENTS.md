@@ -156,7 +156,9 @@ When implementing changes, adhere to the following testing procedures:
   shared-base cache only when the authority is newer and retains the reviewed
   tracked configuration when a clean checkout cannot reach that authority.
 - Run `make fmt` after any documentation changes to format all Markdown files
-  and fix table markup.
+  and fix table markup. It calls `mdtablefix` and `markdownlint-cli2 --fix`
+  directly over the Markdown files Git tracks plus untracked files Git does not
+  ignore; `make check-fmt` runs the matching `mdtablefix --check`.
 - Validate Mermaid diagrams in Markdown files by running `make nixie`.
 - Markdown paragraphs and bullet points must be wrapped at 80 columns.
 - Code blocks must be wrapped at 120 columns.

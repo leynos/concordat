@@ -16,6 +16,7 @@ from scripts.parabellum_ledger import (
 from scripts.parabellum_paths import DEFAULT_LEDGER_PATH
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import pathlib
 
 
@@ -129,20 +130,49 @@ def render_report(ledger_path: pathlib.Path = DEFAULT_LEDGER_PATH) -> str:
         "",
         "Table 1: Latest verdict and findings per estate repository.",
         "",
-        "| Repository | Verdict | Commit | Findings |",
-        "| ---------- | ------- | ------ | -------- |",
     ])
+    rows = [("Repository", "Verdict", "Commit", "Findings")]
     for repository in sorted(latest):
         record = latest[repository]
         commit = (record["commit_sha"] or "")[:12]
-        summary = _finding_summary(record)
         # Every cell is escaped, not only the free-text one. The ledger is an
         # editable file and its load path checks types, not charsets, so a
         # hand-edited `repository`, `verdict`, or `commit_sha` can carry a
         # pipe or a newline and break the row it sits in.
-        lines.append(
-            f"| {_cell(repository)} | {_cell(record['verdict'])} "
-            f"| {_cell(commit)} | {summary} |"
-        )
+        rows.append((
+            _cell(repository),
+            _cell(record["verdict"]),
+            _cell(commit),
+            _finding_summary(record),
+        ))
+    lines.extend(_aligned_table(rows))
     lines.append("")
     return "\n".join(lines)
+
+
+def _aligned_table(rows: cabc.Sequence[tuple[str, ...]]) -> list[str]:
+    """Render *rows* (header first) as a column-aligned Markdown table.
+
+    Columns are padded to their widest cell, in the shape `mdtablefix`
+    produces, so the generated report already satisfies `make check-fmt`
+    and the checked-in snapshot is not rewritten by the formatter.
+
+    Returns
+    -------
+    list[str]
+        The header, delimiter, and body lines of the table.
+    """
+    widths = [max(len(row[column]) for row in rows) for column in range(len(rows[0]))]
+    header, *body = rows
+
+    def line(cells: tuple[str, ...]) -> str:
+        return (
+            "| "
+            + " | ".join(
+                cell.ljust(width) for cell, width in zip(cells, widths, strict=True)
+            )
+            + " |"
+        )
+
+    delimiter = tuple("-" * width for width in widths)
+    return [line(header), line(delimiter), *(line(row) for row in body)]
