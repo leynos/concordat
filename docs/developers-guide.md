@@ -26,8 +26,11 @@ the pinned PyPy shim. A separate CPython 3.14 invocation loads every diagnostic
 from the `df12-python-lints` pin, while retaining Concordat's Python 3.13
 semantic baseline for version-gated checks. `ambrleaks`, provisioned from the
 same immutable release, scans the test tree for unredacted values in Syrupy
-snapshots. The spelling subtarget refreshes the shared policy and runs pinned
-`typos`. Finally, the blocking Skylos 4.33.2 dead-code scan covers only the
+snapshots. The spelling subtarget runs the shared `typos-config-builder` gate,
+which regenerates `typos.toml` from the live shared dictionary and the
+`typos.local.toml` overlay before checking en-GB-oxendict spelling; because the
+dictionary is live, `typos.toml` is never drift checked in continuous
+integration. Finally, the blocking Skylos 4.33.2 dead-code scan covers only the
 production `concordat` and `scripts` packages and excludes `tests`, so
 test-only references do not keep production symbols live. The separate df12
 process prevents its CPython dependency from changing the PyPy-backed Pylint
@@ -54,6 +57,14 @@ The Makefile uses `$(SKYLOS_CLI)` only for subcommands and keeps scan-only
 options such as `--config-file` in `$(SKYLOS)`. This keeps
 `skylos whitelist <symbol> --reason <reason>` in the command order that Skylos
 requires.
+
+### Coverage workflow contract
+
+Pull-request jobs generate coverage with the baseline written by `main` and
+enforce the local ratchet. They do not invoke CodeScene and must not expose
+`CS_ACCESS_TOKEN`. `.github/workflows/coverage-main.yml` runs only on pushes to
+`main`; it advances the coverage baseline and is the sole CodeScene publisher,
+using `mode: upload`.
 
 ## Public runtime boundary
 

@@ -14,8 +14,10 @@ VENV_TOOLS = pytest
 ACRONYM_SCRIPT ?= scripts/update_acronym_allowlist.py
 UV_ENV = UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools
 RUFF := $(UV_ENV) uv run ruff
-TYPOS_VERSION ?= 1.48.0
-TYPOS := uv tool run typos@$(TYPOS_VERSION)
+TYPOS_CONFIG_BUILDER_VERSION ?= v0.1.1
+TYPOS_CONFIG_BUILDER = uv tool run --from \
+	"git+https://github.com/leynos/typos-config-builder.git@$(TYPOS_CONFIG_BUILDER_VERSION)" \
+	typos-config-builder
 # Keep Pylint independent from the project virtual environment.  The PyPy shim
 # makes the baseline Pylint policy available on every supported host.
 PYLINT_PYTHON ?= pypy
@@ -131,10 +133,8 @@ markdownlint: $(MDLINT) ## Lint Markdown files
 	$(MDLINT) '**/*.md'
 	+$(MAKE) spelling
 
-spelling: ## Enforce en-GB-oxendict spelling in Markdown prose
-	@uv run scripts/generate_typos_config.py
-	@find . -type f -name '*.md' -not -path './.venv/*' -print0 | \
-		xargs -0 -r $(TYPOS) --config typos.toml --force-exclude
+spelling: ## Enforce en-GB-oxendict spelling
+	$(TYPOS_CONFIG_BUILDER) gate --repository .
 
 nixie: $(NIXIE) ## Validate Mermaid diagrams
 	$(NIXIE) --no-sandbox

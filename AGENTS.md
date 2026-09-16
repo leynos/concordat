@@ -98,7 +98,7 @@ When implementing changes, adhere to the following testing procedures:
     - **Typechecking:** Passes type checking (`make typecheck`).
   - For Markdown files (`.md` only):
     - **Linting:** Passes lint checks (`make markdownlint`).
-    - **Spelling:** Passes the en-GB-oxendict `typos` gate included in
+    - **Spelling:** Passes the en-GB-oxendict spelling gate included in
       `make markdownlint` and `make lint`.
     - **Mermaid diagrams:** Passes validation using nixie (`make nixie`)
 - **Committing:**
@@ -151,10 +151,11 @@ When implementing changes, adhere to the following testing procedures:
 ## Markdown guidance
 
 - Validate Markdown files using `make markdownlint`.
-- Put narrow repository-only terms in `typos.local.toml`; never edit the
-  generated `typos.toml` entries by hand. The generator refreshes its untracked
-  shared-base cache only when the authority is newer and retains the reviewed
-  tracked configuration when a clean checkout cannot reach that authority.
+- Enforce spelling with `make spelling`. It regenerates `typos.toml` from the
+  live shared dictionary and the `typos.local.toml` overlay on every run, so
+  `typos.toml` must never be drift checked in continuous integration. Put
+  narrow repository-only terms in `typos.local.toml`; never edit the generated
+  `typos.toml` entries by hand.
 - Run `make fmt` after any documentation changes to format all Markdown files
   and fix table markup. It calls `mdtablefix` and `markdownlint-cli2 --fix`
   directly over the Markdown files Git tracks plus untracked files Git does not

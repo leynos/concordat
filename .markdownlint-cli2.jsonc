@@ -17,8 +17,9 @@
     "**/node_modules/**",
     "**/target/**",
     ".terraform/**",
-    "**/.terraform/**",
     ".uv-cache/**",
+    ".uv-tools/**",
+    "**/.terraform/**",
     "memories/**",
     "CRUSH.md",
     // Checked-in renderer output, compared byte-for-byte by the snapshot

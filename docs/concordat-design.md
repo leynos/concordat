@@ -1789,7 +1789,7 @@ breakdown of what constitutes "compliance" within the framework.
 | QG-002       | Lint tooling is installed from a pinned release via the hardened step: version-keyed cache, shell-variable indirection in `run:` blocks, `--locked`, binstall-or-build fallback, `--cranelift` preserved where the repository builds with Cranelift.                                                                                                                               | Quality-Gate Integrity          | OPA/Conftest                                       | error                | 4                        |
 | QG-003       | The lint suite itself is pinned (e.g. `whitaker-installer --ref <tag>`), not floating on a rolling release.                                                                                                                                                                                                                                                                        | Quality-Gate Integrity          | OPA/Conftest                                       | warning              | 4                        |
 | QG-004       | Test invocation uses the canonical `TEST_CMD` nextest fallback, test-tool installs pass `--locked`, and doctests are executed by a dedicated target (nextest does not run them).                                                                                                                                                                                                   | Quality-Gate Integrity          | OPA/Conftest + Makefile parse                      | warning              | 4                        |
-| CV-001       | The pull-request coverage job drives the CodeScene gate with `cs-coverage check` (`mode: check`, `project-url`, `fetch-depth: 0`, LCOV named `*.info`); `upload` is never attempted from pull requests.                                                                                                                                                                            | Quality-Gate Integrity          | OPA/Conftest                                       | error                | 4                        |
+| CV-001       | Pull-request coverage remains local: the job runs the ratcheting coverage generator against the baseline written by `main` and neither uploads coverage to CodeScene nor runs a CodeScene gate.                                                                                                                                                                                    | Quality-Gate Integrity          | OPA/Conftest                                       | error                | 4                        |
 | CV-002       | A push-to-main (and only main) workflow uploads coverage to CodeScene (`mode: upload`).                                                                                                                                                                                                                                                                                            | Quality-Gate Integrity          | OPA/Conftest + file presence                       | error                | 4                        |
 | CV-003       | Every secret referenced by a guarded workflow step exists in BOTH the Actions and Dependabot secret stores (guards silently skip when the secret is absent).                                                                                                                                                                                                                       | Quality-Gate Integrity          | Python/GitHub API                                  | error                | 4                        |
 | CV-004       | The coverage ratchet is enabled: exactly one ratcheting `generate-coverage` invocation per job, with the authoritative baseline written by the main-branch workflow.                                                                                                                                                                                                               | Quality-Gate Integrity          | OPA/Conftest                                       | warning              | 4                        |
@@ -1888,28 +1888,31 @@ provider rejects outside analysed branches ("CodeScene only analyse the
 following branches: (main)"), reports stripped of per-line records by
 `--summary-only`, and guard conditions that skipped uploads forever because the
 secret was set in only one of GitHub's two secret stores (Actions and
-Dependabot runs read different stores).
+Dependabot runs read different stores). The accepted topology keeps the
+pull-request gate local and gives CodeScene one authoritative publisher:
+coverage generated after a merge on `main`.
 
-- **Sensors:** workflow policies asserting the PR coverage job runs
-  `cs-coverage check` with a `fetch-depth: 0` checkout, a `project-url`, and an
-  `*.info`-named LCOV report; a push-to-main workflow exists whose only trigger
-  is `main` and whose final step is `mode: upload`; the coverage-action pin is
-  at or after the shared-actions revision that preserves line records; exactly
-  one `with-ratchet` invocation per job with the baseline written by the main
-  workflow (Actions caches saved on a pull-request branch are invisible to
-  other branches, so a PR-only ratchet compares against nothing). The
+- **Sensors:** workflow policies assert that pull-request coverage runs the
+  ratcheting generator against the baseline written by `main`, without a
+  CodeScene action or access token. A push-to-main workflow must exist whose
+  only trigger is `main` and whose final coverage step is `mode: upload`; the
+  coverage-action pin is at or after the shared-actions revision that preserves
+  line records; and exactly one `with-ratchet` invocation exists per job.
+  Actions caches saved on a pull-request branch are invisible to other
+  branches, so a PR-only ratchet cannot provide the authoritative baseline. The
   secret-store sensor lists secret names via the GitHub API for both stores and
   cross-references every `if: env.X != ''` guard in the repository's workflows.
-- **Actuators:** canonical `coverage-main.yml` file-copy, coverage-job
-  patches, and a `concordat`-driven secret provisioning command that sets an
-  operator-supplied token in both stores; where the token is not available to
-  automation, the actuator degrades to opening a tracking issue naming the
-  absent store. The provisioning command sources the operator-supplied token
-  from a secret store and never persists or logs it (per the Section 2.1.2
-  contract). Provisioning needs no coordination — `PUT` on a secret is an
-  upsert, so it is idempotent server-side — but the tracking-issue fallback is a
-  `POST`, so it creates behind the single-flight lease keyed on the absent
-  store (Section 2.1.2), and concurrent sweeps yield exactly one issue.
+- **Actuators:** canonical `coverage-main.yml` file-copy and coverage-job
+  patches retain the local PR ratchet and the main-only CodeScene upload. A
+  `concordat`-driven secret provisioning command sets an operator-supplied
+  token in both stores; where the token is not available to automation, the
+  actuator degrades to opening a tracking issue naming the absent store. The
+  provisioning command sources the operator-supplied token from a secret store
+  and never persists or logs it (per the Section 2.1.2 contract). Provisioning
+  needs no coordination — `PUT` on a secret is an upsert, so it is idempotent
+  server-side — but the tracking-issue fallback is a `POST`, so it creates
+  behind the single-flight lease keyed on the absent store (Section 2.1.2), and
+  concurrent sweeps yield exactly one issue.
 
 ##### Automerge and workflow health (AM-001, AM-002)
 
