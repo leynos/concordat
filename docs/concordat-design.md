@@ -1788,6 +1788,7 @@ breakdown of what constitutes "compliance" within the framework.
 | CV-002       | A push-to-main (and only main) workflow uploads coverage to CodeScene (`mode: upload`).                                                                                                                                                                                                                                                                                            | Quality-Gate Integrity          | OPA/Conftest + file presence                       | error                | 4                        |
 | CV-003       | Every secret referenced by a guarded workflow step exists in BOTH the Actions and Dependabot secret stores (guards silently skip when the secret is absent).                                                                                                                                                                                                                       | Quality-Gate Integrity          | Python/GitHub API                                  | error                | 4                        |
 | CV-004       | The coverage ratchet is enabled: exactly one ratcheting `generate-coverage` invocation per job, with the authoritative baseline written by the main-branch workflow.                                                                                                                                                                                                               | Quality-Gate Integrity          | OPA/Conftest                                       | warning              | 4                        |
+| CV-005       | Pull-request coverage uses the main-derived local ratchet and neither invokes CodeScene nor receives its token; one main-only workflow writes that ratchet baseline and explicitly uploads coverage to CodeScene (`mode: upload`).                                                                                                                                                 | Quality-Gate Integrity          | OPA/Conftest (`main-owned-codescene-coverage`)     | error                | 4                        |
 | AM-001       | No open Dependabot pull request is `BLOCKED` specifically because a stale or timed-out required status check is poisoning the rollup, with every other merge requirement (approvals, conversations, ruleset conditions) already satisfied.                                                                                                                                         | Quality-Gate Integrity          | Python/GitHub API                                  | warning              | 4                        |
 | AM-002       | No workflow's recent runs all conclude `startup_failure` (an unloadable workflow file failing silently on every trigger).                                                                                                                                                                                                                                                          | Quality-Gate Integrity          | Python/GitHub API                                  | error                | 4                        |
 | DP-001       | Open Dependabot security alerts are actionable: no manifest requirement pins a dependency below the first patched version of an open alert.                                                                                                                                                                                                                                        | Quality-Gate Integrity          | Python/GitHub API + manifest parse                 | error                | 4                        |
@@ -1875,7 +1876,7 @@ introduced its locked-build tripwire.
 - **Actuators:** Makefile patches adding the `TEST_CMD` variable, a
   `test-doc` target, and the aggregate-target wiring.
 
-##### Coverage pipeline reach (CV-001 through CV-004)
+##### Coverage pipeline reach (CV-001 through CV-005)
 
 The CodeScene rollout found repositories that generated coverage and then
 discarded it, uploads keyed to synthetic merge commits, an upload verb that the
@@ -1893,6 +1894,9 @@ coverage generated after a merge on `main`.
   only trigger is `main` and whose final coverage step is `mode: upload`; the
   coverage-action pin is at or after the shared-actions revision that preserves
   line records; and exactly one `with-ratchet` invocation exists per job.
+  The audit-only `main-owned-codescene-coverage` package evaluates those facts
+  from a decoded-workflow envelope; malformed YAML and reusable workflows are
+  indeterminate rather than guessed compliant or non-compliant.
   Actions caches saved on a pull-request branch are invisible to other
   branches, so a PR-only ratchet cannot provide the authoritative baseline. The
   secret-store sensor lists secret names via the GitHub API for both stores and

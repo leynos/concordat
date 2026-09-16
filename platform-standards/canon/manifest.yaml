@@ -80,3 +80,16 @@ artifacts:
       Rule package manifest (sensor wiring, parameters, defaults) for
       rust-makefile-baseline.
     sha256: 3250b28ee20c7dd14761fc77678318c49524467069a38259527fdc57f8d2254f
+  - id: lint-rule-main-owned-codescene-coverage
+    type: opa-policy
+    path: >-
+      platform-standards/canon/lint-rules/main-owned-codescene-coverage/policy/main_owned_codescene_coverage.rego
+    description: >
+      Audit-only CV-005 policy keeping CodeScene coverage publication on main.
+    sha256: 45f854bc80a0e41aa56352e394d2a7582aaf0c760fa5e2a388ff82c40b38362d
+  - id: lint-rule-main-owned-codescene-coverage-manifest
+    type: lint-config
+    path: platform-standards/canon/lint-rules/main-owned-codescene-coverage/rule.yaml
+    description: >
+      Rule package manifest for the main-owned CodeScene coverage policy.
+    sha256: 3f0a5aea5efcc66b2bd8abca215c7e9c66df489d49e97bc8708e692ecf6dfe7c

@@ -423,6 +423,13 @@ actuators that remediate them. Each check ships as a lint rule package under
   workflow, summary-only pins, and PR-scoped baselines each raise findings;
   compliant fixtures keep the PR ratchet and main-only upload; mutations emit
   the canonical coverage-main workflow and job patches.
+- [x] Ship the main-owned CodeScene coverage publication rule (CV-005):
+  pull-request workflows generate coverage with the main-derived local ratchet
+  but never invoke CodeScene or receive `CS_ACCESS_TOKEN`; a main-only push
+  workflow writes the ratchet baseline and explicitly uploads with
+  `mode: upload`. Acceptance: the `main-owned-codescene-coverage` package has
+  compliant, PR-check, PR-upload, missing-main, missing-ratchet, malformed, and
+  reusable-workflow fixtures.
 - [ ] Implement the dual-store secret sensor (CV-003) in the Auditor:
   enumerate secret names in the Actions and Dependabot stores via the GitHub
   API and cross-reference every `if: env.X != ''` workflow guard. Acceptance: a
