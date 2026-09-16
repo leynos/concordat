@@ -5,7 +5,12 @@ from __future__ import annotations
 import typing as typ
 
 from .makefile_facts import MakeutilReport, inspect_makefile
-from .rust_surfaces import CargoManifest, CargoSurface, resolve_rust_surfaces
+from .rust_surfaces import (
+    CargoManifest,
+    CargoSurface,
+    _root_cargo_toml_exists,
+    resolve_rust_surfaces,
+)
 
 if typ.TYPE_CHECKING:
     import pathlib
@@ -59,11 +64,10 @@ def build_envelope(checkout: pathlib.Path) -> PolicyEnvelope:
     PolicyEnvelope
         The policy input document assembled from the checkout.
     """
-    cargo_path = checkout / "Cargo.toml"
     makefile_path = checkout / "Makefile"
 
-    root_cargo_toml = cargo_path.is_file()
     resolution = resolve_rust_surfaces(checkout)
+    root_cargo_toml = _root_cargo_toml_exists(checkout / "Cargo.toml")
     cargo_parsed = next(
         (
             surface["parsed"]
