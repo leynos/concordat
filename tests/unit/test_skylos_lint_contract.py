@@ -472,24 +472,8 @@ def test_skylos_configuration_models_runtime_and_documented_boundaries() -> None
         )
 
 
-def test_ci_installs_makeutil_for_every_full_suite() -> None:
-    """Every isolated full pytest suite must provision the pinned parser."""
-    prerequisites = _text_sequence(
-        _sole_recipe_rule("test").get("prerequisites"), subject="test prerequisites"
-    )
-    assert "makeutil" in prerequisites, (
-        "Make test contract must require Makeutil before running contract tests"
-    )
-    lint_test = _workflow_job(".github/workflows/ci.yml", "lint-test")
-    _assert_makeutil_environment(lint_test, contract="CI lint-test Makeutil contract")
-    lint_parser = _sole_workflow_step("lint-test", "Install Makefile parser")
-    _assert_makeutil_installation(
-        lint_parser.get("run"), contract="CI lint-test Makeutil-install contract"
-    )
-    lint_step = _sole_workflow_step("lint-test", "Run lint and dead-code detection")
-    assert lint_step.get("run") == "make lint", (
-        "CI lint step must invoke the shared Makefile lint target"
-    )
+def _assert_pull_request_coverage_contract(lint_test: dict[str, object]) -> None:
+    """Assert that pull-request coverage stays on the local ratchet."""
     pull_request_coverage = _sole_workflow_step("lint-test", "Generate coverage")
     pull_request_coverage_inputs = _mapping(
         pull_request_coverage.get("with"),
@@ -515,6 +499,10 @@ def test_ci_installs_makeutil_for_every_full_suite() -> None:
     assert "CS_ACCESS_TOKEN" not in str(lint_test), (
         "pull-request CI must not receive the CodeScene access token"
     )
+
+
+def _assert_main_coverage_contract() -> None:
+    """Assert that main publishes the ratchet baseline and CodeScene report."""
     coverage = _workflow_job(".github/workflows/coverage-main.yml", "coverage-upload")
     _assert_makeutil_environment(coverage, contract="main coverage Makeutil contract")
     coverage_parser = _sole_workflow_step(
@@ -554,3 +542,25 @@ def test_ci_installs_makeutil_for_every_full_suite() -> None:
     assert main_upload_inputs.get("mode") == "upload", (
         "main coverage must be the authoritative CodeScene upload"
     )
+
+
+def test_ci_installs_makeutil_for_every_full_suite() -> None:
+    """Every isolated full pytest suite must provision the pinned parser."""
+    prerequisites = _text_sequence(
+        _sole_recipe_rule("test").get("prerequisites"), subject="test prerequisites"
+    )
+    assert "makeutil" in prerequisites, (
+        "Make test contract must require Makeutil before running contract tests"
+    )
+    lint_test = _workflow_job(".github/workflows/ci.yml", "lint-test")
+    _assert_makeutil_environment(lint_test, contract="CI lint-test Makeutil contract")
+    lint_parser = _sole_workflow_step("lint-test", "Install Makefile parser")
+    _assert_makeutil_installation(
+        lint_parser.get("run"), contract="CI lint-test Makeutil-install contract"
+    )
+    lint_step = _sole_workflow_step("lint-test", "Run lint and dead-code detection")
+    assert lint_step.get("run") == "make lint", (
+        "CI lint step must invoke the shared Makefile lint target"
+    )
+    _assert_pull_request_coverage_contract(lint_test)
+    _assert_main_coverage_contract()
