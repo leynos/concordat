@@ -54,6 +54,14 @@ options such as `--config-file` in `$(SKYLOS)`. This keeps
 `skylos whitelist <symbol> --reason <reason>` in the command order that Skylos
 requires.
 
+### Coverage workflow contract
+
+Pull-request jobs generate coverage with the baseline written by `main` and
+enforce the local ratchet. They do not invoke CodeScene and must not expose
+`CS_ACCESS_TOKEN`. `.github/workflows/coverage-main.yml` runs only on pushes to
+`main`; it advances the coverage baseline and is the sole CodeScene publisher,
+using `mode: upload`.
+
 ## Public runtime boundary
 
 `concordat.hello` is the public greeting entry point. At runtime it selects

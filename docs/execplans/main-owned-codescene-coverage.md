@@ -147,18 +147,19 @@ fixtures cover compliance, forbidden pull-request checks and uploads, direct
 token use, missing main upload, missing pull-request ratchet, malformed input,
 and reusable-workflow uncertainty. The full branch suite passed with 714 tests
 and one intentional skip. Draft PR #175 carries EP-M1, and draft PR #176
-carries EP-M2. At hand-off, repository jobs were still queued or running; PR
-#175's CodeScene health review failed against external delta result 7585557,
-while the same review passed on PR #176.
+carries EP-M2. At hand-off, repository jobs were still queued or running; the
+CodeScene health review for PR #175 failed against external delta result
+7585557, while the same review passed on PR #176.
 
 ## Context and orientation
 
 `.github/workflows/ci.yml` runs on pull requests. Its `Generate coverage` step
 uses the shared action with `with-ratchet: true`, producing `coverage.xml` and
-enforcing the locally cached baseline. A later
-`Check coverage against CodeScene gates` step passes `CS_ACCESS_TOKEN`,
-`mode: check`, and the project URL to the CodeScene action. That later step
-caused the cited failure.
+enforcing the locally cached baseline. Before EP-M1, a later
+`Check coverage against CodeScene gates` step passed `CS_ACCESS_TOKEN`,
+`mode: check`, and the project URL to the CodeScene action; that historical
+step caused the cited failure. EP-M1 removed it, so current pull-request CI no
+longer runs `cs-coverage check`.
 
 `.github/workflows/coverage-main.yml` runs on pushes to `main`, generates the
 same report and ratchet state, and invokes the CodeScene action in upload mode.

@@ -475,6 +475,9 @@ def test_skylos_configuration_models_runtime_and_documented_boundaries() -> None
 def _assert_pull_request_coverage_contract(lint_test: dict[str, object]) -> None:
     """Assert that pull-request coverage stays on the local ratchet."""
     pull_request_coverage = _sole_workflow_step("lint-test", "Generate coverage")
+    assert pull_request_coverage.get("if") == "github.event_name == 'pull_request'", (
+        "pull-request coverage must run only for pull-request events"
+    )
     pull_request_coverage_inputs = _mapping(
         pull_request_coverage.get("with"),
         subject="pull-request coverage action inputs",
@@ -496,6 +499,16 @@ def _assert_pull_request_coverage_contract(lint_test: dict[str, object]) -> None
         in str(_mapping(step, subject="CI step").get("uses", ""))
         for step in pull_request_steps
     ), "pull-request CI must not invoke the CodeScene coverage action"
+    yaml = YAML(typ="safe")
+    workflow = _mapping(
+        yaml.load((REPOSITORY_ROOT / ".github/workflows/ci.yml").read_text()),
+        subject=".github/workflows/ci.yml workflow",
+    )
+    workflow_environment = workflow.get("env")
+    if workflow_environment is not None:
+        assert "CS_ACCESS_TOKEN" not in _mapping(
+            workflow_environment, subject="CI workflow environment"
+        ), "pull-request CI workflow must not receive the CodeScene access token"
     assert "CS_ACCESS_TOKEN" not in str(lint_test), (
         "pull-request CI must not receive the CodeScene access token"
     )
@@ -503,6 +516,19 @@ def _assert_pull_request_coverage_contract(lint_test: dict[str, object]) -> None
 
 def _assert_main_coverage_contract() -> None:
     """Assert that main publishes the ratchet baseline and CodeScene report."""
+    yaml = YAML(typ="safe")
+    workflow = _mapping(
+        yaml.load(
+            (REPOSITORY_ROOT / ".github/workflows/coverage-main.yml").read_text()
+        ),
+        subject=".github/workflows/coverage-main.yml workflow",
+    )
+    triggers = _mapping(
+        workflow.get("on"), subject=".github/workflows/coverage-main.yml triggers"
+    )
+    assert triggers == {"push": {"branches": ["main"]}}, (
+        "main coverage workflow must trigger only on pushes to main"
+    )
     coverage = _workflow_job(".github/workflows/coverage-main.yml", "coverage-upload")
     _assert_makeutil_environment(coverage, contract="main coverage Makeutil contract")
     coverage_parser = _sole_workflow_step(
@@ -536,6 +562,10 @@ def _assert_main_coverage_contract() -> None:
         "Upload coverage data to CodeScene",
         workflow_path=".github/workflows/coverage-main.yml",
     )
+    assert main_upload.get("uses") == (
+        "leynos/shared-actions/.github/actions/upload-codescene-coverage@"
+        "18bed1ca49a6de3d8882bd72635a32ae3f023d57"
+    ), "main coverage must use the pinned CodeScene upload action"
     main_upload_inputs = _mapping(
         main_upload.get("with"), subject="main CodeScene upload inputs"
     )
