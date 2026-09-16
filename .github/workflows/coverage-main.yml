@@ -24,6 +24,12 @@ jobs:
         # v4
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
 
+      - name: Set up Go
+        # v5
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5
+        with:
+          go-version: '1.22'
+
       - name: Set up Python
         # v5
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
@@ -33,6 +39,9 @@ jobs:
       - name: Install uv
         # v5
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990
+
+      - name: Install Conftest
+        run: go install github.com/open-policy-agent/conftest@v0.52.0
 
       - name: Install Makefile parser
         run: |

@@ -26,6 +26,13 @@ REPOSITORY_ROOT = Path(__file__).parents[2]
 _MAKEUTIL_COMMAND: typ.Final = ("makeutil", "parse", "Makefile")
 _MAKEUTIL_REVISION: typ.Final = "29fc5a1634ffbaa18a773eed9dff1b2838a45d9c"
 _MAKEUTIL_TOOLCHAIN: typ.Final = "nightly-2026-05-28"
+_CONFTEST_GO_ACTION: typ.Final = (
+    "actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5"
+)
+_CONFTEST_GO_VERSION: typ.Final = "1.22"
+_CONFTEST_INSTALL_COMMAND: typ.Final = (
+    "go install github.com/open-policy-agent/conftest@v0.52.0"
+)
 _COVERAGE_BASELINE_PYTHON_FILE: typ.Final = ".coverage-baseline.python-v2"
 _HYPOTHESIS_REQUIREMENT: typ.Final = "hypothesis>=6.165.10,<7.0"
 _MAKEUTIL_INSTALL_TOKENS: typ.Final = (
@@ -472,8 +479,69 @@ def test_skylos_configuration_models_runtime_and_documented_boundaries() -> None
         )
 
 
-def test_ci_installs_makeutil_for_every_full_suite() -> None:
-    """Every isolated full pytest suite must provision the pinned parser."""
+def _assert_main_coverage_policy_tools() -> None:
+    """Verify main coverage provisions every policy-backed test dependency."""
+    coverage = _workflow_job(".github/workflows/coverage-main.yml", "coverage-upload")
+    _assert_makeutil_environment(coverage, contract="main coverage Makeutil contract")
+    coverage_parser = _sole_workflow_step(
+        "coverage-upload",
+        "Install Makefile parser",
+        workflow_path=".github/workflows/coverage-main.yml",
+    )
+    _assert_makeutil_installation(
+        coverage_parser.get("run"), contract="main coverage Makeutil-install contract"
+    )
+    coverage_go = _sole_workflow_step(
+        "coverage-upload",
+        "Set up Go",
+        workflow_path=".github/workflows/coverage-main.yml",
+    )
+    assert coverage_go.get("uses") == _CONFTEST_GO_ACTION, (
+        "main coverage must use the approved Go setup action for Conftest"
+    )
+    coverage_go_inputs = _mapping(
+        coverage_go.get("with"), subject="main coverage Go setup inputs"
+    )
+    assert coverage_go_inputs.get("go-version") == _CONFTEST_GO_VERSION, (
+        "main coverage must use the approved Conftest Go version"
+    )
+    coverage_conftest = _sole_workflow_step(
+        "coverage-upload",
+        "Install Conftest",
+        workflow_path=".github/workflows/coverage-main.yml",
+    )
+    assert coverage_conftest.get("run") == _CONFTEST_INSTALL_COMMAND, (
+        "main coverage must install the pinned Conftest binary required by policy tests"
+    )
+    main_coverage = _sole_workflow_step(
+        "coverage-upload",
+        "Generate coverage",
+        workflow_path=".github/workflows/coverage-main.yml",
+    )
+    coverage_steps = _objects(
+        coverage.get("steps"), subject="main coverage workflow steps"
+    )
+    coverage_step_names = tuple(step.get("name") for step in coverage_steps)
+    go_step_index = coverage_step_names.index("Set up Go")
+    conftest_step_index = coverage_step_names.index("Install Conftest")
+    coverage_step_index = coverage_step_names.index("Generate coverage")
+    assert go_step_index < conftest_step_index < coverage_step_index, (
+        "main coverage must provision Go and Conftest before it runs coverage"
+    )
+    main_coverage_inputs = _mapping(
+        main_coverage.get("with"), subject="main coverage action inputs"
+    )
+    assert main_coverage_inputs.get("pytest-workers") == "", (
+        "main coverage must run pytest serially for a stable ratchet"
+    )
+    assert (
+        main_coverage_inputs.get("baseline-python-file")
+        == _COVERAGE_BASELINE_PYTHON_FILE
+    ), "main coverage must use the reset Python ratchet baseline"
+
+
+def test_ci_installs_required_policy_tools_for_every_full_suite() -> None:
+    """Every isolated full pytest suite must provision its pinned policy tools."""
     prerequisites = _text_sequence(
         _sole_recipe_rule("test").get("prerequisites"), subject="test prerequisites"
     )
@@ -502,28 +570,4 @@ def test_ci_installs_makeutil_for_every_full_suite() -> None:
         pull_request_coverage_inputs.get("baseline-python-file")
         == _COVERAGE_BASELINE_PYTHON_FILE
     ), "pull-request coverage must use the reset Python ratchet baseline"
-    coverage = _workflow_job(".github/workflows/coverage-main.yml", "coverage-upload")
-    _assert_makeutil_environment(coverage, contract="main coverage Makeutil contract")
-    coverage_parser = _sole_workflow_step(
-        "coverage-upload",
-        "Install Makefile parser",
-        workflow_path=".github/workflows/coverage-main.yml",
-    )
-    _assert_makeutil_installation(
-        coverage_parser.get("run"), contract="main coverage Makeutil-install contract"
-    )
-    main_coverage = _sole_workflow_step(
-        "coverage-upload",
-        "Generate coverage",
-        workflow_path=".github/workflows/coverage-main.yml",
-    )
-    main_coverage_inputs = _mapping(
-        main_coverage.get("with"), subject="main coverage action inputs"
-    )
-    assert main_coverage_inputs.get("pytest-workers") == "", (
-        "main coverage must run pytest serially for a stable ratchet"
-    )
-    assert (
-        main_coverage_inputs.get("baseline-python-file")
-        == _COVERAGE_BASELINE_PYTHON_FILE
-    ), "main coverage must use the reset Python ratchet baseline"
+    _assert_main_coverage_policy_tools()

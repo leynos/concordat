@@ -429,6 +429,7 @@ def test_local_policy_preserves_inline_code_removal(
 
 def test_generated_config_does_not_skip_all_inline_code(
     rollout_modules: tuple[types.ModuleType, types.ModuleType, types.ModuleType],
+    tmp_path: Path,
 ) -> None:
     """The repository's own generated config checks inline code spans.
 
@@ -437,7 +438,15 @@ def test_generated_config_does_not_skip_all_inline_code(
     should fail here rather than be noticed in review.
     """
     _, rollout, generator = rollout_modules
-    rendered = rollout.render_typos_config(generator.dictionary_from_cache())
+    (tmp_path / ".typos-oxendict-base.toml").write_text(
+        _dictionary_text(ignore_patterns=(r"`[^`\n]+`",)), encoding="utf-8"
+    )
+    (tmp_path / "typos.local.toml").write_text(
+        (REPOSITORY_ROOT / "typos.local.toml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    rendered = rollout.render_typos_config(generator.dictionary_from_cache(tmp_path))
 
     assert "`[^`\\n]+`" not in rendered, (
         "the blanket inline-code exemption is back in the generated config"
