@@ -174,9 +174,12 @@ Run all quality gates before committing:
 make fmt && make lint && make typecheck && make test
 ```
 
-The lint and Markdown gates generate `typos.toml` from the shared estate
-dictionary plus `typos.local.toml`, then run a pinned `typos` release. A valid
-committed configuration remains usable in a clean network-restricted checkout.
+The lint and Markdown gates run `make spelling`, which regenerates
+`typos.toml` from the live shared estate dictionary plus the
+`typos.local.toml` overlay on every run and then checks en-GB-oxendict
+spelling. Because the dictionary is live, `typos.toml` is never drift checked
+in continuous integration; narrow repository-only exceptions belong in
+`typos.local.toml`.
 
 ## Licence
 

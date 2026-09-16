@@ -16,8 +16,9 @@ references keep production symbols live.
 `make lint` runs four sequential source-lint tiers:
 
 1. Ruff checks Python source rules.
-2. The spelling-policy generator refreshes the reviewed shared policy.
-3. Pinned `typos` enforces the resulting en-GB spelling policy.
+2. The shared `typos-config-builder` gate regenerates `typos.toml` from the
+   live shared dictionary and the `typos.local.toml` overlay.
+3. The same gate enforces the resulting en-GB spelling policy.
 4. Skylos performs strict production dead-code detection.
 
 Skylos 4.33.2 scans `concordat` and `scripts`, excludes `tests`, and blocks the

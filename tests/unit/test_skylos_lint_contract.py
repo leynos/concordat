@@ -56,7 +56,6 @@ _TEXTUAL_BINDINGS: typ.Final = frozenset({
     "scripts.canon_artifacts_tui.CanonArtifactsApp.BINDINGS",
 })
 _DOCUMENTED_FALSE_POSITIVES: typ.Final = frozenset({
-    "RefreshResult",
     "_format_outcome",
     "_refresh",
     "published_path",
