@@ -332,7 +332,6 @@ packages = [
 "concordat.canon" = ["lint-rules/**/*"]
 
 [tool.skylos.whitelist.documented]
-"RefreshResult" = "Re-exported by typos_rollout and used by generate_typos_config."
 "_refresh" = "Called by Textual lifecycle and action callbacks after framework dispatch."
 "render" = "Called by the CLI when it prints enrollment outcomes."
 "_format_outcome" = "Called by both enrollment outcome render methods."

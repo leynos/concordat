@@ -16,6 +16,7 @@
     "**/node_modules/**",
     "**/target/**",
     ".uv-cache/**",
+    ".uv-tools/**",
     "**/.terraform/**",
     // Checked-in renderer output, compared byte-for-byte by the snapshot
     // tests. Reformatting it to satisfy prose rules would break the tests it
