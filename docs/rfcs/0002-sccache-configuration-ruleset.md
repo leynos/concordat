@@ -155,9 +155,29 @@ variable set, or `SCCACHE_DIR` set with no cache step owning the path.
 
 An action-exported wrapper is `RUSTC_WRAPPER` set by a `setup-rust` reference
 at a pin that exports it, or by a repository-local action that exports an
-absolute path. A wrapper set caller-side is CI-016's finding, not RT-012's;
-RT-012 treats it as *present but defective* and defers to CI-016 so one step
-produces one finding.
+absolute path.
+
+Three caller-side values are possible, and each is assigned to exactly one
+rule, so no step can fall between them:
+
+| Caller-side `RUSTC_WRAPPER`                                    | Owning rule | Verdict                                                           |
+| -------------------------------------------------------------- | ----------- | ----------------------------------------------------------------- |
+| Absent, with an exporting pin                                  | RT-012      | Compliant                                                         |
+| Absent, with a pin that exports nothing                        | RT-012      | Non-compliant; the remedy is RT-013's repin, never a wrapper line |
+| The literal `sccache`                                          | CI-016      | Non-compliant                                                     |
+| An absolute path, or an expression reading the action's output | RT-012      | Compliant, with a note                                            |
+
+The third row is the whitaker #409 defect and belongs to CI-016. The fourth is
+the case the first draft left unassigned: a caller-side absolute path resolves
+correctly and does not reproduce #409, so it is not a finding. It carries a
+note rather than silence because the path is a literal the caller maintains,
+and an action upgrade that moves the binary breaks it without touching the
+workflow. The note names the exporting pin as the durable form.
+
+RT-012's wrapper predicate is therefore satisfied by presence, and CI-016
+decides quality, so one step produces one finding. Where both could fire, the
+more specific rule reports: CI-016 owns the bare-name literal, RT-012 owns
+absence.
 
 **Failure mode.** Where the envelope cannot resolve whether a preceding step
 wrote `SCCACHE_GHA_ENABLED` to `GITHUB_ENV`, the verdict is `indeterminate`.
@@ -169,7 +189,7 @@ not export it, the finding is RT-013's and the remediation is the repin.
 ### 3.3 RT-013: one pin, and not a known-bad one
 
 **Sensor.** Collect every reference to the shared `setup-rust` action and the
-coverage actions in the checkout. Two findings:
+coverage actions in the checkout. Three findings:
 
 - **Divergent pins.** More than one distinct SHA across same-tree references.
   A reference that is byte-identical to another but at a different SHA is still
@@ -178,6 +198,9 @@ coverage actions in the checkout. Two findings:
 - **A known-bad pin.** The SHA appears in the canon data list of pins known to
   export neither half. 32c8ea64 is the seed entry, recorded from the
   ortho-config survey with the date it was current.
+- **A uniformly unknown pin.** Every reference carries one SHA that is neither
+  the current pin nor a named-bad one. Reported as `indeterminate` naming the
+  SHA, for the reasons below.
 
 **Why a named list rather than a floor.** A floor requires ordering SHAs, which
 is not a total order the rule can compute from a checkout. The named set is
@@ -206,11 +229,25 @@ weight:
    every repository during an outage. Failing closed reports the whole estate
    non-compliant on a `403`. Neither is a statement about the repository.
 
+**The uniformly unknown pin.** One case is neither divergent nor known-bad: a
+checkout where every reference carries the same SHA that is not the current pin
+and not in the named set. There is only one distinct SHA, so the divergence
+clause cannot fire, and hermeticity means the rule cannot read that commit to
+learn what it exports. This is the third finding class, and it is reported as
+an explicit `indeterminate` naming the SHA, not as a pass.
+
+Reporting it as a pass would defeat the rule. Ortho-config's pin, 32c8ea64, was
+uniform across the repository before it was surveyed and added to the named
+set, so a rule that passed uniform unknown pins would have reported
+ortho-config compliant on exactly the configuration RT-013 exists to catch. The
+`indeterminate` verdict is what makes the named set self-extending: it is the
+signal to survey that pin and record the result, whichever way it goes.
+
 The cost of hermeticity is that the named set must be maintained by hand, and
-the rule is honest about the trade: an entry is canon data carrying the reason
-and the date it was current, and a pin that is neither the current SHA nor a
-named-bad one is already reported by the divergence clause, so the set only has
-to name the pins a repository might legitimately still be sitting on.
+the rule is honest about the trade. An entry is canon data carrying the reason
+and the date it was current, and the set only has to name the pins that a
+survey has judged, because everything else is already reported: a divergent pin
+by the first clause, and a uniform unknown one by this third class.
 
 **Actuator.** Repin to the SHA in canon data, comment-preservingly.
 
@@ -290,20 +327,22 @@ Each pair differs in exactly the fact its rule claims to decide.
 
 ### Table 2: RT-012 fixtures
 
-| Must raise                                                                                                        | Must not raise                                                                                                                                              | Difference under test                                       |
-| ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `compiling-job-no-backend`: a job running `cargo test` with the wrapper exported and neither backend variable set | `compiling-job-gha-backend`: the same job with `SCCACHE_GHA_ENABLED: "true"` at job level                                                                   | Backend configured                                          |
-| `sccache-dir-unowned`: `SCCACHE_DIR` set with no `actions/cache` step for the path                                | `sccache-dir-owned`: the whitaker shape, the same variable with an `actions/cache` step restoring and saving that path under the `sccache-v1-` key families | Whether the directory has an owner                          |
-| `release-job-binstall-dry-run`: a tag-triggered release job that dry-runs `binstall` with neither half set        | `release-job-uploads-only`: a release job that only uploads prebuilt assets                                                                                 | Whether the job compiles, with both triggered by a tag push |
-| `backend-via-github-env`: a preceding step writing `SCCACHE_GHA_ENABLED` to `GITHUB_ENV`                          | —                                                                                                                                                           | Yields `indeterminate`                                      |
+| Must raise                                                                                                        | Must not raise                                                                                                                                              | Difference under test                                                                   |
+| ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `compiling-job-no-backend`: a job running `cargo test` with the wrapper exported and neither backend variable set | `compiling-job-gha-backend`: the same job with `SCCACHE_GHA_ENABLED: "true"` at job level                                                                   | Backend configured                                                                      |
+| `sccache-dir-unowned`: `SCCACHE_DIR` set with no `actions/cache` step for the path                                | `sccache-dir-owned`: the whitaker shape, the same variable with an `actions/cache` step restoring and saving that path under the `sccache-v1-` key families | Whether the directory has an owner                                                      |
+| `release-job-binstall-dry-run`: a tag-triggered release job that dry-runs `binstall` with neither half set        | `release-job-uploads-only`: a release job that only uploads prebuilt assets                                                                                 | Whether the job compiles, with both triggered by a tag push                             |
+| `caller-side-bare-wrapper`: the job setting `RUSTC_WRAPPER: sccache`                                              | `caller-side-absolute-path`: the same job setting an absolute path                                                                                          | Which rule owns the step; the bare name is CI-016's, the path passes RT-012 with a note |
+| `backend-via-github-env`: a preceding step writing `SCCACHE_GHA_ENABLED` to `GITHUB_ENV`                          | —                                                                                                                                                           | Yields `indeterminate`                                                                  |
 
 ### Table 3: RT-013 fixtures
 
-| Must raise                                                                 | Must not raise                                  | Difference under test                                                          |
-| -------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------ |
-| `two-distinct-pins`: eleven references at 0e3c4d24 and one at an older SHA | `twelve-identical-pins`: all twelve at 0e3c4d24 | Pin divergence, with the reference text byte-identical in both                 |
-| `known-bad-pin`: every reference at 32c8ea64                               | `current-pin`: every reference at 0e3c4d24      | Membership of the named bad set, with pin uniformity identical                 |
-| `network-fetch-required`: a reference to an action outside the tree        | —                                               | Yields `indeterminate` without a fetch; the fixture asserts zero network calls |
+| Must raise                                                                                    | Must not raise                                  | Difference under test                                                                                    |
+| --------------------------------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `two-distinct-pins`: eleven references at 0e3c4d24 and one at an older SHA                    | `twelve-identical-pins`: all twelve at 0e3c4d24 | Pin divergence, with the reference text byte-identical in both                                           |
+| `known-bad-pin`: every reference at 32c8ea64                                                  | `current-pin`: every reference at 0e3c4d24      | Membership of the named bad set, with pin uniformity identical                                           |
+| `uniform-unknown-pin`: all twelve references at one SHA that is neither current nor named-bad | —                                               | Yields `indeterminate` naming the SHA, not a pass; the divergence clause cannot fire on one distinct SHA |
+| `network-fetch-required`: a reference to an action outside the tree                           | —                                               | Yields `indeterminate` without a fetch; the fixture asserts zero network calls                           |
 
 ### Table 4: RT-014, RT-015 and RT-016 fixtures
 
@@ -337,6 +376,15 @@ own mutation discriminates nothing.
   sibling field in an otherwise identical expression. The rule must stop
   reporting `two-distinct-pins`, proving the contract reads the reference and
   not its neighbour.
+- **RT-013, unknown-pin mutation.** Treat a uniformly unknown pin as
+  compliant. The rule must stop reporting `uniform-unknown-pin`. This mutation
+  reproduces the state ortho-config was in before its survey, when 32c8ea64 was
+  uniform and unrecorded, so a rule that survives it would have passed the
+  configuration RT-013 exists to catch.
+- **RT-012, caller-side-absolute mutation.** Treat a caller-side absolute-path
+  wrapper as a finding. The rule must raise on `caller-side-absolute-path`,
+  proving the fourth row of the wrapper table is a deliberate pass rather than
+  an unconsidered gap.
 - **RT-013, hermeticity mutation.** Replace the named bad set with a fetch of
   the action text. The `network-fetch-required` fixture must fail on the
   assertion of zero network calls. The fixture asserts the call count rather

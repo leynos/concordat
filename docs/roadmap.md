@@ -418,23 +418,26 @@ actuators that remediate them. Each check ships as a lint rule package under
 - [ ] Ship the duplicate-gate-work rule packages (QG-005 to QG-007), per
   [RFC 0003](rfcs/0003-no-duplicate-test-and-coverage-work.md): a test-only
   lane must not duplicate a coverage lane on the same trigger at the same
-  scope, nextest profile, and resolved feature set; two matrix legs must not
-  resolve to one feature set; and a publish dry run must not repeat the
-  workspace check and test the job has already run. Sequenced after QG-004
-  because it consumes the workflow-text sensor and the comment-preserving patch
-  machinery that QG-002 to QG-004 introduce, and because QG-005's remediation
-  turns on the nextest profile that the QG-004 Makefile patch establishes.
-  Acceptance: fixtures `test-lane-duplicates-coverage`,
-  `all-features-equals-defaults`, and `dry-run-repeats-tests` each raise the
-  intended finding, while `test-lane-different-profile`,
-  `all-features-superset`, and `pruned-keeps-packaging` raise nothing; feature
-  sets resolve including Cargo's default features, so the mutation that
-  compares feature-list arguments as text stops `all-features-equals-defaults`
-  raising, and the mutation that drops the profile from the equality predicate
-  makes `test-lane-different-profile` raise. QG-005 ships without an actuator,
-  naming the duplicate leg and the coverage lane that covers it, because
-  choosing the surviving lane is a local judgement; QG-007 reports any pruning
-  that removes per-crate `cargo package`.
+  scope, platform, nextest profile, resolved feature set, and test selection;
+  two legs of one matrix that are otherwise equivalent must not resolve to one
+  feature set; and a publish dry run must not repeat the workspace check and
+  test the job has already run, the skip being asked for only where both have
+  demonstrably run. Sequenced after QG-004 because it consumes the
+  workflow-text sensor and the comment-preserving patch machinery that QG-002
+  to QG-004 introduce, and because QG-005's remediation turns on the nextest
+  profile that the QG-004 Makefile patch establishes. Acceptance: fixtures
+  `test-lane-duplicates-coverage`, `all-features-equals-defaults`, and
+  `dry-run-repeats-check-and-tests` each raise the intended finding, while
+  `test-lane-different-profile`, `disjoint-filters-two-jobs`,
+  `linux-and-windows-default-features`, `dry-run-after-tests-only`, and
+  `pruned-keeps-packaging` raise nothing; feature sets resolve including
+  Cargo's default features, so the mutation that compares feature-list
+  arguments as text stops `all-features-equals-defaults` raising, and the
+  mutation that drops the profile from the equality predicate makes
+  `test-lane-different-profile` raise. QG-005 ships without an actuator, naming
+  the duplicate leg and the coverage lane that covers it, because choosing the
+  surviving lane is a local judgement; QG-007 reports any pruning that removes
+  per-crate `cargo package`.
 - [ ] Ship the coverage-pipeline rule packages (CV-001, CV-002, CV-004):
   pull-request jobs must keep coverage local, enforce the ratchet against the
   baseline written on `main`, and contain no CodeScene action or token; a
@@ -577,24 +580,26 @@ the Section 2.1.2 format.
   [RFC 0002](rfcs/0002-sccache-configuration-ruleset.md): every compiling Rust
   job carries a configured backend and an action-exported wrapper; the
   `setup-rust` pin is one SHA across same-tree references and not one of a
-  named set known to export neither half; a statistics step runs after the
-  build through `SCCACHE_PATH`, including on failure; each cache key family has
-  exactly one writer per workflow; and sccache is not installed into a job that
-  compiles nothing. Sequenced after RT-011 because it extends the same family
-  over the workflow-text sensor that QG-002 to QG-004 introduce, and reuses the
-  comment-preserving patching those items establish. Acceptance: fixtures
-  `compiling-job-no-backend`, `known-bad-pin`, `stats-on-success-only`,
+  named set known to export neither half, with a uniformly unknown pin reported
+  as an explicit indeterminate rather than a pass; a statistics step runs after
+  the build through `SCCACHE_PATH`, including on failure; each cache key family
+  has exactly one writer per workflow; and sccache is not installed into a job
+  that compiles nothing. Sequenced after RT-011 because it extends the same
+  family over the workflow-text sensor that QG-002 to QG-004 introduce, and
+  reuses the comment-preserving patching those items establish. Acceptance:
+  fixtures `compiling-job-no-backend`, `known-bad-pin`, `stats-on-success-only`,
   `two-writers-one-key`, and `non-compiling-job-installs-sccache` each raise
-  the intended finding, while `sccache-dir-owned`, `twelve-identical-pins`,
-  `stats-always`, `two-keys-two-writers`, and `non-compiling-job-opts-out`
-  raise nothing; the mutation narrowing the backend predicate to
-  `SCCACHE_GHA_ENABLED` alone makes `sccache-dir-owned` raise, and the mutation
-  replacing the compiling-fact scope with an event-name guard stops
-  `release-job-binstall-dry-run` raising. Actuators add the backend variable,
-  repin, append the statistics step, and disable the surplus cache writer, each
-  comment-preservingly; the wrapper line is never added, because setting it
-  caller-side by bare name is the whitaker #409 defect. The wrapper-naming
-  clause remains CI-016 rather than taking a new identifier.
+  the intended finding, `uniform-unknown-pin` reports indeterminate, and
+  `sccache-dir-owned`, `twelve-identical-pins`, `stats-always`,
+  `two-keys-two-writers`, `caller-side-absolute-path`, and
+  `non-compiling-job-opts-out` raise nothing; the mutation narrowing the
+  backend predicate to `SCCACHE_GHA_ENABLED` alone makes `sccache-dir-owned`
+  raise, and the mutation replacing the compiling-fact scope with an event-name
+  guard stops `release-job-binstall-dry-run` raising. Actuators add the backend
+  variable, repin, append the statistics step, and disable the surplus cache
+  writer, each comment-preservingly; the wrapper line is never added, because
+  setting it caller-side by bare name is the whitaker #409 defect. The
+  wrapper-naming clause remains CI-016 rather than taking a new identifier.
 - [ ] Ship the tool-acquisition rule packages (TA-001 to TA-003), per
   [RFC 0001](rfcs/0001-binary-only-tool-installation-in-ci.md): a continuous
   integration job never builds a tool it merely consumes; a release archive is
@@ -608,12 +613,12 @@ the Section 2.1.2 format.
   `cargo-install-consumed-tool`, `indented-chained-cargo-install`,
   `digest-after-execution`, and `uses-branch-ref` each raise the intended
   finding, while `install-tool-pinned-archive`, `echo-mentions-cargo-install`,
-  `digest-before-execution`, and `uses-sha-ref` raise nothing; re-anchoring the
-  sensor at column zero stops `indented-chained-cargo-install` raising,
-  replacing command-word tokenization with a substring match makes
-  `echo-mentions-cargo-install` raise, and removing the digest-ordering
-  predicate stops `digest-after-execution` raising. TA-001 and TA-002 have no
-  automatic actuator and open a tracking issue naming the `install-tool`
-  manifest entry to add, because the entry needs a fact about published
-  archives that the sensor cannot obtain; TA-003 repins from canon data
-  comment-preservingly.
+  `digest-before-execution`, and `uses-sha-ref`, which pins a full forty-hex
+  SHA, raise nothing; re-anchoring the sensor at column zero stops
+  `indented-chained-cargo-install` raising, replacing command-word tokenization
+  with a substring match makes `echo-mentions-cargo-install` raise, and
+  removing the digest-ordering predicate stops `digest-after-execution`
+  raising. TA-001 and TA-002 have no automatic actuator and open a tracking
+  issue naming the `install-tool` manifest entry to add, because the entry
+  needs a fact about published archives that the sensor cannot obtain; TA-003
+  repins from canon data comment-preservingly.

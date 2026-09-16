@@ -201,13 +201,31 @@ is a fact about a published artefact.
 
 ### 3.3 TA-003: a pin that is a branch or a bare tag
 
-**Sensor.** For each acquisition — a `uses:` reference, a `--git`/`--rev` pair,
-a `go install` module reference, a manifest entry in canon data — the pin must
-be a full commit SHA or an exact version string. A branch name fails. A bare
-tag fails unless an immutable-tag mechanism is explicitly verified for that
-publisher, matching the standard already set for the shared auto-merge and
-mutation-testing workflows in DB-003 and MT-001. Semantic-version and
-major-version tags do not pass automatically.
+**Sensor.** For each acquisition the pin must be a full commit SHA of forty
+hexadecimal characters, or an exact version string. The acquisitions the sensor
+reads are:
+
+- a `uses:` reference, split into path and reference;
+- a Git acquisition, in every form that selects a revision: `--git` paired with
+  `--rev`, with `--branch`, or with `--tag`, and `--git` alone, which selects
+  the default branch;
+- a `go install` module reference;
+- a manifest entry in canon data.
+
+`--branch` and a bare `--git` fail, because both name a moving target. `--rev`
+passes only at full length. `--tag` is treated exactly as a `uses:` tag, by the
+next paragraph.
+
+A branch name fails. A bare tag fails unless an immutable-tag mechanism is
+explicitly verified for that publisher, matching the standard already set for
+the shared auto-merge and mutation-testing workflows in DB-003 and MT-001.
+Semantic-version and major-version tags do not pass automatically.
+
+**Why an abbreviated SHA fails.** A short SHA is a prefix, and a prefix that is
+unique today can become ambiguous as the object database grows, at which point
+the reference resolves to a different object or to none. Every fixture in this
+RFC therefore writes SHAs at full length, and the abbreviated form appears only
+as the subject of the SHA-length mutation in Section 5.
 
 **Exemption.** A reference to a repository within the estate that the same
 change set also pins is resolved against the canon pin data rather than
@@ -246,12 +264,14 @@ nothing.
 
 ### Table 4: TA-003 fixtures
 
-| Must raise                                                                                          | Must not raise                                                                                           | Difference under test                                       |
-| --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `uses-branch-ref`: `uses: leynos/shared-actions/.github/actions/setup-rust@main`                    | `uses-sha-ref`: the same path at `@0e3c4d24`                                                             | Reference kind                                              |
-| `uses-bare-tag`: the same path at `@v2` with no immutable-tag mechanism verified                    | `uses-verified-immutable-tag`: the same tag where the publisher's immutability is recorded in canon data | Whether immutability is verified, not whether a tag is used |
-| `git-rev-branch`: `--git <url> --branch main`                                                       | `git-rev-sha`: `--git <url> --rev <sha>`                                                                 | Reference kind                                              |
-| `coordinated-repin`: two references to an estate repository that canon data pins in the same change | —                                                                                                        | Resolved against canon data, not reported                   |
+| Must raise                                                                                          | Must not raise                                                                                             | Difference under test                                       |
+| --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `uses-branch-ref`: `uses: leynos/shared-actions/.github/actions/setup-rust@main`                    | `uses-sha-ref`: the same path at `@0e3c4d24a7f1b5e9c83d26f04b7a1e58d9c3f260`, forty hexadecimal characters | Reference kind                                              |
+| `uses-bare-tag`: the same path at `@v2` with no immutable-tag mechanism verified                    | `uses-verified-immutable-tag`: the same tag where the publisher's immutability is recorded in canon data   | Whether immutability is verified, not whether a tag is used |
+| `git-rev-branch`: `--git <url> --branch main`                                                       | `git-rev-sha`: `--git <url> --rev 7cb894fe2a1d6035c8f49b7e0d23a86154fc9b7d`                                | Reference kind, with the same `--git` URL in both           |
+| `git-no-revision`: `--git <url>` with no revision selector, which takes the default branch          | `git-rev-sha`: as above                                                                                    | Whether a revision is selected at all                       |
+| `git-abbreviated-rev`: `--git <url> --rev 7cb894fe`                                                 | `git-rev-sha`: as above                                                                                    | SHA length, with the same commit named in both              |
+| `coordinated-repin`: two references to an estate repository that canon data pins in the same change | —                                                                                                          | Resolved against canon data, not reported                   |
 
 ## 5. Contract mutations
 
@@ -285,8 +305,13 @@ fixture must start raising when the rule is widened.
   raising on `uses-bare-tag` while continuing to raise on `uses-branch-ref`,
   showing the two fixtures are not interchangeable.
 - **TA-003, SHA-length mutation.** Accept an abbreviated SHA. The rule must
-  raise on a fixture pinning to seven characters, since an abbreviation is not
-  a stable identifier across a growing object database.
+  stop raising on `git-abbreviated-rev`, since an abbreviation is not a stable
+  identifier across a growing object database. `uses-sha-ref` and `git-rev-sha`
+  must continue to raise nothing under the mutation, which is what proves the
+  two fixtures differ in length alone and not in some other property.
+- **TA-003, revision-selector mutation.** Accept `--git` with no revision
+  selector. The rule must stop raising on `git-no-revision`, proving the sensor
+  reads the absence of a selector rather than only the presence of a bad one.
 
 The consumer's own workflow contract must fail each of these mutations
 independently of the rule package, following the estate rule that a contract

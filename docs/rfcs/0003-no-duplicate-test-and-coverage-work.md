@@ -13,11 +13,12 @@
 ## 1. Summary
 
 On any one trigger, a test-only lane must not run where a coverage lane already
-runs the same test scope under the same nextest profile and the same resolved
-feature set. The pre-flight of a publish dry run must not repeat the workspace
-check and test that the same job has already run. Per-crate `cargo package` is
-always kept, because it is a distinct gate class that no other lane can
-substitute for.
+runs the same test scope on the same platform under the same nextest profile,
+the same resolved feature set, and the same test selection. The pre-flight of a
+publish dry run must not repeat the workspace check and test that the same job
+has already run, and is asked to skip only where the job has demonstrably run
+both. Per-crate `cargo package` is always kept, because it is a distinct gate
+class that no other lane can substitute for.
 
 This RFC proposes three rule packages in the quality-gate integrity family,
 taking the identifiers immediately after QG-004:
@@ -128,8 +129,12 @@ it as a single suite command appearing once.
 ### 3.2 QG-005: a duplicated test lane
 
 **Sensor.** For each trigger, group the jobs that run a test suite. Two jobs
-duplicate when all three of the following hold:
+duplicate when all five of the following hold:
 
+- **Same platform.** The normalized runner platform is equal. `runs-on` values
+  normalize to an operating-system family and architecture, so `ubuntu-latest`,
+  `ubicloud-standard-2` and a self-hosted Linux label are one platform, and
+  Linux and Windows are never duplicates of each other.
 - **Same scope.** The resolved package selection is equal: the same workspace
   members, resolved through `--workspace`, `-p` and default-members.
 - **Same profile.** The same nextest profile, resolved through `--profile` and
@@ -137,6 +142,20 @@ duplicate when all three of the following hold:
   profile's overrides, so two legs naming different profiles may still resolve
   to the same effective configuration.
 - **Same resolved feature set.** Equal after resolution per Section 2.2.
+- **Same test selection.** The set of tests the command selects is equal.
+  Nextest filter expressions (`-E`), test-name filters, target selectors such as
+  `--lib`, `--bins`, `--tests` and `--doc`, and partition arguments
+  (`--partition`) all narrow the selection, and two commands that differ in any
+  of them run different tests.
+
+The last condition is the one that keeps the rule safe to act on. Two jobs can
+share package selection, profile and features while running disjoint sets
+through different filter expressions, and a rule blind to selection would name
+one of them removable and delete coverage that exists nowhere else. Where a
+selection argument cannot be resolved to a set — a filter built from an
+expression, or a partition whose count comes from a matrix the envelope cannot
+expand — the verdict is `indeterminate`, because an unresolved filter might
+select everything or nothing.
 
 When a coverage lane and a test-only lane duplicate, the finding names the
 test-only lane as the removable one and the coverage lane as its cover.
@@ -152,8 +171,8 @@ not a duplicate, it is two different suites.
 
 **Exemptions.** A lane on a different trigger is not a duplicate; the rule
 groups by trigger because a push lane and a pull-request lane serve different
-purposes. A lane on a different platform is not a duplicate, because the
-platform is part of the scope.
+purposes. Platform and test selection are conditions of the predicate above
+rather than exemptions, so a lane differing in either is simply not grouped.
 
 **Actuator.** None automatic. The finding names the duplicate leg and the
 coverage lane that covers it. Removal is withheld because deciding which of two
@@ -162,9 +181,21 @@ judgement about what the repository intends to gate.
 
 ### 3.3 QG-006: two legs, one resolved feature set
 
-**Sensor.** Within one matrix, resolve each leg's feature set including Cargo's
-default features. Two legs whose sets are equal are a finding, whatever their
-names.
+**Sensor.** Within one matrix, compare only legs that are otherwise equivalent:
+legs whose every other matrix dimension — operating system, architecture,
+toolchain, and any dimension the job reads outside the feature arguments — is
+equal, so the legs differ in their feature configuration alone. Among those,
+resolve each leg's feature set including Cargo's default features. Two legs
+whose sets are equal are a finding, whatever their names.
+
+**Why the restriction is necessary.** An ordinary `os: [ubuntu, windows]` or
+Rust-version matrix uses the default feature set in every leg, so every pair of
+legs has an equal feature set. Without the equivalence restriction the rule
+reports every such matrix in the estate, which is both wrong and the fastest
+way to have the rule switched off. The defect axinite had was two legs that
+differed in nothing *but* their stated features, which resolved to the same
+set. The restriction is what distinguishes the two cases, and it is why
+`linux-and-windows-default-features` is a must-not-raise fixture.
 
 **Resolution requirements.** The resolver reads `default` from every manifest
 in the selected packages, expands feature dependencies transitively, and applies
@@ -177,11 +208,27 @@ they share.
 
 ### 3.4 QG-007: a dry run repeating the job's own work
 
-**Sensor.** Where a job runs a publish dry run after a test suite, require that
-the dry run's pre-flight be skipped. For lading, this is the `[preflight] skip`
-key, the `--skip-preflight` flag, or the `LADING_SKIP_PREFLIGHT` environment
-variable, and the rule reads the lading configuration as well as the workflow
-text.
+**Sensor.** Where a job runs a publish dry run, require the dry run's
+pre-flight to be skipped *only* when the job has already run both of the
+operations the pre-flight would repeat, on the same trigger and before the
+dry-run step:
+
+- an equivalent workspace check, and
+- an equivalent test run.
+
+Both must be present. A job that ran only a test suite has not performed the
+pre-flight's check, and a job that ran only a check has not performed its
+tests; in either case the pre-flight is the sole execution of the missing half,
+and demanding the skip would suppress a gate rather than deduplicate one. The
+rule reports nothing in those cases.
+
+"Equivalent" resolves through the same scope, profile, feature set and test
+selection predicate QG-005 uses, so a narrower earlier run does not license
+skipping a wider pre-flight.
+
+For lading, the skip is the `[preflight] skip` key, the `--skip-preflight`
+flag, or the `LADING_SKIP_PREFLIGHT` environment variable, and the rule reads
+the lading configuration as well as the workflow text.
 
 **The skip is set on the dry-run step only.** A repository-wide skip would
 disable the pre-flight in a real publish, where nothing precedes it. The sensor
@@ -214,30 +261,39 @@ Each pair differs in exactly the fact its rule claims to decide.
 
 ### Table 2: QG-005 fixtures
 
-| Must raise                                                                                                               | Must not raise                                                                                                               | Difference under test                               |
-| ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| `test-lane-duplicates-coverage`: a pull-request test job and a coverage job, same workspace, same profile, same features | `test-lane-different-profile`: the same pair where the test job runs `--profile ci` and the coverage job the default profile | Profile equality, with scope and features identical |
-| —                                                                                                                        | `push-and-pull-request-lanes`: the same suite on `push` and on `pull_request`                                                | Trigger grouping; must not raise                    |
-| —                                                                                                                        | `linux-and-windows-lanes`: the same suite on two `runs-on` values                                                            | Platform is part of scope; must not raise           |
-| —                                                                                                                        | `cargo-nextest-version-probe`: a step running `cargo nextest --version` beside a real suite                                  | A probe is not an invocation; must not raise        |
-| `two-invocations-one-job`: one job running the suite twice with identical scope, profile and features                    | `one-invocation-one-job`: the same job running it once                                                                       | Invocation count per job                            |
+| Must raise                                                                                                               | Must not raise                                                                                                               | Difference under test                                                                 |
+| ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `test-lane-duplicates-coverage`: a pull-request test job and a coverage job, same workspace, same profile, same features | `test-lane-different-profile`: the same pair where the test job runs `--profile ci` and the coverage job the default profile | Profile equality, with scope and features identical                                   |
+| —                                                                                                                        | `push-and-pull-request-lanes`: the same suite on `push` and on `pull_request`                                                | Trigger grouping; must not raise                                                      |
+| —                                                                                                                        | `linux-and-windows-lanes`: the same suite on two `runs-on` values                                                            | Platform is a condition of the predicate; must not raise                              |
+| `ubuntu-and-ubicloud-lanes`: the same suite on `ubuntu-latest` and `ubicloud-standard-2`                                 | `linux-and-windows-lanes`: as above                                                                                          | Platform normalization; two Linux labels are one platform                             |
+| `same-filter-two-jobs`: two jobs with identical `-E` filter expressions                                                  | `disjoint-filters-two-jobs`: the same two jobs with filter expressions selecting disjoint sets                               | Test selection, with scope, profile and features identical                            |
+| `partitioned-and-whole`: one job running `--partition count:1/2` beside a job running the whole suite                    | `two-partitions`: the two halves of one partitioned suite                                                                    | Whether the selections are equal, not whether partitioning is used                    |
+| `unresolvable-filter`: a filter built from an expression the envelope cannot expand                                      | —                                                                                                                            | Yields `indeterminate`, because an unresolved filter may select everything or nothing |
+| —                                                                                                                        | `cargo-nextest-version-probe`: a step running `cargo nextest --version` beside a real suite                                  | A probe is not an invocation; must not raise                                          |
+| `two-invocations-one-job`: one job running the suite twice with identical scope, profile and features                    | `one-invocation-one-job`: the same job running it once                                                                       | Invocation count per job                                                              |
 
 ### Table 3: QG-006 fixtures
 
-| Must raise                                                                                                                           | Must not raise                                                                                        | Difference under test                                        |
-| ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `all-features-equals-defaults`: a leg named all-features passing a list equal to the default set, beside a default leg               | `all-features-superset`: the same pair where the list adds one feature outside the default set        | Set equality after resolution, with both leg names unchanged |
-| `no-default-features-empty-default`: two legs where one passes `--no-default-features` against a manifest whose default set is empty | `no-default-features-nonempty-default`: the same pair against a manifest with a non-empty default set | Whether the manifest's default set is empty                  |
-| `features-from-expression`: a leg whose feature list comes from an unresolvable expression                                           | —                                                                                                     | Yields `indeterminate`                                       |
+| Must raise                                                                                                                                            | Must not raise                                                                                           | Difference under test                                                |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `all-features-equals-defaults`: a leg named all-features passing a list equal to the default set, beside a default leg equal on every other dimension | `all-features-superset`: the same pair where the list adds one feature outside the default set           | Set equality after resolution, with both leg names unchanged         |
+| `no-default-features-empty-default`: two legs where one passes `--no-default-features` against a manifest whose default set is empty                  | `no-default-features-nonempty-default`: the same pair against a manifest with a non-empty default set    | Whether the manifest's default set is empty                          |
+| —                                                                                                                                                     | `linux-and-windows-default-features`: an `os: [ubuntu, windows]` matrix on default features in every leg | Legs differing in a dimension other than features are never compared |
+| —                                                                                                                                                     | `rust-version-matrix-default-features`: a toolchain matrix on default features in every leg              | As above, for a non-platform dimension                               |
+| `features-from-expression`: a leg whose feature list comes from an unresolvable expression                                                            | —                                                                                                        | Yields `indeterminate`                                               |
 
 ### Table 4: QG-007 fixtures
 
-| Must raise                                                                                                 | Must not raise                                                               | Difference under test                           |
-| ---------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------- |
-| `dry-run-repeats-tests`: a job running the suite then a dry run with the pre-flight enabled                | `dry-run-preflight-skipped`: the same job with the skip on the dry-run step  | The skip, with both jobs running the same suite |
-| `skip-set-config-wide`: the skip set in the lading configuration file rather than on the step              | `skip-set-on-step`: the same skip passed to the dry-run step                 | Skip scope, with the dry run identical in both  |
-| `pruned-away-packaging`: a pruned dry run that no longer runs `cargo package` per crate                    | `pruned-keeps-packaging`: the same pruning with per-crate packaging retained | Whether packaging survives the pruning          |
-| `contract-asserts-flag-only`: a contract asserting the flag but not that the recipe hands lading `publish` | `contract-asserts-both-ends`: the same contract asserting both               | Which ends the contract binds                   |
+| Must raise                                                                                                                     | Must not raise                                                                                                         | Difference under test                                                                                       |
+| ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `dry-run-repeats-check-and-tests`: a job running the workspace check and the suite, then a dry run with the pre-flight enabled | `dry-run-preflight-skipped`: the same job with the skip on the dry-run step                                            | The skip, with both jobs running the same check and suite                                                   |
+| —                                                                                                                              | `dry-run-after-tests-only`: a job running the suite but no workspace check, then a dry run with the pre-flight enabled | Whether both halves ran; the pre-flight is the only check here, so demanding the skip would suppress a gate |
+| —                                                                                                                              | `dry-run-after-check-only`: the mirror case, a check with no test run                                                  | As above, for the other half                                                                                |
+| —                                                                                                                              | `earlier-run-is-narrower`: an earlier suite over one package, then a dry run covering the workspace                    | Equivalence resolves through QG-005's predicate; a narrower run licenses nothing                            |
+| `skip-set-config-wide`: the skip set in the lading configuration file rather than on the step                                  | `skip-set-on-step`: the same skip passed to the dry-run step                                                           | Skip scope, with the dry run identical in both                                                              |
+| `pruned-away-packaging`: a pruned dry run that no longer runs `cargo package` per crate                                        | `pruned-keeps-packaging`: the same pruning with per-crate packaging retained                                           | Whether packaging survives the pruning                                                                      |
+| `contract-asserts-flag-only`: a contract asserting the flag but not that the recipe hands lading `publish`                     | `contract-asserts-both-ends`: the same contract asserting both                                                         | Which ends the contract binds                                                                               |
 
 ## 5. Contract mutations
 
@@ -250,6 +306,15 @@ Every mutation is applied in both directions.
   a lane that runs suites the survivor does not.
 - **QG-005, trigger mutation.** Drop the trigger from the grouping. The rule
   must now raise on `push-and-pull-request-lanes`.
+- **QG-005, platform mutation.** Drop the normalized platform from the
+  grouping key. The rule must now raise on `linux-and-windows-lanes`. The same
+  mutation must leave `ubuntu-and-ubicloud-lanes` raising, which is what proves
+  normalization maps two Linux labels together rather than comparing the label
+  text.
+- **QG-005, selection mutation.** Drop test selection from the equality
+  predicate. The rule must now raise on `disjoint-filters-two-jobs`. This is
+  the mutation that guards against the rule's worst failure, naming a lane
+  removable whose tests run nowhere else.
 - **QG-005, counting mutation.** Count occurrences per file rather than
   invocations per job. The rule must stop raising on `two-invocations-one-job`.
   This is the mutation the shared-actions finding argues for; a file-level
@@ -260,10 +325,23 @@ Every mutation is applied in both directions.
   than as resolved sets. The rule must stop raising on
   `all-features-equals-defaults`. A rule that survives this mutation with its
   suite green is matching names, and axinite is the proof that names lie.
+- **QG-006, equivalence mutation.** Compare every pair of legs in a matrix
+  rather than only legs equal on every other dimension. The rule must now raise
+  on `linux-and-windows-default-features` and on
+  `rust-version-matrix-default-features`, which between them cover a platform
+  dimension and a non-platform one.
 - **QG-006, default mutation.** Resolve feature sets without Cargo's default
   features. The rule must stop raising on `all-features-equals-defaults` and
   must start raising on `all-features-superset`, so the mutation is visible
   from both sides.
+- **QG-007, both-halves mutation.** Require only an earlier test run rather
+  than both an earlier check and an earlier test. The rule must now raise on
+  `dry-run-after-tests-only`, where following the finding would suppress the
+  job's only workspace check. Mutating it the other way, to require only an
+  earlier check, must raise on `dry-run-after-check-only`, so neither half can
+  be dropped unnoticed.
+- **QG-007, equivalence mutation.** Accept any earlier run regardless of
+  scope. The rule must now raise on `earlier-run-is-narrower`.
 - **QG-007, scope mutation.** Accept a configuration-file-wide skip. The rule
   must stop raising on `skip-set-config-wide`.
 - **QG-007, packaging mutation.** Remove the packaging-retention predicate.
