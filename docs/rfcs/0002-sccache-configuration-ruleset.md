@@ -185,6 +185,33 @@ small, is canon data with a recorded reason per entry, and fails closed: a pin
 not in the set and not equal to the current pin is reported as divergent by the
 first clause anyway.
 
+**Hermeticity, and why a network fetch is refused.** The contract shape is
+ortho-config #495's: assert one SHA across every same-tree reference, and
+assert a short named set of SHAs known to export neither half as the exception.
+It never fetches the action text over the network. Three reasons, in order of
+weight:
+
+1. **The package contract forbids it.** Section 2.1.2 specifies a `conftest`
+   sensor as evaluation over structured inputs and a `github-api` sensor as
+   pure evaluation over an injected or local snapshot that "never reads
+   credentials or makes network calls". A sensor that fetched an action would
+   be neither, and would need a credential to read a private action, which no
+   sensor in the catalogue is permitted to hold.
+2. **The verdict would stop being a property of the checkout.** A fetch makes
+   the answer depend on a remote repository's state at evaluation time, so the
+   same commit audited twice can yield two verdicts, and a finding cannot be
+   reproduced from the evidence the sweep recorded. Replay, which `rule run`
+   requires, becomes impossible.
+3. **A rate-limited or failed fetch has no safe verdict.** Failing open passes
+   every repository during an outage. Failing closed reports the whole estate
+   non-compliant on a `403`. Neither is a statement about the repository.
+
+The cost of hermeticity is that the named set must be maintained by hand, and
+the rule is honest about the trade: an entry is canon data carrying the reason
+and the date it was current, and a pin that is neither the current SHA nor a
+named-bad one is already reported by the divergence clause, so the set only has
+to name the pins a repository might legitimately still be sitting on.
+
 **Actuator.** Repin to the SHA in canon data, comment-preservingly.
 
 ### 3.4 RT-014: statistics after the build, including on failure
@@ -263,12 +290,12 @@ Each pair differs in exactly the fact its rule claims to decide.
 
 ### Table 2: RT-012 fixtures
 
-| Must raise                                                                                                        | Must not raise                                                                                     | Difference under test                                       |
-| ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `compiling-job-no-backend`: a job running `cargo test` with the wrapper exported and neither backend variable set | `compiling-job-gha-backend`: the same job with `SCCACHE_GHA_ENABLED: "true"` at job level          | Backend configured                                          |
-| `sccache-dir-unowned`: `SCCACHE_DIR` set with no `actions/cache` step for the path                                | `sccache-dir-owned`: the same variable with an `actions/cache` step restoring and saving that path | Whether the directory has an owner                          |
-| `release-job-binstall-dry-run`: a tag-triggered release job that dry-runs `binstall` with neither half set        | `release-job-uploads-only`: a release job that only uploads prebuilt assets                        | Whether the job compiles, with both triggered by a tag push |
-| `backend-via-github-env`: a preceding step writing `SCCACHE_GHA_ENABLED` to `GITHUB_ENV`                          | —                                                                                                  | Yields `indeterminate`                                      |
+| Must raise                                                                                                        | Must not raise                                                                                                                                              | Difference under test                                       |
+| ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `compiling-job-no-backend`: a job running `cargo test` with the wrapper exported and neither backend variable set | `compiling-job-gha-backend`: the same job with `SCCACHE_GHA_ENABLED: "true"` at job level                                                                   | Backend configured                                          |
+| `sccache-dir-unowned`: `SCCACHE_DIR` set with no `actions/cache` step for the path                                | `sccache-dir-owned`: the whitaker shape, the same variable with an `actions/cache` step restoring and saving that path under the `sccache-v1-` key families | Whether the directory has an owner                          |
+| `release-job-binstall-dry-run`: a tag-triggered release job that dry-runs `binstall` with neither half set        | `release-job-uploads-only`: a release job that only uploads prebuilt assets                                                                                 | Whether the job compiles, with both triggered by a tag push |
+| `backend-via-github-env`: a preceding step writing `SCCACHE_GHA_ENABLED` to `GITHUB_ENV`                          | —                                                                                                                                                           | Yields `indeterminate`                                      |
 
 ### Table 3: RT-013 fixtures
 
@@ -312,7 +339,10 @@ own mutation discriminates nothing.
   not its neighbour.
 - **RT-013, hermeticity mutation.** Replace the named bad set with a fetch of
   the action text. The `network-fetch-required` fixture must fail on the
-  assertion of zero network calls.
+  assertion of zero network calls. The fixture asserts the call count rather
+  than the verdict, because a fetching implementation reaches the same verdict
+  on a reachable network and the defect is only visible in what it did to get
+  there.
 - **RT-014, condition mutation.** Drop the failure-condition predicate. The
   rule must stop raising on `stats-on-success-only`.
 - **RT-014, path mutation.** Accept the bare name. The rule must stop raising
