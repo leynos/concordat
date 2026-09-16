@@ -416,12 +416,13 @@ actuators that remediate them. Each check ships as a lint rule package under
   whose doctests are never executed is detected, and the mutated Makefile runs
   doctests under `make test`.
 - [ ] Ship the coverage-pipeline rule packages (CV-001, CV-002, CV-004):
-  pull-request jobs must gate via `cs-coverage check` with `fetch-depth: 0`, a
-  `project-url`, and `*.info` LCOV naming; a main-only push workflow must
-  upload; exactly one ratcheting invocation per job with the baseline written
-  on main. Acceptance: fixtures for upload-from-PR, missing main workflow,
-  summary-only pins, and PR-scoped baselines each raise findings; mutations
-  emit the canonical coverage-main workflow and job patches.
+  pull-request jobs must keep coverage local, enforce the ratchet against the
+  baseline written on `main`, and contain no CodeScene action or token; a
+  main-only push workflow must upload; exactly one ratcheting invocation must
+  exist per job. Acceptance: fixtures for upload-from-PR, missing main
+  workflow, summary-only pins, and PR-scoped baselines each raise findings;
+  compliant fixtures keep the PR ratchet and main-only upload; mutations emit
+  the canonical coverage-main workflow and job patches.
 - [ ] Implement the dual-store secret sensor (CV-003) in the Auditor:
   enumerate secret names in the Actions and Dependabot stores via the GitHub
   API and cross-reference every `if: env.X != ''` workflow guard. Acceptance: a

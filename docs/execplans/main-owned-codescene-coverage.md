@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & retrospective`, `Conformance basis`, and `Verification plan` must
 be kept up to date as work proceeds.
 
-Status: DRAFT
+Status: IN PROGRESS
 
 ## Purpose / big picture
 
@@ -79,9 +79,10 @@ when the local coverage ratchet is not wired to a baseline written by `main`.
 - [x] (2026-09-16 19:25Z) Create two clean git-donkey worktrees from
   `origin/main` at `549b58acd3c3b518d0987ec8982ee4f1a0cadc25`.
 - [x] (2026-09-16 19:35Z) Draft this ExecPlan.
-- [ ] Receive explicit approval for implementation.
-- [ ] Add the failing repair contract, remove the PR CodeScene step, and pass
-  the focused and repository gates.
+- [x] (2026-09-16 19:45Z) Receive explicit approval for implementation.
+- [x] (2026-09-16 21:10Z) Add the repair contract, remove the PR CodeScene
+  step, and reconcile the accepted design and roadmap doctrine.
+- [ ] Pass the focused and repository gates for the repair branch.
 - [ ] Add failing workflow-envelope and policy fixtures for the estate rule.
 - [ ] Implement the workflow envelope, rule package, documentation, and wider
   validation.
@@ -266,3 +267,11 @@ and create two draft pull requests against `main`.
 2026-09-16: Initial draft records the two independent deliverables, the
 contrary unmerged RFC, the workflow-envelope approach, and the verification
 obligations. Implementation awaits explicit approval.
+
+2026-09-16: Approval moved the plan into execution. EP-M1 started with the
+workflow contract described above; no scope or verification obligation changed.
+
+2026-09-16: EP-M1 implementation removed the obsolete pull-request CodeScene
+check while retaining the local ratchet and explicit main-only upload. The
+design catalogue and roadmap now describe that topology; EP-M2 remains
+unstarted.

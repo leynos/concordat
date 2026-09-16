@@ -502,6 +502,19 @@ def test_ci_installs_makeutil_for_every_full_suite() -> None:
         pull_request_coverage_inputs.get("baseline-python-file")
         == _COVERAGE_BASELINE_PYTHON_FILE
     ), "pull-request coverage must use the reset Python ratchet baseline"
+    assert pull_request_coverage_inputs.get("with-ratchet") == "true", (
+        "pull-request coverage must enforce the main-derived ratchet"
+    )
+    pull_request_steps = lint_test.get("steps")
+    assert isinstance(pull_request_steps, list), "CI lint-test steps must be a list"
+    assert not any(
+        "upload-codescene-coverage"
+        in str(_mapping(step, subject="CI step").get("uses", ""))
+        for step in pull_request_steps
+    ), "pull-request CI must not invoke the CodeScene coverage action"
+    assert "CS_ACCESS_TOKEN" not in str(lint_test), (
+        "pull-request CI must not receive the CodeScene access token"
+    )
     coverage = _workflow_job(".github/workflows/coverage-main.yml", "coverage-upload")
     _assert_makeutil_environment(coverage, contract="main coverage Makeutil contract")
     coverage_parser = _sole_workflow_step(
@@ -527,3 +540,17 @@ def test_ci_installs_makeutil_for_every_full_suite() -> None:
         main_coverage_inputs.get("baseline-python-file")
         == _COVERAGE_BASELINE_PYTHON_FILE
     ), "main coverage must use the reset Python ratchet baseline"
+    assert main_coverage_inputs.get("with-ratchet") == "true", (
+        "main coverage must publish the ratchet baseline"
+    )
+    main_upload = _sole_workflow_step(
+        "coverage-upload",
+        "Upload coverage data to CodeScene",
+        workflow_path=".github/workflows/coverage-main.yml",
+    )
+    main_upload_inputs = _mapping(
+        main_upload.get("with"), subject="main CodeScene upload inputs"
+    )
+    assert main_upload_inputs.get("mode") == "upload", (
+        "main coverage must be the authoritative CodeScene upload"
+    )
