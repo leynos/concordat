@@ -34,6 +34,11 @@ _CONFTEST_INSTALL_COMMAND: typ.Final = (
     "go install github.com/open-policy-agent/conftest@v0.52.0"
 )
 _COVERAGE_BASELINE_PYTHON_FILE: typ.Final = ".coverage-baseline.python-v2"
+_CS_ACTION: typ.Final = (
+    "leynos/shared-actions/.github/actions/upload-codescene-coverage@"
+    "18bed1ca49a6de3d8882bd72635a32ae3f023d57"
+)
+_CS_CLI_VERSION: typ.Final = "1.0.101"
 _HYPOTHESIS_REQUIREMENT: typ.Final = "hypothesis>=6.165.10,<7.0"
 _MAKEUTIL_INSTALL_TOKENS: typ.Final = (
     "rustup",
@@ -571,3 +576,33 @@ def test_ci_installs_required_policy_tools_for_every_full_suite() -> None:
         == _COVERAGE_BASELINE_PYTHON_FILE
     ), "pull-request coverage must use the reset Python ratchet baseline"
     _assert_main_coverage_policy_tools()
+
+
+def test_codescene_coverage_steps_pin_the_compatible_cli() -> None:
+    """Both coverage workflows retain the tested CodeScene CLI compatibility pin."""
+    steps = (
+        (
+            ".github/workflows/ci.yml",
+            "lint-test",
+            "Check coverage against CodeScene gates",
+            "check",
+        ),
+        (
+            ".github/workflows/coverage-main.yml",
+            "coverage-upload",
+            "Upload coverage data to CodeScene",
+            None,
+        ),
+    )
+    shared_inputs: list[dict[str, object]] = []
+    for workflow_path, job_name, step_name, mode in steps:
+        step = _sole_workflow_step(job_name, step_name, workflow_path=workflow_path)
+        assert step.get("uses") == _CS_ACTION, "CodeScene action mismatch"
+        inputs = _mapping(step.get("with"), subject=f"{workflow_path} inputs")
+        assert inputs.get("cli-version") == _CS_CLI_VERSION, "CodeScene CLI mismatch"
+        assert inputs.get("mode") == mode, "CodeScene mode mismatch"
+        shared_inputs.append({
+            name: inputs.get(name)
+            for name in ("format", "access-token", "installer-checksum", "cli-version")
+        })
+    assert shared_inputs[0] == shared_inputs[1], "CodeScene inputs diverge"
