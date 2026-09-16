@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & retrospective`, `Conformance basis`, and `Verification plan` must
 be kept up to date as work proceeds.
 
-Status: IN PROGRESS
+Status: COMPLETE
 
 ## Purpose / big picture
 
@@ -90,8 +90,8 @@ when the local coverage ratchet is not wired to a baseline written by `main`.
   seven policy fixtures, manifest registration, and operator documentation.
 - [x] (2026-09-16 22:05Z) Pass 714 repository tests, seven Conftest cases,
   and the rule branch's lint, format, type, Markdown, and Mermaid gates.
-- [ ] Commit and publish each branch, then open two draft pull requests against
-  `main`.
+- [x] (2026-09-16 22:20Z) Commit and publish each branch, then open draft pull
+  requests #175 and #176 against `main`.
 
 ## Surprises & discoveries
 
@@ -146,7 +146,10 @@ EP-M2 now ships CV-005 as an audit-only, manifest-selected rule. Seven policy
 fixtures cover compliance, forbidden pull-request checks and uploads, direct
 token use, missing main upload, missing pull-request ratchet, malformed input,
 and reusable-workflow uncertainty. The full branch suite passed with 714 tests
-and one intentional skip. Publication and hosted pull-request checks remain.
+and one intentional skip. Draft PR #175 carries EP-M1, and draft PR #176
+carries EP-M2. At hand-off, repository jobs were still queued or running; PR
+#175's CodeScene health review failed against external delta result 7585557,
+while the same review passed on PR #176.
 
 ## Context and orientation
 
@@ -299,3 +302,7 @@ design catalogue and roadmap now describe that topology.
 2026-09-16: EP-M2 added the decoded-workflow envelope and CV-005 policy on an
 independent branch. Real-repository evidence made reusable workflow calls
 indeterminate, preserving the plan's three-valued classification requirement.
+
+2026-09-16: Both independent branches were pushed and opened as draft pull
+requests #175 and #176. The implementation objective is complete; hosted
+checks continue independently of this plan.
