@@ -82,10 +82,14 @@ when the local coverage ratchet is not wired to a baseline written by `main`.
 - [x] (2026-09-16 19:45Z) Receive explicit approval for implementation.
 - [x] (2026-09-16 21:10Z) Add the repair contract, remove the PR CodeScene
   step, and reconcile the accepted design and roadmap doctrine.
-- [ ] Pass the focused and repository gates for the repair branch.
-- [ ] Add failing workflow-envelope and policy fixtures for the estate rule.
-- [ ] Implement the workflow envelope, rule package, documentation, and wider
-  validation.
+- [x] (2026-09-16 21:20Z) Pass the focused repair checks and an independent
+  scrutineer run across formatting, documentation, typing, and workflow lint.
+- [x] (2026-09-16 21:35Z) Record failing workflow-envelope, dispatch, and
+  policy tests before implementing the estate rule.
+- [x] (2026-09-16 21:55Z) Implement CV-005, its decoded-workflow envelope,
+  seven policy fixtures, manifest registration, and operator documentation.
+- [x] (2026-09-16 22:05Z) Pass 714 repository tests, seven Conftest cases,
+  and the rule branch's lint, format, type, Markdown, and Mermaid gates.
 - [ ] Commit and publish each branch, then open two draft pull requests against
   `main`.
 
@@ -107,6 +111,15 @@ when the local coverage ratchet is not wired to a baseline written by `main`.
   Evidence: `docs/concordat-design.md` on branch `ci-compliance-rfcs` and
   Netsuke PR #724. Impact: the new shipped rule must encode the corrected
   pattern, and the RFC branch will need separate reconciliation by its owner.
+- Observation: the same contradictory `CV-001` wording was already present on
+  `main`, not only on the unmerged RFC branch. Evidence:
+  `docs/concordat-design.md` and `docs/roadmap.md` at the shared merge base.
+  Impact: both branches retire that prescription as part of their own bounded
+  documentation changes.
+- Observation: reusable workflow calls do not expose an inline `steps` list.
+  Evidence: the real Concordat CLI witness reports the reusable workflow as
+  indeterminate. Impact: CV-005 preserves three-valued evaluation instead of
+  treating absent inline steps as proof of compliance or violation.
 
 ## Decision log
 
@@ -125,7 +138,15 @@ when the local coverage ratchet is not wired to a baseline written by `main`.
 
 ## Outcomes & retrospective
 
-No implementation outcome is recorded while this plan remains a draft.
+EP-M1 now keeps pull-request coverage entirely on the existing local ratchet
+and makes the post-merge CodeScene upload explicit. Its focused contract and
+independent gate run passed.
+
+EP-M2 now ships CV-005 as an audit-only, manifest-selected rule. Seven policy
+fixtures cover compliance, forbidden pull-request checks and uploads, direct
+token use, missing main upload, missing pull-request ratchet, malformed input,
+and reusable-workflow uncertainty. The full branch suite passed with 714 tests
+and one intentional skip. Publication and hosted pull-request checks remain.
 
 ## Context and orientation
 
@@ -273,5 +294,8 @@ workflow contract described above; no scope or verification obligation changed.
 
 2026-09-16: EP-M1 implementation removed the obsolete pull-request CodeScene
 check while retaining the local ratchet and explicit main-only upload. The
-design catalogue and roadmap now describe that topology; EP-M2 remains
-unstarted.
+design catalogue and roadmap now describe that topology.
+
+2026-09-16: EP-M2 added the decoded-workflow envelope and CV-005 policy on an
+independent branch. Real-repository evidence made reusable workflow calls
+indeterminate, preserving the plan's three-valued classification requirement.
