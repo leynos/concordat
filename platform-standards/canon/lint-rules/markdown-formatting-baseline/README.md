@@ -34,10 +34,13 @@ dependency graph so nothing is resolved from the registry at run time.
   the finding.
 - **PD-006** (error): CI must lint Markdown through
   `DavidAnson/markdownlint-cli2-action` pinned to a full commit SHA with
-  `globs: '**/*.md'`. A `run:` step that installs or invokes
-  `markdownlint-cli2`, or drives `make markdownlint`, is noncompliant in every
-  workflow it appears in, and a checkout with no such action step at all is
-  noncompliant.
+  `globs: '**/*.md'`. A `run:` step that invokes `markdownlint-cli2`, or drives
+  `make markdownlint`, is noncompliant in every workflow it appears in. A
+  `run:` step that only installs the linter is noncompliant when no compliant
+  action step lints Markdown in that workflow; beside such a step it is
+  provisioning for something else (a test suite that runs the linter as a
+  subprocess, say) and is not a finding. A checkout with no action step at all
+  is noncompliant.
 - **EN-001** (error, indeterminate): the policy-input envelope has an unknown
   schema version.
 

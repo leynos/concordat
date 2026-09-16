@@ -736,24 +736,70 @@ workflow_steps(workflow) := {[job_id, index, step] |
 	is_object(step)
 }
 
-# A `run:` step that installs or invokes markdownlint-cli2, or drives the
-# Makefile's markdownlint target, resolves the linter at run time instead of
-# through the action's pinned release.
-shell_lint_pattern := `markdownlint-cli2|\bmake\b[^\n]*\bmarkdownlint\b`
+# A `run:` step that invokes markdownlint-cli2 as a command, or drives the
+# Makefile's markdownlint target, lints Markdown outside the action's pinned
+# release. Lines that only provision the linter are not invocations: an
+# install (`npm install -g markdownlint-cli2@...`), a path test or quoted
+# package spec (the name is not in command position), or a `--version`
+# probe. Provisioning is the Markdown gate's installer when no compliant
+# action step lints Markdown in that workflow, and otherwise it supplies the
+# executable to something else, such as a test suite that runs the linter
+# as a subprocess, which this check does not govern.
+shell_invocation_pattern := `(?m)^[^\n]*((^|[[:space:];&|(])([^[:space:]"']*/)?markdownlint-cli2([[:space:]]|$)|\bmake\b[^\n]*\bmarkdownlint\b)[^\n]*`
+
+version_probe_pattern := `markdownlint-cli2[[:space:]]+(-V|--version)([[:space:]]|$)`
+
+install_line_pattern := `(?m)^[[:space:]]*(npm|bun|pnpm|yarn)[[:space:]]+(install|add|i)\b[^\n]*markdownlint-cli2`
 
 step_label(step, index) := step.name if {
 	is_string(step.name)
 } else := sprintf("step %d", [index + 1])
 
+# Every line of the script that runs the linter, less provisioning lines.
+shell_invocation_lines(script) := {line |
+	some line in regex.find_n(shell_invocation_pattern, script, -1)
+	not regex.match(install_line_pattern, line)
+	not regex.match(version_probe_pattern, line)
+}
+
+step_invokes_linter(step) if {
+	is_string(step.run)
+	count(shell_invocation_lines(step.run)) > 0
+}
+
+step_installs_linter(step) if {
+	is_string(step.run)
+	regex.match(install_line_pattern, step.run)
+}
+
+workflow_has_compliant_action(workflow) if {
+	some [_, _, step] in workflow_steps(workflow)
+	action_step(step)
+	action_pinned(step)
+	action_globs(step) == markdownlint_globs
+}
+
 deny contains f if {
 	applicable
 	some workflow in input.workflows
 	some [job_id, index, step] in workflow_steps(workflow)
-	is_string(step.run)
-	regex.match(shell_lint_pattern, step.run)
+	step_invokes_linter(step)
 	f := finding(
 		"PD-006", "noncompliant", workflow.path, 0,
 		sprintf("job %q lints Markdown from a shell step (%s); use %s", [job_id, step_label(step, index), markdownlint_action]),
+	)
+}
+
+deny contains f if {
+	applicable
+	some workflow in input.workflows
+	some [job_id, index, step] in workflow_steps(workflow)
+	step_installs_linter(step)
+	not step_invokes_linter(step)
+	not workflow_has_compliant_action(workflow)
+	f := finding(
+		"PD-006", "noncompliant", workflow.path, 0,
+		sprintf("job %q installs markdownlint-cli2 from a shell step (%s) and no step lints Markdown with %s", [job_id, step_label(step, index), markdownlint_action]),
 	)
 }
 

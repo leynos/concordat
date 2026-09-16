@@ -78,6 +78,7 @@ EXPECTED_PROFILES: typ.Final[dict[str, Profile]] = {
     "workflow_none": frozenset({("PD-006", "noncompliant")}),
     "workflow_absent": frozenset({("PD-006", "noncompliant")}),
     "workflow_mixed": frozenset({("PD-006", "noncompliant")}),
+    "workflow_install_for_tests": frozenset(),
     "workflow_reusable_only": frozenset({("PD-006", "indeterminate")}),
     "workflow_malformed": frozenset({("PD-006", "indeterminate")}),
 }

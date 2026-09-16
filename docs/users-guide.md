@@ -328,9 +328,12 @@ cache directories, and reports:
   and globs may be added; the canonical file to copy is
   `platform-standards/canon/lint/markdown/.markdownlint-cli2.jsonc`.
 - **PD-006** — CI lints Markdown through `DavidAnson/markdownlint-cli2-action`
-  pinned to a full commit SHA with `globs: '**/*.md'`. A workflow step that
-  installs or runs `markdownlint-cli2` from a shell, or drives
-  `make markdownlint`, is noncompliant.
+  pinned to a full commit SHA with `globs: '**/*.md'`. A workflow step that runs
+  `markdownlint-cli2` from a shell, or drives `make markdownlint`, is
+  noncompliant. A step that only installs the linter is noncompliant unless a
+  compliant action step lints Markdown in the same workflow, in which case it
+  is provisioning for something else (a test suite that runs the linter as a
+  subprocess, say).
 
 The Makefile checks expand Make variables that are assigned exactly once and
 unconditionally, so `$(MDTABLEFIX) --check $(MDTABLEFIX_SELECT)` is audited
