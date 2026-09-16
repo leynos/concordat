@@ -109,6 +109,7 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "workflow_malformed": Scenario(
         workflows={"ci.yml": "malformed", "release.yml": "no-markdown"}
     ),
+    "workflow_install_for_tests": Scenario(workflows={"ci.yml": "install-for-tests"}),
     "workflow_mixed": Scenario(
         workflows={"ci.yml": "action", "docs.yml": "shell-lint"}
     ),

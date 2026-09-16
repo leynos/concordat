@@ -2159,9 +2159,11 @@ Markdown let unformatted prose reach `main`. These checks have shipped as the
   baseline `ignores` glob, permitting repository additions. A workflow policy
   decodes every file under `.github/workflows`, requires the action pinned to a
   full commit SHA with `globs: '**/*.md'`, and flags any `run:` step that
-  installs or invokes `markdownlint-cli2` or drives `make markdownlint`. An
-  unresolvable Make variable, a conditional or `include` in the closure, an
-  undecodable file, or a job that calls a reusable workflow is indeterminate.
+  invokes `markdownlint-cli2` or drives `make markdownlint`; a step that only
+  installs the linter is flagged unless a compliant action step lints Markdown
+  in the same workflow. An unresolvable Make variable, a conditional or
+  `include` in the closure, an undecodable file, or a job that calls a reusable
+  workflow is indeterminate.
 - **Actuators:** file-copy of the canonical `.markdownlint-cli2.jsonc` from
   `canon/lint/markdown/`; Makefile patches replacing the wrapper with the direct
   `mdtablefix` and `markdownlint-cli2` recipes; workflow patches replacing

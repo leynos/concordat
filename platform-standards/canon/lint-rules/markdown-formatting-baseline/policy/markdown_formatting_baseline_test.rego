@@ -306,6 +306,23 @@ test_malformed_workflow_is_indeterminate if {
 	f.path == ".github/workflows/ci.yml"
 }
 
+# Installing the linter for a test suite is provisioning, not a Markdown gate,
+# while the workflow lints Markdown with the compliant action.
+test_install_beside_the_action_is_compliant if {
+	findings := policy.deny with input as data.fixtures.workflow_install_for_tests
+	count(findings) == 0
+}
+
+# Only command-position invocations count; provisioning lines do not.
+test_shell_invocation_lines_ignore_provisioning if {
+	count(policy.shell_invocation_lines("npm install -g markdownlint-cli2@0.20.0")) == 0
+	count(policy.shell_invocation_lines("[ -x \"$root/bin/markdownlint-cli2\" ] || true")) == 0
+	count(policy.shell_invocation_lines("markdownlint-cli2 --version")) == 0
+	count(policy.shell_invocation_lines("markdownlint-cli2 \"**/*.md\"")) == 1
+	count(policy.shell_invocation_lines("~/.bun/bin/markdownlint-cli2")) == 1
+	count(policy.shell_invocation_lines("make markdownlint")) == 1
+}
+
 test_shell_lint_beside_the_action_is_still_noncompliant if {
 	findings := policy.deny with input as data.fixtures.workflow_mixed
 	profile(findings) == {["PD-006", "noncompliant"]}
