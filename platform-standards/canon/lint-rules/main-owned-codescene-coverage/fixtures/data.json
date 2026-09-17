@@ -746,6 +746,36 @@
       "kind": "policy-input/main-owned-codescene-coverage",
       "repository": {"path": ".", "name": null},
       "workflows": [{"path": ".github/workflows/ci.yml", "parsed": {"on": {"pull_request": null}, "jobs": {"coverage": {"uses": "leynos/shared/.github/workflows/coverage.yml@main"}}}, "error": null}]
+    },
+    "unrelated_reusable": {
+      "schema_version": 1,
+      "kind": "policy-input/main-owned-codescene-coverage",
+      "repository": {"path": ".", "name": null},
+      "workflows": [
+        {
+          "path": ".github/workflows/coverage-main.yml",
+          "parsed": {
+            "on": {"push": {"branches": ["main"]}},
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {"uses": "generate-coverage", "with": {"with-ratchet": true}},
+                  {"uses": "upload-codescene-coverage", "with": {"mode": "upload"}}
+                ]
+              }
+            }
+          },
+          "error": null
+        },
+        {
+          "path": ".github/workflows/dependabot-automerge.yml",
+          "parsed": {
+            "on": {"schedule": [{"cron": "0 0 * * *"}]},
+            "jobs": {"automerge": {"uses": "leynos/shared/.github/workflows/dependabot.yml@main"}}
+          },
+          "error": null
+        }
+      ]
     }
   }
 }

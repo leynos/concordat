@@ -180,6 +180,73 @@ unsupported_workflow(workflow) if {
   not is_object(step["with"])
 }
 
+# A reusable workflow hides its steps from this audit. That is only relevant
+# when the workflow could own coverage: a pull-request or main-only trigger,
+# or decoded CodeScene or coverage facts. Scheduled support workflows such as
+# Dependabot automation cannot affect this contract and are deliberately left
+# outside the fail-closed boundary.
+unsupported_coverage_candidate(workflow) if {
+  unsupported_workflow(workflow)
+  has_pr_trigger(workflow)
+}
+
+unsupported_coverage_candidate(workflow) if {
+  unsupported_workflow(workflow)
+  main_only_trigger(workflow)
+}
+
+unsupported_coverage_candidate(workflow) if {
+  unsupported_workflow(workflow)
+  has_coverage_step(workflow)
+}
+
+unsupported_coverage_candidate(workflow) if {
+  unsupported_workflow(workflow)
+  has_codescene_step(workflow)
+}
+
+unsupported_coverage_candidate(workflow) if {
+  unsupported_workflow(workflow)
+  workflow_exposes_token(workflow)
+}
+
+# A malformed or triggerless document cannot be classified safely, unlike a
+# well-formed unrelated reusable workflow, so it remains indeterminate.
+unsupported_coverage_candidate(workflow) if {
+  unsupported_workflow(workflow)
+  not is_object(workflow)
+}
+
+unsupported_coverage_candidate(workflow) if {
+  unsupported_workflow(workflow)
+  is_object(workflow)
+  object.get(workflow, "error", null) != null
+}
+
+unsupported_coverage_candidate(workflow) if {
+  unsupported_workflow(workflow)
+  is_object(workflow)
+  object.get(workflow, "error", null) == null
+  not is_object(object.get(workflow, "parsed", null))
+}
+
+unsupported_coverage_candidate(workflow) if {
+  unsupported_workflow(workflow)
+  parsed := workflow_parsed(workflow)
+  not "on" in object.keys(parsed)
+}
+
+unsupported_coverage_candidate(workflow) if {
+  unsupported_workflow(workflow)
+  workflow_on(workflow)
+  not has_pr_trigger(workflow)
+  not main_only_trigger(workflow)
+  on := workflow_on(workflow)
+  not is_string(on)
+  not is_array(on)
+  not is_object(on)
+}
+
 workflow_steps(workflow) := {step |
   jobs := workflow_jobs(workflow)
   some name in object.keys(jobs)
@@ -381,7 +448,7 @@ deny contains f if {
 deny contains f if {
   envelope_ok
   some workflow in workflows
-  unsupported_workflow(workflow)
+  unsupported_coverage_candidate(workflow)
   f := finding("indeterminate", workflow_path(workflow), "workflow shape cannot be evaluated safely")
 }
 

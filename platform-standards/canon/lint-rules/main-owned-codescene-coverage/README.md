@@ -19,8 +19,11 @@ The rule requires all of the following:
   action with `mode: upload`, or runs a direct `cs-coverage upload` command.
 
 Malformed workflow YAML, unsupported job shapes, and reusable workflow jobs are
-`indeterminate`. The rule fails closed because a local audit cannot inspect the
-delegated workflow or infer arbitrary GitHub Actions expressions.
+`indeterminate` when they could carry pull-request coverage, a main publisher,
+or decoded CodeScene or coverage facts. Well-formed unrelated reusable
+workflows are ignored. The rule fails closed for the relevant boundary because
+a local audit cannot inspect delegated workflow steps or infer arbitrary GitHub
+Actions expressions.
 
 ## Validation
 

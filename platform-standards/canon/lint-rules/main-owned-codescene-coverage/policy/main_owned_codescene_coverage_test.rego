@@ -116,6 +116,11 @@ test_reusable_workflow_is_indeterminate if {
   }
 }
 
+test_unrelated_reusable_workflow_is_ignored if {
+  findings := policy.deny with input as data.fixtures.unrelated_reusable
+  count(findings) == 0
+}
+
 test_all_pr_coverage_steps_require_ratcheting if {
   findings := policy.deny with input as data.fixtures.multiple_pr_coverage_steps
   profile(findings) == {
