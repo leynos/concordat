@@ -9,8 +9,9 @@ coverage data.
 
 The rule requires all of the following:
 
-- Pull-request workflows with coverage use `generate-coverage` with
-  `with-ratchet: true`.
+- Every `generate-coverage` step in a pull-request workflow uses
+  `with-ratchet: true`, and its effective Rust and Python baseline paths match
+  a ratcheting generator in the main publisher.
 - Pull-request workflows do not invoke a CodeScene action or a direct
   `cs-coverage check`/`upload` command, and do not receive `CS_ACCESS_TOKEN`.
 - A workflow with a `push` trigger restricted to `main`, optionally alongside

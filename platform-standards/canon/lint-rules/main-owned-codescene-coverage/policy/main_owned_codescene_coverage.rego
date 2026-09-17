@@ -1,10 +1,10 @@
 # CV-005: Keep CodeScene coverage publication on main.
 #
 # The Python envelope has already decoded each workflow document. This policy
-# recognises literal direct `cs-coverage` commands in shell scripts but does
-# not interpret shell expressions or reusable workflows: facts that cannot
-# establish the required topology are indeterminate rather than a clean
-# result.
+# recognises literal direct `cs-coverage` commands in shell scripts, including
+# simple environment prefixes, but does not interpret shell expressions or
+# reusable workflows: facts that cannot establish the required topology are
+# indeterminate rather than a clean result.
 package canon.lint_rules.main_owned_codescene_coverage
 
 import rego.v1
@@ -26,7 +26,14 @@ envelope_ok if {
   is_array(workflows)
 }
 
-workflow_path(workflow) := object.get(workflow, "path", ".github/workflows")
+workflow_path(workflow) := path if {
+  is_object(workflow)
+  path := object.get(workflow, "path", ".github/workflows")
+}
+
+workflow_path(workflow) := ".github/workflows" if {
+  not is_object(workflow)
+}
 
 workflow_parsed(workflow) := parsed if {
   is_object(workflow)
@@ -189,7 +196,17 @@ step_uses(step, action) if {
   contains(lower(uses), action)
 }
 
-codescene_cli_command_pattern := `(?m)(^|[\r\n;&|()])\s*cs-coverage\s+(check|upload)(\s|$)`
+shell_assignment_prefix := `[A-Za-z_][A-Za-z0-9_]*=("[^"\r\n]*"|'[^'\r\n]*'|[^[:space:];|&()<>"'\\]*)[[:space:]]+`
+
+codescene_cli_prefix := sprintf(
+  `(?:%s)*(?:env[[:space:]]+)?(?:%s)*`,
+  [shell_assignment_prefix, shell_assignment_prefix],
+)
+
+codescene_cli_command_pattern := sprintf(
+  `(?m)(^|[\r\n;&|()])[[:space:]]*%scs-coverage[[:space:]]+(check|upload)([[:space:]]|$)`,
+  [codescene_cli_prefix],
+)
 
 is_codescene_cli_step(step) if {
   run := object.get(step, "run", "")
@@ -203,6 +220,20 @@ is_codescene_step(step) if is_codescene_cli_step(step)
 
 is_coverage_step(step) if step_uses(step, "generate-coverage")
 
+default_rust_baseline := ".coverage-baseline.rust"
+
+default_python_baseline := ".coverage-baseline.python"
+
+# Omitted inputs have the shared action's defaults, so compare the effective
+# pair rather than whether either workflow spells both paths explicitly.
+coverage_identity(step) := {
+  "rust": object.get(inputs, "baseline-rust-file", default_rust_baseline),
+  "python": object.get(inputs, "baseline-python-file", default_python_baseline),
+} if {
+  inputs := object.get(step, "with", {})
+  is_object(inputs)
+}
+
 has_coverage_step(workflow) if {
   some step in workflow_steps(workflow)
   is_coverage_step(step)
@@ -211,16 +242,24 @@ has_coverage_step(workflow) if {
 has_ratcheting_coverage(workflow) if {
   some step in workflow_steps(workflow)
   is_coverage_step(step)
+  ratcheting_coverage_step(step)
+}
+
+ratcheting_coverage_step(step) if {
   inputs := object.get(step, "with", {})
   value := object.get(inputs, "with-ratchet", null)
   value == true
 }
 
-has_ratcheting_coverage(workflow) if {
-  some step in workflow_steps(workflow)
-  is_coverage_step(step)
+ratcheting_coverage_step(step) if {
   inputs := object.get(step, "with", {})
   object.get(inputs, "with-ratchet", null) == "true"
+}
+
+has_unratcheted_coverage(workflow) if {
+  some step in workflow_steps(workflow)
+  is_coverage_step(step)
+  not ratcheting_coverage_step(step)
 }
 
 has_codescene_step(workflow) if {
@@ -239,12 +278,36 @@ has_explicit_upload(workflow) if {
   some step in workflow_steps(workflow)
   run := object.get(step, "run", "")
   is_string(run)
-  regex.match(`(?m)(^|[\r\n;&|()])\s*cs-coverage\s+upload(\s|$)`, run)
+  regex.match(
+    sprintf(
+      `(?m)(^|[\r\n;&|()])[[:space:]]*%scs-coverage[[:space:]]+upload([[:space:]]|$)`,
+      [codescene_cli_prefix],
+    ),
+    run,
+  )
+}
+
+has_token_reference(value) if {
+  some _, descendant in walk(value)
+  is_string(descendant)
+  contains(descendant, "CS_ACCESS_TOKEN")
 }
 
 has_token(environment) if {
   is_object(environment)
   "CS_ACCESS_TOKEN" in object.keys(environment)
+}
+
+has_token(environment) if {
+  is_object(environment)
+  some key in object.keys(environment)
+  has_token_reference(environment[key])
+}
+
+has_token_input(inputs) if {
+  is_object(inputs)
+  some key in object.keys(inputs)
+  has_token_reference(inputs[key])
 }
 
 workflow_exposes_token(workflow) if {
@@ -267,8 +330,15 @@ workflow_exposes_token(workflow) if {
 
 workflow_exposes_token(workflow) if {
   some step in workflow_steps(workflow)
+  inputs := object.get(step, "with", {})
+  has_token_input(inputs)
+}
+
+workflow_exposes_token(workflow) if {
+  some step in workflow_steps(workflow)
   is_codescene_step(step)
   inputs := object.get(step, "with", {})
+  is_object(inputs)
   "access-token" in object.keys(inputs)
 }
 
@@ -276,6 +346,26 @@ main_coverage_publisher(workflow) if {
   main_only_trigger(workflow)
   has_ratcheting_coverage(workflow)
   has_explicit_upload(workflow)
+}
+
+qualifying_main_coverage_publisher(workflow) if {
+  main_coverage_publisher(workflow)
+  not unsupported_workflow(workflow)
+}
+
+coverage_identity_published(step) if {
+  some workflow in workflows
+  qualifying_main_coverage_publisher(workflow)
+  some publisher_step in workflow_steps(workflow)
+  is_coverage_step(publisher_step)
+  ratcheting_coverage_step(publisher_step)
+  coverage_identity(publisher_step) == coverage_identity(step)
+}
+
+has_unmatched_pr_coverage_identity(workflow) if {
+  some step in workflow_steps(workflow)
+  is_coverage_step(step)
+  not coverage_identity_published(step)
 }
 
 main_coverage_publisher_exists if {
@@ -319,8 +409,18 @@ deny contains f if {
   has_pr_trigger(workflow)
   not unsupported_workflow(workflow)
   has_coverage_step(workflow)
-  not has_ratcheting_coverage(workflow)
+  has_unratcheted_coverage(workflow)
   f := finding("noncompliant", workflow_path(workflow), "pull-request workflow lacks ratcheting coverage generation")
+}
+
+deny contains f if {
+  envelope_ok
+  main_coverage_publisher_exists
+  some workflow in workflows
+  has_pr_trigger(workflow)
+  not unsupported_workflow(workflow)
+  has_unmatched_pr_coverage_identity(workflow)
+  f := finding("noncompliant", workflow_path(workflow), "pull-request coverage baseline has no matching main publisher")
 }
 
 deny contains f if {

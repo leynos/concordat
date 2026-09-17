@@ -74,6 +74,9 @@ def _load_workflow(
     """Return one decoded workflow fact, retaining any content-level failure."""
     fact: WorkflowFile = {"path": str(relative), "parsed": None, "error": None}
     path = checkout / relative
+    if path.is_symlink():
+        fact["error"] = "workflow file is a symlink"
+        return fact
     try:
         text = _read_text(path)
     except UnicodeDecodeError as error:
@@ -87,7 +90,10 @@ def _load_workflow(
     if not isinstance(parsed, dict):
         fact["error"] = "workflow document is not a mapping"
         return fact
-    fact["parsed"] = _json_safe(parsed)
+    try:
+        fact["parsed"] = _json_safe(parsed)
+    except (TypeError, ValueError) as error:
+        fact["error"] = f"workflow document is not JSON-safe: {error}"
     return fact
 
 
@@ -99,7 +105,7 @@ def _load_workflows(checkout: pathlib.Path) -> list[WorkflowFile]:
     return [
         _load_workflow(checkout, WORKFLOWS_DIRECTORY / entry.name)
         for entry in sorted(directory.iterdir(), key=lambda entry: entry.name)
-        if entry.is_file() and entry.suffix in WORKFLOW_SUFFIXES
+        if entry.suffix in WORKFLOW_SUFFIXES and (entry.is_symlink() or entry.is_file())
     ]
 
 
