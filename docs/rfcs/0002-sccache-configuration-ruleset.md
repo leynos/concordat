@@ -442,7 +442,26 @@ default went untested because every fixture pinned the old value explicitly. A
 fixture for a defaulted input must read the action's declared default from its
 manifest, so the pair cannot drift on the next bump.
 
-## 6. Open questions
+## 6. Properties
+
+Two of this family's predicates are comparators over collections whose size and
+order the fixtures cannot enumerate, so each carries a Hypothesis property test
+written from this document, per the developers' guide's discipline for
+`tests/unit/test_properties.py`.
+
+- **Pin uniformity (RT-013).** Over a generated multiset of references to the
+  one repository: the verdict is invariant under permutation, since a set of
+  pins has no order; a multiset containing exactly one distinct SHA never
+  yields the divergence finding, which is the invariant that makes the
+  `indeterminate` class reachable at all rather than dead text; and every
+  multiset yields exactly one of the three classes, so the classes are total
+  and disjoint.
+- **One writer per cache key family (RT-015).** Over a generated set of jobs
+  and cache steps: the count is invariant under job order, and the verdict
+  depends only on the number of writers per key family, so adding a reader
+  never changes it.
+
+## 7. Open questions
 
 1. **Where the bad-pin set lives and who prunes it.** 32c8ea64 is the seed
    entry. The set is canon data, but nothing yet retires an entry when no
@@ -466,7 +485,7 @@ manifest, so the pair cannot drift on the next bump.
    hand-rolls it. Whether the ordering is a sixth rule or an assertion inside
    RT-012 depends on whether that action ships first.
 
-## 7. Alternatives rejected
+## 8. Alternatives rejected
 
 **One rule with five clauses.** A single `sccache-configuration` package would
 share one sensor over the same envelope. Rejected because the five clauses have

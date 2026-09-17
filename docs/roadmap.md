@@ -437,7 +437,12 @@ actuators that remediate them. Each check ships as a lint rule package under
   `test-lane-different-profile` raise. QG-005 ships without an actuator, naming
   the duplicate leg and the coverage lane that covers it, because choosing the
   surviving lane is a local judgement; QG-007 reports any pruning that removes
-  per-crate `cargo package`.
+  per-crate `cargo package`. The feature-set resolver, the profile resolver and
+  the test-selection comparator each carry Hypothesis property tests for the
+  invariants in Section 6 of RFC 0003 (idempotent resolution, equality as an
+  equivalence relation, and the metamorphic relations that a feature outside
+  the default set always destroys equality and that disjoint selections never
+  compare equal), written from the RFC rather than the implementation.
 - [ ] Ship the coverage-pipeline rule packages (CV-001, CV-002, CV-004):
   pull-request jobs must keep coverage local, enforce the ratchet against the
   baseline written on `main`, and contain no CodeScene action or token; a
@@ -599,7 +604,11 @@ the Section 2.1.2 format.
   variable, repin, append the statistics step, and disable the surplus cache
   writer, each comment-preservingly; the wrapper line is never added, because
   setting it caller-side by bare name is the whitaker #409 defect. The
-  wrapper-naming clause remains CI-016 rather than taking a new identifier.
+  wrapper-naming clause remains CI-016 rather than taking a new identifier. The
+  RT-013 pin comparator and the RT-015 writer count carry Hypothesis property
+  tests for the invariants in Section 6 of RFC 0002: both verdicts are
+  invariant under permutation, one distinct SHA never yields divergence, and
+  the three RT-013 classes are total and disjoint.
 - [ ] Ship the tool-acquisition rule packages (TA-001 to TA-003), per
   [RFC 0001](rfcs/0001-binary-only-tool-installation-in-ci.md): a continuous
   integration job never builds a tool it merely consumes; a release archive is
@@ -621,4 +630,8 @@ the Section 2.1.2 format.
   raising. TA-001 and TA-002 have no automatic actuator and open a tracking
   issue naming the `install-tool` manifest entry to add, because the entry
   needs a fact about published archives that the sensor cannot obtain; TA-003
-  repins from canon data comment-preservingly.
+  repins from canon data comment-preservingly. The TA-003 pin-form predicate
+  and the TA-002 digest-ordering predicate carry Hypothesis property tests for
+  the invariants in Section 6 of RFC 0001: acceptance is total, a full
+  forty-hex SHA always passes while every proper prefix of it always fails, and
+  the ordering verdict is invariant under unrelated intervening steps.

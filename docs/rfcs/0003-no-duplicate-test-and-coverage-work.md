@@ -384,7 +384,37 @@ Every mutation is applied in both directions.
   recipe's `publish` subcommand. The rule must stop raising on
   `contract-asserts-flag-only`, proving both ends are load-bearing.
 
-## 6. Open questions
+## 6. Properties
+
+This family carries the most comparator logic of the three, and its resolvers
+range over input spaces no fixture table can cover, so each carries a
+Hypothesis property test written from this document rather than from the
+implementation, per the developers' guide's discipline for
+`tests/unit/test_properties.py`.
+
+- **Feature-set resolution (QG-006, Section 2.2).** Over generated manifests
+  and feature arguments: resolution is idempotent; equality after resolution is
+  an equivalence relation, so it is reflexive, symmetric and transitive;
+  resolving a leg that names a feature outside the default set never yields
+  equality with a default leg, and adding such a feature to an equal pair
+  always destroys the equality. That last pair is the metamorphic statement of
+  the axinite case, and a resolver comparing argument text would satisfy
+  neither direction.
+- **Profile resolution (QG-005).** Over generated profile tables: resolution
+  through inheritance is total and idempotent, and two names resolving to the
+  same effective configuration compare equal regardless of the names.
+- **Test-selection equality (QG-005).** Over generated filter expressions and
+  target selectors: equality is an equivalence relation; two commands whose
+  selections are disjoint and non-empty never compare equal; and the union of a
+  partition's parts never compares equal to any one part. This is the predicate
+  whose failure would delete a suite, so it is the one property in this RFC
+  that is load-bearing for safety rather than for precision.
+- **Duplicate grouping (QG-005).** The verdict is invariant under the order in
+  which jobs appear in the workflow, and the within-job clause of Section 3.2
+  is invariant under the order of the two invocations only up to which one is
+  named redundant.
+
+## 7. Open questions
 
 1. **Trigger equality for composite events.** A lane keyed on
    `pull_request` and a lane keyed on `push` to the default branch are
@@ -411,7 +441,7 @@ Every mutation is applied in both directions.
    recommend opposite changes on one repository, and the ordering between them
    needs stating before either ships.
 
-## 7. Alternatives rejected
+## 8. Alternatives rejected
 
 **Compare suite commands as text.** A string comparison of the two legs'
 commands is trivial to implement. Rejected on the axinite evidence: the

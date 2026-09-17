@@ -321,7 +321,28 @@ independently of the rule package, following the estate rule that a contract
 asserts the command rather than an identifier and is proved by mutation in both
 directions.
 
-## 6. Open questions
+## 6. Properties
+
+The fixtures above are examples, and two predicates in this family are
+comparators over an unbounded input space, so each also carries a Hypothesis
+property test written from this document rather than from the implementation,
+in the discipline the developers' guide sets for `tests/unit/test_properties.py`
+(a property that restates the implementation's pattern proves nothing).
+
+- **The pin-form predicate (TA-003).** Over generated references: acceptance is
+  total, so every generated string yields a verdict and none raises; a
+  forty-character hexadecimal SHA is always accepted; and every proper prefix
+  of an accepted SHA is always rejected. The last is the metamorphic form of
+  Section 3.3's abbreviated-SHA argument, and it is the property an
+  implementation that merely matched a hexadecimal pattern would fail.
+- **The digest-ordering predicate (TA-002).** Over generated step sequences:
+  the verdict is invariant under inserting steps unrelated to the archive
+  between the digest comparison and the execution, and moving the execution
+  before the comparison always raises. Ordering, not co-presence, is what the
+  rule decides, and a rule that only checked both steps exist would pass the
+  first property and fail the second.
+
+## 7. Open questions
 
 1. **Where the manifest lives.** TA-001's remediation names an `install-tool`
    manifest entry, which implies canon data holds the tool catalogue. The
@@ -348,7 +369,7 @@ directions.
    with no archive, is a natural extension that needs the runner-label canon
    data that issue #153 also requests.
 
-## 7. Alternatives rejected
+## 8. Alternatives rejected
 
 **Require `--locked` and stop there.** This is the smallest change and the one
 the estate reached for first. It fixes reproducibility and leaves the compile
