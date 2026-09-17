@@ -11,10 +11,11 @@ The rule requires all of the following:
 
 - Pull-request workflows with coverage use `generate-coverage` with
   `with-ratchet: true`.
-- Pull-request workflows do not invoke a CodeScene action and do not receive
-  `CS_ACCESS_TOKEN`.
-- A workflow triggered only by pushes to `main` generates ratcheted coverage
-  and invokes the CodeScene action with `mode: upload`.
+- Pull-request workflows do not invoke a CodeScene action or a direct
+  `cs-coverage check`/`upload` command, and do not receive `CS_ACCESS_TOKEN`.
+- A workflow with a `push` trigger restricted to `main`, optionally alongside
+  `workflow_dispatch`, generates ratcheted coverage and invokes the CodeScene
+  action with `mode: upload`, or runs a direct `cs-coverage upload` command.
 
 Malformed workflow YAML, unsupported job shapes, and reusable workflow jobs are
 `indeterminate`. The rule fails closed because a local audit cannot inspect the

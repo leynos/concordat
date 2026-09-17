@@ -1,9 +1,10 @@
 # CV-005: Keep CodeScene coverage publication on main.
 #
 # The Python envelope has already decoded each workflow document. This policy
-# deliberately does not interpret shell expressions or reusable workflows:
-# facts that cannot establish the required topology are indeterminate rather
-# than a clean result.
+# recognises literal direct `cs-coverage` commands in shell scripts but does
+# not interpret shell expressions or reusable workflows: facts that cannot
+# establish the required topology are indeterminate rather than a clean
+# result.
 package canon.lint_rules.main_owned_codescene_coverage
 
 import rego.v1
@@ -62,10 +63,14 @@ has_pr_trigger(workflow) if {
   "pull_request" in object.keys(on)
 }
 
+main_trigger_events(events) if events == {"push"}
+
+main_trigger_events(events) if events == {"push", "workflow_dispatch"}
+
 main_only_trigger(workflow) if {
   on := workflow_on(workflow)
   is_object(on)
-  object.keys(on) == {"push"}
+  main_trigger_events(object.keys(on))
   push := on.push
   is_object(push)
   branches := object.get(push, "branches", null)
@@ -184,9 +189,24 @@ step_uses(step, action) if {
   contains(lower(uses), action)
 }
 
+codescene_cli_command_pattern := `(?m)(^|[\r\n;&|()])\s*cs-coverage\s+(check|upload)(\s|$)`
+
+is_codescene_cli_step(step) if {
+  run := object.get(step, "run", "")
+  is_string(run)
+  regex.match(codescene_cli_command_pattern, run)
+}
+
 is_codescene_step(step) if step_uses(step, "codescene")
 
+is_codescene_step(step) if is_codescene_cli_step(step)
+
 is_coverage_step(step) if step_uses(step, "generate-coverage")
+
+has_coverage_step(workflow) if {
+  some step in workflow_steps(workflow)
+  is_coverage_step(step)
+}
 
 has_ratcheting_coverage(workflow) if {
   some step in workflow_steps(workflow)
@@ -213,6 +233,13 @@ has_explicit_upload(workflow) if {
   is_codescene_step(step)
   inputs := object.get(step, "with", {})
   object.get(inputs, "mode", null) == "upload"
+}
+
+has_explicit_upload(workflow) if {
+  some step in workflow_steps(workflow)
+  run := object.get(step, "run", "")
+  is_string(run)
+  regex.match(`(?m)(^|[\r\n;&|()])\s*cs-coverage\s+upload(\s|$)`, run)
 }
 
 has_token(environment) if {
@@ -291,6 +318,7 @@ deny contains f if {
   some workflow in workflows
   has_pr_trigger(workflow)
   not unsupported_workflow(workflow)
+  has_coverage_step(workflow)
   not has_ratcheting_coverage(workflow)
   f := finding("noncompliant", workflow_path(workflow), "pull-request workflow lacks ratcheting coverage generation")
 }
