@@ -175,9 +175,14 @@ and an action upgrade that moves the binary breaks it without touching the
 workflow. The note names the exporting pin as the durable form.
 
 RT-012's wrapper predicate is therefore satisfied by presence, and CI-016
-decides quality, so one step produces one finding. Where both could fire, the
+decides quality, so the wrapper value of one step is classified by one rule and
+yields at most one wrapper finding. Where both could fire on that value, the
 more specific rule reports: CI-016 owns the bare-name literal, RT-012 owns
-absence.
+absence. This is a statement about wrapper classification alone, not about the
+step's total finding count. RT-012's backend clause is independent, so a
+compiling job that sets no backend and names the wrapper as the bare literal
+raises both an RT-012 backend finding and a CI-016 wrapper finding, and both
+are reported.
 
 **Failure mode.** Where the envelope cannot resolve whether a preceding step
 wrote `SCCACHE_GHA_ENABLED` to `GITHUB_ENV`, the verdict is `indeterminate`.
@@ -189,12 +194,25 @@ not export it, the finding is RT-013's and the remediation is the repin.
 ### 3.3 RT-013: one pin, and not a known-bad one
 
 **Sensor.** Collect every reference to the shared `setup-rust` action and the
-coverage actions in the checkout. Three findings:
+coverage actions in the checkout.
 
-- **Divergent pins.** More than one distinct SHA across same-tree references.
-  A reference that is byte-identical to another but at a different SHA is still
-  a divergence; ortho-config moved its `dependabot-automerge` reference,
-  byte-identical to its neighbours, purely so the one-SHA claim held.
+**The grouping key is the repository, not the action path.** `setup-rust` and
+`upload-codescene-coverage` are two directories of the one `shared-actions`
+repository, so a `uses:` SHA pins that repository's commit rather than the
+action's. Two paths at two SHAs means the checkout consumes the repository at
+two commits, which is the condition the rule exists to report; grouping by path
+would call that compliant. Comparison is therefore within one owner and
+repository, and a reference to a different repository is a different group and
+never compared. This is why `twelve-identical-pins` spans several action paths
+of the one repository and must not raise.
+
+Three findings:
+
+- **Divergent pins.** More than one distinct SHA across same-tree references to
+  the one repository. A reference that is byte-identical to another but at a
+  different SHA is still a divergence; ortho-config moved its
+  `dependabot-automerge` reference, byte-identical to its neighbours, purely so
+  the one-SHA claim held.
 - **A known-bad pin.** The SHA appears in the canon data list of pins known to
   export neither half. 32c8ea64 is the seed entry, recorded from the
   ortho-config survey with the date it was current.
@@ -205,8 +223,12 @@ coverage actions in the checkout. Three findings:
 **Why a named list rather than a floor.** A floor requires ordering SHAs, which
 is not a total order the rule can compute from a checkout. The named set is
 small, is canon data with a recorded reason per entry, and fails closed: a pin
-not in the set and not equal to the current pin is reported as divergent by the
-first clause anyway.
+outside the set and not equal to the current pin is never a silent pass. Which
+of the other two classes it falls into depends on the checkout. Where the
+references disagree, the divergence clause reports it; where they agree on that
+one SHA, the divergence clause cannot fire and the third class reports it as
+`indeterminate`, as Section 3.3 sets out below. The named set therefore removes
+the need to guess about a specific pin, not the need for the third class.
 
 **Hermeticity, and why a network fetch is refused.** The contract shape is
 ortho-config #495's: assert one SHA across every same-tree reference, and
@@ -337,12 +359,13 @@ Each pair differs in exactly the fact its rule claims to decide.
 
 ### Table 3: RT-013 fixtures
 
-| Must raise                                                                                    | Must not raise                                  | Difference under test                                                                                    |
-| --------------------------------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `two-distinct-pins`: eleven references at 0e3c4d24 and one at an older SHA                    | `twelve-identical-pins`: all twelve at 0e3c4d24 | Pin divergence, with the reference text byte-identical in both                                           |
-| `known-bad-pin`: every reference at 32c8ea64                                                  | `current-pin`: every reference at 0e3c4d24      | Membership of the named bad set, with pin uniformity identical                                           |
-| `uniform-unknown-pin`: all twelve references at one SHA that is neither current nor named-bad | —                                               | Yields `indeterminate` naming the SHA, not a pass; the divergence clause cannot fire on one distinct SHA |
-| `network-fetch-required`: a reference to an action outside the tree                           | —                                               | Yields `indeterminate` without a fetch; the fixture asserts zero network calls                           |
+| Must raise                                                                                     | Must not raise                                                                                                           | Difference under test                                                                                    |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `two-distinct-pins`: eleven references at 0e3c4d24 and one at an older SHA                     | `twelve-identical-pins`: all twelve at 0e3c4d24                                                                          | Pin divergence, with the reference text byte-identical in both                                           |
+| `known-bad-pin`: every reference at 32c8ea64                                                   | `current-pin`: every reference at 0e3c4d24                                                                               | Membership of the named bad set, with pin uniformity identical                                           |
+| `uniform-unknown-pin`: all twelve references at one SHA that is neither current nor named-bad  | —                                                                                                                        | Yields `indeterminate` naming the SHA, not a pass; the divergence clause cannot fire on one distinct SHA |
+| `network-fetch-required`: a reference to an action outside the tree                            | —                                                                                                                        | Yields `indeterminate` without a fetch; the fixture asserts zero network calls                           |
+| `two-paths-two-shas`: `setup-rust` at 0e3c4d24 and `upload-codescene-coverage` at an older SHA | `two-repositories-two-shas`: `shared-actions` uniformly at 0e3c4d24 beside a third-party action at its own unrelated SHA | The grouping key is the repository, not the action path, and not the owner                               |
 
 ### Table 4: RT-014, RT-015 and RT-016 fixtures
 
@@ -381,6 +404,13 @@ own mutation discriminates nothing.
   reproduces the state ortho-config was in before its survey, when 32c8ea64 was
   uniform and unrecorded, so a rule that survives it would have passed the
   configuration RT-013 exists to catch.
+- **RT-013, grouping-key mutation.** Narrow the grouping key from the
+  repository to the action path. The rule must stop reporting
+  `two-paths-two-shas`, which is the case where one repository is consumed at
+  two commits. Widening it instead, to the owner alone, must start raising on
+  `two-repositories-two-shas`, so the key is proved narrow as well as
+  sufficient; a key that survives both mutations is comparing something other
+  than the repository.
 - **RT-012, caller-side-absolute mutation.** Treat a caller-side absolute-path
   wrapper as a finding. The rule must raise on `caller-side-absolute-path`,
   proving the fourth row of the wrapper table is a deliberate pass rather than

@@ -202,8 +202,11 @@ is a fact about a published artefact.
 ### 3.3 TA-003: a pin that is a branch or a bare tag
 
 **Sensor.** For each acquisition the pin must be a full commit SHA of forty
-hexadecimal characters, or an exact version string. The acquisitions the sensor
-reads are:
+hexadecimal characters, an exact version string, or a bare tag whose publisher
+has a verified immutable-tag mechanism recorded in canon data. That third form
+is the single exception, stated here so the rule and the
+`uses-verified-immutable-tag` fixture agree; it is set out below. The
+acquisitions the sensor reads are:
 
 - a `uses:` reference, split into path and reference;
 - a Git acquisition, in every form that selects a revision: `--git` paired with

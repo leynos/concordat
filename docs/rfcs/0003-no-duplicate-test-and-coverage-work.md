@@ -128,8 +128,12 @@ it as a single suite command appearing once.
 
 ### 3.2 QG-005: a duplicated test lane
 
-**Sensor.** For each trigger, group the jobs that run a test suite. Two jobs
-duplicate when all five of the following hold:
+**Sensor.** For each trigger, group the jobs that run a test suite, and label
+each grouped job by lane type: a coverage lane is one that produces a coverage
+report, a test-only lane is one that runs the suite and produces none.
+
+Two jobs duplicate when they are one coverage lane and one test-only lane, and
+all five of the following hold:
 
 - **Same platform.** The normalized runner platform is equal. `runs-on` values
   normalize to an operating-system family and architecture, so `ubuntu-latest`,
@@ -147,6 +151,23 @@ duplicate when all five of the following hold:
   `--lib`, `--bins`, `--tests` and `--doc`, and partition arguments
   (`--partition`) all narrow the selection, and two commands that differ in any
   of them run different tests.
+
+**Why lane type is a precondition and not merely the finding's wording.** The
+rule's claim is that a test-only lane is redundant because a coverage lane
+already runs its suite, and its remediation names the test-only lane as the
+removable one. Two coverage lanes matching on all five attributes are not that
+claim, and neither are two test-only lanes; reporting either would name a
+removal the rule cannot justify, because nothing establishes which of the two
+is the cover. Such a pair may well be waste, but it is waste of a kind this
+rule does not decide, so it is not grouped.
+
+**Within one job.** The five attributes compare two jobs. One job that invokes
+the suite twice is the separate, simpler case, and it is a finding in its own
+right: where a single job runs two invocations equal on scope, profile,
+resolved feature set and test selection, the later invocation is reported as
+redundant. Lane type does not apply, because there is one lane. This clause is
+what Section 3.1's per-job counting is for, and it is what
+`two-invocations-one-job` exercises.
 
 The last condition is the one that keeps the rule safe to act on. Two jobs can
 share package selection, profile and features while running disjoint sets
@@ -261,17 +282,22 @@ Each pair differs in exactly the fact its rule claims to decide.
 
 ### Table 2: QG-005 fixtures
 
-| Must raise                                                                                                               | Must not raise                                                                                                               | Difference under test                                                                 |
-| ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `test-lane-duplicates-coverage`: a pull-request test job and a coverage job, same workspace, same profile, same features | `test-lane-different-profile`: the same pair where the test job runs `--profile ci` and the coverage job the default profile | Profile equality, with scope and features identical                                   |
-| —                                                                                                                        | `push-and-pull-request-lanes`: the same suite on `push` and on `pull_request`                                                | Trigger grouping; must not raise                                                      |
-| —                                                                                                                        | `linux-and-windows-lanes`: the same suite on two `runs-on` values                                                            | Platform is a condition of the predicate; must not raise                              |
-| `ubuntu-and-ubicloud-lanes`: the same suite on `ubuntu-latest` and `ubicloud-standard-2`                                 | `linux-and-windows-lanes`: as above                                                                                          | Platform normalization; two Linux labels are one platform                             |
-| `same-filter-two-jobs`: two jobs with identical `-E` filter expressions                                                  | `disjoint-filters-two-jobs`: the same two jobs with filter expressions selecting disjoint sets                               | Test selection, with scope, profile and features identical                            |
-| `partitioned-and-whole`: one job running `--partition count:1/2` beside a job running the whole suite                    | `two-partitions`: the two halves of one partitioned suite                                                                    | Whether the selections are equal, not whether partitioning is used                    |
-| `unresolvable-filter`: a filter built from an expression the envelope cannot expand                                      | —                                                                                                                            | Yields `indeterminate`, because an unresolved filter may select everything or nothing |
-| —                                                                                                                        | `cargo-nextest-version-probe`: a step running `cargo nextest --version` beside a real suite                                  | A probe is not an invocation; must not raise                                          |
-| `two-invocations-one-job`: one job running the suite twice with identical scope, profile and features                    | `one-invocation-one-job`: the same job running it once                                                                       | Invocation count per job                                                              |
+Every two-job pair below is one coverage lane and one test-only lane, which is
+the rule's precondition; only `two-invocations-one-job` and its partner are a
+single job.
+
+| Must raise                                                                                                               | Must not raise                                                                                                                                 | Difference under test                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `test-lane-duplicates-coverage`: a pull-request test job and a coverage job, same workspace, same profile, same features | `test-lane-different-profile`: the same pair where the test job runs `--profile ci` and the coverage job the default profile                   | Profile equality, with scope and features identical                                     |
+| —                                                                                                                        | `push-and-pull-request-lanes`: the same suite on `push` and on `pull_request`                                                                  | Trigger grouping; must not raise                                                        |
+| —                                                                                                                        | `linux-and-windows-lanes`: the same suite on two `runs-on` values                                                                              | Platform is a condition of the predicate; must not raise                                |
+| `ubuntu-and-ubicloud-lanes`: the same suite on `ubuntu-latest` and `ubicloud-standard-2`                                 | `linux-and-windows-lanes`: as above                                                                                                            | Platform normalization; two Linux labels are one platform                               |
+| `same-filter-two-jobs`: two jobs with identical `-E` filter expressions                                                  | `disjoint-filters-two-jobs`: the same two jobs with filter expressions selecting disjoint sets                                                 | Test selection, with scope, profile and features identical                              |
+| `partitioned-and-whole`: one job running `--partition count:1/2` beside a job running the whole suite                    | `two-partitions`: the two halves of one partitioned suite                                                                                      | Whether the selections are equal, not whether partitioning is used                      |
+| `unresolvable-filter`: a filter built from an expression the envelope cannot expand                                      | —                                                                                                                                              | Yields `indeterminate`, because an unresolved filter may select everything or nothing   |
+| —                                                                                                                        | `cargo-nextest-version-probe`: a step running `cargo nextest --version` beside a real suite                                                    | A probe is not an invocation; must not raise                                            |
+| `two-invocations-one-job`: one job running the suite twice with identical scope, profile and features                    | `one-invocation-one-job`: the same job running it once                                                                                         | Invocation count per job                                                                |
+| —                                                                                                                        | `two-coverage-lanes`: two coverage jobs equal on all five attributes, and `two-test-only-lanes`, the same pair with neither producing a report | Lane type as a precondition; neither pair yields a justified removal, so neither raises |
 
 ### Table 3: QG-006 fixtures
 
@@ -311,6 +337,14 @@ Every mutation is applied in both directions.
   mutation must leave `ubuntu-and-ubicloud-lanes` raising, which is what proves
   normalization maps two Linux labels together rather than comparing the label
   text.
+- **QG-005, lane-type mutation.** Drop lane type from the grouping and the
+  finding precondition. The rule must now raise on `two-coverage-lanes` and on
+  `two-test-only-lanes`, naming a removal it cannot justify. The same mutation
+  must leave `test-lane-duplicates-coverage` raising, which is what shows the
+  precondition narrows the rule rather than disabling it.
+- **QG-005, within-job mutation.** Remove the within-job repeated-invocation
+  clause, leaving only the two-job predicate. The rule must stop raising on
+  `two-invocations-one-job`, which no two-job comparison can reach.
 - **QG-005, selection mutation.** Drop test selection from the equality
   predicate. The rule must now raise on `disjoint-filters-two-jobs`. This is
   the mutation that guards against the rule's worst failure, naming a lane
