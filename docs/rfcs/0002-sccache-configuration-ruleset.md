@@ -186,6 +186,13 @@ are reported.
 
 **Failure mode.** Where the envelope cannot resolve whether a preceding step
 wrote `SCCACHE_GHA_ENABLED` to `GITHUB_ENV`, the verdict is `indeterminate`.
+The wrapper clause carries a second such case, inherited from RT-013. Where a
+compiling job sets no caller-side `RUSTC_WRAPPER` and RT-013 classifies the
+checkout's `setup-rust` references as a uniformly unknown pin, RT-012 cannot
+know whether that pin exports the wrapper, so its wrapper verdict is
+`indeterminate` naming the SHA. It is neither a silent pass nor a definite
+missing-wrapper finding: the table's second row depends on knowing that the pin
+exports nothing, which is the one fact the unknown pin withholds.
 
 **Actuator.** Add the backend variable at job level, comment-preservingly. The
 wrapper line is never added; where the wrapper is absent because the pin does
@@ -449,13 +456,15 @@ order the fixtures cannot enumerate, so each carries a Hypothesis property test
 written from this document, per the developers' guide's discipline for
 `tests/unit/test_properties.py`.
 
-- **Pin uniformity (RT-013).** Over a generated multiset of references to the
-  one repository: the verdict is invariant under permutation, since a set of
-  pins has no order; a multiset containing exactly one distinct SHA never
-  yields the divergence finding, which is the invariant that makes the
-  `indeterminate` class reachable at all rather than dead text; and every
-  multiset yields exactly one of the three classes, so the classes are total
-  and disjoint.
+- **Pin uniformity (RT-013).** Over a generated non-empty multiset of
+  references to the one repository, the generator excluding the empty multiset
+  because a checkout with no reference forms no group and so has nothing to
+  classify: the verdict is invariant under permutation, since a set of pins has
+  no order; a multiset containing exactly one distinct SHA never yields the
+  divergence finding, which is the invariant that makes the `indeterminate`
+  class reachable at all rather than dead text; and every non-empty multiset
+  yields exactly one of the three classes, so the classes are total and
+  disjoint over non-empty input.
 - **One writer per cache key family (RT-015).** Over a generated set of jobs
   and cache steps: the count is invariant under job order, and the verdict
   depends only on the number of writers per key family, so adding a reader

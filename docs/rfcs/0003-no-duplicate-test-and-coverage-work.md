@@ -396,10 +396,12 @@ implementation, per the developers' guide's discipline for
   and feature arguments: resolution is idempotent; equality after resolution is
   an equivalence relation, so it is reflexive, symmetric and transitive;
   resolving a leg that names a feature outside the default set never yields
-  equality with a default leg, and adding such a feature to an equal pair
-  always destroys the equality. That last pair is the metamorphic statement of
-  the axinite case, and a resolver comparing argument text would satisfy
-  neither direction.
+  equality with a default leg, and adding such a feature to exactly one leg of
+  an equal pair, the other leg left unchanged, always destroys the equality.
+  Adding it to both legs is the degenerate case the property excludes, since
+  the pair stays equal. That last pair is the metamorphic statement of the
+  axinite case, and a resolver comparing argument text would satisfy neither
+  direction.
 - **Profile resolution (QG-005).** Over generated profile tables: resolution
   through inheritance is total and idempotent, and two names resolving to the
   same effective configuration compare equal regardless of the names.
