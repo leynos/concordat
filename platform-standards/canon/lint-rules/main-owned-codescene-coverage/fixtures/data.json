@@ -1,0 +1,781 @@
+{
+  "fixtures": {
+    "compliant": {
+      "schema_version": 1,
+      "kind": "policy-input/main-owned-codescene-coverage",
+      "repository": {"path": ".", "name": null},
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "on": {"pull_request": null},
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {
+                    "uses": "leynos/shared-actions/.github/actions/generate-coverage@pin",
+                    "with": {"with-ratchet": "true"}
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        },
+        {
+          "path": ".github/workflows/coverage-main.yaml",
+          "parsed": {
+            "on": {"push": {"branches": ["main"]}, "workflow_dispatch": null},
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {
+                    "uses": "leynos/shared-actions/.github/actions/generate-coverage@pin",
+                    "with": {"with-ratchet": true}
+                  },
+                  {
+                    "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
+                    "with": {"mode": "upload"}
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ]
+    },
+    "explicit_baseline_match": {
+      "schema_version": 1,
+      "kind": "policy-input/main-owned-codescene-coverage",
+      "repository": {"path": ".", "name": null},
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "on": {"pull_request": null},
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {
+                    "uses": "generate-coverage",
+                    "with": {
+                      "with-ratchet": true,
+                      "baseline-rust-file": ".coverage-baseline.rust-v2",
+                      "baseline-python-file": ".coverage-baseline.python-v2"
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        },
+        {
+          "path": ".github/workflows/coverage-main.yml",
+          "parsed": {
+            "on": {"push": {"branches": ["main"]}},
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {
+                    "uses": "generate-coverage",
+                    "with": {
+                      "with-ratchet": true,
+                      "baseline-rust-file": ".coverage-baseline.rust-v2",
+                      "baseline-python-file": ".coverage-baseline.python-v2"
+                    }
+                  },
+                  {"uses": "upload-codescene-coverage", "with": {"mode": "upload"}}
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ]
+    },
+    "mismatched_python_baseline": {
+      "schema_version": 1,
+      "kind": "policy-input/main-owned-codescene-coverage",
+      "repository": {"path": ".", "name": null},
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "on": {"pull_request": null},
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {
+                    "uses": "generate-coverage",
+                    "with": {
+                      "with-ratchet": true,
+                      "baseline-rust-file": ".coverage-baseline.rust",
+                      "baseline-python-file": ".coverage-baseline.python-pr"
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        },
+        {
+          "path": ".github/workflows/coverage-main.yml",
+          "parsed": {
+            "on": {"push": {"branches": ["main"]}},
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {
+                    "uses": "generate-coverage",
+                    "with": {
+                      "with-ratchet": true,
+                      "baseline-rust-file": ".coverage-baseline.rust"
+                    }
+                  },
+                  {"uses": "upload-codescene-coverage", "with": {"mode": "upload"}}
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ]
+    },
+    "mismatched_rust_baseline": {
+      "schema_version": 1,
+      "kind": "policy-input/main-owned-codescene-coverage",
+      "repository": {"path": ".", "name": null},
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "on": {"pull_request": null},
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {
+                    "uses": "generate-coverage",
+                    "with": {
+                      "with-ratchet": true,
+                      "baseline-rust-file": ".coverage-baseline.rust-pr",
+                      "baseline-python-file": ".coverage-baseline.python"
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        },
+        {
+          "path": ".github/workflows/coverage-main.yml",
+          "parsed": {
+            "on": {"push": {"branches": ["main"]}},
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {
+                    "uses": "generate-coverage",
+                    "with": {
+                      "with-ratchet": true,
+                      "baseline-python-file": ".coverage-baseline.python"
+                    }
+                  },
+                  {"uses": "upload-codescene-coverage", "with": {"mode": "upload"}}
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ]
+    },
+    "unrelated_pr_workflow": {
+      "schema_version": 1,
+      "kind": "policy-input/main-owned-codescene-coverage",
+      "repository": {"path": ".", "name": null},
+      "workflows": [
+        {
+          "path": ".github/workflows/lint.yml",
+          "parsed": {
+            "on": {"pull_request": null},
+            "jobs": {
+              "lint": {
+                "steps": [
+                  {"run": "make lint"},
+                  {
+                    "uses": "example/unrelated-action@pin",
+                    "with": {"access-token": "${{ secrets.OTHER_TOKEN }}"}
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        },
+        {
+          "path": ".github/workflows/coverage-main.yml",
+          "parsed": {
+            "on": {"push": {"branches": ["main"]}},
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {
+                    "uses": "leynos/shared-actions/.github/actions/generate-coverage@pin",
+                    "with": {"with-ratchet": true}
+                  },
+                  {
+                    "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
+                    "with": {"mode": "upload"}
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ]
+    },
+    "pr_check": {
+      "schema_version": 1,
+      "kind": "policy-input/main-owned-codescene-coverage",
+      "repository": {"path": ".", "name": null},
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "on": "pull_request",
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {
+                    "uses": "leynos/shared-actions/.github/actions/generate-coverage@pin",
+                    "with": {"with-ratchet": "true"}
+                  },
+                  {
+                    "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
+                    "with": {"mode": "check"}
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        },
+        {
+          "path": ".github/workflows/coverage-main.yml",
+          "parsed": {
+            "on": {"push": {"branches": ["main"]}},
+            "jobs": {"coverage": {"steps": [{"uses": "generate-coverage", "with": {"with-ratchet": true}}, {"uses": "upload-codescene-coverage", "with": {"mode": "upload"}}]}}
+          },
+          "error": null
+        }
+      ]
+    },
+    "pr_upload": {
+      "schema_version": 1,
+      "kind": "policy-input/main-owned-codescene-coverage",
+      "repository": {"path": ".", "name": null},
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "on": ["pull_request"],
+            "jobs": {"coverage": {"steps": [{"uses": "generate-coverage", "with": {"with-ratchet": true}}, {"uses": "upload-codescene-coverage", "with": {"mode": "upload", "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"}}]}}
+          },
+          "error": null
+        },
+        {
+          "path": ".github/workflows/coverage-main.yml",
+          "parsed": {
+            "on": {"push": {"branches": ["main"]}},
+            "jobs": {"coverage": {"steps": [{"uses": "generate-coverage", "with": {"with-ratchet": true}}, {"uses": "upload-codescene-coverage", "with": {"mode": "upload"}}]}}
+          },
+          "error": null
+        }
+      ]
+    },
+    "pr_shell_check": {
+      "schema_version": 1,
+      "kind": "policy-input/main-owned-codescene-coverage",
+      "repository": {"path": ".", "name": null},
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "on": {"pull_request": null},
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {
+                    "uses": "leynos/shared-actions/.github/actions/generate-coverage@pin",
+                    "with": {"with-ratchet": "true"}
+                  },
+                  {
+                    "name": "Check coverage",
+                    "run": "set -eu\ncs-coverage check coverage.xml\n"
+                  },
+                  {
+                    "name": "Document the command",
+                    "run": "echo 'cs-coverage check is documentation'"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        },
+        {
+          "path": ".github/workflows/coverage-main.yml",
+          "parsed": {
+            "on": {"push": {"branches": ["main"]}},
+            "jobs": {"coverage": {"steps": [
+              {"uses": "generate-coverage", "with": {"with-ratchet": true}},
+              {"uses": "upload-codescene-coverage", "with": {"mode": "upload"}}
+            ]}}
+          },
+          "error": null
+        }
+      ]
+    },
+    "main_shell_upload": {
+      "schema_version": 1,
+      "kind": "policy-input/main-owned-codescene-coverage",
+      "repository": {"path": ".", "name": null},
+      "workflows": [
+        {
+          "path": ".github/workflows/coverage-main.yml",
+          "parsed": {
+            "on": {"push": {"branches": ["main"]}},
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {
+                    "uses": "leynos/shared-actions/.github/actions/generate-coverage@pin",
+                    "with": {"with-ratchet": true}
+                  },
+                  {
+                    "name": "Upload coverage",
+                    "run": "# Publish the report\ncs-coverage upload coverage.xml"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ]
+    },
+    "missing_main_upload": {
+      "schema_version": 1,
+      "kind": "policy-input/main-owned-codescene-coverage",
+      "repository": {"path": ".", "name": null},
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {"on": "pull_request", "jobs": {"coverage": {"steps": [{"uses": "generate-coverage", "with": {"with-ratchet": true}}]}}},
+          "error": null
+        }
+      ]
+    },
+    "missing_pr_ratchet": {
+      "schema_version": 1,
+      "kind": "policy-input/main-owned-codescene-coverage",
+      "repository": {"path": ".", "name": null},
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yaml",
+          "parsed": {"on": {"pull_request": null}, "jobs": {"coverage": {"steps": [{"uses": "generate-coverage", "with": {}}]}}},
+          "error": null
+        },
+        {
+          "path": ".github/workflows/coverage-main.yml",
+          "parsed": {"on": {"push": {"branches": ["main"]}}, "jobs": {"coverage": {"steps": [{"uses": "generate-coverage", "with": {"with-ratchet": true}}, {"uses": "upload-codescene-coverage", "with": {"mode": "upload"}}]}}},
+          "error": null
+        }
+      ]
+    },
+    "main_dispatch_wrong_branch": {
+      "schema_version": 1,
+      "kind": "policy-input/main-owned-codescene-coverage",
+      "repository": {"path": ".", "name": null},
+      "workflows": [
+        {
+          "path": ".github/workflows/coverage-main.yml",
+          "parsed": {
+            "on": {"push": {"branches": ["release"]}, "workflow_dispatch": null},
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {"uses": "generate-coverage", "with": {"with-ratchet": true}},
+                  {"uses": "upload-codescene-coverage", "with": {"mode": "upload"}}
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ]
+    },
+    "main_dispatch_extra_trigger": {
+      "schema_version": 1,
+      "kind": "policy-input/main-owned-codescene-coverage",
+      "repository": {"path": ".", "name": null},
+      "workflows": [
+        {
+          "path": ".github/workflows/coverage-main.yml",
+          "parsed": {
+            "on": {
+              "push": {"branches": ["main"]},
+              "schedule": [{"cron": "0 0 * * *"}],
+              "workflow_dispatch": null
+            },
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {"uses": "generate-coverage", "with": {"with-ratchet": true}},
+                  {"uses": "upload-codescene-coverage", "with": {"mode": "upload"}}
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ]
+    },
+    "multiple_pr_coverage_steps": {
+      "schema_version": 1,
+      "kind": "policy-input/main-owned-codescene-coverage",
+      "repository": {"path": ".", "name": null},
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "on": {"pull_request": null},
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {"uses": "generate-coverage", "with": {"with-ratchet": true}},
+                  {"uses": "generate-coverage", "with": {"with-ratchet": false}}
+                ]
+              }
+            }
+          },
+          "error": null
+        },
+        {
+          "path": ".github/workflows/coverage-main.yml",
+          "parsed": {
+            "on": {"push": {"branches": ["main"]}},
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {"uses": "generate-coverage", "with": {"with-ratchet": true}},
+                  {"uses": "upload-codescene-coverage", "with": {"mode": "upload"}}
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ]
+    },
+    "multiple_pr_generators_one_unmatched": {
+      "schema_version": 1,
+      "kind": "policy-input/main-owned-codescene-coverage",
+      "repository": {"path": ".", "name": null},
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "on": {"pull_request": null},
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {"uses": "generate-coverage", "with": {"with-ratchet": true}},
+                  {
+                    "uses": "generate-coverage",
+                    "with": {
+                      "with-ratchet": true,
+                      "baseline-python-file": ".coverage-baseline.python-alt"
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        },
+        {
+          "path": ".github/workflows/coverage-main.yml",
+          "parsed": {
+            "on": {"push": {"branches": ["main"]}},
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {"uses": "generate-coverage", "with": {"with-ratchet": true}},
+                  {"uses": "upload-codescene-coverage", "with": {"mode": "upload"}}
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ]
+    },
+    "aliased_token_references": {
+      "schema_version": 1,
+      "kind": "policy-input/main-owned-codescene-coverage",
+      "repository": {"path": ".", "name": null},
+      "workflows": [
+        {
+          "path": ".github/workflows/workflow-env.yml",
+          "parsed": {
+            "on": {"pull_request": null},
+            "env": {"CODE_SCENE_TOKEN": "${{ secrets.CS_ACCESS_TOKEN }}"},
+            "jobs": {
+              "coverage": {
+                "steps": [{"uses": "generate-coverage", "with": {"with-ratchet": true}}]
+              }
+            }
+          },
+          "error": null
+        },
+        {
+          "path": ".github/workflows/job-env.yml",
+          "parsed": {
+            "on": {"pull_request": null},
+            "jobs": {
+              "coverage": {
+                "env": {"CODE_SCENE_TOKEN": "${{ secrets.CS_ACCESS_TOKEN }}"},
+                "steps": [{"uses": "generate-coverage", "with": {"with-ratchet": true}}]
+              }
+            }
+          },
+          "error": null
+        },
+        {
+          "path": ".github/workflows/step-env.yml",
+          "parsed": {
+            "on": {"pull_request": null},
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {
+                    "uses": "generate-coverage",
+                    "env": {"CODE_SCENE_TOKEN": "${{ secrets.CS_ACCESS_TOKEN }}"},
+                    "with": {"with-ratchet": true}
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        },
+        {
+          "path": ".github/workflows/action-input.yml",
+          "parsed": {
+            "on": {"pull_request": null},
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {"uses": "generate-coverage", "with": {"with-ratchet": true}},
+                  {
+                    "uses": "generate-coverage",
+                    "with": {
+                      "with-ratchet": true,
+                      "options": {"CODE_SCENE_TOKEN": "${{ secrets.CS_ACCESS_TOKEN }}"}
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        },
+        {
+          "path": ".github/workflows/coverage-main.yml",
+          "parsed": {
+            "on": {"push": {"branches": ["main"]}},
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {"uses": "generate-coverage", "with": {"with-ratchet": true}},
+                  {"uses": "upload-codescene-coverage", "with": {"mode": "upload"}}
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ]
+    },
+    "non_object_workflow": {
+      "schema_version": 1,
+      "kind": "policy-input/main-owned-codescene-coverage",
+      "repository": {"path": ".", "name": null},
+      "workflows": [
+        null,
+        {
+          "path": ".github/workflows/coverage-main.yml",
+          "parsed": {
+            "on": {"push": {"branches": ["main"]}},
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {"uses": "generate-coverage", "with": {"with-ratchet": true}},
+                  {"uses": "upload-codescene-coverage", "with": {"mode": "upload"}}
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ]
+    },
+    "duplicate_pr_coverage": {
+      "schema_version": 1,
+      "kind": "policy-input/main-owned-codescene-coverage",
+      "repository": {"path": ".", "name": null},
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "on": {"pull_request": null},
+            "jobs": {"coverage": {"steps": [{"uses": "generate-coverage", "with": {}}]}}
+          },
+          "error": null
+        },
+        {
+          "path": ".github/workflows/other-ci.yml",
+          "parsed": {
+            "on": {"pull_request": null},
+            "jobs": {"coverage": {"steps": [{"uses": "generate-coverage", "with": {}}]}}
+          },
+          "error": null
+        },
+        {
+          "path": ".github/workflows/coverage-main.yml",
+          "parsed": {
+            "on": {"push": {"branches": ["main"]}},
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {"uses": "generate-coverage", "with": {"with-ratchet": true}},
+                  {"uses": "upload-codescene-coverage", "with": {"mode": "upload"}}
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ]
+    },
+    "pr_shell_environment_prefix": {
+      "schema_version": 1,
+      "kind": "policy-input/main-owned-codescene-coverage",
+      "repository": {"path": ".", "name": null},
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "on": {"pull_request": null},
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {"uses": "generate-coverage", "with": {"with-ratchet": true}},
+                  {"run": "TOKEN=x cs-coverage check coverage.xml"},
+                  {"run": "env TOKEN='x' cs-coverage check coverage.xml"},
+                  {"run": "echo 'TOKEN=x cs-coverage check coverage.xml'"}
+                ]
+              }
+            }
+          },
+          "error": null
+        },
+        {
+          "path": ".github/workflows/coverage-main.yml",
+          "parsed": {
+            "on": {"push": {"branches": ["main"]}},
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {"uses": "generate-coverage", "with": {"with-ratchet": true}},
+                  {"uses": "upload-codescene-coverage", "with": {"mode": "upload"}}
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ]
+    },
+    "main_shell_environment_prefix": {
+      "schema_version": 1,
+      "kind": "policy-input/main-owned-codescene-coverage",
+      "repository": {"path": ".", "name": null},
+      "workflows": [
+        {
+          "path": ".github/workflows/coverage-main.yml",
+          "parsed": {
+            "on": {"push": {"branches": ["main"]}},
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {"uses": "generate-coverage", "with": {"with-ratchet": true}},
+                  {"run": "env CS_ACCESS_TOKEN='x' cs-coverage upload coverage.xml"}
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ]
+    },
+    "malformed": {
+      "schema_version": 1,
+      "kind": "policy-input/main-owned-codescene-coverage",
+      "repository": {"path": ".", "name": null},
+      "workflows": [{"path": ".github/workflows/ci.yml", "parsed": null, "error": "invalid YAML"}]
+    },
+    "reusable": {
+      "schema_version": 1,
+      "kind": "policy-input/main-owned-codescene-coverage",
+      "repository": {"path": ".", "name": null},
+      "workflows": [{"path": ".github/workflows/ci.yml", "parsed": {"on": {"pull_request": null}, "jobs": {"coverage": {"uses": "leynos/shared/.github/workflows/coverage.yml@main"}}}, "error": null}]
+    },
+    "unrelated_reusable": {
+      "schema_version": 1,
+      "kind": "policy-input/main-owned-codescene-coverage",
+      "repository": {"path": ".", "name": null},
+      "workflows": [
+        {
+          "path": ".github/workflows/coverage-main.yml",
+          "parsed": {
+            "on": {"push": {"branches": ["main"]}},
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {"uses": "generate-coverage", "with": {"with-ratchet": true}},
+                  {"uses": "upload-codescene-coverage", "with": {"mode": "upload"}}
+                ]
+              }
+            }
+          },
+          "error": null
+        },
+        {
+          "path": ".github/workflows/dependabot-automerge.yml",
+          "parsed": {
+            "on": {"schedule": [{"cron": "0 0 * * *"}]},
+            "jobs": {"automerge": {"uses": "leynos/shared/.github/workflows/dependabot.yml@main"}}
+          },
+          "error": null
+        }
+      ]
+    }
+  }
+}

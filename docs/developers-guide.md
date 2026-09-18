@@ -322,8 +322,8 @@ reverse:
 
 ## `concordat artefact rule run`
 
-`concordat/rules/runner.py` and `concordat/rules/envelope.py` implement the
-rule-run subcommand exposed as `concordat artefact rule run <rule-id>`.
+`concordat/rules/runner.py` and the package-specific envelope modules implement
+the rule-run subcommand exposed as `concordat artefact rule run <rule-id>`.
 
 ### The policy envelope
 
@@ -342,6 +342,16 @@ without it retains the root surface when `root_cargo_toml` is true. A present
 malformed recorded evidence yields a structured EN-001 indeterminate finding
 instead of silently selecting the fallback or causing the policy evaluator to
 fail.
+
+`build_codescene_coverage_envelope` (in `codescene_coverage_envelope.py`)
+assembles a `policy-input/main-owned-codescene-coverage` document containing
+every root `.github/workflows/*.yml` and `*.yaml` file. Each fact records
+decoded YAML or the content error that prevented decoding; the CV-005 policy
+can therefore fail closed for malformed or reusable workflows.
+`runner._envelope_builder` selects the builder declared by a package's
+`sensor.input`; manifests without that field keep the Rust envelope for
+backwards compatibility, while an unknown kind is an operational error rather
+than a guessed audit.
 
 ### Tool dependencies
 

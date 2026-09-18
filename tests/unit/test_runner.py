@@ -242,6 +242,73 @@ class TestRulePackageIdentifier:
         assert (rule_dir / "policy").is_dir(), rule_dir
 
 
+class TestRuleManifest:
+    """Validate manifest sensor shapes and input-default behaviour."""
+
+    @pytest.mark.parametrize(
+        ("sensor", "kind"),
+        [
+            pytest.param("null", "NoneType", id="null"),
+            pytest.param("[]", "list", id="array"),
+            pytest.param('"text"', "str", id="string"),
+        ],
+    )
+    def test_non_mapping_sensor_is_rejected_with_manifest_context(
+        self,
+        tmp_path: pathlib.Path,
+        sensor: str,
+        kind: str,
+    ) -> None:
+        """Reject a present sensor that cannot declare an input."""
+        manifest_path = tmp_path / "rule.yaml"
+        manifest_path.write_text(f"sensor: {sensor}\n", encoding="utf-8")
+
+        with pytest.raises(
+            OperationalRuleError,
+            match=f"sensor is {kind}, not a mapping",
+        ) as exc_info:
+            runner._envelope_builder(tmp_path)
+
+        error = exc_info.value
+        assert error.operation == "load-rule-manifest", error.operation
+        assert error.tool is None, error.tool
+        assert error.resource == manifest_path, error.resource
+
+    @pytest.mark.parametrize(
+        "manifest",
+        [
+            pytest.param("schema_version: 1\n", id="sensor-absent"),
+            pytest.param("sensor: {}\n", id="input-absent"),
+            pytest.param("sensor:\n  type: conftest\n", id="input-omitted"),
+        ],
+    )
+    def test_absent_sensor_or_input_uses_rust_builder(
+        self,
+        tmp_path: pathlib.Path,
+        manifest: str,
+    ) -> None:
+        """Use the Rust envelope only when sensor input is absent."""
+        (tmp_path / "rule.yaml").write_text(manifest, encoding="utf-8")
+
+        assert runner._envelope_builder(tmp_path) is runner.build_envelope
+
+    def test_present_null_input_is_not_treated_as_absent(
+        self,
+        tmp_path: pathlib.Path,
+    ) -> None:
+        """Reject an explicitly null input instead of silently defaulting."""
+        manifest_path = tmp_path / "rule.yaml"
+        manifest_path.write_text("sensor:\n  input: null\n", encoding="utf-8")
+
+        with pytest.raises(
+            OperationalRuleError,
+            match="declares the policy input None",
+        ) as exc_info:
+            runner._envelope_builder(tmp_path)
+
+        assert exc_info.value.resource == manifest_path, exc_info.value.resource
+
+
 class TestConftestExitCodes:
     """Only Conftest's policy verdict codes may be decoded as findings."""
 

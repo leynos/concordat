@@ -252,13 +252,23 @@ checkout against the template and optionally copy missing/outdated artefacts.
 ## Auditing a checkout against a lint rule package
 
 `concordat artefact rule run` evaluates one canon lint rule package against a
-local checkout and reports structured findings. The first package,
-`rust-makefile-baseline`, audits every governed Rust Cargo surface and the root
-`Makefile` for canonical `build`, `test`, and `lint` targets (FP-003), plus a
-binding Whitaker lint gate (QG-001):
+local checkout and reports structured findings. `rust-makefile-baseline` audits
+every governed Rust Cargo surface and the root `Makefile` for canonical `build`,
+`test`, and `lint` targets (FP-003), plus a binding Whitaker lint gate
+(QG-001):
 
 ```shell
 concordat artefact rule run rust-makefile-baseline --repo /path/to/checkout
+```
+
+`main-owned-codescene-coverage` audits the coverage topology (CV-005). It
+requires pull-request coverage to use the main-derived local ratchet without
+contacting CodeScene, and requires a main-only workflow to write that baseline
+and explicitly upload CodeScene coverage. It reports malformed YAML and
+reusable workflow calls as indeterminate rather than assuming they comply:
+
+```shell
+concordat artefact rule run main-owned-codescene-coverage --repo /path/to/checkout
 ```
 
 Options:
