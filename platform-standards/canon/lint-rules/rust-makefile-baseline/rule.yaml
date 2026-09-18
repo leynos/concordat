@@ -9,6 +9,7 @@ description: >-
 version: 0.3.0
 sensor:
   type: conftest
+  input: policy-input/rust-makefile-baseline
   policy: policy/
   tests:
     - policy/

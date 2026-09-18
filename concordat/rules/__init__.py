@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from .envelope import build_envelope
 from .makefile_facts import MakefileFacts, inspect_makefile
+from .markdown_envelope import build_markdown_envelope
 from .runner import Finding, RuleRunResult, render_json, render_table, run_rule
 
 __all__ = [
@@ -11,6 +12,7 @@ __all__ = [
     "MakefileFacts",
     "RuleRunResult",
     "build_envelope",
+    "build_markdown_envelope",
     "inspect_makefile",
     "render_json",
     "render_table",

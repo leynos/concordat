@@ -17,7 +17,15 @@ from ruamel.yaml.error import YAMLError
 
 from concordat.errors import OperationalRuleError
 
+from .envelope import ENVELOPE_KIND as RUST_ENVELOPE_KIND
 from .envelope import PolicyEnvelope, build_envelope
+from .markdown_envelope import ENVELOPE_KIND as MARKDOWN_ENVELOPE_KIND
+from .markdown_envelope import MarkdownEnvelope, build_markdown_envelope
+
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
+type PolicyInput = PolicyEnvelope | MarkdownEnvelope
 
 
 def _resolve_rule_packages_dir() -> pathlib.Path:
@@ -63,6 +71,17 @@ POLICY_EXIT_CODES: typ.Final = frozenset({0, 1})
 _MAX_ERROR_DETAIL: typ.Final = 500
 
 _yaml = YAML(typ="safe")
+
+# A rule manifest names the policy-input document its sensor evaluates under
+# `sensor.input`; the builder that assembles that document from a checkout is
+# looked up here. The Rust kind is also the default for a manifest that
+# predates the field, so the first rule package keeps working unchanged.
+ENVELOPE_BUILDERS: typ.Final[
+    typ.Mapping[str, cabc.Callable[[pathlib.Path], PolicyInput]]
+] = {
+    RUST_ENVELOPE_KIND: build_envelope,
+    MARKDOWN_ENVELOPE_KIND: build_markdown_envelope,
+}
 
 VERDICT_COMPLIANT: typ.Final = "compliant"
 VERDICT_NONCOMPLIANT: typ.Final = "noncompliant"
@@ -225,22 +244,18 @@ def _policy_namespace(rule_id: str) -> str:
     return "canon.lint_rules." + rule_id.replace("-", "_")
 
 
-def _rule_parameters(rule_dir: pathlib.Path) -> dict[str, typ.Any]:
-    """Return the rule manifest's parameter defaults.
-
-    The policies read their tunables from ``data.parameters``; without this
-    the manifest's declared defaults would be inert and only the ``default``
-    rules baked into the Rego would ever apply.
+def _rule_manifest(rule_dir: pathlib.Path) -> dict[str, typ.Any]:
+    """Return the rule package's `rule.yaml` mapping, or ``{}`` if absent.
 
     Returns
     -------
     dict[str, typ.Any]
-        Parameter defaults declared by the rule manifest.
+        The decoded manifest mapping.
 
     Raises
     ------
     OperationalRuleError
-        If the rule manifest cannot be read or is malformed.
+        If the rule manifest cannot be read or is not a mapping.
     """
     manifest_path = rule_dir / "rule.yaml"
     if not manifest_path.is_file():
@@ -261,11 +276,62 @@ def _rule_parameters(rule_dir: pathlib.Path) -> dict[str, typ.Any]:
             operation="load-rule-manifest",
             resource=manifest_path,
         )
-    parameters = manifest.get("parameters")
+    return typ.cast("dict[str, typ.Any]", manifest)
+
+
+def _rule_parameters(rule_dir: pathlib.Path) -> dict[str, typ.Any]:
+    """Return the rule manifest's parameter defaults.
+
+    The policies read their tunables from ``data.parameters``; without this
+    the manifest's declared defaults would be inert and only the ``default``
+    rules baked into the Rego would ever apply.
+
+    An `OperationalRuleError` propagates from the manifest read if the rule
+    manifest cannot be read or is malformed.
+
+    Returns
+    -------
+    dict[str, typ.Any]
+        Parameter defaults declared by the rule manifest.
+    """
+    parameters = _rule_manifest(rule_dir).get("parameters")
     if not isinstance(parameters, dict):
         return {}
     defaults = parameters.get("defaults")
     return dict(defaults) if isinstance(defaults, dict) else {}
+
+
+def _envelope_builder(
+    rule_dir: pathlib.Path,
+) -> cabc.Callable[[pathlib.Path], PolicyInput]:
+    """Return the builder for the policy input the rule manifest declares.
+
+    Returns
+    -------
+    cabc.Callable[[pathlib.Path], PolicyInput]
+        The function assembling the declared policy-input document.
+
+    Raises
+    ------
+    OperationalRuleError
+        If the manifest declares an input kind this build cannot assemble.
+    """
+    sensor = _rule_manifest(rule_dir).get("sensor")
+    declared: object = RUST_ENVELOPE_KIND
+    if isinstance(sensor, dict):
+        declared = sensor.get("input", RUST_ENVELOPE_KIND)
+    if isinstance(declared, str) and declared in ENVELOPE_BUILDERS:
+        return ENVELOPE_BUILDERS[declared]
+    known = ", ".join(sorted(ENVELOPE_BUILDERS))
+    message = (
+        f"rule manifest {rule_dir / 'rule.yaml'} declares the policy input "
+        f"{declared!r}; expected one of: {known}"
+    )
+    raise OperationalRuleError(
+        message,
+        operation="load-rule-manifest",
+        resource=rule_dir / "rule.yaml",
+    )
 
 
 def _run_conftest(argv: list[str], rule_id: str) -> subprocess.CompletedProcess[str]:
@@ -342,7 +408,7 @@ def _require_policy_exit_code(
 
 def _invoke_conftest(
     rule_id: str,
-    envelope: PolicyEnvelope,
+    envelope: PolicyInput,
 ) -> list[_ConftestResult]:
     """Evaluate *envelope* against *rule_id*'s policy and return the results."""
     rule_dir = _rule_package_dir(rule_id)
@@ -535,7 +601,7 @@ def run_rule(rule_id: str, checkout: pathlib.Path) -> RuleRunResult:
         Conftest cannot be run or produces no usable output.
 
     """
-    _rule_package_dir(rule_id)
+    rule_dir = _rule_package_dir(rule_id)
     if not checkout.is_dir():
         message = f"checkout path {checkout} is not a directory"
         raise OperationalRuleError(
@@ -543,7 +609,7 @@ def run_rule(rule_id: str, checkout: pathlib.Path) -> RuleRunResult:
             operation="audit-checkout",
             resource=checkout,
         )
-    envelope = build_envelope(checkout)
+    envelope = _envelope_builder(rule_dir)(checkout)
     results = _invoke_conftest(rule_id, envelope)
     findings = _findings_from_results(results)
     return RuleRunResult(

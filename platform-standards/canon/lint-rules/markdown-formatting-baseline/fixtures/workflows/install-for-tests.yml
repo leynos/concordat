@@ -1,0 +1,32 @@
+---
+name: CI
+
+on:  # yamllint disable-line rule:truthy
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    env:
+      MARKDOWNLINT_CLI2_VERSION: '0.20.0'
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      - name: Lint Markdown
+        uses: DavidAnson/markdownlint-cli2-action@4580e1612f6407034edd6c0e4e316d725920867b
+        with:
+          globs: '**/*.md'
+
+      - name: Install the golden-test Markdown linter
+        # The test suite runs markdownlint-cli2 as a subprocess.
+        run: |
+          set -euo pipefail
+          npm_root="$HOME/.local/share/formatters/npm"
+          if [ ! -x "$npm_root/bin/markdownlint-cli2" ]; then
+            npm install --prefix "$npm_root" \
+              "markdownlint-cli2@$MARKDOWNLINT_CLI2_VERSION"
+          fi
+          markdownlint-cli2 --version
+
+      - name: Test
+        run: cargo test

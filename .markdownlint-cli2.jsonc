@@ -12,12 +12,16 @@
   },
   "ignores": [
     "**/.venv/**",
+    ".vtcode/**",
     ".node_modules/**",
     "**/node_modules/**",
     "**/target/**",
+    ".terraform/**",
     ".uv-cache/**",
     ".uv-tools/**",
     "**/.terraform/**",
+    "memories/**",
+    "CRUSH.md",
     // Checked-in renderer output, compared byte-for-byte by the snapshot
     // tests. Reformatting it to satisfy prose rules would break the tests it
     // exists to serve.

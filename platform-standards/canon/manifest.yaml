@@ -79,4 +79,27 @@ artifacts:
     description: >
       Rule package manifest (sensor wiring, parameters, defaults) for
       rust-makefile-baseline.
-    sha256: 3250b28ee20c7dd14761fc77678318c49524467069a38259527fdc57f8d2254f
+    sha256: 0efc640d554a5d5cb88cf6314de7f87ae5a159efd51098cd0229697cdb9824ca
+  - id: markdown-markdownlint-config
+    type: lint-config
+    path: platform-standards/canon/lint/markdown/.markdownlint-cli2.jsonc
+    description: >
+      Canonical markdownlint-cli2 configuration that consumers copy verbatim;
+      the markdown-formatting-baseline rule audits repositories against it.
+    sha256: 2bdaf102a8712ada9f4111c9aba82d0ebe9c36ff31cf98aad6140ef4ec2d118f
+  - id: lint-rule-markdown-formatting-baseline
+    type: opa-policy
+    path: platform-standards/canon/lint-rules/markdown-formatting-baseline/policy/markdown_formatting_baseline.rego
+    description: >
+      Sensor policy for the markdown-formatting-baseline rule package: PD-002
+      to PD-004 direct mdtablefix and markdownlint-cli2 wiring in the fmt and
+      check-fmt targets, PD-005 the baseline markdownlint configuration, and
+      PD-006 the pinned markdownlint-cli2 action in CI.
+    sha256: de843f8599a3839cb88008e96d22c160931a5ab96363230fab1b1cc3433151e0
+  - id: lint-rule-markdown-formatting-baseline-manifest
+    type: lint-config
+    path: platform-standards/canon/lint-rules/markdown-formatting-baseline/rule.yaml
+    description: >
+      Rule package manifest (sensor wiring, input kind, parameters, defaults)
+      for markdown-formatting-baseline.
+    sha256: 2ef3cbabbb9bb1fcff2bc12c7a41a812bfd25b968e2987501e10732461ac2626
