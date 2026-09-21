@@ -148,6 +148,34 @@ class TestBuildEnvelope:
         assert error.operation == "resolve-rust-surfaces", error.operation
         assert error.resource == cargo_path, error.resource
 
+    def test_unreadable_makefile_probe_raises_a_parse_error(
+        self,
+        tmp_path: pathlib.Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A Makefile probe failure cannot become no Makefile applicability."""
+        tmp_path.mkdir(exist_ok=True)
+        makefile_path = tmp_path / "Makefile"
+        makefile_path.write_text("all:\n\t@true\n", encoding="utf-8")
+        original_stat = pathlib.Path.stat
+
+        def unreadable_makefile(
+            path: pathlib.Path, *, follow_symlinks: bool = True
+        ) -> os.stat_result:
+            """Raise the filesystem error only for the Makefile probe."""
+            if path == makefile_path:
+                raise PermissionError
+            return original_stat(path, follow_symlinks=follow_symlinks)
+
+        monkeypatch.setattr(pathlib.Path, "stat", unreadable_makefile)
+
+        with pytest.raises(OperationalRuleError, match="cannot inspect") as exc_info:
+            build_envelope(tmp_path)
+
+        error = exc_info.value
+        assert error.operation == "parse-makefile", error.operation
+        assert error.resource == makefile_path, error.resource
+
     def test_non_table_cargo_structure_raises(
         self,
         tmp_path: pathlib.Path,

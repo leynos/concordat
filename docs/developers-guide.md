@@ -65,6 +65,41 @@ enforce the local ratchet. They do not invoke CodeScene and must not expose
 `main`; it advances the coverage baseline and is the sole CodeScene publisher,
 using `mode: upload`.
 
+### Gate tool provisioning
+
+Two lanes run the whole pytest suite: `ci.yml`'s `lint-test` job on pull
+requests and `coverage-main.yml`'s `coverage-upload` job on pushes to `main`.
+Parts of the suite shell out to external programs, so a lane that runs the
+suite must also install them. `coverage-main.yml` once installed only the
+Makefile parser, and every push to `main` failed in three rule tests with
+`conftest is required but was not found on PATH`; no pull request could see
+it, because the lane that reports a defect is not the lane that suffers from
+it.
+
+`tests/unit/test_gate_tool_provisioning_contract.py` holds the contract.
+It derives the required tool set from the package rather than restating it,
+by reading the `<tool> is required but was not found on PATH` messages that
+`concordat` raises, so a newly required tool is covered as soon as it is
+introduced. It enumerates the suite lanes from `.github/workflows`, so a
+workflow added later is covered on the day it appears. Provisioning is
+recognized from the shape of an install command and not from a step's name,
+so renaming or merging steps cannot void it, and every lane must install a
+shared tool at the same specification so the two cannot drift apart.
+`make test` lists the same tools as prerequisites, so the local gate fails
+by name rather than through unrelated rule tests.
+
+Add a new external tool in three places together: the package's missing-tool
+message, the install step in every suite lane, and the `test` target's
+prerequisites.
+
+The two lanes do not yet agree on the interpreter that measures coverage.
+`ci.yml` installs tooling that leaves a newer managed Python in place before
+the coverage step resolves one, so its `.venv-coverage` has been Python 3.14
+while the publisher's has been Python 3.13. Behaviour that differs between
+supported interpreters therefore fails only on `main`; `concordat.rules`
+probes the filesystem through `concordat/rules/filesystem.py` for exactly
+this reason.
+
 ## Public runtime boundary
 
 `concordat.hello` is the public greeting entry point. At runtime it selects
