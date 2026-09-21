@@ -529,7 +529,9 @@ class TestPathProbes:
         """The narrow half: an ordinary file still gets an ordinary answer."""
         target = tmp_path / "plain.txt"
         target.write_text("x", encoding="utf-8")
-        assert probe(target, "probe-path") is expected
+        assert probe(target, "probe-path") is expected, (
+            "a probe misread an ordinary readable file"
+        )
 
     @pytest.mark.parametrize(
         "probe",
@@ -546,7 +548,9 @@ class TestPathProbes:
         probe: cabc.Callable[[pathlib.Path, str], bool],
     ) -> None:
         """A path that genuinely is not there is absent, not inaccessible."""
-        assert probe(tmp_path / "nowhere", "probe-path") is False
+        assert probe(tmp_path / "nowhere", "probe-path") is False, (
+            "a probe treated a missing path as present or as a refusal"
+        )
 
     def test_a_symlink_is_judged_without_following_it(
         self, tmp_path: pathlib.Path
@@ -556,6 +560,10 @@ class TestPathProbes:
         target.write_text("# Hi\n", encoding="utf-8")
         link = tmp_path / "link.md"
         link.symlink_to(target)
-        assert _is_symlink(link, "probe-path") is True
-        assert _is_file(link, "probe-path") is True
-        assert _is_symlink(target, "probe-path") is False
+        assert _is_symlink(link, "probe-path") is True, "the link is a link"
+        assert _is_file(link, "probe-path") is True, (
+            "the link resolves to a regular file"
+        )
+        assert _is_symlink(target, "probe-path") is False, (
+            "the target is not itself a link"
+        )

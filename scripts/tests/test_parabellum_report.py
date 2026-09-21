@@ -507,7 +507,7 @@ class TestDisplayWidthAlignment:
     )
     def test_display_width_of_one_cell(self, text: str, expected: int) -> None:
         """Each character class contributes its rendered column count."""
-        assert report._display_width(text) == expected
+        assert report._display_width(text) == expected, text
 
     def test_wide_cells_align_with_the_delimiter(self) -> None:
         """Every row and the delimiter agree on each column's width.

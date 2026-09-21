@@ -131,7 +131,9 @@ class TestEnvelopeBuilder:
     def test_an_absent_manifest_is_still_absent(self, tmp_path: pathlib.Path) -> None:
         """The narrow half: a package without a manifest keeps the default."""
         package = _write_package(tmp_path, "bare-rule", None)
-        assert manifest.load(package) == {}
+        assert manifest.load(package) == {}, (
+            "a package with no rule.yaml declares nothing"
+        )
 
     def test_shipped_packages_declare_their_inputs(self) -> None:
         """Both shipped manifests resolve to the builder for their own kind."""
