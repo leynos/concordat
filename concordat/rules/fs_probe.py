@@ -86,7 +86,8 @@ def _absent_or_dangling(path: pathlib.Path) -> FileProbe:
 
     `stat` follows links, so both raise `FileNotFoundError`. `lstat` does not,
     so it succeeds for the link that is there and fails for the path that is
-    not.
+    not. Its own failures are read by the same rule as every other: `ENOENT`
+    and `ENOTDIR` mean nothing is there, and anything else is a refusal.
 
     Returns
     -------
@@ -95,8 +96,14 @@ def _absent_or_dangling(path: pathlib.Path) -> FileProbe:
     """
     try:
         path.lstat()
-    except OSError:
+    except (FileNotFoundError, NotADirectoryError):
         return ABSENT
+    except OSError as error:
+        # The same rule as `probe_file` itself: only the two absence errors
+        # mean nothing is there. A refusal to describe the link is a refusal,
+        # and swallowing it here would reintroduce one level down exactly the
+        # defect this function exists to fix.
+        return FileProbe(present=False, read_error=f"{path}: {error}")
     return FileProbe(
         present=False,
         read_error=f"{path}: symbolic link does not resolve",

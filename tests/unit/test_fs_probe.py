@@ -119,3 +119,38 @@ def test_a_refusal_is_neither_presence_nor_absence(
     assert "Permission denied" in probe.read_error, (
         f"the diagnostic should carry the reason, got {probe.read_error!r}"
     )
+
+
+def test_a_refusal_to_describe_the_link_is_not_an_absence(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The same rule one level down, where it is easiest to forget.
+
+    Reaching the link check at all means `stat` raised `FileNotFoundError`,
+    which a dangling link and a missing path share. If `lstat` then refuses to
+    answer, neither has been established, and reporting an absence would
+    reintroduce the defect this function exists to fix.
+    """
+
+    def missing(_self: pathlib.Path, *_args: object, **_kwargs: object) -> object:
+        message = "No such file or directory"
+        raise FileNotFoundError(2, message)
+
+    def refuse(_self: pathlib.Path, *_args: object, **_kwargs: object) -> object:
+        message = "Permission denied"
+        raise PermissionError(13, message)
+
+    monkeypatch.setattr("pathlib.Path.stat", missing)
+    monkeypatch.setattr("pathlib.Path.lstat", refuse)
+    target = tmp_path / "config.toml"
+    probe = probe_file(target)
+    assert probe.present is False, "a refusal proves no presence"
+    assert probe.read_error is not None, (
+        "an lstat refusal is not evidence that the path is empty"
+    )
+    assert str(target) in probe.read_error, (
+        f"the diagnostic should name the path, got {probe.read_error!r}"
+    )
+    assert "Permission denied" in probe.read_error, (
+        f"the diagnostic should carry the reason, got {probe.read_error!r}"
+    )
