@@ -76,15 +76,22 @@ Makefile parser, and every push to `main` failed in three rule tests with
 it, because the lane that reports a defect is not the lane that suffers from
 it.
 
-`tests/unit/test_gate_tool_provisioning_contract.py` holds the contract.
-It derives the required tool set from the package rather than restating it,
-by reading the `<tool> is required but was not found on PATH` messages that
+`tests/unit/test_gate_tool_provisioning_contract.py` holds the contract,
+reading the repository through `tests/unit/gate_provisioning_support.py`,
+whose recognizers are driven against synthetic input in
+`tests/unit/test_gate_provisioning_recognizers.py`. The contract derives
+the required tool set from the package rather than restating it, by
+reading the `<tool> is required but was not found on PATH` messages that
 `concordat` raises, so a newly required tool is covered as soon as it is
 introduced. It enumerates the suite lanes from `.github/workflows`, so a
 workflow added later is covered on the day it appears. Provisioning is
 recognized from the shape of an install command and not from a step's name,
-so renaming or merging steps cannot void it, and every lane must install a
-shared tool at the same specification so the two cannot drift apart.
+so renaming or merging steps cannot void it. A tool must be installed before
+the step that runs the suite, since installing it afterwards fails exactly as
+the publisher did, and every lane must install a shared tool at the same
+specification so the two cannot drift apart. A lane that installs with Go
+must also run the shared Go setup action, at the same pin, because the
+runners carry no toolchain the install can rely on.
 `make test` lists the same tools as prerequisites, so the local gate fails
 by name rather than through unrelated rule tests.
 
