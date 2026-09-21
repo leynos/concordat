@@ -152,6 +152,35 @@ def _end_of_quote(line: str, index: int) -> int:
     return len(line)
 
 
+def _without_comment(line: str) -> str:
+    """Return the line up to its first unquoted comment.
+
+    The shell stops reading there, so the contract must too: splitting
+    control operators first would read a commented-out install as a real one.
+
+    Parameters
+    ----------
+    line:
+        One physical line of a step's ``run`` body.
+
+    Returns
+    -------
+        The part of the line the shell would run.
+    """
+    index = 0
+    while index < len(line):
+        character = line[index]
+        if character == "\\":
+            index = min(index + 2, len(line))
+        elif character in "'\"":
+            index = _end_of_quote(line, index)
+        elif character == "#" and _starts_a_word(line, index):
+            return line[:index]
+        else:
+            index += 1
+    return line
+
+
 def _starts_a_word(line: str, index: int) -> bool:
     """Return whether ``index`` begins a shell word rather than continuing one."""
     return index == 0 or line[index - 1].isspace()
@@ -186,6 +215,7 @@ def split_compound(line: str) -> tuple[str, ...]:
     -------
         The line's segments, each of which is one simple command.
     """
+    line = _without_comment(line)
     segments: list[str] = []
     start = 0
     index = 0
@@ -195,10 +225,6 @@ def split_compound(line: str) -> tuple[str, ...]:
             index = min(index + 2, len(line))
         elif character in "'\"":
             index = _end_of_quote(line, index)
-        elif character == "#" and _starts_a_word(line, index):
-            # The shell stops here, so the contract must too: a commented
-            # install is not an install, however it reads.
-            break
         elif character in _OPERATOR_CHARACTERS:
             segments.append(line[start:index])
             index = _end_of_operator(line, index)
