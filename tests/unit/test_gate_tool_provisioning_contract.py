@@ -287,6 +287,24 @@ def suite_lanes() -> tuple[Lane, ...]:
     return tuple(lanes)
 
 
+def _shell_commands(lane: Lane) -> typ.Iterator[tuple[str, ...]]:
+    """Yield every shell command a lane's steps run, in step order.
+
+    Parameters
+    ----------
+    lane:
+        The suite-running job to read.
+
+    Yields
+    ------
+        One token tuple per logical command line across the job's steps.
+    """
+    for step in _steps(lane.job, subject=str(lane)):
+        run = step.get("run")
+        if isinstance(run, str):
+            yield from _commands(run)
+
+
 def _provisioning(lane: Lane) -> dict[str, tuple[str, ...]]:
     """Return each tool a lane installs and the command that installs it.
 
@@ -302,15 +320,14 @@ def _provisioning(lane: Lane) -> dict[str, tuple[str, ...]]:
         pinning the same revision compare equal.
     """
     environment = _job_environment(lane.job)
+    installs = [
+        (name, tuple(_expand(token, environment) for token in command))
+        for command in _shell_commands(lane)
+        for name in _installed_tool_names(command)
+    ]
     provisioning: dict[str, tuple[str, ...]] = {}
-    for step in _steps(lane.job, subject=str(lane)):
-        run = step.get("run")
-        if not isinstance(run, str):
-            continue
-        for command in _commands(run):
-            expanded = tuple(_expand(token, environment) for token in command)
-            for name in _installed_tool_names(command):
-                provisioning.setdefault(name, expanded)
+    for name, command in installs:
+        provisioning.setdefault(name, command)
     return provisioning
 
 
