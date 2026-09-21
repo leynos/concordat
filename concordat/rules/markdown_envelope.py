@@ -11,9 +11,11 @@ verdict instead of silently treating the file as absent.
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 import pathlib
+import stat as stat_module
 import typing as typ
 
 from ruamel.yaml import YAML
@@ -23,9 +25,6 @@ from concordat.errors import OperationalRuleError
 
 from .jsonc import JsoncError, loads_jsonc
 from .makefile_facts import MakeutilReport, inspect_makefile
-
-if typ.TYPE_CHECKING:
-    import collections.abc as cabc
 
 ENVELOPE_SCHEMA_VERSION: typ.Final = 1
 ENVELOPE_KIND: typ.Final = "policy-input/markdown-formatting-baseline"
@@ -161,7 +160,7 @@ def _within_checkout(root: pathlib.Path, path: pathlib.Path, operation: str) -> 
     OperationalRuleError
         If the path exists but resolves outside the checkout.
     """
-    if not _probe(path.exists, path, operation):
+    if not _exists(path, operation):
         return False
     try:
         resolved = path.resolve(strict=True)
@@ -179,34 +178,66 @@ def _within_checkout(root: pathlib.Path, path: pathlib.Path, operation: str) -> 
     raise OperationalRuleError(message, operation=operation, resource=path)
 
 
-def _probe(
-    predicate: cabc.Callable[[], bool], path: pathlib.Path, operation: str
-) -> bool:
-    """Return the result of a `pathlib` existence test, or raise.
+# The two errno values that mean the path genuinely is not there. Every other
+# `OSError` is the audit failing to look, not a fact about the checkout.
+_ABSENT_ERRNOS: typ.Final = frozenset({errno.ENOENT, errno.ENOTDIR})
 
-    `Path.is_file`, `Path.is_dir`, and `Path.exists` answer ``False`` for an
-    unreadable path as readily as for an absent one. An audit that cannot
-    stat its own inputs must say so rather than record their absence, so the
-    few `OSError`s those methods do propagate, and any they would swallow on
-    a future Python, are translated here.
+
+def _status(
+    path: pathlib.Path, operation: str, *, follow_symlinks: bool = True
+) -> os.stat_result | None:
+    """Return the path's status, or ``None`` when it does not exist.
+
+    `Path.exists`, `Path.is_file`, and `Path.is_dir` answer ``False`` for an
+    unreadable path as readily as for an absent one, and from Python 3.14
+    they suppress every `OSError` the operating system raises. This package
+    supports 3.13 and later, so an inaccessible parent directory would make
+    a policy input look absent on one interpreter and raise on another. Both
+    readings are wrong: the audit could not look, and must say so.
 
     Returns
     -------
-    bool
-        The predicate's answer for *path*.
+    os.stat_result | None
+        The status, or ``None`` when the path or one of its parents is
+        genuinely missing.
 
     Raises
     ------
     OperationalRuleError
-        If the path cannot be examined.
+        If the path exists but cannot be examined.
     """
     try:
-        return predicate()
+        return path.lstat() if not follow_symlinks else path.stat()
     except OSError as error:
+        if error.errno in _ABSENT_ERRNOS:
+            return None
         message = f"cannot examine {path}: {error}"
         raise OperationalRuleError(
             message, operation=operation, resource=path
         ) from error
+
+
+def _exists(path: pathlib.Path, operation: str) -> bool:
+    """Return whether the path exists, raising if it cannot be examined."""
+    return _status(path, operation) is not None
+
+
+def _is_file(path: pathlib.Path, operation: str) -> bool:
+    """Return whether the path is a regular file, following symbolic links."""
+    status = _status(path, operation)
+    return status is not None and stat_module.S_ISREG(status.st_mode)
+
+
+def _is_dir(path: pathlib.Path, operation: str) -> bool:
+    """Return whether the path is a directory, following symbolic links."""
+    status = _status(path, operation)
+    return status is not None and stat_module.S_ISDIR(status.st_mode)
+
+
+def _is_symlink(path: pathlib.Path, operation: str) -> bool:
+    """Return whether the path is itself a symbolic link."""
+    status = _status(path, operation, follow_symlinks=False)
+    return status is not None and stat_module.S_ISLNK(status.st_mode)
 
 
 def _raise_walk_error(error: OSError) -> typ.NoReturn:
@@ -251,9 +282,9 @@ def _has_markdown_files(checkout: pathlib.Path) -> bool:
             candidate = pathlib.Path(root) / name
             if candidate.suffix.lower() not in MARKDOWN_SUFFIXES:
                 continue
-            if not _probe(candidate.is_file, candidate, OPERATION_SCAN_MARKDOWN):
+            if not _is_file(candidate, OPERATION_SCAN_MARKDOWN):
                 continue
-            if _probe(candidate.is_symlink, candidate, OPERATION_SCAN_MARKDOWN):
+            if _is_symlink(candidate, OPERATION_SCAN_MARKDOWN):
                 continue
             return True
     return False
@@ -302,7 +333,7 @@ def _load_markdownlint_config(
     path = checkout / MARKDOWNLINT_CONFIG_FILENAME
     if not _within_checkout(root, path, OPERATION_READ_MARKDOWNLINT_CONFIG):
         return None
-    if not _probe(path.is_file, path, OPERATION_READ_MARKDOWNLINT_CONFIG):
+    if not _is_file(path, OPERATION_READ_MARKDOWNLINT_CONFIG):
         return None
     fact: MarkdownlintConfig = {
         "path": MARKDOWNLINT_CONFIG_FILENAME,
@@ -335,7 +366,7 @@ def _alternate_configs(checkout: pathlib.Path) -> list[str]:
     present: list[str] = []
     for name in ALTERNATE_CONFIG_FILENAMES:
         candidate = checkout / name
-        if _probe(candidate.is_file, candidate, OPERATION_PROBE_PATH):
+        if _is_file(candidate, OPERATION_PROBE_PATH):
             present.append(name)
     return present
 
@@ -397,7 +428,7 @@ def _load_workflows(checkout: pathlib.Path, root: pathlib.Path) -> list[Workflow
     directory = checkout / WORKFLOWS_DIRECTORY
     if not _within_checkout(root, directory, OPERATION_READ_WORKFLOW):
         return []
-    if not _probe(directory.is_dir, directory, OPERATION_LIST_WORKFLOWS):
+    if not _is_dir(directory, OPERATION_LIST_WORKFLOWS):
         return []
     try:
         entries = sorted(directory.iterdir(), key=lambda entry: entry.name)
@@ -409,7 +440,7 @@ def _load_workflows(checkout: pathlib.Path, root: pathlib.Path) -> list[Workflow
     return [
         _load_workflow(checkout, root, WORKFLOWS_DIRECTORY / entry.name)
         for entry in entries
-        if _probe(entry.is_file, entry, OPERATION_LIST_WORKFLOWS)
+        if _is_file(entry, OPERATION_LIST_WORKFLOWS)
         and entry.suffix in WORKFLOW_SUFFIXES
     ]
 
@@ -435,8 +466,8 @@ def build_markdown_envelope(checkout: pathlib.Path) -> MarkdownEnvelope:
     workflows_dir = checkout / WORKFLOWS_DIRECTORY
     makefile_path = checkout / "Makefile"
     makefile_report: MakeutilReport | None = None
-    if _within_checkout(root, makefile_path, OPERATION_READ_MAKEFILE) and _probe(
-        makefile_path.is_file, makefile_path, OPERATION_READ_MAKEFILE
+    if _within_checkout(root, makefile_path, OPERATION_READ_MAKEFILE) and _is_file(
+        makefile_path, OPERATION_READ_MAKEFILE
     ):
         makefile_report = inspect_makefile(makefile_path).report
     markdownlint = _load_markdownlint_config(checkout, root)
@@ -448,9 +479,7 @@ def build_markdown_envelope(checkout: pathlib.Path) -> MarkdownEnvelope:
             "markdown_files": _has_markdown_files(checkout),
             "root_makefile": makefile_report is not None,
             "markdownlint_config": markdownlint is not None,
-            "workflows_dir": _probe(
-                workflows_dir.is_dir, workflows_dir, OPERATION_PROBE_PATH
-            ),
+            "workflows_dir": _is_dir(workflows_dir, OPERATION_PROBE_PATH),
         },
         "makefile": makefile_report,
         "markdownlint": markdownlint,

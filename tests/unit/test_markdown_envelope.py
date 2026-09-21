@@ -20,12 +20,18 @@ from concordat.rules.markdown_envelope import (
     ENVELOPE_KIND,
     MarkdownlintConfig,
     WorkflowFile,
+    _exists,
     _has_markdown_files,
+    _is_dir,
+    _is_file,
+    _is_symlink,
     build_markdown_envelope,
 )
 from tests.unit.rule_test_support import MINIMAL_REPORT
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from tests.conftest import CmdMox
 
 WORKFLOW = """---
@@ -372,6 +378,52 @@ class TestSymlinkedPolicyInputs:
 class TestUnlistableDirectories:
     """A directory the scan cannot read is an audit failure, not an absence."""
 
+    def test_inaccessible_parent_directory_is_operational(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """An unreadable parent makes a policy input inaccessible, not absent.
+
+        From Python 3.14 the `pathlib` predicates suppress every `OSError`,
+        so `.github/workflows` under an unreadable `.github` answers "not a
+        directory" exactly as a repository without workflows does. PD-006
+        would then report that CI does not lint Markdown for a checkout the
+        audit was never able to read.
+        """
+        checkout = tmp_path / "checkout"
+        checkout.mkdir()
+        (checkout / "README.md").write_text("# Hi\n", encoding="utf-8")
+        github = checkout / ".github"
+        (github / "workflows").mkdir(parents=True)
+        (github / "workflows" / "ci.yml").write_text("on: push\n", encoding="utf-8")
+        github.chmod(0o000)
+        try:
+            with pytest.raises(OperationalRuleError, match="cannot examine"):
+                build_markdown_envelope(checkout)
+        finally:
+            github.chmod(0o755)
+
+    def test_a_genuinely_absent_input_is_not_an_error(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """The other half: a missing path is still recorded as missing.
+
+        A guard that refused every unreadable path would be satisfied by
+        refusing every path; this pins that an ordinary checkout without a
+        `Makefile`, configuration, or workflows still builds an envelope.
+        """
+        checkout = tmp_path / "checkout"
+        checkout.mkdir()
+        (checkout / "README.md").write_text("# Hi\n", encoding="utf-8")
+        envelope = build_markdown_envelope(checkout)
+        applicability = typ.cast(
+            "dict[str, bool]",
+            typ.cast("dict[str, object]", envelope)["applicability"],
+        )
+        assert applicability["markdown_files"] is True, envelope
+        assert applicability["root_makefile"] is False, envelope
+        assert applicability["markdownlint_config"] is False, envelope
+        assert applicability["workflows_dir"] is False, envelope
+
     def test_unlistable_workflows_directory_is_operational(
         self, tmp_path: pathlib.Path
     ) -> None:
@@ -410,3 +462,100 @@ class TestUnlistableDirectories:
                 _has_markdown_files(checkout)
         finally:
             nested.chmod(0o755)
+
+
+class TestPathProbes:
+    """Each probe distinguishes "not there" from "could not look".
+
+    The envelope's callers reach these through paths a containment guard has
+    usually already touched, so the probes are driven here directly: a test
+    that exercises them only through `build_markdown_envelope` passes on
+    whichever guard happens to raise first and proves nothing about the
+    probe it names.
+    """
+
+    @staticmethod
+    def _unreadable(tmp_path: pathlib.Path) -> pathlib.Path:
+        """Return a path inside a directory that cannot be read."""
+        parent = tmp_path / "locked"
+        parent.mkdir()
+        (parent / "target").write_text("x", encoding="utf-8")
+        parent.chmod(0o000)
+        return parent / "target"
+
+    @pytest.mark.parametrize(
+        "probe",
+        [
+            pytest.param(_exists, id="exists"),
+            pytest.param(_is_file, id="is_file"),
+            pytest.param(_is_dir, id="is_dir"),
+            pytest.param(_is_symlink, id="is_symlink"),
+        ],
+    )
+    def test_an_unreadable_parent_raises(
+        self,
+        tmp_path: pathlib.Path,
+        probe: cabc.Callable[[pathlib.Path, str], bool],
+    ) -> None:
+        """From Python 3.14 `pathlib` answers False here; the audit must not.
+
+        `Path.exists`, `Path.is_file`, `Path.is_dir`, and `Path.is_symlink`
+        suppress every `OSError` on 3.14, so an unreadable parent makes a
+        policy input indistinguishable from one that was never there.
+        """
+        target = self._unreadable(tmp_path)
+        try:
+            with pytest.raises(OperationalRuleError, match="cannot examine"):
+                probe(target, "probe-path")
+        finally:
+            target.parent.chmod(0o755)
+
+    @pytest.mark.parametrize(
+        ("probe", "expected"),
+        [
+            pytest.param(_exists, True, id="exists-file"),
+            pytest.param(_is_file, True, id="is-a-file"),
+            pytest.param(_is_dir, False, id="not-a-directory"),
+            pytest.param(_is_symlink, False, id="not-a-link"),
+        ],
+    )
+    def test_a_readable_file_answers_normally(
+        self,
+        tmp_path: pathlib.Path,
+        probe: cabc.Callable[[pathlib.Path, str], bool],
+        *,
+        expected: bool,
+    ) -> None:
+        """The narrow half: an ordinary file still gets an ordinary answer."""
+        target = tmp_path / "plain.txt"
+        target.write_text("x", encoding="utf-8")
+        assert probe(target, "probe-path") is expected
+
+    @pytest.mark.parametrize(
+        "probe",
+        [
+            pytest.param(_exists, id="exists"),
+            pytest.param(_is_file, id="is_file"),
+            pytest.param(_is_dir, id="is_dir"),
+            pytest.param(_is_symlink, id="is_symlink"),
+        ],
+    )
+    def test_a_missing_path_is_false_not_an_error(
+        self,
+        tmp_path: pathlib.Path,
+        probe: cabc.Callable[[pathlib.Path, str], bool],
+    ) -> None:
+        """A path that genuinely is not there is absent, not inaccessible."""
+        assert probe(tmp_path / "nowhere", "probe-path") is False
+
+    def test_a_symlink_is_judged_without_following_it(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`_is_symlink` reads the link itself, `_is_file` its target."""
+        target = tmp_path / "real.md"
+        target.write_text("# Hi\n", encoding="utf-8")
+        link = tmp_path / "link.md"
+        link.symlink_to(target)
+        assert _is_symlink(link, "probe-path") is True
+        assert _is_file(link, "probe-path") is True
+        assert _is_symlink(target, "probe-path") is False
