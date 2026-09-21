@@ -28,6 +28,23 @@ if typ.TYPE_CHECKING:
 CARGO: typ.Final = '[package]\nname = "fixture"\nversion = "0.1.0"\n'
 
 
+def _shipped_packages() -> set[str]:
+    """Return the name of every rule package that ships a policy."""
+    return {
+        path.name
+        for path in packages._rule_packages_dir().iterdir()
+        if (path / "policy").is_dir()
+    }
+
+
+def _is_resolvable(rule_id: str) -> bool:
+    """Report whether *rule_id* reaches a builder by either documented route."""
+    if rule_id in packages.PACKAGE_ENVELOPE_BUILDERS:
+        return True
+    declared = packages._declared_input_kind(packages.rule_package_dir(rule_id))
+    return declared in packages.INPUT_KIND_ENVELOPE_BUILDERS
+
+
 @pytest.fixture
 def checkout(tmp_path: pathlib.Path) -> pathlib.Path:
     """Return a minimal Rust checkout the resolver can build an envelope for."""
@@ -56,21 +73,37 @@ class TestRegisteredPackages:
             f"{rule_id} should be audited over {kind}, got {envelope['kind']!r}"
         )
 
-    def test_every_shipped_package_is_registered(self) -> None:
-        """The mapping is the complete list, not the exceptions to a default.
+    def test_every_shipped_package_is_resolvable(self) -> None:
+        """Every package reaches an envelope by one route or the other.
 
-        Without this, adding a package and forgetting to register it is caught
+        Without this, adding a package and wiring up neither route is caught
         only when someone runs it, and this suite would pass over the gap.
+        The check spans both routes deliberately: requiring registration alone
+        would refuse the manifest-only route the developers' guide promises.
         """
-        shipped = {
-            path.name
-            for path in packages._rule_packages_dir().iterdir()
-            if (path / "policy").is_dir()
-        }
+        shipped = _shipped_packages()
         assert shipped, "the discovery must find the shipped packages"
-        unregistered = shipped - set(packages.PACKAGE_ENVELOPE_BUILDERS)
-        assert unregistered == set(), (
-            f"these packages have no envelope builder: {sorted(unregistered)}"
+        unresolvable = {name for name in shipped if not _is_resolvable(name)}
+        assert unresolvable == set(), (
+            f"these packages reach no envelope builder: {sorted(unresolvable)}"
+        )
+
+    def test_a_package_is_resolvable_by_its_manifest_alone(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The promise that reusing an envelope kind needs no Python change.
+
+        With the identifier mapping emptied, every shipped package must still
+        resolve, because each declares its input kind. A guard written against
+        registration alone would fail a package that took the documented
+        route, which is the shape this test exists to forbid.
+        """
+        monkeypatch.setattr(packages, "PACKAGE_ENVELOPE_BUILDERS", {})
+        unresolvable = {
+            name for name in _shipped_packages() if not _is_resolvable(name)
+        }
+        assert unresolvable == set(), (
+            f"these packages resolve only by registration: {sorted(unresolvable)}"
         )
 
     def test_every_registered_builder_produces_a_known_input_kind(self) -> None:

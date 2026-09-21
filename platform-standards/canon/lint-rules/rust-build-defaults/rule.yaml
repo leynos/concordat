@@ -9,7 +9,7 @@ description: >-
   codegen backend either configured for the development profile or refused
   by a recorded, current exception (RT-009).
   Audit-only: this rule declares no mutations.
-version: 0.1.0
+version: 0.1.1
 sensor:
   type: conftest
   input: policy-input/rust-build-defaults

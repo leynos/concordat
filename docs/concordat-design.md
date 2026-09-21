@@ -1016,6 +1016,9 @@ In this model:
 
 - `version` is the SemVer version of the rule package.
 - `sensor.type` selects the detector (`conftest` or `github-api`).
+- `sensor.input` names the policy-input envelope kind a `conftest` sensor is
+  evaluated over. A package whose input is a shape another package already
+  builds declares it here and needs no code change.
 - `parameters` defines the configuration surface area and defaults.
 - `mutations` defines the actuator entries executed by remediation tooling;
   each entry's `type` selects a deterministic edit (for example `file-copy`) or
