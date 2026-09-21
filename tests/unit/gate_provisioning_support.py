@@ -24,6 +24,8 @@ from pathlib import Path
 
 from ruamel.yaml import YAML
 
+from concordat.rules.makefile_facts import SCHEMA_VERSION
+
 REPOSITORY_ROOT: typ.Final = Path(__file__).parents[2]
 WORKFLOW_DIRECTORY: typ.Final = REPOSITORY_ROOT / ".github/workflows"
 PACKAGE_DIRECTORY: typ.Final = REPOSITORY_ROOT / "concordat"
@@ -598,9 +600,16 @@ def run_makeutil_parse() -> dict[str, object]:
     """Run Makeutil over this repository's Makefile and return its report.
 
     Named for what it does, because it is not a query: it resolves
-    ``makeutil`` from `PATH` and spawns it. Spawn failure, a non-zero exit
-    and unparsable output each fail here, naming the parser, rather than
+    ``makeutil`` from `PATH` and spawns it. Spawn failure, a non-zero exit,
+    unparsable output, a schema version this repository does not read, and
+    an incomplete parse each fail here, naming the parser, rather than
     surfacing later as a puzzling absence of Makefile facts.
+
+    The pinned revision cannot be read back from the binary, which reports
+    only its crate version, so the pin is enforced where it is applied, in
+    the workflows' install command, and what is checked here is the contract
+    the pin exists to hold: the schema the package reads and a complete
+    parse.
 
     Returns
     -------
@@ -634,6 +643,11 @@ def run_makeutil_parse() -> dict[str, object]:
         message = f"makeutil emitted unparsable JSON: {error}"
         raise AssertionError(message) from error
     report = _mapping(loaded, subject="makeutil report")
+    assert report.get("schema_version") == SCHEMA_VERSION, (
+        f"makeutil emitted schema version {report.get('schema_version')!r}, "
+        f"but this repository reads version {SCHEMA_VERSION}; the parser on "
+        "PATH is not the pinned revision"
+    )
     parse = _mapping(report.get("parse"), subject="parse report")
     assert parse.get("status") == "complete", (
         f"makeutil did not complete the Makefile parse: {parse!r}"
