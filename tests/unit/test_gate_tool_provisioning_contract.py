@@ -36,6 +36,7 @@ it must reject proves that it discriminates.
 from __future__ import annotations
 
 import json
+import os
 import re
 import shlex
 import shutil
@@ -78,6 +79,11 @@ _COVERAGE_ACTION: typ.Final = "generate-coverage@"
 _SUITE_COMMANDS: typ.Final = (("make", "test"), ("pytest",), ("uv", "run", "pytest"))
 
 _MAKEFILE_SUITE_TARGET: typ.Final = "test"
+
+# `ensure_tool`'s refusal, as the Makefile spells it. Asserting the message
+# rather than the exit status alone keeps the target from passing by failing
+# for some other reason.
+_MISSING_TOOL_REFUSAL: typ.Final = "is required, but not installed"
 
 # Bounded alphabets for the property tests. They exclude the shell
 # metacharacters and variable sigils the extractors deliberately ignore, so a
@@ -397,6 +403,47 @@ def _make_prerequisites(target: str) -> frozenset[str]:
     return frozenset(typ.cast("list[str]", prerequisites))
 
 
+def _make_executable() -> str:
+    """Return the resolved Make executable the gate tests drive."""
+    executable = shutil.which("make")
+    assert executable is not None, (
+        "the gate-provisioning contract drives Make targets, so make must be on PATH"
+    )
+    return executable
+
+
+_MAKE_EXECUTABLE: typ.Final = _make_executable()
+
+
+def _run_make_target(
+    target: str, search_path: Path
+) -> subprocess.CompletedProcess[str]:
+    """Run one Make target with ``search_path`` as the whole of `PATH`.
+
+    Parameters
+    ----------
+    target:
+        The Make target to run.
+    search_path:
+        The sole directory placed on `PATH`, so the target sees exactly the
+        executables written into it.
+
+    Returns
+    -------
+        The completed process, whatever its exit status.
+    """
+    environment = dict(os.environ)
+    environment["PATH"] = str(search_path)
+    return subprocess.run(  # noqa: S603 - Resolved Make path, fixed target.
+        (_MAKE_EXECUTABLE, "--no-print-directory", target),
+        capture_output=True,
+        check=False,
+        cwd=REPOSITORY_ROOT,
+        env=environment,
+        text=True,
+    )
+
+
 def test_required_tools_are_derived_from_the_package() -> None:
     """The required-tool set is read from the package, not restated here."""
     discovered = required_tools()
@@ -476,6 +523,44 @@ def test_the_make_gate_verifies_the_suites_tools() -> None:
         f"`make {_MAKEFILE_SUITE_TARGET}` runs the suite, so it must require "
         f"{sorted(missing)} before running it"
     )
+
+
+def test_each_tool_target_refuses_when_the_tool_is_absent(
+    tmp_path: Path,
+) -> None:
+    """Every required tool has a target that actually checks for it.
+
+    Asserting only that a tool names a prerequisite of `test` passes with the
+    target's recipe emptied, which would let `make test` run without the tool
+    and fail later in unrelated rule tests. Each target is therefore driven
+    both ways: with nothing on `PATH` it must refuse and name the tool, and
+    with a stub of that name it must succeed.
+    """
+    for tool in sorted(required_tools()):
+        empty = tmp_path / f"{tool}-absent"
+        empty.mkdir()
+        absent = _run_make_target(tool, empty)
+        assert absent.returncode != 0, (
+            f"`make {tool}` must refuse when {tool} is not on PATH; it exited "
+            f"{absent.returncode}"
+        )
+        assert _MISSING_TOOL_REFUSAL in absent.stderr, (
+            f"`make {tool}` must refuse with the shared message; stderr was "
+            f"{absent.stderr!r}"
+        )
+        assert tool in absent.stderr, (
+            f"`make {tool}` must name the missing tool; stderr was {absent.stderr!r}"
+        )
+        stubbed = tmp_path / f"{tool}-present"
+        stubbed.mkdir()
+        stub = stubbed / tool
+        stub.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        stub.chmod(0o755)
+        present = _run_make_target(tool, stubbed)
+        assert present.returncode == 0, (
+            f"`make {tool}` must accept a {tool} on PATH; it exited "
+            f"{present.returncode} with {present.stderr!r}"
+        )
 
 
 def test_a_command_that_only_uses_a_tool_does_not_provision_it() -> None:
