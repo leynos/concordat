@@ -71,6 +71,14 @@ the tool's arguments run to the end of the line or to `&&`; a following `;`,
 `TMPDIR`, `USER`) are rewritten to their shell spelling, so a tool under
 `$(HOME)/.cargo/bin/` still reads as the command word.
 
+Flags and status are read from the same invocation.
+`mdtablefix --check --git --include-untracked || true; mdtablefix --version`
+puts the required flags on one invocation and the binding exit status on
+another; taking them from whichever invocation supplies each reports the recipe
+compliant while the check cannot fail the target. Compliance therefore reads
+only the arguments of the invocation whose status reaches Make, and any other
+invocation of the tool on the line is reported as soft-skipped in its own right.
+
 Every invocation on an audited path is judged on its own. A `check-fmt` path
 that runs the required `mdtablefix --check --git --include-untracked` and then
 runs `mdtablefix --in-place` rewrites the files the target was asked to verify,

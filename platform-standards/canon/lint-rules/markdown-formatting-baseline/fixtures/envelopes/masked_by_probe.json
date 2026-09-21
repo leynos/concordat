@@ -21,8 +21,8 @@
     },
     "source": {
       "path": "Makefile",
-      "sha256": "bc09d41d91fc2526e8821f37591d427bfd2a793bad0848f354947767d9733903",
-      "byte_length": 566
+      "sha256": "79b5c9fd5dec6b68977a7aed58ffb25058582449203313c2d6dd5f69c81c2ba9",
+      "byte_length": 353
     },
     "parse": {
       "status": "complete",
@@ -30,7 +30,7 @@
     },
     "rules": [
       {
-        "ordinal": 5,
+        "ordinal": 3,
         "targets": [
           ".PHONY"
         ],
@@ -42,16 +42,16 @@
         "conditions": [],
         "recipes": [],
         "location": {
-          "start_byte": 269,
-          "end_byte": 292,
-          "start_line": 7,
+          "start_byte": 100,
+          "end_byte": 123,
+          "start_line": 5,
           "start_column": 1,
-          "end_line": 9,
+          "end_line": 7,
           "end_column": 1
         }
       },
       {
-        "ordinal": 6,
+        "ordinal": 4,
         "targets": [
           "fmt"
         ],
@@ -61,61 +61,46 @@
         "recipes": [
           {
             "ordinal": 0,
-            "text": "$(RUFF) format",
+            "text": "$(MDTABLEFIX) --in-place $(MDTABLEFIX_SELECT) || true; $(MDTABLEFIX) --version",
             "silent": false,
             "ignore_errors": false,
             "always_execute": false,
             "location": {
-              "start_byte": 315,
-              "end_byte": 331,
-              "start_line": 10,
+              "start_byte": 128,
+              "end_byte": 208,
+              "start_line": 8,
               "start_column": 1,
-              "end_line": 11,
+              "end_line": 9,
               "end_column": 1
             }
           },
           {
             "ordinal": 1,
-            "text": "$(MDTABLEFIX) --in-place $(MDTABLEFIX_SELECT) $(MDTABLEFIX_RULES)",
+            "text": "$(MDLINT) --fix \"**/*.md\" || true; $(MDLINT) --version",
             "silent": false,
             "ignore_errors": false,
             "always_execute": false,
             "location": {
-              "start_byte": 331,
-              "end_byte": 398,
-              "start_line": 11,
+              "start_byte": 208,
+              "end_byte": 264,
+              "start_line": 9,
               "start_column": 1,
-              "end_line": 12,
-              "end_column": 1
-            }
-          },
-          {
-            "ordinal": 2,
-            "text": "@unset FORCE_COLOR; $(MDLINT) --fix \"**/*.md\"",
-            "silent": true,
-            "ignore_errors": false,
-            "always_execute": false,
-            "location": {
-              "start_byte": 398,
-              "end_byte": 445,
-              "start_line": 12,
-              "start_column": 1,
-              "end_line": 13,
+              "end_line": 10,
               "end_column": 1
             }
           }
         ],
         "location": {
-          "start_byte": 292,
-          "end_byte": 446,
-          "start_line": 9,
+          "start_byte": 123,
+          "end_byte": 265,
+          "start_line": 7,
           "start_column": 1,
-          "end_line": 14,
+          "end_line": 11,
           "end_column": 1
         }
       },
       {
-        "ordinal": 7,
+        "ordinal": 5,
         "targets": [
           "check-fmt"
         ],
@@ -125,41 +110,26 @@
         "recipes": [
           {
             "ordinal": 0,
-            "text": "$(RUFF) format --check",
+            "text": "$(MDTABLEFIX) --check $(MDTABLEFIX_SELECT) || true; $(MDTABLEFIX) --version",
             "silent": false,
             "ignore_errors": false,
             "always_execute": false,
             "location": {
-              "start_byte": 478,
-              "end_byte": 502,
-              "start_line": 15,
+              "start_byte": 276,
+              "end_byte": 353,
+              "start_line": 12,
               "start_column": 1,
-              "end_line": 16,
-              "end_column": 1
-            }
-          },
-          {
-            "ordinal": 1,
-            "text": "$(MDTABLEFIX) --check $(MDTABLEFIX_SELECT) $(MDTABLEFIX_RULES)",
-            "silent": false,
-            "ignore_errors": false,
-            "always_execute": false,
-            "location": {
-              "start_byte": 502,
-              "end_byte": 566,
-              "start_line": 16,
-              "start_column": 1,
-              "end_line": 17,
+              "end_line": 13,
               "end_column": 1
             }
           }
         ],
         "location": {
-          "start_byte": 446,
-          "end_byte": 566,
-          "start_line": 14,
+          "start_byte": 265,
+          "end_byte": 353,
+          "start_line": 11,
           "start_column": 1,
-          "end_line": 17,
+          "end_line": 13,
           "end_column": 1
         }
       }
@@ -167,42 +137,6 @@
     "variables": [
       {
         "ordinal": 0,
-        "name": "RUFF",
-        "operator": ":=",
-        "raw_value": "uv run ruff",
-        "exported": false,
-        "overridden": false,
-        "define_block": false,
-        "conditions": [],
-        "location": {
-          "start_byte": 0,
-          "end_byte": 20,
-          "start_line": 1,
-          "start_column": 1,
-          "end_line": 2,
-          "end_column": 1
-        }
-      },
-      {
-        "ordinal": 1,
-        "name": "MDLINT",
-        "operator": "?=",
-        "raw_value": "$(shell command -v markdownlint-cli2 2>/dev/null || printf '%s' \"$$HOME/.bun/bin/markdownlint-cli2\")",
-        "exported": false,
-        "overridden": false,
-        "define_block": false,
-        "conditions": [],
-        "location": {
-          "start_byte": 20,
-          "end_byte": 131,
-          "start_line": 2,
-          "start_column": 1,
-          "end_line": 3,
-          "end_column": 1
-        }
-      },
-      {
-        "ordinal": 2,
         "name": "MDTABLEFIX",
         "operator": "?=",
         "raw_value": "mdtablefix",
@@ -211,16 +145,16 @@
         "define_block": false,
         "conditions": [],
         "location": {
-          "start_byte": 131,
-          "end_byte": 156,
-          "start_line": 3,
+          "start_byte": 0,
+          "end_byte": 25,
+          "start_line": 1,
           "start_column": 1,
-          "end_line": 4,
+          "end_line": 2,
           "end_column": 1
         }
       },
       {
-        "ordinal": 3,
+        "ordinal": 1,
         "name": "MDTABLEFIX_SELECT",
         "operator": "=",
         "raw_value": "--git --include-untracked",
@@ -229,29 +163,29 @@
         "define_block": false,
         "conditions": [],
         "location": {
-          "start_byte": 156,
-          "end_byte": 202,
-          "start_line": 4,
+          "start_byte": 25,
+          "end_byte": 71,
+          "start_line": 2,
           "start_column": 1,
-          "end_line": 5,
+          "end_line": 3,
           "end_column": 1
         }
       },
       {
-        "ordinal": 4,
-        "name": "MDTABLEFIX_RULES",
-        "operator": "=",
-        "raw_value": "--wrap --renumber --breaks --ellipsis --fences",
+        "ordinal": 2,
+        "name": "MDLINT",
+        "operator": "?=",
+        "raw_value": "markdownlint-cli2",
         "exported": false,
         "overridden": false,
         "define_block": false,
         "conditions": [],
         "location": {
-          "start_byte": 202,
-          "end_byte": 268,
-          "start_line": 5,
+          "start_byte": 71,
+          "end_byte": 99,
+          "start_line": 3,
           "start_column": 1,
-          "end_line": 6,
+          "end_line": 4,
           "end_column": 1
         }
       }
@@ -298,17 +232,24 @@
       "parsed": {
         "name": "CI",
         "on": {
+          "push": {
+            "branches": [
+              "main"
+            ]
+          },
           "pull_request": null
         },
         "jobs": {
-          "build-test": {
+          "lint-test": {
             "runs-on": "ubuntu-latest",
-            "env": {
-              "MARKDOWNLINT_CLI2_VERSION": "0.20.0"
-            },
             "steps": [
               {
+                "name": "Check out repository",
                 "uses": "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0"
+              },
+              {
+                "name": "Check formatting",
+                "run": "make check-fmt"
               },
               {
                 "name": "Lint Markdown",
@@ -316,14 +257,6 @@
                 "with": {
                   "globs": "**/*.md"
                 }
-              },
-              {
-                "name": "Install the golden-test Markdown linter",
-                "run": "set -euo pipefail\nnpm_root=\"$HOME/.local/share/formatters/npm\"\nif [ ! -x \"$npm_root/bin/markdownlint-cli2\" ]; then\n  npm install -g --prefix \"$npm_root\" \"markdownlint-cli2@$MARKDOWNLINT_CLI2_VERSION\"\nfi\nprintf '%s\\n' \"$npm_root/bin\" >> \"$GITHUB_PATH\"\n\"$npm_root/bin/markdownlint-cli2\" --version\n"
-              },
-              {
-                "name": "Test",
-                "run": "cargo test"
               }
             ]
           }

@@ -57,6 +57,7 @@ EXPECTED_PROFILES: typ.Final[dict[str, Profile]] = {
     "soft_skip": _NONCOMPLIANT_RECIPES,
     "echo_decoy": _NONCOMPLIANT_RECIPES,
     "extra_invocation": frozenset({("PD-002", "noncompliant")}),
+    "masked_by_probe": _NONCOMPLIANT_RECIPES,
     "mode_swapped": frozenset({("PD-002", "noncompliant"), ("PD-003", "noncompliant")}),
     "conditional": frozenset({
         ("PD-003", "indeterminate"),

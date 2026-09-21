@@ -374,3 +374,28 @@ test_echoed_workflow_mention_is_not_an_invocation if {
 	findings := policy.deny with input as data.fixtures.workflow_echo_mention
 	count(findings) == 0
 }
+
+# Flags and status must come from the same invocation. A soft-skipped check
+# followed by a `--version` probe puts the required flags on one invocation
+# and the binding exit status on another; judging them independently reported
+# the recipe compliant while the check could not fail the target.
+test_flags_and_status_must_bind_to_one_invocation if {
+	findings := policy.deny with input as data.fixtures.masked_by_probe
+	profile(findings) == {
+		["PD-002", "noncompliant"],
+		["PD-003", "noncompliant"],
+		["PD-004", "noncompliant"],
+	}
+	"\"check-fmt\"-path recipe soft-skips mdtablefix; its exit status cannot fail the target" in messages(findings, "PD-002")
+}
+
+# The fixture above must actually trip `step_installs_linter`, or the test
+# that provisioning beside the action is not a finding passes over a step the
+# policy never recognised as provisioning and discriminates nothing. It did
+# not: the package name sat on a line continuation, away from `npm install`.
+test_install_for_tests_fixture_really_provisions if {
+	some workflow in data.fixtures.workflow_install_for_tests.workflows
+	some [_, _, step] in policy.workflow_steps(workflow)
+	policy.step_installs_linter(step)
+	not policy.step_invokes_linter(step)
+}

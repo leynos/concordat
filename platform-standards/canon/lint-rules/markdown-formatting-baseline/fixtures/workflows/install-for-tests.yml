@@ -23,10 +23,10 @@ jobs:
           set -euo pipefail
           npm_root="$HOME/.local/share/formatters/npm"
           if [ ! -x "$npm_root/bin/markdownlint-cli2" ]; then
-            npm install --prefix "$npm_root" \
-              "markdownlint-cli2@$MARKDOWNLINT_CLI2_VERSION"
+            npm install -g --prefix "$npm_root" "markdownlint-cli2@$MARKDOWNLINT_CLI2_VERSION"
           fi
-          markdownlint-cli2 --version
+          printf '%s\n' "$npm_root/bin" >> "$GITHUB_PATH"
+          "$npm_root/bin/markdownlint-cli2" --version
 
       - name: Test
         run: cargo test

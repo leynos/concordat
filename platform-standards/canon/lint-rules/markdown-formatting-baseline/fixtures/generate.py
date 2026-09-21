@@ -27,6 +27,9 @@ from concordat.rules.markdown_envelope import (
     build_markdown_envelope,
 )
 
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
 FIXTURES_DIR = Path(__file__).resolve().parent
 MAKEFILES_DIR = FIXTURES_DIR / "makefiles"
 MARKDOWNLINT_DIR = FIXTURES_DIR / "markdownlint"
@@ -63,7 +66,7 @@ class Scenario:
 
     makefile: str | None = "compliant"
     markdownlint: str | None = "baseline"
-    workflows: typ.Mapping[str, str] = dataclasses.field(
+    workflows: cabc.Mapping[str, str] = dataclasses.field(
         default_factory=lambda: {"ci.yml": "action"}
     )
     markdown: bool = True
@@ -88,6 +91,7 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "mode_swapped": Scenario(makefile="mode-swapped"),
     "echo_decoy": Scenario(makefile="echo-decoy"),
     "extra_invocation": Scenario(makefile="extra-invocation"),
+    "masked_by_probe": Scenario(makefile="masked-by-probe"),
     "conditional": Scenario(makefile="conditional"),
     "with_include": Scenario(makefile="with-include"),
     "ambiguous_variable": Scenario(makefile="ambiguous-variable"),
@@ -121,7 +125,15 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
 
 
 def lay_out(scenario: Scenario, checkout: Path) -> None:
-    """Populate *checkout* with the files *scenario* names."""
+    """Populate *checkout* with the files *scenario* names.
+
+    Parameters
+    ----------
+    scenario:
+        The scenario whose fixture files compose the checkout.
+    checkout:
+        An existing empty directory to lay the files out in.
+    """
     if scenario.markdown:
         (checkout / "README.md").write_text("# Fixture\n", encoding="utf-8")
     if scenario.makefile is not None:
@@ -143,7 +155,23 @@ def lay_out(scenario: Scenario, checkout: Path) -> None:
 
 
 def build_fixture_envelope(scenario: Scenario) -> MarkdownEnvelope:
-    """Return the production envelope for *scenario*, with a stable path."""
+    """Return the production envelope for *scenario*, with a stable path.
+
+    The scenario is laid out in a temporary directory and handed to the
+    production builder, so a recorded envelope cannot drift from what the
+    runner would send to Conftest.
+
+    Parameters
+    ----------
+    scenario:
+        The scenario to lay out and record.
+
+    Returns
+    -------
+    MarkdownEnvelope
+        The recorded envelope, with the checkout path rewritten to ``.`` so
+        the temporary directory does not leak into version control.
+    """
     with tempfile.TemporaryDirectory(prefix="markdown-fixture-") as scratch:
         checkout = Path(scratch)
         lay_out(scenario, checkout)
@@ -153,7 +181,12 @@ def build_fixture_envelope(scenario: Scenario) -> MarkdownEnvelope:
 
 
 def main() -> None:
-    """Regenerate every envelope and the bundled data document."""
+    """Regenerate every envelope and the bundled data document.
+
+    Writes one JSON file per scenario under ``envelopes/`` and the bundle
+    ``data.json`` that ``conftest verify --data`` consumes. Existing files
+    are overwritten, so the pinned ``makeutil`` must be on PATH.
+    """
     ENVELOPES_DIR.mkdir(exist_ok=True)
     envelopes = {
         key: build_fixture_envelope(scenario) for key, scenario in SCENARIOS.items()

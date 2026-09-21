@@ -348,6 +348,14 @@ tool_binding_pattern(tool) := sprintf(
 	[segment_start, env_assignment_prefix, tool_word(tool)],
 )
 
+# The same shape, with the argument list as the final capture and the `&&`
+# tail uncaptured, so the arguments of the invocation whose status reaches
+# Make can be read rather than inferred.
+tool_binding_segment_pattern(tool) := sprintf(
+	`%s(?:%s)*%s([^;|&]*)(?:&&[^;|&]*)*$`,
+	[segment_start, env_assignment_prefix, tool_word(tool)],
+)
+
 recipe_is_comment(recipe) if regex.match(`^[[:space:]]*[-@+]*[[:space:]]*#`, recipe.text)
 
 # Every argument list the tool receives in the recipe, as whitespace-separated
@@ -366,10 +374,30 @@ tool_arguments(recipe, tool) := {tokens |
 
 tool_invoked(recipe, tool) if count(tool_arguments(recipe, tool)) > 0
 
+# The arguments of the invocations whose exit status reaches Make. Flags and
+# status must be read from the *same* invocation: a recipe such as
+# `mdtablefix --check --git --include-untracked || true; mdtablefix --version`
+# has one invocation carrying the required flags and a different one carrying
+# the binding status, and judging the two independently reports it compliant
+# while the check it was asked to run cannot fail the target.
+binding_arguments(recipe, tool) := {tokens |
+	not recipe_is_comment(recipe)
+	recipe.ignore_errors == false
+	some match in regex.find_all_string_submatch_n(
+		tool_binding_segment_pattern(tool), expand(recipe.text), -1,
+	)
+	arguments := match[count(match) - 1]
+	tokens := {token |
+		some token in split(trim_space(arguments), " ")
+		token != ""
+	}
+}
+
+invocation_binds(recipe, tool, tokens) if tokens in binding_arguments(recipe, tool)
+
 tool_binding(recipe, tool) if {
 	tool_invoked(recipe, tool)
-	recipe.ignore_errors == false
-	regex.match(tool_binding_pattern(tool), expand(recipe.text))
+	count(binding_arguments(recipe, tool)) > 0
 }
 
 # A token such as `$(MDTABLEFIX_SELECT)` left in the argument list names a
@@ -393,15 +421,13 @@ missing_select_flags(tokens) := [flag |
 ]
 
 mdtablefix_compliant(recipe, mode) if {
-	tool_binding(recipe, "mdtablefix")
-	some tokens in tool_arguments(recipe, "mdtablefix")
+	some tokens in binding_arguments(recipe, "mdtablefix")
 	mode in tokens
 	count(missing_select_flags(tokens)) == 0
 }
 
 markdownlint_compliant(recipe) if {
-	tool_binding(recipe, "markdownlint-cli2")
-	some tokens in tool_arguments(recipe, "markdownlint-cli2")
+	some tokens in binding_arguments(recipe, "markdownlint-cli2")
 	"--fix" in tokens
 }
 
@@ -479,8 +505,8 @@ deny contains f if {
 	some recipe in path_recipes(root)
 	not recipe_satisfies(check_id, recipe)
 	tool := check_tool[check_id]
-	tool_invoked(recipe, tool)
-	not tool_binding(recipe, tool)
+	some tokens in tool_arguments(recipe, tool)
+	not invocation_binds(recipe, tool, tokens)
 	f := finding(
 		check_id, "noncompliant", makefile_path, recipe.location.start_line,
 		sprintf("%q-path recipe soft-skips %s; its exit status cannot fail the target", [root, tool]),
