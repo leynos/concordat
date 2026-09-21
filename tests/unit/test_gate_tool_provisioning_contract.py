@@ -135,7 +135,10 @@ def test_a_go_install_is_preceded_by_the_shared_go_setup() -> None:
 
     The runners carry no Go toolchain the publisher can rely on, so the
     install step alone is not provisioning: without the setup action the
-    command fails before it installs anything.
+    command fails before it installs anything. A lane that sets Go up twice
+    at different pins is refused rather than judged by either one, since the
+    toolchain its installs actually run under is then not readable and the
+    comparison across lanes would compare the wrong value.
     """
     setups: dict[str, str] = {}
     for lane in suite_lanes():
@@ -155,6 +158,10 @@ def test_a_go_install_is_preceded_by_the_shared_go_setup() -> None:
         assert references, (
             f"{lane} installs with Go but never runs {GO_SETUP_ACTION}, so "
             "the install has no toolchain to run under"
+        )
+        assert len(set(references.values())) == 1, (
+            f"{lane} sets Go up more than once at different pins, so which "
+            f"toolchain its installs run under is not readable: {references}"
         )
         earliest_setup = min(references)
         assert earliest_setup < min(go_installs), (

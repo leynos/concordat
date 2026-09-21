@@ -321,3 +321,26 @@ def test_an_install_in_the_suite_step_counts_as_late() -> None:
     assert late_installs(earlier, {"conftest"}) == {}, (
         "an install in an earlier step is not late"
     )
+
+
+def test_a_commented_install_is_not_an_install() -> None:
+    """The shell stops at an unquoted comment, so the reader must too.
+
+    Splitting control operators before discarding comments would read
+    ``echo ready # && go install ...`` as a real installation, and a lane
+    could satisfy the provisioning contract with a command that never runs.
+    """
+    commented = commands("echo ready # && go install example.com/conftest@v0.52.0\n")
+    installed = {
+        name for command in commented for name in installed_tool_names(command)
+    }
+    assert not installed, (
+        f"a commented-out install provisions nothing; found {installed}"
+    )
+    assert commented == (("echo", "ready"),), (
+        f"the command before the comment still runs; found {commented}"
+    )
+    within_word = commands("go install example.com/conftest@v0.52.0#pinned\n")
+    assert installed_tool_names(within_word[0]) == frozenset({"conftest"}), (
+        "a hash inside a word is not a comment"
+    )

@@ -152,6 +152,11 @@ def _end_of_quote(line: str, index: int) -> int:
     return len(line)
 
 
+def _starts_a_word(line: str, index: int) -> bool:
+    """Return whether ``index`` begins a shell word rather than continuing one."""
+    return index == 0 or line[index - 1].isspace()
+
+
 def _end_of_operator(line: str, index: int) -> int:
     """Return the index just past the control operator at ``index``."""
     while index < len(line) and line[index] in _OPERATOR_CHARACTERS:
@@ -166,6 +171,11 @@ def split_compound(line: str) -> tuple[str, ...]:
     and the suite or an install may sit after any of them. Splitting is done
     on the raw text rather than on tokens, because a quoted ``"&&"`` is an
     argument and tokenizing first would make the two indistinguishable.
+
+    An unquoted ``#`` at a word boundary ends the line, as it does in the
+    shell. Splitting operators first would otherwise read a commented-out
+    install as a real one, and a lane could satisfy the provisioning
+    contract with a command the shell never runs.
 
     Parameters
     ----------
@@ -185,13 +195,17 @@ def split_compound(line: str) -> tuple[str, ...]:
             index = min(index + 2, len(line))
         elif character in "'\"":
             index = _end_of_quote(line, index)
+        elif character == "#" and _starts_a_word(line, index):
+            # The shell stops here, so the contract must too: a commented
+            # install is not an install, however it reads.
+            break
         elif character in _OPERATOR_CHARACTERS:
             segments.append(line[start:index])
             index = _end_of_operator(line, index)
             start = index
         else:
             index += 1
-    segments.append(line[start:])
+    segments.append(line[start:index])
     return tuple(segment for segment in (s.strip() for s in segments) if segment)
 
 
