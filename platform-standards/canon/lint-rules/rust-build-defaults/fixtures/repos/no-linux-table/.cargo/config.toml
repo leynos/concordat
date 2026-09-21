@@ -1,0 +1,4 @@
+# Cargo selects a single rustflags source rather than merging them, so
+# every flag that must survive is repeated in each source.
+[build]
+rustflags = ["-Zthreads=8"]

@@ -1,0 +1,7 @@
+# Cargo selects a single rustflags source rather than merging them, so
+# every flag that must survive is repeated in each source.
+[build]
+rustflags = ["-Zthreads=8"]
+
+[target.'cfg(target_os = "linux")']
+rustflags = ["-Clink-arg=-fuse-ld=mold"]

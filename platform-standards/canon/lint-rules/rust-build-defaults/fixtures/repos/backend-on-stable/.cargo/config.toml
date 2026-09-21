@@ -1,0 +1,10 @@
+# Cargo selects a single rustflags source rather than merging them, so
+# every flag that must survive is repeated in each source.
+[unstable]
+codegen-backend = true
+
+[profile.dev]
+codegen-backend = "cranelift"
+
+[target.'cfg(target_os = "linux")']
+rustflags = ["-Clink-arg=-fuse-ld=mold"]

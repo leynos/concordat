@@ -80,3 +80,18 @@ artifacts:
       Rule package manifest (sensor wiring, parameters, defaults) for
       rust-makefile-baseline.
     sha256: 3250b28ee20c7dd14761fc77678318c49524467069a38259527fdc57f8d2254f
+  - id: lint-rule-rust-build-defaults
+    type: opa-policy
+    path: platform-standards/canon/lint-rules/rust-build-defaults/policy/rust_build_defaults.rego
+    description: >
+      Sensor policy for the rust-build-defaults rule package: the parallel
+      frontend and linker defaults, the rustflags sources held equal, and the
+      codegen backend configured or refused by a recorded exception.
+    sha256: 2f25cf5c8001f917982aaac61383e7d9f249b37d1ffc79abdf25bc5eac4904fa
+  - id: lint-rule-rust-build-defaults-manifest
+    type: lint-config
+    path: platform-standards/canon/lint-rules/rust-build-defaults/rule.yaml
+    description: >
+      Rule package manifest (sensor wiring, parameters, defaults) for
+      rust-build-defaults.
+    sha256: cccfc6314c79964038a717cd5f69b285471686642896d5b51355ca259490ca5a

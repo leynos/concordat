@@ -302,6 +302,48 @@ The command requires two external tools on `PATH`: `conftest` and the pinned
 `platform-standards/canon/lint-rules/rust-makefile-baseline/README.md` for the
 pin and regeneration workflow).
 
+### Auditing the Rust build defaults
+
+The `rust-build-defaults` package audits the estate's build standard:
+
+```shell
+concordat artefact rule run rust-build-defaults --repo /path/to/checkout
+```
+
+It reads the files Cargo and rustup auto-discover, so it needs `conftest` on
+`PATH` but not `makeutil`. Four clauses:
+
+- the parallel `rustc` frontend is carried by every `rustflags` source, where
+  `rust-toolchain.toml` pins a nightly channel;
+- the `mold` linker is named in a source that applies on Linux, and in no
+  source that does not;
+- the sources are repeated rather than merged, because Cargo replaces one with
+  another instead of combining them;
+- the Cranelift codegen backend is the development-profile default, or the
+  repository records an exception.
+
+The backend clause accepts two states. Configure the backend where the
+repository's own suite passes under it:
+
+```toml
+[unstable]
+codegen-backend = true
+
+[profile.dev]
+codegen-backend = "cranelift"
+```
+
+Where the suite fails under it, record the exception instead: a section in
+`docs/developers-guide.md` whose heading names the backend, naming the failing
+tests and the toolchain the measurement was taken on. The audit checks that the
+section names the channel `rust-toolchain.toml` pins, so bumping the pin past
+the measurement reports the exception as due a re-test. A repository with
+neither the backend nor an exception is noncompliant.
+
+Both the document list and the heading keyword are rule parameters, so a
+repository that records the exception elsewhere can be accommodated without
+changing the policy.
+
 ### Sweeping the Rust estate
 
 `scripts/parabellum_sweep.py` audits every repository listed in

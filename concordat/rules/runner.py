@@ -17,7 +17,14 @@ from ruamel.yaml.error import YAMLError
 
 from concordat.errors import OperationalRuleError
 
-from .envelope import PolicyEnvelope, build_envelope
+from .envelope import (
+    BuildDefaultsEnvelope,
+    PolicyEnvelope,
+    build_build_defaults_envelope,
+    build_envelope,
+)
+
+type RuleEnvelope = PolicyEnvelope | BuildDefaultsEnvelope
 
 
 def _resolve_rule_packages_dir() -> pathlib.Path:
@@ -342,7 +349,7 @@ def _require_policy_exit_code(
 
 def _invoke_conftest(
     rule_id: str,
-    envelope: PolicyEnvelope,
+    envelope: RuleEnvelope,
 ) -> list[_ConftestResult]:
     """Evaluate *envelope* against *rule_id*'s policy and return the results."""
     rule_dir = _rule_package_dir(rule_id)
@@ -513,6 +520,28 @@ def _overall_verdict(findings: tuple[Finding, ...]) -> str:
     return VERDICT_COMPLIANT
 
 
+# A rule package reads the facts its checks need, and those differ. Adding a
+# builder here is how a package opts out of the Makefile envelope; anything not
+# named takes the historic one, so existing packages are untouched.
+_ENVELOPE_BUILDERS: typ.Final = {
+    "rust-build-defaults": build_build_defaults_envelope,
+}
+
+
+def _envelope_for(rule_id: str, checkout: pathlib.Path) -> RuleEnvelope:
+    """Return the policy input *rule_id* is evaluated over.
+
+    Returns
+    -------
+    RuleEnvelope
+        The envelope built by the package's own builder, or the default one.
+    """
+    builder = _ENVELOPE_BUILDERS.get(rule_id)
+    if builder is None:
+        return build_envelope(checkout)
+    return builder(checkout, _rule_parameters(_rule_package_dir(rule_id)))
+
+
 def run_rule(rule_id: str, checkout: pathlib.Path) -> RuleRunResult:
     """Evaluate *rule_id* against *checkout* and return the structured result.
 
@@ -543,7 +572,7 @@ def run_rule(rule_id: str, checkout: pathlib.Path) -> RuleRunResult:
             operation="audit-checkout",
             resource=checkout,
         )
-    envelope = build_envelope(checkout)
+    envelope = _envelope_for(rule_id, checkout)
     results = _invoke_conftest(rule_id, envelope)
     findings = _findings_from_results(results)
     return RuleRunResult(

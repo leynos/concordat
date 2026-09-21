@@ -1820,8 +1820,8 @@ breakdown of what constitutes "compliance" within the framework.
 | RT-005       | Whitaker linting is present, integrated per the `rust-makefile-baseline` rule package.                                                                                                                                                                                                                                                                                             | Toolchain Baseline              | OPA/Conftest + Makefile parse                           | error                | 4                        |
 | RT-006       | A nightly channel pinned in `rust-toolchain.toml` is dated within the last year.                                                                                                                                                                                                                                                                                                   | Toolchain Baseline              | Python/TOML parse + date check                          | warning              | 4                        |
 | RT-007       | The pinned toolchain includes the `clippy`, `rustfmt`, and `rust-analyzer` components.                                                                                                                                                                                                                                                                                             | Toolchain Baseline              | OPA/Conftest + TOML parse                               | error                | 4                        |
-| RT-008       | The mold linker is configured for development builds unless the repository holds a recorded exemption.                                                                                                                                                                                                                                                                             | Toolchain Baseline              | OPA/Conftest + TOML parse                               | warning              | 4                        |
-| RT-009       | The Cranelift codegen backend is configured for development builds unless the repository holds a recorded exemption.                                                                                                                                                                                                                                                               | Toolchain Baseline              | OPA/Conftest + TOML parse                               | warning              | 4                        |
+| RT-008       | The mold linker is configured for development builds: named in a `rustflags` source that applies on Linux, and named in no source that does not.                                                                                                                                                                                                                                   | Toolchain Baseline              | OPA/Conftest + TOML parse (`rust-build-defaults`)       | error                | 4                        |
+| RT-009       | The Cranelift codegen backend is the development-profile default, or the repository records an exception naming the pinned toolchain channel. A repository with neither is noncompliant; a selection cargo cannot honour, or a backend the estate has not adopted, is noncompliant in its own right.                                                                               | Toolchain Baseline              | OPA/Conftest + TOML parse (`rust-build-defaults`)       | error                | 4                        |
 | RT-010       | The Polonius-next borrow checker is enabled when the repository exposes only application targets (no publishable library targets).                                                                                                                                                                                                                                                 | Toolchain Baseline              | OPA/Conftest + manifest parse                           | warning              | 4                        |
 | RT-011       | nextest runs the test suite unless the repository holds a recorded exemption.                                                                                                                                                                                                                                                                                                      | Toolchain Baseline              | OPA/Conftest + Makefile parse                           | error                | 4                        |
 | RT-012       | Every Rust job that compiles carries both a configured sccache backend and an action-exported wrapper.                                                                                                                                                                                                                                                                             | Toolchain Baseline              | OPA/Conftest + workflow envelope                        | warning              | 4                        |
@@ -1829,6 +1829,8 @@ breakdown of what constitutes "compliance" within the framework.
 | RT-014       | A statistics step runs after the build through `SCCACHE_PATH`, including when the job has failed.                                                                                                                                                                                                                                                                                  | Toolchain Baseline              | OPA/Conftest + workflow envelope                        | note                 | 4                        |
 | RT-015       | Each cache key family has exactly one writer per workflow.                                                                                                                                                                                                                                                                                                                         | Toolchain Baseline              | OPA/Conftest + workflow envelope                        | warning              | 4                        |
 | RT-016       | sccache is not installed into a job that compiles nothing.                                                                                                                                                                                                                                                                                                                         | Toolchain Baseline              | OPA/Conftest + workflow envelope                        | note                 | 4                        |
+| RT-017       | The parallel `rustc` frontend (`-Zthreads=8`) is carried by every `rustflags` source in the auto-discovered `.cargo/config.toml`. Applies only where `rust-toolchain.toml` pins a nightly channel; a stable pin makes the check inapplicable rather than noncompliant.                                                                                                             | Toolchain Baseline              | OPA/Conftest + TOML parse (`rust-build-defaults`)       | error                | 4                        |
+| RT-018       | The `rustflags` sources are repeated, not merged: a flag named by one source is named by every other, because a matching `[target.*]` table replaces `[build] rustflags` outright rather than adding to it. The linker flag is the deliberate exception, governed by RT-008.                                                                                                       | Toolchain Baseline              | OPA/Conftest + TOML parse (`rust-build-defaults`)       | error                | 4                        |
 | TA-001       | No continuous integration job builds a tool it merely consumes from source; the repository's own crate under test and a build that is the workflow's product are exempt.                                                                                                                                                                                                           | Toolchain Baseline              | OPA/Conftest + workflow envelope                        | error                | 4                        |
 | TA-002       | A release archive is verified by a digest computed from the downloaded bytes and compared with the publisher's sidecar before those bytes are executed or extracted.                                                                                                                                                                                                               | Toolchain Baseline              | OPA/Conftest + workflow envelope                        | error                | 4                        |
 | TA-003       | Every tool pin is a full commit SHA or an exact version, never a branch, a bare tag, or an unpinned Git acquisition.                                                                                                                                                                                                                                                               | Toolchain Baseline              | OPA/Conftest + workflow envelope + canon pin data       | error                | 4                        |
@@ -2160,11 +2162,50 @@ date ages past the point where current tooling supports it.
   pin can change lint and borrow-checker behaviour, so the bump needs a human
   to shepherd the fallout.
 
-##### Rust build and test acceleration (RT-008 to RT-011)
+##### Rust build and test acceleration (RT-008 to RT-011, RT-017, RT-018)
 
-- **Sensors:** parse `.cargo/config.toml` for the mold linker (RT-008)
-  and the Cranelift codegen backend on the development profile (RT-009),
-  honouring recorded exemptions; determine target exposure from `Cargo.toml` —
+RT-008, RT-009, RT-017, and RT-018 have since shipped as the
+`rust-build-defaults` rule package. The four clauses are one property of one
+file, so they are one sensor: the estate's build standard is a default because
+Cargo auto-discovers `.cargo/config.toml`, and every clause is a reading of
+what that file configures. The package deliberately carries no Makefile facts.
+A repository whose flags live behind an opt-in `make dev-fast` target has no
+such configuration file at all and fails RT-017 and RT-008 on that alone, so
+reading the Makefile would add no fact the policy decides anything from — and
+would make the rule unrunnable against any checkout the pinned Makefile parser
+rejects.
+
+Three readings settled the package's shape, each from a defect met while
+surveying the estate for it:
+
+- **Normalize before comparing.** Cargo accepts `rustflags` as an array or as
+  one space-separated string, and accepts `-C` and its value as one token or
+  two. The estate writes the same linker flag three of those ways today, and a
+  checker written against one spelling would fail the one repository that
+  already complies.
+- **Parse, never search.** A survey line reading the pinned channel with
+  `grep -m1 channel rust-toolchain.toml` returned a line of prose, because the
+  reference repository's file opens with a comment containing the word. Both
+  fixture sets include the commented spelling for that reason.
+- **Prove narrowness as well as sufficiency.** `-Zthreads` is a nightly flag,
+  so a stable pin makes RT-017 inapplicable rather than noncompliant; a
+  checker proved only against violations refuses a legitimate repository.
+
+The codegen-backend clause encodes the 2026-09-21 ruling directly. Cranelift is
+the development-profile default in every repository whose own suite passes
+under it; a repository whose suite fails records the failing tests as an
+exception in its developers' guide and re-measures on each toolchain bump. Both
+states are compliant and a repository with neither is not. The exception is
+recognized as a section of a declared document whose heading names the backend,
+and its currency is decided by whether that section names the pinned channel —
+which is what makes the re-test obligation checkable rather than aspirational.
+The policy does not attempt to read which tests the prose names.
+
+- **Sensors:** parse `.cargo/config.toml` for the mold linker (RT-008), the
+  parallel `rustc` frontend (RT-017), the equality of the `rustflags` sources
+  (RT-018), and the Cranelift codegen backend on the development profile
+  (RT-009), honouring recorded exceptions; determine target exposure from
+  `Cargo.toml` —
   a repository whose crates expose no publishable library targets
   (`publish = false` or binary-only) must enable the Polonius-next borrow
   checker, since nightly flags are safe when no downstream consumer builds the
