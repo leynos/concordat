@@ -195,6 +195,28 @@ def split_compound(line: str) -> tuple[str, ...]:
     return tuple(segment for segment in (s.strip() for s in segments) if segment)
 
 
+def _tokenize(segment: str) -> tuple[str, ...]:
+    """Return one simple command's tokens, or none if it cannot be read.
+
+    An unbalanced quote is not this contract's concern: a segment that
+    cannot be tokenized provisions nothing it can claim credit for.
+    """
+    try:
+        return tuple(shlex.split(segment, comments=True))
+    except ValueError:
+        return ()
+
+
+def _line_commands(line: str) -> tuple[tuple[str, ...], ...]:
+    """Return the simple commands one physical line runs."""
+    stripped = line.strip()
+    if not stripped or stripped.startswith("#"):
+        return ()
+    return tuple(
+        tokens for segment in split_compound(stripped) if (tokens := _tokenize(segment))
+    )
+
+
 def commands(script: str) -> tuple[tuple[str, ...], ...]:
     """Return the shell-like token tuples of each command in a ``run`` script.
 
@@ -209,22 +231,9 @@ def commands(script: str) -> tuple[tuple[str, ...], ...]:
         comments discarded and control operators split on.
     """
     joined = script.replace("\\\n", " ")
-    commands: list[tuple[str, ...]] = []
-    for line in joined.splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        for segment in split_compound(stripped):
-            try:
-                tokens = tuple(shlex.split(segment, comments=True))
-            except ValueError:
-                # An unbalanced quote is not this contract's concern; a step
-                # that cannot be tokenized provisions nothing it can claim
-                # credit for.
-                continue
-            if tokens:
-                commands.append(tokens)
-    return tuple(commands)
+    return tuple(
+        command for line in joined.splitlines() for command in _line_commands(line)
+    )
 
 
 def installer_program(command: typ.Sequence[str]) -> str | None:
