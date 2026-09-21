@@ -514,9 +514,11 @@ def test_a_lane_installing_one_tool_twice_differently_is_rejected() -> None:
             ]
         },
     )
-    assert _provisioning(agreeing) == {
-        "conftest": ("go", "install", "example.com/conftest@v0.52.0")
-    }
+    expected = {"conftest": ("go", "install", "example.com/conftest@v0.52.0")}
+    assert _provisioning(agreeing) == expected, (
+        "a lane that installs one executable twice with the same command must "
+        f"report that one command; expected {expected}"
+    )
 
 
 def test_a_job_that_does_not_run_the_suite_is_not_a_lane() -> None:
@@ -531,8 +533,12 @@ def test_a_job_that_does_not_run_the_suite_is_not_a_lane() -> None:
             {"name": "Publish", "run": "make build-release\n"},
         ]
     }
-    assert not _runs_the_suite(publishing_job, subject="synthetic publishing job")
+    assert not _runs_the_suite(publishing_job, subject="synthetic publishing job"), (
+        "a job that checks out and builds a release does not run the suite"
+    )
     suite_job: dict[str, object] = {
         "steps": [{"name": "Run tests", "run": "make test\n"}]
     }
-    assert _runs_the_suite(suite_job, subject="synthetic suite job")
+    assert _runs_the_suite(suite_job, subject="synthetic suite job"), (
+        "a job whose step runs `make test` runs the suite"
+    )
