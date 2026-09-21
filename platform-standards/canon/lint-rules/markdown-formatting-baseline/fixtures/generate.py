@@ -87,6 +87,7 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "soft_skip": Scenario(makefile="soft-skip"),
     "mode_swapped": Scenario(makefile="mode-swapped"),
     "echo_decoy": Scenario(makefile="echo-decoy"),
+    "extra_invocation": Scenario(makefile="extra-invocation"),
     "conditional": Scenario(makefile="conditional"),
     "with_include": Scenario(makefile="with-include"),
     "ambiguous_variable": Scenario(makefile="ambiguous-variable"),
@@ -113,6 +114,9 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "workflow_mixed": Scenario(
         workflows={"ci.yml": "action", "docs.yml": "shell-lint"}
     ),
+    "workflow_disabled_action": Scenario(workflows={"ci.yml": "disabled-action"}),
+    "workflow_disabled_job": Scenario(workflows={"ci.yml": "disabled-job"}),
+    "workflow_echo_mention": Scenario(workflows={"ci.yml": "echo-mention"}),
 }
 
 

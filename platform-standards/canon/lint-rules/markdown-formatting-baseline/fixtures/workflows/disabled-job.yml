@@ -1,0 +1,17 @@
+---
+name: CI
+
+on:  # yamllint disable-line rule:truthy
+  pull_request:
+
+jobs:
+  lint-test:
+    if: false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+
+      - name: Lint Markdown
+        uses: DavidAnson/markdownlint-cli2-action@21c1be1b93ad9ed58fa840aacc3f279cde2a72ff  # v24.2.0
+        with:
+          globs: '**/*.md'

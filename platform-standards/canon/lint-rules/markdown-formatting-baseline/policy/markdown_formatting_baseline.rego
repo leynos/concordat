@@ -414,19 +414,28 @@ makefile_check_root := {
 	"PD-004": "fmt",
 }
 
-check_satisfied("PD-002") if {
-	some recipe in path_recipes("check-fmt")
+# Whether one reachable recipe satisfies a check on its own. Every
+# per-invocation finding below is suppressed by this rather than by the
+# existential `check_satisfied`: a `check-fmt` path that first runs the
+# required `mdtablefix --check --git --include-untracked` and then runs
+# `mdtablefix --in-place` rewrites the files the target was asked to check,
+# and an existential guard would report the target compliant.
+recipe_satisfies("PD-002", recipe) if {
 	mdtablefix_compliant(recipe, "--check")
 }
 
-check_satisfied("PD-003") if {
-	some recipe in path_recipes("fmt")
+recipe_satisfies("PD-003", recipe) if {
 	mdtablefix_compliant(recipe, "--in-place")
 }
 
-check_satisfied("PD-004") if {
-	some recipe in path_recipes("fmt")
+recipe_satisfies("PD-004", recipe) if {
 	markdownlint_compliant(recipe)
+}
+
+check_satisfied(check_id) if {
+	root := makefile_check_root[check_id]
+	some recipe in path_recipes(root)
+	recipe_satisfies(check_id, recipe)
 }
 
 check_tool := {
@@ -467,8 +476,8 @@ deny contains f if {
 deny contains f if {
 	some check_id, root in makefile_check_root
 	closure_provable(root)
-	not check_satisfied(check_id)
 	some recipe in path_recipes(root)
+	not recipe_satisfies(check_id, recipe)
 	tool := check_tool[check_id]
 	tool_invoked(recipe, tool)
 	not tool_binding(recipe, tool)
@@ -485,8 +494,8 @@ deny contains f if {
 	some check_id, mode in check_mode
 	root := makefile_check_root[check_id]
 	closure_provable(root)
-	not check_satisfied(check_id)
 	some recipe in path_recipes(root)
+	not recipe_satisfies(check_id, recipe)
 	tool_binding(recipe, "mdtablefix")
 	not mdtablefix_mode(recipe, mode)
 	f := finding(
@@ -499,8 +508,8 @@ deny contains f if {
 	some check_id, mode in check_mode
 	root := makefile_check_root[check_id]
 	closure_provable(root)
-	not check_satisfied(check_id)
 	some recipe in path_recipes(root)
+	not recipe_satisfies(check_id, recipe)
 	tool_binding(recipe, "mdtablefix")
 	some tokens in tool_arguments(recipe, "mdtablefix")
 	mode in tokens
@@ -517,8 +526,8 @@ deny contains f if {
 	some check_id, mode in check_mode
 	root := makefile_check_root[check_id]
 	closure_provable(root)
-	not check_satisfied(check_id)
 	some recipe in path_recipes(root)
+	not recipe_satisfies(check_id, recipe)
 	tool_binding(recipe, "mdtablefix")
 	some tokens in tool_arguments(recipe, "mdtablefix")
 	mode in tokens
@@ -532,8 +541,8 @@ deny contains f if {
 
 deny contains f if {
 	closure_provable("fmt")
-	not check_satisfied("PD-004")
 	some recipe in path_recipes("fmt")
+	not recipe_satisfies("PD-004", recipe)
 	tool_binding(recipe, "markdownlint-cli2")
 	some tokens in tool_arguments(recipe, "markdownlint-cli2")
 	count(unresolved_tokens(tokens)) == 0
@@ -545,8 +554,8 @@ deny contains f if {
 
 deny contains f if {
 	closure_provable("fmt")
-	not check_satisfied("PD-004")
 	some recipe in path_recipes("fmt")
+	not recipe_satisfies("PD-004", recipe)
 	tool_binding(recipe, "markdownlint-cli2")
 	some tokens in tool_arguments(recipe, "markdownlint-cli2")
 	unresolved := unresolved_tokens(tokens)
@@ -736,6 +745,34 @@ workflow_steps(workflow) := {[job_id, index, step] |
 	is_object(step)
 }
 
+# A condition GitHub Actions never satisfies, written either as the YAML
+# boolean or as an expression whose whole body is the `false` literal. Only
+# the literal is judged: any other expression depends on run-time context the
+# policy cannot evaluate, and is treated as a step that may run.
+disabled_condition(value) if value == false
+
+disabled_condition(value) if {
+	is_string(value)
+	body := trim_space(trim_suffix(trim_prefix(trim_space(value), "${{"), "}}"))
+	lower(trim_space(body)) == "false"
+}
+
+condition_disabled(holder) if disabled_condition(object.get(holder, "if", null))
+
+# Steps that CI can actually reach. A step guarded by a literally false
+# condition, or sitting in a job guarded by one, never runs, so it cannot be
+# the evidence that the repository lints its Markdown.
+workflow_enabled_steps(workflow) := {[job_id, index, step] |
+	some job_id, job in workflow_jobs(workflow)
+	is_object(job)
+	not condition_disabled(job)
+	steps := object.get(job, "steps", [])
+	is_array(steps)
+	some index, step in steps
+	is_object(step)
+	not condition_disabled(step)
+}
+
 # A `run:` step that invokes markdownlint-cli2 as a command, or drives the
 # Makefile's markdownlint target, lints Markdown outside the action's pinned
 # release. Lines that only provision the linter are not invocations: an
@@ -773,7 +810,7 @@ step_installs_linter(step) if {
 }
 
 workflow_has_compliant_action(workflow) if {
-	some [_, _, step] in workflow_steps(workflow)
+	some [_, _, step] in workflow_enabled_steps(workflow)
 	action_step(step)
 	action_pinned(step)
 	action_globs(step) == markdownlint_globs
@@ -844,8 +881,40 @@ deny contains f if {
 # absence finding is reserved for checkouts with no action step at all.
 action_step_present if {
 	some workflow in input.workflows
-	some [_, _, step] in workflow_steps(workflow)
+	some [_, _, step] in workflow_enabled_steps(workflow)
 	action_step(step)
+}
+
+# The action is wired up but can never run. Reported in place of the absence
+# finding below, which would say the workflows do not mention the action at
+# all and send the reader looking for something that is already there.
+step_unreachable(job, _) if condition_disabled(job)
+
+step_unreachable(_, step) if condition_disabled(step)
+
+disabled_action_steps := {[workflow.path, job_id, index, step] |
+	some workflow in input.workflows
+	some job_id, job in workflow_jobs(workflow)
+	is_object(job)
+	steps := object.get(job, "steps", [])
+	is_array(steps)
+	some index, step in steps
+	is_object(step)
+	action_step(step)
+	step_unreachable(job, step)
+}
+
+disabled_action_step_present if count(disabled_action_steps) > 0
+
+deny contains f if {
+	applicable
+	not action_step_present
+	not workflow_decode_failed
+	some [workflow_path, job_id, index, step] in disabled_action_steps
+	f := finding(
+		"PD-006", "noncompliant", workflow_path, 0,
+		sprintf("job %q guards %s (%s) with a condition that is literally false; CI never lints Markdown", [job_id, markdownlint_action, step_label(step, index)]),
+	)
 }
 
 # A job that calls a reusable workflow may lint Markdown inside it; the policy
@@ -865,6 +934,7 @@ workflow_decode_failed if {
 deny contains f if {
 	applicable
 	not action_step_present
+	not disabled_action_step_present
 	not workflow_decode_failed
 	reusable_job_present
 	f := finding(
@@ -876,6 +946,7 @@ deny contains f if {
 deny contains f if {
 	applicable
 	not action_step_present
+	not disabled_action_step_present
 	not workflow_decode_failed
 	not reusable_job_present
 	f := finding(

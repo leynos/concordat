@@ -39,8 +39,11 @@ dependency graph so nothing is resolved from the registry at run time.
   `run:` step that only installs the linter is noncompliant when no compliant
   action step lints Markdown in that workflow; beside such a step it is
   provisioning for something else (a test suite that runs the linter as a
-  subprocess, say) and is not a finding. A checkout with no action step at all
-  is noncompliant.
+  subprocess, say) and is not a finding. An action step guarded by a literally
+  false condition (`if: false` or `if: ${{ false }}`), or sitting in a job
+  guarded by one, never runs and is not evidence that CI lints Markdown; it is
+  reported in its own right. A checkout with no action step at all is
+  noncompliant.
 - **EN-001** (error, indeterminate): the policy-input envelope has an unknown
   schema version.
 
@@ -67,6 +70,16 @@ the tool's arguments run to the end of the line or to `&&`; a following `;`,
 `$(HOME)` and the other process-environment variables (`PATH`, `PWD`, `SHELL`,
 `TMPDIR`, `USER`) are rewritten to their shell spelling, so a tool under
 `$(HOME)/.cargo/bin/` still reads as the command word.
+
+Every invocation on an audited path is judged on its own. A `check-fmt` path
+that runs the required `mdtablefix --check --git --include-untracked` and then
+runs `mdtablefix --in-place` rewrites the files the target was asked to verify,
+and is noncompliant: satisfying a check once does not license a second,
+contradictory invocation beside it.
+
+Only the literal is read as a disabled condition. Any other expression depends
+on run-time context the policy cannot evaluate, so the step is treated as one
+that may run.
 
 The policy does not parse shell. A variable it cannot resolve, a conditional
 rule or `include` in the closure, a recovered parse, or a dynamic recursive
@@ -100,7 +113,7 @@ A repository is `compliant` only when the finding set is empty.
   the envelope the production builder produces for it; rerun it whenever the
   `makeutil` pin or a fixture changes.
 
-The canonical `.markdownlint-cli2.jsonc` consumers copy verbatim lives at
+The canonical `.markdownlint-cli2.jsonc` file that consumers copy verbatim is at
 `platform-standards/canon/lint/markdown/.markdownlint-cli2.jsonc`.
 
 ## Validation

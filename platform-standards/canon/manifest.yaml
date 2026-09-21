@@ -95,7 +95,7 @@ artifacts:
       to PD-004 direct mdtablefix and markdownlint-cli2 wiring in the fmt and
       check-fmt targets, PD-005 the baseline markdownlint configuration, and
       PD-006 the pinned markdownlint-cli2 action in CI.
-    sha256: de843f8599a3839cb88008e96d22c160931a5ab96363230fab1b1cc3433151e0
+    sha256: f96553249a4c4e0d708e9d968f289e3a7e96305d11b0b9c8854bfba886bec883
   - id: lint-rule-markdown-formatting-baseline-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/markdown-formatting-baseline/rule.yaml

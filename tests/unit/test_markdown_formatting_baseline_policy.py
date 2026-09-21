@@ -56,6 +56,7 @@ EXPECTED_PROFILES: typ.Final[dict[str, Profile]] = {
     "missing_flags": _NONCOMPLIANT_RECIPES,
     "soft_skip": _NONCOMPLIANT_RECIPES,
     "echo_decoy": _NONCOMPLIANT_RECIPES,
+    "extra_invocation": frozenset({("PD-002", "noncompliant")}),
     "mode_swapped": frozenset({("PD-002", "noncompliant"), ("PD-003", "noncompliant")}),
     "conditional": frozenset({
         ("PD-003", "indeterminate"),
@@ -81,6 +82,9 @@ EXPECTED_PROFILES: typ.Final[dict[str, Profile]] = {
     "workflow_install_for_tests": frozenset(),
     "workflow_reusable_only": frozenset({("PD-006", "indeterminate")}),
     "workflow_malformed": frozenset({("PD-006", "indeterminate")}),
+    "workflow_disabled_action": frozenset({("PD-006", "noncompliant")}),
+    "workflow_disabled_job": frozenset({("PD-006", "noncompliant")}),
+    "workflow_echo_mention": frozenset(),
 }
 
 

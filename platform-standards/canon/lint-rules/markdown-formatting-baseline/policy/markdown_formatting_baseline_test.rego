@@ -330,3 +330,47 @@ test_shell_lint_beside_the_action_is_still_noncompliant if {
 		f.path == ".github/workflows/docs.yml"
 	}
 }
+
+# -- each invocation is judged on its own ----------------------------------
+
+# A `check-fmt` path that runs the required check and then rewrites the same
+# files is not compliant: the target it was asked to verify mutates the tree.
+# An existential guard over the path would have reported it clean.
+test_extra_rewriting_invocation_is_noncompliant if {
+	findings := policy.deny with input as data.fixtures.extra_invocation
+	profile(findings) == {["PD-002", "noncompliant"]}
+	messages(findings, "PD-002") == {"\"check-fmt\"-path recipe runs mdtablefix without --check"}
+}
+
+# -- a step that cannot run is not evidence --------------------------------
+
+test_disabled_action_step_is_noncompliant if {
+	findings := policy.deny with input as data.fixtures.workflow_disabled_action
+	profile(findings) == {["PD-006", "noncompliant"]}
+	messages(findings, "PD-006") == {"job \"lint-test\" guards DavidAnson/markdownlint-cli2-action (Lint Markdown) with a condition that is literally false; CI never lints Markdown"}
+}
+
+test_action_step_in_a_disabled_job_is_noncompliant if {
+	findings := policy.deny with input as data.fixtures.workflow_disabled_job
+	profile(findings) == {["PD-006", "noncompliant"]}
+	messages(findings, "PD-006") == {"job \"lint-test\" guards DavidAnson/markdownlint-cli2-action (Lint Markdown) with a condition that is literally false; CI never lints Markdown"}
+}
+
+# Only the literal is judged disabled; any other expression may run.
+test_only_the_false_literal_disables_a_step if {
+	policy.disabled_condition(false)
+	policy.disabled_condition("${{ false }}")
+	policy.disabled_condition("false")
+	not policy.disabled_condition("${{ github.event_name == 'push' }}")
+	not policy.disabled_condition("${{ !cancelled() }}")
+	not policy.disabled_condition(true)
+}
+
+# -- a mention is not an invocation ----------------------------------------
+
+# A quoted name inside `echo` is not in command position, so the step neither
+# lints nor provisions and the pinned action alone decides PD-006.
+test_echoed_workflow_mention_is_not_an_invocation if {
+	findings := policy.deny with input as data.fixtures.workflow_echo_mention
+	count(findings) == 0
+}
