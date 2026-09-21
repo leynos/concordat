@@ -340,6 +340,15 @@ def test_a_commented_install_is_not_an_install() -> None:
     assert commented == (("echo", "ready"),), (
         f"the command before the comment still runs; found {commented}"
     )
+    after_operator = commands(
+        "echo ready;# && go install example.com/conftest@v0.52.0\n"
+    )
+    assert not {
+        name for command in after_operator for name in installed_tool_names(command)
+    }, "a control operator ends the word before it, so the comment still applies"
+    assert after_operator == (("echo", "ready"),), (
+        f"the command before the operator still runs; found {after_operator}"
+    )
     within_word = commands("go install example.com/conftest@v0.52.0#pinned\n")
     assert installed_tool_names(within_word[0]) == frozenset({"conftest"}), (
         "a hash inside a word is not a comment"

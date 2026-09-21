@@ -169,21 +169,60 @@ def _without_comment(line: str) -> str:
     """
     index = 0
     while index < len(line):
-        character = line[index]
-        if character == "\\":
-            index = min(index + 2, len(line))
-        elif character in "'\"":
-            index = _end_of_quote(line, index)
-        elif character == "#" and _starts_a_word(line, index):
+        literal_end = _skip_literal(line, index)
+        if literal_end is not None:
+            index = literal_end
+        elif line[index] == "#" and _starts_a_word(line, index):
             return line[:index]
         else:
             index += 1
     return line
 
 
+def _skip_literal(line: str, index: int) -> int | None:
+    """Return the index past an escape or quoted run, or `None` if neither.
+
+    Parameters
+    ----------
+    line:
+        The line being scanned.
+    index:
+        The position to examine.
+
+    Returns
+    -------
+        The index just past the run, or `None` when the character at
+        ``index`` starts neither an escape nor a quoted string.
+    """
+    character = line[index]
+    if character == "\\":
+        return min(index + 2, len(line))
+    if character in "'\"":
+        return _end_of_quote(line, index)
+    return None
+
+
 def _starts_a_word(line: str, index: int) -> bool:
-    """Return whether ``index`` begins a shell word rather than continuing one."""
-    return index == 0 or line[index - 1].isspace()
+    """Return whether ``index`` begins a shell word rather than continuing one.
+
+    A control operator ends the word before it, so a comment may follow one
+    with no space between, as in ``echo ready;# commented out``.
+
+    Parameters
+    ----------
+    line:
+        The line being scanned.
+    index:
+        The position to examine.
+
+    Returns
+    -------
+        Whether a shell word begins at ``index``.
+    """
+    if index == 0:
+        return True
+    previous = line[index - 1]
+    return previous.isspace() or previous in _OPERATOR_CHARACTERS
 
 
 def _end_of_operator(line: str, index: int) -> int:
@@ -220,12 +259,10 @@ def split_compound(line: str) -> tuple[str, ...]:
     start = 0
     index = 0
     while index < len(line):
-        character = line[index]
-        if character == "\\":
-            index = min(index + 2, len(line))
-        elif character in "'\"":
-            index = _end_of_quote(line, index)
-        elif character in _OPERATOR_CHARACTERS:
+        literal_end = _skip_literal(line, index)
+        if literal_end is not None:
+            index = literal_end
+        elif line[index] in _OPERATOR_CHARACTERS:
             segments.append(line[start:index])
             index = _end_of_operator(line, index)
             start = index
@@ -557,8 +594,24 @@ def provisioning(lane: Lane) -> dict[str, tuple[str, ...]]:
     return provisioning
 
 
-def _makefile_report() -> dict[str, object]:
-    """Return Makeutil's complete, successfully parsed Makefile report."""
+def run_makeutil_parse() -> dict[str, object]:
+    """Run Makeutil over this repository's Makefile and return its report.
+
+    Named for what it does, because it is not a query: it resolves
+    ``makeutil`` from `PATH` and spawns it. Spawn failure, a non-zero exit
+    and unparsable output each fail here, naming the parser, rather than
+    surfacing later as a puzzling absence of Makefile facts.
+
+    Returns
+    -------
+        Makeutil's complete, successfully parsed report.
+
+    Raises
+    ------
+    AssertionError
+        If the parser is absent, exits non-zero, or emits unparsable or
+        incomplete output.
+    """
     makeutil = shutil.which("makeutil")
     assert makeutil is not None, (
         "the gate-provisioning contract reads Makefile facts through makeutil, "
@@ -567,11 +620,20 @@ def _makefile_report() -> dict[str, object]:
     completed = subprocess.run(  # noqa: S603 - Resolved parser path, fixed arguments.
         (makeutil, "parse", "Makefile"),
         capture_output=True,
-        check=True,
+        check=False,
         cwd=REPOSITORY_ROOT,
         text=True,
     )
-    report = typ.cast("dict[str, object]", json.loads(completed.stdout))
+    assert completed.returncode == 0, (
+        f"makeutil exited {completed.returncode} parsing the Makefile: "
+        f"{completed.stderr!r}"
+    )
+    try:
+        loaded = json.loads(completed.stdout)
+    except json.JSONDecodeError as error:
+        message = f"makeutil emitted unparsable JSON: {error}"
+        raise AssertionError(message) from error
+    report = _mapping(loaded, subject="makeutil report")
     parse = _mapping(report.get("parse"), subject="parse report")
     assert parse.get("status") == "complete", (
         f"makeutil did not complete the Makefile parse: {parse!r}"
@@ -579,9 +641,24 @@ def _makefile_report() -> dict[str, object]:
     return report
 
 
-def make_prerequisites(target: str) -> frozenset[str]:
-    """Return the prerequisites of the sole recipe-bearing rule for ``target``."""
-    rules = _makefile_report().get("rules")
+def make_prerequisites(report: dict[str, object], target: str) -> frozenset[str]:
+    """Return the prerequisites of the sole recipe-bearing rule for ``target``.
+
+    Takes an already obtained report rather than launching the parser, so a
+    caller can see where the process runs.
+
+    Parameters
+    ----------
+    report:
+        A Makeutil report, as returned by `run_makeutil_parse`.
+    target:
+        The Make target to read.
+
+    Returns
+    -------
+        The target's prerequisites.
+    """
+    rules = report.get("rules")
     assert isinstance(rules, list), "expected makeutil rules to be a JSON array"
     matches = [
         rule

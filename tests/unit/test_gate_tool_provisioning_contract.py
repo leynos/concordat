@@ -54,6 +54,7 @@ from tests.unit.gate_provisioning_support import (
     provisioning,
     required_tools,
     run_make_target,
+    run_makeutil_parse,
     shell_commands,
     suite_lanes,
     suite_step_index,
@@ -209,7 +210,7 @@ def test_the_make_gate_verifies_the_suites_tools() -> None:
     rule tests fail rather than one named missing tool.
     """
     needed = required_tools()
-    prerequisites = make_prerequisites(MAKEFILE_SUITE_TARGET)
+    prerequisites = make_prerequisites(run_makeutil_parse(), MAKEFILE_SUITE_TARGET)
     missing = needed - prerequisites
     assert not missing, (
         f"`make {MAKEFILE_SUITE_TARGET}` runs the suite, so it must require "
