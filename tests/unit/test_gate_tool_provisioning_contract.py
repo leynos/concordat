@@ -412,9 +412,6 @@ def _make_executable() -> str:
     return executable
 
 
-_MAKE_EXECUTABLE: typ.Final = _make_executable()
-
-
 def _run_make_target(
     target: str, search_path: Path
 ) -> subprocess.CompletedProcess[str]:
@@ -432,10 +429,11 @@ def _run_make_target(
     -------
         The completed process, whatever its exit status.
     """
+    make_executable = _make_executable()
     environment = dict(os.environ)
     environment["PATH"] = str(search_path)
     return subprocess.run(  # noqa: S603 - Resolved Make path, fixed target.
-        (_MAKE_EXECUTABLE, "--no-print-directory", target),
+        (make_executable, "--no-print-directory", target),
         capture_output=True,
         check=False,
         cwd=REPOSITORY_ROOT,
@@ -690,9 +688,9 @@ def test_duplicate_installs_are_judged_by_agreement_not_by_order(
         assert _provisioning(lane) == {executable: expected}, (
             f"identical installs of {executable!r} must report {expected}"
         )
-        return
-    with pytest.raises(AssertionError, match="conflicting commands"):
-        _provisioning(lane)
+    else:
+        with pytest.raises(AssertionError, match="conflicting commands"):
+            _provisioning(lane)
 
 
 @given(

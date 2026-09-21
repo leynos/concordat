@@ -148,6 +148,49 @@ class TestBuildEnvelope:
         assert error.operation == "resolve-rust-surfaces", error.operation
         assert error.resource == cargo_path, error.resource
 
+    def test_unreadable_root_cargo_probe_raises_with_surfaces_declared(
+        self,
+        tmp_path: pathlib.Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The envelope's own root probe raises, not the resolver's.
+
+        Without a declaration the resolver probes the same manifest, so the
+        test above passes on an interpreter whose `Path.is_file` swallows the
+        failure: the resolver raises afterwards and the envelope's own probe
+        is never judged. An explicit empty `language.rust.surfaces` list makes
+        the resolver authoritative and return without touching the manifest,
+        leaving `build_envelope`'s probe as the only reader of it.
+        """
+        tmp_path.mkdir(exist_ok=True)
+        cargo_path = tmp_path / "Cargo.toml"
+        cargo_path.write_text(
+            '[package]\nname = "fixture"\nversion = "0.1.0"\n',
+            encoding="utf-8",
+        )
+        (tmp_path / ".concordat").write_text(
+            "language:\n  rust:\n    surfaces: []\n",
+            encoding="utf-8",
+        )
+        original_stat = pathlib.Path.stat
+
+        def unreadable_cargo(
+            path: pathlib.Path, *, follow_symlinks: bool = True
+        ) -> os.stat_result:
+            """Raise the filesystem error only for the root Cargo probe."""
+            if path == cargo_path:
+                raise PermissionError
+            return original_stat(path, follow_symlinks=follow_symlinks)
+
+        monkeypatch.setattr(pathlib.Path, "stat", unreadable_cargo)
+
+        with pytest.raises(OperationalRuleError, match="cannot inspect") as exc_info:
+            build_envelope(tmp_path)
+
+        error = exc_info.value
+        assert error.operation == "resolve-rust-surfaces", error.operation
+        assert error.resource == cargo_path, error.resource
+
     def test_unreadable_makefile_probe_raises_a_parse_error(
         self,
         tmp_path: pathlib.Path,
