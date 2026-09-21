@@ -44,6 +44,8 @@ import typing as typ
 from pathlib import Path
 
 import pytest
+from hypothesis import assume, given
+from hypothesis import strategies as st
 from ruamel.yaml import YAML
 
 REPOSITORY_ROOT: typ.Final = Path(__file__).parents[2]
@@ -76,6 +78,17 @@ _COVERAGE_ACTION: typ.Final = "generate-coverage@"
 _SUITE_COMMANDS: typ.Final = (("make", "test"), ("pytest",), ("uv", "run", "pytest"))
 
 _MAKEFILE_SUITE_TARGET: typ.Final = "test"
+
+# Bounded alphabets for the property tests. They exclude the shell
+# metacharacters and variable sigils the extractors deliberately ignore, so a
+# generated command means what it reads as.
+# A name begins with an alphanumeric: an operand starting with a hyphen is
+# indistinguishable from an option on any command line, and no module path or
+# executable is spelled that way.
+_NAMES: typ.Final = st.from_regex(r"[a-z0-9][a-z0-9._-]{0,11}", fullmatch=True)
+_VERSIONS: typ.Final = st.text(
+    alphabet="abcdefghijklmnopqrstuvwxyz0123456789.", min_size=1, max_size=8
+)
 
 
 class Lane(typ.NamedTuple):
@@ -518,6 +531,111 @@ def test_a_lane_installing_one_tool_twice_differently_is_rejected() -> None:
     assert _provisioning(agreeing) == expected, (
         "a lane that installs one executable twice with the same command must "
         f"report that one command; expected {expected}"
+    )
+
+
+@given(command=st.lists(_NAMES, min_size=1, max_size=6))
+def test_only_an_install_command_provisions_anything(command: list[str]) -> None:
+    """Without an install verb, no command provisions anything.
+
+    The oracle is the generator: a command drawn without the verb cannot
+    install, whatever its operands spell. This is the direction that matters,
+    because a recognizer that fired on any mention of a tool would have
+    accepted the publisher's missing install.
+    """
+    assume("install" not in command)
+    assert not _installed_tool_names(tuple(command)), (
+        f"{command} contains no install verb, so it provisions nothing"
+    )
+
+
+@given(
+    segments=st.lists(_NAMES, min_size=1, max_size=3),
+    executable=_NAMES,
+    version=_VERSIONS,
+)
+def test_a_module_install_provisions_its_final_segment(
+    segments: list[str], executable: str, version: str
+) -> None:
+    """A module path installs the executable its last segment names.
+
+    The drawn executable is the independent oracle: the property asserts the
+    recognizer recovers the name the command was generated to install, rather
+    than restating how the path is split. Segments begin with an alphanumeric,
+    because an operand starting with a hyphen reads as an option and is
+    skipped by design.
+    """
+    module = "/".join([*segments, executable])
+    command = ("go", "install", f"{module}@{version}")
+    assert _installed_tool_names(command) == frozenset({executable}), (
+        f"installing {module}@{version} must provision {executable!r}"
+    )
+
+
+def _install_lane(executable: str, versions: typ.Sequence[str]) -> Lane:
+    """Return a synthetic lane installing ``executable`` once per version."""
+    return Lane(
+        "synthetic.yml",
+        "generated",
+        {
+            "steps": [
+                {"run": f"go install example.com/{executable}@{version}\n"}
+                for version in versions
+            ]
+        },
+    )
+
+
+@given(
+    executable=_NAMES,
+    versions=st.lists(_VERSIONS, min_size=2, max_size=4),
+)
+def test_duplicate_installs_are_judged_by_agreement_not_by_order(
+    executable: str, versions: list[str]
+) -> None:
+    """Whether duplicates are accepted depends on agreement, never on order.
+
+    The oracle is whether the generated versions are all equal. Keeping the
+    first or the last install would make the verdict depend on the order the
+    steps happen to appear in, which is exactly the defect this guards.
+    """
+    lane = _install_lane(executable, versions)
+    if len(set(versions)) == 1:
+        expected = ("go", "install", f"example.com/{executable}@{versions[0]}")
+        assert _provisioning(lane) == {executable: expected}, (
+            f"identical installs of {executable!r} must report {expected}"
+        )
+        return
+    with pytest.raises(AssertionError, match="conflicting commands"):
+        _provisioning(lane)
+
+
+@given(
+    before=st.lists(_NAMES, max_size=3),
+    after=st.lists(_NAMES, max_size=3),
+)
+def test_a_suite_step_is_recognized_wherever_it_sits(
+    before: list[str], after: list[str]
+) -> None:
+    """A job runs the suite if any step does, whatever surrounds it.
+
+    Steps are enumerated rather than positionally assumed, so a lane that
+    runs the suite last is as much a lane as one that runs it first.
+    """
+    assume(not {*before, *after} & {"make", "pytest", "uv"})
+    surrounding = [{"run": f"{command}\n"} for command in [*before, *after]]
+    quiet: dict[str, object] = {"steps": list(surrounding)}
+    assert not _runs_the_suite(quiet, subject="generated quiet job"), (
+        f"none of {before + after} runs the suite"
+    )
+    steps = [
+        *({"run": f"{command}\n"} for command in before),
+        {"run": "make test\n"},
+        *({"run": f"{command}\n"} for command in after),
+    ]
+    running: dict[str, object] = {"steps": steps}
+    assert _runs_the_suite(running, subject="generated suite job"), (
+        f"a `make test` step after {before} must be recognized"
     )
 
 
