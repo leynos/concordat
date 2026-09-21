@@ -17,6 +17,7 @@ the one other repository already carrying mold.
 
 from __future__ import annotations
 
+import re
 import tomllib
 import typing as typ
 from itertools import starmap
@@ -349,6 +350,55 @@ _UNEVALUATED_CFG_OPERATORS: typ.Final = ("not(", "any(")
 
 _OTHER_OS_MARKERS: typ.Final = ("windows", "macos", "darwin", "ios", "wasm", "android")
 
+# A target triple is `<arch>-<vendor>-<os>[-<env>]`, or the three-component
+# forms that drop the vendor or the environment. Each component is a bare
+# identifier, so a path such as `custom-linux.json` — a custom JSON target,
+# which Cargo also accepts as a target key — fails the shape and is never read
+# as a triple.
+_TRIPLE_COMPONENT: typ.Final = re.compile(r"^[A-Za-z0-9_]+$")
+_TRIPLE_COMPONENT_COUNTS: typ.Final = frozenset({3, 4})
+
+# The operating-system component is not at a fixed position: the three-part
+# form is `<arch>-<vendor>-<os>` in `aarch64-apple-darwin` and `<arch>-<os>-
+# <env>` in `i686-linux-android`. Rather than guess which, the components are
+# matched against the names rustc uses, and a triple naming none of them, or
+# more than one, is left unplaced.
+_LINUX_OS_COMPONENT: typ.Final = "linux"
+_OTHER_OS_COMPONENTS: typ.Final = frozenset({
+    "windows",
+    "darwin",
+    "macos",
+    "ios",
+    "tvos",
+    "watchos",
+    "visionos",
+    "android",
+    "freebsd",
+    "netbsd",
+    "openbsd",
+    "dragonfly",
+    "solaris",
+    "illumos",
+    "fuchsia",
+    "redox",
+    "haiku",
+    "hermit",
+    "wasi",
+    "emscripten",
+    "uefi",
+    "vxworks",
+    "horizon",
+    "espidf",
+    "nto",
+    "aix",
+    "none",
+})
+
+# An architecture that has no operating system to name. `wasm32-unknown-unknown`
+# is a real estate target and names no OS component at all, so without this it
+# would be unplaced rather than simply not Linux.
+_NON_LINUX_ARCH_PREFIXES: typ.Final = ("wasm", "asmjs")
+
 
 def classify_target_key(key: str) -> TargetClassification:
     """Decide where the target table named by *key* applies.
@@ -367,13 +417,7 @@ def classify_target_key(key: str) -> TargetClassification:
     """
     expression = _cfg_expression(key)
     if expression is None:
-        # An explicit triple: `<arch>-<vendor>-<os>[-<env>]`. It names exactly
-        # one platform, so applying on Linux and applying only on Linux are
-        # the same question.
-        is_linux = "-linux" in key
-        return TargetClassification(
-            is_linux=is_linux, is_linux_only=is_linux, is_classified=True
-        )
+        return _classify_triple(key)
     collapsed = "".join(expression.split())
     if any(operator in collapsed for operator in _UNEVALUATED_CFG_OPERATORS):
         return UNCLASSIFIED
@@ -389,6 +433,44 @@ def classify_target_key(key: str) -> TargetClassification:
             is_linux=True, is_linux_only=False, is_classified=True
         )
     if _names_another_os(collapsed):
+        return TargetClassification(
+            is_linux=False, is_linux_only=False, is_classified=True
+        )
+    return UNCLASSIFIED
+
+
+def _classify_triple(key: str) -> TargetClassification:
+    """Classify a key that is not a `cfg` expression as a target triple.
+
+    A triple names exactly one platform, so applying on Linux and applying only
+    on Linux are the same question for it. Anything that is not a well-formed
+    triple naming exactly one operating system this reader knows is left
+    unplaced: a custom JSON target is a path rather than a triple, and a triple
+    naming both `linux` and `android` is ambiguous about which is the operating
+    system and which the environment.
+
+    Returns
+    -------
+    TargetClassification
+        Where the triple applies, or `UNCLASSIFIED` when it is not one this
+        reader can place.
+    """
+    components = key.strip().split("-")
+    if len(components) not in _TRIPLE_COMPONENT_COUNTS:
+        return UNCLASSIFIED
+    if not all(_TRIPLE_COMPONENT.match(component) for component in components):
+        return UNCLASSIFIED
+    named = [
+        component
+        for component in components
+        if component == _LINUX_OS_COMPONENT or component in _OTHER_OS_COMPONENTS
+    ]
+    if len(named) == 1:
+        is_linux = named[0] == _LINUX_OS_COMPONENT
+        return TargetClassification(
+            is_linux=is_linux, is_linux_only=is_linux, is_classified=True
+        )
+    if not named and components[0].startswith(_NON_LINUX_ARCH_PREFIXES):
         return TargetClassification(
             is_linux=False, is_linux_only=False, is_classified=True
         )

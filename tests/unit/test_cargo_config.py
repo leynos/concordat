@@ -186,6 +186,42 @@ class TestTargetClassification:
             pytest.param(
                 'cfg(target_env = "gnu")', (False, False, False), id="unclassified"
             ),
+            # Cargo accepts a custom JSON target as a target key. It is a path,
+            # not a triple, and the `-linux` in its name says nothing about
+            # what it targets.
+            pytest.param(
+                "custom-linux.json", (False, False, False), id="custom-json-target"
+            ),
+            # A near miss on the triple shape: two components, not three or
+            # four, so it is not a triple this reader will read as one.
+            pytest.param("custom-linux", (False, False, False), id="near-miss"),
+            # The dangerous custom target: a path to a JSON file named after
+            # the triple it is derived from. It splits into four components
+            # and one of them is exactly `linux`, so only the component shape
+            # keeps it from being read as a Linux-only triple.
+            pytest.param(
+                "targets/x86_64-unknown-linux-gnu.json",
+                (False, False, False),
+                id="custom-json-path-named-after-a-triple",
+            ),
+            # `i686-linux-android` names two operating systems this reader
+            # knows, and which is the OS and which the environment depends on
+            # a reading of the three-component form that is not decidable from
+            # the name alone.
+            pytest.param(
+                "i686-linux-android", (False, False, False), id="ambiguous-triple"
+            ),
+            # An architecture with no operating system component at all. It is
+            # decidably not Linux without naming an OS.
+            pytest.param(
+                "wasm32-unknown-unknown", (False, False, True), id="wasm-triple"
+            ),
+            pytest.param(
+                "x86_64-unknown-linux-musl", (True, True, True), id="musl-triple"
+            ),
+            pytest.param(
+                "totally-made-up-key", (False, False, False), id="unrecognized"
+            ),
         ],
     )
     def test_keys_are_placed_or_left_unplaced(
@@ -196,6 +232,27 @@ class TestTargetClassification:
         assert tuple(classification) == expected, (
             f"{key!r} should classify as {expected!r}, got {tuple(classification)!r}"
         )
+
+    def test_a_custom_target_is_not_read_as_a_triple_in_a_configuration(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """The end-to-end path, because the policy reads the source not the key.
+
+        A custom JSON target whose filename contains `linux` would otherwise
+        be reported as a Linux-only source, and BD-002 would then demand the
+        Linux-only linker flag in a table that may target anything at all.
+        """
+        write_config(
+            tmp_path,
+            "[target.'custom-linux.json']\nrustflags = [\"-Zthreads=8\"]\n",
+        )
+        facts = inspect_cargo_config(tmp_path)
+        assert facts is not None, "the file exists, so facts are produced"
+        source = facts["sources"][0]
+        assert source["classified"] is False, (
+            "a custom target is a path, not a triple, and cannot be placed"
+        )
+        assert source["linux"] is False, "an unplaced source claims nothing"
 
     def test_the_classification_reaches_the_source(
         self, tmp_path: pathlib.Path
