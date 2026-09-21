@@ -333,7 +333,8 @@ cache directories, and reports:
   noncompliant. A step that only installs the linter is noncompliant unless a
   compliant action step lints Markdown in the same workflow, in which case it
   is provisioning for something else (a test suite that runs the linter as a
-  subprocess, say).
+  subprocess, say). An action step guarded by a literally false condition, or
+  sitting in a job guarded by one, never runs and does not satisfy the check.
 
 The Makefile checks expand Make variables that are assigned exactly once and
 unconditionally, so `$(MDTABLEFIX) --check $(MDTABLEFIX_SELECT)` is audited
@@ -346,6 +347,7 @@ The canonical recipes are:
 
 ```makefile
 MDTABLEFIX ?= mdtablefix
+MDLINT ?= markdownlint-cli2
 MDTABLEFIX_SELECT = --git --include-untracked
 MDTABLEFIX_RULES = --wrap --renumber --breaks --ellipsis --fences
 
@@ -361,9 +363,37 @@ and the canonical CI step is:
 
 ```yaml
       - name: Lint Markdown
-        uses: DavidAnson/markdownlint-cli2-action@4580e1612f6407034edd6c0e4e316d725920867b  # v24.2.0
+        uses: DavidAnson/markdownlint-cli2-action@21c1be1b93ad9ed58fa840aacc3f279cde2a72ff  # v24.2.0
         with:
           globs: '**/*.md'
+```
+
+#### Adopting the baseline in a repository already using `mdformat-all`
+
+The wrapper is noncompliant under PD-003 and PD-004, so a repository moving to
+the baseline changes three things and gains one prerequisite:
+
+1. Replace the `mdformat-all` call in `fmt` with the two direct invocations
+   above, and give `check-fmt` its own `mdtablefix --check` line. `check-fmt`
+   previously did no Markdown checking at all in some repositories.
+2. Install `mdtablefix` 0.6.0 or later. Earlier releases have neither
+   `--check` nor `--git`, so both recipes fail immediately against one. Pin the
+   same version in continuous integration.
+3. Replace any `npm install -g markdownlint-cli2` step, and any workflow step
+   running the linter or `make markdownlint`, with the pinned action step
+   above. Copy `.markdownlint-cli2.jsonc` from
+   `platform-standards/canon/lint/markdown/` if the repository has none.
+
+Expect the first `make fmt` after the change to rewrite more files than usual.
+`--git --include-untracked` reaches every Markdown file Git tracks plus the
+untracked files it does not ignore, including hidden directories such as
+`.rules/` that a wrapper's directory walk skipped. Commit that reformatting on
+its own so the wiring change stays readable.
+
+Run the audit to confirm the result:
+
+```shell
+concordat artefact rule run markdown-formatting-baseline --repo .
 ```
 
 ### Sweeping the Rust estate
