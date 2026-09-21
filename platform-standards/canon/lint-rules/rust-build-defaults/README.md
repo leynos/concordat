@@ -79,9 +79,17 @@ A recorded exception is recognized as a section of a declared document whose
 heading names the backend. The heading is structure and can be read reliably;
 the prose beneath it cannot, so the policy does not attempt to verify which
 tests are named. What it does check is the channel: an exception that names the
-pinned toolchain is current, and one that names an older toolchain is stale. A
-probe crate's unwind result is evidence about the backend, not a verdict on a
-repository, so nothing here reads such a probe.
+pinned toolchain is current, and one that names an older toolchain is stale.
+
+A probe crate's unwind result is evidence about the backend, not a verdict on a
+repository, so nothing here reads such a probe. netsuke's exception is the
+worked example of the difference. It rested on a three-case probe until
+2026-09-21, when its whole suite was measured under Cranelift on the pinned
+`nightly-2026-08-23`: 6 of 3308 tests fail, three of them spawned-thread panics
+that abort the process, and the LLVM control on the same commit passes all of
+them. The measurement confirmed the exception, but the rule would have accepted
+either outcome without changing, because it asks only that one of the two
+states is recorded.
 
 ## Spellings the rule accepts
 
