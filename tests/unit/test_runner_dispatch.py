@@ -103,6 +103,30 @@ class TestEnvelopeBuilder:
         with pytest.raises(OperationalRuleError, match="declares `sensor` as"):
             runner._envelope_builder(package)
 
+    def test_an_unreadable_manifest_is_operational(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A manifest that exists but cannot be read must not read as absent.
+
+        `Path.is_file` answers ``False`` for an unreadable path as readily as
+        for a missing one, and suppresses the error outright from Python
+        3.14. The package would then lose its declared parameters and its
+        policy input silently, and the runner would hand the Rust envelope to
+        whichever policy it ships.
+        """
+        package = _write_package(tmp_path, "locked-rule", "sensor:\n  type: conftest\n")
+        package.chmod(0o000)
+        try:
+            with pytest.raises(OperationalRuleError, match="cannot examine"):
+                runner._envelope_builder(package)
+        finally:
+            package.chmod(0o755)
+
+    def test_an_absent_manifest_is_still_absent(self, tmp_path: pathlib.Path) -> None:
+        """The narrow half: a package without a manifest keeps the default."""
+        package = _write_package(tmp_path, "bare-rule", None)
+        assert runner._rule_manifest(package) == {}
+
     def test_shipped_packages_declare_their_inputs(self) -> None:
         """Both shipped manifests resolve to the builder for their own kind."""
         rust = runner._rule_package_dir("rust-makefile-baseline")

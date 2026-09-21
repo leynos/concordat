@@ -17,6 +17,7 @@ from ruamel.yaml.error import YAMLError
 
 from concordat.errors import OperationalRuleError
 
+from . import fsprobe
 from .envelope import ENVELOPE_KIND as RUST_ENVELOPE_KIND
 from .envelope import PolicyEnvelope, build_envelope
 from .markdown_envelope import ENVELOPE_KIND as MARKDOWN_ENVELOPE_KIND
@@ -263,7 +264,12 @@ def _rule_manifest(rule_dir: pathlib.Path) -> dict[str, object]:
         If the rule manifest cannot be read or is not a mapping.
     """
     manifest_path = rule_dir / "rule.yaml"
-    if not manifest_path.is_file():
+    # `Path.is_file` answers False for an unreadable manifest exactly as it
+    # does for an absent one, and suppresses the error outright from Python
+    # 3.14. A package whose manifest cannot be read would then silently lose
+    # its declared parameters and its policy input, and the runner would send
+    # the Rust envelope to whatever policy it ships.
+    if not fsprobe.is_file(manifest_path, "load-rule-manifest"):
         return {}
     try:
         manifest = _yaml.load(manifest_path.read_text(encoding="utf-8"))

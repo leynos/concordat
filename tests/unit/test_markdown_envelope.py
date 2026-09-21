@@ -16,15 +16,12 @@ import typing as typ
 import pytest
 
 from concordat.errors import OperationalRuleError
+from concordat.rules import fsprobe
 from concordat.rules.markdown_envelope import (
     ENVELOPE_KIND,
     MarkdownlintConfig,
     WorkflowFile,
-    _exists,
     _has_markdown_files,
-    _is_dir,
-    _is_file,
-    _is_symlink,
     build_markdown_envelope,
 )
 from tests.unit.rule_test_support import MINIMAL_REPORT
@@ -486,10 +483,10 @@ class TestPathProbes:
     @pytest.mark.parametrize(
         "probe",
         [
-            pytest.param(_exists, id="exists"),
-            pytest.param(_is_file, id="is_file"),
-            pytest.param(_is_dir, id="is_dir"),
-            pytest.param(_is_symlink, id="is_symlink"),
+            pytest.param(fsprobe.exists, id="exists"),
+            pytest.param(fsprobe.is_file, id="is_file"),
+            pytest.param(fsprobe.is_dir, id="is_dir"),
+            pytest.param(fsprobe.is_symlink, id="is_symlink"),
         ],
     )
     def test_an_unreadable_parent_raises(
@@ -513,10 +510,10 @@ class TestPathProbes:
     @pytest.mark.parametrize(
         ("probe", "expected"),
         [
-            pytest.param(_exists, True, id="exists-file"),
-            pytest.param(_is_file, True, id="is-a-file"),
-            pytest.param(_is_dir, False, id="not-a-directory"),
-            pytest.param(_is_symlink, False, id="not-a-link"),
+            pytest.param(fsprobe.exists, True, id="exists-file"),
+            pytest.param(fsprobe.is_file, True, id="is-a-file"),
+            pytest.param(fsprobe.is_dir, False, id="not-a-directory"),
+            pytest.param(fsprobe.is_symlink, False, id="not-a-link"),
         ],
     )
     def test_a_readable_file_answers_normally(
@@ -534,10 +531,10 @@ class TestPathProbes:
     @pytest.mark.parametrize(
         "probe",
         [
-            pytest.param(_exists, id="exists"),
-            pytest.param(_is_file, id="is_file"),
-            pytest.param(_is_dir, id="is_dir"),
-            pytest.param(_is_symlink, id="is_symlink"),
+            pytest.param(fsprobe.exists, id="exists"),
+            pytest.param(fsprobe.is_file, id="is_file"),
+            pytest.param(fsprobe.is_dir, id="is_dir"),
+            pytest.param(fsprobe.is_symlink, id="is_symlink"),
         ],
     )
     def test_a_missing_path_is_false_not_an_error(
@@ -556,6 +553,6 @@ class TestPathProbes:
         target.write_text("# Hi\n", encoding="utf-8")
         link = tmp_path / "link.md"
         link.symlink_to(target)
-        assert _is_symlink(link, "probe-path") is True
-        assert _is_file(link, "probe-path") is True
-        assert _is_symlink(target, "probe-path") is False
+        assert fsprobe.is_symlink(link, "probe-path") is True
+        assert fsprobe.is_file(link, "probe-path") is True
+        assert fsprobe.is_symlink(target, "probe-path") is False
