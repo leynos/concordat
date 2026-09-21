@@ -439,7 +439,9 @@ deny contains f if {
 }
 
 # The exception is current only while it names the toolchain it was measured
-# on. A bump past that channel is what obliges the repository to re-measure.
+# on. The finding states that and no more: whether a bump obliges a fresh
+# measurement, or only a line saying none was taken, depends on decisions the
+# repository has recorded elsewhere and this policy cannot read.
 exception_names_pin if {
 	input.toolchain != null
 	input.toolchain.channel != null
@@ -457,7 +459,7 @@ deny contains f if {
 	f := finding(
 		"BD-006", "noncompliant", exception_sections[0].path,
 		sprintf(
-			"the recorded exception names no measurement on %q, so it is due a re-test on the pinned toolchain",
+			"the recorded exception names no measurement on %q, so the recorded state does not cover the pinned toolchain",
 			[input.toolchain.channel],
 		),
 	)

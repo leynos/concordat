@@ -51,9 +51,10 @@ Cargo and rustup discover, and does not read the Makefile.
   true` is refused by Cargo; an `[unstable]` key under a non-nightly pin stops
   the file loading for every consumer.
 - **BD-006** (error): the recorded exception names the pinned toolchain
-  channel. An exception measured on an older channel is due a re-test, which is
-  what makes the "re-test on each toolchain bump" obligation checkable. With no
-  channel pinned at all the finding is `indeterminate`.
+  channel. An exception measured on an older channel no longer covers the
+  toolchain the repository builds with, which is what keeps the recorded state
+  from drifting quietly behind the pin. With no channel pinned at all the
+  finding is `indeterminate`.
 - **CF-001** (error, indeterminate): `.cargo/config.toml` exists but could not
   be read, parsed, or used, so no clause that reads it can be decided. This
   includes a configuration Cargo itself refuses: `rustflags = ["-Zthreads=8",
@@ -80,6 +81,23 @@ heading names the backend. The heading is structure and can be read reliably;
 the prose beneath it cannot, so the policy does not attempt to verify which
 tests are named. What it does check is the channel: an exception that names the
 pinned toolchain is current, and one that names an older toolchain is stale.
+
+### What the staleness finding does and does not claim
+
+BD-006 reports that the recorded measurement does not cover the pinned
+toolchain. It does not claim that a fresh measurement is owed, because whether
+one is depends on decisions the repository has recorded elsewhere and this
+policy cannot read them. netsuke is the case that made the distinction
+concrete: the backend is shelved there for six months by an explicit ruling,
+with a dated reminder issue, so a pin bump inside that window leaves the
+recorded measurement stale without obliging anyone to re-run a forty-minute
+suite.
+
+Either way the repository owes the same small thing, which is why the finding
+is a finding: a line in the exception section saying what the pin is now and
+that no fresh measurement was taken. Clearing it costs an edit, and the
+property it preserves is that the guide tracks the pin rather than drifting
+silently behind it.
 
 A probe crate's unwind result is evidence about the backend, not a verdict on a
 repository, so nothing here reads such a probe. netsuke's exception is the

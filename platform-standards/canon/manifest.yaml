@@ -87,7 +87,7 @@ artifacts:
       Sensor policy for the rust-build-defaults rule package: the parallel
       frontend and linker defaults, the rustflags sources held equal, and the
       codegen backend configured or refused by a recorded exception.
-    sha256: 6c0029765d1ceff07ec83a44be6afea9c2bc711e595068e901bb98f256b2ca7d
+    sha256: 68c80ab8dbb2fc4f0e75007d90331fe2a6eceef47e6f2c93d979240398002307
   - id: lint-rule-rust-build-defaults-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/rust-build-defaults/rule.yaml

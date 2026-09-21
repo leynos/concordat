@@ -337,7 +337,10 @@ Where the suite fails under it, record the exception instead: a section in
 `docs/developers-guide.md` whose heading names the backend, naming the failing
 tests and the toolchain the measurement was taken on. The audit checks that the
 section names the channel `rust-toolchain.toml` pins, so bumping the pin past
-the measurement reports the exception as due a re-test. A repository with
+the measurement reports that the recorded state no longer covers the pinned
+toolchain. Clearing that is a line in the section saying what the pin is now
+and whether a fresh measurement was taken; the audit does not claim to know
+whether one is owed. A repository with
 neither the backend nor an exception is noncompliant.
 
 Note that a package override beneath the profile is not the profile's default:
