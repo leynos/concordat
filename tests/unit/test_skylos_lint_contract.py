@@ -563,7 +563,7 @@ def _assert_main_coverage_contract() -> None:
     )
     assert main_upload.get("uses") == (
         "leynos/shared-actions/.github/actions/upload-codescene-coverage@"
-        "18bed1ca49a6de3d8882bd72635a32ae3f023d57"
+        "a5765019912a8ab6882b12db049c7cde635f3a85"
     ), "main coverage must use the pinned CodeScene upload action"
     main_upload_inputs = _mapping(
         main_upload.get("with"), subject="main CodeScene upload inputs"
