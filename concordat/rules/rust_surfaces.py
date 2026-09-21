@@ -17,7 +17,7 @@ from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
 from concordat.errors import OperationalRuleError
-from concordat.rules.filesystem import regular_file_exists
+from concordat.rules.fs_probe import regular_file_exists
 
 CONCORDAT_FILENAME: typ.Final = ".concordat"
 MANIFEST_FILENAME: typ.Final = "Cargo.toml"
@@ -260,7 +260,7 @@ def root_cargo_toml_exists(cargo_path: pathlib.Path) -> bool:
     failures cannot safely be treated as absence: an unreadable manifest
     raises `OperationalRuleError` under the `resolve-rust-surfaces`
     operation, carrying the manifest path as the error's resource. The raise
-    happens in `concordat.rules.filesystem.regular_file_exists`, so it is
+    happens in `concordat.rules.fs_probe.regular_file_exists`, so it is
     described here rather than in a `Raises` section, which ruff's
     `DOC502` rejects for an exception the function does not raise itself.
 

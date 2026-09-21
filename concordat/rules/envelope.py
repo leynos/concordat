@@ -12,7 +12,7 @@ import typing as typ
 
 from .cargo_config import CargoConfigFacts, inspect_cargo_config
 from .exception_docs import DocumentScan, find_exception_sections
-from .filesystem import regular_file_exists
+from .fs_probe import regular_file_exists
 from .makefile_facts import (
     OPERATION_PARSE_MAKEFILE,
     MakeutilReport,
