@@ -1,0 +1,6 @@
+# The standard is -Zthreads=8 with -Clink-arg=-fuse-ld=mold on Linux.
+[build]
+rustflags = []
+
+[target.'cfg(target_os = "linux")']
+rustflags = []

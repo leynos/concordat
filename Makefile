@@ -43,7 +43,7 @@ SKYLOS_PRODUCTION_TARGETS ?= concordat scripts
 SKYLOS_EXCLUDE_FOLDERS ?= tests
 
 .PHONY: help all clean build build-release lint fmt check-fmt \
-	        markdownlint nixie spelling skylos-allow makeutil test typecheck vale $(TOOLS) \
+	        markdownlint nixie spelling skylos-allow makeutil conftest test typecheck vale $(TOOLS) \
         $(VENV_TOOLS)
 
 .DEFAULT_GOAL := all
@@ -139,7 +139,10 @@ vale: $(VALE) $(ACRONYM_SCRIPT) ## Check prose
 makeutil: ## Verify the Makefile parser used by contract tests
 	$(call ensure_tool,$@)
 
-test: build spelling uv $(VENV_TOOLS) makeutil ## Run tests
+conftest: ## Verify the policy engine the lint-rule suites run under
+	$(call ensure_tool,$@)
+
+test: build spelling uv $(VENV_TOOLS) makeutil conftest ## Run tests
 	$(UV_ENV) uv run pytest -v -n auto
 
 help: ## Show available targets

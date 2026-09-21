@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import collections.abc as cabc
 import dataclasses
 import functools
 import importlib.resources
@@ -10,6 +11,7 @@ import pathlib
 import re
 import subprocess
 import tempfile
+import types
 import typing as typ
 
 from ruamel.yaml import YAML
@@ -17,7 +19,15 @@ from ruamel.yaml.error import YAMLError
 
 from concordat.errors import OperationalRuleError
 
-from .envelope import PolicyEnvelope, build_envelope
+from .envelope import (
+    BuildDefaultsEnvelope,
+    PolicyEnvelope,
+    build_build_defaults_envelope,
+    build_envelope,
+)
+
+type RuleEnvelope = PolicyEnvelope | BuildDefaultsEnvelope
+type EnvelopeResolver = cabc.Callable[[str, pathlib.Path], RuleEnvelope]
 
 
 def _resolve_rule_packages_dir() -> pathlib.Path:
@@ -342,7 +352,7 @@ def _require_policy_exit_code(
 
 def _invoke_conftest(
     rule_id: str,
-    envelope: PolicyEnvelope,
+    envelope: RuleEnvelope,
 ) -> list[_ConftestResult]:
     """Evaluate *envelope* against *rule_id*'s policy and return the results."""
     rule_dir = _rule_package_dir(rule_id)
@@ -513,7 +523,41 @@ def _overall_verdict(findings: tuple[Finding, ...]) -> str:
     return VERDICT_COMPLIANT
 
 
-def run_rule(rule_id: str, checkout: pathlib.Path) -> RuleRunResult:
+# A rule package reads the facts its checks need, and those differ. A package
+# named here supplies its own builder; anything unnamed takes the historic
+# Makefile envelope, so existing packages are untouched. The mapping is a
+# read-only view: package selection is a composition decision, not state a
+# caller may reach in and change.
+PACKAGE_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
+    "rust-build-defaults": build_build_defaults_envelope,
+})
+
+
+def default_envelope_builder(rule_id: str, checkout: pathlib.Path) -> RuleEnvelope:
+    """Return the policy input *rule_id* is evaluated over.
+
+    This is the composition layer's resolver: it decides which builder a
+    package takes and supplies the manifest parameters that builder needs.
+    `run_rule` calls whatever resolver it is given, so a caller — including a
+    test — can substitute one without touching the mapping above.
+
+    Returns
+    -------
+    RuleEnvelope
+        The envelope built by the package's own builder, or the default one.
+    """
+    builder = PACKAGE_ENVELOPE_BUILDERS.get(rule_id)
+    if builder is None:
+        return build_envelope(checkout)
+    return builder(checkout, _rule_parameters(_rule_package_dir(rule_id)))
+
+
+def run_rule(
+    rule_id: str,
+    checkout: pathlib.Path,
+    *,
+    envelope_builder: EnvelopeResolver = default_envelope_builder,
+) -> RuleRunResult:
     """Evaluate *rule_id* against *checkout* and return the structured result.
 
     Parameters
@@ -522,6 +566,9 @@ def run_rule(rule_id: str, checkout: pathlib.Path) -> RuleRunResult:
         Identifier of the rule package to evaluate.
     checkout:
         Path to the local checkout to audit.
+    envelope_builder:
+        Resolver that builds the policy input for a package. The default
+        resolves the package's own builder; a caller may substitute one.
 
     Returns
     -------
@@ -543,7 +590,7 @@ def run_rule(rule_id: str, checkout: pathlib.Path) -> RuleRunResult:
             operation="audit-checkout",
             resource=checkout,
         )
-    envelope = build_envelope(checkout)
+    envelope = envelope_builder(rule_id, checkout)
     results = _invoke_conftest(rule_id, envelope)
     findings = _findings_from_results(results)
     return RuleRunResult(
