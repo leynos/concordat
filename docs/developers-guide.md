@@ -390,10 +390,14 @@ fallback or causing the policy evaluator to fail.
 ### Policy-input kinds and dispatch
 
 Each rule manifest names the envelope its sensor evaluates under `sensor.input`.
-`runner._envelope_builder` reads that field and looks the builder up in
-`ENVELOPE_BUILDERS`; a manifest without the field defaults to the Rust kind, so
-the first rule package keeps working unchanged, and an unknown kind is an
-`OperationalRuleError` rather than a guess. Two kinds exist:
+`concordat/rules/manifest.py` reads and validates the manifest, and
+`runner._envelope_builder` looks the declared kind up in `ENVELOPE_BUILDERS`; a
+manifest without the field defaults to the Rust kind, so the first rule package
+keeps working unchanged, and an unknown kind is an `OperationalRuleError`
+rather than a guess. A `sensor` key that is present and is not a mapping is
+refused for the same reason: falling back would hand one policy the document
+another was written for, and a policy that cannot find its own facts reports a
+compliance it never established. Two kinds exist:
 
 - `policy-input/rust-makefile-baseline` — `envelope.build_envelope`, above.
 - `policy-input/markdown-formatting-baseline` —
@@ -420,10 +424,18 @@ takes an `envelope_builder` resolver and calls whatever it is given;
 `default_envelope_builder` is the composition layer that maps a package to its
 builder and supplies the manifest parameters that builder needs.
 `PACKAGE_ENVELOPE_BUILDERS` is the read-only mapping it consults: a package
-named there supplies its own builder, and anything unnamed takes
-`build_envelope` above. Package selection therefore stays in one place, and a
-caller — a test included — substitutes a resolver rather than reaching into the
-mapping.
+named there supplies its own builder and receives the manifest parameters that
+builder needs, which is the only reason to name one. Package selection
+therefore stays in one place, and a caller — a test included — substitutes a
+resolver rather than reaching into the mapping.
+
+A package that is not named there is not left to the Rust envelope by default;
+it is asked what it wants. The resolver falls through to the manifest's declared
+`sensor.input`, described in the section above, and only a manifest that
+predates the field takes `build_envelope`. The two mechanisms answer different
+questions, which is why both are here: the mapping says which packages need
+parameters passed to their builder, and the manifest says which document a
+package is evaluated over.
 
 `rust-build-defaults` is the first package to take its own. Its envelope
 (`build_build_defaults_envelope`) carries the facts Cargo and rustup
@@ -457,6 +469,17 @@ which is the one answer a fail-closed audit must never give by accident.
 `probe_file` separates the two: callers turn an absence into whatever their
 clause means by it, and a refusal into a fail-closed fact carrying the reason.
 Every new reader in the build-defaults envelope uses it.
+
+`probe_dir`, `probe_symlink`, and `probe_any` answer the same way for the other
+three questions, over a shared core. The Markdown envelope and the manifest
+reader use them, because from Python 3.14 the suppression is total: `exists`,
+`is_file`, `is_dir`, and `is_symlink` now swallow every `OSError` the operating
+system raises. This package supports 3.13 and later, so before that change the
+same unreadable checkout raised on one interpreter and read as empty on the
+other. The Markdown envelope translates a reported refusal into the
+`OperationalRuleError` its callers already expect; the rule manifest does the
+same, so a package whose `rule.yaml` cannot be read cannot silently lose its
+parameters and its declared policy input.
 
 ### Tool dependencies
 

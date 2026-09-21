@@ -14,12 +14,9 @@ import tempfile
 import types
 import typing as typ
 
-from ruamel.yaml import YAML
-from ruamel.yaml.error import YAMLError
-
 from concordat.errors import OperationalRuleError
 
-from . import fs_probe
+from . import manifest
 from .envelope import ENVELOPE_KIND as RUST_ENVELOPE_KIND
 from .envelope import (
     BuildDefaultsEnvelope,
@@ -75,8 +72,6 @@ POLICY_EXIT_CODES: typ.Final = frozenset({0, 1})
 # Diagnostics are quoted back to the operator, so cap how much of a runaway
 # stderr reaches the error message.
 _MAX_ERROR_DETAIL: typ.Final = 500
-
-_yaml = YAML(typ="safe")
 
 # A rule manifest names the policy-input document its sensor evaluates under
 # `sensor.input`; the builder that assembles that document from a checkout is
@@ -250,90 +245,23 @@ def _policy_namespace(rule_id: str) -> str:
     return "canon.lint_rules." + rule_id.replace("-", "_")
 
 
-def _rule_manifest(rule_dir: pathlib.Path) -> dict[str, object]:
-    """Return the rule package's `rule.yaml` mapping, or ``{}`` if absent.
-
-    The decoded document is typed as `dict[str, object]` rather than carrying
-    `typ.Any` outward: `.rules/python-00.md` asks that decoded data be
-    narrowed at its boundary, and every caller below tests the shape it needs
-    before reading it.
-
-    Returns
-    -------
-    dict[str, object]
-        The decoded manifest mapping, keyed by its top-level field names.
-
-    Raises
-    ------
-    OperationalRuleError
-        If the rule manifest cannot be read or is not a mapping.
-    """
-    manifest_path = rule_dir / "rule.yaml"
-    # `Path.is_file` answers False for an unreadable manifest exactly as it
-    # does for an absent one, and suppresses the error outright from Python
-    # 3.14. A package whose manifest cannot be read would then silently lose
-    # its declared parameters and its policy input, and the runner would send
-    # the Rust envelope to whatever policy it ships.
-    probe = fs_probe.probe_file(manifest_path)
-    if probe.read_error is not None:
-        message = f"cannot read rule manifest {manifest_path}: {probe.read_error}"
-        raise OperationalRuleError(
-            message,
-            operation="load-rule-manifest",
-            resource=manifest_path,
-        )
-    if not probe.present:
-        return {}
-    try:
-        manifest = _yaml.load(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, YAMLError) as error:
-        message = f"cannot read rule manifest {manifest_path}: {error}"
-        raise OperationalRuleError(
-            message,
-            operation="load-rule-manifest",
-            resource=manifest_path,
-        ) from error
-    if not isinstance(manifest, dict):
-        message = f"rule manifest {manifest_path} is not a mapping"
-        raise OperationalRuleError(
-            message,
-            operation="load-rule-manifest",
-            resource=manifest_path,
-        )
-    return {str(key): typ.cast("object", value) for key, value in manifest.items()}
-
-
 def _rule_parameters(rule_dir: pathlib.Path) -> dict[str, object]:
     """Return the rule manifest's parameter defaults.
-
-    The policies read their tunables from ``data.parameters``; without this
-    the manifest's declared defaults would be inert and only the ``default``
-    rules baked into the Rego would ever apply.
-
-    An `OperationalRuleError` propagates from the manifest read if the rule
-    manifest cannot be read or is malformed.
 
     Returns
     -------
     dict[str, object]
         Parameter defaults declared by the rule manifest.
     """
-    parameters = _rule_manifest(rule_dir).get("parameters")
-    if not isinstance(parameters, dict):
-        return {}
-    defaults = typ.cast("dict[object, object]", parameters).get("defaults")
-    if not isinstance(defaults, dict):
-        return {}
-    return {
-        str(key): value
-        for key, value in typ.cast("dict[object, object]", defaults).items()
-    }
+    return manifest.parameter_defaults(rule_dir)
 
 
 def _envelope_builder(
     rule_dir: pathlib.Path,
 ) -> cabc.Callable[[pathlib.Path], RuleEnvelope]:
     """Return the builder for the policy input the rule manifest declares.
+
+    An `OperationalRuleError` propagates from the manifest read.
 
     Returns
     -------
@@ -343,37 +271,21 @@ def _envelope_builder(
     Raises
     ------
     OperationalRuleError
-        If the manifest declares an input kind this build cannot assemble, or
-        declares `sensor` as anything other than a mapping.
+        If the manifest declares a kind this build cannot assemble.
     """
-    manifest = _rule_manifest(rule_dir)
-    manifest_path = rule_dir / "rule.yaml"
-    if "sensor" not in manifest:
-        # The documented legacy case: a manifest written before the field
-        # existed audits the Rust surfaces.
-        return ENVELOPE_BUILDERS[RUST_ENVELOPE_KIND]
-    sensor = manifest["sensor"]
-    if not isinstance(sensor, dict):
-        message = (
-            f"rule manifest {manifest_path} declares `sensor` as "
-            f"{type(sensor).__name__}; expected a mapping"
-        )
-        raise OperationalRuleError(
-            message,
-            operation="load-rule-manifest",
-            resource=manifest_path,
-        )
-    declared = typ.cast("dict[object, object]", sensor).get("input", RUST_ENVELOPE_KIND)
-    if isinstance(declared, str) and declared in ENVELOPE_BUILDERS:
-        return ENVELOPE_BUILDERS[declared]
+    declared = manifest.declared_input(rule_dir, RUST_ENVELOPE_KIND)
+    builder = ENVELOPE_BUILDERS.get(declared)
+    if builder is not None:
+        return builder
     known = ", ".join(sorted(ENVELOPE_BUILDERS))
+    manifest_path = rule_dir / manifest.MANIFEST_FILENAME
     message = (
         f"rule manifest {manifest_path} declares the policy input "
         f"{declared!r}; expected one of: {known}"
     )
     raise OperationalRuleError(
         message,
-        operation="load-rule-manifest",
+        operation=manifest.OPERATION,
         resource=manifest_path,
     )
 

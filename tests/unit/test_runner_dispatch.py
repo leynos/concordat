@@ -16,7 +16,7 @@ import typing as typ
 import pytest
 
 from concordat.errors import OperationalRuleError
-from concordat.rules import runner
+from concordat.rules import manifest, runner
 from tests.unit.rule_test_support import MINIMAL_REPORT
 
 if typ.TYPE_CHECKING:
@@ -26,13 +26,19 @@ if typ.TYPE_CHECKING:
 
 
 def _write_package(
-    root: pathlib.Path, rule_id: str, manifest: str | None
+    root: pathlib.Path, rule_id: str, manifest_text: str | None
 ) -> pathlib.Path:
-    """Create a rule package skeleton with an optional manifest."""
+    """Create a rule package skeleton with an optional manifest.
+
+    Returns
+    -------
+    pathlib.Path
+        The package directory.
+    """
     package = root / rule_id
     (package / "policy").mkdir(parents=True)
-    if manifest is not None:
-        (package / "rule.yaml").write_text(manifest, encoding="utf-8")
+    if manifest_text is not None:
+        (package / "rule.yaml").write_text(manifest_text, encoding="utf-8")
     return package
 
 
@@ -82,7 +88,7 @@ class TestEnvelopeBuilder:
             runner._envelope_builder(package)
 
     @pytest.mark.parametrize(
-        "manifest",
+        "manifest_text",
         [
             pytest.param("sensor:\n", id="null"),
             pytest.param("sensor: conftest\n", id="scalar"),
@@ -90,7 +96,7 @@ class TestEnvelopeBuilder:
         ],
     )
     def test_non_mapping_sensor_is_refused(
-        self, tmp_path: pathlib.Path, manifest: str
+        self, tmp_path: pathlib.Path, manifest_text: str
     ) -> None:
         """A `sensor` that is not a mapping is an error, not the Rust default.
 
@@ -99,7 +105,7 @@ class TestEnvelopeBuilder:
         `applicability.markdown_files`, skips its own checks, and reports a
         compliant verdict it never established.
         """
-        package = _write_package(tmp_path, "odd-rule", manifest)
+        package = _write_package(tmp_path, "odd-rule", manifest_text)
         with pytest.raises(OperationalRuleError, match="declares `sensor` as"):
             runner._envelope_builder(package)
 
@@ -125,7 +131,7 @@ class TestEnvelopeBuilder:
     def test_an_absent_manifest_is_still_absent(self, tmp_path: pathlib.Path) -> None:
         """The narrow half: a package without a manifest keeps the default."""
         package = _write_package(tmp_path, "bare-rule", None)
-        assert runner._rule_manifest(package) == {}
+        assert manifest.load(package) == {}
 
     def test_shipped_packages_declare_their_inputs(self) -> None:
         """Both shipped manifests resolve to the builder for their own kind."""
