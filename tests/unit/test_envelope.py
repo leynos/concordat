@@ -40,21 +40,7 @@ def _assert_unreadable_root_cargo_probe_raises(
     *,
     declaration: str | None,
 ) -> None:
-    """Assert an unreadable root manifest raises rather than reading as absent.
-
-    Shared by the two declaration states, which differ only in whether the
-    surface resolver reads the same manifest afterwards. The setup, the patch
-    and the assertions are identical, so only the declaration varies.
-
-    Parameters
-    ----------
-    checkout:
-        The temporary checkout to build the envelope from.
-    monkeypatch:
-        The fixture used to make the root manifest unreadable.
-    declaration:
-        The `.concordat` document to write, or `None` for no declaration.
-    """
+    """Assert an unreadable root manifest raises rather than reading as absent."""
     checkout.mkdir(exist_ok=True)
     cargo_path = checkout / "Cargo.toml"
     cargo_path.write_text(

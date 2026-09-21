@@ -80,6 +80,25 @@ _SUITE_COMMANDS: typ.Final = (("make", "test"), ("pytest",), ("uv", "run", "pyte
 
 _MAKEFILE_SUITE_TARGET: typ.Final = "test"
 
+# The package managers whose `install` verb provisions an executable. A
+# command run by anything else is not an installation, however its arguments
+# read, so `echo install conftest` provisions nothing.
+_INSTALLERS: typ.Final = frozenset({
+    "apt-get",
+    "cargo",
+    "go",
+    "npm",
+    "pip",
+    "pipx",
+    "rustup",
+    "uv",
+})
+_ENVIRONMENT_PREFIX: typ.Final = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*", re.DOTALL)
+
+# The action that must precede a `go install`, since the publisher has no Go
+# toolchain of its own.
+_GO_SETUP_ACTION: typ.Final = "actions/setup-go@"
+
 # `ensure_tool`'s refusal, as the Makefile spells it. Asserting the message
 # rather than the exit status alone keeps the target from passing by failing
 # for some other reason.
@@ -181,10 +200,33 @@ def _commands(script: str) -> tuple[tuple[str, ...], ...]:
     return tuple(commands)
 
 
+def _installer_program(command: typ.Sequence[str]) -> str | None:
+    """Return the package manager a command runs, ignoring `NAME=value` prefixes.
+
+    Parameters
+    ----------
+    command:
+        One tokenized command line.
+
+    Returns
+    -------
+        The program name, or `None` for a command that runs no program.
+    """
+    for token in command:
+        if _ENVIRONMENT_PREFIX.fullmatch(token):
+            continue
+        return token
+    return None
+
+
 def _installed_tool_names(command: typ.Sequence[str]) -> frozenset[str]:
     """Return the executable names one install command provisions.
 
-    A command provisions a tool only if it contains an ``install`` verb.
+    A command provisions a tool only if a known package manager runs it with
+    an ``install`` verb. Requiring the program keeps the recognizer erring
+    towards not recognizing: a false positive is silent, and would let a lane
+    claim credit for an install it never performs, while a false negative
+    fails the contract loudly and is fixed by naming the manager here.
     Arguments are reduced to the executable they would leave on `PATH`: a Go
     module path becomes its final segment and a version suffix is dropped, so
     ``go install github.com/open-policy-agent/conftest@v0.52.0`` provisions
@@ -200,7 +242,7 @@ def _installed_tool_names(command: typ.Sequence[str]) -> frozenset[str]:
         The executable names the command installs, which is empty for any
         command that is not an installation.
     """
-    if "install" not in command:
+    if _installer_program(command) not in _INSTALLERS or "install" not in command:
         return frozenset()
     operands = command[command.index("install") + 1 :]
     names: set[str] = set()
@@ -307,8 +349,8 @@ def suite_lanes() -> tuple[Lane, ...]:
     return tuple(lanes)
 
 
-def _shell_commands(lane: Lane) -> typ.Iterator[tuple[str, ...]]:
-    """Yield every shell command a lane's steps run, in step order.
+def _shell_commands(lane: Lane) -> typ.Iterator[tuple[int, tuple[str, ...]]]:
+    """Yield every shell command a lane's steps run, with its step position.
 
     Parameters
     ----------
@@ -317,12 +359,60 @@ def _shell_commands(lane: Lane) -> typ.Iterator[tuple[str, ...]]:
 
     Yields
     ------
-        One token tuple per logical command line across the job's steps.
+        The step's index and one token tuple per logical command line, in
+        step order, so an install can be placed relative to the suite step.
     """
-    for step in _steps(lane.job, subject=str(lane)):
+    for index, step in enumerate(_steps(lane.job, subject=str(lane))):
         run = step.get("run")
         if isinstance(run, str):
-            yield from _commands(run)
+            for command in _commands(run):
+                yield index, command
+
+
+def _suite_step_index(lane: Lane) -> int:
+    """Return the position of the first step that runs the suite.
+
+    Parameters
+    ----------
+    lane:
+        The suite-running job to read.
+
+    Returns
+    -------
+        The index of the earliest suite-running step.
+
+    Raises
+    ------
+    AssertionError
+        If the lane runs no suite step, which the enumeration rules out.
+    """
+    for index, step in enumerate(_steps(lane.job, subject=str(lane))):
+        if _step_runs_the_suite(step):
+            return index
+    message = f"{lane} was enumerated as a suite lane but runs no suite step"
+    raise AssertionError(message)
+
+
+def _provisioning_positions(lane: Lane) -> dict[str, int]:
+    """Return the step index at which each tool is last installed.
+
+    The last install is the one whose version reaches `PATH`, so it is the
+    one that has to precede the suite step.
+
+    Parameters
+    ----------
+    lane:
+        The suite-running job to read.
+
+    Returns
+    -------
+        A mapping from executable name to the index of its last install step.
+    """
+    positions: dict[str, int] = {}
+    for index, command in _shell_commands(lane):
+        for name in _installed_tool_names(command):
+            positions[name] = index
+    return positions
 
 
 def _provisioning(lane: Lane) -> dict[str, tuple[str, ...]]:
@@ -345,7 +435,7 @@ def _provisioning(lane: Lane) -> dict[str, tuple[str, ...]]:
     environment = _job_environment(lane.job)
     installs = [
         (name, tuple(_expand(token, environment) for token in command))
-        for command in _shell_commands(lane)
+        for _, command in _shell_commands(lane)
         for name in _installed_tool_names(command)
     ]
     provisioning: dict[str, tuple[str, ...]] = {}
@@ -482,6 +572,65 @@ def test_every_lane_that_runs_the_suite_provisions_the_suites_tools() -> None:
     assert not unprovisioned, (
         "every lane that runs the pytest suite must install the tools the "
         f"suite shells out to; these lanes are missing tools: {unprovisioned}"
+    )
+
+
+def test_every_tool_is_installed_before_the_suite_runs() -> None:
+    """Installing a tool after the gate is the same as not installing it.
+
+    Provisioning judged only by name passes for a lane that installs Conftest
+    after the coverage step, which fails exactly as the publisher did.
+    """
+    needed = required_tools()
+    late = {}
+    for lane in suite_lanes():
+        suite_index = _suite_step_index(lane)
+        positions = _provisioning_positions(lane)
+        overdue = {
+            tool: position
+            for tool, position in positions.items()
+            if tool in needed and position > suite_index
+        }
+        if overdue:
+            late[str(lane)] = {"suite step": suite_index, "installed at": overdue}
+    assert not late, (
+        "every required tool must be installed before the step that runs the "
+        f"suite; these lanes install one too late: {late}"
+    )
+
+
+def test_a_go_install_is_preceded_by_the_shared_go_setup() -> None:
+    """A lane installing with Go must set Go up, at the pin the others use.
+
+    The runners carry no Go toolchain the publisher can rely on, so the
+    install step alone is not provisioning: without the setup action the
+    command fails before it installs anything.
+    """
+    setups: dict[str, str] = {}
+    for lane in suite_lanes():
+        uses_go = any(
+            _installer_program(command) == "go" and _installed_tool_names(command)
+            for _, command in _shell_commands(lane)
+        )
+        if not uses_go:
+            continue
+        references = [
+            uses
+            for step in _steps(lane.job, subject=str(lane))
+            if isinstance(uses := step.get("uses"), str)
+            and uses.startswith(_GO_SETUP_ACTION)
+        ]
+        assert references, (
+            f"{lane} installs with Go but never runs {_GO_SETUP_ACTION}, so "
+            "the install has no toolchain to run under"
+        )
+        setups[str(lane)] = references[0]
+    assert setups, (
+        "no lane was found installing with Go, so the agreement assertion "
+        "below would pass vacuously"
+    )
+    assert len(set(setups.values())) == 1, (
+        f"every lane must set Go up at the same pin; found {setups}"
     )
 
 
@@ -719,6 +868,31 @@ def test_a_suite_step_is_recognized_wherever_it_sits(
     running: dict[str, object] = {"steps": steps}
     assert _runs_the_suite(running, subject="generated suite job"), (
         f"a `make test` step after {before} must be recognized"
+    )
+
+
+def test_a_command_that_is_not_an_installation_provisions_nothing() -> None:
+    """Only a package manager's install verb counts as provisioning.
+
+    A recognizer that read any command containing `install` would credit a
+    lane for `echo install conftest`, or for a tool invoked with a path that
+    happens to contain the word. Each case is driven directly, because a
+    predicate parametrized over compliant files proves only that it is quiet.
+    """
+    for script in (
+        "echo install conftest\n",
+        "conftest test --policy install/policies examples/*.json\n",
+        "./install conftest\n",
+        "make install\n",
+    ):
+        command = _commands(script)[0]
+        assert not _installed_tool_names(command), (
+            f"{script.strip()!r} is not a package-manager install, so it "
+            "provisions nothing"
+        )
+    installer = _commands("uv tool install mbake\n")[0]
+    assert _installed_tool_names(installer) == frozenset({"mbake"}), (
+        "a package manager's install verb must still be recognized"
     )
 
 
