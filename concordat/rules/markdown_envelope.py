@@ -62,6 +62,9 @@ PRUNED_DIRECTORIES: typ.Final = frozenset({
 
 OPERATION_READ_MARKDOWNLINT_CONFIG: typ.Final = "read-markdownlint-config"
 OPERATION_READ_WORKFLOW: typ.Final = "read-workflow"
+OPERATION_SCAN_MARKDOWN: typ.Final = "scan-markdown-files"
+OPERATION_RESOLVE_CHECKOUT: typ.Final = "resolve-checkout"
+OPERATION_READ_MAKEFILE: typ.Final = "read-makefile"
 
 _yaml = YAML(typ="safe")
 
@@ -111,19 +114,105 @@ class MarkdownEnvelope(typ.TypedDict):
     workflows: list[WorkflowFile]
 
 
+def _resolved_root(checkout: pathlib.Path) -> pathlib.Path:
+    """Return the checkout's fully resolved path.
+
+    Returns
+    -------
+    pathlib.Path
+        The checkout with every symbolic link in its own path resolved.
+
+    Raises
+    ------
+    OperationalRuleError
+        If the checkout path itself cannot be resolved.
+    """
+    try:
+        return checkout.resolve(strict=True)
+    except OSError as error:
+        message = f"cannot resolve checkout {checkout}: {error}"
+        raise OperationalRuleError(
+            message, operation=OPERATION_RESOLVE_CHECKOUT, resource=checkout
+        ) from error
+
+
+def _within_checkout(root: pathlib.Path, path: pathlib.Path, operation: str) -> bool:
+    """Return whether *path* resolves to a location inside *root*.
+
+    Every policy input is read through this guard. The readers follow
+    symbolic links, so without it a checkout could aim its `Makefile`,
+    markdownlint configuration, or a workflow file at a readable file
+    elsewhere on the machine and carry that file's contents into the
+    envelope, which the audit then reports and may publish.
+
+    Returns
+    -------
+    bool
+        Whether the path exists and resolves inside the checkout. A path
+        that does not exist at all returns ``False``.
+
+    Raises
+    ------
+    OperationalRuleError
+        If the path exists but resolves outside the checkout.
+    """
+    if not path.exists():
+        return False
+    try:
+        resolved = path.resolve(strict=True)
+    except OSError as error:
+        message = f"cannot resolve {path}: {error}"
+        raise OperationalRuleError(
+            message, operation=operation, resource=path
+        ) from error
+    if resolved == root or resolved.is_relative_to(root):
+        return True
+    message = (
+        f"{path} resolves to {resolved}, outside the checkout {root}; "
+        "refusing to read a policy input from outside the audited tree"
+    )
+    raise OperationalRuleError(message, operation=operation, resource=path)
+
+
+def _raise_walk_error(error: OSError) -> typ.NoReturn:
+    """Re-raise a directory-scan failure as an operational audit failure.
+
+    `os.walk` swallows every `OSError` by default. A directory the audit
+    cannot list would then contribute no Markdown files, and an unreadable
+    tree would read as a repository with no governed prose: the rule would
+    report `not-applicable` rather than admitting it could not look.
+
+    Raises
+    ------
+    OperationalRuleError
+        Always; the scan cannot continue over a directory it cannot read.
+    """
+    resource = pathlib.Path(error.filename) if error.filename else pathlib.Path()
+    message = f"cannot scan {resource} for Markdown files: {error}"
+    raise OperationalRuleError(
+        message, operation=OPERATION_SCAN_MARKDOWN, resource=resource
+    ) from error
+
+
 def _has_markdown_files(checkout: pathlib.Path) -> bool:
     """Return whether any Markdown file exists outside the pruned directories.
 
     The walk stops at the first match, and never follows symbolic links, so a
     checkout whose only Markdown is a link to another file (netsuke's
     `CRUSH.md`) is judged by the link's target being present in its own right.
+    A directory that cannot be listed raises rather than being skipped.
 
     Returns
     -------
     bool
         Whether a governed Markdown file was found.
+
+    Raises
+    ------
+    OperationalRuleError
+        If a directory under the checkout cannot be listed.
     """
-    for root, directories, files in os.walk(checkout):
+    for root, directories, files in os.walk(checkout, onerror=_raise_walk_error):
         directories[:] = sorted(
             name for name in directories if name not in PRUNED_DIRECTORIES
         )
@@ -166,9 +255,24 @@ def _read_text(path: pathlib.Path, operation: str) -> str:
         ) from error
 
 
-def _load_markdownlint_config(checkout: pathlib.Path) -> MarkdownlintConfig | None:
-    """Return the decoded markdownlint configuration, or ``None`` if absent."""
+def _load_markdownlint_config(
+    checkout: pathlib.Path, root: pathlib.Path
+) -> MarkdownlintConfig | None:
+    """Return the decoded markdownlint configuration, or ``None`` if absent.
+
+    Returns
+    -------
+    MarkdownlintConfig | None
+        The configuration fact, or ``None`` when the file does not exist.
+
+    Raises
+    ------
+    OperationalRuleError
+        If the file resolves outside the checkout.
+    """
     path = checkout / MARKDOWNLINT_CONFIG_FILENAME
+    if not _within_checkout(root, path, OPERATION_READ_MARKDOWNLINT_CONFIG):
+        return None
     if not path.is_file():
         return None
     fact: MarkdownlintConfig = {
@@ -199,11 +303,23 @@ def _json_safe(value: object) -> object:
 
 
 def _load_workflow(
-    checkout: pathlib.Path, relative: pathlib.PurePosixPath
+    checkout: pathlib.Path, root: pathlib.Path, relative: pathlib.PurePosixPath
 ) -> WorkflowFile:
-    """Return one decoded workflow file, or the file with its decoding error."""
+    """Return one decoded workflow file, or the file with its decoding error.
+
+    Returns
+    -------
+    WorkflowFile
+        The workflow fact, decoded or carrying its decoding error.
+
+    Raises
+    ------
+    OperationalRuleError
+        If the workflow file resolves outside the checkout.
+    """
     fact: WorkflowFile = {"path": str(relative), "parsed": None, "error": None}
     path = checkout / relative
+    _within_checkout(root, path, OPERATION_READ_WORKFLOW)
     try:
         text = _read_text(path, OPERATION_READ_WORKFLOW)
     except UnicodeDecodeError as error:
@@ -221,13 +337,26 @@ def _load_workflow(
     return fact
 
 
-def _load_workflows(checkout: pathlib.Path) -> list[WorkflowFile]:
-    """Return every workflow file under `.github/workflows`, sorted by name."""
+def _load_workflows(checkout: pathlib.Path, root: pathlib.Path) -> list[WorkflowFile]:
+    """Return every workflow file under `.github/workflows`, sorted by name.
+
+    Returns
+    -------
+    list[WorkflowFile]
+        One fact per workflow file, ordered by file name.
+
+    Raises
+    ------
+    OperationalRuleError
+        If the directory or any workflow file resolves outside the checkout.
+    """
     directory = checkout / WORKFLOWS_DIRECTORY
+    if not _within_checkout(root, directory, OPERATION_READ_WORKFLOW):
+        return []
     if not directory.is_dir():
         return []
     return [
-        _load_workflow(checkout, WORKFLOWS_DIRECTORY / entry.name)
+        _load_workflow(checkout, root, WORKFLOWS_DIRECTORY / entry.name)
         for entry in sorted(directory.iterdir(), key=lambda entry: entry.name)
         if entry.is_file() and entry.suffix in WORKFLOW_SUFFIXES
     ]
@@ -242,19 +371,22 @@ def build_markdown_envelope(checkout: pathlib.Path) -> MarkdownEnvelope:
         Path to the checkout under audit.
 
     An `OperationalRuleError` propagates from the fact readers if the root
-    `Makefile` cannot be parsed by `makeutil`, or a fact file exists but
-    cannot be opened.
+    `Makefile` cannot be parsed by `makeutil`, a fact file exists but cannot
+    be opened, or a fact file resolves to a location outside the checkout.
 
     Returns
     -------
     MarkdownEnvelope
         The policy input document assembled from the checkout.
     """
+    root = _resolved_root(checkout)
     makefile_path = checkout / "Makefile"
     makefile_report: MakeutilReport | None = None
-    if makefile_path.is_file():
+    if _within_checkout(root, makefile_path, OPERATION_READ_MAKEFILE) and (
+        makefile_path.is_file()
+    ):
         makefile_report = inspect_makefile(makefile_path).report
-    markdownlint = _load_markdownlint_config(checkout)
+    markdownlint = _load_markdownlint_config(checkout, root)
     return {
         "schema_version": ENVELOPE_SCHEMA_VERSION,
         "kind": ENVELOPE_KIND,
@@ -268,5 +400,5 @@ def build_markdown_envelope(checkout: pathlib.Path) -> MarkdownEnvelope:
         "makefile": makefile_report,
         "markdownlint": markdownlint,
         "alternate_markdownlint_configs": _alternate_configs(checkout),
-        "workflows": _load_workflows(checkout),
+        "workflows": _load_workflows(checkout, root),
     }

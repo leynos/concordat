@@ -287,3 +287,105 @@ class TestWorkflows:
         assert fact["parsed"] is None, fact
         assert fact["error"] is not None, fact
         assert fragment in fact["error"], fact
+
+
+class TestSymlinkedPolicyInputs:
+    """A policy input may not be read from outside the audited checkout.
+
+    Every reader follows symbolic links. Without a containment guard a
+    checkout could aim its `Makefile`, its markdownlint configuration, or a
+    workflow file at any readable file on the machine, and that file's
+    contents would enter the envelope the audit reports and may publish.
+    """
+
+    @staticmethod
+    def _outside(tmp_path: pathlib.Path, name: str, text: str) -> pathlib.Path:
+        """Create *name* outside the checkout and return its path."""
+        outside = tmp_path / "outside"
+        outside.mkdir(exist_ok=True)
+        target = outside / name
+        target.write_text(text, encoding="utf-8")
+        return target
+
+    @staticmethod
+    def _checkout(tmp_path: pathlib.Path) -> pathlib.Path:
+        """Return an applicable checkout directory."""
+        checkout = tmp_path / "checkout"
+        checkout.mkdir(exist_ok=True)
+        (checkout / "README.md").write_text("# Hi\n", encoding="utf-8")
+        return checkout
+
+    def test_symlinked_markdownlint_config_is_refused(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A configuration linked outside the checkout is not read."""
+        checkout = self._checkout(tmp_path)
+        target = self._outside(tmp_path, "secrets.jsonc", '{"config": {}}')
+        (checkout / ".markdownlint-cli2.jsonc").symlink_to(target)
+        with pytest.raises(OperationalRuleError, match="outside the checkout"):
+            build_markdown_envelope(checkout)
+
+    def test_symlinked_makefile_is_refused(self, tmp_path: pathlib.Path) -> None:
+        """A `Makefile` linked outside the checkout is never parsed."""
+        checkout = self._checkout(tmp_path)
+        target = self._outside(tmp_path, "Makefile", "fmt:\n\techo hi\n")
+        (checkout / "Makefile").symlink_to(target)
+        with pytest.raises(OperationalRuleError, match="outside the checkout"):
+            build_markdown_envelope(checkout)
+
+    def test_symlinked_workflows_directory_is_refused(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A workflows directory linked outside the checkout is not listed."""
+        checkout = self._checkout(tmp_path)
+        outside = tmp_path / "outside" / "workflows"
+        outside.mkdir(parents=True)
+        (outside / "ci.yml").write_text("on: push\n", encoding="utf-8")
+        (checkout / ".github").mkdir()
+        (checkout / ".github" / "workflows").symlink_to(outside)
+        with pytest.raises(OperationalRuleError, match="outside the checkout"):
+            build_markdown_envelope(checkout)
+
+    def test_symlinked_workflow_file_is_refused(self, tmp_path: pathlib.Path) -> None:
+        """One workflow file linked outside the checkout is not decoded."""
+        checkout = self._checkout(tmp_path)
+        target = self._outside(tmp_path, "elsewhere.yml", "on: push\n")
+        workflows = checkout / ".github" / "workflows"
+        workflows.mkdir(parents=True)
+        (workflows / "ci.yml").symlink_to(target)
+        with pytest.raises(OperationalRuleError, match="outside the checkout"):
+            build_markdown_envelope(checkout)
+
+    def test_a_link_inside_the_checkout_is_read(self, tmp_path: pathlib.Path) -> None:
+        """Containment is the test, not the link: an internal link is fine."""
+        checkout = self._checkout(tmp_path)
+        real = checkout / "config" / ".markdownlint-cli2.jsonc"
+        real.parent.mkdir()
+        real.write_text('{"config": {"MD004": {"style": "dash"}}}', encoding="utf-8")
+        (checkout / ".markdownlint-cli2.jsonc").symlink_to(real)
+        envelope = build_markdown_envelope(checkout)
+        config = _config(typ.cast("dict[str, object]", envelope))
+        assert config["error"] is None, config
+        assert config["parsed"] == {"config": {"MD004": {"style": "dash"}}}, config
+
+
+class TestUnlistableDirectories:
+    """A directory the scan cannot read is an audit failure, not an absence."""
+
+    def test_unlistable_directory_stops_the_scan(self, tmp_path: pathlib.Path) -> None:
+        """`os.walk` swallows errors; the builder must not inherit that.
+
+        A checkout whose subdirectory cannot be listed would otherwise
+        contribute no Markdown files, and the rule would report
+        `not-applicable` for a repository it never managed to look at.
+        """
+        checkout = tmp_path / "checkout"
+        nested = checkout / "docs"
+        nested.mkdir(parents=True)
+        (nested / "guide.md").write_text("# Guide\n", encoding="utf-8")
+        nested.chmod(0o000)
+        try:
+            with pytest.raises(OperationalRuleError, match="cannot scan"):
+                _has_markdown_files(checkout)
+        finally:
+            nested.chmod(0o755)
