@@ -53,8 +53,11 @@ Cargo and rustup discover, and does not read the Makefile.
 - **BD-006** (error): the recorded exception names the pinned toolchain
   channel. An exception measured on an older channel no longer covers the
   toolchain the repository builds with, which is what keeps the recorded state
-  from drifting quietly behind the pin. With no channel pinned at all the
-  finding is `indeterminate`.
+  from drifting quietly behind the pin. Clearing it does not require a fresh
+  measurement: a line in the exception section saying what the pin is now,
+  whether a measurement was taken on it, and the date any deferral runs to is
+  a true statement of the recorded state and satisfies the clause. With no
+  channel pinned at all the finding is `indeterminate`.
 - **CF-001** (error, indeterminate): `.cargo/config.toml` exists but could not
   be read, parsed, or used, so no clause that reads it can be decided. This
   includes a configuration Cargo itself refuses: `rustflags = ["-Zthreads=8",
@@ -94,10 +97,15 @@ recorded measurement stale without obliging anyone to re-run a forty-minute
 suite.
 
 Either way the repository owes the same small thing, which is why the finding
-is a finding: a line in the exception section saying what the pin is now and
-that no fresh measurement was taken. Clearing it costs an edit, and the
-property it preserves is that the guide tracks the pin rather than drifting
-silently behind it.
+is a finding and not a warning: a line in the exception section giving what the
+pin is now, whether a measurement was taken on it, and the date any deferral
+runs to. netsuke's deferral runs to 2027-03-21 and is tracked by an issue, so a
+pin move inside that window is cleared by writing those three facts down rather
+than by re-running a forty-minute suite.
+
+Clearing it therefore costs an edit, and the property it preserves is worth the
+edit: the failure this clause exists to prevent is a guide that quietly
+describes a toolchain the repository no longer pins.
 
 A probe crate's unwind result is evidence about the backend, not a verdict on a
 repository, so nothing here reads such a probe. netsuke's exception is the
@@ -114,17 +122,27 @@ states is recorded.
 Cargo reads `rustflags` as an array or as one space-separated string, and reads
 `-C` and its value as either one token or two. The estate writes the same
 linker flag three of those ways today. The policy compares normalized flags, so
-all three are the same flag, and a target table keyed on an explicit
-`*-linux-*` triple satisfies the Linux condition exactly as a
-`cfg(target_os = "linux")` key does.
+all three are the same flag, and a target table keyed on an explicit Linux
+triple satisfies the Linux condition exactly as a `cfg(target_os = "linux")`
+key does.
 
-Target keys are placed, not pattern-matched. `cfg(target_os = "linux")` and a
-`*-linux-*` triple apply only on Linux; `cfg(unix)` applies on Linux and
-beyond it; a key naming another operating system applies elsewhere. Anything
-this reader will not evaluate — a negation, a disjunction, a `target_env`
-predicate, a custom JSON target — is left unplaced, because
-`cfg(not(target_os = "linux"))` contains the Linux predicate while applying
-everywhere except Linux, and a substring test reads it exactly backwards.
+Target keys are placed, not pattern-matched. A key is read as a target triple
+only when it has three or four components and each is a bare identifier, and it
+is placed only when exactly one of those components names an operating system
+this reader knows. So `x86_64-unknown-linux-gnu` applies only on Linux,
+`aarch64-apple-darwin` applies elsewhere, and `wasm32-unknown-unknown` is
+placed through its architecture because it names no operating system at all.
+A custom JSON target is a path rather than a triple and is left unplaced, even
+when it is named after the triple it derives from; so is
+`i686-linux-android`, because which component is the operating system and which
+the environment is not decidable from a three-part name.
+
+Among `cfg` expressions, `cfg(target_os = "linux")` applies only on Linux and
+`cfg(unix)` applies on Linux and beyond it. Anything this reader will not
+evaluate — a negation, a disjunction, a `target_env` predicate — is left
+unplaced, because `cfg(not(target_os = "linux"))` contains the Linux predicate
+while applying everywhere except Linux, and a substring test reads it exactly
+backwards.
 
 ## Verdicts
 
