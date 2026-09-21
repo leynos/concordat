@@ -200,6 +200,10 @@ def _tokenize(segment: str) -> tuple[str, ...]:
 
     An unbalanced quote is not this contract's concern: a segment that
     cannot be tokenized provisions nothing it can claim credit for.
+
+    Returns
+    -------
+        The segment's tokens, empty when it cannot be tokenized.
     """
     try:
         return tuple(shlex.split(segment, comments=True))
