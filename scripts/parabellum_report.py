@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools as it
 import typing as typ
 import unicodedata as ud
 
@@ -190,7 +191,7 @@ def _aligned_table(rows: cabc.Sequence[tuple[str, ...]]) -> list[str]:
         return (
             "| "
             + " | ".join(
-                _pad(cell, width) for cell, width in zip(cells, widths, strict=True)
+                it.starmap(_pad, zip(cells, widths, strict=True))
             )
             + " |"
         )

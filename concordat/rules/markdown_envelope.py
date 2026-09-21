@@ -200,17 +200,13 @@ def _has_markdown_files(checkout: pathlib.Path) -> bool:
     The walk stops at the first match, and never follows symbolic links, so a
     checkout whose only Markdown is a link to another file (netsuke's
     `CRUSH.md`) is judged by the link's target being present in its own right.
-    A directory that cannot be listed raises rather than being skipped.
+    A directory that cannot be listed raises rather than being skipped: an
+    `OperationalRuleError` propagates from the walk's error callback.
 
     Returns
     -------
     bool
         Whether a governed Markdown file was found.
-
-    Raises
-    ------
-    OperationalRuleError
-        If a directory under the checkout cannot be listed.
     """
     for root, directories, files in os.walk(checkout, onerror=_raise_walk_error):
         directories[:] = sorted(
@@ -260,15 +256,13 @@ def _load_markdownlint_config(
 ) -> MarkdownlintConfig | None:
     """Return the decoded markdownlint configuration, or ``None`` if absent.
 
+    An `OperationalRuleError` propagates from the containment guard if the
+    file resolves outside the checkout.
+
     Returns
     -------
     MarkdownlintConfig | None
         The configuration fact, or ``None`` when the file does not exist.
-
-    Raises
-    ------
-    OperationalRuleError
-        If the file resolves outside the checkout.
     """
     path = checkout / MARKDOWNLINT_CONFIG_FILENAME
     if not _within_checkout(root, path, OPERATION_READ_MARKDOWNLINT_CONFIG):
@@ -307,15 +301,13 @@ def _load_workflow(
 ) -> WorkflowFile:
     """Return one decoded workflow file, or the file with its decoding error.
 
+    An `OperationalRuleError` propagates from the containment guard if the
+    file resolves outside the checkout.
+
     Returns
     -------
     WorkflowFile
         The workflow fact, decoded or carrying its decoding error.
-
-    Raises
-    ------
-    OperationalRuleError
-        If the workflow file resolves outside the checkout.
     """
     fact: WorkflowFile = {"path": str(relative), "parsed": None, "error": None}
     path = checkout / relative
@@ -340,15 +332,13 @@ def _load_workflow(
 def _load_workflows(checkout: pathlib.Path, root: pathlib.Path) -> list[WorkflowFile]:
     """Return every workflow file under `.github/workflows`, sorted by name.
 
+    An `OperationalRuleError` propagates from the containment guard if the
+    directory or any workflow file resolves outside the checkout.
+
     Returns
     -------
     list[WorkflowFile]
         One fact per workflow file, ordered by file name.
-
-    Raises
-    ------
-    OperationalRuleError
-        If the directory or any workflow file resolves outside the checkout.
     """
     directory = checkout / WORKFLOWS_DIRECTORY
     if not _within_checkout(root, directory, OPERATION_READ_WORKFLOW):

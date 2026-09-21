@@ -306,7 +306,7 @@ def _rule_parameters(rule_dir: pathlib.Path) -> dict[str, object]:
     if not isinstance(defaults, dict):
         return {}
     return {
-        str(key): typ.cast("object", value)
+        str(key): value
         for key, value in typ.cast("dict[object, object]", defaults).items()
     }
 
