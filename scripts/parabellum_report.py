@@ -189,11 +189,7 @@ def _aligned_table(rows: cabc.Sequence[tuple[str, ...]]) -> list[str]:
 
     def line(cells: tuple[str, ...]) -> str:
         return (
-            "| "
-            + " | ".join(
-                it.starmap(_pad, zip(cells, widths, strict=True))
-            )
-            + " |"
+            "| " + " | ".join(it.starmap(_pad, zip(cells, widths, strict=True))) + " |"
         )
 
     delimiter = tuple("-" * width for width in widths)
