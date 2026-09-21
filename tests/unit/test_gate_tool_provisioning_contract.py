@@ -219,6 +219,26 @@ def _steps(job: dict[str, object], *, subject: str) -> list[dict[str, object]]:
     return [_mapping(step, subject=f"{subject} step") for step in steps]
 
 
+def _step_runs_the_suite(step: dict[str, object]) -> bool:
+    """Return whether one step runs the whole pytest suite.
+
+    Returns
+    -------
+        Whether the step invokes the shared coverage action or runs pytest.
+    """
+    uses = step.get("uses")
+    if isinstance(uses, str) and _COVERAGE_ACTION in uses:
+        return True
+    run = step.get("run")
+    if not isinstance(run, str):
+        return False
+    return any(
+        tuple(command[: len(prefix)]) == prefix
+        for command in _commands(run)
+        for prefix in _SUITE_COMMANDS
+    )
+
+
 def _runs_the_suite(job: dict[str, object], *, subject: str) -> bool:
     """Return whether a job runs the whole pytest suite.
 
@@ -237,19 +257,7 @@ def _runs_the_suite(job: dict[str, object], *, subject: str) -> bool:
             "cannot be judged for suite provisioning"
         )
         return False
-    for step in _steps(job, subject=subject):
-        uses = step.get("uses")
-        if isinstance(uses, str) and _COVERAGE_ACTION in uses:
-            return True
-        run = step.get("run")
-        if not isinstance(run, str):
-            continue
-        for command in _commands(run):
-            if any(
-                tuple(command[: len(prefix)]) == prefix for prefix in _SUITE_COMMANDS
-            ):
-                return True
-    return False
+    return any(_step_runs_the_suite(step) for step in _steps(job, subject=subject))
 
 
 def suite_lanes() -> tuple[Lane, ...]:
