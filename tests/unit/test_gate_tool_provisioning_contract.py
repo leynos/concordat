@@ -43,6 +43,7 @@ import subprocess
 import typing as typ
 from pathlib import Path
 
+import pytest
 from ruamel.yaml import YAML
 
 REPOSITORY_ROOT: typ.Final = Path(__file__).parents[2]
@@ -317,7 +318,10 @@ def _provisioning(lane: Lane) -> dict[str, tuple[str, ...]]:
     -------
         A mapping from executable name to the installing command's tokens,
         with job-level environment variables expanded so that two lanes
-        pinning the same revision compare equal.
+        pinning the same revision compare equal. A lane that installs one
+        executable twice with different commands is rejected: the last
+        install wins on `PATH` while a first-wins reading would compare the
+        earlier command across lanes and pass.
     """
     environment = _job_environment(lane.job)
     installs = [
@@ -327,7 +331,13 @@ def _provisioning(lane: Lane) -> dict[str, tuple[str, ...]]:
     ]
     provisioning: dict[str, tuple[str, ...]] = {}
     for name, command in installs:
-        provisioning.setdefault(name, command)
+        previous = provisioning.get(name)
+        assert previous is None or previous == command, (
+            f"{lane} installs {name!r} twice with conflicting commands, so "
+            f"which version reaches PATH is not readable from the workflow: "
+            f"{previous} and {command}"
+        )
+        provisioning[name] = command
     return provisioning
 
 
@@ -473,6 +483,40 @@ def test_a_command_that_only_uses_a_tool_does_not_provision_it() -> None:
     assert _installed_tool_names(installation[0]) == frozenset({"conftest"}), (
         "a Go module install must provision the module's final segment"
     )
+
+
+def test_a_lane_installing_one_tool_twice_differently_is_rejected() -> None:
+    """Conflicting duplicate installs are refused rather than silently ranked.
+
+    Keeping the first install would let a lane run a later version while the
+    cross-lane comparison judged the earlier command, so the two lanes would
+    read as agreeing while running different tools.
+    """
+    conflicting = Lane(
+        "synthetic.yml",
+        "conflicting",
+        {
+            "steps": [
+                {"run": "go install example.com/conftest@v0.52.0\n"},
+                {"run": "go install example.com/conftest@v0.53.0\n"},
+            ]
+        },
+    )
+    with pytest.raises(AssertionError, match="conflicting commands"):
+        _provisioning(conflicting)
+    agreeing = Lane(
+        "synthetic.yml",
+        "agreeing",
+        {
+            "steps": [
+                {"run": "go install example.com/conftest@v0.52.0\n"},
+                {"run": "go install example.com/conftest@v0.52.0\n"},
+            ]
+        },
+    )
+    assert _provisioning(agreeing) == {
+        "conftest": ("go", "install", "example.com/conftest@v0.52.0")
+    }
 
 
 def test_a_job_that_does_not_run_the_suite_is_not_a_lane() -> None:

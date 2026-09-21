@@ -100,6 +100,24 @@ supported interpreters therefore fails only on `main`; `concordat.rules`
 probes the filesystem through `concordat/rules/filesystem.py` for exactly
 this reason.
 
+### Filesystem applicability probes
+
+`concordat/rules/filesystem.py` holds `regular_file_exists(path, *,
+operation)`, the single probe behind every applicability decision that asks
+whether a file is present. It returns `False` for an absent path and for a
+path that exists but is not a regular file, and raises `OperationalRuleError`
+with the caller's `operation` identifier and the path as `resource` when the
+file exists but cannot be inspected. An unreadable file is never reported as
+an absent one, because absence is evidence that a rule does not apply while
+an inspection failure is evidence of nothing.
+
+Two callers use it. `concordat.rules.rust_surfaces.root_cargo_toml_exists`
+probes the root Cargo manifest under `resolve-rust-surfaces`, and
+`build_envelope` probes the root `Makefile` under `parse-makefile`. Do not
+call `Path.is_file` or `Path.exists` for applicability evidence: the
+`pathlib` probes conflate the two facts, and which failures they swallow
+differs between supported interpreters.
+
 ## Public runtime boundary
 
 `concordat.hello` is the public greeting entry point. At runtime it selects
