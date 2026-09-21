@@ -12,6 +12,7 @@ description: >-
 version: 0.1.0
 sensor:
   type: conftest
+  input: policy-input/rust-build-defaults
   policy: policy/
   tests:
     - policy/
