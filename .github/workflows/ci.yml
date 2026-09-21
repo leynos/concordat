@@ -9,6 +9,11 @@ on:  # yamllint disable-line rule:truthy
 jobs:
   lint-test:
     runs-on: ubuntu-latest
+    # The job checks out, installs pinned tools, and runs the gates. Nothing
+    # it does writes to the repository, so the token is read-only rather than
+    # whatever the repository or organisation default happens to be.
+    permissions:
+      contents: read
     env:
       TOFU_VERSION: "1.10.7"
       # `make check-fmt` runs `mdtablefix --check --git`; 0.6.0 is the first
