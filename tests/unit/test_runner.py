@@ -530,15 +530,23 @@ class TestRulePackagesDirIsLazy:
         `_resolve_rule_packages_dir`: reloading re-defines the module's own
         functions, so a patch on the module would be discarded before the
         module body ran and the test could not fail.
+
+        `packages` is reloaded as well as `runner`, and first. The lookup now
+        lives there, and reloading `runner` alone reuses the already-imported
+        `packages`, so its module body never runs again and an eager lookup
+        added to it would go unseen.
         """
         files = mocker.patch("importlib.resources.files", autospec=True)
         packages._rule_packages_dir.cache_clear()
 
+        importlib.reload(packages)
         importlib.reload(runner)
 
-        assert not hasattr(runner, "RULE_PACKAGES_DIR"), (
-            "an eagerly resolved module constant resolves the tree at import"
-        )
+        for module in (packages, runner):
+            assert not hasattr(module, "RULE_PACKAGES_DIR"), (
+                f"an eagerly resolved constant in {module.__name__} resolves "
+                "the tree at import"
+            )
         files.assert_not_called()
 
     def test_the_resolver_runs_when_a_package_is_looked_up(

@@ -144,13 +144,16 @@ def rule_package_dir(rule_id: str) -> pathlib.Path:
     return rule_dir
 
 
-def rule_manifest(rule_dir: pathlib.Path) -> dict[str, typ.Any]:
+def rule_manifest(rule_dir: pathlib.Path) -> dict[str, object]:
     """Return the rule package's parsed manifest, or an empty mapping.
 
     Returns
     -------
-    dict[str, typ.Any]
-        The parsed `rule.yaml`, or `{}` when the package ships none.
+    dict[str, object]
+        The parsed `rule.yaml`, or `{}` when the package ships none. Values
+        are narrowed by each caller after its own shape check rather than
+        handed out as `Any`, which would let a malformed manifest reach the
+        policy as if it were valid.
 
     Raises
     ------
@@ -176,10 +179,10 @@ def rule_manifest(rule_dir: pathlib.Path) -> dict[str, typ.Any]:
             operation="load-rule-manifest",
             resource=manifest_path,
         )
-    return typ.cast("dict[str, typ.Any]", manifest)
+    return typ.cast("dict[str, object]", manifest)
 
 
-def rule_parameters(rule_dir: pathlib.Path) -> dict[str, typ.Any]:
+def rule_parameters(rule_dir: pathlib.Path) -> dict[str, object]:
     """Return the rule manifest's parameter defaults.
 
     The policies read their tunables from ``data.parameters``; without this
@@ -191,7 +194,7 @@ def rule_parameters(rule_dir: pathlib.Path) -> dict[str, typ.Any]:
 
     Returns
     -------
-    dict[str, typ.Any]
+    dict[str, object]
         Parameter defaults declared by the rule manifest.
     """
     parameters = rule_manifest(rule_dir).get("parameters")
@@ -200,7 +203,7 @@ def rule_parameters(rule_dir: pathlib.Path) -> dict[str, typ.Any]:
     defaults = typ.cast("dict[str, object]", parameters).get("defaults")
     if not isinstance(defaults, dict):
         return {}
-    return dict(typ.cast("dict[str, typ.Any]", defaults))
+    return dict(typ.cast("dict[str, object]", defaults))
 
 
 def _makefile_envelope(

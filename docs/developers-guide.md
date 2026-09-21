@@ -392,8 +392,15 @@ The split is by question asked. `packages.py` answers three about a rule
 package without evaluating one: where its policy lives, what its manifest
 declares, and which policy-input envelope it is audited over. `runner.py`
 answers the fourth, what Conftest made of that envelope, and imports the rest.
-A test that substitutes a resolver or a packages root patches `packages`, where
-the name is defined, rather than `runner`, which only imports it.
+Where a test patches depends on what it is testing, and the answer is not
+simply "where the name is defined". `runner` imports `rule_package_dir` and
+`rule_parameters` into its own bindings, so a test of how `runner` uses them
+patches `runner._rule_package_dir` or `runner._rule_parameters`; patching
+`packages` leaves `runner`'s bindings pointing at the originals. `run_rule`
+captures `default_envelope_builder` as a default argument at definition time,
+so substituting the resolver means passing `envelope_builder=` rather than
+patching either module. Patch `packages` when testing the package helpers
+themselves, including the mappings and the manifest reader.
 
 ### The policy envelope
 

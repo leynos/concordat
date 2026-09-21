@@ -282,6 +282,14 @@ filesystem failure, the command exits `2` and names the path rather than
 reporting the checkout as having no Rust surface or no Makefile. Only a genuine
 absence produces the no-applicability result.
 
+A rule package the command cannot choose a policy input for is one of those
+operational failures, not a finding. Every shipped package either has a
+built-in input or declares one as `sensor.input` in its `rule.yaml`; a package
+with neither is refused, with the registered packages and the declarable kinds
+named in the message. There is no fallback, because a policy handed an envelope
+of the wrong shape does not fail — it answers confidently about facts it was
+never asked about, and that reaches you as a verdict rather than an error.
+
 For Rust below the repository root, declare each `Cargo.toml` in `.concordat`
 under `language.rust.surfaces`. The declaration is authoritative; an empty list
 states that no Rust surface is governed, while an absent declaration retains

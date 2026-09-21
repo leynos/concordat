@@ -1,4 +1,20 @@
-"""Evaluate a canon lint rule package against a local checkout."""
+"""Evaluate a canon lint rule package against a local checkout.
+
+The command's own steps, in order: confirm the checkout is a directory,
+obtain the policy input through `packages.default_envelope_builder` or an
+injected `EnvelopeResolver`, invoke Conftest over it, validate what Conftest
+returned, reduce the failures to findings and one verdict, and render them.
+
+The neighbouring modules own the rest. `packages` answers everything about a
+rule package that is not its evaluation: where its policy lives, what its
+manifest declares, and which envelope kind it is audited over. `envelope`
+builds those envelopes from a checkout.
+
+Conftest's output is treated as untrusted. Only exit 0 and 1 describe an
+evaluated policy, and a result document of the wrong shape is an operational
+failure rather than an empty finding set, because a clean-looking answer from
+a run that did not happen is the one result this command must never give.
+"""
 
 from __future__ import annotations
 

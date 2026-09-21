@@ -10,10 +10,12 @@ for everything else.
 
 from __future__ import annotations
 
+import pathlib
 import typing as typ
 
 import pytest
 
+from concordat import cli
 from concordat.errors import OperationalRuleError
 from concordat.rules import packages, runner
 from concordat.rules.envelope import (
@@ -23,7 +25,6 @@ from concordat.rules.envelope import (
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
-    import pathlib
 
 CARGO: typ.Final = '[package]\nname = "fixture"\nversion = "0.1.0"\n'
 
@@ -260,3 +261,182 @@ def test_the_makefile_adapter_ignores_parameters(
     assert with_parameters == without, (
         "the Makefile envelope does not vary with parameters"
     )
+
+
+def _package_tree(
+    root: pathlib.Path,
+    name: str,
+    manifest: str,
+) -> pathlib.Path:
+    """Write a rule package under *root* with *manifest* as its `rule.yaml`.
+
+    A real directory and a real manifest, so the manifest reader under test is
+    the shipped one rather than a substitute for it.
+
+    Returns
+    -------
+    pathlib.Path
+        The written package directory.
+    """
+    package = root / name
+    (package / "policy").mkdir(parents=True)
+    (package / "rule.yaml").write_text(manifest, encoding="utf-8")
+    return package
+
+
+@pytest.fixture
+def package_root(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> cabc.Iterator[pathlib.Path]:
+    """Point the package resolver at a temporary tree for one test."""
+    root = tmp_path / "lint-rules"
+    root.mkdir()
+    monkeypatch.setattr(packages, "_resolve_rule_packages_dir", lambda: root)
+    packages._rule_packages_dir.cache_clear()
+    yield root
+    packages._rule_packages_dir.cache_clear()
+
+
+class TestAgainstRealManifests:
+    """The manifest routes, driven through files rather than substitutes."""
+
+    def test_a_real_declaration_selects_the_envelope(
+        self,
+        checkout: pathlib.Path,
+        package_root: pathlib.Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The documented route, with nothing about it stubbed out.
+
+        Only the identifier mapping is emptied. The manifest reader, the
+        `rule.yaml` and the kind mapping are the shipped ones, so this fails
+        if a real declaration does not in fact reach a builder.
+        """
+        _package_tree(
+            package_root,
+            "declared-only",
+            "schema_version: 1\nid: declared-only\nsensor:\n"
+            f"  type: conftest\n  input: {BUILD_DEFAULTS_ENVELOPE_KIND}\n",
+        )
+        monkeypatch.setattr(packages, "PACKAGE_ENVELOPE_BUILDERS", {})
+
+        envelope = packages.default_envelope_builder("declared-only", checkout)
+
+        assert envelope["kind"] == BUILD_DEFAULTS_ENVELOPE_KIND, (
+            f"a declared kind must select its builder, got {envelope['kind']!r}"
+        )
+
+    def test_a_real_package_declaring_nothing_is_refused(
+        self,
+        checkout: pathlib.Path,
+        package_root: pathlib.Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The refusal, likewise driven through a manifest that declares none."""
+        _package_tree(
+            package_root,
+            "declares-nothing",
+            "schema_version: 1\nid: declares-nothing\nsensor:\n  type: conftest\n",
+        )
+        monkeypatch.setattr(packages, "PACKAGE_ENVELOPE_BUILDERS", {})
+
+        with pytest.raises(OperationalRuleError) as excinfo:
+            packages.default_envelope_builder("declares-nothing", checkout)
+
+        assert "declares-nothing" in str(excinfo.value), (
+            f"the refusal must name the package, got {excinfo.value!s}"
+        )
+
+
+class TestTheCommandRefuses:
+    """The operator's view: an exit status and a diagnostic, not a verdict.
+
+    `run_rule` raising is only half the guarantee. What an operator runs is
+    the command, and a refusal that reached them as a clean exit and an empty
+    table would be indistinguishable from a compliant audit.
+    """
+
+    def test_the_command_exits_two_with_the_reason_and_no_verdict(
+        self,
+        checkout: pathlib.Path,
+        package_root: pathlib.Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Exit 2, the reason on standard error, and nothing on standard out."""
+        _package_tree(
+            package_root,
+            "declares-nothing",
+            "schema_version: 1\nid: declares-nothing\nsensor:\n  type: conftest\n",
+        )
+        monkeypatch.setattr(packages, "PACKAGE_ENVELOPE_BUILDERS", {})
+
+        exit_code = cli.main([
+            "artefact",
+            "rule",
+            "run",
+            "declares-nothing",
+            "--repo",
+            str(checkout),
+        ])
+
+        captured = capsys.readouterr()
+        assert exit_code == 2, (
+            f"an operational failure exits 2, not {exit_code}; "
+            "1 would read as a finding and 0 as a clean audit"
+        )
+        assert "declares-nothing" in captured.err, (
+            f"the reason belongs on standard error, got {captured.err!r}"
+        )
+        for verdict in ("compliant", "noncompliant", "indeterminate"):
+            assert verdict not in captured.out, (
+                f"a refused audit must print no verdict, got {captured.out!r}"
+            )
+
+
+class TestManifestReading:
+    """`rule_manifest` is a boundary, so its failures are part of the contract."""
+
+    def test_a_package_without_a_manifest_reads_as_empty(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """An absent manifest is not a malformed one."""
+        assert packages.rule_manifest(tmp_path) == {}, (
+            "a package shipping no rule.yaml declares nothing"
+        )
+
+    def test_malformed_yaml_is_an_operational_failure(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A manifest that cannot be parsed must not read as declaring nothing."""
+        (tmp_path / "rule.yaml").write_text("id: [unclosed\n", encoding="utf-8")
+        with pytest.raises(OperationalRuleError) as excinfo:
+            packages.rule_manifest(tmp_path)
+        assert excinfo.value.operation == "load-rule-manifest", (
+            "the failure needs a stable operation identifier for automation"
+        )
+
+    def test_a_manifest_that_is_not_a_mapping_is_refused(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Valid YAML of the wrong shape is still a manifest nobody can read."""
+        (tmp_path / "rule.yaml").write_text("- one\n- two\n", encoding="utf-8")
+        with pytest.raises(OperationalRuleError) as excinfo:
+            packages.rule_manifest(tmp_path)
+        assert "not a mapping" in str(excinfo.value), (
+            f"the diagnostic should say what was wrong, got {excinfo.value!s}"
+        )
+
+    def test_an_unreadable_manifest_is_an_operational_failure(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A refusal to read is reported, never treated as an absent manifest."""
+        (tmp_path / "rule.yaml").write_text("id: x\n", encoding="utf-8")
+
+        def refuse(*_args: object, **_kwargs: object) -> str:
+            message = "Permission denied"
+            raise PermissionError(13, message)
+
+        monkeypatch.setattr(pathlib.Path, "read_text", refuse)
+        with pytest.raises(OperationalRuleError):
+            packages.rule_manifest(tmp_path)
