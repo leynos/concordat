@@ -24,6 +24,9 @@ from concordat.errors import OperationalRuleError
 from .jsonc import JsoncError, loads_jsonc
 from .makefile_facts import MakeutilReport, inspect_makefile
 
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
 ENVELOPE_SCHEMA_VERSION: typ.Final = 1
 ENVELOPE_KIND: typ.Final = "policy-input/markdown-formatting-baseline"
 
@@ -64,6 +67,8 @@ OPERATION_READ_MARKDOWNLINT_CONFIG: typ.Final = "read-markdownlint-config"
 OPERATION_READ_WORKFLOW: typ.Final = "read-workflow"
 OPERATION_SCAN_MARKDOWN: typ.Final = "scan-markdown-files"
 OPERATION_RESOLVE_CHECKOUT: typ.Final = "resolve-checkout"
+OPERATION_LIST_WORKFLOWS: typ.Final = "list-workflows"
+OPERATION_PROBE_PATH: typ.Final = "probe-path"
 OPERATION_READ_MAKEFILE: typ.Final = "read-makefile"
 
 _yaml = YAML(typ="safe")
@@ -156,7 +161,7 @@ def _within_checkout(root: pathlib.Path, path: pathlib.Path, operation: str) -> 
     OperationalRuleError
         If the path exists but resolves outside the checkout.
     """
-    if not path.exists():
+    if not _probe(path.exists, path, operation):
         return False
     try:
         resolved = path.resolve(strict=True)
@@ -172,6 +177,36 @@ def _within_checkout(root: pathlib.Path, path: pathlib.Path, operation: str) -> 
         "refusing to read a policy input from outside the audited tree"
     )
     raise OperationalRuleError(message, operation=operation, resource=path)
+
+
+def _probe(
+    predicate: cabc.Callable[[], bool], path: pathlib.Path, operation: str
+) -> bool:
+    """Return the result of a `pathlib` existence test, or raise.
+
+    `Path.is_file`, `Path.is_dir`, and `Path.exists` answer ``False`` for an
+    unreadable path as readily as for an absent one. An audit that cannot
+    stat its own inputs must say so rather than record their absence, so the
+    few `OSError`s those methods do propagate, and any they would swallow on
+    a future Python, are translated here.
+
+    Returns
+    -------
+    bool
+        The predicate's answer for *path*.
+
+    Raises
+    ------
+    OperationalRuleError
+        If the path cannot be examined.
+    """
+    try:
+        return predicate()
+    except OSError as error:
+        message = f"cannot examine {path}: {error}"
+        raise OperationalRuleError(
+            message, operation=operation, resource=path
+        ) from error
 
 
 def _raise_walk_error(error: OSError) -> typ.NoReturn:
@@ -216,9 +251,9 @@ def _has_markdown_files(checkout: pathlib.Path) -> bool:
             candidate = pathlib.Path(root) / name
             if candidate.suffix.lower() not in MARKDOWN_SUFFIXES:
                 continue
-            if not candidate.is_file():
+            if not _probe(candidate.is_file, candidate, OPERATION_SCAN_MARKDOWN):
                 continue
-            if candidate.is_symlink():
+            if _probe(candidate.is_symlink, candidate, OPERATION_SCAN_MARKDOWN):
                 continue
             return True
     return False
@@ -267,7 +302,7 @@ def _load_markdownlint_config(
     path = checkout / MARKDOWNLINT_CONFIG_FILENAME
     if not _within_checkout(root, path, OPERATION_READ_MARKDOWNLINT_CONFIG):
         return None
-    if not path.is_file():
+    if not _probe(path.is_file, path, OPERATION_READ_MARKDOWNLINT_CONFIG):
         return None
     fact: MarkdownlintConfig = {
         "path": MARKDOWNLINT_CONFIG_FILENAME,
@@ -287,8 +322,22 @@ def _load_markdownlint_config(
 
 
 def _alternate_configs(checkout: pathlib.Path) -> list[str]:
-    """Return the other markdownlint configuration file names present."""
-    return [name for name in ALTERNATE_CONFIG_FILENAMES if (checkout / name).is_file()]
+    """Return the other markdownlint configuration file names present.
+
+    An `OperationalRuleError` propagates if one of the candidate paths cannot
+    be examined.
+
+    Returns
+    -------
+    list[str]
+        The alternate configuration file names the checkout carries.
+    """
+    present: list[str] = []
+    for name in ALTERNATE_CONFIG_FILENAMES:
+        candidate = checkout / name
+        if _probe(candidate.is_file, candidate, OPERATION_PROBE_PATH):
+            present.append(name)
+    return present
 
 
 def _json_safe(value: object) -> object:
@@ -339,16 +388,29 @@ def _load_workflows(checkout: pathlib.Path, root: pathlib.Path) -> list[Workflow
     -------
     list[WorkflowFile]
         One fact per workflow file, ordered by file name.
+
+    Raises
+    ------
+    OperationalRuleError
+        If the workflows directory exists but cannot be listed.
     """
     directory = checkout / WORKFLOWS_DIRECTORY
     if not _within_checkout(root, directory, OPERATION_READ_WORKFLOW):
         return []
-    if not directory.is_dir():
+    if not _probe(directory.is_dir, directory, OPERATION_LIST_WORKFLOWS):
         return []
+    try:
+        entries = sorted(directory.iterdir(), key=lambda entry: entry.name)
+    except OSError as error:
+        message = f"cannot list {directory}: {error}"
+        raise OperationalRuleError(
+            message, operation=OPERATION_LIST_WORKFLOWS, resource=directory
+        ) from error
     return [
         _load_workflow(checkout, root, WORKFLOWS_DIRECTORY / entry.name)
-        for entry in sorted(directory.iterdir(), key=lambda entry: entry.name)
-        if entry.is_file() and entry.suffix in WORKFLOW_SUFFIXES
+        for entry in entries
+        if _probe(entry.is_file, entry, OPERATION_LIST_WORKFLOWS)
+        and entry.suffix in WORKFLOW_SUFFIXES
     ]
 
 
@@ -370,10 +432,11 @@ def build_markdown_envelope(checkout: pathlib.Path) -> MarkdownEnvelope:
         The policy input document assembled from the checkout.
     """
     root = _resolved_root(checkout)
+    workflows_dir = checkout / WORKFLOWS_DIRECTORY
     makefile_path = checkout / "Makefile"
     makefile_report: MakeutilReport | None = None
-    if _within_checkout(root, makefile_path, OPERATION_READ_MAKEFILE) and (
-        makefile_path.is_file()
+    if _within_checkout(root, makefile_path, OPERATION_READ_MAKEFILE) and _probe(
+        makefile_path.is_file, makefile_path, OPERATION_READ_MAKEFILE
     ):
         makefile_report = inspect_makefile(makefile_path).report
     markdownlint = _load_markdownlint_config(checkout, root)
@@ -385,7 +448,9 @@ def build_markdown_envelope(checkout: pathlib.Path) -> MarkdownEnvelope:
             "markdown_files": _has_markdown_files(checkout),
             "root_makefile": makefile_report is not None,
             "markdownlint_config": markdownlint is not None,
-            "workflows_dir": (checkout / WORKFLOWS_DIRECTORY).is_dir(),
+            "workflows_dir": _probe(
+                workflows_dir.is_dir, workflows_dir, OPERATION_PROBE_PATH
+            ),
         },
         "makefile": makefile_report,
         "markdownlint": markdownlint,

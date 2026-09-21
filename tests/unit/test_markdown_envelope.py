@@ -372,6 +372,27 @@ class TestSymlinkedPolicyInputs:
 class TestUnlistableDirectories:
     """A directory the scan cannot read is an audit failure, not an absence."""
 
+    def test_unlistable_workflows_directory_is_operational(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A workflows directory that exists but cannot be listed raises.
+
+        Returning an empty list would record a checkout with no workflows,
+        and PD-006 would then report that CI does not lint Markdown for a
+        repository whose workflows the audit never managed to read.
+        """
+        checkout = tmp_path / "checkout"
+        workflows = checkout / ".github" / "workflows"
+        workflows.mkdir(parents=True)
+        (workflows / "ci.yml").write_text("on: push\n", encoding="utf-8")
+        (checkout / "README.md").write_text("# Hi\n", encoding="utf-8")
+        workflows.chmod(0o000)
+        try:
+            with pytest.raises(OperationalRuleError, match="cannot list"):
+                build_markdown_envelope(checkout)
+        finally:
+            workflows.chmod(0o755)
+
     def test_unlistable_directory_stops_the_scan(self, tmp_path: pathlib.Path) -> None:
         """`os.walk` swallows errors; the builder must not inherit that.
 
