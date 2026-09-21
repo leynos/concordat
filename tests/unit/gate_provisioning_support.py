@@ -70,6 +70,10 @@ _INSTALLERS: typ.Final = frozenset({
 })
 _ENVIRONMENT_PREFIX: typ.Final = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*", re.DOTALL)
 
+# The shell control operators that separate one simple command from the
+# next. A suite run or an install may follow any of them.
+_OPERATOR_CHARACTERS: typ.Final = frozenset({"&", "|", ";"})
+
 # The action that must precede a `go install`, since the publisher has no Go
 # toolchain of its own.
 GO_SETUP_ACTION: typ.Final = "actions/setup-go@"
@@ -134,8 +138,63 @@ def required_tools() -> frozenset[str]:
     )
 
 
+def split_compound(line: str) -> tuple[str, ...]:
+    """Split one shell line at its unquoted control operators.
+
+    A workflow step may chain commands with ``&&``, ``||``, ``;`` or a pipe,
+    and the suite or an install may sit after any of them. Splitting is done
+    on the raw text rather than on tokens, because a quoted ``"&&"`` is an
+    argument and tokenizing first would make the two indistinguishable.
+
+    Parameters
+    ----------
+    line:
+        One physical line of a step's ``run`` body.
+
+    Returns
+    -------
+        The line's segments, each of which is one simple command.
+    """
+    segments: list[str] = []
+    current: list[str] = []
+    quote: str | None = None
+    index = 0
+    while index < len(line):
+        character = line[index]
+        if quote is None and character == "\\":
+            current.append(line[index : index + 2])
+            index += 2
+            continue
+        if quote is not None:
+            current.append(character)
+            if character == "\\" and quote == '"':
+                current.append(line[index + 1 : index + 2])
+                index += 2
+                continue
+            if character == quote:
+                quote = None
+            index += 1
+            continue
+        if character in "'\"":
+            quote = character
+            current.append(character)
+            index += 1
+            continue
+        if character in _OPERATOR_CHARACTERS:
+            segments.append("".join(current))
+            current = []
+            # Consume a doubled operator whole, so `&&` does not leave an `&`.
+            while index < len(line) and line[index] in _OPERATOR_CHARACTERS:
+                index += 1
+            continue
+        current.append(character)
+        index += 1
+    segments.append("".join(current))
+    return tuple(segment for segment in (s.strip() for s in segments) if segment)
+
+
 def commands(script: str) -> tuple[tuple[str, ...], ...]:
-    """Return the shell-like token tuples of each line of a ``run`` script.
+    """Return the shell-like token tuples of each command in a ``run`` script.
 
     Parameters
     ----------
@@ -144,8 +203,8 @@ def commands(script: str) -> tuple[tuple[str, ...], ...]:
 
     Returns
     -------
-        One token tuple per logical command line, with continuations joined
-        and comments discarded.
+        One token tuple per simple command, with continuations joined,
+        comments discarded and control operators split on.
     """
     joined = script.replace("\\\n", " ")
     commands: list[tuple[str, ...]] = []
@@ -153,14 +212,16 @@ def commands(script: str) -> tuple[tuple[str, ...], ...]:
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
-        try:
-            tokens = tuple(shlex.split(stripped, comments=True))
-        except ValueError:
-            # An unbalanced quote is not this contract's concern; a step that
-            # cannot be tokenized provisions nothing it can claim credit for.
-            continue
-        if tokens:
-            commands.append(tokens)
+        for segment in split_compound(stripped):
+            try:
+                tokens = tuple(shlex.split(segment, comments=True))
+            except ValueError:
+                # An unbalanced quote is not this contract's concern; a step
+                # that cannot be tokenized provisions nothing it can claim
+                # credit for.
+                continue
+            if tokens:
+                commands.append(tokens)
     return tuple(commands)
 
 
@@ -377,6 +438,33 @@ def provisioning_positions(lane: Lane) -> dict[str, int]:
         for name in installed_tool_names(command):
             positions[name] = index
     return positions
+
+
+def late_installs(lane: Lane, needed: typ.AbstractSet[str]) -> dict[str, int]:
+    """Return the needed tools a lane installs no earlier than the suite step.
+
+    Equality counts as late. Two commands in one step have an order the step
+    list cannot show, so a contract that cannot tell whether the install ran
+    first should not say that it did.
+
+    Parameters
+    ----------
+    lane:
+        The suite-running job to read.
+    needed:
+        The tools the suite requires on `PATH`.
+
+    Returns
+    -------
+        A mapping from tool name to the step index of its last install, for
+        every needed tool installed at or after the suite step.
+    """
+    suite_index = suite_step_index(lane)
+    return {
+        tool: position
+        for tool, position in provisioning_positions(lane).items()
+        if tool in needed and position >= suite_index
+    }
 
 
 def provisioning(lane: Lane) -> dict[str, tuple[str, ...]]:

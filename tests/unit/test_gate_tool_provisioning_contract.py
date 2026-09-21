@@ -49,9 +49,9 @@ from tests.unit.gate_provisioning_support import (
     installed_tool_names,
     installer_program,
     job_steps,
+    late_installs,
     make_prerequisites,
     provisioning,
-    provisioning_positions,
     required_tools,
     run_make_target,
     shell_commands,
@@ -110,20 +110,20 @@ def test_every_tool_is_installed_before_the_suite_runs() -> None:
     """Installing a tool after the gate is the same as not installing it.
 
     Provisioning judged only by name passes for a lane that installs Conftest
-    after the coverage step, which fails exactly as the publisher did.
+    after the coverage step, which fails exactly as the publisher did. An
+    install in the *same* step as the suite is refused too: whether it runs
+    before or after cannot be read from the step list, and a contract that
+    cannot tell should not say yes.
     """
     needed = required_tools()
     late = {}
     for lane in suite_lanes():
-        suite_index = suite_step_index(lane)
-        positions = provisioning_positions(lane)
-        overdue = {
-            tool: position
-            for tool, position in positions.items()
-            if tool in needed and position > suite_index
-        }
+        overdue = late_installs(lane, needed)
         if overdue:
-            late[str(lane)] = {"suite step": suite_index, "installed at": overdue}
+            late[str(lane)] = {
+                "suite step": suite_step_index(lane),
+                "installed at": overdue,
+            }
     assert not late, (
         "every required tool must be installed before the step that runs the "
         f"suite; these lanes install one too late: {late}"
@@ -139,23 +139,30 @@ def test_a_go_install_is_preceded_by_the_shared_go_setup() -> None:
     """
     setups: dict[str, str] = {}
     for lane in suite_lanes():
-        uses_go = any(
-            installer_program(command) == "go" and installed_tool_names(command)
-            for _, command in shell_commands(lane)
-        )
-        if not uses_go:
+        go_installs = [
+            index
+            for index, command in shell_commands(lane)
+            if installer_program(command) == "go" and installed_tool_names(command)
+        ]
+        if not go_installs:
             continue
-        references = [
-            uses
-            for step in job_steps(lane.job, subject=str(lane))
+        references = {
+            index: uses
+            for index, step in enumerate(job_steps(lane.job, subject=str(lane)))
             if isinstance(uses := step.get("uses"), str)
             and uses.startswith(GO_SETUP_ACTION)
-        ]
+        }
         assert references, (
             f"{lane} installs with Go but never runs {GO_SETUP_ACTION}, so "
             "the install has no toolchain to run under"
         )
-        setups[str(lane)] = references[0]
+        earliest_setup = min(references)
+        assert earliest_setup < min(go_installs), (
+            f"{lane} sets Go up at step {earliest_setup}, after its first Go "
+            f"install at step {min(go_installs)}; the install would run "
+            "without a toolchain"
+        )
+        setups[str(lane)] = references[earliest_setup]
     assert setups, (
         "no lane was found installing with Go, so the agreement assertion "
         "below would pass vacuously"

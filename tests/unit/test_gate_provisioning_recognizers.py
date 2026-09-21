@@ -25,7 +25,9 @@ from tests.unit.gate_provisioning_support import (
     commands,
     installed_tool_names,
     job_runs_the_suite,
+    late_installs,
     provisioning,
+    split_compound,
 )
 
 # metacharacters and variable sigils the extractors deliberately ignore, so a
@@ -245,4 +247,77 @@ def test_a_job_that_does_not_run_the_suite_is_not_a_lane() -> None:
     }
     assert job_runs_the_suite(suite_job, subject="synthetic suite job"), (
         "a job whose step runs `make test` runs the suite"
+    )
+
+
+def test_a_compound_line_is_read_as_its_separate_commands() -> None:
+    """A step may chain commands, and the suite may follow any operator.
+
+    Reading one command per physical line hides a suite run or an install
+    behind `&&`, `;` or a pipe. The lane is then never enumerated and its
+    provisioning is never judged, which fails open.
+    """
+    for script in (
+        "uv sync && make test\n",
+        "make build; make test\n",
+        "make test | tee coverage.log\n",
+        "false || make test\n",
+    ):
+        assert job_runs_the_suite(
+            {"steps": [{"run": script}]}, subject="compound job"
+        ), f"{script.strip()!r} runs the suite after a control operator"
+    chained = commands("go install example.com/first@v1 && go install b/second@v2\n")
+    installed = {name for command in chained for name in installed_tool_names(command)}
+    assert installed == {"first", "second"}, (
+        f"both installs in a chained line must be recognized; found {installed}"
+    )
+
+
+def test_a_quoted_operator_is_an_argument_not_a_separator() -> None:
+    """Splitting reads the text, so a quoted operator stays in its command.
+
+    Tokenizing first would make a quoted ``&&`` indistinguishable from the
+    control operator, and every argument that spells one would silently
+    become a second command the lane never runs.
+    """
+    assert split_compound('echo "a && b"') == ('echo "a && b"',), (
+        "a double-quoted operator is an argument"
+    )
+    assert split_compound("echo 'x ; y'") == ("echo 'x ; y'",), (
+        "a single-quoted operator is an argument"
+    )
+    assert split_compound("echo a\\&& echo b") == ("echo a\\&", "echo b"), (
+        "an escaped operator stays in its command, and the unescaped one "
+        "after it separates"
+    )
+
+
+def test_an_install_in_the_suite_step_counts_as_late() -> None:
+    """A step that installs and runs the suite has an unreadable order.
+
+    Its two commands could run either way round, and the step list cannot
+    say which. Accepting it would let a lane install Conftest after the
+    suite in the same script and still pass, which is the publisher's own
+    failure with one fewer step.
+    """
+    same_step = Lane(
+        "synthetic.yml",
+        "same-step",
+        {"steps": [{"run": "make test\ngo install example.com/conftest@v0.52.0\n"}]},
+    )
+    assert late_installs(same_step, {"conftest"}) == {"conftest": 0}, (
+        "an install in the step that runs the suite must be reported as late"
+    )
+    earlier = Lane(
+        "synthetic.yml",
+        "earlier",
+        {
+            "steps": [
+                {"run": "go install example.com/conftest@v0.52.0\n"},
+                {"run": "make test\n"},
+            ]
+        },
+    )
+    assert late_installs(earlier, {"conftest"}) == {}, (
+        "an install in an earlier step is not late"
     )
