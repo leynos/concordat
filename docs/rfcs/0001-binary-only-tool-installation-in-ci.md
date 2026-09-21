@@ -326,8 +326,9 @@ directions.
 The fixtures above are examples, and two predicates in this family are
 comparators over an unbounded input space, so each also carries a Hypothesis
 property test written from this document rather than from the implementation,
-in the discipline the developers' guide sets for `tests/unit/test_properties.py`
-(a property that restates the implementation's pattern proves nothing).
+in the discipline the developers' guide sets for
+`tests/unit/test_properties.py` (a property that restates the implementation's
+pattern proves nothing).
 
 - **The pin-form predicate (TA-003).** Over generated references: acceptance is
   total, so every generated string yields a verdict and none raises; a

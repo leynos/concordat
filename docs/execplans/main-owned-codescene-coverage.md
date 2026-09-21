@@ -305,5 +305,5 @@ independent branch. Real-repository evidence made reusable workflow calls
 indeterminate, preserving the plan's three-valued classification requirement.
 
 2026-09-16: Both independent branches were pushed and opened as draft pull
-requests #175 and #176. The implementation objective is complete; hosted
-checks continue independently of this plan.
+requests #175 and #176. The implementation objective is complete; hosted checks
+continue independently of this plan.

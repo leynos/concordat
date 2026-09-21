@@ -26,14 +26,15 @@ the pinned PyPy shim. A separate CPython 3.14 invocation loads every diagnostic
 from the `df12-python-lints` pin, while retaining Concordat's Python 3.13
 semantic baseline for version-gated checks. `ambrleaks`, provisioned from the
 same immutable release, scans the test tree for unredacted values in Syrupy
-snapshots. The spelling subtarget runs the shared `typos-config-builder`
-gate, which regenerates `typos.toml` from the live shared dictionary and the
-`typos.local.toml` overlay before checking en-GB-oxendict spelling; because
-the dictionary is live, `typos.toml` is never drift checked in continuous
+snapshots. The spelling subtarget runs the shared `typos-config-builder` gate,
+which regenerates `typos.toml` from the live shared dictionary and the
+`typos.local.toml` overlay before checking en-GB-oxendict spelling; because the
+dictionary is live, `typos.toml` is never drift checked in continuous
 integration. Finally, the blocking Skylos 4.33.2 dead-code scan covers only the
-production `concordat` and `scripts` packages and excludes `tests`, so test-only
-references do not keep production symbols live. The separate df12 process
-prevents its CPython dependency from changing the PyPy-backed Pylint baseline.
+production `concordat` and `scripts` packages and excludes `tests`, so
+test-only references do not keep production symbols live. The separate df12
+process prevents its CPython dependency from changing the PyPy-backed Pylint
+baseline.
 
 Treat each Skylos report as a dead-code candidate. Remove confirmed dead code.
 For a verified dynamic runtime entry point, add a precise rule in
@@ -56,6 +57,50 @@ The Makefile uses `$(SKYLOS_CLI)` only for subcommands and keeps scan-only
 options such as `--config-file` in `$(SKYLOS)`. This keeps
 `skylos whitelist <symbol> --reason <reason>` in the command order that Skylos
 requires.
+
+### Markdown formatting and linting
+
+`make fmt` and `make check-fmt` call the two Markdown tools directly. The
+`mdformat-all` wrapper is gone: it hid both tools behind a script whose flags
+no audit could read, and `markdown-formatting-baseline` (PD-003, PD-004)
+forbids it estate-wide.
+
+Two tools must be on `PATH` before either target runs:
+
+- `mdtablefix` 0.6.0 or later. `--check` and `--git` first appear in that
+  release, and continuous integration installs exactly that version from
+  `MDTABLEFIX_VERSION` in `.github/workflows/ci.yml`. An older build accepts
+  neither flag and the recipe fails at once.
+- `markdownlint-cli2`, found through `MDLINT`. The variable probes `PATH`
+  first and falls back to the Bun install location, so a Bun-installed linter
+  needs no configuration.
+
+Both targets select their files the same way, through
+`MDTABLEFIX_SELECT = --git --include-untracked`. That is every Markdown file
+Git tracks, plus the untracked files Git does not ignore, so a document is
+formatted before it is ever staged and no hidden directory is missed. The
+earlier wrapper walked the tree with `fd` and silently skipped `.rules/`.
+`MDTABLEFIX_RULES` carries the formatting rules themselves (`--wrap`,
+`--renumber`, `--breaks`, `--ellipsis`, `--fences`) and is identical in both
+targets, so what `fmt` writes is what `check-fmt` accepts.
+
+`fmt` rewrites: `mdtablefix --in-place` then `markdownlint-cli2 --fix`.
+`check-fmt` verifies with `mdtablefix --check` and rewrites nothing. Running
+`--in-place` anywhere on the `check-fmt` path is itself a PD-002 finding,
+because a target asked to verify would be mutating the tree.
+
+`make markdownlint` runs the linter over `**/*.md` for the rule checks that
+`--fix` cannot repair. Continuous integration does not call it: PD-006 mandates
+that the only Markdown lint in a workflow is
+`DavidAnson/markdownlint-cli2-action` at a full commit SHA with
+`globs: '**/*.md'`. The action's release carries the linter's whole dependency
+graph, so nothing resolves from the npm registry at run time and Dependabot
+owns the pin. Both the local gate and the action read the repository's
+`.markdownlint-cli2.jsonc`, so the two lint the same files under the same rules.
+
+`tests/unit/test_repository_markdown_wiring.py` runs the shipped rule over this
+checkout, so a change to the `Makefile`, the markdownlint configuration, or the
+CI workflow that breaks the mandate fails in this repository's own test suite.
 
 ### Coverage workflow contract
 
