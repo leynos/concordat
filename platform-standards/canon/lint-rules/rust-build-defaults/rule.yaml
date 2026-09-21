@@ -1,0 +1,58 @@
+schema_version: 1
+id: rust-build-defaults
+name: Rust build defaults
+description: >-
+  Audits the auto-discovered `.cargo/config.toml` and the pinned toolchain
+  against the estate build standard: the parallel `rustc` frontend and the
+  mold linker as defaults (RT-017, RT-008), the `rustflags` sources held
+  equal so neither silently replaces the other (RT-018), and the Cranelift
+  codegen backend either configured for the development profile or refused
+  by a recorded, current exception (RT-009).
+  Audit-only: this rule declares no mutations.
+version: 0.1.0
+sensor:
+  type: conftest
+  policy: policy/
+  tests:
+    - policy/
+  data:
+    - fixtures/data.json
+parameters:
+  schema:
+    type: object
+    additionalProperties: false
+    properties:
+      threads_flag:
+        type: string
+        description: The parallel-frontend flag every rustflags source must carry.
+      linker_flag:
+        type: string
+        description: The linker flag the platform-specific source must add.
+      linker_platforms:
+        type: array
+        items:
+          type: string
+        description: >-
+          Platforms the linker flag is required on. An empty list makes the
+          linker clause inapplicable, for a repository that does not build
+          for any platform the linker ships on.
+      codegen_backend:
+        type: string
+        description: The codegen backend the development profile should select.
+      exception_documents:
+        type: array
+        items:
+          type: string
+        description: Documents scanned for a recorded codegen-backend exception.
+      exception_keyword:
+        type: string
+        description: The word an exception section's heading must contain.
+  defaults:
+    threads_flag: -Zthreads=8
+    linker_flag: -Clink-arg=-fuse-ld=mold
+    linker_platforms:
+      - linux
+    codegen_backend: cranelift
+    exception_documents:
+      - docs/developers-guide.md
+    exception_keyword: Cranelift

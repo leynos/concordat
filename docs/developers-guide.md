@@ -413,6 +413,51 @@ temporary checkout and records what `build_markdown_envelope` produces, so the
 checked-in envelopes are exactly the production builder's output;
 `tests/unit/test_markdown_fixture_generator.py` fails if they drift.
 
+### Choosing the envelope for a package
+
+A rule package reads the facts its checks need, and those differ. `run_rule`
+takes an `envelope_builder` resolver and calls whatever it is given;
+`default_envelope_builder` is the composition layer that maps a package to its
+builder and supplies the manifest parameters that builder needs.
+`PACKAGE_ENVELOPE_BUILDERS` is the read-only mapping it consults: a package
+named there supplies its own builder, and anything unnamed takes
+`build_envelope` above. Package selection therefore stays in one place, and a
+caller — a test included — substitutes a resolver rather than reaching into the
+mapping.
+
+`rust-build-defaults` is the first package to take its own. Its envelope
+(`build_build_defaults_envelope`) carries the facts Cargo and rustup
+auto-discover and no Makefile facts at all:
+
+- `cargo_config` — the `rustflags` sources Cargo would consult, each with its
+  normalized flags and whether it applies on Linux, only on Linux, or could not
+  be placed at all; every codegen-backend selection with the route that made
+  it; and the `[unstable]` gate. A configuration Cargo would refuse to load,
+  including a `rustflags` array with a non-string member, is reported as a
+  parse error rather than read around.
+- `toolchain` — the pinned channel and its classification, which decides
+  whether the nightly-only clauses apply.
+- `exceptions` — one scan per document declared by the rule's
+  `exception_documents` parameter, listing the sections whose heading names the
+  backend and the channel spellings each section's body contains.
+
+The reason it carries no Makefile facts is worth stating, because it looks like
+an omission: the standard is a default precisely because Cargo auto-discovers
+`.cargo/config.toml`, so a repository whose flags live behind an opt-in Make
+target has no such file and fails on that alone. Reading the Makefile would add
+no fact the policy decides anything from, and would make the rule unrunnable
+against any checkout the pinned `makeutil` cannot parse.
+
+### Absence is not a read failure
+
+`concordat/rules/fs_probe.py` exists because `Path.is_file()` answers "does not
+exist" and "the filesystem refused to say" with the same `False`. A rule fact
+built on that probe reports an unreadable checkout as a compliant absence,
+which is the one answer a fail-closed audit must never give by accident.
+`probe_file` separates the two: callers turn an absence into whatever their
+clause means by it, and a refusal into a fail-closed fact carrying the reason.
+Every new reader in the build-defaults envelope uses it.
+
 ### Tool dependencies
 
 Two external tools must be on `PATH`:
@@ -426,6 +471,19 @@ Two external tools must be on `PATH`:
 - **`conftest`** (`concordat/rules/runner.py`) — evaluates the envelope
   against the rule package's Rego policy, with a 60-second timeout
   (`CONFTEST_TIMEOUT`).
+
+### Running a package's own policy tests
+
+Each rule package ships a Conftest/Rego test file beside its policy, and those
+tests are where a clause's semantics are pinned. `make test` runs them:
+`tests/unit/test_lint_rule_policies.py` discovers every package with a
+`policy/` directory and invokes `conftest verify` over the package's
+`fixtures/data.json`. A guard test asserts the discovery finds the shipped
+packages, so the parametrization cannot pass over an empty list.
+
+Before that module existed nothing ran them. The continuous-integration policy
+step covers the OpenTofu policies alone, so every clause pinned by a lint-rule
+Rego test was pinned by a test that never executed.
 
 ### The `OperationalRuleError` contract
 

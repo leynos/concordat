@@ -1,0 +1,11 @@
+# Cargo selects a single rustflags source rather than merging them, so
+# every flag that must survive is repeated in each source.
+[build]
+rustflags = ["-Zthreads=8"]
+
+# The linker ships for Linux only, so the flag is gated behind a cfg.
+[target.'cfg(target_os = "linux")']
+rustflags = ["-Zthreads=8", "-Clink-arg=-fuse-ld=mold"]
+
+[target.'cfg(target_env = "gnu")']
+rustflags = ["-Zthreads=8"]

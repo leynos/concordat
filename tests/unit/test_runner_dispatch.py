@@ -117,7 +117,7 @@ class TestEnvelopeBuilder:
         package = _write_package(tmp_path, "locked-rule", "sensor:\n  type: conftest\n")
         package.chmod(0o000)
         try:
-            with pytest.raises(OperationalRuleError, match="cannot examine"):
+            with pytest.raises(OperationalRuleError, match="cannot read rule manifest"):
                 runner._envelope_builder(package)
         finally:
             package.chmod(0o755)

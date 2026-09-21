@@ -89,10 +89,10 @@ EXPECTED_PROFILES: typ.Final[dict[str, Profile]] = {
 }
 
 
-def _load_envelope(name: str) -> runner.PolicyInput:
+def _load_envelope(name: str) -> runner.RuleEnvelope:
     """Return one checked-in fixture envelope."""
     loaded = json.loads((_ENVELOPES_DIR / f"{name}.json").read_text(encoding="utf-8"))
-    return typ.cast("runner.PolicyInput", loaded)
+    return typ.cast("runner.RuleEnvelope", loaded)
 
 
 def test_expectation_table_covers_every_fixture() -> None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import collections.abc as cabc
 import dataclasses
 import functools
 import importlib.resources
@@ -10,6 +11,7 @@ import pathlib
 import re
 import subprocess
 import tempfile
+import types
 import typing as typ
 
 from ruamel.yaml import YAML
@@ -17,16 +19,19 @@ from ruamel.yaml.error import YAMLError
 
 from concordat.errors import OperationalRuleError
 
-from . import fsprobe
+from . import fs_probe
 from .envelope import ENVELOPE_KIND as RUST_ENVELOPE_KIND
-from .envelope import PolicyEnvelope, build_envelope
+from .envelope import (
+    BuildDefaultsEnvelope,
+    PolicyEnvelope,
+    build_build_defaults_envelope,
+    build_envelope,
+)
 from .markdown_envelope import ENVELOPE_KIND as MARKDOWN_ENVELOPE_KIND
 from .markdown_envelope import MarkdownEnvelope, build_markdown_envelope
 
-if typ.TYPE_CHECKING:
-    import collections.abc as cabc
-
-type PolicyInput = PolicyEnvelope | MarkdownEnvelope
+type RuleEnvelope = PolicyEnvelope | BuildDefaultsEnvelope | MarkdownEnvelope
+type EnvelopeResolver = cabc.Callable[[str, pathlib.Path], RuleEnvelope]
 
 
 def _resolve_rule_packages_dir() -> pathlib.Path:
@@ -78,7 +83,7 @@ _yaml = YAML(typ="safe")
 # looked up here. The Rust kind is also the default for a manifest that
 # predates the field, so the first rule package keeps working unchanged.
 ENVELOPE_BUILDERS: typ.Final[
-    typ.Mapping[str, cabc.Callable[[pathlib.Path], PolicyInput]]
+    typ.Mapping[str, cabc.Callable[[pathlib.Path], RuleEnvelope]]
 ] = {
     RUST_ENVELOPE_KIND: build_envelope,
     MARKDOWN_ENVELOPE_KIND: build_markdown_envelope,
@@ -269,7 +274,15 @@ def _rule_manifest(rule_dir: pathlib.Path) -> dict[str, object]:
     # 3.14. A package whose manifest cannot be read would then silently lose
     # its declared parameters and its policy input, and the runner would send
     # the Rust envelope to whatever policy it ships.
-    if not fsprobe.is_file(manifest_path, "load-rule-manifest"):
+    probe = fs_probe.probe_file(manifest_path)
+    if probe.read_error is not None:
+        message = f"cannot read rule manifest {manifest_path}: {probe.read_error}"
+        raise OperationalRuleError(
+            message,
+            operation="load-rule-manifest",
+            resource=manifest_path,
+        )
+    if not probe.present:
         return {}
     try:
         manifest = _yaml.load(manifest_path.read_text(encoding="utf-8"))
@@ -319,12 +332,12 @@ def _rule_parameters(rule_dir: pathlib.Path) -> dict[str, object]:
 
 def _envelope_builder(
     rule_dir: pathlib.Path,
-) -> cabc.Callable[[pathlib.Path], PolicyInput]:
+) -> cabc.Callable[[pathlib.Path], RuleEnvelope]:
     """Return the builder for the policy input the rule manifest declares.
 
     Returns
     -------
-    cabc.Callable[[pathlib.Path], PolicyInput]
+    cabc.Callable[[pathlib.Path], RuleEnvelope]
         The function assembling the declared policy-input document.
 
     Raises
@@ -439,7 +452,7 @@ def _require_policy_exit_code(
 
 def _invoke_conftest(
     rule_id: str,
-    envelope: PolicyInput,
+    envelope: RuleEnvelope,
 ) -> list[_ConftestResult]:
     """Evaluate *envelope* against *rule_id*'s policy and return the results."""
     rule_dir = _rule_package_dir(rule_id)
@@ -610,7 +623,46 @@ def _overall_verdict(findings: tuple[Finding, ...]) -> str:
     return VERDICT_COMPLIANT
 
 
-def run_rule(rule_id: str, checkout: pathlib.Path) -> RuleRunResult:
+# A rule package reads the facts its checks need, and those differ. Two ways
+# of saying which are in play, and they compose rather than compete. A package
+# named here supplies its own builder and receives the manifest parameters
+# that builder needs; that is the only reason to name one. Every other package
+# declares its policy input in its own manifest under `sensor.input`, which
+# `_envelope_builder` reads, and a manifest that predates the field takes the
+# historic Makefile envelope, so existing packages are untouched. The mapping
+# is a read-only view: package selection is a composition decision, not state
+# a caller may reach in and change.
+PACKAGE_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
+    "rust-build-defaults": build_build_defaults_envelope,
+})
+
+
+def default_envelope_builder(rule_id: str, checkout: pathlib.Path) -> RuleEnvelope:
+    """Return the policy input *rule_id* is evaluated over.
+
+    This is the composition layer's resolver: it decides which builder a
+    package takes and supplies the manifest parameters that builder needs.
+    `run_rule` calls whatever resolver it is given, so a caller — including a
+    test — can substitute one without touching the mapping above.
+
+    Returns
+    -------
+    RuleEnvelope
+        The envelope built by the package's own builder, or the default one.
+    """
+    rule_dir = _rule_package_dir(rule_id)
+    builder = PACKAGE_ENVELOPE_BUILDERS.get(rule_id)
+    if builder is not None:
+        return builder(checkout, _rule_parameters(rule_dir))
+    return _envelope_builder(rule_dir)(checkout)
+
+
+def run_rule(
+    rule_id: str,
+    checkout: pathlib.Path,
+    *,
+    envelope_builder: EnvelopeResolver = default_envelope_builder,
+) -> RuleRunResult:
     """Evaluate *rule_id* against *checkout* and return the structured result.
 
     Parameters
@@ -619,6 +671,9 @@ def run_rule(rule_id: str, checkout: pathlib.Path) -> RuleRunResult:
         Identifier of the rule package to evaluate.
     checkout:
         Path to the local checkout to audit.
+    envelope_builder:
+        Resolver that builds the policy input for a package. The default
+        resolves the package's own builder; a caller may substitute one.
 
     Returns
     -------
@@ -632,7 +687,7 @@ def run_rule(rule_id: str, checkout: pathlib.Path) -> RuleRunResult:
         Conftest cannot be run or produces no usable output.
 
     """
-    rule_dir = _rule_package_dir(rule_id)
+    _rule_package_dir(rule_id)
     if not checkout.is_dir():
         message = f"checkout path {checkout} is not a directory"
         raise OperationalRuleError(
@@ -640,7 +695,7 @@ def run_rule(rule_id: str, checkout: pathlib.Path) -> RuleRunResult:
             operation="audit-checkout",
             resource=checkout,
         )
-    envelope = _envelope_builder(rule_dir)(checkout)
+    envelope = envelope_builder(rule_id, checkout)
     results = _invoke_conftest(rule_id, envelope)
     findings = _findings_from_results(results)
     return RuleRunResult(

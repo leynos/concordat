@@ -1,0 +1,8 @@
+# Cargo selects a single rustflags source rather than merging them, so
+# every flag that must survive is repeated in each source.
+[build]
+rustflags = ["-Z", "threads=8"]
+
+[target.x86_64-unknown-linux-gnu]
+linker = "clang"
+rustflags = ["-Z", "threads=8", "-C", "link-arg=-fuse-ld=mold"]

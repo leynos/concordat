@@ -582,16 +582,29 @@ the Section 2.1.2 format.
   delegating gate bindingness to `rust-makefile-baseline`. Acceptance: fixtures
   with drifted `rustfmt.toml` keys and a downgraded `[lints]` entry each raise
   findings; mutations restore the canonical values comment-preservingly.
-- [ ] Ship the Rust toolchain and acceleration rule packages (RT-006 to
-  RT-011): nightly pins no older than one year, required toolchain components,
-  mold and Cranelift development configuration, Polonius-next for
-  application-only repositories, and nextest via the canonical `TEST_CMD`
-  fallback. Acceptance: fixtures for a stale nightly, a missing `rust-analyzer`
-  component, and a binary-only crate without Polonius-next each raise findings;
-  RT-006 opens a tracking issue rather than patching the pin, and the RT-011
-  mutation reuses the QG-004 Makefile patch. The RT-006 nightly-age comparator
-  carries a Hypothesis property test asserting the one-year boundary of Section
-  3.1.4.
+- [x] Ship the Rust build-defaults rule package (RT-008, RT-009, RT-017,
+  RT-018) as `rust-build-defaults`, audit-only: the parallel `rustc` frontend
+  and the mold linker as defaults, the `rustflags` sources held equal because
+  Cargo replaces one with another rather than merging them, and the Cranelift
+  codegen backend either configured for the development profile or refused by a
+  recorded exception naming the pinned toolchain channel. The package reads
+  only the files Cargo and rustup auto-discover; it carries no Makefile facts,
+  because a repository whose flags live behind an opt-in Make target has no
+  `.cargo/config.toml` and fails on that alone.
+- [ ] Ship the remaining Rust toolchain and acceleration rule packages (RT-006,
+  RT-007, RT-010, RT-011): nightly pins no older than one year, required
+  toolchain components, Polonius-next for application-only repositories, and
+  nextest via the canonical `TEST_CMD` fallback. Acceptance: fixtures for a
+  stale nightly, a missing `rust-analyzer` component, and a binary-only crate
+  without Polonius-next each raise findings; RT-006 opens a tracking issue
+  rather than patching the pin, and the RT-011 mutation reuses the QG-004
+  Makefile patch. The RT-006 nightly-age comparator carries a Hypothesis
+  property test asserting the one-year boundary of Section 3.1.4.
+- [ ] Ship the `rust-build-defaults` mutations (actuators). The package is
+  audit-only today: comment-preserving TOML patches adding the flags, the
+  Linux-only linker table, and the backend configuration are a separate change,
+  and the exception clause has no mutation at all because recording one
+  requires a measurement rather than an edit.
 - [ ] Ship the compiler-cache rule packages (RT-012 to RT-016), per
   [RFC 0002](rfcs/0002-sccache-configuration-ruleset.md): every compiling Rust
   job carries a configured backend and an action-exported wrapper; the

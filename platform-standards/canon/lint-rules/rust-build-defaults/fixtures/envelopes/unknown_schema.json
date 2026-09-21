@@ -1,0 +1,21 @@
+{
+  "schema_version": 2,
+  "kind": "policy-input/rust-build-defaults",
+  "repository": {
+    "path": "unknown-schema",
+    "name": null
+  },
+  "applicability": {
+    "root_cargo_toml": true,
+    "rust_surfaces_declared": false,
+    "cargo_config": false,
+    "toolchain_file": false
+  },
+  "cargo": {
+    "parsed": null,
+    "surfaces": []
+  },
+  "toolchain": null,
+  "cargo_config": null,
+  "exceptions": []
+}

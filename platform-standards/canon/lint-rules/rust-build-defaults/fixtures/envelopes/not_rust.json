@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "kind": "policy-input/rust-build-defaults",
+  "repository": {
+    "path": "not-rust",
+    "name": null
+  },
+  "applicability": {
+    "root_cargo_toml": false,
+    "rust_surfaces_declared": false,
+    "cargo_config": false,
+    "toolchain_file": false
+  },
+  "cargo": {
+    "parsed": null,
+    "surfaces": []
+  },
+  "toolchain": null,
+  "cargo_config": null,
+  "exceptions": [
+    {
+      "path": "docs/developers-guide.md",
+      "present": false,
+      "read_error": null,
+      "sections": []
+    }
+  ]
+}

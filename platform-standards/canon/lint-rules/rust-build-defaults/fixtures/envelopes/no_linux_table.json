@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "kind": "policy-input/rust-build-defaults",
+  "repository": {
+    "path": "no-linux-table",
+    "name": null
+  },
+  "applicability": {
+    "root_cargo_toml": true,
+    "rust_surfaces_declared": false,
+    "cargo_config": true,
+    "toolchain_file": true
+  },
+  "cargo": {
+    "parsed": {
+      "package": {
+        "name": "fixture",
+        "version": "0.1.0"
+      }
+    },
+    "surfaces": [
+      {
+        "path": "Cargo.toml",
+        "role": "crate",
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        }
+      }
+    ]
+  },
+  "toolchain": {
+    "path": "rust-toolchain.toml",
+    "channel": "nightly-2026-08-23",
+    "channel_kind": "nightly-dated",
+    "parse_error": null
+  },
+  "cargo_config": {
+    "path": ".cargo/config.toml",
+    "sources": [
+      {
+        "name": "build",
+        "kind": "build",
+        "key": null,
+        "linux": false,
+        "linux_only": false,
+        "classified": true,
+        "flags": [
+          "-Zthreads=8"
+        ]
+      }
+    ],
+    "backends": [],
+    "unstable_codegen_backend": null,
+    "parse_error": null
+  },
+  "exceptions": [
+    {
+      "path": "docs/developers-guide.md",
+      "present": true,
+      "read_error": null,
+      "sections": [
+        {
+          "path": "docs/developers-guide.md",
+          "heading": "Why Cranelift is not part of the standard",
+          "line": 8,
+          "level": 3,
+          "channels_named": [
+            "nightly-2026-08-23"
+          ],
+          "body_lines": 10
+        }
+      ]
+    }
+  ]
+}
