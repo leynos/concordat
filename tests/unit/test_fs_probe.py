@@ -4,6 +4,11 @@
 with the same `False`. Every rule fact built on it would report an unreadable
 checkout as a compliant absence, so the distinction is the whole point of this
 module and each case here pins one side of it.
+
+A `stat` plus a regular-file test is not enough either, which is the second
+lesson these tests carry. Two shapes are occupied paths that such a probe
+reports as empty ones: a dangling symbolic link, and a directory where a file
+is expected. Both are states to report, not states to pass over.
 """
 
 from __future__ import annotations
@@ -34,22 +39,66 @@ def test_a_missing_path_is_absent(tmp_path: pathlib.Path) -> None:
     assert probe.read_error is None, "the filesystem answered the question"
 
 
-def test_a_directory_in_the_file_s_place_is_absent(tmp_path: pathlib.Path) -> None:
-    """A directory is not the file, and the filesystem described it fine."""
-    target = tmp_path / "config.toml"
-    target.mkdir()
-    probe = probe_file(target)
-    assert probe.present is False, "a directory is not a regular file"
-    assert probe.read_error is None, "the filesystem answered the question"
-
-
 def test_a_path_under_a_file_is_absent(tmp_path: pathlib.Path) -> None:
-    """A parent that is not a directory means the file is not there."""
+    """A parent that is not a directory means the file is not there.
+
+    `ENOTDIR`, like `ENOENT`, is the filesystem saying nothing is at that
+    path. Those two are the whole of absence.
+    """
     parent = tmp_path / "cargo"
     parent.write_text("", encoding="utf-8")
     probe = probe_file(parent / "config.toml")
     assert probe.present is False, "nothing can live beneath a regular file"
     assert probe.read_error is None, "the filesystem answered the question"
+
+
+def test_a_dangling_symlink_is_a_refusal_not_an_absence(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Something is there, and it names a target that is not.
+
+    `stat` follows links, so a dangling one raises `FileNotFoundError` exactly
+    as a missing path does. Reading that as an absence turns a broken checkout
+    into a repository that simply never had the file, which is the compliant
+    answer rather than the true one.
+    """
+    link = tmp_path / "config.toml"
+    link.symlink_to(tmp_path / "does-not-exist")
+    probe = probe_file(link)
+    assert probe.present is False, "an unresolved link is not a readable file"
+    assert probe.read_error is not None, (
+        "a link that does not resolve is a state to report, not an absence"
+    )
+    assert str(link) in probe.read_error, (
+        f"the diagnostic should name the path, got {probe.read_error!r}"
+    )
+    assert "resolve" in probe.read_error, (
+        f"the diagnostic should give the reason, got {probe.read_error!r}"
+    )
+
+
+def test_a_directory_in_the_file_s_place_is_a_refusal(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The path is occupied by something the reader cannot parse.
+
+    The filesystem answered, but it did not answer "nothing is here". A
+    directory named `config.toml` is a misconfiguration to surface rather than
+    a configuration the repository never wrote.
+    """
+    target = tmp_path / "config.toml"
+    target.mkdir()
+    probe = probe_file(target)
+    assert probe.present is False, "a directory is not a regular file"
+    assert probe.read_error is not None, (
+        "an occupied path is a state to report, not an absence"
+    )
+    assert str(target) in probe.read_error, (
+        f"the diagnostic should name the path, got {probe.read_error!r}"
+    )
+    assert "directory" in probe.read_error, (
+        f"the diagnostic should say what occupies it, got {probe.read_error!r}"
+    )
 
 
 def test_a_refusal_is_neither_presence_nor_absence(

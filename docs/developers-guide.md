@@ -439,6 +439,12 @@ input is a shape another package already builds, and it needs no Python change.
 A package matching neither is refused with an `OperationalRuleError` naming it,
 the registered packages, and the declarable kinds.
 
+**Every shipped package declares or registers.** There is no third state and
+no default, so a manifest written before `sensor.input` existed is refused
+rather than quietly given the envelope it used to receive by accident. That is
+the point of the rule: the package that most needs refusing is the one nobody
+remembered to wire up, and a default is precisely what hides it.
+
 There is deliberately no fallback. An earlier version of this resolver sent an
 unregistered package to `build_envelope`, on the reasoning that existing
 packages should be left untouched. That is a fail-open default inside a
@@ -481,6 +487,16 @@ absence, which is the one answer a fail-closed audit must never give by
 accident. `probe_file` separates the two: callers turn an absence into
 whatever their clause means by it, and a refusal into a fail-closed fact
 carrying the reason. Every new reader in the build-defaults envelope uses it.
+
+Absence is narrower than it first looks, and the boundary took a second pass to
+get right. It is `ENOENT` with nothing behind it, and `ENOTDIR` because a
+component of the path is not a directory. Everything else is a refusal,
+including two shapes a bare `stat` plus a regular-file test reports as empty:
+a dangling symbolic link, where `lstat` succeeds and `stat` does not, and a
+directory or other non-regular file where a file is expected. Both are occupied
+paths. Reading either as an absence turns a broken checkout into a repository
+that simply never wrote the file, which is the compliant answer rather than the
+true one.
 
 ### Tool dependencies
 
