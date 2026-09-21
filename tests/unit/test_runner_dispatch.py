@@ -81,6 +81,28 @@ class TestEnvelopeBuilder:
         with pytest.raises(OperationalRuleError, match="declares the policy input"):
             runner._envelope_builder(package)
 
+    @pytest.mark.parametrize(
+        "manifest",
+        [
+            pytest.param("sensor:\n", id="null"),
+            pytest.param("sensor: conftest\n", id="scalar"),
+            pytest.param("sensor:\n  - type: conftest\n", id="list"),
+        ],
+    )
+    def test_non_mapping_sensor_is_refused(
+        self, tmp_path: pathlib.Path, manifest: str
+    ) -> None:
+        """A `sensor` that is not a mapping is an error, not the Rust default.
+
+        Falling back would hand the Rust envelope to whichever policy the
+        package ships. A Markdown policy reading that document finds no
+        `applicability.markdown_files`, skips its own checks, and reports a
+        compliant verdict it never established.
+        """
+        package = _write_package(tmp_path, "odd-rule", manifest)
+        with pytest.raises(OperationalRuleError, match="declares `sensor` as"):
+            runner._envelope_builder(package)
+
     def test_shipped_packages_declare_their_inputs(self) -> None:
         """Both shipped manifests resolve to the builder for their own kind."""
         rust = runner._rule_package_dir("rust-makefile-baseline")

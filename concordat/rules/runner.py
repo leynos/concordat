@@ -244,13 +244,18 @@ def _policy_namespace(rule_id: str) -> str:
     return "canon.lint_rules." + rule_id.replace("-", "_")
 
 
-def _rule_manifest(rule_dir: pathlib.Path) -> dict[str, typ.Any]:
+def _rule_manifest(rule_dir: pathlib.Path) -> dict[str, object]:
     """Return the rule package's `rule.yaml` mapping, or ``{}`` if absent.
+
+    The decoded document is typed as `dict[str, object]` rather than carrying
+    `typ.Any` outward: `.rules/python-00.md` asks that decoded data be
+    narrowed at its boundary, and every caller below tests the shape it needs
+    before reading it.
 
     Returns
     -------
-    dict[str, typ.Any]
-        The decoded manifest mapping.
+    dict[str, object]
+        The decoded manifest mapping, keyed by its top-level field names.
 
     Raises
     ------
@@ -276,10 +281,10 @@ def _rule_manifest(rule_dir: pathlib.Path) -> dict[str, typ.Any]:
             operation="load-rule-manifest",
             resource=manifest_path,
         )
-    return typ.cast("dict[str, typ.Any]", manifest)
+    return {str(key): typ.cast("object", value) for key, value in manifest.items()}
 
 
-def _rule_parameters(rule_dir: pathlib.Path) -> dict[str, typ.Any]:
+def _rule_parameters(rule_dir: pathlib.Path) -> dict[str, object]:
     """Return the rule manifest's parameter defaults.
 
     The policies read their tunables from ``data.parameters``; without this
@@ -291,14 +296,19 @@ def _rule_parameters(rule_dir: pathlib.Path) -> dict[str, typ.Any]:
 
     Returns
     -------
-    dict[str, typ.Any]
+    dict[str, object]
         Parameter defaults declared by the rule manifest.
     """
     parameters = _rule_manifest(rule_dir).get("parameters")
     if not isinstance(parameters, dict):
         return {}
-    defaults = parameters.get("defaults")
-    return dict(defaults) if isinstance(defaults, dict) else {}
+    defaults = typ.cast("dict[object, object]", parameters).get("defaults")
+    if not isinstance(defaults, dict):
+        return {}
+    return {
+        str(key): typ.cast("object", value)
+        for key, value in typ.cast("dict[object, object]", defaults).items()
+    }
 
 
 def _envelope_builder(
@@ -314,23 +324,38 @@ def _envelope_builder(
     Raises
     ------
     OperationalRuleError
-        If the manifest declares an input kind this build cannot assemble.
+        If the manifest declares an input kind this build cannot assemble, or
+        declares `sensor` as anything other than a mapping.
     """
-    sensor = _rule_manifest(rule_dir).get("sensor")
-    declared: object = RUST_ENVELOPE_KIND
-    if isinstance(sensor, dict):
-        declared = sensor.get("input", RUST_ENVELOPE_KIND)
+    manifest = _rule_manifest(rule_dir)
+    manifest_path = rule_dir / "rule.yaml"
+    if "sensor" not in manifest:
+        # The documented legacy case: a manifest written before the field
+        # existed audits the Rust surfaces.
+        return ENVELOPE_BUILDERS[RUST_ENVELOPE_KIND]
+    sensor = manifest["sensor"]
+    if not isinstance(sensor, dict):
+        message = (
+            f"rule manifest {manifest_path} declares `sensor` as "
+            f"{type(sensor).__name__}; expected a mapping"
+        )
+        raise OperationalRuleError(
+            message,
+            operation="load-rule-manifest",
+            resource=manifest_path,
+        )
+    declared = typ.cast("dict[object, object]", sensor).get("input", RUST_ENVELOPE_KIND)
     if isinstance(declared, str) and declared in ENVELOPE_BUILDERS:
         return ENVELOPE_BUILDERS[declared]
     known = ", ".join(sorted(ENVELOPE_BUILDERS))
     message = (
-        f"rule manifest {rule_dir / 'rule.yaml'} declares the policy input "
+        f"rule manifest {manifest_path} declares the policy input "
         f"{declared!r}; expected one of: {known}"
     )
     raise OperationalRuleError(
         message,
         operation="load-rule-manifest",
-        resource=rule_dir / "rule.yaml",
+        resource=manifest_path,
     )
 
 
