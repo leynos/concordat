@@ -19,6 +19,9 @@ from __future__ import annotations
 
 import tomllib
 import typing as typ
+from itertools import starmap
+
+from .fs_probe import probe_file
 
 if typ.TYPE_CHECKING:
     import pathlib
@@ -41,23 +44,36 @@ type TomlDocument = dict[str, object]
 class RustflagsSource(typ.TypedDict):
     """One `rustflags` table Cargo would consult, with its normalised flags.
 
-    ``linux`` says the source applies when building for Linux; ``classified``
-    says the reader could decide that at all. An unclassified key is neither
-    Linux nor not-Linux, and the policy reports it rather than assuming.
+    ``linux`` says the source applies when building for Linux, and
+    ``linux_only`` that it applies nowhere else: `cfg(unix)` is the first but
+    not the second, and a linker that ships for Linux alone must not be named
+    there. ``classified`` says the reader could decide either at all. An
+    unclassified key is neither Linux nor not-Linux, and the policy reports it
+    rather than assuming.
     """
 
     name: str
     kind: str
     key: str | None
     linux: bool
+    linux_only: bool
     classified: bool
     flags: list[str]
+
+
+# The routes a codegen backend can be selected by. They are not
+# interchangeable: a package override applies to one package, so it is a
+# backend selection to validate but never the profile's default.
+SCOPE_PROFILE: typ.Final = "profile"
+SCOPE_PACKAGE_OVERRIDE: typ.Final = "package-override"
+SCOPE_RUSTFLAGS: typ.Final = "rustflags"
 
 
 class CodegenBackendSelection(typ.TypedDict):
     """One codegen backend selection, and the route that selected it."""
 
     source: str
+    scope: str
     profile: str | None
     backend: str
 
@@ -135,19 +151,35 @@ def read_cargo_config(path: pathlib.Path) -> TomlDocument:
         return tomllib.load(handle)
 
 
-def locate_cargo_config(checkout: pathlib.Path) -> pathlib.Path | None:
+class ConfigLocation(typ.NamedTuple):
+    """Where Cargo's configuration is, or why the answer is unknown."""
+
+    path: pathlib.Path | None
+    read_error: str | None
+
+
+def locate_cargo_config(checkout: pathlib.Path) -> ConfigLocation:
     """Return the Cargo configuration file Cargo would discover, if any.
+
+    A candidate the filesystem refuses to describe stops the search and is
+    reported: the configuration may be there, and treating a refusal as an
+    absence would report an unreadable checkout as one that simply has no
+    configuration.
 
     Returns
     -------
-    pathlib.Path | None
-        The first candidate that is a regular file, or ``None``.
+    ConfigLocation
+        The first candidate that is a regular file, or the refusal that
+        prevented the question from being answered.
     """
     for relative in CONFIG_RELATIVE_PATHS:
         candidate = checkout / relative
-        if candidate.is_file():
-            return candidate
-    return None
+        probe = probe_file(candidate)
+        if probe.read_error is not None:
+            return ConfigLocation(path=None, read_error=probe.read_error)
+        if probe.present:
+            return ConfigLocation(path=candidate, read_error=None)
+    return ConfigLocation(path=None, read_error=None)
 
 
 def inspect_cargo_config(checkout: pathlib.Path) -> CargoConfigFacts | None:
@@ -163,20 +195,19 @@ def inspect_cargo_config(checkout: pathlib.Path) -> CargoConfigFacts | None:
     CargoConfigFacts | None
         The extracted facts, or ``None`` when no configuration file exists.
     """
-    path = locate_cargo_config(checkout)
-    if path is None:
+    location = locate_cargo_config(checkout)
+    if location.read_error is not None:
+        return _unreadable(CONFIG_RELATIVE_PATHS[0], location.read_error)
+    if location.path is None:
         return None
-    relative = path.relative_to(checkout).as_posix()
+    relative = location.path.relative_to(checkout).as_posix()
     try:
-        document = read_cargo_config(path)
+        document = read_cargo_config(location.path)
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
-        return {
-            "path": relative,
-            "sources": [],
-            "backends": [],
-            "unstable_codegen_backend": None,
-            "parse_error": str(error),
-        }
+        return _unreadable(relative, str(error))
+    refusal = rustflags_cargo_would_refuse(document)
+    if refusal is not None:
+        return _unreadable(relative, refusal)
     sources = rustflags_sources(document)
     return {
         "path": relative,
@@ -187,6 +218,77 @@ def inspect_cargo_config(checkout: pathlib.Path) -> CargoConfigFacts | None:
     }
 
 
+def _unreadable(relative: str, detail: str) -> CargoConfigFacts:
+    """Return facts for a configuration that exists but cannot be used."""
+    return {
+        "path": relative,
+        "sources": [],
+        "backends": [],
+        "unstable_codegen_backend": None,
+        "parse_error": detail,
+    }
+
+
+def rustflags_cargo_would_refuse(document: TomlDocument) -> str | None:
+    """Return why Cargo would refuse *document*'s `rustflags`, or ``None``.
+
+    Cargo reads `rustflags` as a string or as an array of strings, and exits
+    on anything else: `rustflags = ["-Zthreads=8", 42]` fails with
+    ``expected string, but found a integer``. Dropping the offending member
+    and reading the rest would report a configuration Cargo refuses to load as
+    one carrying the standard, which is a pass on a repository that cannot
+    build at all.
+
+    Returns
+    -------
+    str | None
+        The diagnostic for the first source Cargo would refuse, or ``None``.
+    """
+    for name, table in _rustflags_tables(document):
+        refusal = _rustflags_value_refusal(name, table["rustflags"])
+        if refusal is not None:
+            return refusal
+    return None
+
+
+def _rustflags_value_refusal(name: str, value: object) -> str | None:
+    """Return why Cargo would refuse one `rustflags` value, or ``None``."""
+    match value:
+        case str():
+            return None
+        case list():
+            return next(
+                (
+                    f"{name} rustflags contains a {type(item).__name__}; "
+                    "cargo expects strings"
+                    for item in typ.cast("list[object]", value)
+                    if not isinstance(item, str)
+                ),
+                None,
+            )
+        case _:
+            kind = type(value).__name__
+            return f"{name} rustflags is {kind}; cargo expects a string or an array"
+
+
+def _rustflags_tables(
+    document: TomlDocument,
+) -> typ.Iterator[tuple[str, dict[str, object]]]:
+    """Yield each table Cargo reads `rustflags` from, with its reported name."""
+    build = document.get("build")
+    if isinstance(build, dict) and "rustflags" in build:
+        yield "build", typ.cast("dict[str, object]", build)
+    target = document.get("target")
+    if not isinstance(target, dict):
+        return
+    for key, table in sorted(typ.cast("dict[str, object]", target).items()):
+        # Direct children only. A `rustflags` key beneath `[target.<triple>.
+        # <links>]` is a build-script override, which Cargo does not read as
+        # target flags.
+        if isinstance(table, dict) and "rustflags" in table:
+            yield f"target.{key}", typ.cast("dict[str, object]", table)
+
+
 def rustflags_sources(document: TomlDocument) -> list[RustflagsSource]:
     """Return every `rustflags` source Cargo would consult in *document*.
 
@@ -195,76 +297,102 @@ def rustflags_sources(document: TomlDocument) -> list[RustflagsSource]:
     list[RustflagsSource]
         The `[build]` source, when present, followed by each target table.
     """
-    sources: list[RustflagsSource] = []
-    build = document.get("build")
-    if isinstance(build, dict) and "rustflags" in build:
-        sources.append({
+    return list(starmap(_rustflags_source, _rustflags_tables(document)))
+
+
+def _rustflags_source(name: str, table: dict[str, object]) -> RustflagsSource:
+    """Return one normalized `rustflags` source for the table named *name*."""
+    flags = normalise_flags(table["rustflags"])
+    if name == "build":
+        # `[build] rustflags` applies wherever no target table matches, so it
+        # is not a Linux source: on Linux a matching target table replaces it
+        # outright.
+        return {
             "name": "build",
             "kind": "build",
             "key": None,
-            # `[build] rustflags` applies wherever no target table matches, so
-            # it is not a Linux source: on Linux a matching target table
-            # replaces it outright.
             "linux": False,
+            "linux_only": False,
             "classified": True,
-            "flags": normalise_flags(typ.cast("dict[str, object]", build)["rustflags"]),
-        })
-    target = document.get("target")
-    if not isinstance(target, dict):
-        return sources
-    for key, table in sorted(typ.cast("dict[str, object]", target).items()):
-        # Direct children only. A `rustflags` key beneath `[target.<triple>.
-        # <links>]` is a build-script override, which Cargo does not read as
-        # target flags.
-        if not isinstance(table, dict) or "rustflags" not in table:
-            continue
-        classification = classify_target_key(key)
-        sources.append({
-            "name": f"target.{key}",
-            "kind": "target",
-            "key": key,
-            "linux": classification.is_linux,
-            "classified": classification.is_classified,
-            "flags": normalise_flags(typ.cast("dict[str, object]", table)["rustflags"]),
-        })
-    return sources
+            "flags": flags,
+        }
+    key = name.removeprefix("target.")
+    classification = classify_target_key(key)
+    return {
+        "name": name,
+        "kind": "target",
+        "key": key,
+        "linux": classification.is_linux,
+        "linux_only": classification.is_linux_only,
+        "classified": classification.is_classified,
+        "flags": flags,
+    }
 
 
 class TargetClassification(typ.NamedTuple):
-    """Whether a target key applies on Linux, and whether that was decidable."""
+    """Where a target key applies, and whether that could be decided at all."""
 
     is_linux: bool
+    is_linux_only: bool
     is_classified: bool
 
 
+UNCLASSIFIED: typ.Final = TargetClassification(
+    is_linux=False, is_linux_only=False, is_classified=False
+)
+
+# A `cfg` body this reader will not evaluate. Negation inverts the verdict, and
+# `any(...)` widens it to platforms the body also names, so a substring test
+# over either reports the opposite of the truth: `cfg(not(target_os = "linux"))`
+# applies everywhere except Linux while containing the Linux predicate.
+_UNEVALUATED_CFG_OPERATORS: typ.Final = ("not(", "any(")
+
+_OTHER_OS_MARKERS: typ.Final = ("windows", "macos", "darwin", "ios", "wasm", "android")
+
+
 def classify_target_key(key: str) -> TargetClassification:
-    """Decide whether the target table named by *key* applies on Linux.
+    """Decide where the target table named by *key* applies.
 
     Two spellings are decidable and both appear in the estate: an explicit
     target triple, whose operating-system field is part of the name, and a
     `cfg` expression naming `target_os` or a family that includes Linux.
-    Anything else — a `target_env` predicate, a custom JSON target — is left
-    unclassified so the policy can fail closed rather than guess.
+    Anything else — a `target_env` predicate, a negated or disjunctive
+    expression, a custom JSON target — is left unclassified so the policy can
+    fail closed rather than guess.
 
     Returns
     -------
     TargetClassification
-        The Linux verdict and whether the key could be classified at all.
+        Where the key applies, and whether it could be classified at all.
     """
     expression = _cfg_expression(key)
     if expression is None:
-        # An explicit triple: `<arch>-<vendor>-<os>[-<env>]`.
-        return TargetClassification(is_linux="-linux" in key, is_classified=True)
+        # An explicit triple: `<arch>-<vendor>-<os>[-<env>]`. It names exactly
+        # one platform, so applying on Linux and applying only on Linux are
+        # the same question.
+        is_linux = "-linux" in key
+        return TargetClassification(
+            is_linux=is_linux, is_linux_only=is_linux, is_classified=True
+        )
     collapsed = "".join(expression.split())
+    if any(operator in collapsed for operator in _UNEVALUATED_CFG_OPERATORS):
+        return UNCLASSIFIED
     if 'target_os="linux"' in collapsed:
-        return TargetClassification(is_linux=True, is_classified=True)
+        return TargetClassification(
+            is_linux=True, is_linux_only=True, is_classified=True
+        )
     if "unix" in collapsed:
-        # `cfg(unix)` covers Linux and macOS alike. It is a Linux source, and
-        # the policy's "only on Linux" reading has to account for that.
-        return TargetClassification(is_linux=True, is_classified=True)
+        # `cfg(unix)` covers Linux and macOS alike, so a linker that ships for
+        # Linux alone must not be named here even though this is a source
+        # Linux builds take.
+        return TargetClassification(
+            is_linux=True, is_linux_only=False, is_classified=True
+        )
     if _names_another_os(collapsed):
-        return TargetClassification(is_linux=False, is_classified=True)
-    return TargetClassification(is_linux=False, is_classified=False)
+        return TargetClassification(
+            is_linux=False, is_linux_only=False, is_classified=True
+        )
+    return UNCLASSIFIED
 
 
 def _cfg_expression(key: str) -> str | None:
@@ -273,9 +401,6 @@ def _cfg_expression(key: str) -> str | None:
     if stripped.startswith("cfg(") and stripped.endswith(")"):
         return stripped[len("cfg(") : -1]
     return None
-
-
-_OTHER_OS_MARKERS: typ.Final = ("windows", "macos", "darwin", "ios", "wasm", "android")
 
 
 def _names_another_os(collapsed: str) -> bool:
@@ -319,6 +444,7 @@ def _profile_backends(
         if isinstance(direct, str):
             yield {
                 "source": f"profile.{name}",
+                "scope": SCOPE_PROFILE,
                 "profile": name,
                 "backend": direct,
             }
@@ -340,6 +466,7 @@ def _package_override_backends(
         if isinstance(backend, str):
             yield {
                 "source": f"profile.{name}.package.{spec}",
+                "scope": SCOPE_PACKAGE_OVERRIDE,
                 "profile": name,
                 "backend": backend,
             }
@@ -354,6 +481,7 @@ def _rustflags_backends(
             if flag.startswith(BACKEND_FLAG_PREFIX):
                 yield {
                     "source": source["name"],
+                    "scope": SCOPE_RUSTFLAGS,
                     "profile": None,
                     "backend": flag[len(BACKEND_FLAG_PREFIX) :],
                 }

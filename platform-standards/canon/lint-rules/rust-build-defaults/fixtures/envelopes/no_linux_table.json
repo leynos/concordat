@@ -45,6 +45,7 @@
         "kind": "build",
         "key": null,
         "linux": false,
+        "linux_only": false,
         "classified": true,
         "flags": [
           "-Zthreads=8"

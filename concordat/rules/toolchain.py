@@ -17,6 +17,8 @@ import re
 import tomllib
 import typing as typ
 
+from .fs_probe import probe_file
+
 if typ.TYPE_CHECKING:
     import pathlib
 
@@ -75,18 +77,18 @@ def inspect_toolchain(checkout: pathlib.Path) -> ToolchainFacts | None:
         checkout has no `rust-toolchain.toml`.
     """
     path = checkout / TOOLCHAIN_FILENAME
-    if not path.is_file():
+    probe = probe_file(path)
+    if probe.read_error is not None:
+        # The pin may be there and unreadable. Reporting that as an absence
+        # would make the nightly-only clauses silently inapplicable.
+        return _unreadable(probe.read_error)
+    if not probe.present:
         return None
     try:
         with path.open("rb") as handle:
             document: dict[str, object] = tomllib.load(handle)
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
-        return {
-            "path": TOOLCHAIN_FILENAME,
-            "channel": None,
-            "channel_kind": CHANNEL_UNKNOWN,
-            "parse_error": str(error),
-        }
+        return _unreadable(str(error))
     toolchain = document.get("toolchain")
     channel = None
     if isinstance(toolchain, dict):
@@ -99,4 +101,14 @@ def inspect_toolchain(checkout: pathlib.Path) -> ToolchainFacts | None:
             classify_channel(channel) if channel is not None else CHANNEL_UNKNOWN
         ),
         "parse_error": None,
+    }
+
+
+def _unreadable(detail: str) -> ToolchainFacts:
+    """Return facts for a toolchain pin that exists but cannot be read."""
+    return {
+        "path": TOOLCHAIN_FILENAME,
+        "channel": None,
+        "channel_kind": CHANNEL_UNKNOWN,
+        "parse_error": detail,
     }

@@ -7,9 +7,11 @@ envelope builder is run over each one, so the fixtures the Rego suite verifies
 against are the documents the sensor actually produces rather than a
 handwritten approximation of them.
 
-Two synthetic envelopes cover cases that cannot be built from a checkout: an
-envelope of an unknown schema version, and one whose ``cargo`` payload has the
-wrong shape.
+Three synthetic envelopes cover cases that cannot be built from a checkout: an
+envelope of an unknown schema version, one whose ``cargo`` payload has the
+wrong shape, and one whose exception document the filesystem refused to read.
+The last cannot be a checkout because git records no permission bits beyond the
+executable one, so an unreadable file does not survive a clone.
 
 Run from the rule package directory::
 
@@ -62,45 +64,127 @@ def build_envelopes() -> dict[str, dict[str, object]]:
     return envelopes
 
 
+NIGHTLY_PIN: typ.Final[dict[str, object]] = {
+    "path": "rust-toolchain.toml",
+    "channel": "nightly-2026-08-23",
+    "channel_kind": "nightly-dated",
+    "parse_error": None,
+}
+
+STANDARD_SOURCES: typ.Final[list[dict[str, object]]] = [
+    {
+        "name": "build",
+        "kind": "build",
+        "key": None,
+        "linux": False,
+        "linux_only": False,
+        "classified": True,
+        "flags": ["-Zthreads=8"],
+    },
+    {
+        "name": 'target.cfg(target_os = "linux")',
+        "kind": "target",
+        "key": 'cfg(target_os = "linux")',
+        "linux": True,
+        "linux_only": True,
+        "classified": True,
+        "flags": ["-Zthreads=8", "-Clink-arg=-fuse-ld=mold"],
+    },
+]
+
+
+def _applicability(*, cargo_config: bool, toolchain_file: bool) -> dict[str, object]:
+    """Return an applicability block for a checkout with a root manifest.
+
+    Returns
+    -------
+    dict[str, object]
+        The applicability block.
+    """
+    return {
+        "root_cargo_toml": True,
+        "rust_surfaces_declared": False,
+        "cargo_config": cargo_config,
+        "toolchain_file": toolchain_file,
+    }
+
+
+def _malformed(
+    name: str, *, schema_version: int, surfaces: object
+) -> dict[str, object]:
+    """Return an envelope the policy must refuse before reading anything else.
+
+    Both guard cases are the same document with one field spoiled, so they are
+    one builder: an unrecognized schema version, and a `cargo.surfaces` that is
+    not an array.
+
+    Returns
+    -------
+    dict[str, object]
+        The malformed envelope.
+    """
+    return {
+        "schema_version": schema_version,
+        "kind": "policy-input/rust-build-defaults",
+        "repository": {"path": name, "name": None},
+        "applicability": _applicability(cargo_config=False, toolchain_file=False),
+        "cargo": {"parsed": None, "surfaces": surfaces},
+        "toolchain": None,
+        "cargo_config": None,
+        "exceptions": [],
+    }
+
+
+def _exception_unreadable() -> dict[str, object]:
+    """Return an envelope whose exception document could not be read.
+
+    Not a checkout, because git records no permission bits beyond the
+    executable one: an unreadable file does not survive a clone.
+
+    Returns
+    -------
+    dict[str, object]
+        The envelope whose exception document carries a read error.
+    """
+    return {
+        "schema_version": 1,
+        "kind": "policy-input/rust-build-defaults",
+        "repository": {"path": "exception-unreadable", "name": None},
+        "applicability": _applicability(cargo_config=True, toolchain_file=True),
+        "cargo": {"parsed": None, "surfaces": [{"path": "Cargo.toml"}]},
+        "toolchain": NIGHTLY_PIN,
+        "cargo_config": {
+            "path": ".cargo/config.toml",
+            "sources": STANDARD_SOURCES,
+            "backends": [],
+            "unstable_codegen_backend": None,
+            "parse_error": None,
+        },
+        "exceptions": [
+            {
+                "path": "docs/developers-guide.md",
+                "present": True,
+                "read_error": "[Errno 13] Permission denied",
+                "sections": [],
+            }
+        ],
+    }
+
+
 def synthetic_envelopes() -> dict[str, dict[str, object]]:
     """Return the envelopes that no checkout could produce.
 
     Returns
     -------
     dict[str, dict[str, object]]
-        Malformed envelopes covering the envelope-guard findings.
+        Malformed and unreadable envelopes covering the fail-closed findings.
     """
     return {
-        "unknown_schema": {
-            "schema_version": 2,
-            "kind": "policy-input/rust-build-defaults",
-            "repository": {"path": "unknown-schema", "name": None},
-            "applicability": {
-                "root_cargo_toml": True,
-                "rust_surfaces_declared": False,
-                "cargo_config": False,
-                "toolchain_file": False,
-            },
-            "cargo": {"parsed": None, "surfaces": []},
-            "toolchain": None,
-            "cargo_config": None,
-            "exceptions": [],
-        },
-        "invalid_cargo": {
-            "schema_version": 1,
-            "kind": "policy-input/rust-build-defaults",
-            "repository": {"path": "invalid-cargo", "name": None},
-            "applicability": {
-                "root_cargo_toml": True,
-                "rust_surfaces_declared": False,
-                "cargo_config": False,
-                "toolchain_file": False,
-            },
-            "cargo": {"parsed": None, "surfaces": "Cargo.toml"},
-            "toolchain": None,
-            "cargo_config": None,
-            "exceptions": [],
-        },
+        "unknown_schema": _malformed("unknown-schema", schema_version=2, surfaces=[]),
+        "invalid_cargo": _malformed(
+            "invalid-cargo", schema_version=1, surfaces="Cargo.toml"
+        ),
+        "exception_unreadable": _exception_unreadable(),
     }
 
 

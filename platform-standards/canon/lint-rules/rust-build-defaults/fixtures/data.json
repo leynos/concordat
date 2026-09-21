@@ -47,6 +47,7 @@
             "kind": "target",
             "key": "cfg(target_os = \"linux\")",
             "linux": true,
+            "linux_only": true,
             "classified": true,
             "flags": [
               "-Clink-arg=-fuse-ld=mold"
@@ -56,6 +57,7 @@
         "backends": [
           {
             "source": "profile.dev",
+            "scope": "profile",
             "profile": "dev",
             "backend": "cranelift"
           }
@@ -119,6 +121,7 @@
             "kind": "build",
             "key": null,
             "linux": false,
+            "linux_only": false,
             "classified": true,
             "flags": [
               "-Zthreads=8"
@@ -129,6 +132,7 @@
             "kind": "target",
             "key": "cfg(target_os = \"linux\")",
             "linux": true,
+            "linux_only": true,
             "classified": true,
             "flags": [
               "-Zthreads=8",
@@ -139,6 +143,7 @@
         "backends": [
           {
             "source": "profile.dev",
+            "scope": "profile",
             "profile": "dev",
             "backend": "cranelift"
           }
@@ -202,6 +207,7 @@
             "kind": "build",
             "key": null,
             "linux": false,
+            "linux_only": false,
             "classified": true,
             "flags": []
           },
@@ -210,6 +216,7 @@
             "kind": "target",
             "key": "cfg(target_os = \"linux\")",
             "linux": true,
+            "linux_only": true,
             "classified": true,
             "flags": []
           }
@@ -285,6 +292,7 @@
             "kind": "build",
             "key": null,
             "linux": false,
+            "linux_only": false,
             "classified": true,
             "flags": [
               "-Zthreads=8"
@@ -295,6 +303,7 @@
             "kind": "target",
             "key": "cfg(target_os = \"linux\")",
             "linux": true,
+            "linux_only": true,
             "classified": true,
             "flags": [
               "-Zthreads=8",
@@ -305,6 +314,7 @@
         "backends": [
           {
             "source": "profile.dev",
+            "scope": "profile",
             "profile": "dev",
             "backend": "cranelift"
           }
@@ -368,6 +378,7 @@
             "kind": "build",
             "key": null,
             "linux": false,
+            "linux_only": false,
             "classified": true,
             "flags": [
               "-Zthreads=8"
@@ -378,6 +389,7 @@
             "kind": "target",
             "key": "cfg(target_os = \"linux\")",
             "linux": true,
+            "linux_only": true,
             "classified": true,
             "flags": [
               "-Zthreads=8",
@@ -456,6 +468,7 @@
             "kind": "build",
             "key": null,
             "linux": false,
+            "linux_only": false,
             "classified": true,
             "flags": [
               "-Zthreads=8",
@@ -467,6 +480,7 @@
             "kind": "target",
             "key": "cfg(target_os = \"linux\")",
             "linux": true,
+            "linux_only": true,
             "classified": true,
             "flags": [
               "-Zthreads=8",
@@ -478,11 +492,13 @@
         "backends": [
           {
             "source": "build",
+            "scope": "rustflags",
             "profile": null,
             "backend": "cranelift"
           },
           {
             "source": "target.cfg(target_os = \"linux\")",
+            "scope": "rustflags",
             "profile": null,
             "backend": "cranelift"
           }
@@ -546,6 +562,7 @@
             "kind": "build",
             "key": null,
             "linux": false,
+            "linux_only": false,
             "classified": true,
             "flags": [
               "-Zthreads=8"
@@ -556,6 +573,7 @@
             "kind": "target",
             "key": "x86_64-unknown-linux-gnu",
             "linux": true,
+            "linux_only": true,
             "classified": true,
             "flags": [
               "-Zthreads=8",
@@ -634,6 +652,7 @@
             "kind": "target",
             "key": "cfg(target_os = \"linux\")",
             "linux": true,
+            "linux_only": true,
             "classified": true,
             "flags": [
               "-Clink-arg=-fuse-ld=mold"
@@ -661,6 +680,73 @@
               "body_lines": 10
             }
           ]
+        }
+      ]
+    },
+    "exception_unreadable": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "exception-unreadable",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": null,
+        "surfaces": [
+          {
+            "path": "Cargo.toml"
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [],
+        "unstable_codegen_backend": null,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": true,
+          "read_error": "[Errno 13] Permission denied",
+          "sections": []
         }
       ]
     },
@@ -706,6 +792,7 @@
             "kind": "build",
             "key": null,
             "linux": false,
+            "linux_only": false,
             "classified": true,
             "flags": [
               "-Zthreads=8"
@@ -716,6 +803,7 @@
             "kind": "target",
             "key": "cfg(target_os = \"linux\")",
             "linux": true,
+            "linux_only": true,
             "classified": true,
             "flags": [
               "-Zthreads=8",
@@ -768,6 +856,96 @@
       "cargo_config": null,
       "exceptions": []
     },
+    "linker_beyond_linux": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "linker-beyond-linux",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(unix)",
+            "kind": "target",
+            "key": "cfg(unix)",
+            "linux": true,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [],
+        "unstable_codegen_backend": null,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": true,
+          "read_error": null,
+          "sections": [
+            {
+              "path": "docs/developers-guide.md",
+              "heading": "Why Cranelift is not part of the standard",
+              "line": 8,
+              "level": 3,
+              "channels_named": [
+                "nightly-2026-08-23"
+              ],
+              "body_lines": 10
+            }
+          ]
+        }
+      ]
+    },
     "linker_unconditional": {
       "schema_version": 1,
       "kind": "policy-input/rust-build-defaults",
@@ -815,6 +993,7 @@
             "kind": "build",
             "key": null,
             "linux": false,
+            "linux_only": false,
             "classified": true,
             "flags": [
               "-Zthreads=8",
@@ -826,9 +1005,111 @@
             "kind": "target",
             "key": "cfg(target_os = \"linux\")",
             "linux": true,
+            "linux_only": true,
             "classified": true,
             "flags": [
               "-Zthreads=8"
+            ]
+          }
+        ],
+        "backends": [],
+        "unstable_codegen_backend": null,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": true,
+          "read_error": null,
+          "sections": [
+            {
+              "path": "docs/developers-guide.md",
+              "heading": "Why Cranelift is not part of the standard",
+              "line": 8,
+              "level": 3,
+              "channels_named": [
+                "nightly-2026-08-23"
+              ],
+              "body_lines": 10
+            }
+          ]
+        }
+      ]
+    },
+    "negated_linux_cfg": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "negated-linux-cfg",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(not(target_os = \"linux\"))",
+            "kind": "target",
+            "key": "cfg(not(target_os = \"linux\"))",
+            "linux": false,
+            "linux_only": false,
+            "classified": false,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
             ]
           }
         ],
@@ -903,6 +1184,7 @@
             "kind": "build",
             "key": null,
             "linux": false,
+            "linux_only": false,
             "classified": true,
             "flags": [
               "-Zthreads=8"
@@ -913,6 +1195,7 @@
             "kind": "target",
             "key": "cfg(target_os = \"linux\")",
             "linux": true,
+            "linux_only": true,
             "classified": true,
             "flags": [
               "-Zthreads=8",
@@ -1029,6 +1312,7 @@
             "kind": "build",
             "key": null,
             "linux": false,
+            "linux_only": false,
             "classified": true,
             "flags": [
               "-Zthreads=8"
@@ -1056,6 +1340,61 @@
               "body_lines": 10
             }
           ]
+        }
+      ]
+    },
+    "non_string_rustflags": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "non-string-rustflags",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [],
+        "backends": [],
+        "unstable_codegen_backend": null,
+        "parse_error": "build rustflags contains a int; cargo expects strings"
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
         }
       ]
     },
@@ -1134,6 +1473,7 @@
             "kind": "build",
             "key": null,
             "linux": false,
+            "linux_only": false,
             "classified": true,
             "flags": [
               "-Zthreads=8"
@@ -1144,6 +1484,7 @@
             "kind": "target",
             "key": "cfg(target_os = \"linux\")",
             "linux": true,
+            "linux_only": true,
             "classified": true,
             "flags": [
               "-Zthreads=8",
@@ -1154,8 +1495,95 @@
         "backends": [
           {
             "source": "profile.dev",
+            "scope": "profile",
             "profile": "dev",
             "backend": "experimental"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ]
+    },
+    "package_override_backend": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "package-override-backend",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.dev.package.serde",
+            "scope": "package-override",
+            "profile": "dev",
+            "backend": "cranelift"
           }
         ],
         "unstable_codegen_backend": true,
@@ -1217,6 +1645,7 @@
             "kind": "build",
             "key": null,
             "linux": false,
+            "linux_only": false,
             "classified": true,
             "flags": [
               "-Zthreads=8"
@@ -1227,6 +1656,7 @@
             "kind": "target",
             "key": "cfg(target_os = \"linux\")",
             "linux": true,
+            "linux_only": true,
             "classified": true,
             "flags": [
               "-Zthreads=8",
@@ -1305,6 +1735,7 @@
             "kind": "build",
             "key": null,
             "linux": false,
+            "linux_only": false,
             "classified": true,
             "flags": []
           },
@@ -1313,6 +1744,7 @@
             "kind": "target",
             "key": "cfg(target_os = \"linux\")",
             "linux": true,
+            "linux_only": true,
             "classified": true,
             "flags": [
               "-Zthreads=8",
@@ -1391,6 +1823,7 @@
             "kind": "build",
             "key": null,
             "linux": false,
+            "linux_only": false,
             "classified": true,
             "flags": [
               "-Zthreads=8"
@@ -1401,9 +1834,99 @@
             "kind": "target",
             "key": "cfg(target_os = \"linux\")",
             "linux": true,
+            "linux_only": true,
             "classified": true,
             "flags": [
               "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [],
+        "unstable_codegen_backend": null,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": true,
+          "read_error": null,
+          "sections": [
+            {
+              "path": "docs/developers-guide.md",
+              "heading": "Why Cranelift is not part of the standard",
+              "line": 8,
+              "level": 3,
+              "channels_named": [
+                "nightly-2026-08-23"
+              ],
+              "body_lines": 10
+            }
+          ]
+        }
+      ]
+    },
+    "unclassified_only": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "unclassified-only",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_env = \"gnu\")",
+            "kind": "target",
+            "key": "cfg(target_env = \"gnu\")",
+            "linux": false,
+            "linux_only": false,
+            "classified": false,
+            "flags": [
+              "-Zthreads=8"
             ]
           }
         ],
@@ -1478,6 +2001,7 @@
             "kind": "build",
             "key": null,
             "linux": false,
+            "linux_only": false,
             "classified": true,
             "flags": [
               "-Zthreads=8"
@@ -1488,6 +2012,7 @@
             "kind": "target",
             "key": "cfg(target_env = \"gnu\")",
             "linux": false,
+            "linux_only": false,
             "classified": false,
             "flags": [
               "-Zthreads=8"
@@ -1498,6 +2023,7 @@
             "kind": "target",
             "key": "cfg(target_os = \"linux\")",
             "linux": true,
+            "linux_only": true,
             "classified": true,
             "flags": [
               "-Zthreads=8",

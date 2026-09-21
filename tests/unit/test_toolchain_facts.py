@@ -42,14 +42,18 @@ if typ.TYPE_CHECKING:
 )
 def test_channel_spellings_are_classified(channel: str, expected: str) -> None:
     """Each rustup spelling the estate uses maps to one classification."""
-    assert classify_channel(channel) == expected
+    assert classify_channel(channel) == expected, (
+        f"{channel!r} should classify as {expected!r}"
+    )
 
 
 def test_an_unpinned_checkout_has_no_toolchain_facts(
     tmp_path: pathlib.Path,
 ) -> None:
     """An absent file is not a parse failure and must not read as one."""
-    assert inspect_toolchain(tmp_path) is None
+    assert inspect_toolchain(tmp_path) is None, (
+        "an unpinned checkout produces no toolchain facts"
+    )
 
 
 def test_a_comment_naming_the_channel_is_not_the_channel(
@@ -62,9 +66,13 @@ def test_a_comment_naming_the_channel_is_not_the_channel(
         encoding="utf-8",
     )
     facts = inspect_toolchain(tmp_path)
-    assert facts is not None
-    assert facts["channel"] == "1.93.1"
-    assert facts["channel_kind"] == CHANNEL_VERSION
+    assert facts is not None, "the file exists, so facts are produced"
+    assert facts["channel"] == "1.93.1", (
+        f"the parsed channel is the pin, got {facts['channel']!r}"
+    )
+    assert facts["channel_kind"] == CHANNEL_VERSION, (
+        "a bare version is a version pin, not a nightly one"
+    )
 
 
 def test_malformed_toml_is_reported_rather_than_raised(
@@ -73,9 +81,9 @@ def test_malformed_toml_is_reported_rather_than_raised(
     """A pin that cannot be read fails closed with the reason attached."""
     (tmp_path / "rust-toolchain.toml").write_text("[toolchain\n", encoding="utf-8")
     facts = inspect_toolchain(tmp_path)
-    assert facts is not None
-    assert facts["parse_error"] is not None
-    assert facts["channel"] is None
+    assert facts is not None, "an unparsable pin still produces facts"
+    assert facts["parse_error"] is not None, "the reason must be carried"
+    assert facts["channel"] is None, "nothing was read, so no channel is reported"
 
 
 def test_a_file_without_a_channel_key_reports_none(
@@ -86,7 +94,27 @@ def test_a_file_without_a_channel_key_reports_none(
         '[toolchain]\ncomponents = ["clippy"]\n', encoding="utf-8"
     )
     facts = inspect_toolchain(tmp_path)
-    assert facts is not None
-    assert facts["channel"] is None
-    assert facts["parse_error"] is None
-    assert facts["channel_kind"] == CHANNEL_UNKNOWN
+    assert facts is not None, "the file exists, so facts are produced"
+    assert facts["channel"] is None, "the file pins no channel"
+    assert facts["parse_error"] is None, "a components-only file parses cleanly"
+    assert facts["channel_kind"] == CHANNEL_UNKNOWN, (
+        "with no channel there is no classification to make"
+    )
+
+
+def test_a_filesystem_refusal_is_reported_rather_than_read_as_absence(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An unreadable pin must not make the nightly-only clauses inapplicable."""
+    (tmp_path / "rust-toolchain.toml").write_text(
+        '[toolchain]\nchannel = "nightly-2026-08-23"\n', encoding="utf-8"
+    )
+
+    def refuse(_self: pathlib.Path, *_args: object, **_kwargs: object) -> object:
+        message = "Permission denied"
+        raise PermissionError(13, message)
+
+    monkeypatch.setattr("pathlib.Path.stat", refuse)
+    facts = inspect_toolchain(tmp_path)
+    assert facts is not None, "a refusal is not an absence"
+    assert facts["parse_error"] is not None, "the refusal's reason must be carried"

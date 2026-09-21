@@ -3,7 +3,7 @@
 The facts here decide what the `rust-build-defaults` policy is allowed to
 conclude, so each test pins one reading the policy depends on. Spelling
 variations matter more than usual: the estate writes the same linker flag
-three different ways, and a reader that recognises only one of them would
+three different ways, and a reader that recognizes only one of them would
 fail the repositories that already comply.
 """
 
@@ -14,9 +14,14 @@ import typing as typ
 import pytest
 
 from concordat.rules.cargo_config import (
+    SCOPE_PACKAGE_OVERRIDE,
+    SCOPE_PROFILE,
+    SCOPE_RUSTFLAGS,
+    classify_target_key,
     inspect_cargo_config,
     normalise_flags,
     read_cargo_config,
+    rustflags_cargo_would_refuse,
 )
 
 if typ.TYPE_CHECKING:
@@ -59,16 +64,60 @@ class TestFlagNormalisation:
     def test_equivalent_spellings_normalise_alike(
         self, value: object, expected: list[str]
     ) -> None:
-        """Axinite's split spelling must read as netsuke's joined one."""
-        assert normalise_flags(value) == expected
+        """The split spelling axinite uses must read as netsuke's joined one."""
+        assert normalise_flags(value) == expected, (
+            f"{value!r} should normalize to {expected!r}"
+        )
 
     def test_a_trailing_value_taking_flag_is_kept_verbatim(self) -> None:
         """A dangling `-C` has no value to join, and inventing one would lie."""
-        assert normalise_flags(["-Zthreads=8", "-C"]) == ["-Zthreads=8", "-C"]
+        assert normalise_flags(["-Zthreads=8", "-C"]) == ["-Zthreads=8", "-C"], (
+            "a value-taking flag with nothing after it is reported as written"
+        )
 
     def test_a_non_list_value_yields_no_flags(self) -> None:
         """Cargo reads neither an integer nor a table as rustflags."""
-        assert normalise_flags(17) == []
+        assert normalise_flags(17) == [], "a non-flag value carries no flags"
+
+
+class TestRustflagsCargoWouldRefuse:
+    """A configuration Cargo exits on is not one to read the standard from."""
+
+    def test_a_string_and_an_array_of_strings_are_accepted(self) -> None:
+        """Both spellings Cargo documents pass through unremarked."""
+        document: dict[str, object] = {
+            "build": {"rustflags": "-Zthreads=8"},
+            "target": {LINUX_CFG: {"rustflags": ["-Zthreads=8"]}},
+        }
+        assert rustflags_cargo_would_refuse(document) is None, (
+            "the two documented spellings must not be reported as refusals"
+        )
+
+    @pytest.mark.parametrize(
+        ("value", "fragment"),
+        [
+            pytest.param(["-Zthreads=8", 42], "contains a int", id="member"),
+            pytest.param(17, "is int", id="whole-value"),
+        ],
+    )
+    def test_a_value_cargo_rejects_is_reported(
+        self, value: object, fragment: str
+    ) -> None:
+        """Cargo exits on either; skipping the bad part would read a broken file."""
+        document: dict[str, object] = {"build": {"rustflags": value}}
+        refusal = rustflags_cargo_would_refuse(document)
+        assert refusal is not None, f"cargo refuses rustflags = {value!r}"
+        assert fragment in refusal, f"{refusal!r} should name the offending type"
+
+    def test_the_offending_target_table_is_named(self) -> None:
+        """The diagnostic points at the source, not merely at the file."""
+        document: dict[str, object] = {
+            "build": {"rustflags": ["-Zthreads=8"]},
+            "target": {LINUX_CFG: {"rustflags": ["-Zthreads=8", None]}},
+        }
+        refusal = rustflags_cargo_would_refuse(document)
+        assert refusal is not None, "a target table is read the same way"
+        assert LINUX_CFG in refusal, f"{refusal!r} should name the target table"
 
 
 class TestRustflagsSources:
@@ -85,34 +134,11 @@ class TestRustflagsSources:
             'rustflags = ["-Zthreads=8", "-Clink-arg=-fuse-ld=mold"]\n',
         )
         facts = inspect_cargo_config(tmp_path)
-        assert facts is not None
+        assert facts is not None, "a written configuration must produce facts"
         names = [source["name"] for source in facts["sources"]]
-        assert names == ["build", f"target.{LINUX_CFG}"]
-
-    @pytest.mark.parametrize(
-        ("key", "is_linux", "is_classified"),
-        [
-            pytest.param(LINUX_CFG, True, True, id="linux-cfg"),
-            pytest.param("x86_64-unknown-linux-gnu", True, True, id="linux-triple"),
-            pytest.param("cfg(windows)", False, True, id="windows-cfg"),
-            pytest.param("aarch64-apple-darwin", False, True, id="darwin-triple"),
-            pytest.param('cfg(target_env = "gnu")', False, False, id="unclassified"),
-        ],
-    )
-    def test_target_keys_are_classified_for_linux(
-        self,
-        tmp_path: pathlib.Path,
-        key: str,
-        is_linux: bool,  # noqa: FBT001 - parametrised expectation, not a flag
-        is_classified: bool,  # noqa: FBT001 - parametrised expectation
-    ) -> None:
-        """A key the reader cannot place is unclassified rather than guessed."""
-        write_config(tmp_path, f"[target.'{key}']\nrustflags = []\n")
-        facts = inspect_cargo_config(tmp_path)
-        assert facts is not None
-        source = facts["sources"][0]
-        assert source["linux"] is is_linux
-        assert source["classified"] is is_classified
+        assert names == ["build", f"target.{LINUX_CFG}"], (
+            f"both rustflags sources should be reported, got {names!r}"
+        )
 
     def test_a_nested_table_beneath_a_target_is_not_a_source(
         self, tmp_path: pathlib.Path
@@ -123,8 +149,64 @@ class TestRustflagsSources:
             "[target.'cfg(unix)'.foo]\nrustflags = [\"-Zthreads=8\"]\n",
         )
         facts = inspect_cargo_config(tmp_path)
-        assert facts is not None
-        assert facts["sources"] == []
+        assert facts is not None, "the file exists, so facts are produced"
+        assert facts["sources"] == [], (
+            "a build-script override is not a target flag source"
+        )
+
+
+class TestTargetClassification:
+    """Where a target table applies, and when that cannot be decided."""
+
+    @pytest.mark.parametrize(
+        ("key", "expected"),
+        [
+            pytest.param(LINUX_CFG, (True, True, True), id="linux-cfg"),
+            pytest.param(
+                "x86_64-unknown-linux-gnu", (True, True, True), id="linux-triple"
+            ),
+            pytest.param("cfg(windows)", (False, False, True), id="windows-cfg"),
+            pytest.param(
+                "aarch64-apple-darwin", (False, False, True), id="darwin-triple"
+            ),
+            # A source Linux builds take, and so do macOS builds: the linker
+            # ships for Linux alone, so this is not a place to name it.
+            pytest.param("cfg(unix)", (True, False, True), id="unix-cfg"),
+            # A negated expression contains the Linux predicate and applies
+            # everywhere except Linux; a substring test reads it backwards.
+            pytest.param(
+                'cfg(not(target_os = "linux"))', (False, False, False), id="negated"
+            ),
+            # A disjunction widens the verdict to every platform it names.
+            pytest.param(
+                'cfg(any(target_os = "linux", target_os = "macos"))',
+                (False, False, False),
+                id="disjunction",
+            ),
+            pytest.param(
+                'cfg(target_env = "gnu")', (False, False, False), id="unclassified"
+            ),
+        ],
+    )
+    def test_keys_are_placed_or_left_unplaced(
+        self, key: str, expected: tuple[bool, bool, bool]
+    ) -> None:
+        """A key the reader cannot place is unclassified rather than guessed."""
+        classification = classify_target_key(key)
+        assert tuple(classification) == expected, (
+            f"{key!r} should classify as {expected!r}, got {tuple(classification)!r}"
+        )
+
+    def test_the_classification_reaches_the_source(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """The policy reads these fields from the source, not from the key."""
+        write_config(tmp_path, "[target.'cfg(unix)']\nrustflags = []\n")
+        facts = inspect_cargo_config(tmp_path)
+        assert facts is not None, "the file exists, so facts are produced"
+        source = facts["sources"][0]
+        assert source["linux"] is True, "cfg(unix) is a source Linux builds take"
+        assert source["linux_only"] is False, "cfg(unix) reaches macOS as well"
 
 
 class TestCodegenBackends:
@@ -135,36 +217,53 @@ class TestCodegenBackends:
         [
             pytest.param(
                 '[profile.dev]\ncodegen-backend = "cranelift"\n',
-                [("profile.dev", "dev", "cranelift")],
+                [("profile.dev", SCOPE_PROFILE, "dev", "cranelift")],
                 id="profile-key",
             ),
             pytest.param(
                 '[profile.release.package."*"]\ncodegen-backend = "cranelift"\n',
-                [("profile.release.package.*", "release", "cranelift")],
+                [
+                    (
+                        "profile.release.package.*",
+                        SCOPE_PACKAGE_OVERRIDE,
+                        "release",
+                        "cranelift",
+                    )
+                ],
                 id="package-override",
             ),
             pytest.param(
                 '[build]\nrustflags = ["-Zcodegen-backend=cranelift"]\n',
-                [("build", None, "cranelift")],
+                [("build", SCOPE_RUSTFLAGS, None, "cranelift")],
                 id="rustflags",
             ),
         ],
     )
-    def test_every_documented_route_is_reported(
+    def test_every_documented_route_is_reported_with_its_scope(
         self,
         tmp_path: pathlib.Path,
         body: str,
-        expected: list[tuple[str, str | None, str]],
+        expected: list[tuple[str, str, str | None, str]],
     ) -> None:
-        """Closing one route while another stays open is not a refusal."""
+        """Closing one route while another stays open is not a refusal.
+
+        The scope is recorded because the routes are not interchangeable: a
+        package override selects a backend for one package, so it is a
+        selection to validate but never the profile's default.
+        """
         write_config(tmp_path, body)
         facts = inspect_cargo_config(tmp_path)
-        assert facts is not None
+        assert facts is not None, "the file exists, so facts are produced"
         found = [
-            (backend["source"], backend["profile"], backend["backend"])
+            (
+                backend["source"],
+                backend["scope"],
+                backend["profile"],
+                backend["backend"],
+            )
             for backend in facts["backends"]
         ]
-        assert found == expected
+        assert found == expected, f"expected {expected!r}, got {found!r}"
 
     def test_an_unrelated_key_of_the_same_name_is_not_a_backend(
         self, tmp_path: pathlib.Path
@@ -176,19 +275,23 @@ class TestCodegenBackends:
             "[profile.dev.package.thing]\nopt-level = 3\n",
         )
         facts = inspect_cargo_config(tmp_path)
-        assert facts is not None
-        assert facts["backends"] == []
+        assert facts is not None, "the file exists, so facts are produced"
+        assert facts["backends"] == [], (
+            "only the documented key paths are backend selections"
+        )
 
     def test_the_unstable_table_is_read(self, tmp_path: pathlib.Path) -> None:
-        """Weaver's spelling pairs the profile key with the unstable gate."""
+        """The spelling weaver uses pairs the profile key with the unstable gate."""
         write_config(
             tmp_path,
             "[unstable]\ncodegen-backend = true\n"
             '[profile.dev]\ncodegen-backend = "cranelift"\n',
         )
         facts = inspect_cargo_config(tmp_path)
-        assert facts is not None
-        assert facts["unstable_codegen_backend"] is True
+        assert facts is not None, "the file exists, so facts are produced"
+        assert facts["unstable_codegen_backend"] is True, (
+            "the unstable gate must be reported when it is set"
+        )
 
     def test_the_unstable_gate_is_absent_by_default(
         self, tmp_path: pathlib.Path
@@ -196,8 +299,10 @@ class TestCodegenBackends:
         """An absent gate is `None`, distinct from one explicitly set false."""
         write_config(tmp_path, '[build]\nrustflags = ["-Zthreads=8"]\n')
         facts = inspect_cargo_config(tmp_path)
-        assert facts is not None
-        assert facts["unstable_codegen_backend"] is None
+        assert facts is not None, "the file exists, so facts are produced"
+        assert facts["unstable_codegen_backend"] is None, (
+            "an absent gate is distinguishable from one set to false"
+        )
 
 
 class TestReadFailures:
@@ -205,7 +310,9 @@ class TestReadFailures:
 
     def test_an_absent_configuration_has_no_facts(self, tmp_path: pathlib.Path) -> None:
         """No file means no facts, which the policy reads as noncompliant."""
-        assert inspect_cargo_config(tmp_path) is None
+        assert inspect_cargo_config(tmp_path) is None, (
+            "a checkout with no configuration produces no facts"
+        )
 
     def test_malformed_toml_is_reported_rather_than_raised(
         self, tmp_path: pathlib.Path
@@ -213,9 +320,23 @@ class TestReadFailures:
         """An unparsable file must fail closed, not vanish into an absence."""
         write_config(tmp_path, "[build\nrustflags = []\n")
         facts = inspect_cargo_config(tmp_path)
-        assert facts is not None
-        assert facts["parse_error"] is not None
-        assert facts["sources"] == []
+        assert facts is not None, "an unparsable file still produces facts"
+        assert facts["parse_error"] is not None, "the reason must be carried"
+        assert facts["sources"] == [], "nothing was read, so no source is reported"
+
+    def test_a_value_cargo_refuses_is_carried_as_a_parse_error(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Cargo exits on this file, so the audit must decide nothing from it."""
+        write_config(tmp_path, '[build]\nrustflags = ["-Zthreads=8", 42]\n')
+        facts = inspect_cargo_config(tmp_path)
+        assert facts is not None, "the file exists, so facts are produced"
+        assert facts["parse_error"] is not None, (
+            "a configuration cargo refuses must fail closed"
+        )
+        assert facts["sources"] == [], (
+            "reading the remaining flags would pass a repository that cannot build"
+        )
 
     def test_a_comment_naming_the_flags_contributes_nothing(
         self, tmp_path: pathlib.Path
@@ -227,15 +348,36 @@ class TestReadFailures:
             "[build]\nrustflags = []\n",
         )
         facts = inspect_cargo_config(tmp_path)
-        assert facts is not None
-        assert facts["sources"][0]["flags"] == []
+        assert facts is not None, "the file exists, so facts are produced"
+        assert facts["sources"][0]["flags"] == [], (
+            "a flag named in a comment is not configured"
+        )
 
-    def test_a_directory_in_place_of_the_file_is_reported(
+    def test_a_directory_in_place_of_the_file_is_an_absence(
         self, tmp_path: pathlib.Path
     ) -> None:
-        """A path that is not a regular file is an absence, not a crash."""
+        """The filesystem answered, so this is an absence rather than a refusal."""
         (tmp_path / ".cargo" / "config.toml").mkdir(parents=True)
-        assert inspect_cargo_config(tmp_path) is None
+        assert inspect_cargo_config(tmp_path) is None, (
+            "a directory in the file's place is not the file"
+        )
+
+    def test_a_filesystem_refusal_is_not_an_absence(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A permission failure must not read as a repository with no standard."""
+        write_config(tmp_path, '[build]\nrustflags = ["-Zthreads=8"]\n')
+
+        def refuse(_self: pathlib.Path, *_args: object, **_kwargs: object) -> object:
+            message = "Permission denied"
+            raise PermissionError(13, message)
+
+        monkeypatch.setattr("pathlib.Path.stat", refuse)
+        facts = inspect_cargo_config(tmp_path)
+        assert facts is not None, "a refusal is not an absence"
+        assert facts["parse_error"] is not None, (
+            "the refusal's reason must reach the policy"
+        )
 
     def test_the_legacy_extensionless_name_is_read(
         self, tmp_path: pathlib.Path
@@ -245,8 +387,10 @@ class TestReadFailures:
         legacy.parent.mkdir(parents=True)
         legacy.write_text('[build]\nrustflags = ["-Zthreads=8"]\n', encoding="utf-8")
         facts = inspect_cargo_config(tmp_path)
-        assert facts is not None
-        assert facts["path"] == ".cargo/config"
+        assert facts is not None, "the legacy name is a configuration cargo reads"
+        assert facts["path"] == ".cargo/config", (
+            f"the reported path should be the file read, got {facts['path']!r}"
+        )
 
 
 def test_read_cargo_config_returns_the_parsed_document(
@@ -255,4 +399,6 @@ def test_read_cargo_config_returns_the_parsed_document(
     """The document reader is separable from the fact extraction above."""
     write_config(tmp_path, '[build]\nrustflags = ["-Zthreads=8"]\n')
     document = read_cargo_config(tmp_path / ".cargo" / "config.toml")
-    assert document == {"build": {"rustflags": ["-Zthreads=8"]}}
+    assert document == {"build": {"rustflags": ["-Zthreads=8"]}}, (
+        f"the parsed document should mirror the file, got {document!r}"
+    )

@@ -200,3 +200,114 @@ test_a_rustflags_backend_reaches_the_development_profile if {
 	selected := policy.backend_configured with input as data.fixtures.compliant_rustflags_backend
 	selected
 }
+
+# -- target classification, in both directions ------------------------------
+
+# A negated expression contains the Linux predicate and applies everywhere but
+# Linux. A substring test reads it as a Linux source and would then accept a
+# Linux-only linker flag in a table macOS and Windows builds take.
+test_a_negated_linux_cfg_is_not_a_linux_source if {
+	findings := policy.deny with input as data.fixtures.negated_linux_cfg
+	profile(findings) == {["BD-002", "indeterminate"]}
+}
+
+# `cfg(unix)` is a source Linux builds take, and so do macOS builds. The linker
+# ships for Linux alone, so naming it here breaks the platform it reaches.
+test_the_linker_in_a_source_reaching_beyond_linux_is_found if {
+	findings := policy.deny with input as data.fixtures.linker_beyond_linux
+	profile(findings) == {["BD-002", "noncompliant"]}
+	some f in findings
+	contains(f.msg, "applies beyond Linux")
+}
+
+# With no source placed, "the linker is configured nowhere" is not provable:
+# the unplaceable source may be the Linux table. The indeterminate finding is
+# the whole answer, and the noncompliant one must not accompany it.
+test_an_unplaceable_sole_target_does_not_prove_the_linker_absent if {
+	findings := policy.deny with input as data.fixtures.unclassified_only
+	profile(findings) == {["BD-002", "indeterminate"]}
+	count(findings) == 1
+}
+
+# -- the backend, in both directions ----------------------------------------
+
+# Cargo applies a package override to the named package alone, so every other
+# development build keeps the backend it had. That is not the profile default.
+test_a_package_override_is_not_the_profile_default if {
+	findings := policy.deny with input as data.fixtures.package_override_backend
+	profile(findings) == {["BD-004", "noncompliant"]}
+}
+
+# An unreadable document may hold the exception, so neither state is proved.
+test_an_unreadable_exception_document_proves_neither_state if {
+	findings := policy.deny with input as data.fixtures.exception_unreadable
+	profile(findings) == {["BD-004", "indeterminate"]}
+	count(findings) == 1
+}
+
+# -- a configuration cargo refuses ------------------------------------------
+
+# Cargo exits on `rustflags = ["-Zthreads=8", 42]`. Dropping the offending
+# member and reading the rest would report a repository that cannot build as
+# one carrying the standard.
+test_a_configuration_cargo_refuses_decides_nothing if {
+	findings := policy.deny with input as data.fixtures.non_string_rustflags
+	profile(findings) == {["CF-001", "indeterminate"]}
+	count(findings) == 1
+}
+
+# -- the parameters are read, not merely declared ---------------------------
+#
+# Every test above runs on the manifest defaults. An implementation that
+# ignored `data.parameters` entirely would pass all of them, so each parameter
+# is exercised here in both directions: a value that makes a compliant fixture
+# fail, and a value that makes a failing fixture pass.
+
+# The fixture is compliant on the default flag, so every finding here is one
+# the parameter produced. Both sources are named, because each carries the
+# default spelling and neither carries the configured one.
+test_the_threads_flag_parameter_is_read if {
+	findings := policy.deny with input as data.fixtures.compliant_exception
+		with data.parameters as {"threads_flag": "-Zthreads=16"}
+	profile(findings) == {["BD-001", "noncompliant"]}
+	count(findings) == 2
+}
+
+test_the_linker_flag_parameter_is_read if {
+	findings := policy.deny with input as data.fixtures.compliant_exception
+		with data.parameters as {"linker_flag": "-Clink-arg=-fuse-ld=lld"}
+	# The configured flag is absent from the Linux table, and the flag the
+	# repository does name is no longer held out of the drift comparison.
+	profile(findings) == {["BD-002", "noncompliant"], ["BD-003", "noncompliant"]}
+}
+
+# An empty platform list makes the linker clause inapplicable, which is the
+# escape hatch for a repository that builds for no platform the linker ships
+# on. Proved on the fixture that otherwise reports the linker configured
+# nowhere.
+test_an_empty_linker_platform_list_makes_the_clause_inapplicable if {
+	findings := policy.deny with input as data.fixtures.no_linux_table
+		with data.parameters as {"linker_platforms": []}
+	count(findings) == 0
+}
+
+test_a_populated_linker_platform_list_keeps_the_clause if {
+	findings := policy.deny with input as data.fixtures.no_linux_table
+		with data.parameters as {"linker_platforms": ["linux"]}
+	profile(findings) == {["BD-002", "noncompliant"]}
+}
+
+# The fixture selects Cranelift. Naming another backend as the estate's makes
+# the same configuration a deviation, and the reverse holds on the fixture
+# whose backend is not the default.
+test_the_backend_parameter_is_read if {
+	findings := policy.deny with input as data.fixtures.compliant_cranelift
+		with data.parameters as {"codegen_backend": "experimental"}
+	profile(findings) == {["BD-004", "noncompliant"], ["BD-005", "noncompliant"]}
+}
+
+test_the_backend_parameter_admits_the_repository_that_matches_it if {
+	findings := policy.deny with input as data.fixtures.other_backend
+		with data.parameters as {"codegen_backend": "experimental"}
+	count(findings) == 0
+}

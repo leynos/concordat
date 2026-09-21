@@ -29,9 +29,12 @@ Cargo and rustup discover, and does not read the Makefile.
   `-Zthreads` is a nightly flag, so demanding it of a stable pin would break
   the build rather than accelerate it.
 - **BD-002** (error): a target table that applies on Linux carries the linker
-  flag, and no source that does not apply on Linux names it. `mold` ships for
-  Linux alone, so naming it unconditionally breaks macOS and Windows. A target
-  key this policy cannot place on or off Linux is `indeterminate`.
+  flag, and no source that reaches beyond Linux names it. `mold` ships for
+  Linux alone, so naming it unconditionally — or under `cfg(unix)`, which
+  macOS builds also take — breaks the platforms it reaches. A target key this
+  policy cannot place is `indeterminate`, and while any key is unplaced the
+  policy will not conclude that the linker is configured nowhere: the
+  unplaceable source might be the Linux table.
 - **BD-003** (error): the sources are repeated, not merged. Cargo selects a
   single `rustflags` source rather than merging them — a matching `[target.*]`
   table replaces `[build] rustflags` outright — so a flag named in one source
@@ -39,7 +42,10 @@ Cargo and rustup discover, and does not read the Makefile.
   flag is the deliberate exception and is governed by BD-002.
 - **BD-004** (error): the backend is the development-profile default, or the
   repository records an exception. Both states are accepted; a repository with
-  neither is noncompliant.
+  neither is noncompliant. A package override beneath a profile is not the
+  profile's default: Cargo applies it to the named package alone, leaving
+  every other development build on the backend it had. An exception document
+  the filesystem refused to read decides nothing, and is `indeterminate`.
 - **BD-005** (error): a backend selection Cargo cannot honour, or one the
   estate has not adopted. A profile key without `[unstable] codegen-backend =
   true` is refused by Cargo; an `[unstable]` key under a non-nightly pin stops
@@ -49,7 +55,10 @@ Cargo and rustup discover, and does not read the Makefile.
   what makes the "re-test on each toolchain bump" obligation checkable. With no
   channel pinned at all the finding is `indeterminate`.
 - **CF-001** (error, indeterminate): `.cargo/config.toml` exists but could not
-  be parsed, so no clause that reads it can be decided.
+  be read, parsed, or used, so no clause that reads it can be decided. This
+  includes a configuration Cargo itself refuses: `rustflags = ["-Zthreads=8",
+  42]` makes Cargo exit, and dropping the offending member to read the rest
+  would pass a repository that cannot build at all.
 - **TC-001** (error, indeterminate): `rust-toolchain.toml` exists but its
   channel could not be classified.
 - **AP-001** (error, indeterminate): no `language.rust.surfaces` list was
@@ -82,6 +91,14 @@ linker flag three of those ways today. The policy compares normalized flags, so
 all three are the same flag, and a target table keyed on an explicit
 `*-linux-*` triple satisfies the Linux condition exactly as a
 `cfg(target_os = "linux")` key does.
+
+Target keys are placed, not pattern-matched. `cfg(target_os = "linux")` and a
+`*-linux-*` triple apply only on Linux; `cfg(unix)` applies on Linux and
+beyond it; a key naming another operating system applies elsewhere. Anything
+this reader will not evaluate — a negation, a disjunction, a `target_env`
+predicate, a custom JSON target — is left unplaced, because
+`cfg(not(target_os = "linux"))` contains the Linux predicate while applying
+everywhere except Linux, and a substring test reads it exactly backwards.
 
 ## Verdicts
 

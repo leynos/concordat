@@ -45,6 +45,7 @@
         "kind": "target",
         "key": "cfg(target_os = \"linux\")",
         "linux": true,
+        "linux_only": true,
         "classified": true,
         "flags": [
           "-Clink-arg=-fuse-ld=mold"

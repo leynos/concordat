@@ -23,6 +23,8 @@ from __future__ import annotations
 import re
 import typing as typ
 
+from .fs_probe import probe_file
+
 if typ.TYPE_CHECKING:
     import pathlib
 
@@ -31,9 +33,17 @@ _FENCE: typ.Final = re.compile(r"^\s*(?P<fence>`{3,}|~{3,})")
 # The channel spellings rustup accepts, plus a bare version. Anything looser
 # would match a library version quoted in the evidence and make a stale
 # exception read as current.
+# `\b` would not do: it treats `-`, `.` and `/` as boundaries, so a match can
+# start and end inside a longer token. `librustc_codegen_cranelift-1.100.0-
+# nightly.so`, which the evidence in these sections quotes, would yield both
+# `1.100.0` and `nightly` and make a stale exception read as current. The
+# lookarounds require the match to occupy a whole delimited token; a backtick
+# is not a delimiter, so the guide's quoted spelling still matches.
 _CHANNEL: typ.Final = re.compile(
-    r"\b(?:nightly-\d{4}-\d{2}-\d{2}|beta-\d{4}-\d{2}-\d{2}"
-    r"|nightly|beta|stable|\d+\.\d+(?:\.\d+)?)\b"
+    r"(?<![\w./-])"
+    r"(?:nightly-\d{4}-\d{2}-\d{2}|beta-\d{4}-\d{2}-\d{2}"
+    r"|nightly|beta|stable|\d+\.\d+(?:\.\d+)?)"
+    r"(?![\w./-])"
 )
 
 
@@ -87,7 +97,18 @@ def _scan_document(
 ) -> DocumentScan:
     """Return the scan of one declared document."""
     path = checkout / relative
-    if not path.is_file():
+    probe = probe_file(path)
+    if probe.read_error is not None:
+        # A document the filesystem refuses to describe may hold the
+        # exception. Reporting it absent would turn an unreadable checkout
+        # into a repository that simply never recorded one.
+        return {
+            "path": relative,
+            "present": True,
+            "read_error": probe.read_error,
+            "sections": [],
+        }
+    if not probe.present:
         return {
             "path": relative,
             "present": False,

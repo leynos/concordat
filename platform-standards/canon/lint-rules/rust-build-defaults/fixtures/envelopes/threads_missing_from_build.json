@@ -45,6 +45,7 @@
         "kind": "build",
         "key": null,
         "linux": false,
+        "linux_only": false,
         "classified": true,
         "flags": []
       },
@@ -53,6 +54,7 @@
         "kind": "target",
         "key": "cfg(target_os = \"linux\")",
         "linux": true,
+        "linux_only": true,
         "classified": true,
         "flags": [
           "-Zthreads=8",

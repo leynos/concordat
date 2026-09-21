@@ -316,7 +316,7 @@ It reads the files Cargo and rustup auto-discover, so it needs `conftest` on
 - the parallel `rustc` frontend is carried by every `rustflags` source, where
   `rust-toolchain.toml` pins a nightly channel;
 - the `mold` linker is named in a source that applies on Linux, and in no
-  source that does not;
+  source that reaches beyond Linux;
 - the sources are repeated rather than merged, because Cargo replaces one with
   another instead of combining them;
 - the Cranelift codegen backend is the development-profile default, or the
@@ -340,9 +340,14 @@ section names the channel `rust-toolchain.toml` pins, so bumping the pin past
 the measurement reports the exception as due a re-test. A repository with
 neither the backend nor an exception is noncompliant.
 
+Note that a package override beneath the profile is not the profile's default:
+Cargo applies `[profile.dev.package."serde"] codegen-backend` to that package
+alone.
+
 Both the document list and the heading keyword are rule parameters, so a
 repository that records the exception elsewhere can be accommodated without
-changing the policy.
+changing the policy. So are the two flags, the backend name, and the platform
+list that makes the linker clause applicable.
 
 ### Sweeping the Rust estate
 

@@ -67,11 +67,17 @@ class TestEnvelopeContents:
             '[package]\nname = "x"\nversion = "0.1.0"\n', encoding="utf-8"
         )
         envelope = build_build_defaults_envelope(tmp_path)
-        assert envelope["kind"] == BUILD_DEFAULTS_ENVELOPE_KIND
-        assert envelope["cargo_config"] is None
-        assert envelope["toolchain"] is None
-        assert envelope["applicability"]["cargo_config"] is False
-        assert envelope["applicability"]["toolchain_file"] is False
+        assert envelope["kind"] == BUILD_DEFAULTS_ENVELOPE_KIND, (
+            f"the envelope must name its own kind, got {envelope['kind']!r}"
+        )
+        assert envelope["cargo_config"] is None, "no configuration was written"
+        assert envelope["toolchain"] is None, "no toolchain was pinned"
+        assert envelope["applicability"]["cargo_config"] is False, (
+            "applicability must mirror the absent configuration"
+        )
+        assert envelope["applicability"]["toolchain_file"] is False, (
+            "applicability must mirror the absent toolchain pin"
+        )
 
     def test_the_declared_documents_are_the_ones_scanned(
         self, tmp_path: pathlib.Path
@@ -91,8 +97,13 @@ class TestEnvelopeContents:
             },
         )
         scans = envelope["exceptions"]
-        assert [scan["path"] for scan in scans] == ["docs/adr-029.md"]
-        assert len(scans[0]["sections"]) == 1
+        paths = [scan["path"] for scan in scans]
+        assert paths == ["docs/adr-029.md"], (
+            f"only the declared document is scanned, got {paths!r}"
+        )
+        assert len(scans[0]["sections"]) == 1, (
+            "the declared keyword must be the one matched"
+        )
 
     def test_no_makefile_facts_are_carried(self, tmp_path: pathlib.Path) -> None:
         """The clauses read files Cargo discovers, so a Makefile is irrelevant.
@@ -108,7 +119,9 @@ class TestEnvelopeContents:
             "export NOT_AN_ASSIGNMENT\n", encoding="utf-8"
         )
         envelope = build_build_defaults_envelope(tmp_path)
-        assert "makefile" not in envelope
+        assert "makefile" not in envelope, (
+            "the build-defaults envelope carries no Makefile facts"
+        )
 
 
 class TestBuilderSelection:
@@ -121,8 +134,10 @@ class TestBuilderSelection:
         (tmp_path / "Cargo.toml").write_text(
             '[package]\nname = "x"\nversion = "0.1.0"\n', encoding="utf-8"
         )
-        envelope = runner._envelope_for("rust-build-defaults", tmp_path)
-        assert envelope["kind"] == BUILD_DEFAULTS_ENVELOPE_KIND
+        envelope = runner.default_envelope_builder("rust-build-defaults", tmp_path)
+        assert envelope["kind"] == BUILD_DEFAULTS_ENVELOPE_KIND, (
+            f"the package's own builder must be chosen, got {envelope['kind']!r}"
+        )
 
     def test_an_unregistered_package_keeps_the_makefile_envelope(
         self, tmp_path: pathlib.Path
@@ -131,8 +146,34 @@ class TestBuilderSelection:
         (tmp_path / "Cargo.toml").write_text(
             '[package]\nname = "x"\nversion = "0.1.0"\n', encoding="utf-8"
         )
-        envelope = runner._envelope_for("rust-makefile-baseline", tmp_path)
-        assert envelope["kind"] == "policy-input/rust-makefile-baseline"
+        envelope = runner.default_envelope_builder("rust-makefile-baseline", tmp_path)
+        assert envelope["kind"] == "policy-input/rust-makefile-baseline", (
+            f"an unregistered package keeps the historic envelope, "
+            f"got {envelope['kind']!r}"
+        )
+
+
+def _comparable(fixtures: dict[str, dict[str, object]]) -> dict[str, object]:
+    """Return *fixtures* with every parse diagnostic reduced to its presence.
+
+    A `parse_error` holds `str(tomllib.TOMLDecodeError)`, whose wording belongs
+    to the interpreter. Comparing it verbatim would fail a checked-in fixture
+    on a Python release that reworded the diagnostic, even though the
+    configuration is as unparsable as it ever was. The policy asks only
+    whether the field is set, so that is what is compared; the real message
+    stays in the generated envelopes for whoever reads one.
+
+    Returns
+    -------
+    dict[str, object]
+        A copy of *fixtures* with each parse diagnostic replaced by a marker.
+    """
+    reduced = json.loads(json.dumps(fixtures))
+    for envelope in reduced.values():
+        config = envelope.get("cargo_config")
+        if isinstance(config, dict) and config.get("parse_error") is not None:
+            config["parse_error"] = "<set>"
+    return typ.cast("dict[str, object]", reduced)
 
 
 @pytest.fixture(scope="module")
@@ -158,7 +199,11 @@ class TestCheckedInFixtures:
         bundle = json.loads(
             (RULE_DIR / "fixtures" / "data.json").read_text(encoding="utf-8")
         )
-        assert bundle["fixtures"] == generated
+        assert _comparable(bundle["fixtures"]) == _comparable(generated), (
+            "regenerate the fixtures: `uv run python "
+            "platform-standards/canon/lint-rules/rust-build-defaults/"
+            "fixtures/generate.py`"
+        )
 
     def test_every_envelope_file_matches_the_bundle(
         self, generated: dict[str, dict[str, object]]
@@ -169,4 +214,6 @@ class TestCheckedInFixtures:
             path.stem: json.loads(path.read_text(encoding="utf-8"))
             for path in envelopes_dir.glob("*.json")
         }
-        assert on_disk == generated
+        assert _comparable(on_disk) == _comparable(generated), (
+            "the per-fixture files and the bundle must be regenerated together"
+        )

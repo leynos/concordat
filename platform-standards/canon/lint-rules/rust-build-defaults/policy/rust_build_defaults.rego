@@ -230,9 +230,20 @@ deny contains f if {
 	)
 }
 
+# Only provable when every source was placed. An unclassified source may be
+# the Linux table, so reporting that the linker is configured nowhere while one
+# source could not be read is a verdict the facts do not support; the
+# indeterminate finding below is the whole answer in that case.
+every_source_classified if {
+	every source in rustflags_sources {
+		source.classified == true
+	}
+}
+
 deny contains f if {
 	linker_clause_applies
 	config_readable
+	every_source_classified
 	count(linux_sources) == 0
 	f := finding(
 		"BD-002", "noncompliant", config_path,
@@ -260,13 +271,13 @@ deny contains f if {
 	linker_clause_applies
 	config_readable
 	some source in rustflags_sources
-	source.linux == false
+	source.linux_only == false
 	source.classified == true
 	linker_flag in source.flags
 	f := finding(
 		"BD-002", "noncompliant", config_path,
 		sprintf(
-			"rustflags source %q names %q, which ships for Linux only",
+			"rustflags source %q names %q, which ships for Linux only, and applies beyond Linux",
 			[source.name, linker_flag],
 		),
 	)
@@ -312,13 +323,26 @@ backends := [] if not config_readable
 
 # A `-Zcodegen-backend=` token in rustflags carries no profile, and applies to
 # every build the source reaches, so it selects the development profile too.
+# A package override does not: cargo applies it to the named package alone,
+# leaving every other development build on whatever backend it had.
 dev_backends := [backend |
 	some backend in backends
-	backend.profile in {"dev", null}
+	backend.scope == "profile"
+	backend.profile == "dev"
+]
+
+dev_backends_from_flags := [backend |
+	some backend in backends
+	backend.scope == "rustflags"
 ]
 
 backend_configured if {
 	some backend in dev_backends
+	backend.backend == codegen_backend
+}
+
+backend_configured if {
+	some backend in dev_backends_from_flags
 	backend.backend == codegen_backend
 }
 
@@ -348,10 +372,16 @@ backend_clause_applies if {
 
 backend_clause_applies if config_readable
 
+exception_read_error if {
+	some scan in object.get(input, "exceptions", [])
+	scan.read_error != null
+}
+
 deny contains f if {
 	backend_clause_applies
 	not backend_configured
 	not exception_recorded
+	not exception_read_error
 	f := finding(
 		"BD-004", "noncompliant", config_path,
 		sprintf(
@@ -383,7 +413,7 @@ deny contains f if {
 	applicable
 	config_readable
 	some backend in backends
-	backend.profile != null
+	backend.scope in {"profile", "package-override"}
 	input.cargo_config.unstable_codegen_backend != true
 	f := finding(
 		"BD-005", "noncompliant", config_path,
