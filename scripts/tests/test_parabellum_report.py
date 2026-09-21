@@ -6,7 +6,10 @@ import json
 import typing as typ
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
+from scripts import parabellum_report as report
 from scripts import parabellum_sweep as sweep
 
 if typ.TYPE_CHECKING:
@@ -474,3 +477,79 @@ class TestReport:
         assert "excluded: 1" in report, (
             "the summary should count one excluded repository"
         )
+
+
+class TestDisplayWidthAlignment:
+    """Table columns are sized by rendered width, not by code-point count.
+
+    `mdtablefix` sizes columns with the `unicode-width` crate. A renderer
+    that counts code points pads a CJK, emoji, or combining-mark cell too
+    narrowly, so `make check-fmt` rejects the checked-in report and
+    `make fmt` rewrites it.
+    """
+
+    @staticmethod
+    def _column_widths(line: str) -> list[int]:
+        """Return the rendered width of each cell in one table line."""
+        cells = line.removeprefix("| ").removesuffix(" |").split(" | ")
+        return [report._display_width(cell) for cell in cells]
+
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [
+            pytest.param("abc", 3, id="ascii"),
+            pytest.param("\u65e5\u672c\u8a9e", 6, id="cjk-wide"),
+            pytest.param("\uff41\uff42", 4, id="fullwidth"),
+            pytest.param("e\u0301", 1, id="combining-acute"),
+            pytest.param("\u26a0\ufe0f", 1, id="variation-selector"),
+            pytest.param("", 0, id="empty"),
+        ],
+    )
+    def test_display_width_of_one_cell(self, text: str, expected: int) -> None:
+        """Each character class contributes its rendered column count."""
+        assert report._display_width(text) == expected
+
+    def test_wide_cells_align_with_the_delimiter(self) -> None:
+        """Every row and the delimiter agree on each column's width.
+
+        The oracle is `_display_width` applied to the rendered line rather
+        than the source cells, so a padding bug cannot hide behind the same
+        arithmetic that produced it.
+        """
+        rows = [
+            ("Repository", "Verdict"),
+            ("\u65e5\u672c\u8a9e\u30d7\u30ed\u30b8\u30a7\u30af\u30c8", "compliant"),
+            ("cafe\u0301", "noncompliant"),
+            ("\u26a0\ufe0f alert", "indeterminate"),
+        ]
+        lines = report._aligned_table(rows)
+        widths = [self._column_widths(line) for line in lines]
+        assert all(row == widths[0] for row in widths), lines
+        assert widths[0] == [18, 13], widths[0]
+
+    @given(
+        st.lists(
+            st.lists(
+                st.text(
+                    alphabet="ab \u65e5\u672c\u0301\ufe0f\u26a0",
+                    max_size=6,
+                ),
+                min_size=2,
+                max_size=2,
+            ).map(tuple),
+            min_size=2,
+            max_size=5,
+        )
+    )
+    def test_every_rendered_line_has_equal_column_widths(
+        self, rows: list[tuple[str, ...]]
+    ) -> None:
+        """Whatever the cells, the rendered columns line up.
+
+        The invariant holds over the whole input space, not only the cases
+        the table above names: wide, combining, and format characters mixed
+        freely with ASCII.
+        """
+        lines = report._aligned_table(rows)
+        widths = [self._column_widths(line) for line in lines]
+        assert all(row == widths[0] for row in widths), lines
