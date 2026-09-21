@@ -138,6 +138,27 @@ def required_tools() -> frozenset[str]:
     )
 
 
+def _end_of_quote(line: str, index: int) -> int:
+    """Return the index just past the quoted string opening at ``index``."""
+    quote = line[index]
+    index += 1
+    while index < len(line):
+        if quote == '"' and line[index] == "\\":
+            index += 2
+            continue
+        if line[index] == quote:
+            return index + 1
+        index += 1
+    return len(line)
+
+
+def _end_of_operator(line: str, index: int) -> int:
+    """Return the index just past the control operator at ``index``."""
+    while index < len(line) and line[index] in _OPERATOR_CHARACTERS:
+        index += 1
+    return index
+
+
 def split_compound(line: str) -> tuple[str, ...]:
     """Split one shell line at its unquoted control operators.
 
@@ -156,40 +177,21 @@ def split_compound(line: str) -> tuple[str, ...]:
         The line's segments, each of which is one simple command.
     """
     segments: list[str] = []
-    current: list[str] = []
-    quote: str | None = None
+    start = 0
     index = 0
     while index < len(line):
         character = line[index]
-        if quote is None and character == "\\":
-            current.append(line[index : index + 2])
-            index += 2
-            continue
-        if quote is not None:
-            current.append(character)
-            if character == "\\" and quote == '"':
-                current.append(line[index + 1 : index + 2])
-                index += 2
-                continue
-            if character == quote:
-                quote = None
+        if character == "\\":
+            index = min(index + 2, len(line))
+        elif character in "'\"":
+            index = _end_of_quote(line, index)
+        elif character in _OPERATOR_CHARACTERS:
+            segments.append(line[start:index])
+            index = _end_of_operator(line, index)
+            start = index
+        else:
             index += 1
-            continue
-        if character in "'\"":
-            quote = character
-            current.append(character)
-            index += 1
-            continue
-        if character in _OPERATOR_CHARACTERS:
-            segments.append("".join(current))
-            current = []
-            # Consume a doubled operator whole, so `&&` does not leave an `&`.
-            while index < len(line) and line[index] in _OPERATOR_CHARACTERS:
-                index += 1
-            continue
-        current.append(character)
-        index += 1
-    segments.append("".join(current))
+    segments.append(line[start:])
     return tuple(segment for segment in (s.strip() for s in segments) if segment)
 
 
