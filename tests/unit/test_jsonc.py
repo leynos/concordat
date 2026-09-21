@@ -88,7 +88,7 @@ class TestLoadsJsonc:
         pytest.param('["a"]', 3, False, id="not-a-comma"),
     ],
 )
-def test_is_trailing_comma_contract(text: str, index: int, expected: bool) -> None:  # noqa: FBT001
+def test_is_trailing_comma_contract(text: str, index: int, expected: bool) -> None:  # noqa: FBT001 - parametrised truth-table column, not a behaviour switch
     """A comma is trailing only when whitespace alone separates it from `}` or `]`."""
     assert _is_trailing_comma(text, index) is expected
 

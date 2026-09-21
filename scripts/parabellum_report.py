@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import typing as typ
+import unicodedata as ud
 
 from scripts.parabellum_ledger import (
     MAKEUTIL_REV,
@@ -14,6 +15,10 @@ from scripts.parabellum_ledger import (
     _load_ledger,
 )
 from scripts.parabellum_paths import DEFAULT_LEDGER_PATH
+
+# Unicode general categories that occupy no column: non-spacing and enclosing
+# marks, and format characters such as the emoji variation selector.
+_ZERO_WIDTH_CATEGORIES: typ.Final = frozenset({"Mn", "Me", "Cf"})
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -150,26 +155,42 @@ def render_report(ledger_path: pathlib.Path = DEFAULT_LEDGER_PATH) -> str:
     return "\n".join(lines)
 
 
+def _display_width(text: str) -> int:
+    """Return *text*'s rendered column count, as `mdtablefix` measures it."""
+    # `mdtablefix` sizes columns with the `unicode-width` crate, so a cell
+    # counted by code points misaligns on CJK, emoji, and combining marks and
+    # the formatter then rewrites the checked-in report. Zero-width marks and
+    # format characters contribute nothing; East Asian wide and fullwidth
+    # characters contribute two columns.
+    width = 0
+    for character in text:
+        if ud.category(character) in _ZERO_WIDTH_CATEGORIES:
+            continue
+        width += 2 if ud.east_asian_width(character) in "WF" else 1
+    return width
+
+
+def _pad(text: str, width: int) -> str:
+    """Return *text* padded with spaces to *width* rendered columns."""
+    return text + " " * max(width - _display_width(text), 0)
+
+
 def _aligned_table(rows: cabc.Sequence[tuple[str, ...]]) -> list[str]:
-    """Render *rows* (header first) as a column-aligned Markdown table.
-
-    Columns are padded to their widest cell, in the shape `mdtablefix`
-    produces, so the generated report already satisfies `make check-fmt`
-    and the checked-in snapshot is not rewritten by the formatter.
-
-    Returns
-    -------
-    list[str]
-        The header, delimiter, and body lines of the table.
-    """
-    widths = [max(len(row[column]) for row in rows) for column in range(len(rows[0]))]
+    """Render *rows* (header first) as a column-aligned Markdown table."""
+    # Columns are padded to their widest cell, in the shape `mdtablefix`
+    # produces, so the generated report already satisfies `make check-fmt`
+    # and the checked-in snapshot is not rewritten by the formatter.
+    widths = [
+        max(_display_width(row[column]) for row in rows)
+        for column in range(len(rows[0]))
+    ]
     header, *body = rows
 
     def line(cells: tuple[str, ...]) -> str:
         return (
             "| "
             + " | ".join(
-                cell.ljust(width) for cell, width in zip(cells, widths, strict=True)
+                _pad(cell, width) for cell, width in zip(cells, widths, strict=True)
             )
             + " |"
         )
