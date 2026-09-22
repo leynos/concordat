@@ -264,9 +264,13 @@ def _has_markdown_files(checkout: pathlib.Path) -> bool:
             candidate = pathlib.Path(root) / name
             if candidate.suffix.lower() not in MARKDOWN_SUFFIXES:
                 continue
-            if not _is_file(candidate, OPERATION_SCAN_MARKDOWN):
-                continue
+            # The link test comes first, and reads the link rather than its
+            # target, so a dangling Markdown link is skipped here as any
+            # other link is. A policy input that dangles is a refusal, but
+            # this walk is over whatever the tree happens to hold.
             if _is_symlink(candidate, OPERATION_SCAN_MARKDOWN):
+                continue
+            if not _is_file(candidate, OPERATION_SCAN_MARKDOWN):
                 continue
             return True
     return False

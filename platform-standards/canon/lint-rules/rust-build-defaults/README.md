@@ -46,8 +46,8 @@ Cargo and rustup discover, and does not read the Makefile.
   profile's default: Cargo applies it to the named package alone, leaving every
   other development build on the backend it had. An exception document the
   filesystem refused to read decides nothing, and is `indeterminate`.
-- **BD-005** (error): a backend selection Cargo cannot honour, or one the
-  estate has not adopted. A profile key without
+- **BD-005** (error): a backend selection that Cargo cannot honour, or that the
+  estate has not adopted, is noncompliant. A profile key without
   `[unstable] codegen-backend = true` is refused by Cargo; an `[unstable]` key
   under a non-nightly pin stops the file loading for every consumer.
 - **BD-006** (error): the recorded exception names the pinned toolchain

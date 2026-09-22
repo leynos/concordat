@@ -35,6 +35,34 @@ class FileProbe(typ.NamedTuple):
 ABSENT: typ.Final = FileProbe(present=False, read_error=None)
 
 
+def _absent_or_dangling(
+    path: pathlib.Path, error: FileNotFoundError, *, follow_symlinks: bool
+) -> FileProbe:
+    """Tell a missing entry apart from a link whose target is missing.
+
+    `Path.stat()` raises `FileNotFoundError` for both. They are different
+    answers: nothing was ever there, against something is there and points at
+    nothing. Reporting a dangling `Makefile`, `rule.yaml`, or workflow link as
+    an absence would omit a fact the audit was meant to read, and the caller
+    would take the absence branch rather than reporting that it could not
+    look.
+
+    Returns
+    -------
+    FileProbe
+        An absence, or the diagnostic for a link with no target.
+    """
+    if not follow_symlinks:
+        return ABSENT
+    try:
+        path.lstat()
+    except (FileNotFoundError, NotADirectoryError):
+        return ABSENT
+    except OSError as link_error:
+        return FileProbe(present=False, read_error=str(link_error))
+    return FileProbe(present=False, read_error=str(error))
+
+
 def _probe(
     path: pathlib.Path,
     describes: cabc.Callable[[int], bool],
@@ -51,9 +79,11 @@ def _probe(
     """
     try:
         info = path.stat() if follow_symlinks else path.lstat()
-    except (FileNotFoundError, NotADirectoryError):
-        # A missing path, or one whose parent is not a directory: both mean
-        # the path is not there, which is an answer rather than a failure.
+    except FileNotFoundError as error:
+        return _absent_or_dangling(path, error, follow_symlinks=follow_symlinks)
+    except NotADirectoryError:
+        # A path whose parent is not a directory: the path is not there, which
+        # is an answer rather than a failure.
         return ABSENT
     except OSError as error:
         return FileProbe(present=False, read_error=str(error))

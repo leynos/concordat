@@ -552,6 +552,57 @@ class TestPathProbes:
             "a probe treated a missing path as present or as a refusal"
         )
 
+    @pytest.mark.parametrize(
+        "probe",
+        [
+            pytest.param(_exists, id="exists"),
+            pytest.param(_is_file, id="is_file"),
+            pytest.param(_is_dir, id="is_dir"),
+        ],
+    )
+    def test_a_dangling_link_is_a_refusal_not_an_absence(
+        self,
+        tmp_path: pathlib.Path,
+        probe: cabc.Callable[[pathlib.Path, str], bool],
+    ) -> None:
+        """`stat` cannot tell a missing entry from a link with no target.
+
+        Both raise `FileNotFoundError`. They are different answers: nothing
+        was ever there, against something is there and points at nothing.
+        Reporting a dangling policy input as absent omits a fact the audit
+        was meant to read and sends the caller down the absence branch.
+        """
+        link = tmp_path / "dangling.yaml"
+        link.symlink_to(tmp_path / "never-existed.yaml")
+        with pytest.raises(OperationalRuleError, match="cannot examine"):
+            probe(link, "probe-path")
+
+    def test_a_dangling_link_is_still_a_link(self, tmp_path: pathlib.Path) -> None:
+        """`_is_symlink` reads the link, so a missing target does not hide it."""
+        link = tmp_path / "dangling.md"
+        link.symlink_to(tmp_path / "never-existed.md")
+        assert _is_symlink(link, "probe-path") is True, (
+            "a link with no target is still a link"
+        )
+
+    def test_a_dangling_markdown_link_does_not_stop_the_scan(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """The Markdown walk skips a dangling link as it skips any link.
+
+        The walk is over whatever the tree happens to hold, not over the
+        policy inputs the audit must read, so a broken link in it is not a
+        reason to refuse the whole checkout.
+        """
+        (tmp_path / "broken.md").symlink_to(tmp_path / "never-existed.md")
+        assert _has_markdown_files(tmp_path) is False, (
+            "a dangling link is not a governed Markdown file"
+        )
+        (tmp_path / "real.md").write_text("# Hi\n", encoding="utf-8")
+        assert _has_markdown_files(tmp_path) is True, (
+            "a real document beside the dangling link still counts"
+        )
+
     def test_a_symlink_is_judged_without_following_it(
         self, tmp_path: pathlib.Path
     ) -> None:
