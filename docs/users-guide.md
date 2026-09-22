@@ -252,14 +252,53 @@ checkout against the template and optionally copy missing/outdated artefacts.
 ## Auditing a checkout against a lint rule package
 
 `concordat artefact rule run` evaluates one canon lint rule package against a
-local checkout and reports structured findings. The first package,
-`rust-makefile-baseline`, audits every governed Rust Cargo surface and the root
-`Makefile` for canonical `build`, `test`, and `lint` targets (FP-003), plus a
-binding Whitaker lint gate (QG-001):
+local checkout and reports structured findings. `rust-makefile-baseline` audits
+every governed Rust Cargo surface and the root `Makefile` for canonical `build`,
+`test`, and `lint` targets (FP-003), plus a binding Whitaker lint gate
+(QG-001):
 
 ```shell
 concordat artefact rule run rust-makefile-baseline --repo /path/to/checkout
 ```
+
+`main-owned-codescene-coverage` audits the coverage topology (CV-005):
+
+```shell
+concordat artefact rule run main-owned-codescene-coverage --repo /path/to/checkout
+```
+
+It requires that:
+
+- pull-request coverage uses the main-derived local ratchet, sets
+  `publish-artefact: 'false'`, and neither invokes CodeScene nor receives
+  `CS_ACCESS_TOKEN`;
+- exactly one workflow triggered by a push to `main` (optionally alongside
+  `workflow_dispatch`) writes that baseline and uploads, from a step guarded on
+  `github.ref == 'refs/heads/main'` as well as the credential, under a
+  `concurrency` block. The uploader's `mode` defaults to `upload`, so a step
+  that omits the input satisfies this; `check` and `install` do not;
+- no workflow passes `installer-checksum`, references `CODESCENE_CLI_SHA256`,
+  or refreshes the CodeScene installer digest;
+- every platform that ratchets coverage on pull requests also ratchets on the
+  trunk push, because the baseline is keyed by `runner.os` and only a push to
+  `main` writes it.
+
+Malformed YAML is reported as indeterminate rather than assumed to comply. A
+job that delegates to a reusable workflow is reported by name, while the
+workflow's other jobs are still evaluated. A coverage job's runner platform is
+read from its literal labels; a label written as an expression is classified
+only when every literal it could select agrees, and is otherwise indeterminate.
+A repository that generates no coverage anywhere is not a subject of this
+rule.
+
+Adopting the rule in a repository removes a quality gate from its pull-request
+lane, so an adoption takes a full review rather than a mechanical merge on
+green. Two things follow an adoption and are expected, not defects: the
+`CodeScene Code Coverage (main)` check never completes on a pull request,
+because it waits for an upload no pull-request lane sends, and it is required
+nowhere; and a CodeScene project whose gates configuration is absent fails
+`check` mode on every pull request, which is a property of that project's
+configuration rather than of the repository's workflows.
 
 Options:
 

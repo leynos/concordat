@@ -217,6 +217,41 @@ class TestSiblingProbes:
         assert probe.read_error is None, "the filesystem answered the question"
 
 
+def test_a_path_under_a_dangling_ancestor_is_a_refusal(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A broken link above the path makes it unreachable, not absent.
+
+    `lstat` does not follow the final component but does resolve every one
+    above it, so a dangling `.github` makes `.github/workflows` raise exactly
+    what a checkout with no workflows raises. The link must dangle inside the
+    tree: a caller's containment check would refuse one dangling outside it
+    first, and a test built that way passes without this guard.
+    """
+    link = tmp_path / ".github"
+    link.symlink_to(tmp_path / "gone")
+    probe = probe_file(link / "workflows")
+    assert probe.present is False, "an unreachable path is not a readable file"
+    assert probe.read_error is not None, (
+        "a path under an unresolved link must not be reported as absent"
+    )
+    assert str(link) in probe.read_error, (
+        f"the diagnostic should name the broken ancestor, got {probe.read_error!r}"
+    )
+
+
+def test_a_path_under_a_missing_directory_is_absent(tmp_path: pathlib.Path) -> None:
+    """The other half: a missing ancestor above a resolving one is absence.
+
+    Without this, treating every missing-file error as a refusal would pass
+    the dangling-ancestor case above while reporting every repository that
+    lacks a `.cargo` directory as broken.
+    """
+    probe = probe_file(tmp_path / ".cargo" / "config.toml")
+    assert probe.present is False, "nothing is there"
+    assert probe.read_error is None, "the filesystem answered the question"
+
+
 class TestRegularFileExists:
     """The raising counterpart, for callers whose boundary is an exception.
 

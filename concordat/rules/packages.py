@@ -25,6 +25,13 @@ from ruamel.yaml.error import YAMLError
 
 from concordat.errors import OperationalRuleError
 
+from .codescene_coverage_envelope import (
+    ENVELOPE_KIND as COVERAGE_ENVELOPE_KIND,
+)
+from .codescene_coverage_envelope import (
+    CoverageEnvelope,
+    build_codescene_coverage_envelope,
+)
 from .envelope import (
     BUILD_DEFAULTS_ENVELOPE_KIND,
     ENVELOPE_KIND,
@@ -40,7 +47,9 @@ from .markdown_envelope import MarkdownEnvelope, build_markdown_envelope
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
-type RuleEnvelope = PolicyEnvelope | BuildDefaultsEnvelope | MarkdownEnvelope
+type RuleEnvelope = (
+    PolicyEnvelope | BuildDefaultsEnvelope | MarkdownEnvelope | CoverageEnvelope
+)
 type EnvelopeResolver = cabc.Callable[[str, pathlib.Path], RuleEnvelope]
 
 _yaml = YAML(typ="safe")
@@ -262,6 +271,25 @@ def _markdown_envelope(
     return build_markdown_envelope(checkout)
 
 
+def _coverage_envelope(
+    checkout: pathlib.Path,
+    _parameters: cabc.Mapping[str, object] | None = None,
+) -> CoverageEnvelope:
+    """Build the CV-005 workflow envelope, ignoring the manifest parameters.
+
+    CV-005 declares no tunables: every clause it states is a property of the
+    estate's topology rather than something a repository may configure, so
+    there is nothing for the second argument to change.
+
+    Returns
+    -------
+    CoverageEnvelope
+        The `policy-input/main-owned-codescene-coverage` document for
+        *checkout*.
+    """
+    return build_codescene_coverage_envelope(checkout)
+
+
 # Every rule package's envelope builder, keyed by package identifier. The
 # mapping is the complete list rather than the exceptions to a default: a
 # package that reads facts of one shape and a policy that expects another
@@ -274,6 +302,7 @@ def _markdown_envelope(
 PACKAGE_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     "rust-makefile-baseline": _makefile_envelope,
     "rust-build-defaults": build_build_defaults_envelope,
+    "main-owned-codescene-coverage": _coverage_envelope,
 })
 
 # The same builders by the envelope kind they produce, so a package whose input
@@ -283,6 +312,7 @@ INPUT_KIND_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     ENVELOPE_KIND: _makefile_envelope,
     BUILD_DEFAULTS_ENVELOPE_KIND: build_build_defaults_envelope,
     MARKDOWN_ENVELOPE_KIND: _markdown_envelope,
+    COVERAGE_ENVELOPE_KIND: _coverage_envelope,
 })
 
 

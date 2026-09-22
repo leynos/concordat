@@ -118,3 +118,16 @@ artifacts:
       Rule package manifest (sensor wiring, parameters, defaults) for
       rust-build-defaults.
     sha256: 1fa3d07c7d666314ec23b8ba0381fab5bc082d7faf5ddcd7a030bf71cb55c551
+  - id: lint-rule-main-owned-codescene-coverage
+    type: opa-policy
+    path: >-
+      platform-standards/canon/lint-rules/main-owned-codescene-coverage/policy/main_owned_codescene_coverage.rego
+    description: >
+      Audit-only CV-005 policy keeping CodeScene coverage publication on main.
+    sha256: 3fb766fe74e4730e112a19f03348c90d27865ac18b5ff69fc67b8f49ec5f163d
+  - id: lint-rule-main-owned-codescene-coverage-manifest
+    type: lint-config
+    path: platform-standards/canon/lint-rules/main-owned-codescene-coverage/rule.yaml
+    description: >
+      Rule package manifest for the main-owned CodeScene coverage policy.
+    sha256: 0bc510e555445c98e82679a7002a0c3ac77cfef68de9886ce71d9df80755210e

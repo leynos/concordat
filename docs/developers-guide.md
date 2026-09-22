@@ -540,6 +540,28 @@ would have turned into an `EN-001` finding about the wrong input rather than a
 failure to audit. Refusing costs one line in a mapping or one line in a
 manifest; the alternative costs a verdict nobody can trust.
 
+`main-owned-codescene-coverage` takes its own too.
+`build_codescene_coverage_envelope` (in `codescene_coverage_envelope.py`)
+assembles a `policy-input/main-owned-codescene-coverage` document containing
+every root `.github/workflows/*.yml` and `*.yaml` file. Each fact records
+decoded YAML or the content error that prevented decoding, so the CV-005
+policy returns an indeterminate verdict for one file rather than failing the
+whole run. The package is registered by identifier and declares the same kind
+in its `rule.yaml`, so both routes reach one builder. The adapter in
+`packages.py` accepts the manifest parameters and ignores them: CV-005
+declares no tunables, because every clause it states is a property of the
+estate's topology rather than something a repository may configure.
+
+Workflow discovery in that builder is explicitly fallible. An absent
+`.github/workflows` directory is a repository with no workflows and yields an
+empty list. A path that is not a directory, a directory that cannot be
+enumerated, an entry whose status cannot be read, a file that cannot be read,
+and a directory that resolves outside the checkout each raise
+`OperationalRuleError` with `operation="read-workflow"` and the affected path.
+Returning an empty list for any of those would report the one repository shape
+the reader could not see as being in perfect order, clearing every clause of
+the rule at once.
+
 `rust-build-defaults` is the first package to take its own. Its envelope
 (`build_build_defaults_envelope`) carries the facts Cargo and rustup
 auto-discover and no Makefile facts at all:
@@ -597,6 +619,16 @@ directory or other non-regular file where a file is expected. Both are occupied
 paths. Reading either as an absence turns a broken checkout into a repository
 that simply never wrote the file, which is the compliant answer rather than the
 true one.
+
+The same holds one level up. `lstat` does not follow the final component but
+does resolve every component above it, so a dangling `.github` makes
+`.github/workflows` raise exactly the error an absent directory raises. A
+missing-file error is therefore not read as absence until the nearest existing
+ancestor is shown to resolve; an ancestor that does not resolve is named in the
+refusal. A caller whose own read has already failed with a missing-file error,
+such as the CV-005 workflow-directory reader, asks `probe_file` whether
+anything is there and keys on `read_error is None` rather than on `present`,
+which answers the different question of whether a regular file is there.
 
 ### Tool dependencies
 
