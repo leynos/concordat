@@ -15,12 +15,13 @@ from __future__ import annotations
 
 import typing as typ
 
-from concordat.rules.fs_probe import probe_file
+import pytest
+
+from concordat.errors import OperationalRuleError
+from concordat.rules.fs_probe import probe_file, regular_file_exists
 
 if typ.TYPE_CHECKING:
     import pathlib
-
-    import pytest
 
 
 def test_a_regular_file_is_present(tmp_path: pathlib.Path) -> None:
@@ -154,3 +155,66 @@ def test_a_refusal_to_describe_the_link_is_not_an_absence(
     assert "Permission denied" in probe.read_error, (
         f"the diagnostic should carry the reason, got {probe.read_error!r}"
     )
+
+
+class TestRegularFileExists:
+    """The raising counterpart, for callers whose boundary is an exception.
+
+    It converts `probe_file`'s three answers into two: an absence is `False`,
+    a readable regular file is `True`, and anything else raises. Hardening the
+    probe therefore moved two shapes across that boundary, so both are pinned
+    here rather than left to be discovered by a caller.
+    """
+
+    def test_a_regular_file_exists(self, tmp_path: pathlib.Path) -> None:
+        """The ordinary case returns True rather than raising."""
+        target = tmp_path / "Cargo.toml"
+        target.write_text("", encoding="utf-8")
+        assert regular_file_exists(target, operation="probe") is True, (
+            "a readable regular file exists"
+        )
+
+    def test_an_absent_path_is_reported_false(self, tmp_path: pathlib.Path) -> None:
+        """Absence stays the no-applicability fact, not an error."""
+        assert (
+            regular_file_exists(tmp_path / "Cargo.toml", operation="probe") is False
+        ), "a genuinely absent path is the established no-applicability fact"
+
+    @pytest.mark.parametrize(
+        ("occupant", "fragment"),
+        [
+            pytest.param("directory", "directory", id="directory"),
+            pytest.param("dangling", "resolve", id="dangling-symlink"),
+        ],
+    )
+    def test_an_occupied_path_raises_rather_than_reporting_absence(
+        self, tmp_path: pathlib.Path, occupant: str, fragment: str
+    ) -> None:
+        """Both shapes used to read as absence, so both are pinned here.
+
+        A checkout whose `Cargo.toml` is a directory or a link into nothing is
+        misconfigured, and reporting it as having no Rust surface hides that
+        behind a clean no-applicability result.
+        """
+        target = tmp_path / "Cargo.toml"
+        if occupant == "directory":
+            target.mkdir()
+        else:
+            target.symlink_to(tmp_path / "elsewhere.toml")
+
+        with pytest.raises(OperationalRuleError) as excinfo:
+            regular_file_exists(target, operation="probe-cargo")
+
+        message = str(excinfo.value)
+        assert fragment in message, (
+            f"the diagnostic should say what was wrong, got {message!r}"
+        )
+        assert str(target) in message, (
+            f"the diagnostic should name the path, got {message!r}"
+        )
+        assert message.count(str(target)) == 1, (
+            f"the path belongs in the message once, got {message!r}"
+        )
+        assert excinfo.value.operation == "probe-cargo", (
+            "the caller's operation identifier must reach the error"
+        )
