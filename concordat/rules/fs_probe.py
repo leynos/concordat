@@ -34,6 +34,18 @@ class FileProbe(typ.NamedTuple):
     ``present`` is true only for a regular file the filesystem described.
     ``read_error`` is set when it refused to describe the path at all, which
     is neither presence nor absence and must not be reported as either.
+
+    Which field a caller reads depends on the question it is asking, and the
+    two questions are easy to confuse. ``present`` answers "is this a readable
+    regular file", so a directory where a file is expected is not present and
+    carries a reason. A caller that only needs to know whether *anything* is
+    there — typically one whose own read has already failed with a missing-file
+    error, and which must decide whether that meant absence — keys on
+    ``read_error is None`` instead: that is true for a genuine absence alone,
+    and false for a dangling link, an occupied path, or a refusal. Reading
+    ``present`` for that question reports an existing directory as though
+    nothing were there. Noted by jm-concordat-176, whose workflow-directory
+    reader asks the second question.
     """
 
     present: bool
