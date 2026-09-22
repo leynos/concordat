@@ -26,6 +26,9 @@ from ruamel.yaml import YAML
 
 from concordat.rules.makefile_facts import SCHEMA_VERSION
 
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
 REPOSITORY_ROOT: typ.Final = Path(__file__).parents[2]
 WORKFLOW_DIRECTORY: typ.Final = REPOSITORY_ROOT / ".github/workflows"
 PACKAGE_DIRECTORY: typ.Final = REPOSITORY_ROOT / "concordat"
@@ -76,9 +79,20 @@ _ENVIRONMENT_PREFIX: typ.Final = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*", re.DOT
 # next. A suite run or an install may follow any of them.
 _OPERATOR_CHARACTERS: typ.Final = frozenset({"&", "|", ";"})
 
+# A shell variable reference, braced or bare. Matching the whole name
+# keeps `$VER` from claiming the head of `$VERSION`.
+_VARIABLE_REFERENCE: typ.Final = re.compile(
+    r"\$(?:\{(?P<braced>[A-Za-z_][A-Za-z0-9_]*)\}|(?P<bare>[A-Za-z_][A-Za-z0-9_]*))"
+)
+
 # The action that must precede a `go install`, since the publisher has no Go
 # toolchain of its own.
 GO_SETUP_ACTION: typ.Final = "actions/setup-go@"
+
+# The Go release the pinned Conftest is installed under. Naming it here
+# keeps a lane from setting up a different toolchain than the one the
+# other lane proved the install works on.
+GO_VERSION: typ.Final = "1.22"
 
 # `ensure_tool`'s refusal, as the Makefile spells it. Asserting the message
 # rather than the exit status alone keeps the target from passing by failing
@@ -285,7 +299,10 @@ def _tokenize(segment: str) -> tuple[str, ...]:
         The segment's tokens, empty when it cannot be tokenized.
     """
     try:
-        return tuple(shlex.split(segment, comments=True))
+        # Comments are already stripped, by the shell's rule rather than
+        # shlex's: shlex ends a word at a hash wherever it appears, while the
+        # shell only does so at a word boundary.
+        return tuple(shlex.split(segment))
     except ValueError:
         return ()
 
@@ -319,7 +336,7 @@ def commands(script: str) -> tuple[tuple[str, ...], ...]:
     )
 
 
-def installer_program(command: typ.Sequence[str]) -> str | None:
+def installer_program(command: cabc.Sequence[str]) -> str | None:
     """Return the package manager a command runs, ignoring `NAME=value` prefixes.
 
     Parameters
@@ -338,7 +355,7 @@ def installer_program(command: typ.Sequence[str]) -> str | None:
     return None
 
 
-def installed_tool_names(command: typ.Sequence[str]) -> frozenset[str]:
+def installed_tool_names(command: cabc.Sequence[str]) -> frozenset[str]:
     """Return the executable names one install command provisions.
 
     A command provisions a tool only if a known package manager runs it with
@@ -386,11 +403,33 @@ def _job_environment(job: dict[str, object]) -> dict[str, str]:
     }
 
 
-def _expand(token: str, environment: dict[str, str]) -> str:
-    """Return ``token`` with ``${NAME}`` and ``$NAME`` job variables resolved."""
-    for name, value in environment.items():
-        token = token.replace(f"${{{name}}}", value).replace(f"${name}", value)
-    return token
+def expand(token: str, environment: dict[str, str]) -> str:
+    """Return ``token`` with ``${NAME}`` and ``$NAME`` job variables resolved.
+
+    Each reference is matched as a whole name. Substituting name by name
+    would let a job declaring both ``VER`` and ``VERSION`` turn ``$VERSION``
+    into the value of ``VER`` followed by ``SION``, so two lanes pinning one
+    revision could compare unequal, or two lanes pinning different revisions
+    could compare equal.
+
+    Parameters
+    ----------
+    token:
+        One command-line token.
+    environment:
+        The job's literal string environment.
+
+    Returns
+    -------
+        The token with every defined reference replaced, and every
+        undefined one left as it stands.
+    """
+
+    def substitute(match: re.Match[str]) -> str:
+        name = match.group("braced") or match.group("bare")
+        return environment.get(name, match.group(0))
+
+    return _VARIABLE_REFERENCE.sub(substitute, token)
 
 
 def job_steps(job: dict[str, object], *, subject: str) -> list[dict[str, object]]:
@@ -468,7 +507,7 @@ def suite_lanes() -> tuple[Lane, ...]:
     return tuple(lanes)
 
 
-def shell_commands(lane: Lane) -> typ.Iterator[tuple[int, tuple[str, ...]]]:
+def shell_commands(lane: Lane) -> cabc.Iterator[tuple[int, tuple[str, ...]]]:
     """Yield every shell command a lane's steps run, with its step position.
 
     Parameters
@@ -526,15 +565,22 @@ def provisioning_positions(lane: Lane) -> dict[str, int]:
     Returns
     -------
         A mapping from executable name to the index of its last install step.
+
+    Notes
+    -----
+    Tokens are expanded before recognition, so an install that pins its
+    version through the job environment is still seen.
     """
+    environment = _job_environment(lane.job)
     positions: dict[str, int] = {}
     for index, command in shell_commands(lane):
-        for name in installed_tool_names(command):
+        expanded = tuple(expand(token, environment) for token in command)
+        for name in installed_tool_names(expanded):
             positions[name] = index
     return positions
 
 
-def late_installs(lane: Lane, needed: typ.AbstractSet[str]) -> dict[str, int]:
+def late_installs(lane: Lane, needed: cabc.Set[str]) -> dict[str, int]:
     """Return the needed tools a lane installs no earlier than the suite step.
 
     Equality counts as late. Two commands in one step have an order the step
@@ -579,9 +625,13 @@ def provisioning(lane: Lane) -> dict[str, tuple[str, ...]]:
         earlier command across lanes and pass.
     """
     environment = _job_environment(lane.job)
-    installs = [
-        (name, tuple(_expand(token, environment) for token in command))
+    expanded_commands = [
+        tuple(expand(token, environment) for token in command)
         for _, command in shell_commands(lane)
+    ]
+    installs = [
+        (name, command)
+        for command in expanded_commands
         for name in installed_tool_names(command)
     ]
     provisioning: dict[str, tuple[str, ...]] = {}

@@ -23,6 +23,7 @@ from hypothesis import strategies as st
 from tests.unit.gate_provisioning_support import (
     Lane,
     commands,
+    expand,
     installed_tool_names,
     job_runs_the_suite,
     late_installs,
@@ -352,4 +353,118 @@ def test_a_commented_install_is_not_an_install() -> None:
     within_word = commands("go install example.com/conftest@v0.52.0#pinned\n")
     assert installed_tool_names(within_word[0]) == frozenset({"conftest"}), (
         "a hash inside a word is not a comment"
+    )
+
+
+def test_a_variable_reference_binds_to_a_whole_name() -> None:
+    """One name must not claim the head of a longer one.
+
+    Substituting name by name would turn `$VERSION` into the value of `VER`
+    followed by `SION` when a job declares both, so two lanes pinning one
+    revision could compare unequal and two lanes pinning different revisions
+    could compare equal.
+    """
+    environment = {"VER": "1", "VERSION": "2"}
+    assert expand("$VERSION", environment) == "2", "the longer name wins"
+    assert expand("${VERSION}", environment) == "2", "braced references too"
+    assert expand("$VER", environment) == "1", "the shorter name still resolves"
+    assert expand("$UNSET", environment) == "$UNSET", (
+        "an undefined reference is left as it stands"
+    )
+
+
+def test_an_install_pinned_through_the_environment_is_recognized() -> None:
+    """A version carried by the job environment is still a version.
+
+    Recognition runs on the expanded command, so an install spelling its
+    pin as `${CONFTEST_VERSION}` is seen. Reading the raw command would drop
+    the operand for containing a sigil, and the lane would read as not
+    provisioning the tool it does provision.
+    """
+    lane = Lane(
+        "synthetic.yml",
+        "environment-pinned",
+        {
+            "env": {"CONFTEST_VERSION": "v0.52.0"},
+            "steps": [
+                {"run": "go install example.com/conftest@${CONFTEST_VERSION}\n"},
+                {"run": "make test\n"},
+            ],
+        },
+    )
+    assert provisioning(lane) == {
+        "conftest": ("go", "install", "example.com/conftest@v0.52.0")
+    }, "an install pinned through the job environment must be recognized"
+    assert not late_installs(lane, {"conftest"}), (
+        "the ordering check must see the same install"
+    )
+
+
+# Every way a shell ends one word before the next: whitespace and the control
+# operators. The empty separator is the discriminating case, where the hash
+# continues the word it touches instead of starting a comment.
+_SEPARATORS: typ.Final = st.sampled_from([
+    "",
+    " ",
+    "  ",
+    "\t",
+    ";",
+    " ; ",
+    "&&",
+    " && ",
+    "|",
+    " | ",
+    "||",
+    "&",
+])
+_OPERATORS: typ.Final = st.sampled_from(["&&", "||", ";", "|", " && ", " ; ", " | "])
+
+
+@given(separator=_SEPARATORS, executable=_NAMES, version=_VERSIONS)
+def test_a_comment_is_a_comment_after_any_separator(
+    separator: str, executable: str, version: str
+) -> None:
+    """Where a comment begins is decided by what precedes it, not by a list.
+
+    Each of the last two review rounds found one placement the reader missed,
+    a space and then a semicolon. The generator now walks every separator the
+    shell recognizes, so the next shape is found here rather than by a reader.
+    The oracle is the rule itself: a hash starts a comment when the character
+    before it is absent, whitespace, or a control operator.
+    """
+    module = f"example.com/{executable}@{version}"
+    line = f"go install {module}{separator}# echo done\n"
+    read = commands(line)
+    if separator:
+        assert read == (("go", "install", module),), (
+            f"a hash after {separator!r} begins a comment; found {read}"
+        )
+    else:
+        assert read == (("go", "install", f"{module}#", "echo", "done"),), (
+            f"a hash touching a word continues it; found {read}"
+        )
+
+
+@given(
+    operator=_OPERATORS,
+    first=_NAMES,
+    second=_NAMES,
+    version=_VERSIONS,
+)
+def test_an_operator_separates_installs_wherever_it_appears(
+    operator: str, first: str, second: str, version: str
+) -> None:
+    """Two installs chained by any control operator are both recognized.
+
+    Reading one command per line saw only the first, which hid a lane from
+    enumeration entirely. The oracle is that both drawn executables are
+    installed, whichever operator joins them.
+    """
+    assume(first != second)
+    line = f"go install a/{first}@{version}{operator}go install b/{second}@{version}\n"
+    installed = {
+        name for command in commands(line) for name in installed_tool_names(command)
+    }
+    assert installed == {first, second}, (
+        f"both installs joined by {operator!r} must be recognized; found {installed}"
     )

@@ -41,6 +41,7 @@ import typing as typ
 
 from tests.unit.gate_provisioning_support import (
     GO_SETUP_ACTION,
+    GO_VERSION,
     KNOWN_REQUIRED_TOOLS,
     KNOWN_SUITE_LANES,
     MAKEFILE_SUITE_TARGET,
@@ -62,6 +63,20 @@ from tests.unit.gate_provisioning_support import (
 
 if typ.TYPE_CHECKING:
     from pathlib import Path
+
+
+def _go_version(step: dict[str, object], *, subject: str) -> str:
+    """Return a `setup-go` step's declared Go version."""
+    inputs = step.get("with")
+    assert isinstance(inputs, dict), (
+        f"{subject} runs {GO_SETUP_ACTION} without inputs, so the Go version "
+        "the install runs under is whatever the runner happens to carry"
+    )
+    version = inputs.get("go-version")
+    assert isinstance(version, str), (
+        f"{subject} runs {GO_SETUP_ACTION} without a go-version input"
+    )
+    return version
 
 
 def test_required_tools_are_derived_from_the_package() -> None:
@@ -141,7 +156,7 @@ def test_a_go_install_is_preceded_by_the_shared_go_setup() -> None:
     toolchain its installs actually run under is then not readable and the
     comparison across lanes would compare the wrong value.
     """
-    setups: dict[str, str] = {}
+    setups: dict[str, tuple[str, str]] = {}
     for lane in suite_lanes():
         go_installs = [
             index
@@ -151,7 +166,7 @@ def test_a_go_install_is_preceded_by_the_shared_go_setup() -> None:
         if not go_installs:
             continue
         references = {
-            index: uses
+            index: (uses, _go_version(step, subject=str(lane)))
             for index, step in enumerate(job_steps(lane.job, subject=str(lane)))
             if isinstance(uses := step.get("uses"), str)
             and uses.startswith(GO_SETUP_ACTION)
@@ -161,8 +176,9 @@ def test_a_go_install_is_preceded_by_the_shared_go_setup() -> None:
             "the install has no toolchain to run under"
         )
         assert len(set(references.values())) == 1, (
-            f"{lane} sets Go up more than once at different pins, so which "
-            f"toolchain its installs run under is not readable: {references}"
+            f"{lane} sets Go up more than once at a different pin or version, "
+            f"so which toolchain its installs run under is not readable: "
+            f"{references}"
         )
         earliest_setup = min(references)
         assert earliest_setup < min(go_installs), (
@@ -176,7 +192,12 @@ def test_a_go_install_is_preceded_by_the_shared_go_setup() -> None:
         "below would pass vacuously"
     )
     assert len(set(setups.values())) == 1, (
-        f"every lane must set Go up at the same pin; found {setups}"
+        f"every lane must set Go up at the same pin and version; found {setups}"
+    )
+    (_, version), *_ = setups.values()
+    assert version == GO_VERSION, (
+        f"the suite lanes must set Go up at {GO_VERSION}, since the pinned "
+        f"Conftest is built against it; found {version!r}"
     )
 
 
