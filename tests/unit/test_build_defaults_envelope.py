@@ -16,7 +16,7 @@ import typing as typ
 import pytest
 
 from concordat.errors import OperationalRuleError
-from concordat.rules import runner
+from concordat.rules import packages
 from concordat.rules.envelope import (
     BUILD_DEFAULTS_ENVELOPE_KIND,
     build_build_defaults_envelope,
@@ -173,7 +173,7 @@ class TestBuilderSelection:
         (tmp_path / "Cargo.toml").write_text(
             '[package]\nname = "x"\nversion = "0.1.0"\n', encoding="utf-8"
         )
-        envelope = runner.default_envelope_builder("rust-build-defaults", tmp_path)
+        envelope = packages.default_envelope_builder("rust-build-defaults", tmp_path)
         assert envelope["kind"] == BUILD_DEFAULTS_ENVELOPE_KIND, (
             f"the package's own builder must be chosen, got {envelope['kind']!r}"
         )
@@ -185,7 +185,7 @@ class TestBuilderSelection:
         (tmp_path / "Cargo.toml").write_text(
             '[package]\nname = "x"\nversion = "0.1.0"\n', encoding="utf-8"
         )
-        envelope = runner.default_envelope_builder("rust-makefile-baseline", tmp_path)
+        envelope = packages.default_envelope_builder("rust-makefile-baseline", tmp_path)
         assert envelope["kind"] == "policy-input/rust-makefile-baseline", (
             f"an unregistered package keeps the historic envelope, "
             f"got {envelope['kind']!r}"

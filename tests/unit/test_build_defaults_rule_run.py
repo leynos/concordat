@@ -17,7 +17,7 @@ import typing as typ
 import pytest
 from ruamel.yaml import YAML
 
-from concordat.rules import runner
+from concordat.rules import packages, runner
 from concordat.rules.runner import (
     VERDICT_COMPLIANT,
     VERDICT_INDETERMINATE,
@@ -112,11 +112,11 @@ def test_the_manifest_defaults_reach_the_envelope_builder(
         )
 
     monkeypatch.setattr(
-        runner,
+        packages,
         "PACKAGE_ENVELOPE_BUILDERS",
         {RULE_ID: record},
     )
-    runner.default_envelope_builder(RULE_ID, checkout("compliant-exception"))
+    packages.default_envelope_builder(RULE_ID, checkout("compliant-exception"))
 
     manifest = YAML(typ="safe").load((RULE_DIR / "rule.yaml").read_text("utf-8"))
     declared = manifest["parameters"]["defaults"]

@@ -19,7 +19,7 @@ from hypothesis import strategies as st
 from concordat import credentials, xdg
 from concordat.credentials import CREDENTIAL_KEYS
 from concordat.errors import ConcordatError
-from concordat.rules import runner
+from concordat.rules import packages, runner
 from scripts import parabellum_sweep as sweep
 
 _ALNUM = string.ascii_letters + string.digits
@@ -142,7 +142,7 @@ class TestRulePackageIdentifiers:
             for word in words
         )
         try:
-            runner._validated_rule_id(rule_id)
+            packages._validated_rule_id(rule_id)
         except runner.OperationalRuleError:
             accepted = False
         else:
@@ -158,7 +158,7 @@ class TestRulePackageIdentifiers:
     ) -> None:
         """A rejected identifier raises before any path is resolved."""
         try:
-            runner._validated_rule_id(rule_id)
+            packages._validated_rule_id(rule_id)
         except runner.OperationalRuleError:
             return
         assert "/" not in rule_id, rule_id

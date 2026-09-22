@@ -15,7 +15,7 @@ import typing as typ
 import pytest
 
 from concordat.errors import OperationalRuleError
-from concordat.rules import runner
+from concordat.rules import packages, runner
 from concordat.rules.runner import run_rule
 from tests.unit.rule_test_support import (
     MINIMAL_REPORT,
@@ -228,7 +228,7 @@ class TestRulePackageIdentifier:
         conftest = mocker.patch.object(runner, "_run_conftest")
 
         with pytest.raises(OperationalRuleError) as exc_info:
-            runner._rule_package_dir(rule_id)
+            packages.rule_package_dir(rule_id)
 
         error = exc_info.value
         assert error.operation == "load-rule-package", error.operation
@@ -238,7 +238,7 @@ class TestRulePackageIdentifier:
 
     def test_valid_identifier_resolves_the_packaged_rule(self) -> None:
         """The shipped package name still resolves to its policy directory."""
-        rule_dir = runner._rule_package_dir("rust-makefile-baseline")
+        rule_dir = packages.rule_package_dir("rust-makefile-baseline")
         assert (rule_dir / "policy").is_dir(), rule_dir
 
 
@@ -512,8 +512,9 @@ class TestRulePackagesDirIsLazy:
         # it keep working, but the resolver cache and any patched attribute
         # would otherwise persist into whatever runs next in this worker.
         yield
+        importlib.reload(packages)
         importlib.reload(runner)
-        runner._rule_packages_dir.cache_clear()
+        packages._rule_packages_dir.cache_clear()
 
     def test_importing_the_module_does_not_resolve_the_tree(
         self,
@@ -529,15 +530,23 @@ class TestRulePackagesDirIsLazy:
         `_resolve_rule_packages_dir`: reloading re-defines the module's own
         functions, so a patch on the module would be discarded before the
         module body ran and the test could not fail.
+
+        `packages` is reloaded as well as `runner`, and first. The lookup now
+        lives there, and reloading `runner` alone reuses the already-imported
+        `packages`, so its module body never runs again and an eager lookup
+        added to it would go unseen.
         """
         files = mocker.patch("importlib.resources.files", autospec=True)
-        runner._rule_packages_dir.cache_clear()
+        packages._rule_packages_dir.cache_clear()
 
+        importlib.reload(packages)
         importlib.reload(runner)
 
-        assert not hasattr(runner, "RULE_PACKAGES_DIR"), (
-            "an eagerly resolved module constant resolves the tree at import"
-        )
+        for module in (packages, runner):
+            assert not hasattr(module, "RULE_PACKAGES_DIR"), (
+                f"an eagerly resolved constant in {module.__name__} resolves "
+                "the tree at import"
+            )
         files.assert_not_called()
 
     def test_the_resolver_runs_when_a_package_is_looked_up(
@@ -545,19 +554,19 @@ class TestRulePackagesDirIsLazy:
         mocker: pytest_mock.MockFixture,
     ) -> None:
         """`_rule_package_dir` resolves the tree, and caches the result."""
-        real_root = runner._resolve_rule_packages_dir()
+        real_root = packages._resolve_rule_packages_dir()
         resolve = mocker.patch.object(
-            runner,
+            packages,
             "_resolve_rule_packages_dir",
             autospec=True,
             return_value=real_root,
         )
-        runner._rule_packages_dir.cache_clear()
+        packages._rule_packages_dir.cache_clear()
 
-        runner._rule_package_dir("rust-makefile-baseline")
-        runner._rule_package_dir("rust-makefile-baseline")
+        packages.rule_package_dir("rust-makefile-baseline")
+        packages.rule_package_dir("rust-makefile-baseline")
 
         assert resolve.call_count == 1, (
             f"the tree should resolve once and cache, got {resolve.call_count} calls"
         )
-        runner._rule_packages_dir.cache_clear()
+        packages._rule_packages_dir.cache_clear()

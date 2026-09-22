@@ -34,6 +34,18 @@ class FileProbe(typ.NamedTuple):
     ``present`` is true only for a regular file the filesystem described.
     ``read_error`` is set when it refused to describe the path at all, which
     is neither presence nor absence and must not be reported as either.
+
+    Which field a caller reads depends on the question it is asking, and the
+    two questions are easy to confuse. ``present`` answers "is this a readable
+    regular file", so a directory where a file is expected is not present and
+    carries a reason. A caller that only needs to know whether *anything* is
+    there — typically one whose own read has already failed with a missing-file
+    error, and which must decide whether that meant absence — keys on
+    ``read_error is None`` instead: that is true for a genuine absence alone,
+    and false for a dangling link, an occupied path, or a refusal. Reading
+    ``present`` for that question reports an existing directory as though
+    nothing were there. Noted by jm-concordat-176, whose workflow-directory
+    reader asks the second question.
     """
 
     present: bool
@@ -46,25 +58,87 @@ ABSENT: typ.Final = FileProbe(present=False, read_error=None)
 def probe_file(path: pathlib.Path) -> FileProbe:
     """Report whether *path* is a regular file, or why that could not be told.
 
+    Absence means the filesystem answered that nothing is there: `ENOENT` with
+    no link behind it, or `ENOTDIR` because a component of the path is not a
+    directory. Everything else is a refusal, including two shapes that a bare
+    `stat` plus a regular-file test reports as absences:
+
+    - a dangling symbolic link, where `lstat` succeeds and `stat` does not.
+      Something *is* there, and it names a target that is not; reading that as
+      "no configuration" turns a broken checkout into a compliant one.
+    - a directory, or any other non-regular file, where a file is expected.
+      The path is occupied by something the reader cannot parse, which is a
+      state to report rather than to pass over.
+
     Returns
     -------
     FileProbe
-        Presence, or the filesystem's diagnostic when the path could not be
-        described.
+        Presence, or the reason the path could not be read as a file.
     """
     try:
         info = path.stat()
-    except (FileNotFoundError, NotADirectoryError):
-        # A missing path, or one whose parent is not a directory: both mean
-        # the file is not there, which is an answer rather than a failure.
+    except FileNotFoundError:
+        return _absent_or_dangling(path)
+    except NotADirectoryError:
+        # A component of the path is a file, so nothing can live beneath it.
         return ABSENT
     except OSError as error:
-        return FileProbe(present=False, read_error=str(error))
-    if not stat.S_ISREG(info.st_mode):
-        # A directory or device in the file's place is not the file, and the
-        # filesystem answered the question, so it is an absence.
+        return FileProbe(present=False, read_error=f"{path}: {error}")
+    if stat.S_ISREG(info.st_mode):
+        return FileProbe(present=True, read_error=None)
+    occupant = _non_regular_kind(info.st_mode)
+    return FileProbe(
+        present=False,
+        read_error=f"{path}: {occupant} where a file is expected",
+    )
+
+
+def _absent_or_dangling(path: pathlib.Path) -> FileProbe:
+    """Tell a missing path from a symbolic link whose target is missing.
+
+    `stat` follows links, so both raise `FileNotFoundError`. `lstat` does not,
+    so it succeeds for the link that is there and fails for the path that is
+    not. Its own failures are read by the same rule as every other: `ENOENT`
+    and `ENOTDIR` mean nothing is there, and anything else is a refusal.
+
+    Returns
+    -------
+    FileProbe
+        An absence, or the refusal naming the unresolved link.
+    """
+    try:
+        path.lstat()
+    except (FileNotFoundError, NotADirectoryError):
         return ABSENT
-    return FileProbe(present=True, read_error=None)
+    except OSError as error:
+        # The same rule as `probe_file` itself: only the two absence errors
+        # mean nothing is there. A refusal to describe the link is a refusal,
+        # and swallowing it here would reintroduce one level down exactly the
+        # defect this function exists to fix.
+        return FileProbe(present=False, read_error=f"{path}: {error}")
+    return FileProbe(
+        present=False,
+        read_error=f"{path}: symbolic link does not resolve",
+    )
+
+
+def _non_regular_kind(mode: int) -> str:
+    """Name what occupies a path, for a diagnostic the reader can act on.
+
+    Returns
+    -------
+    str
+        A short description of the file type.
+    """
+    if stat.S_ISDIR(mode):
+        return "directory"
+    if stat.S_ISLNK(mode):
+        return "symbolic link"
+    if stat.S_ISFIFO(mode):
+        return "named pipe"
+    if stat.S_ISSOCK(mode):
+        return "socket"
+    return "non-regular file"
 
 
 def regular_file_exists(path: pathlib.Path, *, operation: str) -> bool:
@@ -94,7 +168,9 @@ def regular_file_exists(path: pathlib.Path, *, operation: str) -> bool:
     """
     probe = probe_file(path)
     if probe.read_error is not None:
-        message = f"cannot inspect {path}: {probe.read_error}"
+        # The probe's diagnostic already opens with the path, so this adds
+        # only what the caller was trying to do with it.
+        message = f"cannot inspect {probe.read_error}"
         raise OperationalRuleError(
             message,
             operation=operation,

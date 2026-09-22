@@ -384,8 +384,23 @@ reverse:
 
 ## `concordat artefact rule run`
 
-`concordat/rules/runner.py` and `concordat/rules/envelope.py` implement the
-rule-run subcommand exposed as `concordat artefact rule run <rule-id>`.
+`concordat/rules/runner.py`, `concordat/rules/packages.py`, and
+`concordat/rules/envelope.py` implement the rule-run subcommand exposed as
+`concordat artefact rule run <rule-id>`.
+
+The split is by question asked. `packages.py` answers three about a rule
+package without evaluating one: where its policy lives, what its manifest
+declares, and which policy-input envelope it is audited over. `runner.py`
+answers the fourth, what Conftest made of that envelope, and imports the rest.
+Where a test patches depends on what it is testing, and the answer is not
+simply "where the name is defined". `runner` imports `rule_package_dir` and
+`rule_parameters` into its own bindings, so a test of how `runner` uses them
+patches `runner._rule_package_dir` or `runner._rule_parameters`; patching
+`packages` leaves `runner`'s bindings pointing at the originals. `run_rule`
+captures `default_envelope_builder` as a default argument at definition time,
+so substituting the resolver means passing `envelope_builder=` rather than
+patching either module. Patch `packages` when testing the package helpers
+themselves, including the mappings and the manifest reader.
 
 ### The policy envelope
 
@@ -410,12 +425,47 @@ fail.
 A rule package reads the facts its checks need, and those differ. `run_rule`
 takes an `envelope_builder` resolver and calls whatever it is given;
 `default_envelope_builder` is the composition layer that maps a package to its
-builder and supplies the manifest parameters that builder needs.
-`PACKAGE_ENVELOPE_BUILDERS` is the read-only mapping it consults: a package
-named there supplies its own builder, and anything unnamed takes
-`build_envelope` above. Package selection therefore stays in one place, and a
-caller — a test included — substitutes a resolver rather than reaching into the
-mapping.
+builder and supplies the manifest parameters that builder needs. Package
+selection therefore stays in one place, and a caller — a test included —
+substitutes a resolver rather than reaching into the mappings below.
+
+The resolver takes two routes and has no third. Both mappings live in
+`packages.py`. `PACKAGE_ENVELOPE_BUILDERS`
+maps a package identifier to its builder and is the complete list of packages,
+not the exceptions to a default. A package absent from it may instead declare
+`sensor.input` in its own `rule.yaml`, naming an envelope kind that
+`INPUT_KIND_ENVELOPE_BUILDERS` knows; that is the route for a package whose
+input is a shape another package already builds, and it needs no Python change.
+A package matching neither is refused with an `OperationalRuleError` naming it,
+the registered packages, and the declarable kinds.
+
+A package that needs facts neither existing envelope carries brings its own
+builder, and adds one entry to `INPUT_KIND_ENVELOPE_BUILDERS` keyed by the
+kind its envelope emits. It then declares that kind in its own `rule.yaml` and
+needs no entry in the identifier mapping at all. That is the ordinary shape for
+a new package: one line here, one line in its manifest, and no mechanism of its
+own.
+
+The two mappings are therefore not the same set. Every builder reachable by
+identifier is also reachable by its kind, so a package's envelope is one
+another package could declare; the reverse does not hold, because a
+declared-only package appears in the kind mapping alone.
+
+**Every shipped package declares or registers.** There is no third state and
+no default, so a manifest written before `sensor.input` existed is refused
+rather than quietly given the envelope it used to receive by accident. That is
+the point of the rule: the package that most needs refusing is the one nobody
+remembered to wire up, and a default is precisely what hides it.
+
+There is deliberately no fallback. An earlier version of this resolver sent an
+unregistered package to `build_envelope`, on the reasoning that existing
+packages should be left untouched. That is a fail-open default inside a
+fail-closed audit: a package whose policy expects one envelope, handed another,
+does not degrade — it answers confidently about a document it was never written
+for. `rust-build-defaults` reads no Makefile at all, so a registration mistake
+would have turned into an `EN-001` finding about the wrong input rather than a
+failure to audit. Refusing costs one line in a mapping or one line in a
+manifest; the alternative costs a verdict nobody can trust.
 
 `rust-build-defaults` is the first package to take its own. Its envelope
 (`build_build_defaults_envelope`) carries the facts Cargo and rustup
@@ -449,6 +499,16 @@ absence, which is the one answer a fail-closed audit must never give by
 accident. `probe_file` separates the two: callers turn an absence into
 whatever their clause means by it, and a refusal into a fail-closed fact
 carrying the reason. Every new reader in the build-defaults envelope uses it.
+
+Absence is narrower than it first looks, and the boundary took a second pass to
+get right. It is `ENOENT` with nothing behind it, and `ENOTDIR` because a
+component of the path is not a directory. Everything else is a refusal,
+including two shapes a bare `stat` plus a regular-file test reports as empty:
+a dangling symbolic link, where `lstat` succeeds and `stat` does not, and a
+directory or other non-regular file where a file is expected. Both are occupied
+paths. Reading either as an absence turns a broken checkout into a repository
+that simply never wrote the file, which is the compliant answer rather than the
+true one.
 
 ### Tool dependencies
 

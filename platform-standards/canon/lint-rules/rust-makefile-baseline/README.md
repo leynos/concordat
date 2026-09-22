@@ -69,7 +69,8 @@ A repository is `compliant` only when the finding set is empty.
 
 ## Layout
 
-- `rule.yaml` — package manifest (sensor, parameters, defaults).
+- `rule.yaml` — package manifest (sensor, its declared
+  `input: policy-input/rust-makefile-baseline`, parameters, defaults).
 - `policy/` — the Rego policy and its tests.
 - `fixtures/makefiles/` — one small Makefile per behaviour.
 - `fixtures/envelopes/` — generated `policy-input/v1` envelopes.
