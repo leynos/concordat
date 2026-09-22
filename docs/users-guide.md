@@ -276,6 +276,12 @@ Exit codes: `0` compliant; `1` at least one finding, including indeterminate
 verdicts; `2` operational failure (for example, the pinned `makeutil` or
 `conftest` executable is missing), reported on standard error.
 
+An unreadable file is not an absent one. If the root `Cargo.toml` or the root
+`Makefile` exists but cannot be inspected, because of permissions or any other
+filesystem failure, the command exits `2` and names the path rather than
+reporting the checkout as having no Rust surface or no Makefile. Only a genuine
+absence produces the no-applicability result.
+
 For Rust below the repository root, declare each `Cargo.toml` in `.concordat`
 under `language.rust.surfaces`. The declaration is authoritative; an empty list
 states that no Rust surface is governed, while an absent declaration retains

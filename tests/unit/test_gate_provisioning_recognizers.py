@@ -1,0 +1,470 @@
+"""The gate-provisioning recognizers, driven directly.
+
+`test_gate_tool_provisioning_contract` judges this repository's workflows and
+Makefile. It can only do so honestly if the readers beneath it discriminate,
+and a reader exercised solely against files that already comply proves nothing
+but its own silence. Every case here is synthetic and is chosen for what the
+reader must *refuse*: a command that merely mentions a tool, a command that is
+not an installation at all, a job that runs no suite step, and a lane that
+installs one executable twice with conflicting specifications.
+
+The properties use the generator as their oracle rather than restating the
+implementation, so the two can disagree.
+"""
+
+from __future__ import annotations
+
+import typing as typ
+
+import pytest
+from hypothesis import assume, given
+from hypothesis import strategies as st
+
+from tests.unit.gate_provisioning_support import (
+    Lane,
+    commands,
+    expand,
+    installed_tool_names,
+    job_runs_the_suite,
+    late_installs,
+    provisioning,
+    split_compound,
+)
+
+# metacharacters and variable sigils the extractors deliberately ignore, so a
+# generated command means what it reads as.
+# A name begins with an alphanumeric: an operand starting with a hyphen is
+# indistinguishable from an option on any command line, and no module path or
+# executable is spelled that way.
+_NAMES: typ.Final = st.from_regex(r"[a-z0-9][a-z0-9._-]{0,11}", fullmatch=True)
+_VERSIONS: typ.Final = st.text(
+    alphabet="abcdefghijklmnopqrstuvwxyz0123456789.", min_size=1, max_size=8
+)
+
+
+def test_a_command_that_only_uses_a_tool_does_not_provision_it() -> None:
+    """The recognizer reads an install verb, not a mention of the tool.
+
+    ``ci.yml`` both installs and invokes Conftest. Were a mention enough, the
+    invocation alone would satisfy the contract and the publisher's missing
+    install would have gone on passing.
+    """
+    invocation = commands(
+        "conftest test --policy platform-standards/tofu/policies examples/*.json\n"
+    )
+    assert invocation, "the invocation fixture must tokenize to one command"
+    assert not installed_tool_names(invocation[0]), (
+        "invoking a tool is not installing it"
+    )
+    installation = commands("go install github.com/open-policy-agent/conftest@v0.52.0")
+    assert installed_tool_names(installation[0]) == frozenset({"conftest"}), (
+        "a Go module install must provision the module's final segment"
+    )
+
+
+def test_a_lane_installing_one_tool_twice_differently_is_rejected() -> None:
+    """Conflicting duplicate installs are refused rather than silently ranked.
+
+    Keeping the first install would let a lane run a later version while the
+    cross-lane comparison judged the earlier command, so the two lanes would
+    read as agreeing while running different tools.
+    """
+    conflicting = Lane(
+        "synthetic.yml",
+        "conflicting",
+        {
+            "steps": [
+                {"run": "go install example.com/conftest@v0.52.0\n"},
+                {"run": "go install example.com/conftest@v0.53.0\n"},
+            ]
+        },
+    )
+    with pytest.raises(AssertionError, match="conflicting commands"):
+        provisioning(conflicting)
+    agreeing = Lane(
+        "synthetic.yml",
+        "agreeing",
+        {
+            "steps": [
+                {"run": "go install example.com/conftest@v0.52.0\n"},
+                {"run": "go install example.com/conftest@v0.52.0\n"},
+            ]
+        },
+    )
+    expected = {"conftest": ("go", "install", "example.com/conftest@v0.52.0")}
+    assert provisioning(agreeing) == expected, (
+        "a lane that installs one executable twice with the same command must "
+        f"report that one command; expected {expected}"
+    )
+
+
+@given(command=st.lists(_NAMES, min_size=1, max_size=6))
+def test_only_an_install_command_provisions_anything(command: list[str]) -> None:
+    """Without an install verb, no command provisions anything.
+
+    The oracle is the generator: a command drawn without the verb cannot
+    install, whatever its operands spell. This is the direction that matters,
+    because a recognizer that fired on any mention of a tool would have
+    accepted the publisher's missing install.
+    """
+    assume("install" not in command)
+    assert not installed_tool_names(tuple(command)), (
+        f"{command} contains no install verb, so it provisions nothing"
+    )
+
+
+@given(
+    segments=st.lists(_NAMES, min_size=1, max_size=3),
+    executable=_NAMES,
+    version=_VERSIONS,
+)
+def test_a_module_install_provisions_its_final_segment(
+    segments: list[str], executable: str, version: str
+) -> None:
+    """A module path installs the executable its last segment names.
+
+    The drawn executable is the independent oracle: the property asserts the
+    recognizer recovers the name the command was generated to install, rather
+    than restating how the path is split. Segments begin with an alphanumeric,
+    because an operand starting with a hyphen reads as an option and is
+    skipped by design.
+    """
+    module = "/".join([*segments, executable])
+    command = ("go", "install", f"{module}@{version}")
+    assert installed_tool_names(command) == frozenset({executable}), (
+        f"installing {module}@{version} must provision {executable!r}"
+    )
+
+
+def _install_lane(executable: str, versions: typ.Sequence[str]) -> Lane:
+    """Return a synthetic lane installing ``executable`` once per version."""
+    return Lane(
+        "synthetic.yml",
+        "generated",
+        {
+            "steps": [
+                {"run": f"go install example.com/{executable}@{version}\n"}
+                for version in versions
+            ]
+        },
+    )
+
+
+@given(
+    executable=_NAMES,
+    versions=st.lists(_VERSIONS, min_size=2, max_size=4),
+)
+def test_duplicate_installs_are_judged_by_agreement_not_by_order(
+    executable: str, versions: list[str]
+) -> None:
+    """Whether duplicates are accepted depends on agreement, never on order.
+
+    The oracle is whether the generated versions are all equal. Keeping the
+    first or the last install would make the verdict depend on the order the
+    steps happen to appear in, which is exactly the defect this guards.
+    """
+    lane = _install_lane(executable, versions)
+    if len(set(versions)) == 1:
+        expected = ("go", "install", f"example.com/{executable}@{versions[0]}")
+        assert provisioning(lane) == {executable: expected}, (
+            f"identical installs of {executable!r} must report {expected}"
+        )
+    else:
+        with pytest.raises(AssertionError, match="conflicting commands"):
+            provisioning(lane)
+
+
+@given(
+    before=st.lists(_NAMES, max_size=3),
+    after=st.lists(_NAMES, max_size=3),
+)
+def test_a_suite_step_is_recognized_wherever_it_sits(
+    before: list[str], after: list[str]
+) -> None:
+    """A job runs the suite if any step does, whatever surrounds it.
+
+    Steps are enumerated rather than positionally assumed, so a lane that
+    runs the suite last is as much a lane as one that runs it first.
+    """
+    assume(not {*before, *after} & {"make", "pytest", "uv"})
+    surrounding = [{"run": f"{command}\n"} for command in [*before, *after]]
+    quiet: dict[str, object] = {"steps": list(surrounding)}
+    assert not job_runs_the_suite(quiet, subject="generated quiet job"), (
+        f"none of {before + after} runs the suite"
+    )
+    steps = [
+        *({"run": f"{command}\n"} for command in before),
+        {"run": "make test\n"},
+        *({"run": f"{command}\n"} for command in after),
+    ]
+    running: dict[str, object] = {"steps": steps}
+    assert job_runs_the_suite(running, subject="generated suite job"), (
+        f"a `make test` step after {before} must be recognized"
+    )
+
+
+def test_a_command_that_is_not_an_installation_provisions_nothing() -> None:
+    """Only a package manager's install verb counts as provisioning.
+
+    A recognizer that read any command containing `install` would credit a
+    lane for `echo install conftest`, or for a tool invoked with a path that
+    happens to contain the word. Each case is driven directly, because a
+    predicate parametrized over compliant files proves only that it is quiet.
+    """
+    for script in (
+        "echo install conftest\n",
+        "conftest test --policy install/policies examples/*.json\n",
+        "./install conftest\n",
+        "make install\n",
+    ):
+        command = commands(script)[0]
+        assert not installed_tool_names(command), (
+            f"{script.strip()!r} is not a package-manager install, so it "
+            "provisions nothing"
+        )
+    installer = commands("uv tool install mbake\n")[0]
+    assert installed_tool_names(installer) == frozenset({"mbake"}), (
+        "a package manager's install verb must still be recognized"
+    )
+
+
+def test_a_job_that_does_not_run_the_suite_is_not_a_lane() -> None:
+    """The lane recognizer reads the steps, not the presence of a job.
+
+    A contract that treated every job as a suite lane would demand the gate's
+    tools of jobs that never run the gate, and would be relaxed to silence.
+    """
+    publishing_job: dict[str, object] = {
+        "steps": [
+            {"name": "Check out repository", "uses": "actions/checkout@0000000"},
+            {"name": "Publish", "run": "make build-release\n"},
+        ]
+    }
+    assert not job_runs_the_suite(publishing_job, subject="synthetic publishing job"), (
+        "a job that checks out and builds a release does not run the suite"
+    )
+    suite_job: dict[str, object] = {
+        "steps": [{"name": "Run tests", "run": "make test\n"}]
+    }
+    assert job_runs_the_suite(suite_job, subject="synthetic suite job"), (
+        "a job whose step runs `make test` runs the suite"
+    )
+
+
+def test_a_compound_line_is_read_as_its_separate_commands() -> None:
+    """A step may chain commands, and the suite may follow any operator.
+
+    Reading one command per physical line hides a suite run or an install
+    behind `&&`, `;` or a pipe. The lane is then never enumerated and its
+    provisioning is never judged, which fails open.
+    """
+    for script in (
+        "uv sync && make test\n",
+        "make build; make test\n",
+        "make test | tee coverage.log\n",
+        "false || make test\n",
+    ):
+        assert job_runs_the_suite(
+            {"steps": [{"run": script}]}, subject="compound job"
+        ), f"{script.strip()!r} runs the suite after a control operator"
+    chained = commands("go install example.com/first@v1 && go install b/second@v2\n")
+    installed = {name for command in chained for name in installed_tool_names(command)}
+    assert installed == {"first", "second"}, (
+        f"both installs in a chained line must be recognized; found {installed}"
+    )
+
+
+def test_a_quoted_operator_is_an_argument_not_a_separator() -> None:
+    """Splitting reads the text, so a quoted operator stays in its command.
+
+    Tokenizing first would make a quoted ``&&`` indistinguishable from the
+    control operator, and every argument that spells one would silently
+    become a second command the lane never runs.
+    """
+    assert split_compound('echo "a && b"') == ('echo "a && b"',), (
+        "a double-quoted operator is an argument"
+    )
+    assert split_compound("echo 'x ; y'") == ("echo 'x ; y'",), (
+        "a single-quoted operator is an argument"
+    )
+    assert split_compound("echo a\\&& echo b") == ("echo a\\&", "echo b"), (
+        "an escaped operator stays in its command, and the unescaped one "
+        "after it separates"
+    )
+
+
+def test_an_install_in_the_suite_step_counts_as_late() -> None:
+    """A step that installs and runs the suite has an unreadable order.
+
+    Its two commands could run either way round, and the step list cannot
+    say which. Accepting it would let a lane install Conftest after the
+    suite in the same script and still pass, which is the publisher's own
+    failure with one fewer step.
+    """
+    same_step = Lane(
+        "synthetic.yml",
+        "same-step",
+        {"steps": [{"run": "make test\ngo install example.com/conftest@v0.52.0\n"}]},
+    )
+    assert late_installs(same_step, {"conftest"}) == {"conftest": 0}, (
+        "an install in the step that runs the suite must be reported as late"
+    )
+    earlier = Lane(
+        "synthetic.yml",
+        "earlier",
+        {
+            "steps": [
+                {"run": "go install example.com/conftest@v0.52.0\n"},
+                {"run": "make test\n"},
+            ]
+        },
+    )
+    assert late_installs(earlier, {"conftest"}) == {}, (
+        "an install in an earlier step is not late"
+    )
+
+
+def test_a_commented_install_is_not_an_install() -> None:
+    """The shell stops at an unquoted comment, so the reader must too.
+
+    Splitting control operators before discarding comments would read
+    ``echo ready # && go install ...`` as a real installation, and a lane
+    could satisfy the provisioning contract with a command that never runs.
+    """
+    commented = commands("echo ready # && go install example.com/conftest@v0.52.0\n")
+    installed = {
+        name for command in commented for name in installed_tool_names(command)
+    }
+    assert not installed, (
+        f"a commented-out install provisions nothing; found {installed}"
+    )
+    assert commented == (("echo", "ready"),), (
+        f"the command before the comment still runs; found {commented}"
+    )
+    after_operator = commands(
+        "echo ready;# && go install example.com/conftest@v0.52.0\n"
+    )
+    assert not {
+        name for command in after_operator for name in installed_tool_names(command)
+    }, "a control operator ends the word before it, so the comment still applies"
+    assert after_operator == (("echo", "ready"),), (
+        f"the command before the operator still runs; found {after_operator}"
+    )
+    within_word = commands("go install example.com/conftest@v0.52.0#pinned\n")
+    assert installed_tool_names(within_word[0]) == frozenset({"conftest"}), (
+        "a hash inside a word is not a comment"
+    )
+
+
+def test_a_variable_reference_binds_to_a_whole_name() -> None:
+    """One name must not claim the head of a longer one.
+
+    Substituting name by name would turn `$VERSION` into the value of `VER`
+    followed by `SION` when a job declares both, so two lanes pinning one
+    revision could compare unequal and two lanes pinning different revisions
+    could compare equal.
+    """
+    environment = {"VER": "1", "VERSION": "2"}
+    assert expand("$VERSION", environment) == "2", "the longer name wins"
+    assert expand("${VERSION}", environment) == "2", "braced references too"
+    assert expand("$VER", environment) == "1", "the shorter name still resolves"
+    assert expand("$UNSET", environment) == "$UNSET", (
+        "an undefined reference is left as it stands"
+    )
+
+
+def test_an_install_pinned_through_the_environment_is_recognized() -> None:
+    """A version carried by the job environment is still a version.
+
+    Recognition runs on the expanded command, so an install spelling its
+    pin as `${CONFTEST_VERSION}` is seen. Reading the raw command would drop
+    the operand for containing a sigil, and the lane would read as not
+    provisioning the tool it does provision.
+    """
+    lane = Lane(
+        "synthetic.yml",
+        "environment-pinned",
+        {
+            "env": {"CONFTEST_VERSION": "v0.52.0"},
+            "steps": [
+                {"run": "go install example.com/conftest@${CONFTEST_VERSION}\n"},
+                {"run": "make test\n"},
+            ],
+        },
+    )
+    assert provisioning(lane) == {
+        "conftest": ("go", "install", "example.com/conftest@v0.52.0")
+    }, "an install pinned through the job environment must be recognized"
+    assert not late_installs(lane, {"conftest"}), (
+        "the ordering check must see the same install"
+    )
+
+
+# Every way a shell ends one word before the next: whitespace and the control
+# operators. The empty separator is the discriminating case, where the hash
+# continues the word it touches instead of starting a comment.
+_SEPARATORS: typ.Final = st.sampled_from([
+    "",
+    " ",
+    "  ",
+    "\t",
+    ";",
+    " ; ",
+    "&&",
+    " && ",
+    "|",
+    " | ",
+    "||",
+    "&",
+])
+_OPERATORS: typ.Final = st.sampled_from(["&&", "||", ";", "|", " && ", " ; ", " | "])
+
+
+@given(separator=_SEPARATORS, executable=_NAMES, version=_VERSIONS)
+def test_a_comment_is_a_comment_after_any_separator(
+    separator: str, executable: str, version: str
+) -> None:
+    """Where a comment begins is decided by what precedes it, not by a list.
+
+    Each of the last two review rounds found one placement the reader missed,
+    a space and then a semicolon. The generator now walks every separator the
+    shell recognizes, so the next shape is found here rather than by a reader.
+    The oracle is the rule itself: a hash starts a comment when the character
+    before it is absent, whitespace, or a control operator.
+    """
+    module = f"example.com/{executable}@{version}"
+    line = f"go install {module}{separator}# echo done\n"
+    read = commands(line)
+    if separator:
+        assert read == (("go", "install", module),), (
+            f"a hash after {separator!r} begins a comment; found {read}"
+        )
+    else:
+        assert read == (("go", "install", f"{module}#", "echo", "done"),), (
+            f"a hash touching a word continues it; found {read}"
+        )
+
+
+@given(
+    operator=_OPERATORS,
+    first=_NAMES,
+    second=_NAMES,
+    version=_VERSIONS,
+)
+def test_an_operator_separates_installs_wherever_it_appears(
+    operator: str, first: str, second: str, version: str
+) -> None:
+    """Two installs chained by any control operator are both recognized.
+
+    Reading one command per line saw only the first, which hid a lane from
+    enumeration entirely. The oracle is that both drawn executables are
+    installed, whichever operator joins them.
+    """
+    assume(first != second)
+    line = f"go install a/{first}@{version}{operator}go install b/{second}@{version}\n"
+    installed = {
+        name for command in commands(line) for name in installed_tool_names(command)
+    }
+    assert installed == {first, second}, (
+        f"both installs joined by {operator!r} must be recognized; found {installed}"
+    )

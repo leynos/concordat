@@ -8,12 +8,21 @@ the one answer a fail-closed audit must never give by accident.
 
 The probe here separates the two. Callers turn an absence into whatever their
 clause means by it, and a refusal into a fail-closed fact carrying the reason.
+
+Two shapes are offered over one probe. `probe_file` returns the outcome as a
+fact, for callers that carry the reason into a policy clause.
+`regular_file_exists` raises instead, for callers whose boundary is an
+operational error rather than a fact, such as the applicability evidence in
+`concordat.rules.envelope`. Neither reports an unreadable path as an absent
+one, and which failures count as absence is decided here, once.
 """
 
 from __future__ import annotations
 
 import stat
 import typing as typ
+
+from concordat.errors import OperationalRuleError
 
 if typ.TYPE_CHECKING:
     import pathlib
@@ -56,3 +65,39 @@ def probe_file(path: pathlib.Path) -> FileProbe:
         # filesystem answered the question, so it is an absence.
         return ABSENT
     return FileProbe(present=True, read_error=None)
+
+
+def regular_file_exists(path: pathlib.Path, *, operation: str) -> bool:
+    """Return whether *path* is a regular file, refusing to guess on failure.
+
+    The raising counterpart to `probe_file`, for a caller whose contract is
+    an exception rather than a fact.
+
+    Parameters
+    ----------
+    path:
+        The path to probe.
+    operation:
+        The stable `operation` identifier reported when the probe fails.
+
+    Returns
+    -------
+    bool
+        Whether *path* exists and is a regular file. An absent path is
+        reported as `False`, which is the established no-applicability fact.
+
+    Raises
+    ------
+    OperationalRuleError
+        If the path exists but cannot be inspected, so that an unreadable
+        file is never reported as an absent one.
+    """
+    probe = probe_file(path)
+    if probe.read_error is not None:
+        message = f"cannot inspect {path}: {probe.read_error}"
+        raise OperationalRuleError(
+            message,
+            operation=operation,
+            resource=path,
+        )
+    return probe.present
