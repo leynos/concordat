@@ -131,6 +131,12 @@ jobs:
         # generated and uploaded by coverage-main.yml on push, so this
         # step is skipped there to avoid generating it twice.
         if: github.event_name == 'pull_request'
+        # `uv venv` builds the coverage environment from the newest
+        # interpreter uv can find, and the tool installs above leave a
+        # managed 3.14 behind. Without this the lane measured on 3.14 while
+        # the publisher measured on 3.13, and the ratchet compared the two.
+        env:
+          UV_PYTHON: '3.13'
         uses: leynos/shared-actions/.github/actions/generate-coverage@18bed1ca49a6de3d8882bd72635a32ae3f023d57
         with:
           output-path: coverage.xml
