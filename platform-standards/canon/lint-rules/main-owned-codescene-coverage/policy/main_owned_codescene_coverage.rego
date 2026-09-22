@@ -517,9 +517,12 @@ has_publishing_coverage(workflow) if {
 # Clause 2: the single main publisher is guarded and serialized.
 # --------------------------------------------------------------------------
 
+# Each pattern must match one whole conjunct, not a substring of the
+# condition: `x && github.ref == 'refs/heads/main' || y` contains the
+# comparison while making it optional.
 main_ref_guard_patterns := [
-  `github\.ref[[:space:]]*==[[:space:]]*['"]refs/heads/main['"]`,
-  `['"]refs/heads/main['"][[:space:]]*==[[:space:]]*github\.ref`,
+  `^[(]*[[:space:]]*github\.ref[[:space:]]*==[[:space:]]*['"]refs/heads/main['"][[:space:]]*[)]*$`,
+  `^[(]*[[:space:]]*['"]refs/heads/main['"][[:space:]]*==[[:space:]]*github\.ref[[:space:]]*[)]*$`,
 ]
 
 step_condition(step) := condition if {
@@ -527,14 +530,47 @@ step_condition(step) := condition if {
   is_string(condition)
 }
 
+# The expression inside an optional `${{ }}` wrapper, which GitHub accepts
+# around a step condition or leaves out.
+guard_expression(condition) := expression if {
+  trimmed := trim_space(condition)
+  wrapped_guard(trimmed)
+  expression := trim_space(trim_suffix(trim_prefix(trimmed, "${{"), "}}"))
+}
+
+guard_expression(condition) := trim_space(condition) if {
+  trimmed := trim_space(condition)
+  not wrapped_guard(trimmed)
+}
+
+wrapped_guard(trimmed) if {
+  startswith(trimmed, "${{")
+  endswith(trimmed, "}}")
+}
+
+# A disjunction anywhere outside a quoted string makes every conjunct beside
+# it optional, so a condition carrying one guards nothing. Quoted literals are
+# blanked first so that `'a||b'` is not mistaken for an operator.
+guard_has_disjunction(condition) if {
+  unquoted := regex.replace(condition, `'[^']*'|"[^"]*"`, "''")
+  contains(unquoted, "||")
+}
+
+guard_conjuncts(condition) := [trim_space(part) |
+  some part in split(guard_expression(condition), "&&")
+]
+
 step_guarded_on_main_ref(step) if {
   condition := step_condition(step)
+  not guard_has_disjunction(condition)
+  some conjunct in guard_conjuncts(condition)
   some pattern in main_ref_guard_patterns
-  regex.match(pattern, condition)
+  regex.match(pattern, conjunct)
 }
 
 step_guarded_on_token(step) if {
   condition := step_condition(step)
+  not guard_has_disjunction(condition)
   contains(condition, "CS_ACCESS_TOKEN")
 }
 
@@ -551,6 +587,17 @@ has_concurrency_block(workflow) if {
   value := workflow_concurrency(workflow)
   is_string(value)
   trim_space(value) != ""
+}
+
+# A cancelled publisher abandons both its upload and the ratchet baseline it
+# was writing; a queued one publishes later and the later push's baseline
+# wins. Only an absent or literally false `cancel-in-progress` queues: an
+# expression may evaluate true on the very push it matters for.
+publisher_cancels_in_progress(workflow) if {
+  value := workflow_concurrency(workflow)
+  is_object(value)
+  "cancel-in-progress" in object.keys(value)
+  not falsey(value["cancel-in-progress"])
 }
 
 publisher_paths := {path |
@@ -872,6 +919,14 @@ deny contains f if {
   qualifying_main_coverage_publisher(workflow)
   not has_concurrency_block(workflow)
   f := finding("noncompliant", workflow_path(workflow), "main coverage publisher has no concurrency block")
+}
+
+deny contains f if {
+  envelope_ok
+  some workflow in workflows
+  qualifying_main_coverage_publisher(workflow)
+  publisher_cancels_in_progress(workflow)
+  f := finding("noncompliant", workflow_path(workflow), "main coverage publisher cancels in progress rather than queueing")
 }
 
 deny contains f if {

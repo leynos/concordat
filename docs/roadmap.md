@@ -458,10 +458,11 @@ actuators that remediate them. Each check ships as a lint rule package under
   set `publish-artefact: 'false'`, and never invoke CodeScene or receive
   `CS_ACCESS_TOKEN`; exactly one main-only push workflow writes the ratchet
   baseline and uploads with `mode: upload` from a step guarded on `github.ref`
-  and the credential, under a concurrency block; no workflow carries the
-  removed installer digest; and every platform ratcheting on pull requests also
-  ratchets on the trunk push. Acceptance: the `main-owned-codescene-coverage`
-  package has compliant, PR-check, PR-upload, missing-main, missing-ratchet,
+  and the credential with no disjunction, under a concurrency block that queues
+  rather than cancels; no workflow carries the removed installer digest; and
+  every platform ratcheting on pull requests also ratchets on the trunk push.
+  Acceptance: the `main-owned-codescene-coverage` package has
+  compliant, PR-check, PR-upload, missing-main, missing-ratchet,
   malformed, and reusable-job fixtures; a compliant and a non-compliant fixture
   for each clause above; a compliant and a non-compliant pair written with the
   YAML-boolean trigger key, which is what the dual reading needs; and a

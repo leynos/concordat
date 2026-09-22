@@ -248,6 +248,54 @@ test_ref_guard_written_in_either_order_is_compliant if {
   count(findings) == 0
 }
 
+# A trailing disjunction contains the comparison while making it optional,
+# so a dispatch from any branch would upload. Both guards are refused.
+test_disjunction_makes_the_guards_optional if {
+  findings := policy.deny with input as data.fixtures.clause2_ref_guard_made_optional_by_disjunction
+  profile(findings) == {
+    ["noncompliant", ".github/workflows/coverage-main.yml", "CodeScene upload step is not guarded on github.ref == 'refs/heads/main'"],
+    ["noncompliant", ".github/workflows/coverage-main.yml", "CodeScene upload step is not guarded on the CS_ACCESS_TOKEN credential"],
+  }
+}
+
+# The comparison must be a whole conjunct; inside a negation it guards the
+# opposite ref.
+test_negated_ref_guard_is_noncompliant if {
+  findings := policy.deny with input as data.fixtures.clause2_negated_ref_guard
+  profile(findings) == {
+    ["noncompliant", ".github/workflows/coverage-main.yml", "CodeScene upload step is not guarded on github.ref == 'refs/heads/main'"],
+  }
+}
+
+test_disjunction_inside_a_quoted_literal_is_compliant if {
+  findings := policy.deny with input as data.fixtures.clause2_quoted_disjunction_is_compliant
+  count(findings) == 0
+}
+
+test_guard_without_expression_wrapper_is_compliant if {
+  findings := policy.deny with input as data.fixtures.clause2_unwrapped_guard_is_compliant
+  count(findings) == 0
+}
+
+test_publisher_cancelling_in_progress_is_noncompliant if {
+  findings := policy.deny with input as data.fixtures.clause2_publisher_cancels_in_progress
+  profile(findings) == {
+    ["noncompliant", ".github/workflows/coverage-main.yml", "main coverage publisher cancels in progress rather than queueing"],
+  }
+}
+
+test_publisher_cancelling_by_expression_is_noncompliant if {
+  findings := policy.deny with input as data.fixtures.clause2_publisher_cancels_by_expression
+  profile(findings) == {
+    ["noncompliant", ".github/workflows/coverage-main.yml", "main coverage publisher cancels in progress rather than queueing"],
+  }
+}
+
+test_publisher_without_cancel_key_is_compliant if {
+  findings := policy.deny with input as data.fixtures.clause2_publisher_without_cancel_key_is_compliant
+  count(findings) == 0
+}
+
 test_publisher_without_concurrency_is_noncompliant if {
   findings := policy.deny with input as data.fixtures.clause2_publisher_without_concurrency
   profile(findings) == {
