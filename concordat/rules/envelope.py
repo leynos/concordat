@@ -12,8 +12,18 @@ import typing as typ
 
 from .cargo_config import CargoConfigFacts, inspect_cargo_config
 from .exception_docs import DocumentScan, find_exception_sections
-from .makefile_facts import MakeutilReport, inspect_makefile
-from .rust_surfaces import CargoManifest, CargoSurface, resolve_rust_surfaces
+from .fs_probe import regular_file_exists
+from .makefile_facts import (
+    OPERATION_PARSE_MAKEFILE,
+    MakeutilReport,
+    inspect_makefile,
+)
+from .rust_surfaces import (
+    CargoManifest,
+    CargoSurface,
+    resolve_rust_surfaces,
+    root_cargo_toml_exists,
+)
 from .toolchain import ToolchainFacts, inspect_toolchain
 
 if typ.TYPE_CHECKING:
@@ -72,7 +82,7 @@ def build_envelope(checkout: pathlib.Path) -> PolicyEnvelope:
     cargo_path = checkout / "Cargo.toml"
     makefile_path = checkout / "Makefile"
 
-    root_cargo_toml = cargo_path.is_file()
+    root_cargo_toml = root_cargo_toml_exists(cargo_path)
     resolution = resolve_rust_surfaces(checkout)
     cargo_parsed = next(
         (
@@ -84,7 +94,7 @@ def build_envelope(checkout: pathlib.Path) -> PolicyEnvelope:
     )
 
     makefile_report: MakeutilReport | None = None
-    if makefile_path.is_file():
+    if regular_file_exists(makefile_path, operation=OPERATION_PARSE_MAKEFILE):
         makefile_report = inspect_makefile(makefile_path).report
 
     envelope: PolicyEnvelope = {
@@ -194,7 +204,7 @@ def build_build_defaults_envelope(
         "kind": BUILD_DEFAULTS_ENVELOPE_KIND,
         "repository": {"path": str(checkout), "name": None},
         "applicability": {
-            "root_cargo_toml": (checkout / "Cargo.toml").is_file(),
+            "root_cargo_toml": root_cargo_toml_exists(checkout / "Cargo.toml"),
             "rust_surfaces_declared": resolution.declared,
             "cargo_config": cargo_config is not None,
             "toolchain_file": toolchain is not None,

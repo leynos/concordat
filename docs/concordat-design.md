@@ -895,7 +895,15 @@ A “lint rule” in Concordat is a sensor plus mutation logic:
     ruleset contexts, and security alerts — that no checkout contains. The
     separate `rule acquire` command or service obtains those snapshots.
 - configuration: parameters that allow the same rule logic to be reused with
-  different baselines, and
+  different baselines,
+- input: for a `conftest` sensor, the envelope kind the policy is evaluated
+  over, declared as `sensor.input` in `rule.yaml`. A package whose input is a
+  shape another package already builds declares it here and needs no code
+  change; a package that builds its own adds that builder under the kind it
+  emits, and may also be registered by identifier. There is no default, because
+  a policy handed the wrong document does not fail but answers confidently
+  about the wrong facts: a package matching neither is refused rather than
+  audited over an envelope it never expected; and
 - mutation (actuator): the remediation. Two actuator types exist:
   - deterministic edits (`file-copy`, comment-preserving TOML patches) that
     bring a checkout into compliance, and
@@ -1008,6 +1016,9 @@ In this model:
 
 - `version` is the SemVer version of the rule package.
 - `sensor.type` selects the detector (`conftest` or `github-api`).
+- `sensor.input` names the policy-input envelope kind a `conftest` sensor is
+  evaluated over. A package whose input is a shape another package already
+  builds declares it here and needs no code change.
 - `parameters` defines the configuration surface area and defaults.
 - `mutations` defines the actuator entries executed by remediation tooling;
   each entry's `type` selects a deterministic edit (for example `file-copy`) or

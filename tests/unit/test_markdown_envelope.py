@@ -515,7 +515,6 @@ class TestPathProbes:
         [
             pytest.param(_exists, True, id="exists-file"),
             pytest.param(_is_file, True, id="is-a-file"),
-            pytest.param(_is_dir, False, id="not-a-directory"),
             pytest.param(_is_symlink, False, id="not-a-link"),
         ],
     )
@@ -532,6 +531,20 @@ class TestPathProbes:
         assert probe(target, "probe-path") is expected, (
             "a probe misread an ordinary readable file"
         )
+
+    def test_a_file_where_a_directory_is_expected_is_refused(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """An occupied path is a state to report, not an absent directory.
+
+        `_is_symlink` is a question about what kind of entry is there, so a
+        regular file answers it. `_is_dir` expects a directory: a file in its
+        place would otherwise read as a repository with no workflows.
+        """
+        target = tmp_path / "plain.txt"
+        target.write_text("x", encoding="utf-8")
+        with pytest.raises(OperationalRuleError, match="where a directory is expected"):
+            _is_dir(target, "probe-path")
 
     @pytest.mark.parametrize(
         "probe",

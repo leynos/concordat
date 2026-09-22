@@ -110,6 +110,65 @@ enforce the local ratchet. They do not invoke CodeScene and must not expose
 `main`; it advances the coverage baseline and is the sole CodeScene publisher,
 using `mode: upload`.
 
+### Gate tool provisioning
+
+Two lanes run the whole pytest suite: `ci.yml`'s `lint-test` job on pull
+requests and `coverage-main.yml`'s `coverage-upload` job on pushes to `main`.
+Parts of the suite shell out to external programs, so a lane that runs the
+suite must also install them. `coverage-main.yml` once installed only the
+Makefile parser, and every push to `main` failed in three rule tests with
+`conftest is required but was not found on PATH`; no pull request could see it,
+because the lane that reports a defect is not the lane that suffers from it.
+
+`tests/unit/test_gate_tool_provisioning_contract.py` holds the contract,
+reading the repository through `tests/unit/gate_provisioning_support.py`, whose
+recognizers are driven against synthetic input in
+`tests/unit/test_gate_provisioning_recognizers.py`. The contract derives the
+required tool set from the package rather than restating it, by reading the
+`<tool> is required but was not found on PATH` messages that `concordat`
+raises, so a newly required tool is covered as soon as it is introduced. It
+enumerates the suite lanes from `.github/workflows`, so a workflow added later
+is covered on the day it appears. Provisioning is recognized from the shape of
+an install command and not from a step's name, so renaming or merging steps
+cannot void it. A tool must be installed before the step that runs the suite,
+since installing it afterwards fails exactly as the publisher did, and every
+lane must install a shared tool at the same specification so the two cannot
+drift apart. A lane that installs with Go must also run the shared Go setup
+action, at the same pin, because the runners carry no toolchain the install can
+rely on. `make test` lists the same tools as prerequisites, so the local gate
+fails by name rather than through unrelated rule tests.
+
+Add a new external tool in three places together: the package's missing-tool
+message, the install step in every suite lane, and the `test` target's
+prerequisites.
+
+The two lanes do not yet agree on the interpreter that measures coverage.
+`ci.yml` installs tooling that leaves a newer managed Python in place before
+the coverage step resolves one, so its `.venv-coverage` has been Python 3.14
+while the publisher's has been Python 3.13. Behaviour that differs between
+supported interpreters therefore fails only on `main`; `concordat.rules` probes
+the filesystem through `concordat/rules/fs_probe.py` for exactly this reason.
+
+### Filesystem applicability probes
+
+`concordat/rules/fs_probe.py` decides, in one place, which filesystem failures
+count as absence. It offers two shapes over that one decision. `probe_file`
+returns a `FileProbe` carrying the filesystem's diagnostic, for callers that
+fail a policy clause closed with the reason.
+`regular_file_exists(path, *, operation)` raises `OperationalRuleError`
+instead, with the caller's `operation` identifier and the path as `resource`,
+for callers whose boundary is an operational error. Both report `False` for an
+absent path and for a non-regular file, and neither reports an unreadable file
+as an absent one, because absence is evidence that a rule does not apply while
+an inspection failure is evidence of nothing.
+
+Two callers use it. `concordat.rules.rust_surfaces.root_cargo_toml_exists`
+probes the root Cargo manifest under `resolve-rust-surfaces`, and
+`build_envelope` probes the root `Makefile` under `parse-makefile`. Do not call
+`Path.is_file` or `Path.exists` for applicability evidence: the `pathlib`
+probes conflate the two facts, and which failures they swallow differs between
+supported interpreters.
+
 ## Public runtime boundary
 
 `concordat.hello` is the public greeting entry point. At runtime it selects
@@ -367,8 +426,23 @@ reverse:
 
 ## `concordat artefact rule run`
 
-`concordat/rules/runner.py` and `concordat/rules/envelope.py` implement the
-rule-run subcommand exposed as `concordat artefact rule run <rule-id>`.
+`concordat/rules/runner.py`, `concordat/rules/packages.py`, and
+`concordat/rules/envelope.py` implement the rule-run subcommand exposed as
+`concordat artefact rule run <rule-id>`.
+
+The split is by question asked. `packages.py` answers three about a rule
+package without evaluating one: where its policy lives, what its manifest
+declares, and which policy-input envelope it is audited over. `runner.py`
+answers the fourth, what Conftest made of that envelope, and imports the rest.
+Where a test patches depends on what it is testing, and the answer is not
+simply "where the name is defined". `runner` imports `rule_package_dir` and
+`rule_parameters` into its own bindings, so a test of how `runner` uses them
+patches `runner._rule_package_dir` or `runner._rule_parameters`; patching
+`packages` leaves `runner`'s bindings pointing at the originals. `run_rule`
+captures `default_envelope_builder` as a default argument at definition time,
+so substituting the resolver means passing `envelope_builder=` rather than
+patching either module. Patch `packages` when testing the package helpers
+themselves, including the mappings and the manifest reader.
 
 ### The policy envelope
 
@@ -390,16 +464,17 @@ fallback or causing the policy evaluator to fail.
 ### Policy-input kinds and dispatch
 
 Each rule manifest names the envelope its sensor evaluates under `sensor.input`.
-`concordat/rules/manifest.py` reads and validates the manifest, and
-`runner._envelope_builder` looks the declared kind up in `ENVELOPE_BUILDERS`; a
-manifest without the field defaults to the Rust kind, so the first rule package
-keeps working unchanged, and an unknown kind is an `OperationalRuleError`
-rather than a guess. A `sensor` key that is present and is not a mapping is
-refused for the same reason: falling back would hand one policy the document
-another was written for, and a policy that cannot find its own facts reports a
-compliance it never established. Two kinds exist:
+`packages.rule_manifest` reads the manifest, and a package not registered by
+identifier reaches its builder through `INPUT_KIND_ENVELOPE_BUILDERS`, keyed by
+that declared kind; "Choosing the envelope for a package" below gives the
+routes. A package declaring no kind, or one no builder produces, is an
+`OperationalRuleError` rather than a guess: falling back would hand one policy
+the document another was written for, and a policy that cannot find its own
+facts reports a compliance it never established. Three kinds exist:
 
 - `policy-input/rust-makefile-baseline` — `envelope.build_envelope`, above.
+- `policy-input/rust-build-defaults` —
+  `envelope.build_build_defaults_envelope`, below.
 - `policy-input/markdown-formatting-baseline` —
   `markdown_envelope.build_markdown_envelope`. Alongside the same `makeutil`
   report for the root `Makefile`, it carries `.markdownlint-cli2.jsonc` decoded
@@ -410,7 +485,9 @@ compliance it never established. Two kinds exist:
   its `error` so the policy reports an indeterminate finding; a file that
   cannot be opened at all is operational. Applicability is content-driven: any
   Markdown file outside the pruned dependency, build, and cache directories
-  brings the checkout into scope.
+  brings the checkout into scope. `markdown-formatting-baseline` is not
+  registered by identifier: it declares this kind, which is the ordinary shape
+  for a package bringing its own builder.
 
 The Markdown package's `fixtures/generate.py` lays each scenario out as a
 temporary checkout and records what `build_markdown_envelope` produces, so the
@@ -422,20 +499,46 @@ checked-in envelopes are exactly the production builder's output;
 A rule package reads the facts its checks need, and those differ. `run_rule`
 takes an `envelope_builder` resolver and calls whatever it is given;
 `default_envelope_builder` is the composition layer that maps a package to its
-builder and supplies the manifest parameters that builder needs.
-`PACKAGE_ENVELOPE_BUILDERS` is the read-only mapping it consults: a package
-named there supplies its own builder and receives the manifest parameters that
-builder needs, which is the only reason to name one. Package selection
-therefore stays in one place, and a caller — a test included — substitutes a
-resolver rather than reaching into the mapping.
+builder and supplies the manifest parameters that builder needs. Package
+selection therefore stays in one place, and a caller — a test included —
+substitutes a resolver rather than reaching into the mappings below.
 
-A package that is not named there is not left to the Rust envelope by default;
-it is asked what it wants. The resolver falls through to the manifest's declared
-`sensor.input`, described in the section above, and only a manifest that
-predates the field takes `build_envelope`. The two mechanisms answer different
-questions, which is why both are here: the mapping says which packages need
-parameters passed to their builder, and the manifest says which document a
-package is evaluated over.
+The resolver takes two routes and has no third. Both mappings live in
+`packages.py`. `PACKAGE_ENVELOPE_BUILDERS` maps a package identifier to its
+builder and is the complete list of packages, not the exceptions to a default.
+A package absent from it may instead declare `sensor.input` in its own
+`rule.yaml`, naming an envelope kind that `INPUT_KIND_ENVELOPE_BUILDERS` knows;
+that is the route for a package whose input is a shape another package already
+builds, and it needs no Python change. A package matching neither is refused
+with an `OperationalRuleError` naming it, the registered packages, and the
+declarable kinds.
+
+A package that needs facts neither existing envelope carries brings its own
+builder, and adds one entry to `INPUT_KIND_ENVELOPE_BUILDERS` keyed by the kind
+its envelope emits. It then declares that kind in its own `rule.yaml` and needs
+no entry in the identifier mapping at all. That is the ordinary shape for a new
+package: one line here, one line in its manifest, and no mechanism of its own.
+
+The two mappings are therefore not the same set. Every builder reachable by
+identifier is also reachable by its kind, so a package's envelope is one
+another package could declare; the reverse does not hold, because a
+declared-only package appears in the kind mapping alone.
+
+**Every shipped package declares or registers.** There is no third state and no
+default, so a manifest written before `sensor.input` existed is refused rather
+than quietly given the envelope it used to receive by accident. That is the
+point of the rule: the package that most needs refusing is the one nobody
+remembered to wire up, and a default is precisely what hides it.
+
+There is deliberately no fallback. An earlier version of this resolver sent an
+unregistered package to `build_envelope`, on the reasoning that existing
+packages should be left untouched. That is a fail-open default inside a
+fail-closed audit: a package whose policy expects one envelope, handed another,
+does not degrade — it answers confidently about a document it was never written
+for. `rust-build-defaults` reads no Makefile at all, so a registration mistake
+would have turned into an `EN-001` finding about the wrong input rather than a
+failure to audit. Refusing costs one line in a mapping or one line in a
+manifest; the alternative costs a verdict nobody can trust.
 
 `rust-build-defaults` is the first package to take its own. Its envelope
 (`build_build_defaults_envelope`) carries the facts Cargo and rustup
@@ -470,16 +573,30 @@ which is the one answer a fail-closed audit must never give by accident.
 clause means by it, and a refusal into a fail-closed fact carrying the reason.
 Every new reader in the build-defaults envelope uses it.
 
-`probe_dir`, `probe_symlink`, and `probe_any` answer the same way for the other
-three questions, over a shared core. The Markdown envelope and the manifest
-reader use them, because from Python 3.14 the suppression is total: `exists`,
-`is_file`, `is_dir`, and `is_symlink` now swallow every `OSError` the operating
-system raises. This package supports 3.13 and later, so before that change the
-same unreadable checkout raised on one interpreter and read as empty on the
-other. The Markdown envelope translates a reported refusal into the
-`OperationalRuleError` its callers already expect; the rule manifest does the
-same, so a package whose `rule.yaml` cannot be read cannot silently lose its
-parameters and its declared policy input.
+`probe_dir` and `probe_any` answer the same way for a directory and for any
+entry, over the core `probe_file` uses, so a file where a directory is expected
+is a refusal naming the occupant, exactly as a directory where a file is
+expected is. `probe_symlink` is the exception, and deliberately: it asks what
+kind of entry is there, without following it, so an entry of another kind is an
+answer rather than an occupied path. The Markdown envelope uses all four,
+because from Python 3.14 the suppression is total: `exists`, `is_file`,
+`is_dir`, and `is_symlink` now swallow every `OSError` the operating system
+raises. This package supports 3.13 and later, so before that change the same
+unreadable checkout raised on one interpreter and read as empty on the other.
+The Markdown envelope translates a reported refusal into the
+`OperationalRuleError` its callers already expect, and `packages.rule_manifest`
+does the same, so a package whose `rule.yaml` cannot be read cannot silently
+lose its parameters and its declared policy input.
+
+Absence is narrower than it first looks, and the boundary took a second pass to
+get right. It is `ENOENT` with nothing behind it, and `ENOTDIR` because a
+component of the path is not a directory. Everything else is a refusal,
+including two shapes a bare `stat` plus a regular-file test reports as empty: a
+dangling symbolic link, where `lstat` succeeds and `stat` does not, and a
+directory or other non-regular file where a file is expected. Both are occupied
+paths. Reading either as an absence turns a broken checkout into a repository
+that simply never wrote the file, which is the compliant answer rather than the
+true one.
 
 ### Tool dependencies
 

@@ -167,7 +167,8 @@ can only be changed in this manifest. No such repository exists in the estate.
 
 ## Layout
 
-- `rule.yaml` — package manifest (sensor, parameters, defaults).
+- `rule.yaml` — package manifest (sensor, its declared
+  `input: policy-input/rust-build-defaults`, parameters, defaults).
 - `policy/` — the Rego policy and its tests.
 - `fixtures/repos/` — one miniature checkout per behaviour.
 - `fixtures/envelopes/` — generated `policy-input/rust-build-defaults`

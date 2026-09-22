@@ -15,13 +15,15 @@ import typing as typ
 
 import pytest
 
-from concordat.rules import runner
+from concordat.errors import OperationalRuleError
+from concordat.rules import packages
 from concordat.rules.envelope import (
     BUILD_DEFAULTS_ENVELOPE_KIND,
     build_build_defaults_envelope,
 )
 
 if typ.TYPE_CHECKING:
+    import os
     import types
 
 RULE_DIR: typ.Final = (
@@ -58,6 +60,43 @@ def _load_generator() -> types.ModuleType:
 
 class TestEnvelopeContents:
     """The builder reports what it read, and says so when it read nothing."""
+
+    def test_an_unreadable_root_cargo_probe_raises(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A probe failure cannot become no Rust applicability here either.
+
+        The explicit empty `language.rust.surfaces` list makes the surface
+        resolver authoritative, so it returns without reading the manifest
+        and this builder's own probe is the only reader of it. Without the
+        declaration the resolver would raise afterwards and the assertion
+        would hold however the probe behaved.
+        """
+        cargo_path = tmp_path / "Cargo.toml"
+        cargo_path.write_text(
+            '[package]\nname = "x"\nversion = "0.1.0"\n', encoding="utf-8"
+        )
+        (tmp_path / ".concordat").write_text(
+            "language:\n  rust:\n    surfaces: []\n", encoding="utf-8"
+        )
+        original_stat = pathlib.Path.stat
+
+        def unreadable_cargo(
+            path: pathlib.Path, *, follow_symlinks: bool = True
+        ) -> os.stat_result:
+            """Raise the filesystem error only for the root Cargo probe."""
+            if path == cargo_path:
+                raise PermissionError
+            return original_stat(path, follow_symlinks=follow_symlinks)
+
+        monkeypatch.setattr(pathlib.Path, "stat", unreadable_cargo)
+
+        with pytest.raises(OperationalRuleError, match="cannot inspect") as exc_info:
+            build_build_defaults_envelope(tmp_path)
+
+        error = exc_info.value
+        assert error.operation == "resolve-rust-surfaces", error.operation
+        assert error.resource == cargo_path, error.resource
 
     def test_a_bare_checkout_reports_every_absence(
         self, tmp_path: pathlib.Path
@@ -134,7 +173,7 @@ class TestBuilderSelection:
         (tmp_path / "Cargo.toml").write_text(
             '[package]\nname = "x"\nversion = "0.1.0"\n', encoding="utf-8"
         )
-        envelope = runner.default_envelope_builder("rust-build-defaults", tmp_path)
+        envelope = packages.default_envelope_builder("rust-build-defaults", tmp_path)
         assert envelope["kind"] == BUILD_DEFAULTS_ENVELOPE_KIND, (
             f"the package's own builder must be chosen, got {envelope['kind']!r}"
         )
@@ -146,7 +185,7 @@ class TestBuilderSelection:
         (tmp_path / "Cargo.toml").write_text(
             '[package]\nname = "x"\nversion = "0.1.0"\n', encoding="utf-8"
         )
-        envelope = runner.default_envelope_builder("rust-makefile-baseline", tmp_path)
+        envelope = packages.default_envelope_builder("rust-makefile-baseline", tmp_path)
         assert envelope["kind"] == "policy-input/rust-makefile-baseline", (
             f"an unregistered package keeps the historic envelope, "
             f"got {envelope['kind']!r}"

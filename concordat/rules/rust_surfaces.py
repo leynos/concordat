@@ -10,7 +10,6 @@ repositories retain their current audit behaviour.
 from __future__ import annotations
 
 import pathlib
-import stat
 import tomllib
 import typing as typ
 
@@ -18,6 +17,7 @@ from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
 from concordat.errors import OperationalRuleError
+from concordat.rules.fs_probe import regular_file_exists
 
 CONCORDAT_FILENAME: typ.Final = ".concordat"
 MANIFEST_FILENAME: typ.Final = "Cargo.toml"
@@ -253,34 +253,28 @@ def _resolved_surface(
     }
 
 
-def _root_cargo_toml_exists(cargo_path: pathlib.Path) -> bool:
+def root_cargo_toml_exists(cargo_path: pathlib.Path) -> bool:
     """Return whether the root Cargo manifest is a regular file.
 
     Missing files preserve the established no-Rust fallback. Other filesystem
-    failures cannot safely be treated as absence.
+    failures cannot safely be treated as absence: an unreadable manifest
+    raises `OperationalRuleError` under the `resolve-rust-surfaces`
+    operation, carrying the manifest path as the error's resource. The raise
+    happens in `concordat.rules.fs_probe.regular_file_exists`, so it is
+    described here rather than in a `Raises` section, which ruff's
+    `DOC502` rejects for an exception the function does not raise itself.
+
+    Parameters
+    ----------
+    cargo_path:
+        The root `Cargo.toml` path to probe.
 
     Returns
     -------
     bool
         Whether the root Cargo manifest is a regular file.
-
-    Raises
-    ------
-    OperationalRuleError
-        If the Cargo manifest cannot be inspected.
     """
-    try:
-        mode = cargo_path.stat().st_mode
-    except FileNotFoundError:
-        return False
-    except OSError as error:
-        message = f"cannot inspect {cargo_path}: {error}"
-        raise OperationalRuleError(
-            message,
-            operation=OPERATION_RESOLVE_SURFACES,
-            resource=cargo_path,
-        ) from error
-    return stat.S_ISREG(mode)
+    return regular_file_exists(cargo_path, operation=OPERATION_RESOLVE_SURFACES)
 
 
 def resolve_rust_surfaces(checkout: pathlib.Path) -> RustSurfaceResolution:
@@ -334,7 +328,7 @@ def resolve_rust_surfaces(checkout: pathlib.Path) -> RustSurfaceResolution:
         return RustSurfaceResolution(declared=True, surfaces=tuple(surfaces))
 
     root_cargo_path = checkout / MANIFEST_FILENAME
-    if not _root_cargo_toml_exists(root_cargo_path):
+    if not root_cargo_toml_exists(root_cargo_path):
         return RustSurfaceResolution(declared=False, surfaces=())
     fallback_context = SurfaceResolutionContext(
         checkout=checkout,

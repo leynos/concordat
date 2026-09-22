@@ -410,13 +410,21 @@ class TestReadFailures:
             "a flag named in a comment is not configured"
         )
 
-    def test_a_directory_in_place_of_the_file_is_an_absence(
+    def test_a_directory_in_place_of_the_file_is_reported(
         self, tmp_path: pathlib.Path
     ) -> None:
-        """The filesystem answered, so this is an absence rather than a refusal."""
+        """An occupied path is a misconfiguration, not a missing configuration.
+
+        The filesystem answered, but it did not answer that nothing is there.
+        Reading it as an absence would report the repository as one that never
+        wrote a configuration rather than one whose configuration cannot be
+        read.
+        """
         (tmp_path / ".cargo" / "config.toml").mkdir(parents=True)
-        assert inspect_cargo_config(tmp_path) is None, (
-            "a directory in the file's place is not the file"
+        facts = inspect_cargo_config(tmp_path)
+        assert facts is not None, "an occupied path is not an absence"
+        assert facts["parse_error"] is not None, (
+            "the reason the path could not be read must reach the policy"
         )
 
     def test_a_filesystem_refusal_is_not_an_absence(

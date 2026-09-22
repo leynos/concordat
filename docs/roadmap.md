@@ -574,7 +574,7 @@ the Section 2.1.2 format.
   configuration, and shell-installed CI linting each raise findings; the
   canonical `.markdownlint-cli2.jsonc` ships under `canon/lint/markdown/`.
   Progress: shipped audit-only as `markdown-formatting-baseline` with a Rego
-  sensor, generated fixtures, policy tests, and runner dispatch on the
+  sensor, generated fixtures, policy tests, and envelope selection by the
   manifest's declared `sensor.input` kind; mutations remain open.
 - [ ] Ship the Rust formatting and linting rule packages (RT-001 to RT-005):
   rustfmt wiring and template-matched configuration, clippy presence with

@@ -1,69 +1,39 @@
-"""Evaluate a canon lint rule package against a local checkout."""
+"""Evaluate a canon lint rule package against a local checkout.
+
+The command's own steps, in order: confirm the checkout is a directory,
+obtain the policy input through `packages.default_envelope_builder` or an
+injected `EnvelopeResolver`, invoke Conftest over it, validate what Conftest
+returned, reduce the failures to findings and one verdict, and render them.
+
+The neighbouring modules own the rest. `packages` answers everything about a
+rule package that is not its evaluation: where its policy lives, what its
+manifest declares, and which envelope kind it is audited over. `envelope`
+builds those envelopes from a checkout.
+
+Conftest's output is treated as untrusted. Only exit 0 and 1 describe an
+evaluated policy, and a result document of the wrong shape is an operational
+failure rather than an empty finding set, because a clean-looking answer from
+a run that did not happen is the one result this command must never give.
+"""
 
 from __future__ import annotations
 
-import collections.abc as cabc
 import dataclasses
-import functools
-import importlib.resources
 import json
 import pathlib
-import re
 import subprocess
 import tempfile
-import types
 import typing as typ
 
 from concordat.errors import OperationalRuleError
 
-from . import manifest
-from .envelope import ENVELOPE_KIND as RUST_ENVELOPE_KIND
-from .envelope import (
-    BuildDefaultsEnvelope,
-    PolicyEnvelope,
-    build_build_defaults_envelope,
-    build_envelope,
+from .packages import (
+    EnvelopeResolver,
+    RuleEnvelope,
+    default_envelope_builder,
 )
-from .markdown_envelope import ENVELOPE_KIND as MARKDOWN_ENVELOPE_KIND
-from .markdown_envelope import MarkdownEnvelope, build_markdown_envelope
-
-type RuleEnvelope = PolicyEnvelope | BuildDefaultsEnvelope | MarkdownEnvelope
-type EnvelopeResolver = cabc.Callable[[str, pathlib.Path], RuleEnvelope]
-
-
-def _resolve_rule_packages_dir() -> pathlib.Path:
-    """Return the canon lint-rule tree, whether installed or run from source.
-
-    A wheel ships the policies inside the package at ``concordat/canon/
-    lint-rules`` (see the ``concordat.canon`` package-data mapping in
-    ``pyproject.toml``), reachable via ``importlib.resources``. A source
-    checkout keeps them in the sibling ``platform-standards`` tree, so that
-    layout is used as a fallback.
-
-    Returns
-    -------
-    pathlib.Path
-        Directory containing the canon lint-rule packages.
-    """
-    packaged = importlib.resources.files("concordat") / "canon" / "lint-rules"
-    if isinstance(packaged, pathlib.Path) and packaged.is_dir():
-        return packaged
-    source = (
-        pathlib.Path(__file__).resolve().parents[2]
-        / "platform-standards"
-        / "canon"
-        / "lint-rules"
-    )
-    if source.is_dir():
-        return source
-    return pathlib.Path(str(packaged))
-
-
-@functools.lru_cache(maxsize=1)
-def _rule_packages_dir() -> pathlib.Path:
-    """Return the cached canon lint-rule tree."""
-    return _resolve_rule_packages_dir()
-
+from .packages import rule_package_dir as _rule_package_dir
+from .packages import rule_parameters as _rule_parameters
 
 CONFTEST_TIMEOUT: typ.Final = 60.0
 # Conftest reports an evaluated policy with 0 (clean) or 1 (failures); any
@@ -72,17 +42,6 @@ POLICY_EXIT_CODES: typ.Final = frozenset({0, 1})
 # Diagnostics are quoted back to the operator, so cap how much of a runaway
 # stderr reaches the error message.
 _MAX_ERROR_DETAIL: typ.Final = 500
-
-# A rule manifest names the policy-input document its sensor evaluates under
-# `sensor.input`; the builder that assembles that document from a checkout is
-# looked up here. The Rust kind is also the default for a manifest that
-# predates the field, so the first rule package keeps working unchanged.
-ENVELOPE_BUILDERS: typ.Final[
-    typ.Mapping[str, cabc.Callable[[pathlib.Path], RuleEnvelope]]
-] = {
-    RUST_ENVELOPE_KIND: build_envelope,
-    MARKDOWN_ENVELOPE_KIND: build_markdown_envelope,
-}
 
 VERDICT_COMPLIANT: typ.Final = "compliant"
 VERDICT_NONCOMPLIANT: typ.Final = "noncompliant"
@@ -173,121 +132,9 @@ class RuleRunResult:
         return 0 if self.verdict == VERDICT_COMPLIANT else 1
 
 
-# A rule package is one canonical name: lower-case ASCII words joined by
-# single hyphens. Anything else — a separator, a dot segment, punctuation — is
-# refused before it can be joined to a path.
-_RULE_ID_PATTERN: typ.Final = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
-
-
-def _validated_rule_id(rule_id: str) -> str:
-    """Return *rule_id* if it is a canonical package name, else raise."""
-    if not _RULE_ID_PATTERN.fullmatch(rule_id):
-        message = (
-            f"invalid rule package {rule_id!r}; expected lower-case words "
-            "joined by single hyphens"
-        )
-        raise OperationalRuleError(
-            message,
-            operation="load-rule-package",
-            resource=rule_id,
-        )
-    return rule_id
-
-
-def _rule_package_dir(rule_id: str) -> pathlib.Path:
-    """Return the rule package directory for *rule_id*, or raise if unknown.
-
-    The identifier is validated before it is joined to a path, and the joined
-    path is then confirmed to stay under the packages root. The pattern alone
-    already excludes traversal, but the containment check means a future
-    loosening of the pattern cannot silently reach outside the root.
-
-    The packages root is resolved here rather than at import, so a missing or
-    unreadable rule tree fails when a rule is run rather than when the module
-    is imported — importing the CLI should not depend on the policy tree.
-
-    Returns
-    -------
-    pathlib.Path
-        Directory containing the requested rule package.
-
-    Raises
-    ------
-    OperationalRuleError
-        If *rule_id* is invalid or its package directory is unavailable.
-    """
-    # Validation first: a malformed identifier is a local error, and must not
-    # cost the packages-root lookup (which touches the filesystem) to reject.
-    validated = _validated_rule_id(rule_id)
-    packages_root = _rule_packages_dir()
-    rule_dir = packages_root / validated
-    root = packages_root.resolve()
-    candidate = rule_dir.resolve()
-    if not candidate.is_relative_to(root):
-        message = f"rule package {rule_id!r} resolves outside {root}"
-        raise OperationalRuleError(
-            message,
-            operation="load-rule-package",
-            resource=rule_id,
-        )
-    if not (rule_dir / "policy").is_dir():
-        message = f"unknown rule package {rule_id!r}; expected {rule_dir}/policy"
-        raise OperationalRuleError(
-            message,
-            operation="load-rule-package",
-            resource=rule_id,
-        )
-    return rule_dir
-
-
 def _policy_namespace(rule_id: str) -> str:
     """Return the Rego package namespace for *rule_id*."""
     return "canon.lint_rules." + rule_id.replace("-", "_")
-
-
-def _rule_parameters(rule_dir: pathlib.Path) -> dict[str, object]:
-    """Return the rule manifest's parameter defaults.
-
-    Returns
-    -------
-    dict[str, object]
-        Parameter defaults declared by the rule manifest.
-    """
-    return manifest.parameter_defaults(rule_dir)
-
-
-def _envelope_builder(
-    rule_dir: pathlib.Path,
-) -> cabc.Callable[[pathlib.Path], RuleEnvelope]:
-    """Return the builder for the policy input the rule manifest declares.
-
-    An `OperationalRuleError` propagates from the manifest read.
-
-    Returns
-    -------
-    cabc.Callable[[pathlib.Path], RuleEnvelope]
-        The function assembling the declared policy-input document.
-
-    Raises
-    ------
-    OperationalRuleError
-        If the manifest declares a kind this build cannot assemble.
-    """
-    declared = manifest.declared_input(rule_dir, RUST_ENVELOPE_KIND)
-    builder = ENVELOPE_BUILDERS.get(declared)
-    if builder is not None:
-        return builder
-    known = ", ".join(sorted(ENVELOPE_BUILDERS))
-    manifest_path = rule_dir / manifest.MANIFEST_FILENAME
-    message = (
-        f"rule manifest {manifest_path} declares the policy input "
-        f"{declared!r}; expected one of: {known}"
-    )
-    raise OperationalRuleError(
-        message,
-        operation=manifest.OPERATION,
-        resource=manifest_path,
-    )
 
 
 def _run_conftest(argv: list[str], rule_id: str) -> subprocess.CompletedProcess[str]:
@@ -533,40 +380,6 @@ def _overall_verdict(findings: tuple[Finding, ...]) -> str:
     if findings:
         return VERDICT_INDETERMINATE
     return VERDICT_COMPLIANT
-
-
-# A rule package reads the facts its checks need, and those differ. Two ways
-# of saying which are in play, and they compose rather than compete. A package
-# named here supplies its own builder and receives the manifest parameters
-# that builder needs; that is the only reason to name one. Every other package
-# declares its policy input in its own manifest under `sensor.input`, which
-# `_envelope_builder` reads, and a manifest that predates the field takes the
-# historic Makefile envelope, so existing packages are untouched. The mapping
-# is a read-only view: package selection is a composition decision, not state
-# a caller may reach in and change.
-PACKAGE_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
-    "rust-build-defaults": build_build_defaults_envelope,
-})
-
-
-def default_envelope_builder(rule_id: str, checkout: pathlib.Path) -> RuleEnvelope:
-    """Return the policy input *rule_id* is evaluated over.
-
-    This is the composition layer's resolver: it decides which builder a
-    package takes and supplies the manifest parameters that builder needs.
-    `run_rule` calls whatever resolver it is given, so a caller — including a
-    test — can substitute one without touching the mapping above.
-
-    Returns
-    -------
-    RuleEnvelope
-        The envelope built by the package's own builder, or the default one.
-    """
-    rule_dir = _rule_package_dir(rule_id)
-    builder = PACKAGE_ENVELOPE_BUILDERS.get(rule_id)
-    if builder is not None:
-        return builder(checkout, _rule_parameters(rule_dir))
-    return _envelope_builder(rule_dir)(checkout)
 
 
 def run_rule(

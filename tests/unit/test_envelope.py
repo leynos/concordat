@@ -34,6 +34,41 @@ def _write_surface_path_declaration(checkout: pathlib.Path, path: str) -> pathli
     return manifest_path
 
 
+def _assert_unreadable_root_cargo_probe_raises(
+    checkout: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    declaration: str | None,
+) -> None:
+    """Assert an unreadable root manifest raises rather than reading as absent."""
+    checkout.mkdir(exist_ok=True)
+    cargo_path = checkout / "Cargo.toml"
+    cargo_path.write_text(
+        '[package]\nname = "fixture"\nversion = "0.1.0"\n',
+        encoding="utf-8",
+    )
+    if declaration is not None:
+        (checkout / ".concordat").write_text(declaration, encoding="utf-8")
+    original_stat = pathlib.Path.stat
+
+    def unreadable_cargo(
+        path: pathlib.Path, *, follow_symlinks: bool = True
+    ) -> os.stat_result:
+        """Raise the filesystem error only for the root Cargo probe."""
+        if path == cargo_path:
+            raise PermissionError
+        return original_stat(path, follow_symlinks=follow_symlinks)
+
+    monkeypatch.setattr(pathlib.Path, "stat", unreadable_cargo)
+
+    with pytest.raises(OperationalRuleError, match="cannot inspect") as exc_info:
+        build_envelope(checkout)
+
+    error = exc_info.value
+    assert error.operation == "resolve-rust-surfaces", error.operation
+    assert error.resource == cargo_path, error.resource
+
+
 class TestBuildEnvelope:
     """Envelope construction from a checkout directory."""
 
@@ -122,31 +157,65 @@ class TestBuildEnvelope:
         tmp_path: pathlib.Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """A root-manifest probe failure cannot become no Rust applicability."""
-        tmp_path.mkdir(exist_ok=True)
-        cargo_path = tmp_path / "Cargo.toml"
-        cargo_path.write_text(
-            '[package]\nname = "fixture"\nversion = "0.1.0"\n',
-            encoding="utf-8",
+        """A root-manifest probe failure cannot become no Rust applicability.
+
+        With no declaration the surface resolver reads the same manifest, so
+        this case alone cannot tell the envelope's probe from the resolver's.
+        The declared case below is the one that can.
+        """
+        _assert_unreadable_root_cargo_probe_raises(
+            tmp_path, monkeypatch, declaration=None
         )
+
+    def test_unreadable_root_cargo_probe_raises_with_surfaces_declared(
+        self,
+        tmp_path: pathlib.Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The envelope's own root probe raises, not the resolver's.
+
+        Without a declaration the resolver probes the same manifest, so the
+        test above passes on an interpreter whose `Path.is_file` swallows the
+        failure: the resolver raises afterwards and the envelope's own probe
+        is never judged. An explicit empty `language.rust.surfaces` list makes
+        the resolver authoritative and return without touching the manifest,
+        leaving `build_envelope`'s probe as the only reader of it. Restoring
+        the raw probe fails this case on both supported interpreters and the
+        case above on neither at 3.14, which is why the two keep their names.
+        """
+        _assert_unreadable_root_cargo_probe_raises(
+            tmp_path,
+            monkeypatch,
+            declaration="language:\n  rust:\n    surfaces: []\n",
+        )
+
+    def test_unreadable_makefile_probe_raises_a_parse_error(
+        self,
+        tmp_path: pathlib.Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A Makefile probe failure cannot become no Makefile applicability."""
+        tmp_path.mkdir(exist_ok=True)
+        makefile_path = tmp_path / "Makefile"
+        makefile_path.write_text("all:\n\t@true\n", encoding="utf-8")
         original_stat = pathlib.Path.stat
 
-        def unreadable_cargo(
+        def unreadable_makefile(
             path: pathlib.Path, *, follow_symlinks: bool = True
         ) -> os.stat_result:
-            """Raise the filesystem error only for the root Cargo probe."""
-            if path == cargo_path:
+            """Raise the filesystem error only for the Makefile probe."""
+            if path == makefile_path:
                 raise PermissionError
             return original_stat(path, follow_symlinks=follow_symlinks)
 
-        monkeypatch.setattr(pathlib.Path, "stat", unreadable_cargo)
+        monkeypatch.setattr(pathlib.Path, "stat", unreadable_makefile)
 
         with pytest.raises(OperationalRuleError, match="cannot inspect") as exc_info:
             build_envelope(tmp_path)
 
         error = exc_info.value
-        assert error.operation == "resolve-rust-surfaces", error.operation
-        assert error.resource == cargo_path, error.resource
+        assert error.operation == "parse-makefile", error.operation
+        assert error.resource == makefile_path, error.resource
 
     def test_non_table_cargo_structure_raises(
         self,
