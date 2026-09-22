@@ -110,7 +110,7 @@ enforce the local ratchet. They do not invoke CodeScene and must not expose
 `main`; it advances the coverage baseline and is the sole CodeScene publisher,
 using `mode: upload`.
 
-Three properties of that topology fail quietly rather than loudly, so
+Four properties of that topology fail quietly rather than loudly, so
 `tests/unit/test_coverage_topology_contract.py` asserts them.
 
 - **Pull-request lanes keep their report local.** The shared coverage action
@@ -118,17 +118,27 @@ Three properties of that topology fail quietly rather than loudly, so
   publishes the report and the repository grows a second publisher of the same
   artefact. The pull-request lane sets it to `'false'`; the contract reads the
   effective value, so omitting it fails.
+- **Nothing a pull request runs reaches CodeScene.** No workflow a pull
+  request can run names `CS_ACCESS_TOKEN` anywhere (a `run` body, an action
+  input, `env` at any scope, or `secrets:` forwarding), invokes the uploader,
+  or names `codescene.io`.
 - **The publisher's upload is guarded on the ref as well as the credential.**
   The push filter constrains the push event only. A `workflow_dispatch`
   selects its own ref, so without `github.ref == 'refs/heads/main'` on the
   step, a dispatch from a feature branch would publish that branch's coverage
-  as the trunk's.
+  as the trunk's. The contract splits the condition on `&&` and requires the
+  ref comparison and the credential check as whole conjuncts. It refuses any
+  unquoted `||`, which binds loosest: appending
+  `|| github.event_name == 'workflow_dispatch'` leaves the ref comparison in
+  the text and makes every conjunct optional, so a substring check passes it.
 - **The publisher serializes its baseline writes.** Two pushes to `main` in
   quick succession would otherwise race to write the ratchet baseline that
   every pull request is measured against, and the loser's partial write is the
   one a pull request might restore. Runs queue rather than cancel
   (`cancel-in-progress: false`): a cancelled publisher abandons both its
   upload and its baseline write, where a queued one merely publishes later.
+  Any value but an absent one or a literal false counts as cancelling, at the
+  workflow level or on a job.
 
 Both lanes invoke the coverage action at one pin, and the contract requires
 it. The publisher writes the baseline the pull-request lanes are measured
@@ -143,6 +153,19 @@ an empty set. The publisher is recognized as a workflow that pushes to `main`
 *and* serves no pull request: `ci.yml` declares a push trigger too, and
 reading only that half would make one file both required to upload and
 forbidden from uploading.
+
+"What a pull request can run" is the transitive closure of the
+pull-request-triggered workflows through local reusable-workflow calls. A
+workflow declaring only `workflow_call` never matches a pull-request trigger,
+yet runs for one whenever a pull-request job calls it, and `secrets: inherit`
+hands it the credential. A call is local when it names a path under
+`.github/workflows/`, matched by shape rather than by a list of prefixes. A
+call to a local workflow that does not exist is refused, so the closure cannot
+stop short silently. The readers live in
+`tests/unit/coverage_topology_support.py`.
+`tests/unit/test_coverage_topology_readers.py` drives them against synthetic
+workflows, because this repository's own files comply and so cannot show that
+a reader sees the hazard it exists for.
 
 ### Gate tool provisioning
 
