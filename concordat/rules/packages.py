@@ -33,6 +33,7 @@ from .envelope import (
     build_build_defaults_envelope,
     build_envelope,
 )
+from .fs_probe import probe_file
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -161,7 +162,22 @@ def rule_manifest(rule_dir: pathlib.Path) -> dict[str, object]:
         If the rule manifest cannot be read or is not a mapping.
     """
     manifest_path = rule_dir / "rule.yaml"
-    if not manifest_path.is_file():
+    # Not `is_file()`. It answers False for a manifest that is absent, for one
+    # that is a directory, for a dangling link, and for a path the filesystem
+    # refused to describe. Returning `{}` for the last three hands the policy
+    # its own baked-in defaults in place of the ones the package declares, and
+    # silently loses the `sensor.input` declaration that decides which envelope
+    # the package is audited over. That is this change's own subject, one level
+    # down. Reported by jm-concordat-176, who fixed it separately on #176.
+    probe = probe_file(manifest_path)
+    if probe.read_error is not None:
+        message = f"cannot read rule manifest {probe.read_error}"
+        raise OperationalRuleError(
+            message,
+            operation="load-rule-manifest",
+            resource=manifest_path,
+        )
+    if not probe.present:
         return {}
     try:
         manifest = _yaml.load(manifest_path.read_text(encoding="utf-8"))

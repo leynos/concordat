@@ -326,21 +326,32 @@ class TestDeclaredInputKind:
             "a declared kind must select the builder that produces it"
         )
 
+    @pytest.mark.parametrize(
+        "manifest",
+        [
+            # A key with nothing under it decodes to `None`, which is the
+            # shape a half-finished manifest has while someone is mid-edit.
+            pytest.param("schema_version: 1\nid: x\nsensor:\n", id="null"),
+            pytest.param("schema_version: 1\nid: x\nsensor: conftest\n", id="scalar"),
+            pytest.param(
+                "schema_version: 1\nid: x\nsensor:\n  - type: conftest\n", id="list"
+            ),
+        ],
+    )
     def test_a_sensor_that_is_not_a_mapping_declares_nothing(
-        self, tmp_path: pathlib.Path
+        self, tmp_path: pathlib.Path, manifest: str
     ) -> None:
         """A malformed `sensor` is refused, never quietly given an envelope.
 
         The hazard is specific: falling back here hands one policy the
         document another was written for, and the policy then answers
         confidently about facts it never asked for. Reported by
-        jm-concordat-168, who hit it separately.
+        jm-concordat-168, whose own fixture contributed the null and list
+        shapes; the null one is the most likely to be written by hand.
         """
-        (tmp_path / "rule.yaml").write_text(
-            "schema_version: 1\nid: x\nsensor: conftest\n", encoding="utf-8"
-        )
+        (tmp_path / "rule.yaml").write_text(manifest, encoding="utf-8")
         assert packages._declared_input_kind(tmp_path) is None, (
-            "a sensor that is not a mapping declares no input kind"
+            f"a sensor of this shape declares no input kind: {manifest!r}"
         )
 
     def test_a_manifest_without_a_sensor_declares_nothing(
@@ -525,6 +536,46 @@ class TestManifestReading:
         assert packages.rule_manifest(tmp_path) == {}, (
             "a package shipping no rule.yaml declares nothing"
         )
+
+    def test_a_manifest_that_is_a_directory_is_refused(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """An occupied path is not a package that declared nothing.
+
+        Returning `{}` here hands the policy its own baked-in defaults in
+        place of the ones the package declares, and loses the `sensor.input`
+        declaration that decides which envelope it is audited over. That is
+        this module's own subject one level down.
+        """
+        (tmp_path / "rule.yaml").mkdir()
+        with pytest.raises(OperationalRuleError) as excinfo:
+            packages.rule_manifest(tmp_path)
+        assert "directory" in str(excinfo.value), (
+            f"the diagnostic should name the occupant, got {excinfo.value!s}"
+        )
+
+    def test_a_dangling_manifest_link_is_refused(self, tmp_path: pathlib.Path) -> None:
+        """A link to a manifest that is not there is not an absent manifest."""
+        (tmp_path / "rule.yaml").symlink_to(tmp_path / "elsewhere.yaml")
+        with pytest.raises(OperationalRuleError) as excinfo:
+            packages.rule_manifest(tmp_path)
+        assert "resolve" in str(excinfo.value), (
+            f"the diagnostic should give the reason, got {excinfo.value!s}"
+        )
+
+    def test_a_manifest_the_filesystem_will_not_describe_is_refused(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A refusal to stat the manifest must not read as a package with none."""
+        (tmp_path / "rule.yaml").write_text("id: x\n", encoding="utf-8")
+
+        def refuse(_self: pathlib.Path, *_args: object, **_kwargs: object) -> object:
+            message = "Permission denied"
+            raise PermissionError(13, message)
+
+        monkeypatch.setattr("pathlib.Path.stat", refuse)
+        with pytest.raises(OperationalRuleError):
+            packages.rule_manifest(tmp_path)
 
     def test_malformed_yaml_is_an_operational_failure(
         self, tmp_path: pathlib.Path
