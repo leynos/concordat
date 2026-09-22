@@ -38,6 +38,26 @@ def _shipped_packages() -> set[str]:
     }
 
 
+def _undeclarable_builders(
+    by_id: cabc.Mapping[str, typ.Any],
+    by_kind: cabc.Mapping[str, typ.Any],
+) -> set[str]:
+    """Return the names of builders reachable by identifier but not by kind.
+
+    The invariant is a subset rather than an equality: a builder reachable by
+    kind and not by identifier is the declared-only package the guide
+    promises, and must not be a violation. Expressed as one function so the
+    shipped mappings and the constructed cases are judged by the same rule
+    rather than by two restatements of it.
+
+    Returns
+    -------
+    set[str]
+        The offending builder names, empty when the invariant holds.
+    """
+    return {builder.__name__ for builder in set(by_id.values()) - set(by_kind.values())}
+
+
 def _is_resolvable(rule_id: str) -> bool:
     """Report whether *rule_id* reaches a builder by either documented route."""
     if rule_id in packages.PACKAGE_ENVELOPE_BUILDERS:
@@ -114,18 +134,67 @@ class TestRegisteredPackages:
         and the package's own manifest declaration names a kind the resolver
         does not know — an inconsistency that only shows up if its
         registration is ever removed.
-
-        Deliberately a subset rather than an equality. A builder reachable by
-        kind and not by identifier is the declared-only package, which is the
-        route the guide promises and a package-bringing branch takes by adding
-        one entry to the kind mapping. Requiring equality here would fail
-        exactly the packages that took the documented route.
         """
-        by_id = set(packages.PACKAGE_ENVELOPE_BUILDERS.values())
-        by_kind = set(packages.INPUT_KIND_ENVELOPE_BUILDERS.values())
-        assert by_id <= by_kind, (
+        undeclarable = _undeclarable_builders(
+            packages.PACKAGE_ENVELOPE_BUILDERS,
+            packages.INPUT_KIND_ENVELOPE_BUILDERS,
+        )
+        assert undeclarable == set(), (
             "these builders are reachable by identifier but not by any "
-            f"declarable kind: {sorted(b.__name__ for b in by_id - by_kind)}"
+            f"declarable kind: {sorted(undeclarable)}"
+        )
+
+    def test_a_declared_only_builder_satisfies_the_invariant(self) -> None:
+        """The asymmetry is the point, and the shipped mappings cannot show it.
+
+        Both shipped mappings hold the same two builders today, so the check
+        above passes under a subset rule and under an equality rule alike, and
+        proves nothing about which is in force. This constructs the case that
+        separates them: a package bringing its own builder, adding one entry
+        to the kind mapping and declaring that kind, with no identifier entry
+        at all. That is the route the guide promises, and an equality rule
+        would refuse it.
+        """
+
+        def build_third_envelope(
+            _checkout: pathlib.Path, _parameters: object = None
+        ) -> dict[str, object]:
+            return {"kind": "policy-input/third"}
+
+        by_id = dict(packages.PACKAGE_ENVELOPE_BUILDERS)
+        by_kind = dict(packages.INPUT_KIND_ENVELOPE_BUILDERS) | {
+            "policy-input/third": build_third_envelope
+        }
+
+        assert _undeclarable_builders(by_id, by_kind) == set(), (
+            "a builder declarable but not registered must satisfy the rule"
+        )
+        assert set(by_id.values()) != set(by_kind.values()), (
+            "this case must actually be asymmetric, or it separates nothing "
+            "and an equality rule would pass it too"
+        )
+
+    def test_a_registered_builder_missing_its_kind_fails_the_invariant(
+        self,
+    ) -> None:
+        """The other direction, so the subset rule is not vacuous.
+
+        A rule satisfied by every arrangement forbids nothing. Dropping the
+        kind entry for a registered builder must be caught, and the failure
+        must name the builder rather than only report a mismatch.
+        """
+        by_id = dict(packages.PACKAGE_ENVELOPE_BUILDERS)
+        dropped = packages.PACKAGE_ENVELOPE_BUILDERS["rust-makefile-baseline"]
+        by_kind = {
+            kind: builder
+            for kind, builder in packages.INPUT_KIND_ENVELOPE_BUILDERS.items()
+            if builder is not dropped
+        }
+
+        undeclarable = _undeclarable_builders(by_id, by_kind)
+
+        assert undeclarable == {dropped.__name__}, (
+            f"the missing builder should be named, got {sorted(undeclarable)}"
         )
 
     def test_every_declared_kind_is_one_the_resolver_knows(self) -> None:
