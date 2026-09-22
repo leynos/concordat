@@ -106,34 +106,29 @@ def test_a_call_to_a_missing_local_workflow_is_refused() -> None:
         pull_request_closure(_probe("./.github/workflows/absent.yml")[:1])
 
 
-def test_a_forwarded_secret_is_a_reference() -> None:
-    """Naming the credential in `secrets:` forwarding hands it over."""
-    caller = _workflow(
-        ".github/workflows/ci.yml",
-        """
-        on: pull_request
-        jobs:
-          call:
-            uses: leynos/elsewhere/.github/workflows/x.yml@abc
-            secrets:
-              token: ${{ secrets.CS_ACCESS_TOKEN }}
-        """,
-    )
-    assert token_references_for_pull_requests((caller,)) == [str(caller)]
+_FORWARDING_CALLER = """
+    on: pull_request
+    jobs:
+      call:
+        uses: leynos/elsewhere/.github/workflows/x.yml@abc
+        secrets:
+          {forwarding}
+"""
 
 
-def test_a_renamed_secret_forwarded_as_the_credential_is_a_reference() -> None:
-    """The credential's name as a key hands a secret over under that name."""
+@pytest.mark.parametrize(
+    "forwarding",
+    [
+        # The credential forwarded under another name.
+        "token: ${{ secrets.CS_ACCESS_TOKEN }}",
+        # Another secret forwarded under the credential's name.
+        "CS_ACCESS_TOKEN: ${{ secrets.CODESCENE }}",
+    ],
+)
+def test_forwarding_the_credential_is_a_reference(forwarding: str) -> None:
+    """`secrets:` forwarding hands the credential over, by key or by value."""
     caller = _workflow(
-        ".github/workflows/ci.yml",
-        """
-        on: pull_request
-        jobs:
-          call:
-            uses: leynos/elsewhere/.github/workflows/x.yml@abc
-            secrets:
-              CS_ACCESS_TOKEN: ${{ secrets.CODESCENE }}
-        """,
+        ".github/workflows/ci.yml", _FORWARDING_CALLER.format(forwarding=forwarding)
     )
     assert token_references_for_pull_requests((caller,)) == [str(caller)]
 

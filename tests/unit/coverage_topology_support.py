@@ -9,6 +9,7 @@ cannot interpret fails loudly rather than reading as compliant.
 
 from __future__ import annotations
 
+import itertools
 import typing as typ
 from pathlib import Path, PurePosixPath
 
@@ -107,26 +108,32 @@ def triggers(document: cabc.Mapping[object, object]) -> dict[str, object]:
     Returns
     -------
         The trigger mapping, empty for a workflow with no triggers.
+    """
+    for key in _TRIGGER_KEYS:
+        if key in document:
+            return _trigger_mapping(document[key])
+    return {}
+
+
+def _trigger_mapping(value: object) -> dict[str, object]:
+    """Return one trigger value as a mapping, refusing an unknown form.
+
+    Returns
+    -------
+        The trigger mapping, one `None`-valued entry per bare name.
 
     Raises
     ------
     TypeError
-        When the trigger value is neither a name, a list of names, nor a
-        mapping.
+        When the value is neither a name, a list of names, nor a mapping.
     """
-    for key in _TRIGGER_KEYS:
-        if key not in document:
-            continue
-        value = document[key]
-        if isinstance(value, dict):
-            return typ.cast("dict[str, object]", value)
-        if isinstance(value, str):
-            return {value: None}
-        if isinstance(value, list) and all(isinstance(name, str) for name in value):
-            return {typ.cast("str", name): None for name in value}
-        msg = f"unrecognized trigger form: {value!r}"
-        raise TypeError(msg)
-    return {}
+    if isinstance(value, dict):
+        return typ.cast("dict[str, object]", value)
+    names = [value] if isinstance(value, str) else value
+    if isinstance(names, list) and all(isinstance(name, str) for name in names):
+        return {typ.cast("str", name): None for name in names}
+    msg = f"unrecognized trigger form: {value!r}"
+    raise TypeError(msg)
 
 
 def serves_pull_requests(document: cabc.Mapping[object, object]) -> bool:
@@ -239,12 +246,6 @@ def pull_request_closure(found: cabc.Sequence[Workflow]) -> tuple[Workflow, ...]
     Returns
     -------
         The reached workflows, sorted by path.
-
-    Raises
-    ------
-    LookupError
-        When a reached job calls a local workflow that does not exist, since
-        the closure would otherwise stop short in silence.
     """
     by_path = {workflow.path: workflow for workflow in found}
     pending = [w for w in found if serves_pull_requests(w.document)]
@@ -254,16 +255,35 @@ def pull_request_closure(found: cabc.Sequence[Workflow]) -> tuple[Workflow, ...]
         if workflow.path in reached:
             continue
         reached[workflow.path] = workflow
-        for job in jobs(workflow).values():
-            uses = job.get("uses")
-            callee = local_callee(uses) if isinstance(uses, str) else None
-            if callee is None:
-                continue
-            if callee not in by_path:
-                msg = f"{workflow} calls {callee}, which does not exist"
-                raise LookupError(msg)
-            pending.append(by_path[callee])
+        pending.extend(_called_workflows(workflow, by_path))
     return tuple(reached[path] for path in sorted(reached))
+
+
+def _called_workflows(
+    workflow: Workflow, by_path: cabc.Mapping[str, Workflow]
+) -> list[Workflow]:
+    """Return the local workflows ``workflow``'s jobs call.
+
+    Returns
+    -------
+        The called workflows, in job order.
+
+    Raises
+    ------
+    LookupError
+        When a job calls a local workflow that does not exist, since the
+        closure would otherwise stop short in silence.
+    """
+    callees = [
+        callee
+        for job in jobs(workflow).values()
+        if isinstance(uses := job.get("uses"), str)
+        and (callee := local_callee(uses)) is not None
+    ]
+    if missing := [callee for callee in callees if callee not in by_path]:
+        msg = f"{workflow} calls {missing}, which does not exist"
+        raise LookupError(msg)
+    return [by_path[callee] for callee in callees]
 
 
 def mentions(value: object, needle: str) -> bool:
@@ -308,22 +328,30 @@ def guard_conjuncts(condition: str) -> list[str] | None:
     body = condition.strip()
     if body.startswith("${{") and body.endswith("}}"):
         body = body[3:-2]
-    parts: list[str] = []
-    start = 0
+    operators = list(_unquoted_operators(body))
+    if any(operator == "||" for _, operator in operators):
+        return None
+    # Each conjunct runs from just past one `&&` to the next; the sentinel
+    # at -2 makes the first start at zero.
+    bounds = [-2, *(index for index, _ in operators), len(body)]
+    return [
+        " ".join(body[start + 2 : end].split())
+        for start, end in itertools.pairwise(bounds)
+    ]
+
+
+def _unquoted_operators(body: str) -> cabc.Iterator[tuple[int, str]]:
+    """Yield the position and spelling of each `&&` or `||` outside quotes."""
     quoted = False
     index = 0
     while index < len(body):
+        operator = body[index : index + 2]
         if body[index] == "'":
             quoted = not quoted
-        elif not quoted and body.startswith("||", index):
-            return None
-        elif not quoted and body.startswith("&&", index):
-            parts.append(body[start:index])
-            start = index + 2
+        elif not quoted and operator in {"&&", "||"}:
+            yield index, operator
             index += 1
         index += 1
-    parts.append(body[start:])
-    return [" ".join(part.split()) for part in parts]
 
 
 def cancels_in_progress(concurrency: object) -> bool:
