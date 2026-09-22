@@ -110,6 +110,40 @@ enforce the local ratchet. They do not invoke CodeScene and must not expose
 `main`; it advances the coverage baseline and is the sole CodeScene publisher,
 using `mode: upload`.
 
+Three properties of that topology fail quietly rather than loudly, so
+`tests/unit/test_coverage_topology_contract.py` asserts them.
+
+- **Pull-request lanes keep their report local.** The shared coverage action
+  defaults `publish-artefact` to `"true"`, so a lane that omits the input
+  publishes the report and the repository grows a second publisher of the same
+  artefact. The pull-request lane sets it to `'false'`; the contract reads the
+  effective value, so omitting it fails.
+- **The publisher's upload is guarded on the ref as well as the credential.**
+  The push filter constrains the push event only. A `workflow_dispatch`
+  selects its own ref, so without `github.ref == 'refs/heads/main'` on the
+  step, a dispatch from a feature branch would publish that branch's coverage
+  as the trunk's.
+- **The publisher serializes its baseline writes.** Two pushes to `main` in
+  quick succession would otherwise race to write the ratchet baseline that
+  every pull request is measured against, and the loser's partial write is the
+  one a pull request might restore. Runs queue rather than cancel
+  (`cancel-in-progress: false`): a cancelled publisher abandons both its
+  upload and its baseline write, where a queued one merely publishes later.
+
+Both lanes invoke the coverage action at one pin, and the contract requires
+it. The publisher writes the baseline the pull-request lanes are measured
+against, so a lane on a different pin can fail a ratchet for a change in the
+measurement rather than in the diff. Move the two together.
+
+The contract enumerates workflows rather than naming these two files, and
+reads the trigger mapping under both the `on` key and the boolean `True` that
+unquoted YAML 1.1 produces. A reader that knows only the string key finds no
+triggers, and every clause that filters workflows by trigger then ranges over
+an empty set. The publisher is recognized as a workflow that pushes to `main`
+*and* serves no pull request: `ci.yml` declares a push trigger too, and
+reading only that half would make one file both required to upload and
+forbidden from uploading.
+
 ### Gate tool provisioning
 
 Two lanes run the whole pytest suite: `ci.yml`'s `lint-test` job on pull
