@@ -248,6 +248,17 @@ test_ref_guard_written_in_either_order_is_compliant if {
   count(findings) == 0
 }
 
+# The push filter restricts pushes, not dispatches: a `workflow_dispatch` runs
+# on whatever ref the dispatcher selects. A publisher reachable that way with
+# only the credential guard (netsuke's shape) uploads a feature branch as the
+# trunk, so the trigger-level `branches: [main]` is not an alternative guard.
+test_dispatch_reachable_publisher_without_ref_guard_is_noncompliant if {
+  findings := policy.deny with input as data.fixtures.clause2_dispatch_reachable_publisher_without_ref_guard
+  profile(findings) == {
+    ["noncompliant", ".github/workflows/coverage-main.yml", "CodeScene upload step is not guarded on github.ref == 'refs/heads/main'"],
+  }
+}
+
 # A trailing disjunction contains the comparison while making it optional,
 # so a dispatch from any branch would upload. Both guards are refused.
 test_disjunction_makes_the_guards_optional if {

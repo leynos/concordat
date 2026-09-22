@@ -4210,6 +4210,77 @@
           "error": null
         }
       ]
+    },
+    "clause2_dispatch_reachable_publisher_without_ref_guard": {
+      "schema_version": 1,
+      "kind": "policy-input/main-owned-codescene-coverage",
+      "repository": {
+        "path": "/checkout",
+        "name": null
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "on": {
+              "pull_request": null
+            },
+            "jobs": {
+              "coverage": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "leynos/shared-actions/.github/actions/generate-coverage@pin",
+                    "with": {
+                      "with-ratchet": "true",
+                      "publish-artefact": "false"
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        },
+        {
+          "path": ".github/workflows/coverage-main.yml",
+          "parsed": {
+            "on": {
+              "push": {
+                "branches": [
+                  "main"
+                ]
+              },
+              "workflow_dispatch": null
+            },
+            "concurrency": {
+              "group": "coverage-main-${{ github.ref }}",
+              "cancel-in-progress": false
+            },
+            "jobs": {
+              "coverage-upload": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "leynos/shared-actions/.github/actions/generate-coverage@pin",
+                    "with": {
+                      "with-ratchet": "true"
+                    }
+                  },
+                  {
+                    "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
+                    "if": "env.CS_ACCESS_TOKEN != ''",
+                    "with": {
+                      "mode": "upload"
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ]
     }
   }
 }

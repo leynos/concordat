@@ -33,9 +33,11 @@ One main-owned publisher writes the baseline and uploads:
 - That workflow's upload step is guarded on `github.ref == 'refs/heads/main'`
   as well as on the credential. A `workflow_dispatch` selects a ref, and the
   push filter says nothing about it, so a dispatch from a feature branch would
-  otherwise publish that branch's coverage as the trunk's. The comparison must
-  be one whole `&&` conjunct of the condition, and a condition carrying an
-  unquoted `||` guards nothing: `... && github.ref == 'refs/heads/main' ||
+  otherwise publish that branch's coverage as the trunk's. A push filter of
+  `branches: [main]` is therefore no substitute: it restricts pushes and says
+  nothing about dispatches. The comparison must be one whole `&&` conjunct of
+  the condition, and a condition carrying an unquoted `||` guards nothing:
+  `... && github.ref == 'refs/heads/main' ||
   github.event_name == 'workflow_dispatch'` contains the comparison while
   making it optional, which is exactly the dispatch this clause exists to stop.
 - The publisher declares a `concurrency` block, so two overlapping pushes to
