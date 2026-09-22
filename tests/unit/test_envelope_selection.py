@@ -107,13 +107,48 @@ class TestRegisteredPackages:
             f"these packages resolve only by registration: {sorted(unresolvable)}"
         )
 
-    def test_every_registered_builder_produces_a_known_input_kind(self) -> None:
-        """The two mappings describe the same set of builders."""
+    def test_every_registered_builder_is_also_declarable(self) -> None:
+        """A registered builder must be reachable by the kind it emits.
+
+        Otherwise a package's envelope is one no other package can declare,
+        and the package's own manifest declaration names a kind the resolver
+        does not know — an inconsistency that only shows up if its
+        registration is ever removed.
+
+        Deliberately a subset rather than an equality. A builder reachable by
+        kind and not by identifier is the declared-only package, which is the
+        route the guide promises and a package-bringing branch takes by adding
+        one entry to the kind mapping. Requiring equality here would fail
+        exactly the packages that took the documented route.
+        """
         by_id = set(packages.PACKAGE_ENVELOPE_BUILDERS.values())
         by_kind = set(packages.INPUT_KIND_ENVELOPE_BUILDERS.values())
-        assert by_id == by_kind, (
-            "a builder reachable by identifier but not by declared kind, or the "
-            "reverse, makes the two routes disagree about what a package gets"
+        assert by_id <= by_kind, (
+            "these builders are reachable by identifier but not by any "
+            f"declarable kind: {sorted(b.__name__ for b in by_id - by_kind)}"
+        )
+
+    def test_every_declared_kind_is_one_the_resolver_knows(self) -> None:
+        """A declaration naming an unknown kind is a typo nobody would notice.
+
+        A package that also registers resolves by identifier first, so a
+        misspelled `sensor.input` never reaches the kind mapping and never
+        fails — until the registration goes, and then the package stops
+        resolving for a reason written down months earlier.
+        """
+        unknown = {
+            name: declared
+            for name in _shipped_packages()
+            if (
+                declared := packages._declared_input_kind(
+                    packages.rule_package_dir(name)
+                )
+            )
+            is not None
+            and declared not in packages.INPUT_KIND_ENVELOPE_BUILDERS
+        }
+        assert unknown == {}, (
+            f"these manifests declare a kind the resolver cannot map: {unknown}"
         )
 
 
@@ -220,6 +255,23 @@ class TestDeclaredInputKind:
         envelope = packages.default_envelope_builder("rust-build-defaults", checkout)
         assert envelope["kind"] == BUILD_DEFAULTS_ENVELOPE_KIND, (
             "a declared kind must select the builder that produces it"
+        )
+
+    def test_a_sensor_that_is_not_a_mapping_declares_nothing(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A malformed `sensor` is refused, never quietly given an envelope.
+
+        The hazard is specific: falling back here hands one policy the
+        document another was written for, and the policy then answers
+        confidently about facts it never asked for. Reported by
+        jm-concordat-168, who hit it separately.
+        """
+        (tmp_path / "rule.yaml").write_text(
+            "schema_version: 1\nid: x\nsensor: conftest\n", encoding="utf-8"
+        )
+        assert packages._declared_input_kind(tmp_path) is None, (
+            "a sensor that is not a mapping declares no input kind"
         )
 
     def test_a_manifest_without_a_sensor_declares_nothing(

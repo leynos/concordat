@@ -439,6 +439,18 @@ input is a shape another package already builds, and it needs no Python change.
 A package matching neither is refused with an `OperationalRuleError` naming it,
 the registered packages, and the declarable kinds.
 
+A package that needs facts neither existing envelope carries brings its own
+builder, and adds one entry to `INPUT_KIND_ENVELOPE_BUILDERS` keyed by the
+kind its envelope emits. It then declares that kind in its own `rule.yaml` and
+needs no entry in the identifier mapping at all. That is the ordinary shape for
+a new package: one line here, one line in its manifest, and no mechanism of its
+own.
+
+The two mappings are therefore not the same set. Every builder reachable by
+identifier is also reachable by its kind, so a package's envelope is one
+another package could declare; the reverse does not hold, because a
+declared-only package appears in the kind mapping alone.
+
 **Every shipped package declares or registers.** There is no third state and
 no default, so a manifest written before `sensor.input` existed is refused
 rather than quietly given the envelope it used to receive by accident. That is
