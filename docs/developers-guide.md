@@ -151,8 +151,8 @@ managed Python 3.14 behind. Until the pin, the pull-request lane measured on
 valid lines on 3.14, so every pull request read roughly 2.5 points below the
 baseline and failed the ratchet with no change in coverage.
 `tests/unit/test_coverage_interpreter_contract.py` holds each coverage step's
-effective `UV_PYTHON` equal to its job's `setup-python` version. Change the
-two together.
+effective `UV_PYTHON` equal to its job's `setup-python` version. Change the two
+together.
 
 Only that one interpreter measures coverage, so behaviour that differs between
 supported interpreters can still escape both lanes. `concordat.rules` probes
