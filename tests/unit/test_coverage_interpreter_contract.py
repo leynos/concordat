@@ -20,7 +20,10 @@ import typing as typ
 from pathlib import Path
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 from ruamel.yaml import YAML
+from ruamel.yaml.error import YAMLError
 
 REPOSITORY_ROOT: typ.Final = Path(__file__).parents[2]
 WORKFLOW_DIRECTORY: typ.Final = REPOSITORY_ROOT / ".github/workflows"
@@ -104,18 +107,55 @@ def lanes_in(path: str, document: dict[object, object]) -> list[CoverageLane]:
     return lanes
 
 
-def repository_lanes() -> list[CoverageLane]:
-    """Return every coverage step in this repository's workflows."""
+class WorkflowLoadError(Exception):
+    """A workflow file could not be read or parsed as a mapping."""
+
+
+def load_workflows(directory: Path) -> dict[str, dict[object, object]]:
+    """Read and parse every workflow file in ``directory``.
+
+    This is the only fallible step; `lanes_in` is a pure transformation of
+    what it returns.
+
+    Returns
+    -------
+        Each workflow document keyed by its name, sorted by name.
+
+    Raises
+    ------
+    WorkflowLoadError
+        When a file cannot be read, is not valid YAML, or is not a mapping,
+        naming the file.
+    """
     yaml = YAML(typ="safe")
+    documents: dict[str, dict[object, object]] = {}
+    for path in sorted(directory.iterdir()):
+        if path.suffix.lower() not in {".yml", ".yaml"}:
+            continue
+        try:
+            document = yaml.load(path.read_text("utf-8"))
+        except (OSError, YAMLError) as error:
+            msg = f"cannot load workflow {path.name}: {error}"
+            raise WorkflowLoadError(msg) from error
+        if not isinstance(document, dict):
+            msg = f"workflow {path.name} is not a mapping"
+            raise WorkflowLoadError(msg)
+        documents[path.name] = typ.cast("dict[object, object]", document)
+    return documents
+
+
+def lanes_of(documents: dict[str, dict[object, object]]) -> list[CoverageLane]:
+    """Return every coverage step across already-loaded workflow documents."""
     return [
         lane
-        for path in sorted(WORKFLOW_DIRECTORY.iterdir())
-        if path.suffix.lower() in {".yml", ".yaml"}
-        for lane in lanes_in(
-            path.relative_to(REPOSITORY_ROOT).as_posix(),
-            typ.cast("dict[object, object]", yaml.load(path.read_text("utf-8"))),
-        )
+        for name, document in documents.items()
+        for lane in lanes_in(name, document)
     ]
+
+
+def repository_lanes() -> list[CoverageLane]:
+    """Return every coverage step in this repository's workflows."""
+    return lanes_of(load_workflows(WORKFLOW_DIRECTORY))
 
 
 def test_every_coverage_lane_selects_the_interpreter_it_declares() -> None:
@@ -145,13 +185,18 @@ def test_every_coverage_lane_measures_on_one_interpreter() -> None:
 
 
 def _job(
-    *steps: dict[str, object], env: dict[str, object] | None = None
+    *steps: dict[str, object],
+    env: dict[str, object] | None = None,
+    workflow_env: dict[str, object] | None = None,
 ) -> dict[object, object]:
     """Return a synthetic workflow document with one job."""
     job: dict[str, object] = {"steps": list(steps)}
     if env is not None:
         job["env"] = env
-    return {"jobs": {"lane": job}}
+    document: dict[object, object] = {"jobs": {"lane": job}}
+    if workflow_env is not None:
+        document["env"] = workflow_env
+    return document
 
 
 _SETUP: dict[str, object] = {
@@ -177,6 +222,16 @@ _COVERAGE: dict[str, object] = {
             "3.14",
         ),
         (_job(_SETUP, _COVERAGE), None),
+        (_job(_SETUP, _COVERAGE, workflow_env={"UV_PYTHON": "3.13"}), "3.13"),
+        (
+            _job(
+                _SETUP,
+                _COVERAGE,
+                env={"UV_PYTHON": "3.14"},
+                workflow_env={"UV_PYTHON": "3.13"},
+            ),
+            "3.14",
+        ),
     ],
 )
 def test_the_effective_scope_selects_the_interpreter(
@@ -184,7 +239,9 @@ def test_the_effective_scope_selects_the_interpreter(
 ) -> None:
     """The step's `env` overrides the job's; an absent variable selects none."""
     (lane,) = lanes_in("w.yml", document)
-    assert lane.selected == expected
+    assert lane.selected == expected, (
+        f"expected {_INTERPRETER_VARIABLE}={expected!r}, selected {lane.selected!r}"
+    )
 
 
 def test_an_ambiguous_declaration_declares_nothing() -> None:
@@ -195,4 +252,66 @@ def test_an_ambiguous_declaration_declares_nothing() -> None:
     }
     document = _job(_SETUP, other, _COVERAGE | {"env": {"UV_PYTHON": "3.13"}})
     (lane,) = lanes_in("w.yml", document)
-    assert lane.declared is None
+    assert lane.declared is None, (
+        f"conflicting setup-python versions must declare nothing: {lane}"
+    )
+
+
+@pytest.mark.parametrize(
+    ("name", "text"),
+    [("broken.yml", "jobs: [unclosed\n"), ("scalar.yaml", "just text\n")],
+)
+def test_an_unloadable_workflow_is_named(tmp_path: Path, name: str, text: str) -> None:
+    """A file the loader cannot interpret fails naming the file.
+
+    Skipping it would drop a lane from every clause in silence.
+    """
+    (tmp_path / name).write_text(text, encoding="utf-8")
+    (tmp_path / "notes.txt").write_text("not a workflow", encoding="utf-8")
+    with pytest.raises(WorkflowLoadError, match=name):
+        load_workflows(tmp_path)
+
+
+_versions = st.sampled_from([None, "3.12", "3.13", "3.14"])
+
+
+@given(
+    workflow_version=_versions,
+    job_version=_versions,
+    step_version=_versions,
+    others_before=st.integers(0, 2),
+    others_after=st.integers(0, 2),
+)
+def test_the_nearest_scope_selects_the_interpreter(
+    workflow_version: str | None,
+    job_version: str | None,
+    step_version: str | None,
+    others_before: int,
+    others_after: int,
+) -> None:
+    """The nearest scope that sets `UV_PYTHON` wins, wherever the step sits.
+
+    Unrelated steps around the coverage step, and unrelated variables beside
+    `UV_PYTHON`, must not change the selection.
+    """
+
+    def scope(version: str | None) -> dict[str, object]:
+        """Return an `env` mapping, with `UV_PYTHON` only when set."""
+        return {"OTHER": "x"} | ({} if version is None else {"UV_PYTHON": version})
+
+    other: dict[str, object] = {"run": "true", "env": {"UV_PYTHON": "2.7"}}
+    document = _job(
+        _SETUP,
+        *[other] * others_before,
+        _COVERAGE | {"env": scope(step_version)},
+        *[other] * others_after,
+        env=scope(job_version),
+        workflow_env=scope(workflow_version),
+    )
+    nearest = next(
+        (v for v in (step_version, job_version, workflow_version) if v is not None),
+        None,
+    )
+    (lane,) = lanes_in("w.yml", document)
+    assert lane.selected == nearest, f"expected {nearest!r}, selected {lane}"
+    assert lane.declared == "3.13", f"setup-python declares 3.13: {lane}"
