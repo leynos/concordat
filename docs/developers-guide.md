@@ -142,11 +142,20 @@ Add a new external tool in three places together: the package's missing-tool
 message, the install step in every suite lane, and the `test` target's
 prerequisites.
 
-The two lanes do not yet agree on the interpreter that measures coverage.
-`ci.yml` installs tooling that leaves a newer managed Python in place before
-the coverage step resolves one, so its `.venv-coverage` has been Python 3.14
-while the publisher's has been Python 3.13. Behaviour that differs between
-supported interpreters therefore fails only on `main`; `concordat.rules` probes
+Both lanes measure coverage on the interpreter they give `setup-python`, and
+each coverage step sets `UV_PYTHON` to that version. The declaration alone is
+not enough: the shared action builds `.venv-coverage` with `uv venv`, which
+takes the newest interpreter uv can find, and `ci.yml`'s tool installs leave a
+managed Python 3.14 behind. Until the pin, the pull-request lane measured on
+3.14 while the publisher measured on 3.13. Slipcover counts about 1,300 fewer
+valid lines on 3.14, so every pull request read roughly 2.5 points below the
+baseline and failed the ratchet with no change in coverage.
+`tests/unit/test_coverage_interpreter_contract.py` holds each coverage step's
+effective `UV_PYTHON` equal to its job's `setup-python` version. Change the two
+together.
+
+Only that one interpreter measures coverage, so behaviour that differs between
+supported interpreters can still escape both lanes. `concordat.rules` probes
 the filesystem through `concordat/rules/fs_probe.py` for exactly this reason.
 
 ### Filesystem applicability probes

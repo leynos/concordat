@@ -55,6 +55,11 @@ jobs:
             makeutil
 
       - name: Generate coverage
+        # Pin the interpreter `uv venv` resolves to the one set up above, as
+        # the pull-request lane does, so the baseline written here and the
+        # coverage compared against it are measured by one interpreter.
+        env:
+          UV_PYTHON: '3.13'
         uses: leynos/shared-actions/.github/actions/generate-coverage@18bed1ca49a6de3d8882bd72635a32ae3f023d57
         with:
           output-path: coverage.xml
