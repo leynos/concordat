@@ -130,12 +130,23 @@ def _json_safe(value: object) -> object:
 
 
 def _load_workflow(
-    checkout: pathlib.Path, relative: pathlib.PurePosixPath
+    checkout: pathlib.Path, relative: pathlib.PurePosixPath, *, is_link: bool
 ) -> WorkflowFile:
-    """Return one decoded workflow fact, retaining any content-level failure."""
+    """Return one decoded workflow fact, retaining any content-level failure.
+
+    *is_link* comes from the entry's one guarded `lstat` in
+    `_workflow_entry_mode`. Asking the filesystem again here would be a second
+    status query outside that guard, whose failure would escape as a raw
+    `OSError` rather than the operational error the builder promises.
+
+    Returns
+    -------
+    WorkflowFile
+        The decoded document, or the content error that prevented decoding.
+    """
     fact: WorkflowFile = {"path": str(relative), "parsed": None, "error": None}
     path = checkout / relative
-    if path.is_symlink():
+    if is_link:
         fact["error"] = "workflow file is a symlink"
         return fact
     try:
@@ -205,13 +216,17 @@ def _list_workflow_directory(directory: pathlib.Path) -> list[pathlib.Path]:
         ) from error
 
 
-def _is_workflow_file(entry: pathlib.Path) -> bool:
-    """Return whether one directory entry is a root workflow document.
+def _workflow_entry_mode(entry: pathlib.Path) -> int | None:
+    """Return a root workflow document's `lstat` mode, or None for any other entry.
+
+    The mode is the entry's only status query: the caller reads whether it is
+    a link from it rather than asking again.
 
     Returns
     -------
-    bool
-        True for a regular file or symlink whose suffix is a workflow suffix.
+    int | None
+        The mode of a regular file or symlink whose suffix is a workflow
+        suffix, otherwise None.
 
     Raises
     ------
@@ -219,7 +234,7 @@ def _is_workflow_file(entry: pathlib.Path) -> bool:
         If the entry's status cannot be read.
     """
     if entry.suffix not in WORKFLOW_SUFFIXES:
-        return False
+        return None
     try:
         mode = entry.lstat().st_mode
     except OSError as error:
@@ -229,7 +244,7 @@ def _is_workflow_file(entry: pathlib.Path) -> bool:
             operation=OPERATION_READ_WORKFLOW,
             resource=entry,
         ) from error
-    return stat.S_ISREG(mode) or stat.S_ISLNK(mode)
+    return mode if stat.S_ISREG(mode) or stat.S_ISLNK(mode) else None
 
 
 def _contained_workflow_directory(checkout: pathlib.Path) -> pathlib.Path:
@@ -277,9 +292,11 @@ def _load_workflows(checkout: pathlib.Path) -> list[WorkflowFile]:
     """Return every root workflow YAML file in stable filename order."""
     directory = _contained_workflow_directory(checkout)
     return [
-        _load_workflow(checkout, WORKFLOWS_DIRECTORY / entry.name)
+        _load_workflow(
+            checkout, WORKFLOWS_DIRECTORY / entry.name, is_link=stat.S_ISLNK(mode)
+        )
         for entry in _list_workflow_directory(directory)
-        if _is_workflow_file(entry)
+        if (mode := _workflow_entry_mode(entry)) is not None
     ]
 
 

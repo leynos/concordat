@@ -121,6 +121,35 @@ class TestBuildCodesceneCoverageEnvelope:
         assert fact["error"] == "workflow file is a symlink", fact
         assert "do-not-leak" not in repr(envelope), envelope
 
+    def test_each_entry_is_described_by_one_guarded_status_query(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Decide link-ness from the listing's `lstat`, not by asking again.
+
+        A second status query sits outside the guard that turns a refusal into
+        an operational error, so a permission change between the two would
+        leak a raw `OSError` through the builder. With every other status
+        query refused, the builder must still classify both entries.
+        """
+        workflows = _workflow_dir(tmp_path)
+        (workflows / "ci.yml").write_text("on: push\njobs: {}\n", encoding="utf-8")
+        target = tmp_path / "workflow-target.yml"
+        target.write_text("on: push\n", encoding="utf-8")
+        (workflows / "linked.yml").symlink_to(target)
+
+        def refuse(_self: pathlib.Path) -> bool:
+            raise PermissionError(13, "Permission denied")
+
+        monkeypatch.setattr(pathlib.Path, "is_symlink", refuse)
+
+        envelope = build_codescene_coverage_envelope(tmp_path)
+
+        facts = {fact["path"]: fact for fact in _workflows(envelope)}
+        assert facts[".github/workflows/ci.yml"]["error"] is None, facts
+        assert facts[".github/workflows/linked.yml"]["error"] == (
+            "workflow file is a symlink"
+        ), facts
+
     def test_carries_recursive_yaml_as_json_conversion_error(
         self, tmp_path: pathlib.Path
     ) -> None:
