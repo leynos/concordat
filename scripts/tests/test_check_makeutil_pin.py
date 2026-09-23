@@ -120,3 +120,42 @@ def test_script_reads_the_pin_from_the_environment(
         check=False,
     )
     assert completed.returncode == expected_status, completed.stderr
+
+
+@pytest.mark.parametrize(
+    ("pinned", "expected_status", "expected_stream"),
+    [("main_head", 0, "out"), ("orphan", 1, "err")],
+)
+def test_main_reports_the_outcome_as_an_exit_status(
+    upstream: Upstream,
+    capsys: pytest.CaptureFixture[str],
+    pinned: str,
+    expected_status: int,
+    expected_stream: str,
+) -> None:
+    """``main`` returns 0 with a confirmation, or 1 with the reason on stderr."""
+    revision = getattr(upstream, pinned)
+    status = pin_check.main(revision=revision, repository=upstream.url)
+    captured = capsys.readouterr()
+    assert status == expected_status, captured
+    assert revision in getattr(captured, expected_stream), captured
+
+
+def test_scratch_repository_failure_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+    upstream: Upstream,
+) -> None:
+    """A scratch repository that cannot be created fails the check.
+
+    Nothing has been fetched at that point, so passing would vouch for a pin
+    the check never examined.
+    """
+
+    def failing_git(*arguments: str, cwd: Path) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            ["git", *arguments], 128, stdout="", stderr=f"cannot init in {cwd}"
+        )
+
+    monkeypatch.setattr(pin_check, "_git", failing_git)
+    with pytest.raises(pin_check.PinCheckError, match="scratch repository"):
+        pin_check.check_pin(upstream.main_head, upstream.url, "main")
