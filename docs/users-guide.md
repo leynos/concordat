@@ -275,8 +275,8 @@ It requires that:
 - exactly one workflow triggered by a push to `main` (optionally alongside
   `workflow_dispatch`) writes that baseline and uploads, from a step guarded on
   `github.ref == 'refs/heads/main'` as well as the credential, under a
-  `concurrency` block that queues rather than cancels. The comparison must be
-  a whole `&&` conjunct, and a condition carrying an unquoted `||` counts as
+  `concurrency` block that queues rather than cancels. The comparison must be a
+  whole `&&` conjunct, and a condition carrying an unquoted `||` counts as
   unguarded, because the disjunction makes every other conjunct optional. The
   uploader's `mode` defaults to `upload`, so a step that omits the input
   satisfies this; `check` and `install` do not;
@@ -291,8 +291,7 @@ job that delegates to a reusable workflow is reported by name, while the
 workflow's other jobs are still evaluated. A coverage job's runner platform is
 read from its literal labels; a label written as an expression is classified
 only when every literal it could select agrees, and is otherwise indeterminate.
-A repository that generates no coverage anywhere is not a subject of this
-rule.
+A repository that generates no coverage anywhere is not a subject of this rule.
 
 Adopting the rule in a repository removes a quality gate from its pull-request
 lane, so an adoption takes a full review rather than a mechanical merge on

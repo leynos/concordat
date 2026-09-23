@@ -26,8 +26,8 @@ One main-owned publisher writes the baseline and uploads:
   alongside `workflow_dispatch`, generates ratcheted coverage and invokes the
   CodeScene action in upload mode, or runs a direct `cs-coverage upload`
   command. The action defaults `mode` to `upload`, so a step that omits the
-  input uploads and satisfies this clause; `mode: check` and `mode: install`
-  do not. The rule reads the effective mode rather than the spelling, because
+  input uploads and satisfies this clause; `mode: check` and `mode: install` do
+  not. The rule reads the effective mode rather than the spelling, because
   reporting correct wiring as broken only teaches people to edit a working
   workflow to satisfy the audit.
 - That workflow's upload step is guarded on `github.ref == 'refs/heads/main'`
@@ -37,9 +37,10 @@ One main-owned publisher writes the baseline and uploads:
   `branches: [main]` is therefore no substitute: it restricts pushes and says
   nothing about dispatches. The comparison must be one whole `&&` conjunct of
   the condition, and a condition carrying an unquoted `||` guards nothing:
-  `... && github.ref == 'refs/heads/main' ||
-  github.event_name == 'workflow_dispatch'` contains the comparison while
-  making it optional, which is exactly the dispatch this clause exists to stop.
+  `… && github.ref == 'refs/heads/main' ||
+  github.event_name == 'workflow_dispatch'`
+  contains the comparison while making it optional, which is exactly the
+  dispatch this clause exists to stop.
 - The publisher declares a `concurrency` block, so two overlapping pushes to
   `main` cannot race to write the baseline every pull request is then measured
   against, and the block queues rather than cancels: `cancel-in-progress` is
@@ -64,8 +65,8 @@ Every ratcheting platform runs on the trunk:
   only on a push to `main`. A Windows or macOS lane that ratchets on pull
   requests therefore needs the same platform running with the ratchet on the
   trunk push, or its baseline is never written and the pull-request ratchet
-  compares against an empty file. There are no unratcheted platform
-  exceptions; the fix is the trunk leg.
+  compares against an empty file. There are no unratcheted platform exceptions;
+  the fix is the trunk leg.
 
 ## What the rule declines to judge
 
@@ -78,10 +79,10 @@ reports what it could not see rather than a verdict.
 - A job that delegates to a reusable workflow is reported by name. The
   indeterminacy is scoped to that job: a reusable job hides its own steps, not
   the document, so the workflow's other jobs are still evaluated. Treating the
-  whole file as unreadable would make the rule silent about a pull-request
-  lane it can see perfectly well, which is what happens in a repository whose
-  matrix delegates one platform leg. A scheduled support workflow that calls a
-  shared automation workflow cannot affect this contract and is left alone.
+  whole file as unreadable would make the rule silent about a pull-request lane
+  it can see perfectly well, which is what happens in a repository whose matrix
+  delegates one platform leg. A scheduled support workflow that calls a shared
+  automation workflow cannot affect this contract and is left alone.
 - A coverage job's `runs-on` is classified from its literal labels; a label
   list is a conjunction and is read as one runner's description. A label
   written as an expression is classified only when every literal it could
@@ -104,8 +105,8 @@ compliant and a non-compliant repository written with each.
 ## Adopting this rule
 
 An adoption **removes a quality gate from the pull-request lane**. It is
-therefore never a mechanical merge on green: it takes a full review round,
-zero unresolved threads, and a walkthrough marker naming the head with a clean
+therefore never a mechanical merge on green: it takes a full review round, zero
+unresolved threads, and a walkthrough marker naming the head with a clean
 pre-merge table, in every repository that adopts it. A pin or version move that
 changes no behaviour is mechanical; this is not one.
 

@@ -544,13 +544,13 @@ manifest; the alternative costs a verdict nobody can trust.
 `build_codescene_coverage_envelope` (in `codescene_coverage_envelope.py`)
 assembles a `policy-input/main-owned-codescene-coverage` document containing
 every root `.github/workflows/*.yml` and `*.yaml` file. Each fact records
-decoded YAML or the content error that prevented decoding, so the CV-005
-policy returns an indeterminate verdict for one file rather than failing the
-whole run. The package is registered by identifier and declares the same kind
-in its `rule.yaml`, so both routes reach one builder. The adapter in
-`packages.py` accepts the manifest parameters and ignores them: CV-005
-declares no tunables, because every clause it states is a property of the
-estate's topology rather than something a repository may configure.
+decoded YAML or the content error that prevented decoding, so the CV-005 policy
+returns an indeterminate verdict for one file rather than failing the whole
+run. The package is registered by identifier and declares the same kind in its
+`rule.yaml`, so both routes reach one builder. The adapter in `packages.py`
+accepts the manifest parameters and ignores them: CV-005 declares no tunables,
+because every clause it states is a property of the estate's topology rather
+than something a repository may configure.
 
 Workflow discovery in that builder is explicitly fallible. An absent
 `.github/workflows` directory is a repository with no workflows and yields an
