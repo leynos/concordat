@@ -1803,10 +1803,11 @@ breakdown of what constitutes "compliance" within the framework.
 | QG-005       | A test-only lane does not duplicate a coverage lane that runs the same scope, platform, nextest profile, resolved feature set, and test selection on the same trigger.                                                                                                                                                                                                                                                                      | Quality-Gate Integrity          | OPA/Conftest + workflow envelope                        | warning              | 4                        |
 | QG-006       | No two otherwise-equivalent legs of one matrix resolve to the same feature set once Cargo's default features are applied.                                                                                                                                                                                                                                                                                                                   | Quality-Gate Integrity          | OPA/Conftest + workflow envelope + manifest parse       | warning              | 4                        |
 | QG-007       | A publish dry run does not repeat the workspace check and test the job already ran; per-crate `cargo package` is always retained.                                                                                                                                                                                                                                                                                                           | Quality-Gate Integrity          | OPA/Conftest + workflow envelope + lading configuration | warning              | 4                        |
-| CV-001       | Pull-request coverage remains local: the job runs the ratcheting coverage generator against the baseline written by `main` and neither uploads coverage to CodeScene nor runs a CodeScene gate.                                                                                                                                                                                                                                             | Quality-Gate Integrity          | OPA/Conftest                                            | error                | 4                        |
-| CV-002       | A push-to-main (and only main) workflow uploads coverage to CodeScene (`mode: upload`).                                                                                                                                                                                                                                                                                                                                                     | Quality-Gate Integrity          | OPA/Conftest + file presence                            | error                | 4                        |
+| CV-001       | Superseded by CV-005, which states this requirement and the publisher clauses it depends on as one rule. Retained for the identifier's history; audit CV-005 instead.                                                                                                                                                                                                                                                                       | Quality-Gate Integrity          | OPA/Conftest                                            | error                | 4                        |
+| CV-002       | A workflow with a push trigger restricted to main (optionally alongside `workflow_dispatch`) uploads coverage to CodeScene (`mode: upload`).                                                                                                                                                                                                                                                                                                | Quality-Gate Integrity          | OPA/Conftest + file presence                            | error                | 4                        |
 | CV-003       | Every secret referenced by a guarded workflow step exists in BOTH the Actions and Dependabot secret stores (guards silently skip when the secret is absent).                                                                                                                                                                                                                                                                                | Quality-Gate Integrity          | Python/GitHub API                                       | error                | 4                        |
 | CV-004       | The coverage ratchet is enabled: exactly one ratcheting `generate-coverage` invocation per job, with the authoritative baseline written by the main-branch workflow.                                                                                                                                                                                                                                                                        | Quality-Gate Integrity          | OPA/Conftest                                            | warning              | 4                        |
+| CV-005       | Pull-request coverage uses the main-derived local ratchet, keeps its report local, and neither invokes CodeScene nor receives its token; one main-only push workflow writes that baseline and uploads (`mode: upload`) from a step guarded on `github.ref` and the credential under a concurrency block; each platform ratcheting on pull requests also ratchets on the trunk.                                                              | Quality-Gate Integrity          | OPA/Conftest (`main-owned-codescene-coverage`)          | error                | 4                        |
 | AM-001       | No open Dependabot pull request is `BLOCKED` specifically because a stale or timed-out required status check is poisoning the rollup, with every other merge requirement (approvals, conversations, ruleset conditions) already satisfied.                                                                                                                                                                                                  | Quality-Gate Integrity          | Python/GitHub API                                       | warning              | 4                        |
 | AM-002       | No workflow's recent runs all conclude `startup_failure` (an unloadable workflow file failing silently on every trigger).                                                                                                                                                                                                                                                                                                                   | Quality-Gate Integrity          | Python/GitHub API                                       | error                | 4                        |
 | DP-001       | Open Dependabot security alerts are actionable: no manifest requirement pins a dependency below the first patched version of an open alert.                                                                                                                                                                                                                                                                                                 | Quality-Gate Integrity          | Python/GitHub API + manifest parse                      | error                | 4                        |
@@ -1904,7 +1905,7 @@ introduced its locked-build tripwire.
 - **Actuators:** Makefile patches adding the `TEST_CMD` variable, a
   `test-doc` target, and the aggregate-target wiring.
 
-##### Coverage pipeline reach (CV-001 through CV-004)
+##### Coverage pipeline reach (CV-001 through CV-005)
 
 The CodeScene rollout found repositories that generated coverage and then
 discarded it, uploads keyed to synthetic merge commits, an upload verb that the
@@ -1918,14 +1919,31 @@ coverage generated after a merge on `main`.
 
 - **Sensors:** workflow policies assert that pull-request coverage runs the
   ratcheting generator against the baseline written by `main`, without a
-  CodeScene action or access token. A push-to-main workflow must exist whose
-  only trigger is `main` and whose final coverage step is `mode: upload`; the
-  coverage-action pin is at or after the shared-actions revision that preserves
-  line records; and exactly one `with-ratchet` invocation exists per job.
-  Actions caches saved on a pull-request branch are invisible to other
-  branches, so a PR-only ratchet cannot provide the authoritative baseline. The
-  secret-store sensor lists secret names via the GitHub API for both stores and
-  cross-references every `if: env.X != ''` guard in the repository's workflows.
+  CodeScene action, direct `cs-coverage` command, or access token. A workflow
+  with a push trigger restricted to `main` (optionally alongside
+  `workflow_dispatch`) must exist, and its final coverage step must upload
+  through the action in upload mode, which is its default, or through
+  `cs-coverage upload`; the coverage-action pin is at or after the
+  shared-actions revision that preserves line records; and exactly one
+  `with-ratchet` invocation exists per job. The audit-only
+  `main-owned-codescene-coverage` package evaluates those facts from a
+  decoded-workflow envelope; malformed YAML is indeterminate rather than
+  guessed compliant or non-compliant, a job delegating to a reusable workflow
+  is reported by name while the workflow's other jobs are still evaluated, and
+  a runner label written as an expression is classified only when every literal
+  it could select agrees. The envelope reads the trigger key under both `on`
+  and the boolean `True` a YAML 1.1 loader produces, because a reader that
+  knows only the string key would find no triggers and every trigger-derived
+  clause would range over an empty set. Workflow discovery is explicitly
+  fallible: an absent `.github/workflows` is a repository with no workflows,
+  while an unreadable or unlistable one is an operational error rather than an
+  empty list that would clear the rule. Adopting this rule removes a quality
+  gate from the pull-request lane, so an adoption is reviewed in full rather
+  than merged mechanically on green. Actions caches saved on a pull-request
+  branch are invisible to other branches, so a PR-only ratchet cannot provide
+  the authoritative baseline. The secret-store sensor lists secret names via
+  the GitHub API for both stores and cross-references every `if: env.X != ''`
+  guard in the repository's workflows.
 - **Actuators:** canonical `coverage-main.yml` file-copy and coverage-job
   patches retain the local PR ratchet and the main-only CodeScene upload. A
   `concordat`-driven secret provisioning command sets an operator-supplied

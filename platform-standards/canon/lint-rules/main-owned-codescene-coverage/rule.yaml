@@ -1,0 +1,22 @@
+schema_version: 1
+id: main-owned-codescene-coverage
+name: Main-owned CodeScene coverage publication
+description: >-
+  Audits GitHub Actions coverage wiring: pull requests must retain the local
+  coverage ratchet, keep their report local, and never contact CodeScene, while
+  exactly one main-only workflow creates the ratchet baseline and uploads it to
+  CodeScene from a guarded step under a concurrency block. Every platform that
+  ratchets on pull requests must also ratchet on the trunk push, and the
+  removed installer digest must be absent. Adopting this rule removes a
+  quality gate from the pull-request lane, so an adoption is never a mechanical
+  merge on green: it takes a full review round. Audit-only: this rule declares
+  no mutations.
+version: 0.1.0
+sensor:
+  type: conftest
+  input: policy-input/main-owned-codescene-coverage
+  policy: policy/
+  tests:
+    - policy/
+  data:
+    - fixtures/data.json

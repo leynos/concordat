@@ -443,14 +443,31 @@ actuators that remediate them. Each check ships as a lint rule package under
   equivalence relation, and the metamorphic relations that a feature outside
   the default set always destroys equality and that disjoint selections never
   compare equal), written from the RFC rather than the implementation.
-- [ ] Ship the coverage-pipeline rule packages (CV-001, CV-002, CV-004):
-  pull-request jobs must keep coverage local, enforce the ratchet against the
-  baseline written on `main`, and contain no CodeScene action or token; a
-  main-only push workflow must upload; exactly one ratcheting invocation must
-  exist per job. Acceptance: fixtures for upload-from-PR, missing main
-  workflow, summary-only pins, and PR-scoped baselines each raise findings;
-  compliant fixtures keep the PR ratchet and main-only upload; mutations emit
-  the canonical coverage-main workflow and job patches.
+- [ ] Ship the remaining coverage-pipeline rule packages (CV-002, CV-004;
+  CV-001 is superseded by the shipped CV-005, which states its requirement
+  alongside the publisher clauses it depends on): pull-request jobs must keep
+  coverage local, enforce the ratchet against the baseline written on `main`,
+  and contain no CodeScene action or token; a main-only push workflow must
+  upload; exactly one ratcheting invocation must exist per job. Acceptance:
+  fixtures for upload-from-PR, missing main workflow, summary-only pins, and
+  PR-scoped baselines each raise findings; compliant fixtures keep the PR
+  ratchet and main-only upload; mutations emit the canonical coverage-main
+  workflow and job patches.
+- [x] Ship the main-owned CodeScene coverage publication rule (CV-005):
+  pull-request workflows generate coverage with the main-derived local ratchet,
+  set `publish-artefact: 'false'`, and never invoke CodeScene or receive
+  `CS_ACCESS_TOKEN`; exactly one main-only push workflow writes the ratchet
+  baseline and uploads with `mode: upload` from a step guarded on `github.ref`
+  and the credential with no disjunction, under a concurrency block that queues
+  rather than cancels; no workflow carries the removed installer digest; and
+  every platform ratcheting on pull requests also ratchets on the trunk push.
+  Acceptance: the `main-owned-codescene-coverage` package has compliant,
+  PR-check, PR-upload, missing-main, missing-ratchet, malformed, and
+  reusable-job fixtures; a compliant and a non-compliant fixture for each
+  clause above; a compliant and a non-compliant pair written with the
+  YAML-boolean trigger key, which is what the dual reading needs; and a
+  Hypothesis suite that generates topologies across both trigger-key spellings
+  and compares them with the real policy.
 - [ ] Implement the dual-store secret sensor (CV-003) in the Auditor:
   enumerate secret names in the Actions and Dependabot stores via the GitHub
   API and cross-reference every `if: env.X != ''` workflow guard. Acceptance: a

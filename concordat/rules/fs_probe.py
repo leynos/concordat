@@ -183,7 +183,9 @@ def _absent_or_dangling(path: pathlib.Path) -> FileProbe:
     """
     try:
         path.lstat()
-    except (FileNotFoundError, NotADirectoryError):
+    except FileNotFoundError:
+        return _absent_or_unresolved_ancestor(path)
+    except NotADirectoryError:
         return ABSENT
     except OSError as error:
         # The same rule as `probe_file` itself: only the two absence errors
@@ -195,6 +197,44 @@ def _absent_or_dangling(path: pathlib.Path) -> FileProbe:
         present=False,
         read_error=f"{path}: symbolic link does not resolve",
     )
+
+
+def _absent_or_unresolved_ancestor(path: pathlib.Path) -> FileProbe:
+    """Tell a path that is not there from one under an unresolved ancestor.
+
+    `lstat` does not follow the final component, but it still resolves every
+    component above it, so a dangling `.github` makes `.github/workflows`
+    raise the same error as a checkout that simply has no workflows. Reading
+    that as absence turns a broken checkout into a compliant one.
+
+    The nearest ancestor whose own entry exists decides. If it resolves, then
+    nothing above the path is broken and the path really is not there. If it
+    does not, the path is unreachable rather than absent.
+
+    Returns
+    -------
+    FileProbe
+        An absence, or the refusal naming the ancestor that does not resolve.
+    """
+    for ancestor in path.parents:
+        try:
+            ancestor.lstat()
+        except FileNotFoundError:
+            # Nothing at this level either; the break, if any, is higher up.
+            continue
+        except OSError as error:
+            return FileProbe(present=False, read_error=f"{ancestor}: {error}")
+        try:
+            ancestor.stat()
+        except FileNotFoundError:
+            return FileProbe(
+                present=False,
+                read_error=f"{ancestor}: symbolic link does not resolve",
+            )
+        except OSError as error:
+            return FileProbe(present=False, read_error=f"{ancestor}: {error}")
+        return ABSENT
+    return ABSENT
 
 
 def _non_regular_kind(mode: int) -> str:
