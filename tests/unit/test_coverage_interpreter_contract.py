@@ -115,33 +115,59 @@ def load_workflows(directory: Path) -> dict[str, dict[object, object]]:
     """Read and parse every workflow file in ``directory``.
 
     This is the only fallible step; `lanes_in` is a pure transformation of
-    what it returns.
+    what it returns. Every failure, from listing the directory to reading a
+    file as a mapping, surfaces as a `WorkflowLoadError` naming its source.
 
     Returns
     -------
         Each workflow document keyed by its name, sorted by name.
+    """
+    yaml = YAML(typ="safe")
+    return {path.name: _load_one(yaml, path) for path in _workflow_paths(directory)}
+
+
+def _workflow_paths(directory: Path) -> list[Path]:
+    """Return the workflow files in ``directory``, sorted by name.
+
+    Returns
+    -------
+        Every `.yml` or `.yaml` entry.
 
     Raises
     ------
     WorkflowLoadError
-        When a file cannot be read, is not valid YAML, or is not a mapping,
-        naming the file.
+        When the directory cannot be listed.
     """
-    yaml = YAML(typ="safe")
-    documents: dict[str, dict[object, object]] = {}
-    for path in sorted(directory.iterdir()):
-        if path.suffix.lower() not in {".yml", ".yaml"}:
-            continue
-        try:
-            document = yaml.load(path.read_text("utf-8"))
-        except (OSError, YAMLError) as error:
-            msg = f"cannot load workflow {path.name}: {error}"
-            raise WorkflowLoadError(msg) from error
-        if not isinstance(document, dict):
-            msg = f"workflow {path.name} is not a mapping"
-            raise WorkflowLoadError(msg)
-        documents[path.name] = typ.cast("dict[object, object]", document)
-    return documents
+    try:
+        entries = sorted(directory.iterdir())
+    except OSError as error:
+        msg = f"cannot list workflows in {directory}: {error}"
+        raise WorkflowLoadError(msg) from error
+    return [path for path in entries if path.suffix.lower() in {".yml", ".yaml"}]
+
+
+def _load_one(yaml: YAML, path: Path) -> dict[object, object]:
+    """Read and parse one workflow file as a mapping.
+
+    Returns
+    -------
+        The parsed document.
+
+    Raises
+    ------
+    WorkflowLoadError
+        When the file cannot be read or decoded as UTF-8, is not valid
+        YAML, or is not a mapping, naming the file.
+    """
+    try:
+        document = yaml.load(path.read_text("utf-8"))
+    except (OSError, UnicodeDecodeError, YAMLError) as error:
+        msg = f"cannot load workflow {path.name}: {error}"
+        raise WorkflowLoadError(msg) from error
+    if not isinstance(document, dict):
+        msg = f"workflow {path.name} is not a mapping"
+        raise WorkflowLoadError(msg)
+    return typ.cast("dict[object, object]", document)
 
 
 def lanes_of(documents: dict[str, dict[object, object]]) -> list[CoverageLane]:
@@ -258,15 +284,21 @@ def test_an_ambiguous_declaration_declares_nothing() -> None:
 
 
 @pytest.mark.parametrize(
-    ("name", "text"),
-    [("broken.yml", "jobs: [unclosed\n"), ("scalar.yaml", "just text\n")],
+    ("name", "content"),
+    [
+        ("broken.yml", b"jobs: [unclosed\n"),
+        ("scalar.yaml", b"just text\n"),
+        ("latin.yml", b"name: caf\xe9\n"),
+    ],
 )
-def test_an_unloadable_workflow_is_named(tmp_path: Path, name: str, text: str) -> None:
+def test_an_unloadable_workflow_is_named(
+    tmp_path: Path, name: str, content: bytes
+) -> None:
     """A file the loader cannot interpret fails naming the file.
 
     Skipping it would drop a lane from every clause in silence.
     """
-    (tmp_path / name).write_text(text, encoding="utf-8")
+    (tmp_path / name).write_bytes(content)
     (tmp_path / "notes.txt").write_text("not a workflow", encoding="utf-8")
     with pytest.raises(WorkflowLoadError, match=name):
         load_workflows(tmp_path)
@@ -275,43 +307,52 @@ def test_an_unloadable_workflow_is_named(tmp_path: Path, name: str, text: str) -
 _versions = st.sampled_from([None, "3.12", "3.13", "3.14"])
 
 
+class _Scopes(typ.NamedTuple):
+    """One drawn arrangement of `UV_PYTHON` scopes around a coverage step."""
+
+    workflow: str | None
+    job: str | None
+    step: str | None
+    others_before: int
+    others_after: int
+
+
+def _env(version: str | None) -> dict[str, object]:
+    """Return an `env` mapping, with `UV_PYTHON` only when set."""
+    return {"OTHER": "x"} | ({} if version is None else {"UV_PYTHON": version})
+
+
 @given(
-    workflow_version=_versions,
-    job_version=_versions,
-    step_version=_versions,
-    others_before=st.integers(0, 2),
-    others_after=st.integers(0, 2),
+    st.builds(
+        _Scopes, _versions, _versions, _versions, st.integers(0, 2), st.integers(0, 2)
+    )
 )
-def test_the_nearest_scope_selects_the_interpreter(
-    workflow_version: str | None,
-    job_version: str | None,
-    step_version: str | None,
-    others_before: int,
-    others_after: int,
-) -> None:
+def test_the_nearest_scope_selects_the_interpreter(scopes: _Scopes) -> None:
     """The nearest scope that sets `UV_PYTHON` wins, wherever the step sits.
 
     Unrelated steps around the coverage step, and unrelated variables beside
     `UV_PYTHON`, must not change the selection.
     """
-
-    def scope(version: str | None) -> dict[str, object]:
-        """Return an `env` mapping, with `UV_PYTHON` only when set."""
-        return {"OTHER": "x"} | ({} if version is None else {"UV_PYTHON": version})
-
     other: dict[str, object] = {"run": "true", "env": {"UV_PYTHON": "2.7"}}
     document = _job(
         _SETUP,
-        *[other] * others_before,
-        _COVERAGE | {"env": scope(step_version)},
-        *[other] * others_after,
-        env=scope(job_version),
-        workflow_env=scope(workflow_version),
+        *[other] * scopes.others_before,
+        _COVERAGE | {"env": _env(scopes.step)},
+        *[other] * scopes.others_after,
+        env=_env(scopes.job),
+        workflow_env=_env(scopes.workflow),
     )
     nearest = next(
-        (v for v in (step_version, job_version, workflow_version) if v is not None),
+        (v for v in (scopes.step, scopes.job, scopes.workflow) if v is not None),
         None,
     )
     (lane,) = lanes_in("w.yml", document)
     assert lane.selected == nearest, f"expected {nearest!r}, selected {lane}"
     assert lane.declared == "3.13", f"setup-python declares 3.13: {lane}"
+
+
+def test_an_unlistable_directory_is_named(tmp_path: Path) -> None:
+    """A workflow directory that cannot be listed fails rather than reading empty."""
+    missing = tmp_path / "absent"
+    with pytest.raises(WorkflowLoadError, match="absent"):
+        load_workflows(missing)
