@@ -17,8 +17,12 @@ on:  # yamllint disable-line rule:truthy
 # ratchet baseline that every pull request is then measured against, and the
 # loser's partial write is the one a pull request might restore. Runs are not
 # cancelled: a cancelled publisher abandons both its upload and its baseline
-# write. A running publisher finishes, and a newer push waits behind it,
-# replacing any older pending run, so the newest push's baseline wins.
+# write. For triggered runs (a push, or a dispatch), a running publisher
+# finishes and a newer one waits behind it, replacing any older pending run,
+# so the newest triggered run's baseline wins. A manual "Re-run jobs" on an
+# older run is an operator action: it keeps that run's commit, so it
+# republishes that commit's coverage and baseline until the next push
+# supersedes it.
 concurrency:
   group: coverage-main-${{ github.ref }}
   cancel-in-progress: false

@@ -147,16 +147,20 @@ Four properties of that topology fail quietly rather than loudly, so
   every pull request is measured against, and the loser's partial write is the
   one a pull request might restore. Runs are not cancelled
   (`cancel-in-progress: false`): a cancelled publisher abandons both its upload
-  and its baseline write. A running publisher finishes, and a newer push waits
-  behind it, replacing any older pending run, so the newest push's baseline
-  wins. This is not a queue. Any value but an absent one or a literal false
-  counts as cancelling, at the workflow level or on a job. The group must
-  resolve the same for every run on `main`, whatever the event, because runs in
-  different groups do not wait for each other. It may interpolate only
-  `github.workflow`, `github.ref`, `github.ref_name` and `github.repository`. A
-  group built on `github.run_id` or `github.sha` gives each run a group of its
-  own. One built on `github.event_name` separates a dispatch from a push, so an
-  earlier dispatch could upload older coverage after a newer push.
+  and its baseline write. For triggered runs (a push, or a dispatch), a running
+  publisher finishes and a newer one waits behind it, replacing any older
+  pending run, so the newest triggered run's baseline wins. This is not a
+  queue. A manual "Re-run jobs" on an older run is an operator action outside
+  that ordering: the re-run keeps its original commit, so it republishes that
+  commit's coverage and baseline until the next push supersedes it. Any value
+  but an absent one or a literal false counts as cancelling, at the workflow
+  level or on a job. The group must resolve the same for every run on `main`,
+  whatever the event, because runs in different groups do not wait for each
+  other. It may interpolate only `github.workflow`, `github.ref`,
+  `github.ref_name` and `github.repository`. A group built on `github.run_id` or
+  `github.sha` gives each run a group of its own. One built on
+  `github.event_name` separates a dispatch from a push, so an earlier dispatch
+  could upload older coverage after a newer push.
 
 Both lanes invoke the coverage action at one pin, and the contract requires it.
 The publisher writes the baseline the pull-request lanes are measured against,

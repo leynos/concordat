@@ -204,9 +204,12 @@ def test_the_publisher_binds_and_passes_the_credential() -> None:
 def test_the_publisher_queues_rather_than_cancels() -> None:
     """A cancelled publisher abandons its upload and its baseline write.
 
-    Without cancellation a running publisher finishes; a newer push waits
-    behind it, replacing any older pending run, so the newest baseline wins.
-    Job-level blocks cancel as surely as the workflow-level one.
+    Without cancellation a running publisher finishes; a newer triggered run
+    waits behind it, replacing any older pending run, so the newest triggered
+    baseline wins. A manual re-run of an older run republishes that commit
+    until the next push; that is an operator action, not an ordering this
+    contract can hold. Job-level blocks cancel as surely as the
+    workflow-level one.
     """
     publisher = _sole_publisher()
     cancelling = cancelling_scopes(publisher)
