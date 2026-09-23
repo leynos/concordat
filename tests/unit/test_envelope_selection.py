@@ -22,6 +22,9 @@ from concordat.rules.envelope import (
     BUILD_DEFAULTS_ENVELOPE_KIND,
     ENVELOPE_KIND,
 )
+from concordat.rules.markdown_envelope import (
+    ENVELOPE_KIND as MARKDOWN_ENVELOPE_KIND,
+)
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -82,6 +85,11 @@ class TestRegisteredPackages:
             pytest.param("rust-makefile-baseline", ENVELOPE_KIND, id="makefile"),
             pytest.param(
                 "rust-build-defaults", BUILD_DEFAULTS_ENVELOPE_KIND, id="build-defaults"
+            ),
+            pytest.param(
+                "markdown-formatting-baseline",
+                MARKDOWN_ENVELOPE_KIND,
+                id="markdown",
             ),
         ],
     )
@@ -304,6 +312,7 @@ class TestDeclaredInputKind:
         for rule_id, kind in (
             ("rust-makefile-baseline", ENVELOPE_KIND),
             ("rust-build-defaults", BUILD_DEFAULTS_ENVELOPE_KIND),
+            ("markdown-formatting-baseline", MARKDOWN_ENVELOPE_KIND),
         ):
             rule_dir = packages.rule_package_dir(rule_id)
             declared = packages._declared_input_kind(rule_dir)

@@ -28,8 +28,8 @@ workflows read the same flag before applying changes.
 The public `concordat.hello` entry point uses the optional Rust implementation
 when `_concordat_rs` is available and falls back to the pure-Python
 implementation when that extension is absent. If importing the extension raises
-`ModuleNotFoundError` for another module or dependency, that exception is raised
-to the caller rather than being mistaken for a missing extension.
+`ModuleNotFoundError` for another module or dependency, that exception is
+raised to the caller rather than being mistaken for a missing extension.
 
 ## Enrolling repositories
 
@@ -355,8 +355,8 @@ section names the channel `rust-toolchain.toml` pins, so bumping the pin past
 the measurement reports that the recorded state no longer covers the pinned
 toolchain. Clearing that is a line in the section saying what the pin is now
 and whether a fresh measurement was taken; the audit does not claim to know
-whether one is owed. A repository with
-neither the backend nor an exception is noncompliant.
+whether one is owed. A repository with neither the backend nor an exception is
+noncompliant.
 
 Note that a package override beneath the profile is not the profile's default:
 Cargo applies `[profile.dev.package."serde"] codegen-backend` to that package
@@ -366,6 +366,100 @@ Both the document list and the heading keyword are rule parameters, so a
 repository that records the exception elsewhere can be accommodated without
 changing the policy. So are the two flags, the backend name, and the platform
 list that makes the linker clause applicable.
+
+### Auditing Markdown formatting wiring
+
+The `markdown-formatting-baseline` package audits how a checkout formats and
+lints its Markdown, using `leynos/netsuke` as the reference wiring:
+
+```shell
+concordat artefact rule run markdown-formatting-baseline --repo /path/to/checkout
+```
+
+It applies wherever a Markdown file exists outside dependency, build, and tool
+cache directories, and reports:
+
+- **FP-003** — the root `Makefile` exists and defines `fmt` and `check-fmt`.
+- **PD-002** — a recipe reachable from `check-fmt` runs
+  `mdtablefix --check --git --include-untracked`, and its exit status reaches
+  Make.
+- **PD-003** — a recipe reachable from `fmt` runs
+  `mdtablefix --in-place --git --include-untracked` directly, not through the
+  `mdformat-all` wrapper.
+- **PD-004** — a recipe reachable from `fmt` runs `markdownlint-cli2 --fix`
+  directly, not through the `mdformat-all` wrapper.
+- **PD-005** — `.markdownlint-cli2.jsonc` exists and carries the baseline
+  `config` entries verbatim plus every baseline `ignores` glob. Further rules
+  and globs may be added; the canonical file to copy is
+  `platform-standards/canon/lint/markdown/.markdownlint-cli2.jsonc`.
+- **PD-006** — CI lints Markdown through `DavidAnson/markdownlint-cli2-action`
+  pinned to a full commit SHA with `globs: '**/*.md'`. A workflow step that runs
+  `markdownlint-cli2` from a shell, or drives `make markdownlint`, is
+  noncompliant. A step that only installs the linter is noncompliant unless a
+  compliant action step lints Markdown in the same workflow, in which case it
+  is provisioning for something else (a test suite that runs the linter as a
+  subprocess, say). An action step guarded by a literally false condition, or
+  sitting in a job guarded by one, never runs and does not satisfy the check.
+
+The Makefile checks expand Make variables that are assigned exactly once and
+unconditionally, so `$(MDTABLEFIX) --check $(MDTABLEFIX_SELECT)` is audited
+through its values. The tool must be the command word of its segment; a mention
+inside `echo`, an assignment, or a comment does not count. A variable the rule
+cannot resolve, a conditional rule or `include` on the path, or a workflow it
+cannot decode is reported as `indeterminate`.
+
+The canonical recipes are:
+
+```makefile
+MDTABLEFIX ?= mdtablefix
+MDLINT ?= markdownlint-cli2
+MDTABLEFIX_SELECT = --git --include-untracked
+MDTABLEFIX_RULES = --wrap --renumber --breaks --ellipsis --fences
+
+fmt:
+	$(MDTABLEFIX) --in-place $(MDTABLEFIX_SELECT) $(MDTABLEFIX_RULES)
+	@unset FORCE_COLOR; $(MDLINT) --fix "**/*.md"
+
+check-fmt:
+	$(MDTABLEFIX) --check $(MDTABLEFIX_SELECT) $(MDTABLEFIX_RULES)
+```
+
+and the canonical CI step is:
+
+```yaml
+      - name: Lint Markdown
+        uses: DavidAnson/markdownlint-cli2-action@21c1be1b93ad9ed58fa840aacc3f279cde2a72ff  # v24.2.0
+        with:
+          globs: '**/*.md'
+```
+
+#### Adopting the baseline in a repository already using `mdformat-all`
+
+The wrapper is noncompliant under PD-003 and PD-004, so a repository moving to
+the baseline changes three things and gains one prerequisite:
+
+1. Replace the `mdformat-all` call in `fmt` with the two direct invocations
+   above, and give `check-fmt` its own `mdtablefix --check` line. `check-fmt`
+   previously did no Markdown checking at all in some repositories.
+2. Install `mdtablefix` 0.6.0 or later. Earlier releases have neither
+   `--check` nor `--git`, so both recipes fail immediately against one. Pin the
+   same version in continuous integration.
+3. Replace any `npm install -g markdownlint-cli2` step, and any workflow step
+   running the linter or `make markdownlint`, with the pinned action step
+   above. Copy `.markdownlint-cli2.jsonc` from
+   `platform-standards/canon/lint/markdown/` if the repository has none.
+
+Expect the first `make fmt` after the change to rewrite more files than usual.
+`--git --include-untracked` reaches every Markdown file Git tracks plus the
+untracked files it does not ignore, including hidden directories such as
+`.rules/` that a wrapper's directory walk skipped. Commit that reformatting on
+its own so the wiring change stays readable.
+
+Run the audit to confirm the result:
+
+```shell
+concordat artefact rule run markdown-formatting-baseline --repo .
+```
 
 ### Sweeping the Rust estate
 

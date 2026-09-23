@@ -34,11 +34,13 @@ from .envelope import (
     build_envelope,
 )
 from .fs_probe import probe_file
+from .markdown_envelope import ENVELOPE_KIND as MARKDOWN_ENVELOPE_KIND
+from .markdown_envelope import MarkdownEnvelope, build_markdown_envelope
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
-type RuleEnvelope = PolicyEnvelope | BuildDefaultsEnvelope
+type RuleEnvelope = PolicyEnvelope | BuildDefaultsEnvelope | MarkdownEnvelope
 type EnvelopeResolver = cabc.Callable[[str, pathlib.Path], RuleEnvelope]
 
 _yaml = YAML(typ="safe")
@@ -241,6 +243,25 @@ def _makefile_envelope(
     return build_envelope(checkout)
 
 
+def _markdown_envelope(
+    checkout: pathlib.Path,
+    _parameters: cabc.Mapping[str, object] | None = None,
+) -> MarkdownEnvelope:
+    """Build the Markdown envelope, ignoring parameters it does not read.
+
+    `markdown-formatting-baseline` reads its tunables through
+    `data.parameters` in the policy, as `rust-makefile-baseline` does, so the
+    second argument exists only to give every builder one callable type.
+
+    Returns
+    -------
+    MarkdownEnvelope
+        The `policy-input/markdown-formatting-baseline` document for
+        *checkout*.
+    """
+    return build_markdown_envelope(checkout)
+
+
 # Every rule package's envelope builder, keyed by package identifier. The
 # mapping is the complete list rather than the exceptions to a default: a
 # package that reads facts of one shape and a policy that expects another
@@ -261,6 +282,7 @@ PACKAGE_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
 INPUT_KIND_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     ENVELOPE_KIND: _makefile_envelope,
     BUILD_DEFAULTS_ENVELOPE_KIND: build_build_defaults_envelope,
+    MARKDOWN_ENVELOPE_KIND: _markdown_envelope,
 })
 
 

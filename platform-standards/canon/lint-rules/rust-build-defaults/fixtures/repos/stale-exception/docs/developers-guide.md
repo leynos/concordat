@@ -2,14 +2,14 @@
 
 ## The build standard
 
-The linker and the parallel frontend are the defaults for every
-development, test, lint and typecheck build.
+The linker and the parallel frontend are the defaults for every development,
+test, lint and typecheck build.
 
 ### Why Cranelift is not part of the standard
 
 Measured on `nightly-2026-03-26`, a Cranelift-compiled panic does not find the
-unwind handler it should. `catch_unwind` fails to catch, and a panic
-raised on a spawned thread aborts the process.
+unwind handler it should. `catch_unwind` fails to catch, and a panic raised on
+a spawned thread aborts the process.
 
 | Case                      | Cranelift          | LLVM control |
 | ------------------------- | ------------------ | ------------ |

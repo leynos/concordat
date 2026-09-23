@@ -1,0 +1,270 @@
+{
+  "schema_version": 1,
+  "kind": "policy-input/markdown-formatting-baseline",
+  "repository": {
+    "path": ".",
+    "name": null
+  },
+  "applicability": {
+    "markdown_files": true,
+    "root_makefile": true,
+    "markdownlint_config": true,
+    "workflows_dir": true
+  },
+  "makefile": {
+    "schema_version": 1,
+    "tool": {
+      "name": "makeutil",
+      "version": "0.1.0",
+      "parser": "makefile-lossless",
+      "parser_version": "0.3.40"
+    },
+    "source": {
+      "path": "Makefile",
+      "sha256": "f4eefca0a508792b31a6436918fb6562a522f21a1ec2eed212f96e917a35840f",
+      "byte_length": 236
+    },
+    "parse": {
+      "status": "complete",
+      "diagnostics": []
+    },
+    "rules": [
+      {
+        "ordinal": 2,
+        "targets": [
+          ".PHONY"
+        ],
+        "prerequisites": [
+          "fmt",
+          "check-fmt"
+        ],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [],
+        "location": {
+          "start_byte": 65,
+          "end_byte": 88,
+          "start_line": 4,
+          "start_column": 1,
+          "end_line": 6,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 3,
+        "targets": [
+          "fmt"
+        ],
+        "prerequisites": [
+          "build",
+          "$(MDFORMAT_ALL)"
+        ],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "$(RUFF) format",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 115,
+              "end_byte": 131,
+              "start_line": 7,
+              "start_column": 1,
+              "end_line": 8,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "text": "$(MDFORMAT_ALL)",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 131,
+              "end_byte": 148,
+              "start_line": 8,
+              "start_column": 1,
+              "end_line": 9,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 88,
+          "end_byte": 149,
+          "start_line": 6,
+          "start_column": 1,
+          "end_line": 10,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 4,
+        "targets": [
+          "check-fmt"
+        ],
+        "prerequisites": [
+          "build"
+        ],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "$(RUFF) format --check",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 166,
+              "end_byte": 190,
+              "start_line": 11,
+              "start_column": 1,
+              "end_line": 12,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "text": "",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 190,
+              "end_byte": 236,
+              "start_line": 12,
+              "start_column": 1,
+              "end_line": 13,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 149,
+          "end_byte": 236,
+          "start_line": 10,
+          "start_column": 1,
+          "end_line": 13,
+          "end_column": 1
+        }
+      }
+    ],
+    "variables": [
+      {
+        "ordinal": 0,
+        "name": "RUFF",
+        "operator": ":=",
+        "raw_value": "uv run ruff",
+        "exported": false,
+        "overridden": false,
+        "define_block": false,
+        "conditions": [],
+        "location": {
+          "start_byte": 0,
+          "end_byte": 20,
+          "start_line": 1,
+          "start_column": 1,
+          "end_line": 2,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "MDFORMAT_ALL",
+        "operator": "?=",
+        "raw_value": "$(shell which mdformat-all)",
+        "exported": false,
+        "overridden": false,
+        "define_block": false,
+        "conditions": [],
+        "location": {
+          "start_byte": 20,
+          "end_byte": 64,
+          "start_line": 2,
+          "start_column": 1,
+          "end_line": 3,
+          "end_column": 1
+        }
+      }
+    ],
+    "includes": []
+  },
+  "markdownlint": {
+    "path": ".markdownlint-cli2.jsonc",
+    "parsed": {
+      "config": {
+        "MD004": {
+          "style": "dash"
+        },
+        "MD010": {
+          "code_blocks": false
+        },
+        "MD013": {
+          "line_length": 80,
+          "code_block_line_length": 120,
+          "tables": false,
+          "headings": false
+        },
+        "MD029": {
+          "style": "ordered"
+        }
+      },
+      "ignores": [
+        "**/.venv/**",
+        ".vtcode/**",
+        "**/node_modules/**",
+        "**/target/**",
+        ".terraform/**",
+        ".uv-cache/**",
+        "memories/**",
+        "CRUSH.md"
+      ]
+    },
+    "error": null
+  },
+  "alternate_markdownlint_configs": [],
+  "workflows": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "parsed": {
+        "name": "CI",
+        "on": {
+          "push": {
+            "branches": [
+              "main"
+            ]
+          },
+          "pull_request": null
+        },
+        "jobs": {
+          "lint-test": {
+            "runs-on": "ubuntu-latest",
+            "steps": [
+              {
+                "name": "Check out repository",
+                "uses": "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0"
+              },
+              {
+                "name": "Check formatting",
+                "run": "make check-fmt"
+              },
+              {
+                "name": "Lint Markdown",
+                "uses": "DavidAnson/markdownlint-cli2-action@4580e1612f6407034edd6c0e4e316d725920867b",
+                "with": {
+                  "globs": "**/*.md"
+                }
+              }
+            ]
+          }
+        }
+      },
+      "error": null
+    }
+  ]
+}

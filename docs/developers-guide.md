@@ -15,9 +15,9 @@ declared in `pyproject.toml` under `[dependency-groups]` as `dev`, and pulls in
 pytest, pytest-xdist, pytest-bdd, pytest-asyncio, pytest-mock, ruff, pyright,
 pytest-timeout, betamax, hypothesis, textual, and the pinned
 `df12-python-lints` plugin at immutable commit
-`9c835f35b0f1690597ade799c9c6a30bc5922959` (lock metadata version 0.1.0).
-The `Makefile`'s `build` target runs
-`uv sync --group dev` as part of setting up the virtual environment.
+`9c835f35b0f1690597ade799c9c6a30bc5922959` (lock metadata version 0.1.0). The
+`Makefile`'s `build` target runs `uv sync --group dev` as part of setting up
+the virtual environment.
 
 `make lint` runs the source and snapshot checks sequentially. Ruff provides the
 fast source-wide style and correctness pass, including preview, asynchronous,
@@ -26,14 +26,15 @@ the pinned PyPy shim. A separate CPython 3.14 invocation loads every diagnostic
 from the `df12-python-lints` pin, while retaining Concordat's Python 3.13
 semantic baseline for version-gated checks. `ambrleaks`, provisioned from the
 same immutable release, scans the test tree for unredacted values in Syrupy
-snapshots. The spelling subtarget runs the shared `typos-config-builder`
-gate, which regenerates `typos.toml` from the live shared dictionary and the
-`typos.local.toml` overlay before checking en-GB-oxendict spelling; because
-the dictionary is live, `typos.toml` is never drift checked in continuous
+snapshots. The spelling subtarget runs the shared `typos-config-builder` gate,
+which regenerates `typos.toml` from the live shared dictionary and the
+`typos.local.toml` overlay before checking en-GB-oxendict spelling; because the
+dictionary is live, `typos.toml` is never drift checked in continuous
 integration. Finally, the blocking Skylos 4.33.2 dead-code scan covers only the
-production `concordat` and `scripts` packages and excludes `tests`, so test-only
-references do not keep production symbols live. The separate df12 process
-prevents its CPython dependency from changing the PyPy-backed Pylint baseline.
+production `concordat` and `scripts` packages and excludes `tests`, so
+test-only references do not keep production symbols live. The separate df12
+process prevents its CPython dependency from changing the PyPy-backed Pylint
+baseline.
 
 Treat each Skylos report as a dead-code candidate. Remove confirmed dead code.
 For a verified dynamic runtime entry point, add a precise rule in
@@ -57,6 +58,50 @@ options such as `--config-file` in `$(SKYLOS)`. This keeps
 `skylos whitelist <symbol> --reason <reason>` in the command order that Skylos
 requires.
 
+### Markdown formatting and linting
+
+`make fmt` and `make check-fmt` call the two Markdown tools directly. The
+`mdformat-all` wrapper is gone: it hid both tools behind a script whose flags
+no audit could read, and `markdown-formatting-baseline` (PD-003, PD-004)
+forbids it estate-wide.
+
+Two tools must be on `PATH` before either target runs:
+
+- `mdtablefix` 0.6.0 or later. `--check` and `--git` first appear in that
+  release, and continuous integration installs exactly that version from
+  `MDTABLEFIX_VERSION` in `.github/workflows/ci.yml`. An older build accepts
+  neither flag and the recipe fails at once.
+- `markdownlint-cli2`, found through `MDLINT`. The variable probes `PATH`
+  first and falls back to the Bun install location, so a Bun-installed linter
+  needs no configuration.
+
+Both targets select their files the same way, through
+`MDTABLEFIX_SELECT = --git --include-untracked`. That is every Markdown file
+Git tracks, plus the untracked files Git does not ignore, so a document is
+formatted before it is ever staged and no hidden directory is missed. The
+earlier wrapper walked the tree with `fd` and silently skipped `.rules/`.
+`MDTABLEFIX_RULES` carries the formatting rules themselves (`--wrap`,
+`--renumber`, `--breaks`, `--ellipsis`, `--fences`) and is identical in both
+targets, so what `fmt` writes is what `check-fmt` accepts.
+
+`fmt` rewrites: `mdtablefix --in-place` then `markdownlint-cli2 --fix`.
+`check-fmt` verifies with `mdtablefix --check` and rewrites nothing. Running
+`--in-place` anywhere on the `check-fmt` path is itself a PD-002 finding,
+because a target asked to verify would be mutating the tree.
+
+`make markdownlint` runs the linter over `**/*.md` for the rule checks that
+`--fix` cannot repair. Continuous integration does not call it: PD-006 mandates
+that the only Markdown lint in a workflow is
+`DavidAnson/markdownlint-cli2-action` at a full commit SHA with
+`globs: '**/*.md'`. The action's release carries the linter's whole dependency
+graph, so nothing resolves from the npm registry at run time and Dependabot
+owns the pin. Both the local gate and the action read the repository's
+`.markdownlint-cli2.jsonc`, so the two lint the same files under the same rules.
+
+`tests/unit/test_repository_markdown_wiring.py` runs the shipped rule over this
+checkout, so a change to the `Makefile`, the markdownlint configuration, or the
+CI workflow that breaks the mandate fails in this repository's own test suite.
+
 ### Coverage workflow contract
 
 Pull-request jobs generate coverage with the baseline written by `main` and
@@ -72,28 +117,26 @@ requests and `coverage-main.yml`'s `coverage-upload` job on pushes to `main`.
 Parts of the suite shell out to external programs, so a lane that runs the
 suite must also install them. `coverage-main.yml` once installed only the
 Makefile parser, and every push to `main` failed in three rule tests with
-`conftest is required but was not found on PATH`; no pull request could see
-it, because the lane that reports a defect is not the lane that suffers from
-it.
+`conftest is required but was not found on PATH`; no pull request could see it,
+because the lane that reports a defect is not the lane that suffers from it.
 
 `tests/unit/test_gate_tool_provisioning_contract.py` holds the contract,
-reading the repository through `tests/unit/gate_provisioning_support.py`,
-whose recognizers are driven against synthetic input in
-`tests/unit/test_gate_provisioning_recognizers.py`. The contract derives
-the required tool set from the package rather than restating it, by
-reading the `<tool> is required but was not found on PATH` messages that
-`concordat` raises, so a newly required tool is covered as soon as it is
-introduced. It enumerates the suite lanes from `.github/workflows`, so a
-workflow added later is covered on the day it appears. Provisioning is
-recognized from the shape of an install command and not from a step's name,
-so renaming or merging steps cannot void it. A tool must be installed before
-the step that runs the suite, since installing it afterwards fails exactly as
-the publisher did, and every lane must install a shared tool at the same
-specification so the two cannot drift apart. A lane that installs with Go
-must also run the shared Go setup action, at the same pin, because the
-runners carry no toolchain the install can rely on.
-`make test` lists the same tools as prerequisites, so the local gate fails
-by name rather than through unrelated rule tests.
+reading the repository through `tests/unit/gate_provisioning_support.py`, whose
+recognizers are driven against synthetic input in
+`tests/unit/test_gate_provisioning_recognizers.py`. The contract derives the
+required tool set from the package rather than restating it, by reading the
+`<tool> is required but was not found on PATH` messages that `concordat`
+raises, so a newly required tool is covered as soon as it is introduced. It
+enumerates the suite lanes from `.github/workflows`, so a workflow added later
+is covered on the day it appears. Provisioning is recognized from the shape of
+an install command and not from a step's name, so renaming or merging steps
+cannot void it. A tool must be installed before the step that runs the suite,
+since installing it afterwards fails exactly as the publisher did, and every
+lane must install a shared tool at the same specification so the two cannot
+drift apart. A lane that installs with Go must also run the shared Go setup
+action, at the same pin, because the runners carry no toolchain the install can
+rely on. `make test` lists the same tools as prerequisites, so the local gate
+fails by name rather than through unrelated rule tests.
 
 Add a new external tool in three places together: the package's missing-tool
 message, the install step in every suite lane, and the `test` target's
@@ -103,29 +146,28 @@ The two lanes do not yet agree on the interpreter that measures coverage.
 `ci.yml` installs tooling that leaves a newer managed Python in place before
 the coverage step resolves one, so its `.venv-coverage` has been Python 3.14
 while the publisher's has been Python 3.13. Behaviour that differs between
-supported interpreters therefore fails only on `main`; `concordat.rules`
-probes the filesystem through `concordat/rules/fs_probe.py` for exactly
-this reason.
+supported interpreters therefore fails only on `main`; `concordat.rules` probes
+the filesystem through `concordat/rules/fs_probe.py` for exactly this reason.
 
 ### Filesystem applicability probes
 
-`concordat/rules/fs_probe.py` decides, in one place, which filesystem
-failures count as absence. It offers two shapes over that one decision.
-`probe_file` returns a `FileProbe` carrying the filesystem's diagnostic, for
-callers that fail a policy clause closed with the reason.
+`concordat/rules/fs_probe.py` decides, in one place, which filesystem failures
+count as absence. It offers two shapes over that one decision. `probe_file`
+returns a `FileProbe` carrying the filesystem's diagnostic, for callers that
+fail a policy clause closed with the reason.
 `regular_file_exists(path, *, operation)` raises `OperationalRuleError`
 instead, with the caller's `operation` identifier and the path as `resource`,
-for callers whose boundary is an operational error. Both report `False` for
-an absent path and for a non-regular file, and neither reports an unreadable
-file as an absent one, because absence is evidence that a rule does not apply
-while an inspection failure is evidence of nothing.
+for callers whose boundary is an operational error. Both report `False` for an
+absent path and for a non-regular file, and neither reports an unreadable file
+as an absent one, because absence is evidence that a rule does not apply while
+an inspection failure is evidence of nothing.
 
 Two callers use it. `concordat.rules.rust_surfaces.root_cargo_toml_exists`
 probes the root Cargo manifest under `resolve-rust-surfaces`, and
-`build_envelope` probes the root `Makefile` under `parse-makefile`. Do not
-call `Path.is_file` or `Path.exists` for applicability evidence: the
-`pathlib` probes conflate the two facts, and which failures they swallow
-differs between supported interpreters.
+`build_envelope` probes the root `Makefile` under `parse-makefile`. Do not call
+`Path.is_file` or `Path.exists` for applicability evidence: the `pathlib`
+probes conflate the two facts, and which failures they swallow differs between
+supported interpreters.
 
 ## Public runtime boundary
 
@@ -407,18 +449,50 @@ themselves, including the mappings and the manifest reader.
 `build_envelope` (in `envelope.py`) assembles a
 `policy-input/rust-makefile-baseline` document (schema version 1) describing
 one local checkout: root `Cargo.toml` and `Makefile` compatibility facts, the
-resolved `cargo.surfaces` list, and the validated `makeutil` report for the
-root `Makefile` (or `None`). `rust_surfaces.resolve_rust_surfaces` is the
-shared Rust applicability boundary: `.concordat`
-`language.rust.surfaces` is authoritative, including an empty list, while an
-absent declaration retains the root-`Cargo.toml` fallback. This document is
-handed to Conftest as the input under audit. The added `cargo.surfaces` field is
-backward-compatible within schema version 1: policy replay of a v0.2 envelope
-without it retains the root surface when `root_cargo_toml` is true. A present
-`cargo.surfaces` field must be an array and `cargo` must be an object;
-malformed recorded evidence yields a structured EN-001 indeterminate finding
-instead of silently selecting the fallback or causing the policy evaluator to
-fail.
+resolved `cargo.surfaces` list, and the validated `makeutil` report for the root
+`Makefile` (or `None`). `rust_surfaces.resolve_rust_surfaces` is the shared
+Rust applicability boundary: `.concordat` `language.rust.surfaces` is
+authoritative, including an empty list, while an absent declaration retains the
+root-`Cargo.toml` fallback. This document is handed to Conftest as the input
+under audit. The added `cargo.surfaces` field is backward-compatible within
+schema version 1: policy replay of a v0.2 envelope without it retains the root
+surface when `root_cargo_toml` is true. A present `cargo.surfaces` field must
+be an array and `cargo` must be an object; malformed recorded evidence yields a
+structured EN-001 indeterminate finding instead of silently selecting the
+fallback or causing the policy evaluator to fail.
+
+### Policy-input kinds and dispatch
+
+Each rule manifest names the envelope its sensor evaluates under `sensor.input`.
+`packages.rule_manifest` reads the manifest, and a package not registered by
+identifier reaches its builder through `INPUT_KIND_ENVELOPE_BUILDERS`, keyed by
+that declared kind; "Choosing the envelope for a package" below gives the
+routes. A package declaring no kind, or one no builder produces, is an
+`OperationalRuleError` rather than a guess: falling back would hand one policy
+the document another was written for, and a policy that cannot find its own
+facts reports a compliance it never established. Three kinds exist:
+
+- `policy-input/rust-makefile-baseline` — `envelope.build_envelope`, above.
+- `policy-input/rust-build-defaults` —
+  `envelope.build_build_defaults_envelope`, below.
+- `policy-input/markdown-formatting-baseline` —
+  `markdown_envelope.build_markdown_envelope`. Alongside the same `makeutil`
+  report for the root `Makefile`, it carries `.markdownlint-cli2.jsonc` decoded
+  by `concordat/rules/jsonc.py` (comments and trailing commas stripped outside
+  string literals, then strict JSON), the names of any alternate markdownlint
+  configuration files present, and every workflow under `.github/workflows`
+  decoded as YAML 1.2. A file that exists but cannot be decoded is carried with
+  its `error` so the policy reports an indeterminate finding; a file that
+  cannot be opened at all is operational. Applicability is content-driven: any
+  Markdown file outside the pruned dependency, build, and cache directories
+  brings the checkout into scope. `markdown-formatting-baseline` is not
+  registered by identifier: it declares this kind, which is the ordinary shape
+  for a package bringing its own builder.
+
+The Markdown package's `fixtures/generate.py` lays each scenario out as a
+temporary checkout and records what `build_markdown_envelope` produces, so the
+checked-in envelopes are exactly the production builder's output;
+`tests/unit/test_markdown_fixture_generator.py` fails if they drift.
 
 ### Choosing the envelope for a package
 
@@ -430,31 +504,30 @@ selection therefore stays in one place, and a caller — a test included —
 substitutes a resolver rather than reaching into the mappings below.
 
 The resolver takes two routes and has no third. Both mappings live in
-`packages.py`. `PACKAGE_ENVELOPE_BUILDERS`
-maps a package identifier to its builder and is the complete list of packages,
-not the exceptions to a default. A package absent from it may instead declare
-`sensor.input` in its own `rule.yaml`, naming an envelope kind that
-`INPUT_KIND_ENVELOPE_BUILDERS` knows; that is the route for a package whose
-input is a shape another package already builds, and it needs no Python change.
-A package matching neither is refused with an `OperationalRuleError` naming it,
-the registered packages, and the declarable kinds.
+`packages.py`. `PACKAGE_ENVELOPE_BUILDERS` maps a package identifier to its
+builder and is the complete list of packages, not the exceptions to a default.
+A package absent from it may instead declare `sensor.input` in its own
+`rule.yaml`, naming an envelope kind that `INPUT_KIND_ENVELOPE_BUILDERS` knows;
+that is the route for a package whose input is a shape another package already
+builds, and it needs no Python change. A package matching neither is refused
+with an `OperationalRuleError` naming it, the registered packages, and the
+declarable kinds.
 
 A package that needs facts neither existing envelope carries brings its own
-builder, and adds one entry to `INPUT_KIND_ENVELOPE_BUILDERS` keyed by the
-kind its envelope emits. It then declares that kind in its own `rule.yaml` and
-needs no entry in the identifier mapping at all. That is the ordinary shape for
-a new package: one line here, one line in its manifest, and no mechanism of its
-own.
+builder, and adds one entry to `INPUT_KIND_ENVELOPE_BUILDERS` keyed by the kind
+its envelope emits. It then declares that kind in its own `rule.yaml` and needs
+no entry in the identifier mapping at all. That is the ordinary shape for a new
+package: one line here, one line in its manifest, and no mechanism of its own.
 
 The two mappings are therefore not the same set. Every builder reachable by
 identifier is also reachable by its kind, so a package's envelope is one
 another package could declare; the reverse does not hold, because a
 declared-only package appears in the kind mapping alone.
 
-**Every shipped package declares or registers.** There is no third state and
-no default, so a manifest written before `sensor.input` existed is refused
-rather than quietly given the envelope it used to receive by accident. That is
-the point of the rule: the package that most needs refusing is the one nobody
+**Every shipped package declares or registers.** There is no third state and no
+default, so a manifest written before `sensor.input` existed is refused rather
+than quietly given the envelope it used to receive by accident. That is the
+point of the rule: the package that most needs refusing is the one nobody
 remembered to wire up, and a default is precisely what hides it.
 
 There is deliberately no fallback. An earlier version of this resolver sent an
@@ -472,39 +545,54 @@ manifest; the alternative costs a verdict nobody can trust.
 auto-discover and no Makefile facts at all:
 
 - `cargo_config` — the `rustflags` sources Cargo would consult, each with its
-  normalized flags and whether it applies on Linux, only on Linux, or could
-  not be placed at all; every codegen-backend selection with the route that
-  made it; and the `[unstable]` gate. A configuration Cargo would refuse to
-  load, including a `rustflags` array with a non-string member, is reported as
-  a parse error rather than read around.
+  normalized flags and whether it applies on Linux, only on Linux, or could not
+  be placed at all; every codegen-backend selection with the route that made
+  it; and the `[unstable]` gate. A configuration Cargo would refuse to load,
+  including a `rustflags` array with a non-string member, is reported as a
+  parse error rather than read around.
 - `toolchain` — the pinned channel and its classification, which decides
   whether the nightly-only clauses apply.
 - `exceptions` — one scan per document declared by the rule's
-  `exception_documents` parameter, listing the sections whose heading names
-  the backend and the channel spellings each section's body contains.
+  `exception_documents` parameter, listing the sections whose heading names the
+  backend and the channel spellings each section's body contains.
 
-The reason it carries no Makefile facts is worth stating, because it looks
-like an omission: the standard is a default precisely because Cargo
-auto-discovers `.cargo/config.toml`, so a repository whose flags live behind
-an opt-in Make target has no such file and fails on that alone. Reading the
-Makefile would add no fact the policy decides anything from, and would make
-the rule unrunnable against any checkout the pinned `makeutil` cannot parse.
+The reason it carries no Makefile facts is worth stating, because it looks like
+an omission: the standard is a default precisely because Cargo auto-discovers
+`.cargo/config.toml`, so a repository whose flags live behind an opt-in Make
+target has no such file and fails on that alone. Reading the Makefile would add
+no fact the policy decides anything from, and would make the rule unrunnable
+against any checkout the pinned `makeutil` cannot parse.
 
 ### Absence is not a read failure
 
-`concordat/rules/fs_probe.py` exists because `Path.is_file()` answers "does
-not exist" and "the filesystem refused to say" with the same `False`. A rule
-fact built on that probe reports an unreadable checkout as a compliant
-absence, which is the one answer a fail-closed audit must never give by
-accident. `probe_file` separates the two: callers turn an absence into
-whatever their clause means by it, and a refusal into a fail-closed fact
-carrying the reason. Every new reader in the build-defaults envelope uses it.
+`concordat/rules/fs_probe.py` exists because `Path.is_file()` answers "does not
+exist" and "the filesystem refused to say" with the same `False`. A rule fact
+built on that probe reports an unreadable checkout as a compliant absence,
+which is the one answer a fail-closed audit must never give by accident.
+`probe_file` separates the two: callers turn an absence into whatever their
+clause means by it, and a refusal into a fail-closed fact carrying the reason.
+Every new reader in the build-defaults envelope uses it.
+
+`probe_dir` and `probe_any` answer the same way for a directory and for any
+entry, over the core `probe_file` uses, so a file where a directory is expected
+is a refusal naming the occupant, exactly as a directory where a file is
+expected is. `probe_symlink` is the exception, and deliberately: it asks what
+kind of entry is there, without following it, so an entry of another kind is an
+answer rather than an occupied path. The Markdown envelope uses all four,
+because from Python 3.14 the suppression is total: `exists`, `is_file`,
+`is_dir`, and `is_symlink` now swallow every `OSError` the operating system
+raises. This package supports 3.13 and later, so before that change the same
+unreadable checkout raised on one interpreter and read as empty on the other.
+The Markdown envelope translates a reported refusal into the
+`OperationalRuleError` its callers already expect, and `packages.rule_manifest`
+does the same, so a package whose `rule.yaml` cannot be read cannot silently
+lose its parameters and its declared policy input.
 
 Absence is narrower than it first looks, and the boundary took a second pass to
 get right. It is `ENOENT` with nothing behind it, and `ENOTDIR` because a
 component of the path is not a directory. Everything else is a refusal,
-including two shapes a bare `stat` plus a regular-file test reports as empty:
-a dangling symbolic link, where `lstat` succeeds and `stat` does not, and a
+including two shapes a bare `stat` plus a regular-file test reports as empty: a
+dangling symbolic link, where `lstat` succeeds and `stat` does not, and a
 directory or other non-regular file where a file is expected. Both are occupied
 paths. Reading either as an absence turns a broken checkout into a repository
 that simply never wrote the file, which is the compliant answer rather than the

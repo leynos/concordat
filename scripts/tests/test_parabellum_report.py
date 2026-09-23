@@ -6,7 +6,10 @@ import json
 import typing as typ
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
+from scripts import parabellum_report as report
 from scripts import parabellum_sweep as sweep
 
 if typ.TYPE_CHECKING:
@@ -164,11 +167,9 @@ class TestReport:
 
         report = sweep.render_report(ledger_path)
 
-        row = next(
-            line for line in report.splitlines() if line.startswith("| leynos/alpha ")
-        )
-        assert row.rstrip().endswith("| none |"), row
-        assert row.count("|") == 5, f"the row should keep four cells: {row}"
+        cells = self._row_cells(report, "leynos/alpha")
+        assert cells[-1] == "none", cells
+        assert len(cells) == 4, f"the row should keep four cells: {cells}"
 
     def test_report_command_writes_the_rendered_report(
         self,
@@ -417,6 +418,26 @@ class TestReport:
             line.startswith("- QG-001 - injected: 99:") for line in report.splitlines()
         ), report
 
+    def test_table_columns_are_aligned(self, tmp_path: pathlib.Path) -> None:
+        """Every table line pads its cells to the column's widest cell.
+
+        The generated report then already satisfies `mdtablefix --check`, so
+        `make check-fmt` does not rewrite the checked-in snapshot.
+        """
+        ledger_path = tmp_path / "ledger.jsonl"
+        records = [
+            self._record("leynos/alpha", "compliant"),
+            self._record("leynos/beta-longer-name", "indeterminate"),
+        ]
+        ledger_path.write_text("".join(json.dumps(record) + "\n" for record in records))
+        report = sweep.render_report(ledger_path)
+        table = [line for line in report.splitlines() if line.startswith("|")]
+        assert len({len(line) for line in table}) == 1, table
+        header, delimiter = table[0], table[1]
+        for cell, dashes in zip(header.split("|"), delimiter.split("|"), strict=True):
+            assert len(cell) == len(dashes), (header, delimiter)
+            assert set(dashes.strip()) <= {"-"}, delimiter
+
     def test_report_uses_latest_record_per_repository(
         self,
         ledger_path: pathlib.Path,
@@ -438,13 +459,13 @@ class TestReport:
         ]
         ledger_path.write_text("".join(json.dumps(record) + "\n" for record in records))
         report = sweep.render_report(ledger_path)
-        assert "| leynos/alpha | compliant |" in report, (
+        assert self._row_cells(report, "leynos/alpha")[1] == "compliant", (
             "alpha's latest (compliant) record should win over its earlier one"
         )
-        assert "| leynos/beta | indeterminate |" in report, (
+        assert self._row_cells(report, "leynos/beta")[1] == "indeterminate", (
             "beta should be reported as indeterminate"
         )
-        assert "| leynos/gamma | excluded |" in report, (
+        assert self._row_cells(report, "leynos/gamma")[1] == "excluded", (
             "gamma should be reported as excluded"
         )
         assert "compliant: 1" in report, (
@@ -456,3 +477,79 @@ class TestReport:
         assert "excluded: 1" in report, (
             "the summary should count one excluded repository"
         )
+
+
+class TestDisplayWidthAlignment:
+    """Table columns are sized by rendered width, not by code-point count.
+
+    `mdtablefix` sizes columns with the `unicode-width` crate. A renderer
+    that counts code points pads a CJK, emoji, or combining-mark cell too
+    narrowly, so `make check-fmt` rejects the checked-in report and
+    `make fmt` rewrites it.
+    """
+
+    @staticmethod
+    def _column_widths(line: str) -> list[int]:
+        """Return the rendered width of each cell in one table line."""
+        cells = line.removeprefix("| ").removesuffix(" |").split(" | ")
+        return [report._display_width(cell) for cell in cells]
+
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [
+            pytest.param("abc", 3, id="ascii"),
+            pytest.param("\u65e5\u672c\u8a9e", 6, id="cjk-wide"),
+            pytest.param("\uff41\uff42", 4, id="fullwidth"),
+            pytest.param("e\u0301", 1, id="combining-acute"),
+            pytest.param("\u26a0\ufe0f", 1, id="variation-selector"),
+            pytest.param("", 0, id="empty"),
+        ],
+    )
+    def test_display_width_of_one_cell(self, text: str, expected: int) -> None:
+        """Each character class contributes its rendered column count."""
+        assert report._display_width(text) == expected, text
+
+    def test_wide_cells_align_with_the_delimiter(self) -> None:
+        """Every row and the delimiter agree on each column's width.
+
+        The oracle is `_display_width` applied to the rendered line rather
+        than the source cells, so a padding bug cannot hide behind the same
+        arithmetic that produced it.
+        """
+        rows = [
+            ("Repository", "Verdict"),
+            ("\u65e5\u672c\u8a9e\u30d7\u30ed\u30b8\u30a7\u30af\u30c8", "compliant"),
+            ("cafe\u0301", "noncompliant"),
+            ("\u26a0\ufe0f alert", "indeterminate"),
+        ]
+        lines = report._aligned_table(rows)
+        widths = [self._column_widths(line) for line in lines]
+        assert all(row == widths[0] for row in widths), lines
+        assert widths[0] == [18, 13], widths[0]
+
+    @given(
+        st.lists(
+            st.lists(
+                st.text(
+                    alphabet="ab \u65e5\u672c\u0301\ufe0f\u26a0",
+                    max_size=6,
+                ),
+                min_size=2,
+                max_size=2,
+            ).map(tuple),
+            min_size=2,
+            max_size=5,
+        )
+    )
+    def test_every_rendered_line_has_equal_column_widths(
+        self, rows: list[tuple[str, ...]]
+    ) -> None:
+        """Whatever the cells, the rendered columns line up.
+
+        The invariant holds over the whole input space, not only the cases
+        the table above names: wide, combining, and format characters mixed
+        freely with ASCII.
+        """
+        lines = report._aligned_table(rows)
+        widths = [self._column_widths(line) for line in lines]
+        assert all(row == widths[0] for row in widths), lines

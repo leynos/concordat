@@ -18,7 +18,13 @@ import typing as typ
 import pytest
 
 from concordat.errors import OperationalRuleError
-from concordat.rules.fs_probe import probe_file, regular_file_exists
+from concordat.rules.fs_probe import (
+    probe_any,
+    probe_dir,
+    probe_file,
+    probe_symlink,
+    regular_file_exists,
+)
 
 if typ.TYPE_CHECKING:
     import pathlib
@@ -155,6 +161,60 @@ def test_a_refusal_to_describe_the_link_is_not_an_absence(
     assert "Permission denied" in probe.read_error, (
         f"the diagnostic should carry the reason, got {probe.read_error!r}"
     )
+
+
+class TestSiblingProbes:
+    """The directory, any-entry and link probes share the file probe's rule.
+
+    `probe_dir` and `probe_any` expect something and refuse an occupied or
+    dangling path, as `probe_file` does. `probe_symlink` asks what kind of
+    entry is there, so another kind is an answer rather than a refusal.
+    """
+
+    def test_a_file_where_a_directory_is_expected_is_a_refusal(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A file in a directory's place is an occupied path, not an absence."""
+        target = tmp_path / "workflows"
+        target.write_text("", encoding="utf-8")
+        probe = probe_dir(target)
+        assert probe.present is False, "a file is not a directory"
+        assert probe.read_error is not None, "an occupied path must be reported"
+        assert "regular file where a directory is expected" in probe.read_error, (
+            f"the diagnostic should name the occupant, got {probe.read_error!r}"
+        )
+
+    def test_a_directory_is_present(self, tmp_path: pathlib.Path) -> None:
+        """The ordinary case for the directory probe."""
+        probe = probe_dir(tmp_path)
+        assert probe.present is True, "a directory is present"
+        assert probe.read_error is None, "nothing refused the question"
+
+    def test_any_entry_behind_a_dangling_link_is_a_refusal(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`probe_any` follows the link, and what it reaches is not there."""
+        link = tmp_path / "Makefile"
+        link.symlink_to(tmp_path / "gone")
+        probe = probe_any(link)
+        assert probe.present is False, "an unresolved link reaches nothing"
+        assert probe.read_error is not None, "a dangling link is not an absence"
+
+    def test_a_dangling_link_is_still_a_link(self, tmp_path: pathlib.Path) -> None:
+        """The link probe reads the entry itself, not its target."""
+        link = tmp_path / "README.md"
+        link.symlink_to(tmp_path / "gone")
+        probe = probe_symlink(link)
+        assert probe.present is True, "the entry is a link whatever it names"
+        assert probe.read_error is None, "nothing refused the question"
+
+    def test_a_regular_file_is_not_a_link(self, tmp_path: pathlib.Path) -> None:
+        """Another kind of entry answers the link question; it is no refusal."""
+        target = tmp_path / "README.md"
+        target.write_text("", encoding="utf-8")
+        probe = probe_symlink(target)
+        assert probe.present is False, "a regular file is not a link"
+        assert probe.read_error is None, "the filesystem answered the question"
 
 
 class TestRegularFileExists:

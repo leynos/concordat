@@ -30,11 +30,11 @@ Cargo and rustup discover, and does not read the Makefile.
   the build rather than accelerate it.
 - **BD-002** (error): a target table that applies on Linux carries the linker
   flag, and no source that reaches beyond Linux names it. `mold` ships for
-  Linux alone, so naming it unconditionally — or under `cfg(unix)`, which
-  macOS builds also take — breaks the platforms it reaches. A target key this
-  policy cannot place is `indeterminate`, and while any key is unplaced the
-  policy will not conclude that the linker is configured nowhere: the
-  unplaceable source might be the Linux table.
+  Linux alone, so naming it unconditionally — or under `cfg(unix)`, which macOS
+  builds also take — breaks the platforms it reaches. A target key this policy
+  cannot place is `indeterminate`, and while any key is unplaced the policy
+  will not conclude that the linker is configured nowhere: the unplaceable
+  source might be the Linux table.
 - **BD-003** (error): the sources are repeated, not merged. Cargo selects a
   single `rustflags` source rather than merging them — a matching `[target.*]`
   table replaces `[build] rustflags` outright — so a flag named in one source
@@ -43,26 +43,27 @@ Cargo and rustup discover, and does not read the Makefile.
 - **BD-004** (error): the backend is the development-profile default, or the
   repository records an exception. Both states are accepted; a repository with
   neither is noncompliant. A package override beneath a profile is not the
-  profile's default: Cargo applies it to the named package alone, leaving
-  every other development build on the backend it had. An exception document
-  the filesystem refused to read decides nothing, and is `indeterminate`.
-- **BD-005** (error): a backend selection Cargo cannot honour, or one the
-  estate has not adopted. A profile key without `[unstable] codegen-backend =
-  true` is refused by Cargo; an `[unstable]` key under a non-nightly pin stops
-  the file loading for every consumer.
+  profile's default: Cargo applies it to the named package alone, leaving every
+  other development build on the backend it had. An exception document the
+  filesystem refused to read decides nothing, and is `indeterminate`.
+- **BD-005** (error): a backend selection that Cargo cannot honour, or that the
+  estate has not adopted, is noncompliant. A profile key without
+  `[unstable] codegen-backend = true` is refused by Cargo; an `[unstable]` key
+  under a non-nightly pin stops the file loading for every consumer.
 - **BD-006** (error): the recorded exception names the pinned toolchain
   channel. An exception measured on an older channel no longer covers the
   toolchain the repository builds with, which is what keeps the recorded state
   from drifting quietly behind the pin. Clearing it does not require a fresh
   measurement: a line in the exception section saying what the pin is now,
-  whether a measurement was taken on it, and the date any deferral runs to is
-  a true statement of the recorded state and satisfies the clause. With no
+  whether a measurement was taken on it, and the date any deferral runs to is a
+  true statement of the recorded state and satisfies the clause. With no
   channel pinned at all the finding is `indeterminate`.
 - **CF-001** (error, indeterminate): `.cargo/config.toml` exists but could not
   be read, parsed, or used, so no clause that reads it can be decided. This
-  includes a configuration Cargo itself refuses: `rustflags = ["-Zthreads=8",
-  42]` makes Cargo exit, and dropping the offending member to read the rest
-  would pass a repository that cannot build at all.
+  includes a configuration Cargo itself refuses:
+  `rustflags = ["-Zthreads=8", 42]` makes Cargo exit, and dropping the
+  offending member to read the rest would pass a repository that cannot build
+  at all.
 - **TC-001** (error, indeterminate): `rust-toolchain.toml` exists but its
   channel could not be classified.
 - **AP-001** (error, indeterminate): no `language.rust.surfaces` list was
@@ -131,11 +132,11 @@ only when it has three or four components and each is a bare identifier, and it
 is placed only when exactly one of those components names an operating system
 this reader knows. So `x86_64-unknown-linux-gnu` applies only on Linux,
 `aarch64-apple-darwin` applies elsewhere, and `wasm32-unknown-unknown` is
-placed through its architecture because it names no operating system at all.
-A custom JSON target is a path rather than a triple and is left unplaced, even
-when it is named after the triple it derives from; so is
-`i686-linux-android`, because which component is the operating system and which
-the environment is not decidable from a three-part name.
+placed through its architecture because it names no operating system at all. A
+custom JSON target is a path rather than a triple and is left unplaced, even
+when it is named after the triple it derives from; so is `i686-linux-android`,
+because which component is the operating system and which the environment is
+not decidable from a three-part name.
 
 Among `cfg` expressions, `cfg(target_os = "linux")` applies only on Linux and
 `cfg(unix)` applies on Linux and beyond it. Anything this reader will not

@@ -10,7 +10,9 @@ The probe here separates the two. Callers turn an absence into whatever their
 clause means by it, and a refusal into a fail-closed fact carrying the reason.
 
 Two shapes are offered over one probe. `probe_file` returns the outcome as a
-fact, for callers that carry the reason into a policy clause.
+fact, for callers that carry the reason into a policy clause; `probe_dir` and
+`probe_any` ask the same question of a directory and of any entry, and
+`probe_symlink` asks what kind of entry is there without following it.
 `regular_file_exists` raises instead, for callers whose boundary is an
 operational error rather than a fact, such as the applicability evidence in
 `concordat.rules.envelope`. Neither reports an unreadable path as an absent
@@ -25,6 +27,7 @@ import typing as typ
 from concordat.errors import OperationalRuleError
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import pathlib
 
 
@@ -75,6 +78,78 @@ def probe_file(path: pathlib.Path) -> FileProbe:
     FileProbe
         Presence, or the reason the path could not be read as a file.
     """
+    return _probe(path, stat.S_ISREG, "a file")
+
+
+def probe_dir(path: pathlib.Path) -> FileProbe:
+    """Report whether *path* is a directory, or why that could not be told.
+
+    The same rule as `probe_file`, for a reader that expects a directory: a
+    regular file or a dangling link in its place is a refusal naming the
+    occupant, not an absence.
+
+    Returns
+    -------
+    FileProbe
+        Presence, or the reason the path could not be read as a directory.
+    """
+    return _probe(path, stat.S_ISDIR, "a directory")
+
+
+def probe_any(path: pathlib.Path) -> FileProbe:
+    """Report whether anything exists at *path*, following links.
+
+    Any kind is accepted, so the only refusals are the filesystem's own and a
+    dangling link, whose target is the thing a reader would reach.
+
+    Returns
+    -------
+    FileProbe
+        Presence, or the reason the path could not be described.
+    """
+    return _probe(path, None, "anything")
+
+
+def probe_symlink(path: pathlib.Path) -> FileProbe:
+    """Report whether *path* is itself a symbolic link.
+
+    Unlike the probes above this is a predicate rather than an expectation:
+    the caller is asking what kind of entry is there, so an entry of another
+    kind is an answer, not an occupied path. The link is read without being
+    followed, so a link to a missing target is still a link. A refusal is
+    still a refusal.
+
+    Returns
+    -------
+    FileProbe
+        Presence when the entry is a link, an absence when there is no entry
+        or it is not a link, or the reason the entry could not be described.
+    """
+    try:
+        info = path.lstat()
+    except (FileNotFoundError, NotADirectoryError):
+        return ABSENT
+    except OSError as error:
+        return FileProbe(present=False, read_error=f"{path}: {error}")
+    return FileProbe(present=stat.S_ISLNK(info.st_mode), read_error=None)
+
+
+def _probe(
+    path: pathlib.Path,
+    describes: cabc.Callable[[int], bool] | None,
+    expected: str,
+) -> FileProbe:
+    """Report whether *path* is the kind *describes* accepts, following links.
+
+    The shared core of the expecting probes. *describes* is ``None`` when any
+    kind will do; *expected* names the kind for the refusal a mismatch
+    produces.
+
+    Returns
+    -------
+    FileProbe
+        Presence, or the reason the path could not be read as *expected*.
+    """
     try:
         info = path.stat()
     except FileNotFoundError:
@@ -84,12 +159,12 @@ def probe_file(path: pathlib.Path) -> FileProbe:
         return ABSENT
     except OSError as error:
         return FileProbe(present=False, read_error=f"{path}: {error}")
-    if stat.S_ISREG(info.st_mode):
+    if describes is None or describes(info.st_mode):
         return FileProbe(present=True, read_error=None)
     occupant = _non_regular_kind(info.st_mode)
     return FileProbe(
         present=False,
-        read_error=f"{path}: {occupant} where a file is expected",
+        read_error=f"{path}: {occupant} where {expected} is expected",
     )
 
 
@@ -130,6 +205,8 @@ def _non_regular_kind(mode: int) -> str:
     str
         A short description of the file type.
     """
+    if stat.S_ISREG(mode):
+        return "regular file"
     if stat.S_ISDIR(mode):
         return "directory"
     if stat.S_ISLNK(mode):
