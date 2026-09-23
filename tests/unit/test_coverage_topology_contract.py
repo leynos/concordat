@@ -46,6 +46,7 @@ from tests.unit.coverage_topology_support import (
     pull_request_closure,
     reports_published_for_pull_requests,
     token_references_for_pull_requests,
+    unbound_uploads,
     unguarded_uploads,
     unstable_group_expressions,
     uploaders,
@@ -189,12 +190,23 @@ def test_the_publisher_serializes_its_baseline_writes() -> None:
     )
 
 
+def test_the_publisher_binds_and_passes_the_credential() -> None:
+    """The upload step binds the secret itself and hands it to the action.
+
+    The guard's `env.CS_ACCESS_TOKEN != ''` passes with the binding deleted,
+    and the upload then skips on every run without failing anything.
+    """
+    publisher = _sole_publisher()
+    unbound = unbound_uploads(publisher)
+    assert not unbound, f"{publisher}'s upload steps lack: {unbound}"
+
+
 def test_the_publisher_queues_rather_than_cancels() -> None:
     """A cancelled publisher abandons its upload and its baseline write.
 
-    A queued one merely publishes later, and the later push's baseline is
-    the one that should win. Job-level blocks cancel as surely as the
-    workflow-level one.
+    Without cancellation a running publisher finishes; a newer push waits
+    behind it, replacing any older pending run, so the newest baseline wins.
+    Job-level blocks cancel as surely as the workflow-level one.
     """
     publisher = _sole_publisher()
     cancelling = cancelling_scopes(publisher)

@@ -27,6 +27,7 @@ from tests.unit.coverage_topology_support import (
     serves_pull_requests,
     token_references_for_pull_requests,
     triggers,
+    unbound_uploads,
     unstable_group_expressions,
     uploads_for_pull_requests,
 )
@@ -74,7 +75,12 @@ def _probe(callee: str) -> tuple[Workflow, ...]:
 
 
 @pytest.mark.parametrize(
-    "callee", ["./.github/workflows/probe.yml", ".github/workflows/probe.yml"]
+    "callee",
+    [
+        "./.github/workflows/probe.yml",
+        ".github/workflows/probe.yml",
+        "$/.github/workflows/probe.yml",
+    ],
 )
 def test_a_called_workflow_is_inside_the_pull_request_closure(callee: str) -> None:
     """Every pull-request clause sees a workflow reached only by a call.
@@ -143,6 +149,7 @@ def test_forwarding_the_credential_is_a_reference(forwarding: str) -> None:
         (".github/workflows/x.yml", ".github/workflows/x.yml"),
         ("leynos/shared-actions/.github/workflows/x.yml@abc", None),
         ("./.github/actions/setup", None),
+        ("$/.github/workflows/x.yml", ".github/workflows/x.yml"),
     ],
 )
 def test_local_calls_are_matched_by_shape(uses: str, expected: str | None) -> None:
@@ -381,3 +388,64 @@ def test_a_group_that_varies_per_run_is_seen(
 ) -> None:
     """Runs in different groups do not wait for each other."""
     assert unstable_group_expressions(concurrency) == expected
+
+
+@pytest.mark.parametrize(
+    "uses", ["$/.github/workflows/x.yml@main", "./.github/workflows/x.yml@v1"]
+)
+def test_a_local_call_with_a_ref_is_refused(uses: str) -> None:
+    """A local path carrying a ref is neither local nor a remote call to skip."""
+    with pytest.raises(ValueError, match="carries a ref"):
+        local_callee(uses)
+
+
+def test_a_workflow_declaring_both_trigger_keys_is_refused() -> None:
+    """GitHub merges both spellings, so reading one would hide the other."""
+    with pytest.raises(TypeError, match="both"):
+        triggers({"on": {"push": None}, True: {"pull_request": None}})
+
+
+def test_the_host_is_found_in_any_case_and_any_scope() -> None:
+    """A workflow-level shell default reaches CodeScene as surely as a step."""
+    found = (
+        _workflow(
+            ".github/workflows/ci.yml",
+            """
+            on: pull_request
+            defaults:
+              run:
+                shell: curl -s https://API.CodeScene.IO/v2 ; bash {0}
+            jobs: {}
+            """,
+        ),
+    )
+    assert host_references_for_pull_requests(found) == [".github/workflows/ci.yml"]
+
+
+_UPLOAD_STEP = {
+    "name": "Upload",
+    "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@abc",
+    "env": {"CS_ACCESS_TOKEN": "${{ secrets.CS_ACCESS_TOKEN }}"},
+    "with": {"access-token": "${{env.CS_ACCESS_TOKEN}}"},
+}
+
+
+@pytest.mark.parametrize(
+    ("changes", "expected"),
+    [
+        ({}, {}),
+        ({"env": {}}, {"Upload": "env.CS_ACCESS_TOKEN bound to the secret"}),
+        (
+            {"env": {"CS_ACCESS_TOKEN": "${{ secrets.OTHER }}"}},
+            {"Upload": "env.CS_ACCESS_TOKEN bound to the secret"},
+        ),
+        ({"with": {}}, {"Upload": "access-token passing it on"}),
+    ],
+)
+def test_the_upload_step_must_bind_and_pass_the_credential(
+    changes: dict[str, object], expected: dict[str, str]
+) -> None:
+    """Deleting the binding leaves the guard true-looking and the upload dead."""
+    step = _UPLOAD_STEP | changes
+    publisher = Workflow("w.yml", {"jobs": {"upload": {"steps": [step]}}})
+    assert unbound_uploads(publisher) == expected, step

@@ -10,6 +10,7 @@ cannot interpret fails loudly rather than reading as compliant.
 from __future__ import annotations
 
 import itertools
+import re
 import typing as typ
 from pathlib import Path, PurePosixPath
 
@@ -105,14 +106,23 @@ def triggers(document: cabc.Mapping[object, object]) -> dict[str, object]:
     name maps to `None`. A form this reader does not understand raises
     rather than reading as a workflow with no triggers.
 
+    A workflow declaring both spellings is refused: GitHub merges them, and
+    a reader that picks one is blind to the other.
+
     Returns
     -------
         The trigger mapping, empty for a workflow with no triggers.
+
+    Raises
+    ------
+    TypeError
+        When the workflow declares its triggers under both spellings.
     """
-    for key in _TRIGGER_KEYS:
-        if key in document:
-            return _trigger_mapping(document[key])
-    return {}
+    present = [key for key in _TRIGGER_KEYS if key in document]
+    if len(present) > 1:
+        msg = "a workflow declares its triggers under both `on` and `true`"
+        raise TypeError(msg)
+    return _trigger_mapping(document[present[0]]) if present else {}
 
 
 def _trigger_mapping(value: object) -> dict[str, object]:
@@ -217,15 +227,22 @@ def publishes_report(step: cabc.Mapping[str, object]) -> bool:
 def local_callee(uses: str) -> str | None:
     """Return the repository path a job-level ``uses`` names, if it is local.
 
-    A call is local when it names a path under the workflow directory; the
-    path reader already folds a leading `./` away. Matching the shape rather
-    than enumerating prefixes means a spelling nobody listed is not silently
-    treated as remote. A remote call names `owner/repo/...@ref` and never
-    starts there.
+    A call is local when it names a path under the workflow directory. The
+    path reader folds a leading `./` away, and the documented `$/` prefix is
+    stripped first. Matching the shape rather than enumerating prefixes
+    means a spelling nobody listed is not silently treated as remote. A
+    remote call names `owner/repo/...@ref` and never starts there. A local
+    path carrying `@ref` is refused: GitHub rejects it, and it is not a
+    remote call this reader may skip.
 
     Returns
     -------
         The repository-relative path of a local callee, otherwise `None`.
+
+    Raises
+    ------
+    ValueError
+        When a local path carries a ref.
 
     Examples
     --------
@@ -234,10 +251,14 @@ def local_callee(uses: str) -> str | None:
     >>> local_callee("leynos/shared-actions/.github/workflows/x.yml@abc") is None
     True
     """
-    path = PurePosixPath(uses.strip())
-    if _LOCAL_WORKFLOW_PREFIX in path.parents:
-        return path.as_posix()
-    return None
+    text = uses.strip().removeprefix("$/")
+    path = PurePosixPath(text)
+    if _LOCAL_WORKFLOW_PREFIX not in path.parents:
+        return None
+    if "@" in text:
+        msg = f"a local workflow call carries a ref: {uses}"
+        raise ValueError(msg)
+    return path.as_posix()
 
 
 def pull_request_closure(found: cabc.Sequence[Workflow]) -> tuple[Workflow, ...]:
@@ -295,7 +316,9 @@ def mentions(value: object, needle: str) -> bool:
     """Return whether ``needle`` appears in any key or scalar under ``value``.
 
     This reads every place a reference can live: `run` bodies, action
-    inputs, `env` at any scope, `if` conditions and `secrets:` forwarding.
+    inputs, `env` and `defaults` at any scope, `if` conditions, `secrets:`
+    forwarding and a callee's `workflow_call` declarations. Matching is
+    case-folded, since hosts and expression contexts are case-insensitive.
 
     Returns
     -------
@@ -308,7 +331,7 @@ def mentions(value: object, needle: str) -> bool:
         )
     if isinstance(value, list):
         return any(mentions(item, needle) for item in value)
-    return isinstance(value, str) and needle in value
+    return isinstance(value, str) and needle.casefold() in value.casefold()
 
 
 def guard_conjuncts(condition: str) -> list[str] | None:
@@ -538,3 +561,54 @@ def cancelling_scopes(publisher: Workflow) -> list[str]:
         for name, job in jobs(publisher).items()
     ]
     return [scope for scope, value in scopes if cancels_in_progress(value)]
+
+
+# The one binding the upload step may hold, and the inputs that pass it on.
+_TOKEN_BINDING: typ.Final = f"${{{{ secrets.{TOKEN_VARIABLE} }}}}"
+_TOKEN_INPUTS: typ.Final = frozenset({
+    f"${{{{ env.{TOKEN_VARIABLE} }}}}",
+    _TOKEN_BINDING,
+})
+
+
+def _expression_text(value: object) -> str:
+    """Return a scalar with the spacing inside `${{ }}` normalized."""
+    return re.sub(r"\$\{\{\s*(.*?)\s*\}\}", r"${{ \1 }}", str(value).strip())
+
+
+def _input(step: cabc.Mapping[str, object], scope: str, name: str) -> str:
+    """Return one normalized value from a step's ``env`` or ``with`` block."""
+    block = step.get(scope)
+    return _expression_text(block.get(name, "")) if isinstance(block, dict) else ""
+
+
+def unbound_uploads(publisher: Workflow) -> dict[str, str]:
+    """Return the upload steps that do not bind and pass the credential.
+
+    A guard on `env.CS_ACCESS_TOKEN != ''` passes with the binding deleted,
+    and the upload then skips on every run in silence. So the step itself
+    must bind the variable from the secret and hand it to the action's
+    `access-token` input.
+
+    Returns
+    -------
+        Each offending step's name and what it lacks.
+    """
+    lacking = {
+        str(step.get("name")): [
+            gap
+            for gap, holds in (
+                (
+                    f"env.{TOKEN_VARIABLE} bound to the secret",
+                    _input(step, "env", TOKEN_VARIABLE) == _TOKEN_BINDING,
+                ),
+                (
+                    "access-token passing it on",
+                    _input(step, "with", "access-token") in _TOKEN_INPUTS,
+                ),
+            )
+            if not holds
+        ]
+        for step in steps_using(publisher, UPLOAD_ACTION)
+    }
+    return {name: ", ".join(gaps) for name, gaps in lacking.items() if gaps}

@@ -15,10 +15,10 @@ on:  # yamllint disable-line rule:truthy
 
 # Two pushes to `main` in quick succession would otherwise race to write the
 # ratchet baseline that every pull request is then measured against, and the
-# loser's partial write is the one a pull request might restore. Runs queue
-# rather than cancel: a cancelled publisher abandons both its upload and its
-# baseline write, where a queued one merely publishes a little later, and the
-# later push's baseline is the one that should win.
+# loser's partial write is the one a pull request might restore. Runs are not
+# cancelled: a cancelled publisher abandons both its upload and its baseline
+# write. A running publisher finishes, and a newer push waits behind it,
+# replacing any older pending run, so the newest push's baseline wins.
 concurrency:
   group: coverage-main-${{ github.ref }}
   cancel-in-progress: false
