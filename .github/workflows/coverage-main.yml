@@ -31,7 +31,7 @@ jobs:
   coverage-upload:
     runs-on: ubuntu-latest
     env:
-      MAKEUTIL_REVISION: "29fc5a1634ffbaa18a773eed9dff1b2838a45d9c"
+      MAKEUTIL_REVISION: "6e64f4fe84419705badc30baa5649cbb6f69a298"
       MAKEUTIL_TOOLCHAIN: "nightly-2026-05-28"
     steps:
       - name: Check out repository

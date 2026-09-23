@@ -736,7 +736,15 @@ Two external tools must be on `PATH`:
   that "Concordat never parses GNU Make syntax itself". `makeutil parse` is run
   with a 10-second default timeout, and its exit code (0 = complete parse, 1 =
   recovered parse) must agree with the `parse.status` field of its own JSON
-  report, or the report is rejected as internally inconsistent.
+  report, or the report is rejected as internally inconsistent. CI installs it
+  from the commit named by `MAKEUTIL_REVISION` in `ci.yml` and
+  `coverage-main.yml`, and that commit must be on makeutil's `main`: a commit
+  no branch reaches installs only until GitHub garbage-collects it. The
+  `Check makeutil pin is on main` step runs `scripts/check_makeutil_pin.py`,
+  which fails the pull request otherwise; run it locally with
+  `MAKEUTIL_REVISION=<sha> uv run scripts/check_makeutil_pin.py` before
+  repinning. `tests/unit/test_makeutil_pin_contract.py` keeps the step
+  unguarded and both workflows on the same revision.
 - **`conftest`** (`concordat/rules/runner.py`) — evaluates the envelope
   against the rule package's Rego policy, with a 60-second timeout
   (`CONFTEST_TIMEOUT`).

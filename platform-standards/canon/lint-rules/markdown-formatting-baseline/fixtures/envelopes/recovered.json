@@ -38,6 +38,18 @@
             "end_line": 1,
             "end_column": 15
           }
+        },
+        {
+          "message": "expected ':'",
+          "code": null,
+          "location": {
+            "start_byte": 201,
+            "end_byte": 201,
+            "start_line": 11,
+            "start_column": 1,
+            "end_line": 11,
+            "end_column": 1
+          }
         }
       ]
     },

@@ -19,7 +19,7 @@ jobs:
       # `make check-fmt` runs `mdtablefix --check --git`; 0.6.0 is the first
       # release with `--check` and `--git`.
       MDTABLEFIX_VERSION: "0.6.0"
-      MAKEUTIL_REVISION: "29fc5a1634ffbaa18a773eed9dff1b2838a45d9c"
+      MAKEUTIL_REVISION: "6e64f4fe84419705badc30baa5649cbb6f69a298"
       MAKEUTIL_TOOLCHAIN: "nightly-2026-05-28"
     steps:
       - name: Check out repository
@@ -53,6 +53,12 @@ jobs:
         uses: leynos/shared-actions/.github/actions/install-mdtablefix@c5a54701c8603a0fa756a6b34c49bc2af75a6c11
         with:
           version: ${{ env.MDTABLEFIX_VERSION }}
+
+      - name: Check makeutil pin is on main
+        # A pin no makeutil branch reaches installs only until GitHub
+        # garbage-collects it; the previous pin was such a commit. Refuse
+        # one here, when it is introduced, rather than when it vanishes.
+        run: uv run scripts/check_makeutil_pin.py
 
       - name: Install Makefile parser
         run: |

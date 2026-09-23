@@ -3,7 +3,7 @@
 Generated from `docs/parabellum/ledger.jsonl` by
 `python -m scripts.parabellum_sweep report`. Do not edit by hand.
 
-Rule package: `rust-makefile-baseline` v0.2.0; makeutil `29fc5a1634ff`.
+Rule package: `rust-makefile-baseline` v0.2.0; makeutil `6e64f4fe8441`.
 
 ## Summary
 
