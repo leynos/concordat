@@ -42,11 +42,13 @@ from tests.unit.coverage_topology_support import (
     cancelling_scopes,
     coverage_steps,
     host_references_for_pull_requests,
-    publishers,
+    is_trunk_publisher,
     pull_request_closure,
     reports_published_for_pull_requests,
     token_references_for_pull_requests,
     unguarded_uploads,
+    unstable_group_expressions,
+    uploaders,
     uploads_for_pull_requests,
     workflows,
 )
@@ -62,13 +64,25 @@ def _repository_workflows() -> tuple[Workflow, ...]:
 
 
 def _sole_publisher() -> Workflow:
-    """Return the single trunk publisher, refusing any other count."""
-    found = publishers(_repository_workflows())
+    """Return the single uploader, refusing any other count or any other trigger.
+
+    Every uploader is counted before its triggers are judged, so a second
+    one cannot escape the count by pushing to another branch.
+
+    Returns
+    -------
+        The one uploading workflow.
+    """
+    found = uploaders(_repository_workflows())
     assert len(found) == 1, (
-        "exactly one workflow must upload coverage from the trunk, so that "
-        f"one baseline and one upload exist; found {[str(w) for w in found]}"
+        "exactly one workflow must upload coverage, so that one baseline and "
+        f"one upload exist; found {[str(w) for w in found]}"
     )
-    return found[0]
+    (publisher,) = found
+    assert is_trunk_publisher(publisher.document), (
+        f"{publisher} must run on pushes to main alone and serve no pull request"
+    )
+    return publisher
 
 
 def test_the_trunk_has_exactly_one_coverage_publisher() -> None:
@@ -168,6 +182,11 @@ def test_the_publisher_serializes_its_baseline_writes() -> None:
         assert concurrency.get("group"), (
             f"{publisher}'s concurrency block must name a group; found {concurrency}"
         )
+    unstable = unstable_group_expressions(concurrency)
+    assert not unstable, (
+        f"{publisher}'s concurrency group must resolve the same for every push "
+        f"to main, or runs in different groups race; these vary: {unstable}"
+    )
 
 
 def test_the_publisher_queues_rather_than_cancels() -> None:

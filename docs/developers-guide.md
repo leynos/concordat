@@ -121,7 +121,10 @@ Four properties of that topology fail quietly rather than loudly, so
 - **Nothing a pull request runs reaches CodeScene.** No workflow a pull
   request can run names `CS_ACCESS_TOKEN` anywhere (a `run` body, an action
   input, `env` at any scope, or `secrets:` forwarding), invokes the uploader,
-  or names `codescene.io`.
+  or names `codescene.io`. No such workflow forwards `secrets: inherit` to a
+  remote reusable workflow either: the contract cannot read a remote
+  workflow, so inheriting into one hands the credential over without its
+  name appearing here.
 - **The publisher's upload is guarded on the ref as well as the credential.**
   The push filter constrains the push event only. A `workflow_dispatch`
   selects its own ref, so without `github.ref == 'refs/heads/main'` on the
@@ -138,7 +141,11 @@ Four properties of that topology fail quietly rather than loudly, so
   (`cancel-in-progress: false`): a cancelled publisher abandons both its
   upload and its baseline write, where a queued one merely publishes later.
   Any value but an absent one or a literal false counts as cancelling, at the
-  workflow level or on a job.
+  workflow level or on a job. The group must resolve the same for every push
+  to `main`, because runs in different groups do not wait for each other. It
+  may interpolate only `github.workflow`, `github.ref`, `github.ref_name`
+  and `github.repository`; a group built on `github.run_id` or `github.sha`
+  gives each run a group of its own.
 
 Both lanes invoke the coverage action at one pin, and the contract requires
 it. The publisher writes the baseline the pull-request lanes are measured
@@ -149,10 +156,13 @@ The contract enumerates workflows rather than naming these two files, and
 reads the trigger mapping under both the `on` key and the boolean `True` that
 unquoted YAML 1.1 produces. A reader that knows only the string key finds no
 triggers, and every clause that filters workflows by trigger then ranges over
-an empty set. The publisher is recognized as a workflow that pushes to `main`
-*and* serves no pull request: `ci.yml` declares a push trigger too, and
-reading only that half would make one file both required to upload and
-forbidden from uploading.
+an empty set. Every workflow that invokes the uploader is counted, and
+exactly one may. The contract then requires that one to push to `main` alone
+*and* serve no pull request. Counting first means a second uploader cannot
+escape the count by pushing to another branch. The filter must name `main`
+alone, since `[main, release]` would publish the release branch as the
+trunk. Serving no pull request matters because `ci.yml` declares a push
+trigger too.
 
 "What a pull request can run" is the transitive closure of the
 pull-request-triggered workflows through local reusable-workflow calls. A
@@ -166,6 +176,10 @@ stop short silently. The readers live in
 `tests/unit/test_coverage_topology_readers.py` drives them against synthetic
 workflows, because this repository's own files comply and so cannot show that
 a reader sees the hazard it exists for.
+`tests/unit/test_coverage_topology_properties.py` generates upload conditions
+(any conjunct order, any spacing, operators inside quoted strings, and an
+unquoted disjunct at any position) and requires the guard reader to agree
+with the generator's verdict.
 
 ### Gate tool provisioning
 

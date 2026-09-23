@@ -17,6 +17,7 @@ from tests.unit.coverage_topology_support import (
     cancelling_scopes,
     host_references_for_pull_requests,
     is_guarded_upload,
+    is_trunk_publisher,
     local_callee,
     parse_workflow,
     publishes_report,
@@ -26,6 +27,8 @@ from tests.unit.coverage_topology_support import (
     serves_pull_requests,
     token_references_for_pull_requests,
     triggers,
+    unstable_group_expressions,
+    uploads_for_pull_requests,
 )
 
 _PULL_REQUEST_CALLER = """
@@ -271,6 +274,15 @@ def test_a_publisher_must_not_also_serve_pull_requests() -> None:
     assert pushes_to_main(both)
     assert serves_pull_requests(both)
     assert not pushes_to_main({"on": {"push": {"branches": ["release"]}}})
+    assert not is_trunk_publisher(both)
+    assert is_trunk_publisher({"on": {"push": {"branches": ["main"]}}})
+
+
+def test_a_push_to_main_among_other_branches_is_not_a_trunk_push() -> None:
+    """A filter naming another branch too would publish that branch as main."""
+    assert not pushes_to_main({"on": {"push": {"branches": ["main", "release"]}}})
+    assert not pushes_to_main({"on": {"push": None}})
+    assert pushes_to_main({"on": {"push": {"branches": "main"}}})
 
 
 def test_an_omitted_artefact_input_counts_as_publishing() -> None:
@@ -294,3 +306,78 @@ def test_a_duplicate_key_is_refused_at_load() -> None:
                 runs-on: ubuntu-latest
             """,
         )
+
+
+_UPLOADING_CALLEE = """
+    on:
+      workflow_call:
+    jobs:
+      upload:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@abc
+"""
+
+
+def test_an_uploader_two_calls_away_is_found() -> None:
+    """The closure is transitive, and the uploader clause reads all of it."""
+    found = (
+        _workflow(
+            ".github/workflows/ci.yml",
+            _PULL_REQUEST_CALLER.format(callee="./.github/workflows/middle.yml"),
+        ),
+        _workflow(
+            ".github/workflows/middle.yml",
+            """
+            on:
+              workflow_call:
+            jobs:
+              call:
+                uses: ./.github/workflows/upload.yml
+            """,
+        ),
+        _workflow(".github/workflows/upload.yml", _UPLOADING_CALLEE),
+    )
+    assert uploads_for_pull_requests(found) == [".github/workflows/upload.yml"]
+    assert uploads_for_pull_requests(found[1:]) == [], (
+        "without the pull-request caller nothing reaches the uploader"
+    )
+
+
+@pytest.mark.parametrize(
+    ("secrets", "expected"),
+    [("secrets: inherit", True), ("", False)],
+)
+def test_inheriting_into_a_remote_workflow_hands_over_the_credential(
+    secrets: str, *, expected: bool
+) -> None:
+    """A remote callee cannot be read, so inheriting into one is refused.
+
+    The same call without forwarded secrets is the control.
+    """
+    caller = _workflow(
+        ".github/workflows/ci.yml",
+        _FORWARDING_CALLER.replace("secrets:\n          {forwarding}", secrets),
+    )
+    assert (token_references_for_pull_requests((caller,)) == [str(caller)]) is expected
+
+
+@pytest.mark.parametrize(
+    ("concurrency", "expected"),
+    [
+        ({"group": "coverage-main-${{ github.ref }}"}, []),
+        ({"group": "${{ github.workflow }}-${{github.ref_name}}"}, []),
+        ("coverage-main", []),
+        ({"group": "coverage-${{ github.run_id }}"}, ["github.run_id"]),
+        ({"group": "coverage-${{ github.sha }}"}, ["github.sha"]),
+        (
+            {"group": "${{ github.head_ref || github.run_id }}"},
+            ["github.head_ref || github.run_id"],
+        ),
+    ],
+)
+def test_a_group_that_varies_per_run_is_seen(
+    concurrency: object, expected: list[str]
+) -> None:
+    """Runs in different groups do not wait for each other."""
+    assert unstable_group_expressions(concurrency) == expected

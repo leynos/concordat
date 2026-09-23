@@ -142,14 +142,19 @@ def serves_pull_requests(document: cabc.Mapping[object, object]) -> bool:
 
 
 def pushes_to_main(document: cabc.Mapping[object, object]) -> bool:
-    """Return whether a workflow runs on a push restricted to `main`."""
+    """Return whether a workflow runs on a push restricted to `main` alone.
+
+    A filter naming `main` among other branches would publish those
+    branches' coverage as the trunk's, so only `main` by itself counts.
+
+    Returns
+    -------
+        Whether the push filter is exactly `main`.
+    """
     push = triggers(document).get("push")
     if not isinstance(push, dict):
         return False
-    branches = push.get("branches")
-    if isinstance(branches, str):
-        return branches == "main"
-    return isinstance(branches, list) and "main" in branches
+    return push.get("branches") in ("main", ["main"])
 
 
 def jobs(workflow: Workflow) -> dict[str, dict[str, object]]:
@@ -370,24 +375,63 @@ def cancels_in_progress(concurrency: object) -> bool:
     return value is not False and str(value).strip().lower() != "false"
 
 
-def publishers(found: cabc.Sequence[Workflow]) -> tuple[Workflow, ...]:
-    """Return the workflows that publish coverage from the trunk.
+def uploaders(found: cabc.Sequence[Workflow]) -> tuple[Workflow, ...]:
+    """Return every workflow that invokes the coverage uploader.
 
-    A publisher pushes to `main` and serves no pull request. Both halves
-    matter: `ci.yml` declares a push trigger too, and reading only that half
-    would make one file required to upload and forbidden from uploading.
+    Every uploader is counted, whatever its triggers, so a second one fails
+    the sole-publisher clause instead of escaping it by pushing to another
+    branch.
 
     Returns
     -------
-        Every workflow that uploads coverage on a push to `main`.
+        Every uploading workflow, in the order given.
     """
-    return tuple(
-        workflow
-        for workflow in found
-        if pushes_to_main(workflow.document)
-        and not serves_pull_requests(workflow.document)
-        and steps_using(workflow, UPLOAD_ACTION)
-    )
+    return tuple(workflow for workflow in found if steps_using(workflow, UPLOAD_ACTION))
+
+
+def is_trunk_publisher(document: cabc.Mapping[object, object]) -> bool:
+    """Return whether a workflow pushes to `main` alone and serves no pull request.
+
+    Both halves matter: `ci.yml` declares a push trigger too, and reading
+    only that half would make one file required to upload and forbidden from
+    uploading.
+
+    Returns
+    -------
+        Whether both halves hold.
+    """
+    return pushes_to_main(document) and not serves_pull_requests(document)
+
+
+# The contexts a concurrency group may interpolate: each resolves the same
+# for every push to `main`, so successive publisher runs share one group.
+# Anything else, `github.run_id` or `github.sha` above all, gives each run a
+# group of its own, and runs in different groups do not wait for each other.
+_STABLE_GROUP_CONTEXTS: typ.Final = frozenset({
+    "github.workflow",
+    "github.ref",
+    "github.ref_name",
+    "github.repository",
+})
+
+
+def unstable_group_expressions(concurrency: object) -> list[str]:
+    """Return the expressions in a concurrency group that may vary per run.
+
+    Returns
+    -------
+        Each interpolated expression outside the stable contexts, including
+        compound ones, which this reader does not try to evaluate.
+    """
+    group = concurrency.get("group") if isinstance(concurrency, dict) else concurrency
+    return [
+        expression
+        for expression in (
+            " ".join(part.split("}}", 1)[0].split())
+            for part in str(group or "").split("${{")[1:]
+        )
+        if expression not in _STABLE_GROUP_CONTEXTS
+    ]
 
 
 def reports_published_for_pull_requests(found: cabc.Sequence[Workflow]) -> list[str]:
@@ -401,12 +445,33 @@ def reports_published_for_pull_requests(found: cabc.Sequence[Workflow]) -> list[
 
 
 def token_references_for_pull_requests(found: cabc.Sequence[Workflow]) -> list[str]:
-    """Return the workflows a pull request can run that name the credential."""
+    """Return the workflows a pull request can run that may hold the credential.
+
+    A workflow holds it when it names it anywhere, or when a job forwards
+    `secrets: inherit` to a remote reusable workflow. The closure cannot
+    read a remote workflow, so inheriting into one hands the credential
+    over without its name appearing here.
+
+    Returns
+    -------
+        The paths of the workflows that may hold it.
+    """
     return [
         str(workflow)
         for workflow in pull_request_closure(found)
         if mentions(workflow.document, TOKEN_VARIABLE)
+        or _inherits_into_remote(workflow)
     ]
+
+
+def _inherits_into_remote(workflow: Workflow) -> bool:
+    """Return whether a job forwards every secret to a remote workflow."""
+    return any(
+        isinstance(uses := job.get("uses"), str)
+        and local_callee(uses) is None
+        and job.get("secrets") == "inherit"
+        for job in jobs(workflow).values()
+    )
 
 
 def uploads_for_pull_requests(found: cabc.Sequence[Workflow]) -> list[str]:
