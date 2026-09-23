@@ -427,9 +427,12 @@ def is_trunk_publisher(document: cabc.Mapping[object, object]) -> bool:
 
 
 # The contexts a concurrency group may interpolate: each resolves the same
-# for every push to `main`, so successive publisher runs share one group.
-# Anything else, `github.run_id` or `github.sha` above all, gives each run a
-# group of its own, and runs in different groups do not wait for each other.
+# for every run on `main`, whatever the event, so every publisher run shares
+# one group. Anything else gives some runs a group of their own, and runs in
+# different groups do not wait for each other: `github.run_id` or
+# `github.sha` separates every run, and `github.event_name` separates a
+# dispatch from a push, so an earlier dispatch could upload older coverage
+# after a newer push.
 _STABLE_GROUP_CONTEXTS: typ.Final = frozenset({
     "github.workflow",
     "github.ref",

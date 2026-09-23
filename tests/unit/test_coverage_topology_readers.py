@@ -378,6 +378,10 @@ def test_inheriting_into_a_remote_workflow_hands_over_the_credential(
         ({"group": "coverage-${{ github.run_id }}"}, ["github.run_id"]),
         ({"group": "coverage-${{ github.sha }}"}, ["github.sha"]),
         (
+            {"group": "coverage-${{ github.event_name }}-${{ github.ref }}"},
+            ["github.event_name"],
+        ),
+        (
             {"group": "${{ github.head_ref || github.run_id }}"},
             ["github.head_ref || github.run_id"],
         ),
