@@ -21,6 +21,9 @@ from concordat.rules import packages, runner
 from concordat.rules.codescene_coverage_envelope import (
     ENVELOPE_KIND as COVERAGE_ENVELOPE_KIND,
 )
+from concordat.rules.dependabot_envelope import (
+    ENVELOPE_KIND as DEPENDABOT_ENVELOPE_KIND,
+)
 from concordat.rules.envelope import (
     BUILD_DEFAULTS_ENVELOPE_KIND,
     ENVELOPE_KIND,
@@ -98,6 +101,11 @@ class TestRegisteredPackages:
                 "main-owned-codescene-coverage",
                 COVERAGE_ENVELOPE_KIND,
                 id="codescene-coverage",
+            ),
+            pytest.param(
+                "dependabot-update-shape",
+                DEPENDABOT_ENVELOPE_KIND,
+                id="dependabot-update-shape",
             ),
         ],
     )
@@ -322,6 +330,7 @@ class TestDeclaredInputKind:
             ("rust-build-defaults", BUILD_DEFAULTS_ENVELOPE_KIND),
             ("markdown-formatting-baseline", MARKDOWN_ENVELOPE_KIND),
             ("main-owned-codescene-coverage", COVERAGE_ENVELOPE_KIND),
+            ("dependabot-update-shape", DEPENDABOT_ENVELOPE_KIND),
         ):
             rule_dir = packages.rule_package_dir(rule_id)
             declared = packages._declared_input_kind(rule_dir)

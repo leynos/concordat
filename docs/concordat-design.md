@@ -1816,6 +1816,7 @@ breakdown of what constitutes "compliance" within the framework.
 | DB-002       | Dependabot cooldown configuration matches estate policy: tiered cooldowns for semver ecosystems, `default-days` only for non-semver ecosystems.                                                                                                                                                                                                                                                                                             | Quality-Gate Integrity          | OPA/Conftest                                            | warning              | 4                        |
 | DB-003       | Dependabot auto-merge is wired through the pinned shared reusable workflow with the prescribed `pull_request_target` permissions.                                                                                                                                                                                                                                                                                                           | Quality-Gate Integrity          | OPA/Conftest                                            | warning              | 4                        |
 | DB-004       | Lockfile-wide dependency audits do not gate Dependabot pull requests, and a scheduled audit workflow exists to cover the gap.                                                                                                                                                                                                                                                                                                               | Quality-Gate Integrity          | OPA/Conftest                                            | warning              | 4                        |
+| DB-005       | Every Dependabot `updates` entry runs daily and ends with one catch-all group (`patterns: ["*"]`, `update-types: [minor, patch]`), any earlier group being narrower than `*`; `github-actions` entries cover `/` and every local action under `.github/actions`; cargo `versioning-strategy` is `auto` or `lockfile-only`.                                                                                                                  | Quality-Gate Integrity          | OPA/Conftest (`dependabot-update-shape`)                | error                | 4                        |
 | MT-001       | A scheduled mutation-testing workflow exists and calls the pinned shared mutation-testing workflow; mutation testing is scheduled, not merge-blocking.                                                                                                                                                                                                                                                                                      | Quality-Gate Integrity          | OPA/Conftest + file presence                            | warning              | 4                        |
 | LC-001       | A `LICENSE` file exists at the repository root.                                                                                                                                                                                                                                                                                                                                                                                             | Licensing Integrity             | Python/file presence                                    | error                | 4                        |
 | LC-002       | The `LICENSE` copyright year matches the year of the most recent commit.                                                                                                                                                                                                                                                                                                                                                                    | Licensing Integrity             | Python/git + content check                              | warning              | 4                        |
@@ -2012,7 +2013,7 @@ git-revision pin on a dependency awaiting a release.
   migration issue is a `POST` keyed on the blocked alert and creates behind the
   single-flight lease.
 
-##### Dependabot governance (DB-001 through DB-004)
+##### Dependabot governance (DB-001 through DB-005)
 
 The estate rollouts repeatedly found Dependabot blind spots: adding a new
 workspace crate without a matching `dependabot.yml` directory silently excluded
@@ -2037,6 +2038,25 @@ Dependabot pull request regardless of its content.
 - **Actuators:** comment-preserving patches adding missing `dependabot.yml`
   directories and cooldown blocks, and file-copies of the canonical auto-merge
   and scheduled-audit workflows.
+
+DB-005 states the update shape the estate adopted on 2026-09-24: one daily run
+per entry, minor and patch updates batched into a single catch-all group, and
+majors left ungrouped so each breaking change arrives in its own pull request.
+Weekly and monthly entries let updates accumulate into large batches, and a
+wildcard group without `update-types` pulled majors into the same batch as
+routine patches. A narrow group may precede the catch-all for a crate family
+released in lockstep (`rstest-bdd*`, the RustCrypto crates), because Dependabot
+assigns a dependency to the first group that matches it; anything as broad as
+`*` in that position is a second catch-all. The rollout also found composite
+actions under `.github/actions` that no `github-actions` entry listed, so their
+pinned `uses:` drifted unmanaged; the rule requires the entries to cover `/`
+and every local action directory, read with Dependabot's own glob semantics.
+Cargo entries may set `versioning-strategy` only to `auto` or `lockfile-only`.
+The audit-only `dependabot-update-shape` package evaluates the decoded
+configuration together with the action directories found on disk. The envelope
+carries each entry's group names in document order, since a Rego object keeps
+none. A repository without a configuration is compliant, since DB-001 owns
+presence, and an undecodable configuration is indeterminate.
 
 ##### Mutation-testing coverage (MT-001)
 

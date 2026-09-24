@@ -131,3 +131,17 @@ artifacts:
     description: >
       Rule package manifest for the main-owned CodeScene coverage policy.
     sha256: 3b2056696831affa9c4774ff7bfed66c05254ac619462c9d4963db59c49914a9
+  - id: lint-rule-dependabot-update-shape
+    type: opa-policy
+    path: >-
+      platform-standards/canon/lint-rules/dependabot-update-shape/policy/dependabot_update_shape.rego
+    description: >
+      Audit-only DB-005 policy holding Dependabot to daily updates, one
+      minor-and-patch catch-all per entry, and covered local actions.
+    sha256: 113b6554c3879fc097ee5ab442b15dfbfbe1ad56aa8b30d69aa19c8254970ca7
+  - id: lint-rule-dependabot-update-shape-manifest
+    type: lint-config
+    path: platform-standards/canon/lint-rules/dependabot-update-shape/rule.yaml
+    description: >
+      Rule package manifest for the Dependabot update-shape policy.
+    sha256: 98ecf6693816616e452d50cc08d5195e107501688b1ed5977aa513385ca7cc85
