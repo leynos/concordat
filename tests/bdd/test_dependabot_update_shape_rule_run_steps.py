@@ -9,6 +9,7 @@ this proves the command delivers them.
 
 from __future__ import annotations
 
+import re
 import typing as typ
 
 import pytest
@@ -150,7 +151,7 @@ def then_audit_exit_status(cli_invocation: dict[str, RunResult], code: int) -> N
 def then_audit_clean(cli_invocation: dict[str, RunResult]) -> None:
     """Assert the table names the compliant verdict and no findings."""
     stdout = cli_invocation["result"].stdout
-    assert "compliant" in stdout, stdout
+    assert re.search(r"\bcompliant\b", stdout), stdout
     assert "DB-005" not in stdout, stdout
 
 

@@ -273,8 +273,8 @@ It requires that every `updates` entry:
 - runs daily (`schedule.interval: daily`);
 - ends with one catch-all group, `patterns: ["*"]` and
   `update-types: [minor, patch]`, with no other key but the default
-  `applies-to: version-updates`, so major updates arrive one pull request
-  apiece;
+  `applies-to: version-updates`, so a major update arrives in its own pull
+  request unless an earlier narrow group, such as a lockstep family, takes it;
 - places only narrow groups before the catch-all: each needs a `patterns` list
   in which no pattern is a bare wildcard, such as a lockstep family like
   `rstest-bdd*`;

@@ -144,4 +144,4 @@ artifacts:
     path: platform-standards/canon/lint-rules/dependabot-update-shape/rule.yaml
     description: >
       Rule package manifest for the Dependabot update-shape policy.
-    sha256: 98ecf6693816616e452d50cc08d5195e107501688b1ed5977aa513385ca7cc85
+    sha256: e1a41a66ef0bd795c9e701aa51a7d7f0cabe3b4d972d55017016d87aa42efb27

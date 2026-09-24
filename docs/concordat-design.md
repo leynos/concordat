@@ -2041,7 +2041,8 @@ Dependabot pull request regardless of its content.
 
 DB-005 states the update shape the estate adopted on 2026-09-24: one daily run
 per entry, minor and patch updates batched into a single catch-all group, and
-majors left ungrouped so each breaking change arrives in its own pull request.
+majors left out of it, so a breaking change arrives in its own pull request
+unless a narrow lockstep group ahead of the catch-all takes it with its family.
 Weekly and monthly entries let updates accumulate into large batches, and a
 wildcard group without `update-types` pulled majors into the same batch as
 routine patches. A narrow group may precede the catch-all for a crate family

@@ -13,12 +13,13 @@ Every `updates` entry must satisfy all of the following.
 - **Daily cadence.** `schedule.interval` is `daily`.
 - **One catch-all, last.** The entry's last group has `patterns: ["*"]` and
   `update-types: [minor, patch]`, and no other key except the default
-  `applies-to: version-updates`. Majors are therefore never grouped: each
-  arrives as its own pull request, where its breaking changes get their own
-  review. Any other key changes what the catch-all takes.
-  `applies-to: security-updates` leaves every version update ungrouped, and
-  `exclude-patterns`, `dependency-type` and `group-by` each carve out a class
-  of dependency that then arrives one pull request apiece.
+  `applies-to: version-updates`. The catch-all therefore groups no major: a
+  major that matches no earlier narrow group arrives as its own pull request,
+  where its breaking changes get their own review, and one that matches a
+  lockstep group moves with that family. Any other key changes what the
+  catch-all takes. `applies-to: security-updates` leaves every version update
+  ungrouped, and `exclude-patterns`, `dependency-type` and `group-by` each
+  carve out a class of dependency that then arrives one pull request apiece.
 - **Earlier groups are narrow.** Dependabot assigns a dependency to the first
   group that matches it, so a group before the catch-all must be narrower than
   `*`. It needs a non-empty `patterns` list, and no pattern may consist only of

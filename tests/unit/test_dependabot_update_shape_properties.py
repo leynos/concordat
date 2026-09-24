@@ -154,7 +154,9 @@ def _write_checkout(root: pathlib.Path, case: RepositoryCase) -> None:
     with config.open("w", encoding="utf-8") as stream:
         YAML().dump(document, stream)
     for directory in case.actions:
-        manifest = root / directory.lstrip("/") / "action.yml"
+        manifest = (
+            root / pathlib.PurePosixPath(directory).relative_to("/") / "action.yml"
+        )
         manifest.parent.mkdir(parents=True)
         manifest.write_text("name: stub\n", encoding="utf-8")
 
@@ -254,8 +256,10 @@ _COMPLIANT: typ.Final = RepositoryCase(
 
 def test_the_compliant_corner_has_no_findings() -> None:
     """Anchor the generator: its compliant corner really is compliant."""
-    assert _expected(_COMPLIANT) == set()
-    assert _findings(_COMPLIANT) == set()
+    expected = _expected(_COMPLIANT)
+    assert expected == set(), expected
+    findings = _findings(_COMPLIANT)
+    assert findings == set(), findings
 
 
 def test_every_clause_can_fire_together() -> None:
