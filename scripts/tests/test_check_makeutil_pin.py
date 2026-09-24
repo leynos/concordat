@@ -122,23 +122,26 @@ def test_script_reads_the_pin_from_the_environment(
     assert completed.returncode == expected_status, completed.stderr
 
 
-@pytest.mark.parametrize(
-    ("pinned", "expected_status", "expected_stream"),
-    [("main_head", 0, "out"), ("orphan", 1, "err")],
-)
-def test_main_reports_the_outcome_as_an_exit_status(
+def test_main_confirms_a_pin_on_main(
     upstream: Upstream,
     capsys: pytest.CaptureFixture[str],
-    pinned: str,
-    expected_status: int,
-    expected_stream: str,
 ) -> None:
-    """``main`` returns 0 with a confirmation, or 1 with the reason on stderr."""
-    revision = getattr(upstream, pinned)
-    status = pin_check.main(revision=revision, repository=upstream.url)
+    """``main`` returns 0 and names the pin on stdout when main contains it."""
+    status = pin_check.main(revision=upstream.main_head, repository=upstream.url)
     captured = capsys.readouterr()
-    assert status == expected_status, captured
-    assert revision in getattr(captured, expected_stream), captured
+    assert status == 0, captured
+    assert upstream.main_head in captured.out, captured
+
+
+def test_main_refuses_an_orphan_pin(
+    upstream: Upstream,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """``main`` returns 1 and names the pin on stderr when main lacks it."""
+    status = pin_check.main(revision=upstream.orphan, repository=upstream.url)
+    captured = capsys.readouterr()
+    assert status == 1, captured
+    assert upstream.orphan in captured.err, captured
 
 
 def test_scratch_repository_failure_is_refused(
