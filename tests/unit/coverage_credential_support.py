@@ -81,6 +81,12 @@ def is_token_check(step: cabc.Mapping[str, object]) -> bool:
     )
 
 
+def _is_upload(step: cabc.Mapping[str, object]) -> bool:
+    """Return whether a step invokes the CodeScene upload action."""
+    uses = step.get("uses")
+    return isinstance(uses, str) and UPLOAD_ACTION in uses
+
+
 def uploads(publisher: Workflow) -> list[Upload]:
     """Return the publisher's upload steps, each with its preceding checks.
 
@@ -98,7 +104,7 @@ def uploads(publisher: Workflow) -> list[Upload]:
         for step in job_steps(publisher, name, job):
             if is_token_check(step):
                 checks.add(str(step["id"]))
-            elif isinstance(uses := step.get("uses"), str) and UPLOAD_ACTION in uses:
+            elif _is_upload(step):
                 label = f"upload {len(found)}: {step.get('name')}"
                 found.append(Upload(label, step, frozenset(checks)))
     return found
@@ -200,12 +206,11 @@ def _unsanctioned_part(step: dict[str, object]) -> object:
     """
     if is_token_check(step):
         return {key: value for key, value in step.items() if key != "run"}
-    uses = step.get("uses")
     inputs = step.get("with")
-    if isinstance(uses, str) and UPLOAD_ACTION in uses and isinstance(inputs, dict):
-        others = {key: value for key, value in inputs.items() if key != "access-token"}
-        return step | {"with": others}
-    return step
+    if not _is_upload(step) or not isinstance(inputs, dict):
+        return step
+    others = {key: value for key, value in inputs.items() if key != "access-token"}
+    return step | {"with": others}
 
 
 def stray_token_references(publisher: Workflow) -> list[str]:
