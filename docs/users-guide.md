@@ -305,11 +305,18 @@ It requires that:
   `concurrency` block that queues rather than cancels. The comparison must be a
   whole `&&` conjunct, and a condition carrying an unquoted `||` counts as
   unguarded, because the disjunction makes every other conjunct optional. The
-  credential guard may use the direct token check or the documented, direct
-  step-output shape from an earlier credential-checking step in the same job;
-  the latter also requires the upload action's direct `access-token` input. The
+  credential guard is the output of an earlier step in the same job, which runs
+  exactly
+  `echo "available=${{ secrets.CS_ACCESS_TOKEN != '' }}" >> "$GITHUB_OUTPUT"`
+  with no `if:` and no `env`; the upload tests
+  `steps.<id>.outputs.available == 'true'` and passes
+  `${{ secrets.CS_ACCESS_TOKEN }}` directly to its `access-token` input. The
   uploader's `mode` defaults to `upload`, so a step that omits the input
   satisfies this; `check` and `install` do not;
+- a workflow that uploads to CodeScene names `CS_ACCESS_TOKEN` only in that
+  check step's command and in the upload's `access-token` input: never in an
+  `env` block at any level, another `run` body, another action's input or a
+  condition;
 - no workflow passes `installer-checksum`, references `CODESCENE_CLI_SHA256`,
   or refreshes the CodeScene installer digest;
 - every platform that ratchets coverage on pull requests also ratchets on the
