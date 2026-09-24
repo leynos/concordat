@@ -110,6 +110,94 @@ enforce the local ratchet. They do not invoke CodeScene and must not expose
 `main`; it advances the coverage baseline and is the sole CodeScene publisher,
 using `mode: upload`.
 
+Four properties of that topology fail quietly rather than loudly, so
+`tests/unit/test_coverage_topology_contract.py` asserts them.
+
+- **Pull-request lanes keep their report local.** The shared coverage action
+  defaults `publish-artefact` to `"true"`, so a lane that omits the input
+  publishes the report and the repository grows a second publisher of the same
+  artefact. The pull-request lane sets it to `'false'`; the contract reads the
+  effective value, so omitting it fails.
+- **Nothing a pull request runs reaches CodeScene.** No workflow a pull
+  request can run names `CS_ACCESS_TOKEN` anywhere (a `run` body, an action
+  input, `env` at any scope, or `secrets:` forwarding), invokes the uploader,
+  or names `codescene.io`. The search reads every key and scalar of the
+  document, case-folded, so neither a workflow-level `defaults.run.shell` nor a
+  callee's `workflow_call` secret declaration escapes it. No such workflow
+  forwards `secrets: inherit` to a remote reusable workflow either: the
+  contract cannot read a remote workflow, so inheriting into one hands the
+  credential over without its name appearing here.
+- **The publisher's upload is guarded on the ref as well as the credential.**
+  The push filter constrains the push event only. A `workflow_dispatch` selects
+  its own ref, so without `github.ref == 'refs/heads/main'` on the step, a
+  dispatch from a feature branch would publish that branch's coverage as the
+  trunk's. The contract splits the condition on `&&` and requires the ref
+  comparison and the credential check as whole conjuncts. It refuses any
+  unquoted `||`, which binds loosest: appending
+  `|| github.event_name == 'workflow_dispatch'` leaves the ref comparison in
+  the text and makes every conjunct optional, so a substring check passes it.
+  Only a disjunct hidden after an extra conjunct proves the refusal: in
+  `<guards> && github.actor != 'x' || <dispatch>` every required conjunct stays
+  whole, so the split alone would accept it. The upload step must also bind
+  `CS_ACCESS_TOKEN` from the secret itself and pass it to the action's
+  `access-token` input, because the guard passes with the binding deleted and
+  the upload then skips on every run.
+- **The publisher serializes its baseline writes.** Two pushes to `main` in
+  quick succession would otherwise race to write the ratchet baseline that
+  every pull request is measured against, and the loser's partial write is the
+  one a pull request might restore. Runs are not cancelled
+  (`cancel-in-progress: false`): a cancelled publisher abandons both its upload
+  and its baseline write. For triggered runs (a push, or a dispatch), a running
+  publisher finishes and a newer one waits behind it, replacing any older
+  pending run, so the newest triggered run's baseline wins. This is not a
+  queue. A manual "Re-run jobs" on an older run is an operator action outside
+  that ordering: the re-run keeps its original commit, so it republishes that
+  commit's coverage and baseline until the next push supersedes it. Any value
+  but an absent one or a literal false counts as cancelling, at the workflow
+  level or on a job. The group must resolve the same for every run on `main`,
+  whatever the event, because runs in different groups do not wait for each
+  other. It may interpolate only `github.workflow`, `github.ref`,
+  `github.ref_name` and `github.repository`. A group built on `github.run_id` or
+  `github.sha` gives each run a group of its own. One built on
+  `github.event_name` separates a dispatch from a push, so an earlier dispatch
+  could upload older coverage after a newer push.
+
+Both lanes invoke the coverage action at one pin, and the contract requires it.
+The publisher writes the baseline the pull-request lanes are measured against,
+so a lane on a different pin can fail a ratchet for a change in the measurement
+rather than in the diff. Move the two together.
+
+The contract enumerates workflows rather than naming these two files, and reads
+the trigger mapping under both the `on` key and the boolean `True` that
+unquoted YAML 1.1 produces. A reader that knows only the string key finds no
+triggers, and every clause that filters workflows by trigger then ranges over
+an empty set. Every workflow that invokes the uploader is counted, and exactly
+one may. The contract then requires that one to push to `main` alone *and*
+serve no pull request. Counting first means a second uploader cannot escape the
+count by pushing to another branch. The filter must name `main` alone, since
+`[main, release]` would publish the release branch as the trunk. Serving no
+pull request matters because `ci.yml` declares a push trigger too.
+
+"What a pull request can run" is the transitive closure of the
+pull-request-triggered workflows through local reusable-workflow calls. A
+workflow declaring only `workflow_call` never matches a pull-request trigger,
+yet runs for one whenever a pull-request job calls it, and `secrets: inherit`
+hands it the credential. A call is local when it names a path under
+`.github/workflows/`, matched by shape rather than by a list of prefixes, after
+removing a leading `./` or the documented `$/`. A local path carrying `@ref` is
+refused, as is a call to a local workflow that does not exist, so the closure
+cannot stop short silently. A workflow declaring its triggers under both `on`
+and the boolean `True` is refused too: GitHub merges them, and a reader that
+picks one is blind to the other. The readers live in
+`tests/unit/coverage_topology_support.py`.
+`tests/unit/test_coverage_topology_readers.py` drives them against synthetic
+workflows, because this repository's own files comply and so cannot show that a
+reader sees the hazard it exists for.
+`tests/unit/test_coverage_topology_properties.py` generates upload conditions
+(any conjunct order, any spacing, operators inside quoted strings, and an
+unquoted disjunct at any position) and requires the guard reader to agree with
+the generator's verdict.
+
 ### Gate tool provisioning
 
 Two lanes run the whole pytest suite: `ci.yml`'s `lint-test` job on pull

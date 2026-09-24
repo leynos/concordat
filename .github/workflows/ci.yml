@@ -137,7 +137,7 @@ jobs:
         # the publisher measured on 3.13, and the ratchet compared the two.
         env:
           UV_PYTHON: '3.13'
-        uses: leynos/shared-actions/.github/actions/generate-coverage@18bed1ca49a6de3d8882bd72635a32ae3f023d57
+        uses: leynos/shared-actions/.github/actions/generate-coverage@a5765019912a8ab6882b12db049c7cde635f3a85
         with:
           output-path: coverage.xml
           format: cobertura
@@ -147,3 +147,6 @@ jobs:
           baseline-python-file: .coverage-baseline.python-v2
           pytest-workers: ''
           with-ratchet: 'true'
+          # The action defaults this to "true", so a lane that omits it
+          # publishes the report. Only the main publisher publishes here.
+          publish-artefact: 'false'

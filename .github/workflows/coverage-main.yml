@@ -13,6 +13,20 @@ on:  # yamllint disable-line rule:truthy
   push:
     branches: [main]
 
+# Two pushes to `main` in quick succession would otherwise race to write the
+# ratchet baseline that every pull request is then measured against, and the
+# loser's partial write is the one a pull request might restore. Runs are not
+# cancelled: a cancelled publisher abandons both its upload and its baseline
+# write. For triggered runs (a push, or a dispatch), a running publisher
+# finishes and a newer one waits behind it, replacing any older pending run,
+# so the newest triggered run's baseline wins. A manual "Re-run jobs" on an
+# older run is an operator action: it keeps that run's commit, so it
+# republishes that commit's coverage and baseline until the next push
+# supersedes it.
+concurrency:
+  group: coverage-main-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   coverage-upload:
     runs-on: ubuntu-latest
@@ -60,7 +74,7 @@ jobs:
         # coverage compared against it are measured by one interpreter.
         env:
           UV_PYTHON: '3.13'
-        uses: leynos/shared-actions/.github/actions/generate-coverage@18bed1ca49a6de3d8882bd72635a32ae3f023d57
+        uses: leynos/shared-actions/.github/actions/generate-coverage@a5765019912a8ab6882b12db049c7cde635f3a85
         with:
           output-path: coverage.xml
           format: cobertura
@@ -73,7 +87,11 @@ jobs:
       - name: Upload coverage data to CodeScene
         env:
           CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
-        if: env.CS_ACCESS_TOKEN != ''
+        # Guarded on the ref as well as the credential. The push filter above
+        # says nothing about a `workflow_dispatch`, which selects its own ref,
+        # so without this a dispatch from a feature branch would publish that
+        # branch's coverage as the trunk's.
+        if: env.CS_ACCESS_TOKEN != '' && github.ref == 'refs/heads/main'
         uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@a5765019912a8ab6882b12db049c7cde635f3a85
         with:
           format: cobertura
