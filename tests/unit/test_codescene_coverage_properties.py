@@ -9,8 +9,9 @@ expectations are deliberately written as independent predicates over the
 case rather than as a second reading of the rendered document, so a defect
 in the policy's document reader cannot be mirrored here.
 
-Shell-command grammar and malformed-YAML handling stay in the Rego fixture
-suite: generating them here would only exercise two copies of one parser.
+Malformed-YAML handling stays in the Rego fixture suite. The step-output
+property below varies topology and a bounded set of command shapes, so its
+oracle stays independent of the workflow parser.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from __future__ import annotations
 import dataclasses
 import typing as typ
 
-from hypothesis import given, settings
+from hypothesis import example, given, settings
 from hypothesis import strategies as st
 
 from concordat.rules import runner
@@ -34,6 +35,9 @@ _UPLOADER: typ.Final = (
 _PR_PATH: typ.Final = ".github/workflows/ci.yml"
 _MAIN_PATH: typ.Final = ".github/workflows/coverage-main.yml"
 _CREDENTIAL: typ.Final = "${{ secrets.CS_ACCESS_TOKEN }}"
+_AVAILABILITY_COMMAND: typ.Final = (
+    'echo "available=${{ secrets.CS_ACCESS_TOKEN != \'\' }}" >> "$GITHUB_OUTPUT"'
+)
 
 _REF_GUARD_MESSAGE: typ.Final = (
     "CodeScene upload step is not guarded on github.ref == 'refs/heads/main'"
@@ -265,6 +269,134 @@ def _findings(case: CoverageCase) -> set[tuple[str, str, str]]:
         (finding.verdict, finding.path, finding.message)
         for finding in runner._findings_from_results(results)
     }
+
+
+@dataclasses.dataclass(frozen=True)
+class OutputGuardCase:
+    """Describe an upload and its candidate credential producer."""
+
+    steps_before: int
+    steps_between: int
+    producer_before_upload: bool
+    producer_in_upload_job: bool
+    producer_id_matches: bool
+    output_name_matches: bool
+    producer_command: str
+    credential_source: str
+    has_disjunction: bool
+
+
+_OUTPUT_GUARD_CASES = st.builds(
+    OutputGuardCase,
+    steps_before=st.integers(min_value=0, max_value=3),
+    steps_between=st.integers(min_value=0, max_value=3),
+    producer_before_upload=st.booleans(),
+    producer_in_upload_job=st.booleans(),
+    producer_id_matches=st.booleans(),
+    output_name_matches=st.booleans(),
+    producer_command=st.sampled_from(["exact", "block_scalar", "altered"]),
+    credential_source=st.sampled_from(["direct", "indirect", "missing"]),
+    has_disjunction=st.booleans(),
+)
+
+_OUTPUT_COMPLIANT_CASE: typ.Final = OutputGuardCase(
+    steps_before=2,
+    steps_between=1,
+    producer_before_upload=True,
+    producer_in_upload_job=True,
+    producer_id_matches=True,
+    output_name_matches=True,
+    producer_command="block_scalar",
+    credential_source="direct",
+    has_disjunction=False,
+)
+
+
+def _output_guard_main_workflow(case: OutputGuardCase) -> dict[str, object]:
+    """Render one step-output topology inside a compliant publisher."""
+    main = _main_workflow(_COMPLIANT_CASE)
+    parsed = typ.cast("dict[str, object]", main["parsed"])
+    jobs = typ.cast("dict[str, object]", parsed["jobs"])
+    coverage = typ.cast("dict[str, object]", jobs["coverage-upload"])
+
+    commands = {
+        "exact": _AVAILABILITY_COMMAND,
+        "block_scalar": _AVAILABILITY_COMMAND + "\n",
+        "altered": _AVAILABILITY_COMMAND.replace(">>", "| tee -a"),
+    }
+    producer: dict[str, object] = {
+        "id": "codescene-token" if case.producer_id_matches else "other-token",
+        "run": commands[case.producer_command],
+    }
+    output_name = "available" if case.output_name_matches else "ready"
+    condition = (
+        f"steps.codescene-token.outputs.{output_name} == 'true' "
+        "&& github.ref == 'refs/heads/main'"
+    )
+    if case.has_disjunction:
+        condition += " || always()"
+    upload: dict[str, object] = {"uses": _UPLOADER, "if": "${{ " + condition + " }}"}
+    token_inputs = {
+        "direct": _CREDENTIAL,
+        "indirect": "${{ env.CS_ACCESS_TOKEN }}",
+    }
+    upload_inputs: dict[str, object] = {"mode": "upload"}
+    if case.credential_source != "missing":
+        upload_inputs["access-token"] = token_inputs[case.credential_source]
+    upload["with"] = upload_inputs
+
+    unrelated: dict[str, object] = {"name": "unrelated", "run": "true"}
+    steps: list[dict[str, object]] = [
+        _coverage_step(ratchet=True, publish=None),
+        *([unrelated] * case.steps_before),
+    ]
+    if case.producer_before_upload and case.producer_in_upload_job:
+        steps.append(producer)
+    steps.extend([unrelated] * case.steps_between)
+    steps.append(upload)
+    if not case.producer_before_upload and case.producer_in_upload_job:
+        steps.append(producer)
+    coverage["steps"] = steps
+    if not case.producer_in_upload_job:
+        jobs["token-check"] = {"runs-on": "ubuntu-latest", "steps": [producer]}
+    return main
+
+
+def _output_guard_expected(case: OutputGuardCase) -> set[tuple[str, str, str]]:
+    """Decide whether each guard holds from the generated decisions."""
+    has_token_guard = (
+        case.producer_before_upload
+        and case.producer_in_upload_job
+        and case.producer_id_matches
+        and case.output_name_matches
+        and case.producer_command != "altered"
+        and case.credential_source == "direct"
+        and not case.has_disjunction
+    )
+    findings: set[tuple[str, str, str]] = set()
+    if not has_token_guard:
+        findings.add(("noncompliant", _MAIN_PATH, _CREDENTIAL_GUARD_MESSAGE))
+    if case.has_disjunction:
+        findings.add(("noncompliant", _MAIN_PATH, _REF_GUARD_MESSAGE))
+    return findings
+
+
+@settings(max_examples=80, deadline=None)
+@example(case=_OUTPUT_COMPLIANT_CASE)
+@given(case=_OUTPUT_GUARD_CASES)
+def test_step_output_guard_matches_generated_topology(case: OutputGuardCase) -> None:
+    """Varied step positions and provenance have the independent verdict."""
+    envelope = _envelope(_COMPLIANT_CASE)
+    envelope["workflows"] = [
+        _pr_workflow(_COMPLIANT_CASE),
+        _output_guard_main_workflow(case),
+    ]
+    results = runner._invoke_conftest(_RULE_ID, typ.cast("typ.Any", envelope))
+    findings = {
+        (finding.verdict, finding.path, finding.message)
+        for finding in runner._findings_from_results(results)
+    }
+    assert findings == _output_guard_expected(case), case
 
 
 _COMPLIANT_CASE: typ.Final = CoverageCase(

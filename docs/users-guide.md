@@ -278,6 +278,9 @@ It requires that:
   `concurrency` block that queues rather than cancels. The comparison must be a
   whole `&&` conjunct, and a condition carrying an unquoted `||` counts as
   unguarded, because the disjunction makes every other conjunct optional. The
+  credential guard may use the direct token check or the documented, direct
+  step-output shape from an earlier credential-checking step in the same job;
+  the latter also requires the upload action's direct `access-token` input. The
   uploader's `mode` defaults to `upload`, so a step that omits the input
   satisfies this; `check` and `install` do not;
 - no workflow passes `installer-checksum`, references `CODESCENE_CLI_SHA256`,

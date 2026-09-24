@@ -41,6 +41,14 @@ One main-owned publisher writes the baseline and uploads:
   github.event_name == 'workflow_dispatch'`
   contains the comparison while making it optional, which is exactly the
   dispatch this clause exists to stop.
+- An upload condition naming `CS_ACCESS_TOKEN` is accepted as before.
+  Alternatively, an earlier step in the same job may write
+  `available=${{ secrets.CS_ACCESS_TOKEN != '' }}` to `$GITHUB_OUTPUT` with the
+  canonical single `echo` command. The upload must test that exact step's
+  `outputs.available == 'true'` as a whole `&&` conjunct and pass
+  `${{ secrets.CS_ACCESS_TOKEN }}` directly to its `access-token` input. This
+  deliberately does not infer credential provenance through other output keys,
+  shell commands, job outputs, or reusable workflows.
 - The publisher declares a `concurrency` block, so two overlapping pushes to
   `main` cannot race to write the baseline every pull request is then measured
   against, and the block queues rather than cancels: `cancel-in-progress` is

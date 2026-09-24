@@ -65,6 +65,33 @@ jobs:
           mode: upload
 """
 
+_STEP_OUTPUT_MAIN_WORKFLOW: typ.Final = """\
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+concurrency:
+  group: coverage-main-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  coverage-upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: leynos/shared-actions/.github/actions/generate-coverage@0000000
+        with:
+          with-ratchet: 'true'
+      - id: codescene-token
+        run: |
+          echo "available=${{ secrets.CS_ACCESS_TOKEN != '' }}" >> "$GITHUB_OUTPUT"
+      - uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@0000000
+        if: >-
+          ${{ steps.codescene-token.outputs.available == 'true' &&
+          github.ref == 'refs/heads/main' }}
+        with:
+          mode: upload
+          access-token: ${{ secrets.CS_ACCESS_TOKEN }}
+"""
+
 _GUARD: typ.Final = (
     "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}"
 )
@@ -95,6 +122,16 @@ def given_compliant_checkout(coverage_checkout: pathlib.Path) -> None:
         coverage_checkout,
         pull_request=_PR_WORKFLOW,
         main=_MAIN_WORKFLOW.format(guard=_GUARD),
+    )
+
+
+@given("a checkout whose publisher uses a block-scalar token output guard")
+def given_step_output_guard_checkout(coverage_checkout: pathlib.Path) -> None:
+    """Write the guarded publisher as an operator would write its YAML."""
+    _write_workflows(
+        coverage_checkout,
+        pull_request=_PR_WORKFLOW,
+        main=_STEP_OUTPUT_MAIN_WORKFLOW,
     )
 
 
