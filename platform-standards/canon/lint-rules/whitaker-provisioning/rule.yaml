@@ -66,8 +66,9 @@ parameters:
               type: string
         description: >-
           Named scripts the rule does not audit, each with its repository and
-          the reason. Only developer-environment scripts that CI never runs
-          belong here.
+          the reason. Developer-environment scripts that CI never runs belong
+          here, and otherwise only a temporary entry whose reason names the
+          change that removes it.
   defaults:
     compliant_install_whitaker_refs:
       - "0000000000000000000000000000000000000000"
@@ -81,3 +82,11 @@ parameters:
         reason: >-
           Developer-environment bootstrap run by hand, never by CI. It pins
           whitaker-installer 0.2.9 and passes --no-source-fallback.
+      - repository: leynos/shared-actions
+        path: .github/workflows/test-install-tool.yml
+        reason: >-
+          install-tool self-test; Dylint entries removed by follow-up. The
+          workflow's macOS leg asks install-tool for cargo-dylint to prove the
+          off-Linux refusal. The follow-up, after shared-actions #488 merges,
+          removes the Dylint entries from install-tool's manifest, moves that
+          proof onto a synthetic Linux-only entry, and deletes this exemption.

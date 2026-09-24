@@ -82,12 +82,19 @@ rather than a script and is not read.
   owning repository may run the action from its own checkout (`./` or `$/`),
   and the action's own files are the sanctioned route, not a second one.
 - `exemptions` — named scripts that are not audited, each with its
-  `repository`, `path` and `reason`. Only developer-environment scripts that CI
-  never runs belong here. An exemption names its repository, so the same path
-  elsewhere is still audited. Default:
+  `repository`, `path` and `reason`. Developer-environment scripts that CI
+  never runs belong here, and otherwise only a temporary entry whose reason
+  names the change that removes it. An exemption names its repository, so the
+  same path elsewhere is still audited. Default:
   - `leynos/agent-helper-scripts`, `get-rust-tooling`: a developer-environment
     bootstrap run by hand, never by CI. It pins `whitaker-installer` 0.2.9 and
     passes `--no-source-fallback`.
+  - `leynos/shared-actions`, `.github/workflows/test-install-tool.yml`:
+    install-tool self-test; Dylint entries removed by follow-up. Its macOS leg
+    asks `install-tool` for `cargo-dylint` to prove the off-Linux refusal. The
+    follow-up, after shared-actions #488 merges, removes the Dylint entries
+    from install-tool's manifest, moves that proof onto a synthetic Linux-only
+    entry, and deletes this exemption.
 
 Exemptions and producers match the repository's GitHub slug, read from the
 checkout's `origin` remote. A checkout without a GitHub origin matches none.
