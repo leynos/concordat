@@ -11,7 +11,9 @@ import pytest
 
 from tests.unit.coverage_credential_support import (
     TOKEN_CHECK_COMMAND,
+    TOKEN_SECRET,
     is_guarded_upload,
+    stray_token_references,
     token_environments,
     unguarded_uploads,
     unpassed_credentials,
@@ -203,3 +205,93 @@ def test_the_token_in_any_env_block_is_seen(
 ) -> None:
     """A binding at workflow, job or step scope reaches steps beyond the upload."""
     assert token_environments(Workflow("w.yml", document)) == expected
+
+
+def test_the_sanctioned_references_are_not_stray() -> None:
+    """The check command and the upload's `access-token` are the two allowed."""
+    assert stray_token_references(_publisher(_CHECK_STEP, _UPLOAD_STEP)) == []
+
+
+@pytest.mark.parametrize(
+    ("document", "expected"),
+    [
+        pytest.param(
+            {
+                "jobs": {
+                    "upload": {"steps": [{"run": f"curl -H 'x: {TOKEN_SECRET}' x"}]}
+                }
+            },
+            ["job 'upload' step 0"],
+            id="run body",
+        ),
+        pytest.param(
+            {
+                "jobs": {
+                    "upload": {
+                        "steps": [{"uses": "a/b@c", "with": {"t": TOKEN_SECRET}}]
+                    }
+                }
+            },
+            ["job 'upload' step 0"],
+            id="another action's input",
+        ),
+        pytest.param(
+            {
+                "jobs": {
+                    "upload": {"steps": [_UPLOAD_STEP | {"with": {"x": TOKEN_SECRET}}]}
+                }
+            },
+            ["job 'upload' step 0"],
+            id="upload input other than access-token",
+        ),
+        pytest.param(
+            {
+                "jobs": {
+                    "upload": {
+                        "steps": [
+                            _UPLOAD_STEP | {"if": "secrets.CS_ACCESS_TOKEN != '' && x"}
+                        ]
+                    }
+                }
+            },
+            ["job 'upload' step 0"],
+            id="upload condition",
+        ),
+        pytest.param(
+            {
+                "jobs": {
+                    "upload": {
+                        "steps": [_CHECK_STEP | {"if": "secrets.CS_ACCESS_TOKEN != ''"}]
+                    }
+                }
+            },
+            ["job 'upload' step 0"],
+            id="check step that is not a usable check",
+        ),
+        pytest.param(
+            {
+                "jobs": {
+                    "call": {
+                        "uses": "./.github/workflows/x.yml",
+                        "secrets": {"t": TOKEN_SECRET},
+                    }
+                }
+            },
+            ["job 'call'"],
+            id="reusable-workflow secrets",
+        ),
+        pytest.param(
+            {
+                "defaults": {"run": {"shell": f"env T={TOKEN_SECRET} bash {{0}}"}},
+                "jobs": {},
+            },
+            ["workflow"],
+            id="workflow defaults",
+        ),
+    ],
+)
+def test_a_stray_reference_is_seen(
+    document: dict[object, object], expected: list[str]
+) -> None:
+    """Any reference outside the two sanctioned places is reported by scope."""
+    assert stray_token_references(Workflow("w.yml", document)) == expected

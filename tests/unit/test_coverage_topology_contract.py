@@ -41,6 +41,7 @@ import typing as typ
 
 from tests.unit.coverage_credential_support import (
     TOKEN_CHECK_COMMAND,
+    stray_token_references,
     token_environments,
     unguarded_uploads,
     unpassed_credentials,
@@ -226,6 +227,21 @@ def test_the_publisher_holds_the_token_in_no_environment() -> None:
     publisher = _sole_publisher()
     bound = token_environments(publisher)
     assert not bound, f"{publisher} binds {TOKEN_VARIABLE} in env at {bound}"
+
+
+def test_the_publisher_names_the_token_only_where_sanctioned() -> None:
+    """The token appears in the check command and `access-token` alone.
+
+    A `run` body interpolating the secret puts it in a shell process that
+    checked-out code can read, and another action's input hands it across a
+    boundary nobody approved.
+    """
+    publisher = _sole_publisher()
+    stray = stray_token_references(publisher)
+    assert not stray, (
+        f"{publisher} names {TOKEN_VARIABLE} outside the check command and the "
+        f"upload step's access-token input, at {stray}"
+    )
 
 
 def test_the_publisher_queues_rather_than_cancels() -> None:

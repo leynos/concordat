@@ -185,3 +185,57 @@ def token_environments(publisher: Workflow) -> list[str]:
             for index, step in enumerate(job_steps(publisher, name, job))
         )
     return [scope for scope, env in scopes if mentions(env, TOKEN_VARIABLE)]
+
+
+def _unsanctioned_part(step: dict[str, object]) -> object:
+    """Return a step with the two sanctioned token references removed.
+
+    The check step may name the token in its `run` command and the upload
+    step in its `access-token` input. Everything else in either step, and
+    every other step, is returned whole.
+
+    Returns
+    -------
+        The step, less its sanctioned reference.
+    """
+    if is_token_check(step):
+        return {key: value for key, value in step.items() if key != "run"}
+    uses = step.get("uses")
+    inputs = step.get("with")
+    if isinstance(uses, str) and UPLOAD_ACTION in uses and isinstance(inputs, dict):
+        others = {key: value for key, value in inputs.items() if key != "access-token"}
+        return step | {"with": others}
+    return step
+
+
+def stray_token_references(publisher: Workflow) -> list[str]:
+    """Return every place outside `env` that names the token unsanctioned.
+
+    Two references are sanctioned: the check step's exact command and the
+    upload step's `access-token` input. A `run` body interpolating the secret
+    puts it in a shell process that checked-out code can read, and another
+    action's input hands it across an unapproved boundary. Workflow-level and
+    job-level keys are read too, such as `defaults.run.shell`, a job's `if:`,
+    or a reusable-workflow call's `with:` and `secrets:`. `env` blocks are
+    `token_environments`' to report.
+
+    Returns
+    -------
+        The scopes naming the token, outermost first.
+    """
+    document = {
+        key: value
+        for key, value in publisher.document.items()
+        if key not in {"jobs", "env"}
+    }
+    found = ["workflow"] if mentions(document, TOKEN_VARIABLE) else []
+    for name, job in jobs(publisher).items():
+        rest = {key: value for key, value in job.items() if key not in {"steps", "env"}}
+        if mentions(rest, TOKEN_VARIABLE):
+            found.append(f"job {name!r}")
+        found.extend(
+            f"job {name!r} step {index}"
+            for index, step in enumerate(job_steps(publisher, name, job))
+            if mentions(_unsanctioned_part(step | {"env": None}), TOKEN_VARIABLE)
+        )
+    return found

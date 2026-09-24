@@ -149,10 +149,14 @@ Four properties of that topology fail quietly rather than loudly, so
   reason: checked-out branch code would then hold the secret. The upload step
   passes `${{ secrets.CS_ACCESS_TOKEN }}` straight to the action's
   `access-token` input, and no `env` block in the publisher, at workflow, job
-  or step scope, names the token. The upload action is composite and hands its
-  step's `env` to every nested step it runs, and it binds the token itself from
-  the input. A Dependabot automerge made with `GITHUB_TOKEN` fires no push, so
-  such a merge publishes nothing until the next push to `main`; this is a known
+  or step scope, names the token. Those two places, the check command and
+  `access-token`, are the only ones in the publisher that may name the token at
+  all: a `run` body interpolating it puts the secret in a shell process that
+  checked-out code can read, and another action's input hands it across a
+  boundary nobody approved. The upload action is composite and hands its step's
+  `env` to every nested step it runs, and it binds the token itself from the
+  input. A Dependabot automerge made with `GITHUB_TOKEN` fires no push, so such
+  a merge publishes nothing until the next push to `main`; this is a known
   exception, not a gap to fill with a schedule.
 - **The publisher serializes its baseline writes.** Two pushes to `main` in
   quick succession would otherwise race to write the ratchet baseline that
