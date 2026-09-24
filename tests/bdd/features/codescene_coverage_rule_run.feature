@@ -10,6 +10,12 @@ Feature: Main-owned CodeScene coverage rule run
     Then the audit exit status is 0
     And the audit table reports zero findings
 
+  Scenario: a block-scalar step output guard is audited clean
+    Given a checkout whose publisher uses a block-scalar token output guard
+    When I audit the checkout for CodeScene coverage
+    Then the audit exit status is 0
+    And the audit table reports zero findings
+
   Scenario: a pull-request lane that contacts CodeScene is reported
     Given a checkout whose pull-request lane invokes CodeScene
     When I audit the checkout for CodeScene coverage

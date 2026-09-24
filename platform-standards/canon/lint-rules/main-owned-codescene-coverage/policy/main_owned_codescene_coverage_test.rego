@@ -242,6 +242,51 @@ test_direct_token_step_output_guard_is_compliant if {
   count(findings) == 0
 }
 
+test_step_output_producer_block_scalar_is_compliant if {
+  fixture := json.patch(data.fixtures.clause2_direct_token_step_output_guard, [{
+    "op": "replace",
+    "path": "/workflows/1/parsed/jobs/coverage/steps/1/run",
+    "value": concat("", [policy.token_availability_run, "\n"]),
+  }])
+  findings := policy.deny with input as fixture
+  count(findings) == 0
+}
+
+test_step_output_producer_without_run_is_noncompliant if {
+  fixture := json.patch(data.fixtures.clause2_direct_token_step_output_guard, [{
+    "op": "remove",
+    "path": "/workflows/1/parsed/jobs/coverage/steps/1/run",
+  }])
+  findings := policy.deny with input as fixture
+  profile(findings) == {
+    ["noncompliant", ".github/workflows/coverage-main.yml", "CodeScene upload step is not guarded on the CS_ACCESS_TOKEN credential"],
+  }
+}
+
+test_step_output_producer_with_non_string_run_is_noncompliant if {
+  fixture := json.patch(data.fixtures.clause2_direct_token_step_output_guard, [{
+    "op": "replace",
+    "path": "/workflows/1/parsed/jobs/coverage/steps/1/run",
+    "value": [policy.token_availability_run],
+  }])
+  findings := policy.deny with input as fixture
+  profile(findings) == {
+    ["noncompliant", ".github/workflows/coverage-main.yml", "CodeScene upload step is not guarded on the CS_ACCESS_TOKEN credential"],
+  }
+}
+
+test_step_output_producer_with_altered_command_is_noncompliant if {
+  fixture := json.patch(data.fixtures.clause2_direct_token_step_output_guard, [{
+    "op": "replace",
+    "path": "/workflows/1/parsed/jobs/coverage/steps/1/run",
+    "value": `echo "available=${{ secrets.CS_ACCESS_TOKEN != '' }}" | tee -a "$GITHUB_OUTPUT"`,
+  }])
+  findings := policy.deny with input as fixture
+  profile(findings) == {
+    ["noncompliant", ".github/workflows/coverage-main.yml", "CodeScene upload step is not guarded on the CS_ACCESS_TOKEN credential"],
+  }
+}
+
 test_step_output_producer_without_credential_is_noncompliant if {
   fixture := json.patch(data.fixtures.clause2_direct_token_step_output_guard, [{
     "op": "replace",
@@ -282,6 +327,18 @@ test_step_output_upload_without_access_token_is_noncompliant if {
   fixture := json.patch(data.fixtures.clause2_direct_token_step_output_guard, [{
     "op": "remove",
     "path": "/workflows/1/parsed/jobs/coverage/steps/2/with/access-token",
+  }])
+  findings := policy.deny with input as fixture
+  profile(findings) == {
+    ["noncompliant", ".github/workflows/coverage-main.yml", "CodeScene upload step is not guarded on the CS_ACCESS_TOKEN credential"],
+  }
+}
+
+test_step_output_upload_with_indirect_access_token_is_noncompliant if {
+  fixture := json.patch(data.fixtures.clause2_direct_token_step_output_guard, [{
+    "op": "replace",
+    "path": "/workflows/1/parsed/jobs/coverage/steps/2/with/access-token",
+    "value": "${{ env.CS_ACCESS_TOKEN }}",
   }])
   findings := policy.deny with input as fixture
   profile(findings) == {

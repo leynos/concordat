@@ -601,7 +601,9 @@ upload_guarded_on_token(workflow, job_name, upload_index) if {
   producer_id := object.get(producer, "id", "")
   is_string(producer_id)
   regex.match(`^[A-Za-z_][A-Za-z0-9_-]*$`, producer_id)
-  object.get(producer, "run", "") == token_availability_run
+  run := producer.run
+  is_string(run)
+  trim_space(run) == token_availability_run
   some conjunct in guard_conjuncts(condition)
   conjunct == sprintf("steps.%s.outputs.available == 'true'", [producer_id])
 }
