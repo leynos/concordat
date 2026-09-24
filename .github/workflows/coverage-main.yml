@@ -84,16 +84,23 @@ jobs:
           pytest-workers: ''
           with-ratchet: 'true'
 
+      # GitHub evaluates the expression before the shell starts, so this
+      # step reports whether the credential is present without the token
+      # entering any process or any step's `env`. The upload action is
+      # composite and hands its step's `env` to nested steps, so the token is
+      # passed only through its `access-token` input.
+      - name: Check for the CodeScene credential
+        id: codescene-token
+        run: echo "available=${{ secrets.CS_ACCESS_TOKEN != '' }}" >> "$GITHUB_OUTPUT"
+
       - name: Upload coverage data to CodeScene
-        env:
-          CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
         # Guarded on the ref as well as the credential. The push filter above
         # says nothing about a `workflow_dispatch`, which selects its own ref,
         # so without this a dispatch from a feature branch would publish that
         # branch's coverage as the trunk's.
-        if: env.CS_ACCESS_TOKEN != '' && github.ref == 'refs/heads/main'
+        if: steps.codescene-token.outputs.available == 'true' && github.ref == 'refs/heads/main'
         uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@a5765019912a8ab6882b12db049c7cde635f3a85
         with:
           format: cobertura
           mode: upload
-          access-token: ${{ env.CS_ACCESS_TOKEN }}
+          access-token: ${{ secrets.CS_ACCESS_TOKEN }}

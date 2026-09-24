@@ -10,7 +10,6 @@ cannot interpret fails loudly rather than reading as compliant.
 from __future__ import annotations
 
 import itertools
-import re
 import typing as typ
 from pathlib import Path, PurePosixPath
 
@@ -178,17 +177,25 @@ def jobs(workflow: Workflow) -> dict[str, dict[str, object]]:
     }
 
 
+def job_steps(
+    workflow: Workflow, name: str, job: cabc.Mapping[str, object]
+) -> list[dict[str, object]]:
+    """Return one job's steps in document order, empty for a called job."""
+    declared = job.get("steps")
+    if not isinstance(declared, list):
+        return []
+    return [
+        _mapping(step, subject=f"{workflow} job {name!r} step") for step in declared
+    ]
+
+
 def steps(workflow: Workflow) -> list[dict[str, object]]:
     """Return every step of every job in a workflow, in document order."""
-    collected: list[dict[str, object]] = []
-    for name, job in jobs(workflow).items():
-        declared = job.get("steps")
-        if isinstance(declared, list):
-            collected.extend(
-                _mapping(step, subject=f"{workflow} job {name!r} step")
-                for step in declared
-            )
-    return collected
+    return [
+        step
+        for name, job in jobs(workflow).items()
+        for step in job_steps(workflow, name, job)
+    ]
 
 
 def steps_using(workflow: Workflow, action: str) -> list[dict[str, object]]:
@@ -518,57 +525,6 @@ def host_references_for_pull_requests(found: cabc.Sequence[Workflow]) -> list[st
     ]
 
 
-def is_guarded_upload(condition: str) -> bool:
-    """Return whether an upload condition requires the main ref and the token.
-
-    Both must be whole conjuncts of a condition with no unquoted `||`. A
-    substring test accepts `... && github.ref == 'refs/heads/main' ||
-    github.event_name == 'workflow_dispatch'`, which uploads a dispatch from
-    any branch.
-
-    Returns
-    -------
-        Whether both guards are whole conjuncts of an `&&`-only condition.
-    """
-    conjuncts = guard_conjuncts(condition)
-    if conjuncts is None:
-        return False
-    ref_guards = {MAIN_REF_GUARD, "'refs/heads/main' == github.ref"}
-    token_guards = {f"{scope}.{TOKEN_VARIABLE} != ''" for scope in ("env", "secrets")}
-    return bool(ref_guards.intersection(conjuncts)) and bool(
-        token_guards.intersection(conjuncts)
-    )
-
-
-def _labelled_uploads(
-    publisher: Workflow,
-) -> list[tuple[str, dict[str, object]]]:
-    """Return each upload step with a label unique within the publisher.
-
-    Two steps may share a name or both omit one, so the label carries the
-    step's position among the uploads; keying on the name alone would let a
-    compliant step overwrite an offending one.
-
-    Returns
-    -------
-        Each upload step paired with its position and name, in step order.
-
-    """
-    return [
-        (f"upload {index}: {step.get('name')}", step)
-        for index, step in enumerate(steps_using(publisher, UPLOAD_ACTION))
-    ]
-
-
-def unguarded_uploads(publisher: Workflow) -> dict[str, str]:
-    """Return the publisher's upload steps whose condition is insufficient."""
-    return {
-        label: condition
-        for label, step in _labelled_uploads(publisher)
-        if not is_guarded_upload(condition := str(step.get("if", "")))
-    }
-
-
 def cancelling_scopes(publisher: Workflow) -> list[str]:
     """Return the publisher's concurrency scopes that may cancel a run.
 
@@ -584,54 +540,3 @@ def cancelling_scopes(publisher: Workflow) -> list[str]:
         for name, job in jobs(publisher).items()
     ]
     return [scope for scope, value in scopes if cancels_in_progress(value)]
-
-
-# The one binding the upload step may hold, and the inputs that pass it on.
-_TOKEN_BINDING: typ.Final = f"${{{{ secrets.{TOKEN_VARIABLE} }}}}"
-_TOKEN_INPUTS: typ.Final = frozenset({
-    f"${{{{ env.{TOKEN_VARIABLE} }}}}",
-    _TOKEN_BINDING,
-})
-
-
-def _expression_text(value: object) -> str:
-    """Return a scalar with the spacing inside `${{ }}` normalized."""
-    return re.sub(r"\$\{\{\s*(.*?)\s*\}\}", r"${{ \1 }}", str(value).strip())
-
-
-def _input(step: cabc.Mapping[str, object], scope: str, name: str) -> str:
-    """Return one normalized value from a step's ``env`` or ``with`` block."""
-    block = step.get(scope)
-    return _expression_text(block.get(name, "")) if isinstance(block, dict) else ""
-
-
-def unbound_uploads(publisher: Workflow) -> dict[str, str]:
-    """Return the upload steps that do not bind and pass the credential.
-
-    A guard on `env.CS_ACCESS_TOKEN != ''` passes with the binding deleted,
-    and the upload then skips on every run in silence. So the step itself
-    must bind the variable from the secret and hand it to the action's
-    `access-token` input.
-
-    Returns
-    -------
-        Each offending step's name and what it lacks.
-    """
-    lacking = {
-        label: [
-            gap
-            for gap, holds in (
-                (
-                    f"env.{TOKEN_VARIABLE} bound to the secret",
-                    _input(step, "env", TOKEN_VARIABLE) == _TOKEN_BINDING,
-                ),
-                (
-                    "access-token passing it on",
-                    _input(step, "with", "access-token") in _TOKEN_INPUTS,
-                ),
-            )
-            if not holds
-        ]
-        for label, step in _labelled_uploads(publisher)
-    }
-    return {name: ", ".join(gaps) for name, gaps in lacking.items() if gaps}

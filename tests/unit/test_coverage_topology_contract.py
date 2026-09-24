@@ -15,6 +15,9 @@ rather than loudly:
   feature branch's coverage as the trunk's the first time someone dispatches
   the workflow from that branch, since a `workflow_dispatch` selects its own
   ref and the push filter says nothing about it;
+* an upload guarded on a credential check that is missing, altered or
+  skipped never runs and never fails, and a token bound in any `env` block
+  reaches steps that never needed it;
 * two pushes to `main` in quick succession would race to write the baseline,
   and a cancelled publisher abandons both its upload and its baseline write.
 
@@ -22,8 +25,9 @@ rather than loudly:
 pull-request-triggered workflows through local reusable-workflow calls: a
 workflow declaring only `workflow_call` never matches a pull-request trigger,
 yet runs for one whenever a pull-request job calls it with `secrets:
-inherit`. The readers live in `coverage_topology_support`, and
-`test_coverage_topology_readers` drives them against synthetic documents,
+inherit`. The readers live in `coverage_topology_support` and
+`coverage_credential_support`, and `test_coverage_topology_readers` and
+`test_coverage_credential_readers` drive them against synthetic documents,
 because a rule cannot be proved by the files that already comply with it.
 
 The full rule lives in the `main-owned-codescene-coverage` rule package and
@@ -35,6 +39,13 @@ from __future__ import annotations
 
 import typing as typ
 
+from tests.unit.coverage_credential_support import (
+    TOKEN_CHECK_COMMAND,
+    stray_token_references,
+    token_environments,
+    unguarded_uploads,
+    unpassed_credentials,
+)
 from tests.unit.coverage_topology_support import (
     MAIN_REF_GUARD,
     TOKEN_VARIABLE,
@@ -46,8 +57,6 @@ from tests.unit.coverage_topology_support import (
     pull_request_closure,
     reports_published_for_pull_requests,
     token_references_for_pull_requests,
-    unbound_uploads,
-    unguarded_uploads,
     unstable_group_expressions,
     uploaders,
     uploads_for_pull_requests,
@@ -156,14 +165,18 @@ def test_the_publisher_guards_its_upload_on_the_ref_and_the_token() -> None:
 
     The push filter constrains the push event only. A `workflow_dispatch`
     selects its own ref, so the ref is a whole conjunct of the step's
-    condition, and a condition with any unquoted `||` is refused.
+    condition, and a condition with any unquoted `||` is refused. The
+    credential conjunct reads the output of an unconditional check step
+    earlier in the same job, so deleting, altering or skipping that step
+    fails here rather than leaving the upload skipping forever.
     """
     publisher = _sole_publisher()
     unguarded = unguarded_uploads(publisher)
     assert not unguarded, (
         f"every upload step in {publisher} must be guarded on both "
-        f"{MAIN_REF_GUARD} and {TOKEN_VARIABLE}, joined by && alone; "
-        f"found {unguarded}"
+        f"{MAIN_REF_GUARD} and steps.<id>.outputs.available == 'true', joined "
+        f"by && alone, where <id> is an earlier step in its job whose sole "
+        f"command, with no if:, is {TOKEN_CHECK_COMMAND}; found {unguarded}"
     )
 
 
@@ -190,15 +203,45 @@ def test_the_publisher_serializes_its_baseline_writes() -> None:
     )
 
 
-def test_the_publisher_binds_and_passes_the_credential() -> None:
-    """The upload step binds the secret itself and hands it to the action.
+def test_the_publisher_passes_the_secret_to_the_action() -> None:
+    """The upload step hands the secret straight to `access-token`.
 
-    The guard's `env.CS_ACCESS_TOKEN != ''` passes with the binding deleted,
-    and the upload then skips on every run without failing anything.
+    The action binds the token itself from that input, so the step needs no
+    `env` binding, and an input read from anywhere else uploads nothing.
     """
     publisher = _sole_publisher()
-    unbound = unbound_uploads(publisher)
-    assert not unbound, f"{publisher}'s upload steps lack: {unbound}"
+    unpassed = unpassed_credentials(publisher)
+    assert not unpassed, (
+        f"{publisher}'s upload steps must pass access-token: "
+        f"${{{{ secrets.{TOKEN_VARIABLE} }}}}; found {unpassed}"
+    )
+
+
+def test_the_publisher_holds_the_token_in_no_environment() -> None:
+    """No `env` block in the publisher names the token.
+
+    The upload action is composite and passes its step's `env` to its nested
+    upload-artifact and cache steps; a job or workflow `env` reaches every
+    step, the checked-out code's included.
+    """
+    publisher = _sole_publisher()
+    bound = token_environments(publisher)
+    assert not bound, f"{publisher} binds {TOKEN_VARIABLE} in env at {bound}"
+
+
+def test_the_publisher_names_the_token_only_where_sanctioned() -> None:
+    """The token appears in the check command and `access-token` alone.
+
+    A `run` body interpolating the secret puts it in a shell process that
+    checked-out code can read, and another action's input hands it across a
+    boundary nobody approved.
+    """
+    publisher = _sole_publisher()
+    stray = stray_token_references(publisher)
+    assert not stray, (
+        f"{publisher} names {TOKEN_VARIABLE} outside the check command and the "
+        f"upload step's access-token input, at {stray}"
+    )
 
 
 def test_the_publisher_queues_rather_than_cancels() -> None:
