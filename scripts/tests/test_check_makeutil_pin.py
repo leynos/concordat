@@ -87,6 +87,17 @@ def test_unknown_pin_is_refused(upstream: Upstream) -> None:
         pin_check.check_pin("0" * 40, upstream.url, "main")
 
 
+def test_non_default_branch_is_the_one_checked(upstream: Upstream) -> None:
+    """The branch argument selects the history the pin must be on.
+
+    The pull-request commit is accepted against its own branch and refused
+    against main, so the check reads the named branch rather than main.
+    """
+    pin_check.check_pin(upstream.orphan, upstream.url, "pr-branch")
+    with pytest.raises(pin_check.PinCheckError, match="not reachable from main"):
+        pin_check.check_pin(upstream.orphan, upstream.url, "main")
+
+
 def test_unreachable_repository_is_refused(tmp_path: Path) -> None:
     """A failed fetch fails the check instead of skipping it."""
     missing = (tmp_path / "absent").as_uri()
@@ -161,4 +172,45 @@ def test_scratch_repository_failure_is_refused(
 
     monkeypatch.setattr(pin_check, "_git", failing_git)
     with pytest.raises(pin_check.PinCheckError, match="scratch repository"):
+        pin_check.check_pin(upstream.main_head, upstream.url, "main")
+
+
+@pytest.mark.parametrize(
+    ("failure", "expected"),
+    [
+        (FileNotFoundError("git"), "could not run git init"),
+        (subprocess.TimeoutExpired(["git"], 1), "git init timed out"),
+    ],
+)
+def test_git_launch_failures_are_refused(
+    monkeypatch: pytest.MonkeyPatch,
+    upstream: Upstream,
+    failure: Exception,
+    expected: str,
+) -> None:
+    """A git that cannot start, or hangs, fails the check with its reason.
+
+    Either would otherwise escape as a traceback rather than the check's own
+    refusal.
+    """
+
+    def failing_run(*_arguments: object, **_options: object) -> typ.NoReturn:
+        raise failure
+
+    monkeypatch.setattr(pin_check.subprocess, "run", failing_run)
+    with pytest.raises(pin_check.PinCheckError, match=expected):
+        pin_check.check_pin(upstream.main_head, upstream.url, "main")
+
+
+def test_scratch_directory_failure_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+    upstream: Upstream,
+) -> None:
+    """A temporary directory that cannot be created fails the check."""
+
+    def failing_directory(**_options: object) -> typ.NoReturn:
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(pin_check.tempfile, "TemporaryDirectory", failing_directory)
+    with pytest.raises(pin_check.PinCheckError, match="scratch directory"):
         pin_check.check_pin(upstream.main_head, upstream.url, "main")

@@ -741,7 +741,9 @@ Two external tools must be on `PATH`:
   `coverage-main.yml`, and that commit must be on makeutil's `main`: a commit
   no branch reaches installs only until GitHub garbage-collects it. The
   `Check makeutil pin is on main` step runs `scripts/check_makeutil_pin.py`,
-  which fails the pull request otherwise; run it locally with
+  which fails the pull request otherwise, and also fails when git cannot run,
+  cannot fetch, or exceeds its 120-second timeout (`GIT_TIMEOUT_SECONDS`),
+  since an unanswered check vouches for nothing; run it locally with
   `MAKEUTIL_REVISION=<sha> uv run scripts/check_makeutil_pin.py` before
   repinning. `tests/unit/test_makeutil_pin_contract.py` keeps the step
   unguarded and both workflows on the same revision.

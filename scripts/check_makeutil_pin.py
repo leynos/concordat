@@ -35,6 +35,9 @@ from cyclopts import App, Parameter
 DEFAULT_REPOSITORY: typ.Final = "https://github.com/leynos/makeutil"
 DEFAULT_BRANCH: typ.Final = "main"
 _TRACKING_REF: typ.Final = "refs/remotes/makeutil/pinned-branch"
+# A fetch of commits only is small; a git process still running after this
+# long is hung on the network, and the check must fail rather than stall CI.
+GIT_TIMEOUT_SECONDS: typ.Final = 120
 
 app = App(config=cyclopts.config.Env("MAKEUTIL_", command=False))
 
@@ -44,14 +47,34 @@ class PinCheckError(RuntimeError):
 
 
 def _git(*arguments: str, cwd: Path) -> subprocess.CompletedProcess[str]:
-    """Run one git command in *cwd* and capture its output."""
-    return subprocess.run(  # noqa: S603 - fixed git argv, no shell
-        ["git", *arguments],  # noqa: S607 - git resolved from PATH
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    """Run one git command in *cwd* and capture its output.
+
+    Returns
+    -------
+    subprocess.CompletedProcess[str]
+        The finished process, whatever its exit status.
+
+    Raises
+    ------
+    PinCheckError
+        If git cannot be launched or does not finish within
+        ``GIT_TIMEOUT_SECONDS``.
+    """
+    try:
+        return subprocess.run(  # noqa: S603 - fixed git argv, no shell
+            ["git", *arguments],  # noqa: S607 - git resolved from PATH
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=GIT_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as error:
+        message = f"git {arguments[0]} timed out after {GIT_TIMEOUT_SECONDS}s"
+        raise PinCheckError(message) from error
+    except OSError as error:
+        message = f"could not run git {arguments[0]}: {error}"
+        raise PinCheckError(message) from error
 
 
 def _fetch_branch_history(scratch: Path, repository: str, branch: str) -> None:
@@ -79,21 +102,32 @@ def _fetch_branch_history(scratch: Path, repository: str, branch: str) -> None:
         raise PinCheckError(message)
 
 
-def check_pin(revision: str, repository: str, branch: str) -> None:
-    """Require *revision* to be an ancestor of *branch* in *repository*.
+def pin_is_on_branch(revision: str, repository: str, branch: str) -> bool:
+    """Report whether *revision* is an ancestor of *branch* in *repository*.
+
+    Returns
+    -------
+    bool
+        ``True`` when the branch's history contains the revision.
 
     Raises
     ------
     PinCheckError
-        If the branch cannot be fetched, or the revision is absent from or
-        not an ancestor of the branch.
+        If the scratch directory or repository cannot be created, or git
+        cannot fetch the branch; the answer is then unknown, not ``False``.
 
     Examples
     --------
-    >>> check_pin("6e64f4fe84419705badc30baa5649cbb6f69a298",
-    ...           DEFAULT_REPOSITORY, DEFAULT_BRANCH)  # doctest: +SKIP
+    >>> pin_is_on_branch("6e64f4fe84419705badc30baa5649cbb6f69a298",
+    ...                  DEFAULT_REPOSITORY, DEFAULT_BRANCH)  # doctest: +SKIP
+    True
     """
-    with tempfile.TemporaryDirectory(prefix="makeutil-pin-") as scratch_name:
+    try:
+        scratch_directory = tempfile.TemporaryDirectory(prefix="makeutil-pin-")
+    except OSError as error:
+        message = f"could not create a scratch directory: {error}"
+        raise PinCheckError(message) from error
+    with scratch_directory as scratch_name:
         scratch = Path(scratch_name)
         _fetch_branch_history(scratch, repository, branch)
         # A pin outside the branch's history is usually absent from the
@@ -102,7 +136,24 @@ def check_pin(revision: str, repository: str, branch: str) -> None:
         ancestry = _git(
             "merge-base", "--is-ancestor", revision, _TRACKING_REF, cwd=scratch
         )
-    if ancestry.returncode != 0:
+    return ancestry.returncode == 0
+
+
+def check_pin(revision: str, repository: str, branch: str) -> None:
+    """Require *revision* to be an ancestor of *branch* in *repository*.
+
+    Raises
+    ------
+    PinCheckError
+        If the answer cannot be obtained, or the revision is absent from or
+        not an ancestor of the branch.
+
+    Examples
+    --------
+    >>> check_pin("6e64f4fe84419705badc30baa5649cbb6f69a298",
+    ...           DEFAULT_REPOSITORY, DEFAULT_BRANCH)  # doctest: +SKIP
+    """
+    if not pin_is_on_branch(revision, repository, branch):
         message = (
             f"makeutil pin {revision} is not reachable from {branch} of "
             f"{repository}; pin a commit on {branch} instead"
