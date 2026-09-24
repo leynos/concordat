@@ -138,10 +138,22 @@ Four properties of that topology fail quietly rather than loudly, so
   the text and makes every conjunct optional, so a substring check passes it.
   Only a disjunct hidden after an extra conjunct proves the refusal: in
   `<guards> && github.actor != 'x' || <dispatch>` every required conjunct stays
-  whole, so the split alone would accept it. The upload step must also bind
-  `CS_ACCESS_TOKEN` from the secret itself and pass it to the action's
-  `access-token` input, because the guard passes with the binding deleted and
-  the upload then skips on every run.
+  whole, so the split alone would accept it. The credential conjunct is
+  `steps.codescene-token.outputs.available == 'true'`, read from an earlier
+  step in the same job whose sole command, with no `if:`, is
+  `echo "available=${{ secrets.CS_ACCESS_TOKEN != '' }}" >> "$GITHUB_OUTPUT"`.
+  GitHub evaluates that expression before the shell starts, so the token enters
+  no process. Deleting, altering or skipping the check would leave the upload
+  skipping on every run without failing anything, so the contract requires the
+  exact command. A script reading the token from `env` is refused for a second
+  reason: checked-out branch code would then hold the secret. The upload step
+  passes `${{ secrets.CS_ACCESS_TOKEN }}` straight to the action's
+  `access-token` input, and no `env` block in the publisher, at workflow, job
+  or step scope, names the token. The upload action is composite and hands its
+  step's `env` to every nested step it runs, and it binds the token itself from
+  the input. A Dependabot automerge made with `GITHUB_TOKEN` fires no push, so
+  such a merge publishes nothing until the next push to `main`; this is a known
+  exception, not a gap to fill with a schedule.
 - **The publisher serializes its baseline writes.** Two pushes to `main` in
   quick succession would otherwise race to write the ratchet baseline that
   every pull request is measured against, and the loser's partial write is the
@@ -189,8 +201,10 @@ refused, as is a call to a local workflow that does not exist, so the closure
 cannot stop short silently. A workflow declaring its triggers under both `on`
 and the boolean `True` is refused too: GitHub merges them, and a reader that
 picks one is blind to the other. The readers live in
-`tests/unit/coverage_topology_support.py`.
-`tests/unit/test_coverage_topology_readers.py` drives them against synthetic
+`tests/unit/coverage_topology_support.py`, with the upload guard and credential
+readers in `tests/unit/coverage_credential_support.py`.
+`tests/unit/test_coverage_topology_readers.py` and
+`tests/unit/test_coverage_credential_readers.py` drive them against synthetic
 workflows, because this repository's own files comply and so cannot show that a
 reader sees the hazard it exists for.
 `tests/unit/test_coverage_topology_properties.py` generates upload conditions

@@ -14,7 +14,7 @@ import typing as typ
 from hypothesis import given
 from hypothesis import strategies as st
 
-from tests.unit.coverage_topology_support import is_guarded_upload
+from tests.unit.coverage_credential_support import is_guarded_upload
 
 # Each guard as its two operands and operator, so the spacing inside it can
 # vary as well as the spacing around it.
@@ -22,13 +22,13 @@ _REF_GUARDS: typ.Final = (
     ("github.ref", "==", "'refs/heads/main'"),
     ("'refs/heads/main'", "==", "github.ref"),
 )
-_TOKEN_GUARDS: typ.Final = (
-    ("env.CS_ACCESS_TOKEN", "!=", "''"),
-    ("secrets.CS_ACCESS_TOKEN", "!=", "''"),
-)
+_TOKEN_GUARDS: typ.Final = (("steps.token.outputs.available", "==", "'true'"),)
 # Conjuncts that are neither guard, some hiding an operator in a quoted
-# string, which must not split the condition.
+# string, which must not split the condition. The retired `env` guard is
+# among them: it needs the token bound in the step's `env`.
 _OTHER_CONJUNCTS: typ.Final = (
+    "env.CS_ACCESS_TOKEN != ''",
+    "steps.other.outputs.available == 'true'",
     "github.actor != 'bot'",
     "github.actor != 'a || b'",
     "github.event.head_commit.message != 'x && y'",
@@ -94,4 +94,4 @@ def test_the_reader_agrees_with_the_generator(case: tuple[str, bool]) -> None:
     loosest and makes every conjunct optional.
     """
     condition, is_guarded = case
-    assert is_guarded_upload(condition) is is_guarded, condition
+    assert is_guarded_upload(condition, {"token"}) is is_guarded, condition

@@ -16,7 +16,6 @@ from tests.unit.coverage_topology_support import (
     Workflow,
     cancelling_scopes,
     host_references_for_pull_requests,
-    is_guarded_upload,
     is_trunk_publisher,
     local_callee,
     parse_workflow,
@@ -27,7 +26,6 @@ from tests.unit.coverage_topology_support import (
     serves_pull_requests,
     token_references_for_pull_requests,
     triggers,
-    unbound_uploads,
     unstable_group_expressions,
     uploads_for_pull_requests,
 )
@@ -155,63 +153,6 @@ def test_forwarding_the_credential_is_a_reference(forwarding: str) -> None:
 def test_local_calls_are_matched_by_shape(uses: str, expected: str | None) -> None:
     """A call is local when it names a path under the workflow directory."""
     assert local_callee(uses) == expected
-
-
-@pytest.mark.parametrize(
-    "condition",
-    [
-        "env.CS_ACCESS_TOKEN != '' && github.ref == 'refs/heads/main'",
-        "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}",
-        "env.CS_ACCESS_TOKEN != ''  &&  'refs/heads/main' == github.ref",
-    ],
-)
-def test_a_conjunctive_guard_is_accepted(condition: str) -> None:
-    """Both requirements as whole conjuncts, in either order, is a guard."""
-    assert is_guarded_upload(condition)
-
-
-@pytest.mark.parametrize(
-    "condition",
-    [
-        # The sweep's named mutation: the disjunct makes both conjuncts
-        # optional, while a substring test still finds the main ref.
-        (
-            "env.CS_ACCESS_TOKEN != '' && github.ref == 'refs/heads/main'"
-            " || github.event_name == 'workflow_dispatch'"
-        ),
-        # The same disjunct landing on the credential's conjunct, which a
-        # reader matching the ref conjunct exactly would still accept.
-        (
-            "github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != ''"
-            " || github.event_name == 'workflow_dispatch'"
-        ),
-        # A disjunct after a third conjunct leaves both guards whole, yet
-        # `||` binds loosest, so the dispatch alone uploads.
-        (
-            "env.CS_ACCESS_TOKEN != '' && github.ref == 'refs/heads/main'"
-            " && github.actor != 'bot' || github.event_name == 'workflow_dispatch'"
-        ),
-        "env.CS_ACCESS_TOKEN != ''",
-        "github.ref == 'refs/heads/main'",
-        "env.CS_ACCESS_TOKEN == '' && github.ref == 'refs/heads/main'",
-        "env.CS_ACCESS_TOKEN != '' && github.ref != 'refs/heads/main'",
-        "env.CS_ACCESS_TOKEN != '' && github.ref == 'refs/heads/main-backup'",
-        "env.CS_ACCESS_TOKEN != '' && (github.ref == 'refs/heads/main')",
-        "",
-    ],
-)
-def test_an_insufficient_guard_is_refused(condition: str) -> None:
-    """Anything but the two whole conjuncts joined by `&&` is refused."""
-    assert not is_guarded_upload(condition)
-
-
-def test_a_quoted_operator_does_not_split_the_guard() -> None:
-    """An operator inside a string literal is text, not logic."""
-    condition = (
-        "env.CS_ACCESS_TOKEN != '' && github.ref == 'refs/heads/main'"
-        " && github.actor != 'a || b'"
-    )
-    assert is_guarded_upload(condition)
 
 
 @pytest.mark.parametrize(
@@ -424,45 +365,3 @@ def test_the_host_is_found_in_any_case_and_any_scope() -> None:
         ),
     )
     assert host_references_for_pull_requests(found) == [".github/workflows/ci.yml"]
-
-
-_UPLOAD_STEP = {
-    "name": "Upload",
-    "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@abc",
-    "env": {"CS_ACCESS_TOKEN": "${{ secrets.CS_ACCESS_TOKEN }}"},
-    "with": {"access-token": "${{env.CS_ACCESS_TOKEN}}"},
-}
-
-
-@pytest.mark.parametrize(
-    ("changes", "expected"),
-    [
-        ({}, {}),
-        ({"env": {}}, {"upload 0: Upload": "env.CS_ACCESS_TOKEN bound to the secret"}),
-        (
-            {"env": {"CS_ACCESS_TOKEN": "${{ secrets.OTHER }}"}},
-            {"upload 0: Upload": "env.CS_ACCESS_TOKEN bound to the secret"},
-        ),
-        ({"with": {}}, {"upload 0: Upload": "access-token passing it on"}),
-    ],
-)
-def test_the_upload_step_must_bind_and_pass_the_credential(
-    changes: dict[str, object], expected: dict[str, str]
-) -> None:
-    """Deleting the binding leaves the guard true-looking and the upload dead."""
-    step = _UPLOAD_STEP | changes
-    publisher = Workflow("w.yml", {"jobs": {"upload": {"steps": [step]}}})
-    assert unbound_uploads(publisher) == expected, step
-
-
-def test_a_compliant_upload_does_not_mask_an_unbound_one() -> None:
-    """Two unnamed upload steps are judged separately, in either order.
-
-    Keyed on the name alone, the later compliant step overwrote the earlier
-    offending one and the clause reported nothing.
-    """
-    unnamed = {key: value for key, value in _UPLOAD_STEP.items() if key != "name"}
-    unbound = unnamed | {"env": {}}
-    for steps, offending in (([unbound, unnamed], 0), ([unnamed, unbound], 1)):
-        publisher = Workflow("w.yml", {"jobs": {"upload": {"steps": steps}}})
-        assert list(unbound_uploads(publisher)) == [f"upload {offending}: None"], steps
