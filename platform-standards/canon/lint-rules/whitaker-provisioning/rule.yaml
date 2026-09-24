@@ -1,0 +1,83 @@
+schema_version: 1
+id: whitaker-provisioning
+name: Whitaker provisioning through install-whitaker
+description: >-
+  Audits how a checkout provisions the Whitaker lint suite. The only permitted
+  route is the shared-actions install-whitaker action, pinned to a revision
+  known to carry the estate's install rules: an exact installer version, the
+  lint suite never pinned, and --no-source-fallback always passed. The action's
+  own contract proves those rules, so this rule does not re-check flags. It
+  refuses every other route in workflows, composite actions, Makefiles and
+  scripts: an install of whitaker-installer, cargo-dylint or dylint-link by
+  Cargo or another action, a download of one, or a direct whitaker-installer
+  invocation; and any install-whitaker pin that is not listed (QG-002). QG-003,
+  a pin on the lint suite, is superseded. Whitaker itself is exempt as the producer. Audit-only: this rule
+  declares no mutations.
+version: 0.1.0
+sensor:
+  type: conftest
+  input: policy-input/whitaker-provisioning
+  policy: policy/
+  tests:
+    - policy/
+  data:
+    - fixtures/data.json
+parameters:
+  schema:
+    type: object
+    additionalProperties: false
+    properties:
+      compliant_install_whitaker_refs:
+        type: array
+        items:
+          type: string
+          pattern: "^[0-9a-f]{40}$"
+        description: >-
+          shared-actions revisions an install-whitaker pin may name. The first
+          entry is the merge of the change that made the action carry the
+          install rules. A revision is added only once `git merge-base
+          --is-ancestor <first entry> <revision>` succeeds in a shared-actions
+          clone, so every entry descends from it.
+      producer_repositories:
+        type: array
+        items:
+          type: string
+        description: >-
+          Repositories that build and publish Whitaker, which the rule does
+          not audit.
+      action_repository:
+        type: string
+        description: The repository that owns the install-whitaker action.
+      action_directory:
+        type: string
+        description: The action's directory within that repository.
+      exemptions:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [repository, path, reason]
+          properties:
+            repository:
+              type: string
+            path:
+              type: string
+            reason:
+              type: string
+        description: >-
+          Named scripts the rule does not audit, each with its repository and
+          the reason. Only developer-environment scripts that CI never runs
+          belong here.
+  defaults:
+    compliant_install_whitaker_refs:
+      - "0000000000000000000000000000000000000000"
+    producer_repositories:
+      - leynos/whitaker
+    action_repository: leynos/shared-actions
+    action_directory: .github/actions/install-whitaker
+    exemptions:
+      - repository: leynos/agent-helper-scripts
+        path: get-rust-tooling
+        reason: >-
+          Developer-environment bootstrap run by hand, never by CI. It pins
+          whitaker-installer 0.2.9 and passes --no-source-fallback.

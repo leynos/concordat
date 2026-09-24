@@ -1,0 +1,52 @@
+{
+  "actions": [
+    {
+      "error": null,
+      "parsed": {
+        "name": "Install Whitaker",
+        "runs": {
+          "steps": [
+            {
+              "run": "curl -fsSL \"https://github.com/leynos/whitaker/releases/download/v0.2.9/whitaker-installer.tgz\" -o archive.tgz\n\"$WHITAKER_INSTALLER_PATH\" --no-source-fallback\n",
+              "shell": "bash"
+            }
+          ],
+          "using": "composite"
+        }
+      },
+      "path": ".github/actions/install-whitaker/action.yml"
+    }
+  ],
+  "kind": "policy-input/whitaker-provisioning",
+  "repository": {
+    "name": "leynos/shared-actions",
+    "path": "action-repository"
+  },
+  "schema_version": 1,
+  "scripts": [],
+  "workflows": [
+    {
+      "error": null,
+      "parsed": {
+        "jobs": {
+          "test": {
+            "runs-on": "ubuntu-latest",
+            "steps": [
+              {
+                "uses": "./.github/actions/install-whitaker"
+              },
+              {
+                "uses": "$/.github/actions/install-whitaker"
+              }
+            ]
+          }
+        },
+        "name": "Test install-whitaker",
+        "on": {
+          "pull_request": null
+        }
+      },
+      "path": ".github/workflows/test-install-whitaker.yml"
+    }
+  ]
+}

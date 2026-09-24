@@ -1,0 +1,39 @@
+{
+  "actions": [],
+  "kind": "policy-input/whitaker-provisioning",
+  "repository": {
+    "name": "leynos/whitaker",
+    "path": "producer"
+  },
+  "schema_version": 1,
+  "scripts": [],
+  "workflows": [
+    {
+      "error": null,
+      "parsed": {
+        "jobs": {
+          "build": {
+            "runs-on": "ubuntu-latest",
+            "steps": [
+              {
+                "run": "cargo install --locked --path installer whitaker-installer"
+              },
+              {
+                "run": "./target/release/whitaker-installer --build-only"
+              }
+            ]
+          }
+        },
+        "name": "Release",
+        "on": {
+          "push": {
+            "tags": [
+              "v*"
+            ]
+          }
+        }
+      },
+      "path": ".github/workflows/release.yml"
+    }
+  ]
+}

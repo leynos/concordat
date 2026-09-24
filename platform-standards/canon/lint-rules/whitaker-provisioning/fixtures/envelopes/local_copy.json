@@ -1,0 +1,49 @@
+{
+  "actions": [
+    {
+      "error": null,
+      "parsed": {
+        "name": "Install Whitaker",
+        "runs": {
+          "steps": [
+            {
+              "run": "cargo binstall --no-confirm whitaker-installer@0.2.9",
+              "shell": "bash"
+            }
+          ],
+          "using": "composite"
+        }
+      },
+      "path": ".github/actions/install-whitaker/action.yml"
+    }
+  ],
+  "kind": "policy-input/whitaker-provisioning",
+  "repository": {
+    "name": "leynos/consumer",
+    "path": "local-copy"
+  },
+  "schema_version": 1,
+  "scripts": [],
+  "workflows": [
+    {
+      "error": null,
+      "parsed": {
+        "jobs": {
+          "lint": {
+            "runs-on": "ubuntu-latest",
+            "steps": [
+              {
+                "uses": "./.github/actions/install-whitaker"
+              }
+            ]
+          }
+        },
+        "name": "CI",
+        "on": {
+          "pull_request": null
+        }
+      },
+      "path": ".github/workflows/ci.yml"
+    }
+  ]
+}

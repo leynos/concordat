@@ -1,0 +1,11 @@
+{
+  "actions": [],
+  "kind": "policy-input/whitaker-provisioning",
+  "repository": {
+    "name": "leynos/consumer",
+    "path": "unknown-schema"
+  },
+  "schema_version": 2,
+  "scripts": [],
+  "workflows": []
+}

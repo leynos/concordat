@@ -1,0 +1,6 @@
+name: Setup
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: cargo binstall --no-confirm dylint-link@6.0.1

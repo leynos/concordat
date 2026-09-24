@@ -1,0 +1,36 @@
+{
+  "actions": [],
+  "kind": "policy-input/whitaker-provisioning",
+  "repository": {
+    "name": "leynos/consumer",
+    "path": "binstall-step"
+  },
+  "schema_version": 1,
+  "scripts": [],
+  "workflows": [
+    {
+      "error": null,
+      "parsed": {
+        "env": {
+          "WHITAKER_INSTALLER_VERSION": "0.2.6"
+        },
+        "jobs": {
+          "build-test": {
+            "runs-on": "ubuntu-latest",
+            "steps": [
+              {
+                "name": "Install Whitaker",
+                "run": "if ! command -v whitaker-installer >/dev/null 2>&1; then\n  if cargo binstall -V >/dev/null 2>&1; then\n    cargo binstall --no-confirm --locked \"whitaker-installer@${WHITAKER_INSTALLER_VERSION}\"\n  else\n    cargo install --locked whitaker-installer --version \"${WHITAKER_INSTALLER_VERSION}\"\n  fi\nfi\nwhitaker-installer\n"
+              }
+            ]
+          }
+        },
+        "name": "CI",
+        "on": {
+          "pull_request": null
+        }
+      },
+      "path": ".github/workflows/ci.yml"
+    }
+  ]
+}

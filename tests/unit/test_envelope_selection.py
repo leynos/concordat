@@ -34,6 +34,9 @@ from concordat.rules.markdown_envelope import (
 from concordat.rules.spelling_envelope import (
     ENVELOPE_KIND as SPELLING_ENVELOPE_KIND,
 )
+from concordat.rules.whitaker_provisioning_envelope import (
+    ENVELOPE_KIND as PROVISIONING_ENVELOPE_KIND,
+)
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -114,6 +117,11 @@ class TestRegisteredPackages:
                 "spelling-config-baseline",
                 SPELLING_ENVELOPE_KIND,
                 id="spelling-config-baseline",
+            ),
+            pytest.param(
+                "whitaker-provisioning",
+                PROVISIONING_ENVELOPE_KIND,
+                id="whitaker-provisioning",
             ),
         ],
     )

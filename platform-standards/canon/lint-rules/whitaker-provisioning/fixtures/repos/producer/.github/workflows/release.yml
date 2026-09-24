@@ -1,0 +1,10 @@
+name: Release
+on:
+  push:
+    tags: ["v*"]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: cargo install --locked --path installer whitaker-installer
+      - run: ./target/release/whitaker-installer --build-only

@@ -1,0 +1,8 @@
+name: Install Whitaker
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        curl -fsSL "https://github.com/leynos/whitaker/releases/download/v0.2.9/whitaker-installer.tgz" -o archive.tgz
+        "$WHITAKER_INSTALLER_PATH" --no-source-fallback

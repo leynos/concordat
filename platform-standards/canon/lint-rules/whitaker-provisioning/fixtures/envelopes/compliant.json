@@ -1,0 +1,56 @@
+{
+  "actions": [],
+  "kind": "policy-input/whitaker-provisioning",
+  "repository": {
+    "name": "leynos/consumer",
+    "path": "compliant"
+  },
+  "schema_version": 1,
+  "scripts": [
+    {
+      "error": null,
+      "path": "Makefile",
+      "text": "WHITAKER ?= whitaker\n\nlint:\n\t# cargo install whitaker-installer is not how this repository gets it.\n\t$(WHITAKER) --all -- --all-targets\n"
+    },
+    {
+      "error": null,
+      "path": "scripts/fetch-mdtablefix.sh",
+      "text": "#!/usr/bin/env bash\n# Fetches an unrelated tool; the lints themselves come from install-whitaker.\nset -euo pipefail\ncurl -fsSL \"https://github.com/leynos/mdtablefix/releases/download/v0.6.0/mdtablefix.tgz\" -o mdtablefix.tgz\nwhitaker --all\n"
+    }
+  ],
+  "workflows": [
+    {
+      "error": null,
+      "parsed": {
+        "jobs": {
+          "lint": {
+            "runs-on": "ubuntu-latest",
+            "steps": [
+              {
+                "name": "Cache the installer the action installs",
+                "uses": "actions/cache@v4",
+                "with": {
+                  "key": "whitaker",
+                  "path": "~/.cargo/bin/whitaker-installer"
+                }
+              },
+              {
+                "name": "Install Whitaker",
+                "uses": "leynos/shared-actions/.github/actions/install-whitaker@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              },
+              {
+                "name": "Lint",
+                "run": "# Whitaker used to come from: cargo binstall whitaker-installer\necho \"installed by whitaker-installer\"\ntest -x \"${HOME}/.cargo/bin/whitaker-installer\"\nmake lint\n"
+              }
+            ]
+          }
+        },
+        "name": "CI",
+        "on": {
+          "pull_request": null
+        }
+      },
+      "path": ".github/workflows/ci.yml"
+    }
+  ]
+}

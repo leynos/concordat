@@ -1,0 +1,28 @@
+{
+  "actions": [
+    {
+      "error": null,
+      "parsed": {
+        "name": "Setup",
+        "runs": {
+          "steps": [
+            {
+              "run": "cargo binstall --no-confirm dylint-link@6.0.1",
+              "shell": "bash"
+            }
+          ],
+          "using": "composite"
+        }
+      },
+      "path": ".github/actions/setup/action.yml"
+    }
+  ],
+  "kind": "policy-input/whitaker-provisioning",
+  "repository": {
+    "name": "leynos/consumer",
+    "path": "composite-action-route"
+  },
+  "schema_version": 1,
+  "scripts": [],
+  "workflows": []
+}
