@@ -438,12 +438,12 @@ _UPLOAD_STEP = {
     ("changes", "expected"),
     [
         ({}, {}),
-        ({"env": {}}, {"Upload": "env.CS_ACCESS_TOKEN bound to the secret"}),
+        ({"env": {}}, {"upload 0: Upload": "env.CS_ACCESS_TOKEN bound to the secret"}),
         (
             {"env": {"CS_ACCESS_TOKEN": "${{ secrets.OTHER }}"}},
-            {"Upload": "env.CS_ACCESS_TOKEN bound to the secret"},
+            {"upload 0: Upload": "env.CS_ACCESS_TOKEN bound to the secret"},
         ),
-        ({"with": {}}, {"Upload": "access-token passing it on"}),
+        ({"with": {}}, {"upload 0: Upload": "access-token passing it on"}),
     ],
 )
 def test_the_upload_step_must_bind_and_pass_the_credential(
@@ -453,3 +453,16 @@ def test_the_upload_step_must_bind_and_pass_the_credential(
     step = _UPLOAD_STEP | changes
     publisher = Workflow("w.yml", {"jobs": {"upload": {"steps": [step]}}})
     assert unbound_uploads(publisher) == expected, step
+
+
+def test_a_compliant_upload_does_not_mask_an_unbound_one() -> None:
+    """Two unnamed upload steps are judged separately, in either order.
+
+    Keyed on the name alone, the later compliant step overwrote the earlier
+    offending one and the clause reported nothing.
+    """
+    unnamed = {key: value for key, value in _UPLOAD_STEP.items() if key != "name"}
+    unbound = unnamed | {"env": {}}
+    for steps, offending in (([unbound, unnamed], 0), ([unnamed, unbound], 1)):
+        publisher = Workflow("w.yml", {"jobs": {"upload": {"steps": steps}}})
+        assert list(unbound_uploads(publisher)) == [f"upload {offending}: None"], steps

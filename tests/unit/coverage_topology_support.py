@@ -540,11 +540,31 @@ def is_guarded_upload(condition: str) -> bool:
     )
 
 
+def _labelled_uploads(
+    publisher: Workflow,
+) -> list[tuple[str, dict[str, object]]]:
+    """Return each upload step with a label unique within the publisher.
+
+    Two steps may share a name or both omit one, so the label carries the
+    step's position among the uploads; keying on the name alone would let a
+    compliant step overwrite an offending one.
+
+    Returns
+    -------
+        Each upload step paired with its position and name, in step order.
+
+    """
+    return [
+        (f"upload {index}: {step.get('name')}", step)
+        for index, step in enumerate(steps_using(publisher, UPLOAD_ACTION))
+    ]
+
+
 def unguarded_uploads(publisher: Workflow) -> dict[str, str]:
     """Return the publisher's upload steps whose condition is insufficient."""
     return {
-        str(step.get("name")): condition
-        for step in steps_using(publisher, UPLOAD_ACTION)
+        label: condition
+        for label, step in _labelled_uploads(publisher)
         if not is_guarded_upload(condition := str(step.get("if", "")))
     }
 
@@ -598,7 +618,7 @@ def unbound_uploads(publisher: Workflow) -> dict[str, str]:
         Each offending step's name and what it lacks.
     """
     lacking = {
-        str(step.get("name")): [
+        label: [
             gap
             for gap, holds in (
                 (
@@ -612,6 +632,6 @@ def unbound_uploads(publisher: Workflow) -> dict[str, str]:
             )
             if not holds
         ]
-        for step in steps_using(publisher, UPLOAD_ACTION)
+        for label, step in _labelled_uploads(publisher)
     }
     return {name: ", ".join(gaps) for name, gaps in lacking.items() if gaps}
