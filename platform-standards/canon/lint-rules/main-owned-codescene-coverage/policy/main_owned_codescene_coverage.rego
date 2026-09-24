@@ -574,6 +574,38 @@ step_guarded_on_token(step) if {
   contains(condition, "CS_ACCESS_TOKEN")
 }
 
+# This direct output shape is safe without binding the secret in job or step
+# environment. The producer must precede this upload in the same job; an
+# output from a different job or an arbitrary shell expression proves nothing.
+token_availability_run := `echo "available=${{ secrets.CS_ACCESS_TOKEN != '' }}" >> "$GITHUB_OUTPUT"`
+
+upload_guarded_on_token(workflow, job_name, upload_index) if {
+  jobs := workflow_jobs(workflow)
+  step := jobs[job_name].steps[upload_index]
+  step_guarded_on_token(step)
+}
+
+upload_guarded_on_token(workflow, job_name, upload_index) if {
+  jobs := workflow_jobs(workflow)
+  steps := jobs[job_name].steps
+  upload := steps[upload_index]
+  inputs := object.get(upload, "with", {})
+  is_object(inputs)
+  object.get(inputs, "access-token", "") == "${{ secrets.CS_ACCESS_TOKEN }}"
+  condition := step_condition(upload)
+  not guard_has_disjunction(condition)
+  some producer_index
+  producer := steps[producer_index]
+  is_object(producer)
+  producer_index < upload_index
+  producer_id := object.get(producer, "id", "")
+  is_string(producer_id)
+  regex.match(`^[A-Za-z_][A-Za-z0-9_-]*$`, producer_id)
+  object.get(producer, "run", "") == token_availability_run
+  some conjunct in guard_conjuncts(condition)
+  conjunct == sprintf("steps.%s.outputs.available == 'true'", [producer_id])
+}
+
 workflow_concurrency(workflow) := value if {
   parsed := workflow_parsed(workflow)
   value := object.get(parsed, "concurrency", null)
@@ -905,9 +937,17 @@ deny contains f if {
   envelope_ok
   some workflow in workflows
   qualifying_main_coverage_publisher(workflow)
-  some step in workflow_steps(workflow)
+  jobs := workflow_jobs(workflow)
+  some job_name in object.keys(jobs)
+  job := jobs[job_name]
+  is_object(job)
+  steps := object.get(job, "steps", [])
+  is_array(steps)
+  some upload_index
+  step := steps[upload_index]
+  is_object(step)
   is_upload_step(step)
-  not step_guarded_on_token(step)
+  not upload_guarded_on_token(workflow, job_name, upload_index)
   f := finding("noncompliant", workflow_path(workflow), "CodeScene upload step is not guarded on the CS_ACCESS_TOKEN credential")
 }
 

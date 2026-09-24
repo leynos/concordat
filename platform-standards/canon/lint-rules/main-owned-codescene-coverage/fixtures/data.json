@@ -4281,6 +4281,83 @@
           "error": null
         }
       ]
+    },
+    "clause2_direct_token_step_output_guard": {
+      "schema_version": 1,
+      "kind": "policy-input/main-owned-codescene-coverage",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "on": {
+              "pull_request": null
+            },
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {
+                    "uses": "leynos/shared-actions/.github/actions/generate-coverage@pin",
+                    "with": {
+                      "with-ratchet": "true",
+                      "publish-artefact": "false"
+                    }
+                  }
+                ],
+                "runs-on": "ubuntu-latest"
+              }
+            }
+          },
+          "error": null
+        },
+        {
+          "path": ".github/workflows/coverage-main.yml",
+          "parsed": {
+            "on": {
+              "push": {
+                "branches": [
+                  "main"
+                ]
+              },
+              "workflow_dispatch": null
+            },
+            "jobs": {
+              "coverage": {
+                "steps": [
+                  {
+                    "uses": "leynos/shared-actions/.github/actions/generate-coverage@pin",
+                    "with": {
+                      "with-ratchet": true
+                    }
+                  },
+                  {
+                    "name": "Check for the CodeScene token",
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
+                    "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
+                    "with": {
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
+                    },
+                    "if": "steps.codescene-token.outputs.available == 'true' && github.ref == 'refs/heads/main'"
+                  }
+                ],
+                "runs-on": "ubuntu-latest"
+              }
+            },
+            "concurrency": {
+              "group": "coverage-main-${{ github.ref }}",
+              "cancel-in-progress": false
+            }
+          },
+          "error": null
+        }
+      ]
     }
   }
 }
