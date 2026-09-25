@@ -40,11 +40,14 @@ from __future__ import annotations
 import typing as typ
 
 from tests.unit.coverage_credential_support import (
+    CODESCENE_ENVIRONMENT,
     TOKEN_CHECK_COMMAND,
+    environment_mismatches,
     stray_token_references,
     token_environments,
     unguarded_uploads,
     unpassed_credentials,
+    uploads,
 )
 from tests.unit.coverage_topology_support import (
     MAIN_REF_GUARD,
@@ -283,4 +286,28 @@ def test_the_coverage_action_is_pinned_identically_in_every_lane() -> None:
     distinct = {pin for pin_list in pins.values() for pin in pin_list}
     assert len(distinct) == 1, (
         f"every lane must invoke one pinned coverage action; found {pins}"
+    )
+
+
+def test_only_the_upload_job_declares_the_codescene_environment() -> None:
+    """The token's environment is declared by the upload job and nowhere else.
+
+    The environment's branch policy admits `main` alone, so a branch copy
+    of the publisher cannot read the token. Any other job declaring it could.
+    """
+    found = _repository_workflows()
+    mismatched = {
+        str(workflow): mismatches
+        for workflow in found
+        if (mismatches := environment_mismatches(workflow))
+    }
+    assert not mismatched, (
+        f"only the CodeScene upload job may declare environment "
+        f"{CODESCENE_ENVIRONMENT}, and it must; found {mismatched}"
+    )
+    publisher = _sole_publisher()
+    assert environment_mismatches(publisher) == [], publisher
+    assert any(uploads(publisher)), (
+        f"{publisher} holds no upload step, so the environment clause above "
+        "would pass over nothing"
     )

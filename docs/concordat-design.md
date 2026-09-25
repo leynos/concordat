@@ -1943,17 +1943,22 @@ coverage generated after a merge on `main`.
   secret as its action input. A workflow that uploads names the token nowhere
   else, so no `env` block, other `run` body, other action input or condition
   holds it; static-analysis tools kept flagging the older `env` binding, which
-  the composite upload action also handed to every nested step. Arbitrary shell
-  provenance and cross-job outputs remain outside this local policy's proof.
-  Workflow discovery is explicitly fallible: an absent `.github/workflows` is a
-  repository with no workflows, while an unreadable or unlistable one is an
-  operational error rather than an empty list that would clear the rule.
-  Adopting this rule removes a quality gate from the pull-request lane, so an
-  adoption is reviewed in full rather than merged mechanically on green.
-  Actions caches saved on a pull-request branch are invisible to other
-  branches, so a PR-only ratchet cannot provide the authoritative baseline. The
-  secret-store sensor lists secret names via the GitHub API for both stores and
-  cross-references every `if: env.X != ''` guard in the repository's workflows.
+  the composite upload action also handed to every nested step. The upload job
+  declares `environment: codescene` and no other job does, because the token is
+  a secret of that environment, whose branch policy admits `main` alone: a
+  branch copy of the publisher dispatched by any pusher cannot read it. The ref
+  guard stays as defence in depth, and CV-006 audits the environment itself.
+  Arbitrary shell provenance and cross-job outputs remain outside this local
+  policy's proof. Workflow discovery is explicitly fallible: an absent
+  `.github/workflows` is a repository with no workflows, while an unreadable or
+  unlistable one is an operational error rather than an empty list that would
+  clear the rule. Adopting this rule removes a quality gate from the
+  pull-request lane, so an adoption is reviewed in full rather than merged
+  mechanically on green. Actions caches saved on a pull-request branch are
+  invisible to other branches, so a PR-only ratchet cannot provide the
+  authoritative baseline. The secret-store sensor lists secret names via the
+  GitHub API for both stores and cross-references every `if: env.X != ''` guard
+  in the repository's workflows.
 - **Actuators:** canonical `coverage-main.yml` file-copy and coverage-job
   patches retain the local PR ratchet and the main-only CodeScene upload. A
   `concordat`-driven secret provisioning command sets an operator-supplied

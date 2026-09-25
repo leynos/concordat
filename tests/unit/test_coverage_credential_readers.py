@@ -12,6 +12,7 @@ import pytest
 from tests.unit.coverage_credential_support import (
     TOKEN_CHECK_COMMAND,
     TOKEN_SECRET,
+    environment_mismatches,
     is_guarded_upload,
     stray_token_references,
     token_environments,
@@ -295,3 +296,49 @@ def test_a_stray_reference_is_seen(
 ) -> None:
     """Any reference outside the two sanctioned places is reported by scope."""
     assert stray_token_references(Workflow("w.yml", document)) == expected
+
+
+@pytest.mark.parametrize(
+    ("jobs_document", "expected"),
+    [
+        pytest.param(
+            {"upload": {"environment": "codescene", "steps": [_UPLOAD_STEP]}},
+            [],
+            id="upload job declares",
+        ),
+        pytest.param(
+            {"upload": {"environment": {"name": "codescene"}, "steps": [_UPLOAD_STEP]}},
+            [],
+            id="mapping form",
+        ),
+        pytest.param(
+            {"upload": {"steps": [_UPLOAD_STEP]}},
+            ["upload: uploads without environment codescene"],
+            id="upload job without environment",
+        ),
+        pytest.param(
+            {"upload": {"environment": "codescene-prod", "steps": [_UPLOAD_STEP]}},
+            ["upload: uploads without environment codescene"],
+            id="near-miss name",
+        ),
+        pytest.param(
+            {
+                "upload": {"environment": "codescene", "steps": [_UPLOAD_STEP]},
+                "lint": {"environment": "codescene", "steps": [{"run": "make lint"}]},
+            },
+            ["lint: declares codescene without uploading"],
+            id="another job declares",
+        ),
+        pytest.param(
+            {"lint": {"environment": "preview", "steps": [{"run": "make lint"}]}},
+            [],
+            id="unrelated environment",
+        ),
+    ],
+)
+def test_only_the_upload_job_declares_the_environment(
+    jobs_document: dict[str, object], expected: list[str]
+) -> None:
+    """The environment holding the token belongs to the upload job alone."""
+    workflow = Workflow("w.yml", {"jobs": jobs_document})
+    assert environment_mismatches(workflow) == expected, jobs_document

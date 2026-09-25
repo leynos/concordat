@@ -76,6 +76,21 @@ Every uploader names the token in exactly two places:
   because the command line reads the token from its environment: upload through
   the action.
 
+The token lives in a main-only environment:
+
+- The job holding the upload step declares `environment: codescene`, either
+  as that exact string or as a mapping whose `name` is `codescene`. No other
+  job declares it, and no job in a pull-request workflow does. An expression is
+  not a declaration, since it may resolve to anything.
+- `CS_ACCESS_TOKEN` is a secret of the `codescene` environment, not a
+  repository secret, and the environment's deployment branch policy admits
+  `main` alone. Anyone who can push can dispatch a branch copy of the
+  publisher, and a repository secret is readable from any branch; an
+  environment secret behind a main-only policy is not. The ref guard on the
+  upload step stays as defence in depth. The repository settings are outside a
+  checkout, so this rule cannot read them: `concordat auditor` checks them as
+  CV-006.
+
 The removed installer digest is gone:
 
 - No workflow passes the `installer-checksum` input. The rule flags the input

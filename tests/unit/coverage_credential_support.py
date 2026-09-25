@@ -244,3 +244,37 @@ def stray_token_references(publisher: Workflow) -> list[str]:
             if mentions(_unsanctioned_part(step | {"env": None}), TOKEN_VARIABLE)
         )
     return found
+
+
+# The environment holding the token. Its branch policy admits `main` alone,
+# so only the upload job may declare it.
+CODESCENE_ENVIRONMENT: typ.Final = "codescene"
+
+
+def _environment_name(job: cabc.Mapping[str, object]) -> str | None:
+    """Return the environment a job declares, in either spelling, if any."""
+    declared = job.get("environment")
+    if isinstance(declared, dict):
+        declared = declared.get("name")
+    return declared if isinstance(declared, str) else None
+
+
+def environment_mismatches(workflow: Workflow) -> list[str]:
+    """Return the jobs whose environment does not match their role.
+
+    A job holding the upload step must declare `codescene`, and no other job
+    may, since any job declaring it can read the token.
+
+    Returns
+    -------
+        Each offending job's name and what is wrong with it.
+    """
+    found: list[str] = []
+    for name, job in jobs(workflow).items():
+        uploads_here = any(_is_upload(step) for step in job_steps(workflow, name, job))
+        declares = _environment_name(job) == CODESCENE_ENVIRONMENT
+        if uploads_here and not declares:
+            found.append(f"{name}: uploads without environment {CODESCENE_ENVIRONMENT}")
+        elif declares and not uploads_here:
+            found.append(f"{name}: declares {CODESCENE_ENVIRONMENT} without uploading")
+    return found

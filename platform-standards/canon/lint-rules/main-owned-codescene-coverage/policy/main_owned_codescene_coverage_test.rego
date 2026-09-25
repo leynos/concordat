@@ -822,3 +822,76 @@ test_defaulted_mode_upload_with_token_in_job_env_is_stray if {
     ["noncompliant", ".github/workflows/coverage-main.yml", "CodeScene uploader names CS_ACCESS_TOKEN outside the check step's command and the upload's access-token input, at jobs.coverage-upload.env.CS_ACCESS_TOKEN"],
   }
 }
+
+# Without the environment, a branch copy of the publisher can read the token.
+test_upload_job_without_environment_is_noncompliant if {
+  fixture := json.patch(data.fixtures.clause2_direct_token_step_output_guard, [
+    {"op": "remove", "path": "/workflows/1/parsed/jobs/coverage/environment"},
+  ])
+  findings := policy.deny with input as fixture
+  profile(findings) == {
+    ["noncompliant", ".github/workflows/coverage-main.yml", "CodeScene upload job \"coverage\" does not declare environment: codescene"],
+  }
+}
+
+# The mapping form names the environment as well as the string form does.
+test_environment_mapping_form_is_compliant if {
+  fixture := json.patch(data.fixtures.clause2_direct_token_step_output_guard, [
+    {"op": "replace", "path": "/workflows/1/parsed/jobs/coverage/environment", "value": {"name": "codescene", "url": "https://codescene.io"}},
+  ])
+  findings := policy.deny with input as fixture
+  count(findings) == 0
+}
+
+# The name is exact: a near miss is a different environment with its own secrets.
+test_environment_with_another_name_is_noncompliant if {
+  fixture := json.patch(data.fixtures.clause2_direct_token_step_output_guard, [
+    {"op": "replace", "path": "/workflows/1/parsed/jobs/coverage/environment", "value": "codescene-prod"},
+  ])
+  findings := policy.deny with input as fixture
+  profile(findings) == {
+    ["noncompliant", ".github/workflows/coverage-main.yml", "CodeScene upload job \"coverage\" does not declare environment: codescene"],
+  }
+}
+
+# An expression may resolve to anything, so it is not the declaration.
+test_environment_named_by_expression_is_noncompliant if {
+  fixture := json.patch(data.fixtures.clause2_direct_token_step_output_guard, [
+    {"op": "replace", "path": "/workflows/1/parsed/jobs/coverage/environment", "value": "${{ github.ref == 'refs/heads/main' && 'codescene' || 'none' }}"},
+  ])
+  findings := policy.deny with input as fixture
+  profile(findings) == {
+    ["noncompliant", ".github/workflows/coverage-main.yml", "CodeScene upload job \"coverage\" does not declare environment: codescene"],
+  }
+}
+
+# Any job declaring the environment can read the token, so only the upload job may.
+test_environment_on_a_job_without_upload_is_noncompliant if {
+  fixture := json.patch(data.fixtures.clause2_direct_token_step_output_guard, [
+    {"op": "add", "path": "/workflows/1/parsed/jobs/lint", "value": {"runs-on": "ubuntu-latest", "environment": "codescene", "steps": [{"run": "make lint"}]}},
+  ])
+  findings := policy.deny with input as fixture
+  profile(findings) == {
+    ["noncompliant", ".github/workflows/coverage-main.yml", "job \"lint\" declares environment codescene but holds no CodeScene upload step"],
+  }
+}
+
+# A pull-request lane never needs the token, so it never declares its environment.
+test_pull_request_job_declaring_environment_is_noncompliant if {
+  fixture := json.patch(data.fixtures.clause2_direct_token_step_output_guard, [
+    {"op": "add", "path": "/workflows/0/parsed/jobs/coverage/environment", "value": "codescene"},
+  ])
+  findings := policy.deny with input as fixture
+  profile(findings) == {
+    ["noncompliant", ".github/workflows/ci.yml", "pull-request workflow job \"coverage\" declares environment codescene"],
+  }
+}
+
+# The clause is about the codescene environment, not about environments in general.
+test_another_environment_elsewhere_is_not_a_finding if {
+  fixture := json.patch(data.fixtures.clause2_direct_token_step_output_guard, [
+    {"op": "add", "path": "/workflows/0/parsed/jobs/coverage/environment", "value": "preview"},
+  ])
+  findings := policy.deny with input as fixture
+  count(findings) == 0
+}
