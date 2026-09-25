@@ -167,9 +167,6 @@ max-branches = 15
 [tool.pylint."messages control"]
 disable = [
     "all",
-    # Managed PyPy can lag the project's supported CPython syntax. Keep the
-    # baseline pass useful on files it can parse.
-    "syntax-error",
 ]
 enable = [
     # Logging format safety.

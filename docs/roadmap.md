@@ -564,7 +564,7 @@ the Section 2.1.2 format.
   regenerates deterministically from the pinned tag.
 - [ ] Ship the Python formatting and linting rule packages (PY-001 to
   PY-005): ruff format and check wiring bound into the format and lint gates,
-  pylint present via `pylint-pypy-shim`, and both configurations matching or
+  pylint present in the lint gate, and both configurations matching or
   exceeding the vendored template baseline. Acceptance: fixtures with a missing
   format target, a soft-skipped lint step, a disabled template rule, and an
   over-broad ignore list each raise findings; mutations patch the configuration

@@ -18,15 +18,16 @@ TYPOS_CONFIG_BUILDER_VERSION ?= v0.1.1
 TYPOS_CONFIG_BUILDER = uv tool run --from \
 	"git+https://github.com/leynos/typos-config-builder.git@$(TYPOS_CONFIG_BUILDER_VERSION)" \
 	typos-config-builder
-# Keep Pylint independent from the project virtual environment.  The PyPy shim
-# makes the baseline Pylint policy available on every supported host.
-PYLINT_PYTHON ?= pypy
+# Keep Pylint independent from the project virtual environment: a pinned
+# Pylint runs as a uv tool on managed PyPy 3.12.  The interpreter is pinned to
+# its minor version so a new PyPy cannot change the parsed grammar silently.
+PYLINT_PYTHON ?= pypy@3.12
+PYLINT_VERSION ?= 4.0.9
 PYLINT_TARGETS ?= concordat scripts tests
-PYLINT_PYPY_SHIM_REF ?= 726d09f968b4d729ee4b29c71fc732e744854f3b
-PYLINT_PYPY_SHIM = git+https://github.com/leynos/pylint-pypy-shim.git@$(PYLINT_PYPY_SHIM_REF)
-PYLINT = $(UV_ENV) uv tool run --python $(PYLINT_PYTHON) --from '$(PYLINT_PYPY_SHIM)' pylint-pypy
+PYLINT = $(UV_ENV) uv tool run --managed-python --python $(PYLINT_PYTHON) --from 'pylint==$(PYLINT_VERSION)' pylint
 # Run the df12 plugin in a separate CPython 3.14 process.  Keeping its
-# dependency out of the PyPy shim avoids interpreter and plugin version skew.
+# dependency out of the PyPy Pylint tool avoids interpreter and plugin version
+# skew.
 DF12_PYTHON_LINTS_REF ?= 9c835f35b0f1690597ade799c9c6a30bc5922959
 DF12_PYTHON_LINTS = git+https://github.com/leynos/df12-python-lints.git@$(DF12_PYTHON_LINTS_REF)
 DF12_PYTHON ?= 3.14
