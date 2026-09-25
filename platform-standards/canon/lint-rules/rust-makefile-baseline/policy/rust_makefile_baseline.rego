@@ -328,9 +328,11 @@ gate_binding_tail := `(([[:space:]][^;|&]*)?(&&[^;|&]*)*)$`
 # a doubled bar cannot anchor a match. A single `|` still can:
 # `cat f | $(GATE)` puts the gate last in the pipeline, so its status is the
 # line's.
+# `gate_command_prefix`, under "Shell readings" at the end of this file,
+# extends the assignment prefix with Make variables that expand to one.
 gate_command_pattern := sprintf(
 	`(^|[;&(]|[^|]\|)[[:space:]]*[-@+]*[[:space:]]*(%s)*(\$\(%s\)|\$\{%s\})%s`,
-	[gate_assignment_prefix, gate_variable, gate_variable, gate_binding_tail],
+	[gate_command_prefix, gate_variable, gate_variable, gate_binding_tail],
 ) if gate_variable_is_simple
 
 # A recipe line whose first word is `#` is a shell comment: the whole line is
@@ -581,7 +583,7 @@ deny contains f if {
 	lint_path_rule(rule)
 	some recipe in rule.recipes
 	some pattern in ["command -v", "|| true"]
-	contains(recipe.text, pattern)
+	recipe_soft_skips(recipe.text, pattern)
 	f := finding(
 		"QG-001", "noncompliant", recipe.location.start_line,
 		sprintf("lint-path recipe soft-skips the gate (%q)", [pattern]),
@@ -593,13 +595,14 @@ deny contains f if {
 	some rule in input.makefile.rules
 	lint_path_rule(rule)
 	some recipe in rule.recipes
-	contains(recipe.text, "which ")
+	regex.match(which_command_pattern, recipe.text)
 	contains(recipe.text, "||")
 	f := finding(
 		"QG-001", "noncompliant", recipe.location.start_line,
 		"lint-path recipe soft-skips the gate (\"which\" existence guard)",
 	)
 }
+
 
 deny contains f if {
 	gate_provable
@@ -659,3 +662,70 @@ deny contains f if {
 		),
 	)
 }
+
+# -- Shell readings ----------------------------------------------------------
+#
+# The policy reads recipe text rather than parsing shell. These helpers refine
+# three readings so that common, correct recipe shapes are not misread: a Make
+# variable holding environment assignments before the gate, a `command -v`
+# probe that fails hard, and the word `which` inside quoted prose.
+
+# A prefix before the gate may also be a Make variable whose every definition
+# is itself a run of environment assignments, as in
+# `GATE_RUSTFLAGS = RUSTFLAGS="-D warnings"` used as
+# `$(GATE_RUSTFLAGS) $(WHITAKER) --all`. Make expands it before the shell
+# runs, so the gate is still the command word. A variable with any other
+# definition, such as `ECHO = echo`, is not seen through, and the gate stays
+# unproven.
+env_assignment_value_pattern := `^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=("[^"]*"|'[^']*'|[^[:space:][:cntrl:]"']*)[[:space:]]*)+$`
+
+# An `export` or `unexport` directive naming the variable assigns nothing, so
+# only value-carrying facts count; a `define` block does carry a value.
+variable_value_definitions(name) := [definition |
+	some definition in input.makefile.variables
+	definition.name == name
+	not is_export_directive(definition)
+]
+
+is_export_directive(definition) if {
+	definition.operator == ""
+	definition.define_block == false
+}
+
+env_prefix_variables := {name |
+	some variable in input.makefile.variables
+	name := variable.name
+	regex.match(`^[A-Za-z_][A-Za-z0-9_]*$`, name)
+	definitions := variable_value_definitions(name)
+	count(definitions) > 0
+	every definition in definitions {
+		definition.operator != ""
+		regex.match(env_assignment_value_pattern, definition.raw_value)
+	}
+}
+
+gate_command_prefix := concat("|", array.concat(
+	[gate_assignment_prefix],
+	[sprintf(`(\$\(%s\)|\$\{%s\})[[:space:]]+`, [name, name]) | some name in env_prefix_variables],
+))
+
+recipe_soft_skips(text, "|| true") if contains(text, "|| true")
+
+# A `command -v` probe skips the gate only if a missing tool lets the line
+# succeed. `command -v X || { ...; exit 1; }` and `command -v X || exit 1`
+# fail hard instead, which is what a lint gate should do, so a recipe whose
+# every probe is followed by such a failure is not a soft skip. `exit 0`, a
+# probe guarding `&&`, or any other shape still is.
+recipe_soft_skips(text, "command -v") if {
+	probes := count(regex.find_n(`command -v`, text, -1))
+	probes > 0
+	probes != count(regex.find_n(command_probe_hard_fail_pattern, text, -1))
+}
+
+command_probe_hard_fail_pattern := `command -v[^|;]*\|\|[[:space:]\\]*(\{([^{}]*;)?[[:space:]\\]*exit[[:space:]]+[1-9][0-9]*[[:space:];\\]*\}|exit[[:space:]]+[1-9][0-9]*)`
+
+# `which` counts only as a command word: at the start of the recipe, after a
+# separator, a subshell or a command substitution, or after `if` or `!`. The
+# word inside quoted prose, as in `printf '... which writes ...'`, is not a
+# guard.
+which_command_pattern := "(^|[;&|(`]|\\$\\()[[:space:]]*[-@+]*[[:space:]]*((if|!)[[:space:]]+)?which[[:space:]]"
