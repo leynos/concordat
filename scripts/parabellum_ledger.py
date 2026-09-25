@@ -19,7 +19,8 @@ if typ.TYPE_CHECKING:
 
 RULE_PACKAGE: typ.Final = "rust-makefile-baseline"
 RULE_VERSION: typ.Final = "0.2.0"
-MAKEUTIL_REV: typ.Final = "6e64f4fe84419705badc30baa5649cbb6f69a298"
+# The commit makeutil v0.1.0 is tagged at, which CI installs as a release.
+MAKEUTIL_REV: typ.Final = "d33acd3ecb8d7d84042a28807243752e1f4dccee"
 LEDGER_SCHEMA_VERSION: typ.Final = 1
 
 

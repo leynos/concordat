@@ -19,8 +19,12 @@ jobs:
       # `make check-fmt` runs `mdtablefix --check --git`; 0.6.0 is the first
       # release with `--check` and `--git`.
       MDTABLEFIX_VERSION: "0.6.0"
-      MAKEUTIL_REVISION: "6e64f4fe84419705badc30baa5649cbb6f69a298"
-      MAKEUTIL_TOOLCHAIN: "nightly-2026-05-28"
+      # makeutil v0.1.0's x86_64 musl release asset and its SHA-256 digest.
+      # Bump the version and the digest together.
+      MAKEUTIL_VERSION: "0.1.0"
+      MAKEUTIL_ASSET: "makeutil-x86_64-unknown-linux-musl"
+      MAKEUTIL_SHA256: "99dd28a138dbe07e88e4dc5dd3954e6b29b46cc959635311d326cb537253115d"
+      MAKEUTIL_RELEASES: "https://github.com/leynos/makeutil/releases/download"
     steps:
       - name: Check out repository
         # v4
@@ -54,21 +58,21 @@ jobs:
         with:
           version: ${{ env.MDTABLEFIX_VERSION }}
 
-      - name: Check makeutil pin is on main
-        # A pin no makeutil branch reaches installs only until GitHub
-        # garbage-collects it; the previous pin was such a commit. Refuse
-        # one here, when it is introduced, rather than when it vanishes.
-        run: uv run scripts/check_makeutil_pin.py
-
       - name: Install Makefile parser
+        # The released static binary, verified against the digest pinned
+        # above rather than the release's own checksum file, so a replaced
+        # asset fails here instead of running.
         run: |
-          rustup toolchain install "${MAKEUTIL_TOOLCHAIN}" --profile minimal
-          RUSTFLAGS="-Zpolonius=next" cargo +"${MAKEUTIL_TOOLCHAIN}" install \
-            --git https://github.com/leynos/makeutil \
-            --rev "${MAKEUTIL_REVISION}" \
-            --locked \
-            --force \
-            makeutil
+          set -euo pipefail
+          download="${RUNNER_TEMP}/${MAKEUTIL_ASSET}"
+          bin_dir="${RUNNER_TEMP}/makeutil-bin"
+          curl --fail --silent --show-error --location --proto '=https' \
+            --tlsv1.2 --output "${download}" \
+            "${MAKEUTIL_RELEASES}/v${MAKEUTIL_VERSION}/${MAKEUTIL_ASSET}"
+          printf '%s  %s\n' "${MAKEUTIL_SHA256}" "${download}" \
+            | sha256sum --check --strict
+          install -D -m 0755 "${download}" "${bin_dir}/makeutil"
+          echo "${bin_dir}" >> "${GITHUB_PATH}"
 
       - name: Install OpenTofu
         run: |

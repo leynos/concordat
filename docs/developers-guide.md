@@ -236,7 +236,11 @@ raises, so a newly required tool is covered as soon as it is introduced. It
 enumerates the suite lanes from `.github/workflows`, so a workflow added later
 is covered on the day it appears. Provisioning is recognized from the shape of
 an install command and not from a step's name, so renaming or merging steps
-cannot void it. A tool must be installed before the step that runs the suite,
+cannot void it. A package manager's `install` verb is one such shape. The other
+is coreutils `install` copying one downloaded file to a literal file name, as
+the makeutil release install does; `tests/unit/file_install_recognizer.py`
+recognizes it and refuses directory creation, several sources, and an expanded
+destination name. A tool must be installed before the step that runs the suite,
 since installing it afterwards fails exactly as the publisher did, and every
 lane must install a shared tool at the same specification so the two cannot
 drift apart. A lane that installs with Go must also run the shared Go setup
@@ -769,17 +773,14 @@ Two external tools must be on `PATH`:
   that "Concordat never parses GNU Make syntax itself". `makeutil parse` is run
   with a 10-second default timeout, and its exit code (0 = complete parse, 1 =
   recovered parse) must agree with the `parse.status` field of its own JSON
-  report, or the report is rejected as internally inconsistent. CI installs it
-  from the commit named by `MAKEUTIL_REVISION` in `ci.yml` and
-  `coverage-main.yml`, and that commit must be on makeutil's `main`: a commit
-  no branch reaches installs only until GitHub garbage-collects it. The
-  `Check makeutil pin is on main` step runs `scripts/check_makeutil_pin.py`,
-  which fails the pull request otherwise, and also fails when git cannot run,
-  cannot fetch, or exceeds its 120-second timeout (`GIT_TIMEOUT_SECONDS`),
-  since an unanswered check vouches for nothing; run it locally with
-  `MAKEUTIL_REVISION=<sha> uv run scripts/check_makeutil_pin.py` before
-  repinning. `tests/unit/test_makeutil_pin_contract.py` keeps the step
-  unguarded and both workflows on the same revision.
+  report, or the report is rejected as internally inconsistent. CI installs a
+  released static binary rather than compiling it: `ci.yml` and
+  `coverage-main.yml` download `MAKEUTIL_ASSET` from release
+  `v$MAKEUTIL_VERSION` and verify it with `sha256sum --check` against the
+  `MAKEUTIL_SHA256` digest pinned beside the version, not against the release's
+  own `.sha256` file, so a replaced asset fails the install. Bump the version
+  and the digest together; `tests/unit/test_skylos_lint_contract.py` holds both
+  workflows to the same release, digest and install command.
 - **`conftest`** (`concordat/rules/runner.py`) — evaluates the envelope
   against the rule package's Rego policy, with a 60-second timeout
   (`CONFTEST_TIMEOUT`).
