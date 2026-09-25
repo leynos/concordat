@@ -24,7 +24,7 @@ TYPOS_CONFIG_BUILDER = uv tool run --from \
 PYLINT_PYTHON ?= pypy@3.12
 PYLINT_VERSION ?= 4.0.9
 PYLINT_TARGETS ?= concordat scripts tests
-PYLINT = $(UV_ENV) uv tool run --python $(PYLINT_PYTHON) --from 'pylint==$(PYLINT_VERSION)' pylint
+PYLINT = $(UV_ENV) uv tool run --managed-python --python $(PYLINT_PYTHON) --from 'pylint==$(PYLINT_VERSION)' pylint
 # Run the df12 plugin in a separate CPython 3.14 process.  Keeping its
 # dependency out of the PyPy Pylint tool avoids interpreter and plugin version
 # skew.
