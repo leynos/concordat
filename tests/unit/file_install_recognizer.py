@@ -48,18 +48,34 @@ def installed_file_name(arguments: cabc.Sequence[str]) -> frozenset[str]:
     """
     if _DIRECTORY_OPTIONS.intersection(arguments):
         return frozenset()
-    operands: list[str] = []
-    skip_next = False
-    for token in arguments:
-        if skip_next:
-            skip_next = False
-        elif token in _OPTIONS_WITH_ARGUMENT:
-            skip_next = True
-        elif not token.startswith("-"):
-            operands.append(token)
+    operands = _operands(arguments)
     if len(operands) != 2:
         return frozenset()
     name = operands[-1].rsplit("/", 1)[-1]
     if not name or "$" in name:
         return frozenset()
     return frozenset({name})
+
+
+def _operands(arguments: cabc.Sequence[str]) -> list[str]:
+    """Return the command's operands, skipping options and their arguments.
+
+    Returns
+    -------
+        The source and destination tokens, in order.
+
+    Examples
+    --------
+    >>> _operands(["-D", "-m", "0755", "dl/asset", "bin/makeutil"])
+    ['dl/asset', 'bin/makeutil']
+    """
+    operands: list[str] = []
+    is_option_argument = False
+    for token in arguments:
+        if is_option_argument:
+            is_option_argument = False
+            continue
+        is_option_argument = token in _OPTIONS_WITH_ARGUMENT
+        if not token.startswith("-"):
+            operands.append(token)
+    return operands
