@@ -339,6 +339,21 @@ nowhere; and a CodeScene project whose gates configuration is absent fails
 `check` mode on every pull request, which is a property of that project's
 configuration rather than of the repository's workflows.
 
+CV-005 0.2.0 changes what a compliant publisher looks like. A repository that
+adopted an earlier version moves as follows:
+
+- Add a step before the upload, in the same job, with an `id` and no `if:` or
+  `env`, whose only command is
+  `echo "available=${{ secrets.CS_ACCESS_TOKEN != '' }}" >> "$GITHUB_OUTPUT"`.
+- Guard the upload on `steps.<id>.outputs.available == 'true'` beside the
+  main-ref comparison. A condition naming `CS_ACCESS_TOKEN` itself no longer
+  counts as a guard.
+- Pass `${{ secrets.CS_ACCESS_TOKEN }}` directly to the upload action's
+  `access-token` input, and remove every `env` binding of the token at
+  workflow, job and step level.
+- Replace any direct `cs-coverage upload` command with the
+  `upload-codescene-coverage` action, which binds the token from its input.
+
 Options:
 
 - `--repo PATH` — the checkout to audit (defaults to the current

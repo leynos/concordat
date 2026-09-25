@@ -24,12 +24,13 @@ One main-owned publisher writes the baseline and uploads:
 
 - Exactly one workflow with a `push` trigger restricted to `main`, optionally
   alongside `workflow_dispatch`, generates ratcheted coverage and invokes the
-  CodeScene action in upload mode, or runs a direct `cs-coverage upload`
-  command. The action defaults `mode` to `upload`, so a step that omits the
-  input uploads and satisfies this clause; `mode: check` and `mode: install` do
-  not. The rule reads the effective mode rather than the spelling, because
-  reporting correct wiring as broken only teaches people to edit a working
-  workflow to satisfy the audit.
+  CodeScene action in upload mode. The action is the only route: a direct
+  `cs-coverage upload` command is noncompliant (see the token clause below).
+  The action defaults `mode` to `upload`, so a step that omits the input
+  uploads and satisfies this clause; `mode: check` and `mode: install` do not.
+  The rule reads the effective mode rather than the spelling, because reporting
+  correct wiring as broken only teaches people to edit a working workflow to
+  satisfy the audit.
 - That workflow's upload step is guarded on `github.ref == 'refs/heads/main'`
   as well as on the credential. A `workflow_dispatch` selects a ref, and the
   push filter says nothing about it, so a dispatch from a feature branch would

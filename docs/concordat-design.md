@@ -1923,8 +1923,9 @@ coverage generated after a merge on `main`.
   CodeScene action, direct `cs-coverage` command, or access token. A workflow
   with a push trigger restricted to `main` (optionally alongside
   `workflow_dispatch`) must exist, and its final coverage step must upload
-  through the action in upload mode, which is its default, or through
-  `cs-coverage upload`; the coverage-action pin is at or after the
+  through the action in upload mode, which is its default; a direct
+  `cs-coverage upload` command is refused, because the command line reads the
+  token from its environment; the coverage-action pin is at or after the
   shared-actions revision that preserves line records; and exactly one
   `with-ratchet` invocation exists per job. The audit-only
   `main-owned-codescene-coverage` package evaluates those facts from a

@@ -811,3 +811,14 @@ test_token_named_variable_is_stray if {
     ["noncompliant", ".github/workflows/coverage-main.yml", "CodeScene uploader names CS_ACCESS_TOKEN outside the check step's command and the upload's access-token input, at jobs.coverage.steps.0.env.CS_ACCESS_TOKEN"],
   }
 }
+
+# A step that omits `mode` still uploads, so the token clause holds it too.
+test_defaulted_mode_upload_with_token_in_job_env_is_stray if {
+  fixture := json.patch(data.fixtures.clause2_upload_mode_defaulted, [
+    {"op": "add", "path": "/workflows/1/parsed/jobs/coverage-upload/env", "value": {"CS_ACCESS_TOKEN": "${{ secrets.CS_ACCESS_TOKEN }}"}},
+  ])
+  findings := policy.deny with input as fixture
+  profile(findings) == {
+    ["noncompliant", ".github/workflows/coverage-main.yml", "CodeScene uploader names CS_ACCESS_TOKEN outside the check step's command and the upload's access-token input, at jobs.coverage-upload.env.CS_ACCESS_TOKEN"],
+  }
+}
