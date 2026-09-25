@@ -24,12 +24,13 @@ One main-owned publisher writes the baseline and uploads:
 
 - Exactly one workflow with a `push` trigger restricted to `main`, optionally
   alongside `workflow_dispatch`, generates ratcheted coverage and invokes the
-  CodeScene action in upload mode, or runs a direct `cs-coverage upload`
-  command. The action defaults `mode` to `upload`, so a step that omits the
-  input uploads and satisfies this clause; `mode: check` and `mode: install` do
-  not. The rule reads the effective mode rather than the spelling, because
-  reporting correct wiring as broken only teaches people to edit a working
-  workflow to satisfy the audit.
+  CodeScene action in upload mode. The action is the only route: a direct
+  `cs-coverage upload` command is noncompliant (see the token clause below).
+  The action defaults `mode` to `upload`, so a step that omits the input
+  uploads and satisfies this clause; `mode: check` and `mode: install` do not.
+  The rule reads the effective mode rather than the spelling, because reporting
+  correct wiring as broken only teaches people to edit a working workflow to
+  satisfy the audit.
 - That workflow's upload step is guarded on `github.ref == 'refs/heads/main'`
   as well as on the credential. A `workflow_dispatch` selects a ref, and the
   push filter says nothing about it, so a dispatch from a feature branch would
@@ -41,14 +42,17 @@ One main-owned publisher writes the baseline and uploads:
   github.event_name == 'workflow_dispatch'`
   contains the comparison while making it optional, which is exactly the
   dispatch this clause exists to stop.
-- An upload condition naming `CS_ACCESS_TOKEN` is accepted as before.
-  Alternatively, an earlier step in the same job may write
-  `available=${{ secrets.CS_ACCESS_TOKEN != '' }}` to `$GITHUB_OUTPUT` with the
-  canonical single `echo` command. The upload must test that exact step's
-  `outputs.available == 'true'` as a whole `&&` conjunct and pass
-  `${{ secrets.CS_ACCESS_TOKEN }}` directly to its `access-token` input. This
-  deliberately does not infer credential provenance through other output keys,
-  shell commands, job outputs, or reusable workflows.
+- The credential guard is a check step's output. An earlier step in the same
+  job, with an `id`, no `if:` and no `env`, runs exactly
+  `echo "available=${{ secrets.CS_ACCESS_TOKEN != '' }}" >> "$GITHUB_OUTPUT"`
+  as its sole command. GitHub evaluates the expression before the shell starts,
+  so the token enters no process. The upload tests that step's
+  `outputs.available == 'true'` as a whole `&&` conjunct and passes
+  `${{ secrets.CS_ACCESS_TOKEN }}` directly to its `access-token` input. A
+  condition naming the token itself no longer counts: it needs the token bound
+  in `env`, and the composite upload action hands its step's `env` to every
+  nested step. This deliberately does not infer credential provenance through
+  other output keys, shell commands, job outputs, or reusable workflows.
 - The publisher declares a `concurrency` block, so two overlapping pushes to
   `main` cannot race to write the baseline every pull request is then measured
   against, and the block queues rather than cancels: `cancel-in-progress` is
@@ -56,6 +60,21 @@ One main-owned publisher writes the baseline and uploads:
   baseline it was writing; a queued one publishes later, and the later push's
   baseline wins. An expression is refused too, because it may evaluate true on
   the very push it matters for.
+
+Every uploader names the token in exactly two places:
+
+- A workflow that uploads to CodeScene may name `CS_ACCESS_TOKEN` only in the
+  check step's command and in the upload action's `access-token` input. Every
+  key and scalar of the document is read, case-folded, and each other reference
+  is reported by its document path. That covers `env` at workflow, job or step
+  level, any other `run` body, another action's input, and a condition. A `run`
+  body interpolating the secret puts it in a shell process that checked-out
+  code can read. An `env` binding reaches every step beneath it, and another
+  action's input hands the secret across a boundary nobody approved.
+  Static-analysis tools flagged the token in `env` repeatedly, which is what
+  this clause settles. A direct `cs-coverage upload` command cannot meet it,
+  because the command line reads the token from its environment: upload through
+  the action.
 
 The removed installer digest is gone:
 

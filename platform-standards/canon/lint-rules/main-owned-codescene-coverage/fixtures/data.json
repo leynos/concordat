@@ -52,11 +52,16 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     },
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}"
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}"
                   }
                 ],
                 "runs-on": "ubuntu-latest"
@@ -126,11 +131,16 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "upload-codescene-coverage",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     },
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}"
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}"
                   }
                 ],
                 "runs-on": "ubuntu-latest"
@@ -199,11 +209,16 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "upload-codescene-coverage",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     },
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}"
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}"
                   }
                 ],
                 "runs-on": "ubuntu-latest"
@@ -272,11 +287,16 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "upload-codescene-coverage",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     },
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}"
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}"
                   }
                 ],
                 "runs-on": "ubuntu-latest"
@@ -343,11 +363,16 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     },
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}"
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}"
                   }
                 ],
                 "runs-on": "ubuntu-latest"
@@ -417,11 +442,16 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "upload-codescene-coverage",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     },
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}"
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}"
                   }
                 ],
                 "runs-on": "ubuntu-latest"
@@ -494,11 +524,16 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "upload-codescene-coverage",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     },
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}"
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}"
                   }
                 ],
                 "runs-on": "ubuntu-latest"
@@ -572,11 +607,16 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "upload-codescene-coverage",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     },
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}"
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}"
                   }
                 ],
                 "runs-on": "ubuntu-latest"
@@ -717,11 +757,16 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "upload-codescene-coverage",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     },
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}"
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}"
                   }
                 ],
                 "runs-on": "ubuntu-latest"
@@ -885,11 +930,16 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "upload-codescene-coverage",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     },
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}"
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}"
                   }
                 ],
                 "runs-on": "ubuntu-latest"
@@ -963,11 +1013,16 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "upload-codescene-coverage",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     },
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}"
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}"
                   }
                 ],
                 "runs-on": "ubuntu-latest"
@@ -1121,11 +1176,16 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "upload-codescene-coverage",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     },
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}"
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}"
                   }
                 ],
                 "runs-on": "ubuntu-latest"
@@ -1169,11 +1229,16 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "upload-codescene-coverage",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     },
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}"
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}"
                   }
                 ],
                 "runs-on": "ubuntu-latest"
@@ -1260,11 +1325,16 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "upload-codescene-coverage",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     },
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}"
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}"
                   }
                 ],
                 "runs-on": "ubuntu-latest"
@@ -1339,11 +1409,16 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "upload-codescene-coverage",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     },
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}"
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}"
                   }
                 ],
                 "runs-on": "ubuntu-latest"
@@ -1469,11 +1544,16 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "upload-codescene-coverage",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     },
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}"
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}"
                   }
                 ],
                 "runs-on": "ubuntu-latest"
@@ -1562,10 +1642,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}",
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -1633,10 +1718,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}",
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -1704,10 +1794,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}",
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -1775,10 +1870,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}",
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -1852,10 +1952,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}",
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -1923,10 +2028,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ env.CS_ACCESS_TOKEN != '' }}",
+                    "if": "${{ steps.codescene-token.outputs.available == 'true' }}",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -2131,10 +2241,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}",
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -2202,10 +2317,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}",
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -2240,10 +2360,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}",
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -2311,10 +2436,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ 'refs/heads/main' == github.ref && env.CS_ACCESS_TOKEN != '' }}",
+                    "if": "${{ 'refs/heads/main' == github.ref && steps.codescene-token.outputs.available == 'true' }}",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -2382,11 +2512,16 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}",
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}",
                     "with": {
                       "mode": "upload",
-                      "installer-checksum": "${{ vars.CODESCENE_CLI_SHA256 }}"
+                      "installer-checksum": "${{ vars.CODESCENE_CLI_SHA256 }}",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -2454,10 +2589,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}",
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     },
                     "env": {
                       "DIGEST": "${{ vars.CODESCENE_CLI_SHA256 }}"
@@ -2528,10 +2668,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}",
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -2630,10 +2775,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}",
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -2713,10 +2863,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}",
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -2807,10 +2962,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}",
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -2878,10 +3038,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}",
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -2949,10 +3114,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}",
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -3049,9 +3219,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}",
-                    "with": {}
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}",
+                    "with": {
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
+                    }
                   }
                 ]
               }
@@ -3118,10 +3294,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}",
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}",
                     "with": {
-                      "mode": "check"
+                      "mode": "check",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -3192,10 +3373,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}",
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -3265,10 +3451,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}",
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -3336,10 +3527,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}",
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -3407,10 +3603,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}",
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -3478,10 +3679,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}",
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -3549,10 +3755,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}",
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -3619,10 +3830,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}",
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -3690,10 +3906,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}",
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' }}",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -3772,10 +3993,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' || github.event_name == 'workflow_dispatch' }}",
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' || github.event_name == 'workflow_dispatch' }}",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -3843,10 +4069,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ !(github.ref == 'refs/heads/main') && env.CS_ACCESS_TOKEN != '' }}",
+                    "if": "${{ !(github.ref == 'refs/heads/main') && steps.codescene-token.outputs.available == 'true' }}",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -3914,10 +4145,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' && github.actor != 'a||b' }}",
+                    "if": "${{ github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true' && github.actor != 'a||b' }}",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -3985,10 +4221,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != ''",
+                    "if": "github.ref == 'refs/heads/main' && steps.codescene-token.outputs.available == 'true'",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -4056,10 +4297,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ 'refs/heads/main' == github.ref && env.CS_ACCESS_TOKEN != '' }}",
+                    "if": "${{ 'refs/heads/main' == github.ref && steps.codescene-token.outputs.available == 'true' }}",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -4127,10 +4373,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ 'refs/heads/main' == github.ref && env.CS_ACCESS_TOKEN != '' }}",
+                    "if": "${{ 'refs/heads/main' == github.ref && steps.codescene-token.outputs.available == 'true' }}",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -4197,10 +4448,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "${{ 'refs/heads/main' == github.ref && env.CS_ACCESS_TOKEN != '' }}",
+                    "if": "${{ 'refs/heads/main' == github.ref && steps.codescene-token.outputs.available == 'true' }}",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
@@ -4268,10 +4524,15 @@
                     }
                   },
                   {
+                    "id": "codescene-token",
+                    "run": "echo \"available=${{ secrets.CS_ACCESS_TOKEN != '' }}\" >> \"$GITHUB_OUTPUT\""
+                  },
+                  {
                     "uses": "leynos/shared-actions/.github/actions/upload-codescene-coverage@pin",
-                    "if": "env.CS_ACCESS_TOKEN != ''",
+                    "if": "steps.codescene-token.outputs.available == 'true'",
                     "with": {
-                      "mode": "upload"
+                      "mode": "upload",
+                      "access-token": "${{ secrets.CS_ACCESS_TOKEN }}"
                     }
                   }
                 ]
