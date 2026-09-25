@@ -6,7 +6,7 @@ description: >-
   (FP-003), plus a binding Whitaker lint gate qualified for every governed
   Rust Cargo surface (QG-001).
   Audit-only: this rule declares no mutations.
-version: 0.3.1
+version: 0.3.2
 sensor:
   type: conftest
   input: policy-input/rust-makefile-baseline
