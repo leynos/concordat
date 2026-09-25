@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import typing as typ
 
+from . import codescene_environment
 from .models import AuditContext, CheckDefinition, Finding
 
 if typ.TYPE_CHECKING:
@@ -50,6 +51,7 @@ def build_registry(priority_model: PriorityModel | None) -> CheckRegistry:
     registry.register(_rule_merge_mode(), _run_merge_mode)
     registry.register(_rule_branch_protection(), _run_branch_protection)
     registry.register(_rule_permissions(), _run_permissions)
+    registry.register(codescene_environment.rule(), codescene_environment.run)
     if priority_model:
         registry.register(
             _rule_priority_labels(),

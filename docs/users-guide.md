@@ -358,7 +358,7 @@ adopted an earlier version moves as follows:
 - Declare `environment: codescene` on the upload job. In the repository
   settings, create that environment with a deployment branch policy admitting
   `main` alone, and move `CS_ACCESS_TOKEN` from the repository secrets into it;
-  `concordat auditor` reports each step of that move (CV-006).
+  the Concordat Auditor reports each step of that move (CV-006).
 
 Options:
 
@@ -984,6 +984,16 @@ checks, unit-style tests, Terratest coverage, and policy validation before any
 real repository settings change.
 
 ## Auditor workflow
+
+- CV-006 checks where a CodeScene uploader keeps its token. For a repository
+  whose workflows upload to CodeScene, the environment `codescene` must exist
+  with a custom deployment branch policy admitting the branch `main` alone, and
+  `CS_ACCESS_TOKEN` must be a secret of that environment and not a repository
+  secret. Each result carries a `status` property naming the step still
+  outstanding: `environment-missing`, `policy-not-custom`,
+  `policy-not-main-only`, `secret-not-moved` or `secret-missing`. Reading
+  secret names needs a token allowed to list them; a refused read is reported as
+  `indeterminate`, never as a pass.
 
 - Scheduled audits run via `.github/workflows/auditor.yml` every day at 05:00
   UTC. Results land in GitHub's Code Scanning dashboard because the workflow

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import typing as typ
 
 import requests
@@ -25,6 +26,14 @@ class GithubError(RuntimeError):
 
 class GithubNotFoundError(GithubError):
     """Raised when the GitHub API returns a 404 for an optional resource."""
+
+
+class GithubForbiddenError(GithubError):
+    """Raised when the token may not read a resource (401 or 403).
+
+    A refusal is neither presence nor absence, so a check reading one reports
+    an indeterminate result rather than a pass.
+    """
 
 
 class GithubClient:
@@ -137,6 +146,75 @@ class GithubClient:
             for entry in entries
         )
 
+    def environment(
+        self, owner: str, name: str, environment: str
+    ) -> dict[str, typ.Any] | None:
+        """Return one deployment environment, or None when it does not exist."""
+        try:
+            return self._get_json(
+                "GET", f"/repos/{owner}/{name}/environments/{environment}"
+            )
+        except GithubNotFoundError:
+            return None
+
+    def environment_branch_policies(
+        self, owner: str, name: str, environment: str
+    ) -> tuple[tuple[str, str], ...]:
+        """Return an environment's custom deployment branch policies.
+
+        Returns
+        -------
+        tuple[tuple[str, str], ...]
+            Each policy's name pattern and type (`branch` or `tag`).
+        """
+        path = (
+            f"/repos/{owner}/{name}/environments/{environment}"
+            "/deployment-branch-policies?per_page=100"
+        )
+        data = self._get_json("GET", path)
+        return tuple(
+            (str(entry.get("name", "")), str(entry.get("type", "branch")))
+            for entry in data.get("branch_policies", [])
+        )
+
+    def environment_secret_names(
+        self, owner: str, name: str, environment: str
+    ) -> tuple[str, ...]:
+        """Return the names, never the values, of an environment's secrets."""
+        path = f"/repos/{owner}/{name}/environments/{environment}/secrets?per_page=100"
+        data = self._get_json("GET", path)
+        return tuple(str(entry["name"]) for entry in data.get("secrets", []))
+
+    def repository_secret_names(self, owner: str, name: str) -> tuple[str, ...]:
+        """Return the names, never the values, of the repository's Actions secrets."""
+        data = self._get_json(
+            "GET", f"/repos/{owner}/{name}/actions/secrets?per_page=100"
+        )
+        return tuple(str(entry["name"]) for entry in data.get("secrets", []))
+
+    def workflow_texts(self, owner: str, name: str) -> tuple[str, ...]:
+        """Return the text of every root workflow file on the default branch."""
+        try:
+            listing = self._request(
+                "GET", f"/repos/{owner}/{name}/contents/.github/workflows"
+            ).json()
+        except GithubNotFoundError:
+            return ()
+        texts = []
+        for entry in listing:
+            if entry.get("type") != "file" or not str(entry.get("name", "")).endswith((
+                ".yml",
+                ".yaml",
+            )):
+                continue
+            body = self._get_json(
+                "GET", f"/repos/{owner}/{name}/contents/{entry['path']}"
+            )
+            texts.append(
+                base64.b64decode(body.get("content", "")).decode("utf-8", "replace")
+            )
+        return tuple(texts)
+
     # Internal helpers -------------------------------------------------
 
     def _get_json(self, method: str, path: str) -> dict[str, typ.Any]:
@@ -149,6 +227,9 @@ class GithubClient:
         if response.status_code == 404:
             message = f"{method} {path} returned 404."
             raise GithubNotFoundError(message)
+        if response.status_code in {401, 403}:
+            message = f"{method} {path} was refused: {response.status_code}"
+            raise GithubForbiddenError(message)
         if response.status_code >= 400:
             detail = response.text[:400]
             message = f"{method} {path} failed: {response.status_code} {detail}"

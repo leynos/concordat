@@ -88,7 +88,7 @@ The token lives in a main-only environment:
   publisher, and a repository secret is readable from any branch; an
   environment secret behind a main-only policy is not. The ref guard on the
   upload step stays as defence in depth. The repository settings are outside a
-  checkout, so this rule cannot read them: `concordat auditor` checks them as
+  checkout, so this rule cannot read them: the Concordat Auditor checks them as
   CV-006.
 
 The removed installer digest is gone:

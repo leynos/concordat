@@ -8,6 +8,7 @@ import os
 import typing as typ
 from pathlib import Path
 
+from . import codescene_environment
 from .checks import build_registry
 from .github import DEFAULT_API_URL, GithubClient
 from .models import (
@@ -158,6 +159,29 @@ def _context_from_snapshot(
         collaborators=collaborators,
         labels=labels,
         priority_model=priority_model,
+        codescene=_codescene_from_dict(data.get("codescene")),
+    )
+
+
+def _codescene_from_dict(
+    payload: object,
+) -> codescene_environment.CodesceneCredentials | None:
+    """Read the CV-006 settings from a snapshot, or None when it has none."""
+    if not isinstance(payload, dict):
+        return None
+    data = typ.cast("dict[str, typ.Any]", payload)
+    return codescene_environment.CodesceneCredentials(
+        uploads=bool(data.get("uploads", False)),
+        environment_exists=bool(data.get("environment_exists", False)),
+        protected_branches=bool(data.get("protected_branches", False)),
+        custom_branch_policies=bool(data.get("custom_branch_policies", False)),
+        branch_policies=tuple(
+            (str(entry["name"]), str(entry.get("type", "branch")))
+            for entry in data.get("branch_policies", [])
+        ),
+        environment_secrets=tuple(data.get("environment_secrets", [])),
+        repository_secrets=tuple(data.get("repository_secrets", [])),
+        refused=tuple(data.get("refused", [])),
     )
 
 
@@ -179,6 +203,7 @@ def _context_from_live_api(
         collaborators=collaborators,
         labels=labels,
         priority_model=priority_model,
+        codescene=codescene_environment.fetch(client, owner, repo),
     )
 
 

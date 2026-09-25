@@ -7,8 +7,8 @@ import typing as typ
 import pytest
 
 from concordat import enrol, estate_execution, platform_standards
+from concordat.auditor import codescene_environment, priority
 from concordat.auditor import models as auditor_models
-from concordat.auditor import priority
 from concordat.persistence import models as persistence_models
 
 
@@ -81,8 +81,23 @@ from concordat.persistence import models as persistence_models
                 "collaborators",
                 "labels",
                 "priority_model",
+                "codescene",
             ),
             id="audit-context",
+        ),
+        pytest.param(
+            codescene_environment.CodesceneCredentials,
+            (
+                "uploads",
+                "environment_exists",
+                "protected_branches",
+                "custom_branch_policies",
+                "branch_policies",
+                "environment_secrets",
+                "repository_secrets",
+                "refused",
+            ),
+            id="codescene-credentials",
         ),
         pytest.param(
             auditor_models.CheckDefinition,
