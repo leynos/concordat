@@ -91,6 +91,11 @@ The token lives in a main-only environment:
   checkout, so this rule cannot read them: the Concordat Auditor checks them as
   CV-006.
 
+  A `workflow_dispatch` of the publisher from any branch but `main` is
+  therefore refused for the whole job, matrix legs that do not upload included,
+  rather than skipped at the upload step. That is intended: a branch proof of a
+  coverage change runs through the pull-request lane's coverage run instead.
+
 The removed installer digest is gone:
 
 - No workflow passes the `installer-checksum` input. The rule flags the input

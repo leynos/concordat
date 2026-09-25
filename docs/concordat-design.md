@@ -1956,7 +1956,11 @@ coverage generated after a merge on `main`.
   Each remaining step of a move is a finding of its own: a missing environment,
   a protected-branches or wider policy, the token still a repository secret
   ("secret not yet moved"), or the token absent from the environment. A read
-  the token may not make is reported as indeterminate rather than passed.
+  the token may not make is reported as indeterminate rather than passed. A
+  `workflow_dispatch` of the publisher from any branch but `main` is therefore
+  refused for the whole job, matrix legs that do not upload included, rather
+  than skipped at the upload step. That is intended: a branch proof of a
+  coverage change runs through the pull-request lane's coverage run instead.
   Arbitrary shell provenance and cross-job outputs remain outside this local
   policy's proof. Workflow discovery is explicitly fallible: an absent
   `.github/workflows` is a repository with no workflows, while an unreadable or
