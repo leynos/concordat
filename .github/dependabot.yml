@@ -1,18 +1,24 @@
 version: 2
 updates:
-  # Enable version updates for GitHub Actions
+  # Enable version updates for GitHub Actions, in the workflows and in the
+  # composite actions under .github/actions, which pin their own `uses:`.
   - package-ecosystem: "github-actions"
     groups:
       github-actions:
         patterns:
           - '*'
-    directory: "/"
+        update-types:
+          - minor
+          - patch
+    directories:
+      - "/"
+      - "/.github/actions/*"
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
       - "github-actions"
     schedule:
-      interval: "weekly"
+      interval: "daily"
     cooldown:
       default-days: 7
 
@@ -28,6 +34,13 @@ updates:
     cooldown:
       default-days: 7
       semver-major-days: 14
+    groups:
+      minor-and-patch:
+        patterns:
+          - '*'
+        update-types:
+          - minor
+          - patch
 
   # Enable version updates for Go modules
   - package-ecosystem: "gomod"
@@ -41,3 +54,10 @@ updates:
     cooldown:
       default-days: 7
       semver-major-days: 14
+    groups:
+      minor-and-patch:
+        patterns:
+          - '*'
+        update-types:
+          - minor
+          - patch

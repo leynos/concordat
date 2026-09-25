@@ -1,0 +1,21 @@
+schema_version: 1
+id: dependabot-update-shape
+name: Dependabot update shape
+description: >-
+  Audits `.github/dependabot.yml` against the estate's update shape (DB-005):
+  every entry runs daily and ends with one catch-all group taking minor and
+  patch updates alone, so a major outside any lockstep group arrives in its
+  own pull request; any group before it is narrower than `*`; github-actions
+  updates cover the root and
+  every local action under `.github/actions`; and cargo entries set
+  `versioning-strategy` only to `auto` or `lockfile-only`. A repository with
+  no configuration is compliant. Audit-only: this rule declares no mutations.
+version: 0.1.0
+sensor:
+  type: conftest
+  input: policy-input/dependabot-update-shape
+  policy: policy/
+  tests:
+    - policy/
+  data:
+    - fixtures/data.json

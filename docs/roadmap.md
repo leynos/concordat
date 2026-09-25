@@ -510,6 +510,18 @@ actuators that remediate them. Each check ships as a lint rule package under
   `TODO` annotation per git revision. Migration issues remain protected by the
   alert-keyed lease, and `TODO` annotations remain deduplicated by the
   git-revision remediation-branch ref.
+- [x] Ship the Dependabot update-shape rule (DB-005): every `updates` entry
+  runs daily and ends with one catch-all group taking minor and patch updates
+  alone, any group before it is narrower than `*`, `github-actions` entries
+  cover `/` and every local action under `.github/actions`, and cargo
+  `versioning-strategy` is `auto` or `lockfile-only`. Acceptance: the
+  `dependabot-update-shape` package has a compliant fixture and a failing
+  fixture for each clause, including a leading catch-all, a security-only
+  catch-all, a nested action outside a one-segment glob and a split pair of
+  `github-actions` entries; a Hypothesis suite generates configurations and
+  compares the real policy with independent expectations; and an estate run
+  over every repository's default branch agrees with the rollout's own
+  validator on the clauses they share.
 - [ ] Ship the Dependabot governance rule packages (DB-001 to DB-004):
   manifest-scan sensor diffing package roots against `dependabot.yml` entries,
   cooldown policy checks (tiered for semver ecosystems, `default-days` for

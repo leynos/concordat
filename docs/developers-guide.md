@@ -667,6 +667,21 @@ accepts the manifest parameters and ignores them: CV-005 declares no tunables,
 because every clause it states is a property of the estate's topology rather
 than something a repository may configure.
 
+`dependabot-update-shape` takes its own as well. `build_dependabot_envelope` (in
+`dependabot_envelope.py`) assembles a `policy-input/dependabot-update-shape`
+document holding the decoded `.github/dependabot.yml` (or `.yaml`), each
+entry's group names in document order, and every directory under
+`.github/actions` that holds an action manifest. The group order is carried
+separately because a Rego object keeps none, and Dependabot assigns a
+dependency to the first group that matches it. A configuration that is not
+UTF-8, not YAML, not a mapping or a symbolic link, and a checkout carrying both
+spellings, is recorded with its reason for an indeterminate verdict. A
+`.github/actions` directory that cannot be listed, is occupied by a file, or
+resolves outside the checkout raises `OperationalRuleError` with
+`operation="read-local-actions"`; the walk does not follow symbolic links. The
+package is registered by identifier and declares its kind, and DB-005 declares
+no tunables.
+
 Workflow discovery in that builder is explicitly fallible. An absent
 `.github/workflows` directory is a repository with no workflows and yields an
 empty list. A path that is not a directory, a directory that cannot be

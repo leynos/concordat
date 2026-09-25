@@ -261,6 +261,33 @@ every governed Rust Cargo surface and the root `Makefile` for canonical `build`,
 concordat artefact rule run rust-makefile-baseline --repo /path/to/checkout
 ```
 
+`dependabot-update-shape` audits `.github/dependabot.yml` against the estate's
+update shape (DB-005):
+
+```shell
+concordat artefact rule run dependabot-update-shape --repo /path/to/checkout
+```
+
+It requires that every `updates` entry:
+
+- runs daily (`schedule.interval: daily`);
+- ends with one catch-all group, `patterns: ["*"]` and
+  `update-types: [minor, patch]`, with no other key but the default
+  `applies-to: version-updates`, so a major update arrives in its own pull
+  request unless an earlier narrow group, such as a lockstep family, takes it;
+- places only narrow groups before the catch-all: each needs a `patterns` list
+  in which no pattern is a bare wildcard, such as a lockstep family like
+  `rstest-bdd*`;
+- sets `versioning-strategy`, on a `cargo` entry, only to `auto` or
+  `lockfile-only`.
+
+When the repository has an action manifest under `.github/actions`, its
+`github-actions` entries must also cover `/` and every directory holding one,
+for example with `directories: ["/", "/.github/actions/*"]`. `*` matches one
+path segment and `**` any number, as in Dependabot. A repository without a
+Dependabot configuration passes, and a configuration that cannot be decoded is
+reported as indeterminate.
+
 `main-owned-codescene-coverage` audits the coverage topology (CV-005):
 
 ```shell

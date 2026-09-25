@@ -32,6 +32,8 @@ from .codescene_coverage_envelope import (
     CoverageEnvelope,
     build_codescene_coverage_envelope,
 )
+from .dependabot_envelope import ENVELOPE_KIND as DEPENDABOT_ENVELOPE_KIND
+from .dependabot_envelope import DependabotEnvelope, build_dependabot_envelope
 from .envelope import (
     BUILD_DEFAULTS_ENVELOPE_KIND,
     ENVELOPE_KIND,
@@ -48,7 +50,11 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
 type RuleEnvelope = (
-    PolicyEnvelope | BuildDefaultsEnvelope | MarkdownEnvelope | CoverageEnvelope
+    PolicyEnvelope
+    | BuildDefaultsEnvelope
+    | MarkdownEnvelope
+    | CoverageEnvelope
+    | DependabotEnvelope
 )
 type EnvelopeResolver = cabc.Callable[[str, pathlib.Path], RuleEnvelope]
 
@@ -290,6 +296,23 @@ def _coverage_envelope(
     return build_codescene_coverage_envelope(checkout)
 
 
+def _dependabot_envelope(
+    checkout: pathlib.Path,
+    _parameters: cabc.Mapping[str, object] | None = None,
+) -> DependabotEnvelope:
+    """Build the DB-005 Dependabot envelope, ignoring the manifest parameters.
+
+    DB-005 declares no tunables: the update shape is estate policy rather
+    than something a repository may configure.
+
+    Returns
+    -------
+    DependabotEnvelope
+        The `policy-input/dependabot-update-shape` document for *checkout*.
+    """
+    return build_dependabot_envelope(checkout)
+
+
 # Every rule package's envelope builder, keyed by package identifier. The
 # mapping is the complete list rather than the exceptions to a default: a
 # package that reads facts of one shape and a policy that expects another
@@ -303,6 +326,7 @@ PACKAGE_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     "rust-makefile-baseline": _makefile_envelope,
     "rust-build-defaults": build_build_defaults_envelope,
     "main-owned-codescene-coverage": _coverage_envelope,
+    "dependabot-update-shape": _dependabot_envelope,
 })
 
 # The same builders by the envelope kind they produce, so a package whose input
@@ -313,6 +337,7 @@ INPUT_KIND_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     BUILD_DEFAULTS_ENVELOPE_KIND: build_build_defaults_envelope,
     MARKDOWN_ENVELOPE_KIND: _markdown_envelope,
     COVERAGE_ENVELOPE_KIND: _coverage_envelope,
+    DEPENDABOT_ENVELOPE_KIND: _dependabot_envelope,
 })
 
 

@@ -1,0 +1,3367 @@
+{
+  "fixtures": {
+    "compliant": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "compliant_yaml_spelling": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yaml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": []
+    },
+    "absent": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": null,
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "unreadable": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": null,
+        "error": "invalid YAML: boom",
+        "group_order": []
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "wrong_kind": {
+      "schema_version": 1,
+      "kind": "policy-input/other",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "no_updates": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2
+        },
+        "error": null,
+        "group_order": []
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "entry_not_mapping": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            "cargo"
+          ]
+        },
+        "error": null,
+        "group_order": [
+          null
+        ]
+      },
+      "action_directories": []
+    },
+    "weekly": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "weekly"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "no_schedule": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "no_groups": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          null
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "empty_groups": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {}
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          []
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "catch_all_groups_majors": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "all": {
+                  "patterns": [
+                    "*"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "all"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "catch_all_major_type": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "all": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "major",
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "all"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "catch_all_security_only": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "all": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ],
+                  "applies-to": "security-updates"
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "all"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "catch_all_version_updates": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "all": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ],
+                  "applies-to": "version-updates"
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "all"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "catch_all_excludes": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "all": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ],
+                  "exclude-patterns": [
+                    "ruff"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "all"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "catch_all_dependency_type": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "all": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ],
+                  "dependency-type": "production"
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "all"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "catch_all_first": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                },
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "minor-and-patch",
+            "rstest-bdd"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "second_catch_all": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "everything": {
+                  "patterns": [
+                    "*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "everything",
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "double_star_group": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "everything": {
+                  "patterns": [
+                    "serde",
+                    "**"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "everything",
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "narrow_without_patterns": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "prod": {
+                  "dependency-type": "production"
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "prod",
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "narrow_empty_patterns": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "none": {
+                  "patterns": []
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "none",
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "narrow_prefix_pattern": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "serde": {
+                  "patterns": [
+                    "serde*"
+                  ],
+                  "update-types": [
+                    "major"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "serde",
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "actions_root_only": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "actions_without_root": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "actions_directory_scalar": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directory": "/"
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "actions_each_listed": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/a",
+                ".github/actions/b/"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/a",
+        "/.github/actions/b"
+      ]
+    },
+    "actions_one_missing": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/a"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/a",
+        "/.github/actions/b"
+      ]
+    },
+    "actions_nested_single_star": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/a/b"
+      ]
+    },
+    "actions_nested_double_star": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/**"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/a/b"
+      ]
+    },
+    "actions_split_entries": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/.github/actions/*"
+              ]
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "actions_other_ecosystem": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "no_actions_directory": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": []
+    },
+    "no_actions_entry": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "cargo_increase": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "versioning-strategy": "increase"
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "cargo_lockfile_only": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "versioning-strategy": "lockfile-only"
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "cargo_auto": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "versioning-strategy": "auto"
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "cargo_null_strategy": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "versioning-strategy": null
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    },
+    "uv_increase": {
+      "schema_version": 1,
+      "kind": "policy-input/dependabot-update-shape",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "rstest-bdd": {
+                  "patterns": [
+                    "rstest-bdd*"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "github-actions",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "directories": [
+                "/",
+                "/.github/actions/*"
+              ]
+            },
+            {
+              "package-ecosystem": "uv",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "versioning-strategy": "increase"
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "rstest-bdd",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "action_directories": [
+        "/.github/actions/setup"
+      ]
+    }
+  }
+}
