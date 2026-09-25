@@ -94,7 +94,7 @@ class SarifBuilder:
         path = pathlib.Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         document = self.build()
-        path.write_text(json.dumps(document, indent=2))
+        path.write_text(json.dumps(document, indent=2), encoding="utf-8")
         return path
 
     def _serialize_rule(self, rule: CheckDefinition) -> dict[str, object]:

@@ -21,8 +21,9 @@ the virtual environment.
 
 `make lint` runs the source and snapshot checks sequentially. Ruff provides the
 fast source-wide style and correctness pass, including preview, asynchronous,
-and NumPy-docstring rules. Pylint then runs the selected Lading policy through
-the pinned PyPy shim. A separate CPython 3.14 invocation loads every diagnostic
+and NumPy-docstring rules. A pinned Pylint then runs the selected Lading policy
+on uv-managed PyPy 3.12; a module that PyPy cannot parse fails the lint rather
+than being skipped. A separate CPython 3.14 invocation loads every diagnostic
 from the `df12-python-lints` pin, while retaining Concordat's Python 3.13
 semantic baseline for version-gated checks. `ambrleaks`, provisioned from the
 same immutable release, scans the test tree for unredacted values in Syrupy
@@ -33,8 +34,7 @@ dictionary is live, `typos.toml` is never drift checked in continuous
 integration. Finally, the blocking Skylos 4.33.2 dead-code scan covers only the
 production `concordat` and `scripts` packages and excludes `tests`, so
 test-only references do not keep production symbols live. The separate df12
-process prevents its CPython dependency from changing the PyPy-backed Pylint
-baseline.
+process prevents its CPython dependency from changing the PyPy Pylint baseline.
 
 Treat each Skylos report as a dead-code candidate. Remove confirmed dead code.
 For a verified dynamic runtime entry point, add a precise rule in
