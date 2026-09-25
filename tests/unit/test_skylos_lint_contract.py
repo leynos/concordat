@@ -24,27 +24,22 @@ from ruamel.yaml import YAML
 
 REPOSITORY_ROOT = Path(__file__).parents[2]
 _MAKEUTIL_COMMAND: typ.Final = ("makeutil", "parse", "Makefile")
-_MAKEUTIL_REVISION: typ.Final = "6e64f4fe84419705badc30baa5649cbb6f69a298"
-_MAKEUTIL_TOOLCHAIN: typ.Final = "nightly-2026-05-28"
+# makeutil v0.1.0's x86_64 musl release asset, verified against this digest.
+_MAKEUTIL_ENVIRONMENT: typ.Final = {
+    "MAKEUTIL_VERSION": "0.1.0",
+    "MAKEUTIL_ASSET": "makeutil-x86_64-unknown-linux-musl",
+    "MAKEUTIL_SHA256": (
+        "99dd28a138dbe07e88e4dc5dd3954e6b29b46cc959635311d326cb537253115d"
+    ),
+    "MAKEUTIL_RELEASES": "https://github.com/leynos/makeutil/releases/download",
+}
 _COVERAGE_BASELINE_PYTHON_FILE: typ.Final = ".coverage-baseline.python-v2"
 _HYPOTHESIS_REQUIREMENT: typ.Final = "hypothesis>=6.165.10,<7.0"
 _MAKEUTIL_INSTALL_TOKENS: typ.Final = (
-    "rustup",
-    "toolchain",
+    "uv",
+    "run",
+    "scripts/install_release_binary.py",
     "install",
-    "${MAKEUTIL_TOOLCHAIN}",
-    "--profile",
-    "minimal",
-    "RUSTFLAGS=-Zpolonius=next",
-    "cargo",
-    "+${MAKEUTIL_TOOLCHAIN}",
-    "install",
-    "--git",
-    "https://github.com/leynos/makeutil",
-    "--rev",
-    "${MAKEUTIL_REVISION}",
-    "--locked",
-    "--force",
     "makeutil",
 )
 _TEXTUAL_ACTIONS: typ.Final = frozenset({
@@ -284,23 +279,21 @@ def _run_skylos_allow_with_recorder(
 
 
 def _assert_makeutil_installation(command: object, *, contract: str) -> None:
-    """Assert that ``command`` installs the pinned Makeutil parser."""
+    """Assert that ``command`` installs the pinned, digest-verified release."""
     assert isinstance(command, str), (
         f"{contract} must provide a Makeutil installation shell command"
     )
     assert (
         tuple(shlex.split(command.replace("\\\n", ""))) == _MAKEUTIL_INSTALL_TOKENS
-    ), f"{contract} must pin the Makeutil toolchain, revision, and Polonius flag"
+    ), f"{contract} must install makeutil through the digest-verifying script"
 
 
 def _assert_makeutil_environment(job: dict[str, object], *, contract: str) -> None:
-    """Assert that a full-suite job pins Makeutil's revision and toolchain."""
+    """Assert that a full-suite job pins Makeutil's release and its digest."""
     environment = _mapping(job.get("env"), subject=f"{contract} environment")
-    assert environment.get("MAKEUTIL_REVISION") == _MAKEUTIL_REVISION, (
-        f"{contract} must pin Makeutil revision {_MAKEUTIL_REVISION}"
-    )
-    assert environment.get("MAKEUTIL_TOOLCHAIN") == _MAKEUTIL_TOOLCHAIN, (
-        f"{contract} must pin Makeutil toolchain {_MAKEUTIL_TOOLCHAIN}"
+    pinned = {name: environment.get(name) for name in _MAKEUTIL_ENVIRONMENT}
+    assert pinned == _MAKEUTIL_ENVIRONMENT, (
+        f"{contract} must pin Makeutil release {_MAKEUTIL_ENVIRONMENT}"
     )
 
 

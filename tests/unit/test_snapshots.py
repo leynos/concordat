@@ -58,6 +58,20 @@ def _snapshot(name: str) -> str:
     return (SNAPSHOTS / name).read_text(encoding="utf-8")
 
 
+# The report names the makeutil revision the audit ran with, which moves with
+# every repin. The snapshot holds a placeholder so a repin does not churn it,
+# and a separate assertion checks the live revision.
+_MAKEUTIL_REVISION_PLACEHOLDER: typ.Final = "<makeutil-revision>"
+
+
+def _redact_makeutil_revision(report: str) -> str:
+    """Replace the rendered makeutil revision with a stable placeholder."""
+    return report.replace(
+        f"makeutil `{sweep.MAKEUTIL_REV[:12]}`",
+        f"makeutil `{_MAKEUTIL_REVISION_PLACEHOLDER}`",
+    )
+
+
 class TestRuleRunRendering:
     """`render_table` and `render_json` keep a stable shape."""
 
@@ -135,12 +149,20 @@ class TestReportRendering:
     def test_report_matches_the_snapshot(self, ledger_path: pathlib.Path) -> None:
         """The baseline report is unchanged.
 
-        `_base_record` stamps a timestamp, but the report never renders one,
-        so nothing needs normalizing for this to be stable.
+        `_base_record` stamps a timestamp, but the report never renders one.
+        The makeutil revision is redacted, since it moves with every repin.
         """
-        assert sweep.render_report(ledger_path) == _snapshot("render_report.md"), (
+        report = _redact_makeutil_revision(sweep.render_report(ledger_path))
+        assert report == _snapshot("render_report.md"), (
             "render_report's output diverged from snapshots/render_report.md"
         )
+
+    def test_report_names_the_current_makeutil_revision(
+        self, ledger_path: pathlib.Path
+    ) -> None:
+        """Semantics: the header names the revision the audit ran with."""
+        report = sweep.render_report(ledger_path)
+        assert f"makeutil `{sweep.MAKEUTIL_REV[:12]}`" in report, report
 
     def test_report_counts_each_verdict(self, ledger_path: pathlib.Path) -> None:
         """Semantics: every repository is summarized under its verdict."""

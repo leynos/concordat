@@ -31,8 +31,12 @@ jobs:
   coverage-upload:
     runs-on: ubuntu-latest
     env:
-      MAKEUTIL_REVISION: "6e64f4fe84419705badc30baa5649cbb6f69a298"
-      MAKEUTIL_TOOLCHAIN: "nightly-2026-05-28"
+      # makeutil v0.1.0's x86_64 musl release asset and its SHA-256 digest.
+      # Bump the version and the digest together.
+      MAKEUTIL_VERSION: "0.1.0"
+      MAKEUTIL_ASSET: "makeutil-x86_64-unknown-linux-musl"
+      MAKEUTIL_SHA256: "99dd28a138dbe07e88e4dc5dd3954e6b29b46cc959635311d326cb537253115d"
+      MAKEUTIL_RELEASES: "https://github.com/leynos/makeutil/releases/download"
     steps:
       - name: Check out repository
         # v4
@@ -59,14 +63,10 @@ jobs:
           go install github.com/open-policy-agent/conftest@v0.52.0
 
       - name: Install Makefile parser
-        run: |
-          rustup toolchain install "${MAKEUTIL_TOOLCHAIN}" --profile minimal
-          RUSTFLAGS="-Zpolonius=next" cargo +"${MAKEUTIL_TOOLCHAIN}" install \
-            --git https://github.com/leynos/makeutil \
-            --rev "${MAKEUTIL_REVISION}" \
-            --locked \
-            --force \
-            makeutil
+        # The released static binary, verified against the digest pinned
+        # above rather than the release's own checksum file, so a replaced
+        # asset fails here instead of running.
+        run: uv run scripts/install_release_binary.py install makeutil
 
       - name: Generate coverage
         # Pin the interpreter `uv venv` resolves to the one set up above, as
