@@ -25,7 +25,6 @@ from pathlib import Path
 from ruamel.yaml import YAML
 
 from concordat.rules.makefile_facts import SCHEMA_VERSION
-from tests.unit.file_install_recognizer import installed_file_name
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -378,17 +377,8 @@ def installed_tool_names(command: cabc.Sequence[str]) -> frozenset[str]:
     -------
         The executable names the command installs, which is empty for any
         command that is not an installation.
-
-    Notes
-    -----
-    Coreutils ``install``, which places a downloaded release binary on `PATH`,
-    is the one non-package-manager shape recognized; see
-    `file_install_recognizer`.
     """
-    program = installer_program(command)
-    if program == "install":
-        return installed_file_name(command[command.index("install") + 1 :])
-    if program not in _INSTALLERS or "install" not in command:
+    if installer_program(command) not in _INSTALLERS or "install" not in command:
         return frozenset()
     operands = command[command.index("install") + 1 :]
     names: set[str] = set()

@@ -43,3 +43,16 @@ Skylos is a blocking part of local and CI linting without adding it to the
 application dependency set. The Makefile contract is parsed by pinned Makeutil,
 and every isolated CI job that runs the full pytest suite installs the same
 Makeutil revision, nightly toolchain, and Polonius flag independently.
+
+## Addendum (2026-09-25): Makeutil installed from a verified release
+
+The consequence above, that each suite job installs the same Makeutil revision,
+nightly toolchain and Polonius flag, is superseded. Makeutil now publishes
+static binaries, and every CI job that runs the full pytest suite installs the
+same v0.1.0 `x86_64-unknown-linux-musl` release asset through
+`scripts/install_release_binary.py`. The script checks the asset against the
+SHA-256 digest pinned in the workflow, not the release's own checksum file, and
+installs nothing on a mismatch. The jobs no longer compile Makeutil, which took
+35 to 75 seconds per run and needed a nightly toolchain. The shared release,
+digest and install command are what now keep the jobs identical, and
+`tests/unit/test_skylos_lint_contract.py` holds them to that.

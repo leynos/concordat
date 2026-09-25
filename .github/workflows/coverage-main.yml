@@ -66,17 +66,7 @@ jobs:
         # The released static binary, verified against the digest pinned
         # above rather than the release's own checksum file, so a replaced
         # asset fails here instead of running.
-        run: |
-          set -euo pipefail
-          download="${RUNNER_TEMP}/${MAKEUTIL_ASSET}"
-          bin_dir="${RUNNER_TEMP}/makeutil-bin"
-          curl --fail --silent --show-error --location --proto '=https' \
-            --tlsv1.2 --output "${download}" \
-            "${MAKEUTIL_RELEASES}/v${MAKEUTIL_VERSION}/${MAKEUTIL_ASSET}"
-          printf '%s  %s\n' "${MAKEUTIL_SHA256}" "${download}" \
-            | sha256sum --check --strict
-          install -D -m 0755 "${download}" "${bin_dir}/makeutil"
-          echo "${bin_dir}" >> "${GITHUB_PATH}"
+        run: uv run scripts/install_release_binary.py install makeutil
 
       - name: Generate coverage
         # Pin the interpreter `uv venv` resolves to the one set up above, as

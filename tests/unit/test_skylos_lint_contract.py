@@ -36,40 +36,11 @@ _MAKEUTIL_ENVIRONMENT: typ.Final = {
 _COVERAGE_BASELINE_PYTHON_FILE: typ.Final = ".coverage-baseline.python-v2"
 _HYPOTHESIS_REQUIREMENT: typ.Final = "hypothesis>=6.165.10,<7.0"
 _MAKEUTIL_INSTALL_TOKENS: typ.Final = (
-    "set",
-    "-euo",
-    "pipefail",
-    "download=${RUNNER_TEMP}/${MAKEUTIL_ASSET}",
-    "bin_dir=${RUNNER_TEMP}/makeutil-bin",
-    "curl",
-    "--fail",
-    "--silent",
-    "--show-error",
-    "--location",
-    "--proto",
-    "=https",
-    "--tlsv1.2",
-    "--output",
-    "${download}",
-    "${MAKEUTIL_RELEASES}/v${MAKEUTIL_VERSION}/${MAKEUTIL_ASSET}",
-    "printf",
-    "%s  %s\\n",
-    "${MAKEUTIL_SHA256}",
-    "${download}",
-    "|",
-    "sha256sum",
-    "--check",
-    "--strict",
+    "uv",
+    "run",
+    "scripts/install_release_binary.py",
     "install",
-    "-D",
-    "-m",
-    "0755",
-    "${download}",
-    "${bin_dir}/makeutil",
-    "echo",
-    "${bin_dir}",
-    ">>",
-    "${GITHUB_PATH}",
+    "makeutil",
 )
 _TEXTUAL_ACTIONS: typ.Final = frozenset({
     "scripts.canon_artifacts_tui.CanonArtifactsApp.action_refresh",
@@ -314,7 +285,7 @@ def _assert_makeutil_installation(command: object, *, contract: str) -> None:
     )
     assert (
         tuple(shlex.split(command.replace("\\\n", ""))) == _MAKEUTIL_INSTALL_TOKENS
-    ), f"{contract} must download the pinned release and verify its digest"
+    ), f"{contract} must install makeutil through the digest-verifying script"
 
 
 def _assert_makeutil_environment(job: dict[str, object], *, contract: str) -> None:
