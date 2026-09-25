@@ -24,7 +24,7 @@ from ruamel.yaml import YAML
 
 REPOSITORY_ROOT = Path(__file__).parents[2]
 _MAKEUTIL_COMMAND: typ.Final = ("makeutil", "parse", "Makefile")
-_MAKEUTIL_REVISION: typ.Final = "29fc5a1634ffbaa18a773eed9dff1b2838a45d9c"
+_MAKEUTIL_REVISION: typ.Final = "6e64f4fe84419705badc30baa5649cbb6f69a298"
 _MAKEUTIL_TOOLCHAIN: typ.Final = "nightly-2026-05-28"
 _COVERAGE_BASELINE_PYTHON_FILE: typ.Final = ".coverage-baseline.python-v2"
 _HYPOTHESIS_REQUIREMENT: typ.Final = "hypothesis>=6.165.10,<7.0"

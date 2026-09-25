@@ -19,7 +19,7 @@ if typ.TYPE_CHECKING:
 
 RULE_PACKAGE: typ.Final = "rust-makefile-baseline"
 RULE_VERSION: typ.Final = "0.2.0"
-MAKEUTIL_REV: typ.Final = "29fc5a1634ffbaa18a773eed9dff1b2838a45d9c"
+MAKEUTIL_REV: typ.Final = "6e64f4fe84419705badc30baa5649cbb6f69a298"
 LEDGER_SCHEMA_VERSION: typ.Final = 1
 
 
