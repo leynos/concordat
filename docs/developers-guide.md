@@ -780,7 +780,13 @@ Two external tools must be on `PATH`:
   `MAKEUTIL_SHA256` digest pinned beside the version, not against the release's
   own `.sha256` file, so a replaced asset fails the install. Bump the version
   and the digest together; `tests/unit/test_skylos_lint_contract.py` holds both
-  workflows to the same release, digest and install command.
+  workflows to the same release, digest and install command. CI used to compile
+  makeutil from a commit SHA, and a check refused any SHA missing from
+  makeutil's `main`, because an orphaned commit installs only until GitHub
+  garbage-collects it. That check was retired with the commit pin. A release
+  asset is not garbage-collected like an orphaned commit, and the pinned digest
+  now guarantees that the installed binary is the one released, so no commit
+  pin remains for the check to guard.
 - **`conftest`** (`concordat/rules/runner.py`) — evaluates the envelope
   against the rule package's Rego policy, with a 60-second timeout
   (`CONFTEST_TIMEOUT`).
