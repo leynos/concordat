@@ -59,10 +59,13 @@ jobs:
       - uses: leynos/shared-actions/.github/actions/generate-coverage@0000000
         with:
           with-ratchet: 'true'
+      - id: codescene-token
+        run: {check}
       - uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@0000000
         if: {guard}
         with:
           mode: upload
+          access-token: ${{{{ secrets.CS_ACCESS_TOKEN }}}}
 """
 
 _STEP_OUTPUT_MAIN_WORKFLOW: typ.Final = """\
@@ -92,10 +95,14 @@ jobs:
           access-token: ${{ secrets.CS_ACCESS_TOKEN }}
 """
 
-_GUARD: typ.Final = (
-    "${{ github.ref == 'refs/heads/main' && env.CS_ACCESS_TOKEN != '' }}"
+_CHECK_COMMAND: typ.Final = (
+    'echo "available=${{ secrets.CS_ACCESS_TOKEN != \'\' }}" >> "$GITHUB_OUTPUT"'
 )
-_CREDENTIAL_ONLY_GUARD: typ.Final = "${{ env.CS_ACCESS_TOKEN != '' }}"
+_AVAILABLE_OUTPUT: typ.Final = "steps.codescene-token.outputs.available == 'true'"
+_GUARD: typ.Final = (
+    "${{ github.ref == 'refs/heads/main' && " + _AVAILABLE_OUTPUT + " }}"
+)
+_CREDENTIAL_ONLY_GUARD: typ.Final = "${{ " + _AVAILABLE_OUTPUT + " }}"
 
 
 @pytest.fixture
@@ -121,7 +128,7 @@ def given_compliant_checkout(coverage_checkout: pathlib.Path) -> None:
     _write_workflows(
         coverage_checkout,
         pull_request=_PR_WORKFLOW,
-        main=_MAIN_WORKFLOW.format(guard=_GUARD),
+        main=_MAIN_WORKFLOW.format(guard=_GUARD, check=_CHECK_COMMAND),
     )
 
 
@@ -141,7 +148,7 @@ def given_pr_lane_invokes_codescene(coverage_checkout: pathlib.Path) -> None:
     _write_workflows(
         coverage_checkout,
         pull_request=_PR_WORKFLOW + _CODESCENE_STEP,
-        main=_MAIN_WORKFLOW.format(guard=_GUARD),
+        main=_MAIN_WORKFLOW.format(guard=_GUARD, check=_CHECK_COMMAND),
     )
 
 
@@ -151,7 +158,7 @@ def given_publisher_without_ref_guard(coverage_checkout: pathlib.Path) -> None:
     _write_workflows(
         coverage_checkout,
         pull_request=_PR_WORKFLOW,
-        main=_MAIN_WORKFLOW.format(guard=_CREDENTIAL_ONLY_GUARD),
+        main=_MAIN_WORKFLOW.format(guard=_CREDENTIAL_ONLY_GUARD, check=_CHECK_COMMAND),
     )
 
 

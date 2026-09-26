@@ -568,44 +568,84 @@ step_guarded_on_main_ref(step) if {
   regex.match(pattern, conjunct)
 }
 
-step_guarded_on_token(step) if {
-  condition := step_condition(step)
-  not guard_has_disjunction(condition)
-  contains(condition, "CS_ACCESS_TOKEN")
-}
-
-# This direct output shape is safe without binding the secret in job or step
-# environment. The producer must precede this upload in the same job; an
-# output from a different job or an arbitrary shell expression proves nothing.
+# The credential guard is the output of a check step: GitHub evaluates the
+# expression below before the shell starts, so the token enters no process
+# and no step's `env`. A condition that names the token itself needs it bound
+# in `env`, which the composite upload action hands to every nested step, so
+# that older shape no longer counts as a guard. The check must precede the
+# upload in the same job; an output from a different job or an arbitrary
+# shell expression proves nothing. It carries no `if:`, since a skipped check
+# leaves the upload skipping forever, and no `env`.
 token_availability_run := `echo "available=${{ secrets.CS_ACCESS_TOKEN != '' }}" >> "$GITHUB_OUTPUT"`
 
-upload_guarded_on_token(workflow, job_name, upload_index) if {
-  jobs := workflow_jobs(workflow)
-  step := jobs[job_name].steps[upload_index]
-  step_guarded_on_token(step)
+token_secret_input := "${{ secrets.CS_ACCESS_TOKEN }}"
+
+token_check_step(step) if {
+  is_object(step)
+  step_id := object.get(step, "id", "")
+  is_string(step_id)
+  regex.match(`^[A-Za-z_][A-Za-z0-9_-]*$`, step_id)
+  not "if" in object.keys(step)
+  not "env" in object.keys(step)
+  run := object.get(step, "run", null)
+  is_string(run)
+  trim_space(run) == token_availability_run
+}
+
+passes_token_secret(step) if {
+  inputs := object.get(step, "with", {})
+  is_object(inputs)
+  object.get(inputs, "access-token", "") == token_secret_input
 }
 
 upload_guarded_on_token(workflow, job_name, upload_index) if {
   jobs := workflow_jobs(workflow)
   steps := jobs[job_name].steps
   upload := steps[upload_index]
-  inputs := object.get(upload, "with", {})
-  is_object(inputs)
-  object.get(inputs, "access-token", "") == "${{ secrets.CS_ACCESS_TOKEN }}"
+  passes_token_secret(upload)
   condition := step_condition(upload)
   not guard_has_disjunction(condition)
   some producer_index
   producer := steps[producer_index]
-  is_object(producer)
   producer_index < upload_index
-  producer_id := object.get(producer, "id", "")
-  is_string(producer_id)
-  regex.match(`^[A-Za-z_][A-Za-z0-9_-]*$`, producer_id)
-  run := producer.run
-  is_string(run)
-  trim_space(run) == token_availability_run
+  token_check_step(producer)
   some conjunct in guard_conjuncts(condition)
-  conjunct == sprintf("steps.%s.outputs.available == 'true'", [producer_id])
+  conjunct == sprintf("steps.%s.outputs.available == 'true'", [producer.id])
+}
+
+# Clause 5: an uploader names the token in exactly two places, the check
+# step's command and the upload action's `access-token` input. A `run` body
+# interpolating it puts the secret in a shell process that checked-out code
+# can read, an `env` binding at any level reaches every step beneath it, and
+# another action's input hands it across a boundary nobody approved. Every
+# key and scalar of the document is read, case-folded, since expression
+# contexts are case-insensitive.
+names_token(value) if {
+  is_string(value)
+  contains(lower(value), "cs_access_token")
+}
+
+names_token_at(_, value) if names_token(value)
+
+names_token_at(path, _) if {
+  count(path) > 0
+  names_token(path[count(path) - 1])
+}
+
+sanctioned_token_path(workflow, ["jobs", job_name, "steps", index, "run"]) if {
+  token_check_step(workflow_jobs(workflow)[job_name].steps[index])
+}
+
+sanctioned_token_path(workflow, ["jobs", job_name, "steps", index, "with", "access-token"]) if {
+  step := workflow_jobs(workflow)[job_name].steps[index]
+  is_codescene_action_step(step)
+  passes_token_secret(step)
+}
+
+stray_token_paths(workflow) := {concat(".", [sprintf("%v", [part]) | some part in path]) |
+  walk(workflow_parsed(workflow), [path, value])
+  names_token_at(path, value)
+  not sanctioned_token_path(workflow, path)
 }
 
 workflow_concurrency(workflow) := value if {
@@ -951,6 +991,33 @@ deny contains f if {
   is_upload_step(step)
   not upload_guarded_on_token(workflow, job_name, upload_index)
   f := finding("noncompliant", workflow_path(workflow), "CodeScene upload step is not guarded on the CS_ACCESS_TOKEN credential")
+}
+
+deny contains f if {
+  envelope_ok
+  some workflow in workflows
+  not unsupported_workflow(workflow)
+  has_explicit_upload(workflow)
+  some path in stray_token_paths(workflow)
+  f := finding("noncompliant", workflow_path(workflow), sprintf("CodeScene uploader names CS_ACCESS_TOKEN outside the check step's command and the upload's access-token input, at %s", [path]))
+}
+
+# The command line reads the token from its environment, so a direct upload
+# cannot keep it to the two sanctioned places. The action binds the token
+# itself from its `access-token` input: it is the one sanctioned route.
+direct_cli_upload(step) if {
+  run := object.get(step, "run", "")
+  is_string(run)
+  regex.match(codescene_cli_upload_pattern, run)
+}
+
+deny contains f if {
+  envelope_ok
+  some workflow in workflows
+  not unsupported_workflow(workflow)
+  some step in workflow_steps(workflow)
+  direct_cli_upload(step)
+  f := finding("noncompliant", workflow_path(workflow), "CodeScene upload runs cs-coverage directly; upload through the upload-codescene-coverage action, which binds the token from its access-token input")
 }
 
 # Clause 2: two overlapping pushes to main must not race to write the

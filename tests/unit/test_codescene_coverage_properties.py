@@ -45,6 +45,10 @@ _REF_GUARD_MESSAGE: typ.Final = (
 _CREDENTIAL_GUARD_MESSAGE: typ.Final = (
     "CodeScene upload step is not guarded on the CS_ACCESS_TOKEN credential"
 )
+_STRAY_MESSAGE: typ.Final = (
+    "CodeScene uploader names CS_ACCESS_TOKEN outside the check step's command "
+    "and the upload's access-token input, at {}"
+)
 
 _PLATFORM_LABELS: typ.Final = {
     "Linux": "ubuntu-latest",
@@ -66,6 +70,7 @@ class CoverageCase:
     publisher_dispatch: bool
     publisher_ref_guard: bool
     publisher_token_guard: bool
+    publisher_stray_site: str
     publisher_concurrency: bool
     pr_invokes_codescene: bool
     pr_credential_site: str
@@ -82,6 +87,7 @@ _CASES = st.builds(
     publisher_dispatch=st.booleans(),
     publisher_ref_guard=st.booleans(),
     publisher_token_guard=st.booleans(),
+    publisher_stray_site=st.sampled_from(["none", "workflow", "job", "step", "run"]),
     publisher_concurrency=st.booleans(),
     pr_invokes_codescene=st.booleans(),
     pr_credential_site=st.sampled_from(["none", "workflow", "job", "step"]),
@@ -146,25 +152,39 @@ def _upload_condition(case: CoverageCase) -> str | None:
     if case.publisher_ref_guard:
         clauses.append("github.ref == 'refs/heads/main'")
     if case.publisher_token_guard:
-        clauses.append("env.CS_ACCESS_TOKEN != ''")
+        clauses.append("steps.codescene-token.outputs.available == 'true'")
     if not clauses:
         return None
     return "${{ " + " && ".join(clauses) + " }}"
 
 
-def _main_workflow(case: CoverageCase) -> dict[str, object]:
-    """Render the push-to-main publisher described by one case."""
+def _publisher_steps(case: CoverageCase) -> list[dict[str, object]]:
+    """Render the publisher job's steps: generate, check if guarded, upload."""
     upload: dict[str, object] = {"uses": _UPLOADER}
     condition = _upload_condition(case)
     if condition is not None:
         upload["if"] = condition
-    upload["with"] = {"mode": "upload", "access-token": "${{ env.CS_ACCESS_TOKEN }}"}
-    jobs: dict[str, object] = {
-        "coverage-upload": {
-            "runs-on": _PLATFORM_LABELS["Linux"],
-            "steps": [_coverage_step(ratchet=True, publish=None), upload],
-        }
+    upload["with"] = {"mode": "upload", "access-token": _CREDENTIAL}
+    if case.publisher_stray_site == "step":
+        upload["env"] = {"CS_ACCESS_TOKEN": _CREDENTIAL}
+    steps: list[dict[str, object]] = [_coverage_step(ratchet=True, publish=None)]
+    if case.publisher_token_guard:
+        steps.append({"id": "codescene-token", "run": _AVAILABILITY_COMMAND})
+    if case.publisher_stray_site == "run":
+        steps.append({"run": f"curl -H 'token: {_CREDENTIAL}' https://example.invalid"})
+    steps.append(upload)
+    return steps
+
+
+def _main_workflow(case: CoverageCase) -> dict[str, object]:
+    """Render the push-to-main publisher described by one case."""
+    upload_job: dict[str, object] = {
+        "runs-on": _PLATFORM_LABELS["Linux"],
+        "steps": _publisher_steps(case),
     }
+    if case.publisher_stray_site == "job":
+        upload_job["env"] = {"CS_ACCESS_TOKEN": _CREDENTIAL}
+    jobs: dict[str, object] = {"coverage-upload": upload_job}
     if case.trunk_runs_pr_platform and case.pr_platform != "Linux":
         jobs["coverage-platform"] = {
             "runs-on": _PLATFORM_LABELS[case.pr_platform],
@@ -174,6 +194,8 @@ def _main_workflow(case: CoverageCase) -> dict[str, object]:
     if case.publisher_dispatch:
         triggers["workflow_dispatch"] = None
     parsed: dict[str, object] = {case.trigger_key: triggers}
+    if case.publisher_stray_site == "workflow":
+        parsed["env"] = {"CS_ACCESS_TOKEN": _CREDENTIAL}
     if case.publisher_concurrency:
         parsed["concurrency"] = {
             "group": "coverage-main-${{ github.ref }}",
@@ -212,6 +234,30 @@ def _platform_expectation(case: CoverageCase) -> tuple[bool, str, str]:
         f"with no {platform} lane on the trunk push"
     )
     return unmatched, ".github/workflows", message
+
+
+def _stray_expectation(case: CoverageCase) -> tuple[bool, str, str]:
+    """Return the item-8 clause's predicate, path and message.
+
+    The stray site's location follows from the decisions: the check step,
+    when the case guards on it, sits between the generator and the upload.
+
+    Returns
+    -------
+    tuple[bool, str, str]
+        Whether a stray reference exists, the publisher path, and the message.
+    """
+    upload_index = 2 if case.publisher_token_guard else 1
+    job = "jobs.coverage-upload"
+    sites = {
+        "none": "",
+        "workflow": "env.CS_ACCESS_TOKEN",
+        "job": f"{job}.env.CS_ACCESS_TOKEN",
+        "step": f"{job}.steps.{upload_index}.env.CS_ACCESS_TOKEN",
+        "run": f"{job}.steps.{upload_index}.run",
+    }
+    site = sites[case.publisher_stray_site]
+    return bool(site), _MAIN_PATH, _STRAY_MESSAGE.format(site)
 
 
 def _expected(case: CoverageCase) -> set[tuple[str, str, str]]:
@@ -256,6 +302,7 @@ def _expected(case: CoverageCase) -> set[tuple[str, str, str]]:
             "main coverage publisher has no concurrency block",
         ),
         _platform_expectation(case),
+        _stray_expectation(case),
     ]
     return {
         ("noncompliant", path, message) for applies, path, message in clauses if applies
@@ -378,7 +425,40 @@ def _output_guard_expected(case: OutputGuardCase) -> set[tuple[str, str, str]]:
         findings.add(("noncompliant", _MAIN_PATH, _CREDENTIAL_GUARD_MESSAGE))
     if case.has_disjunction:
         findings.add(("noncompliant", _MAIN_PATH, _REF_GUARD_MESSAGE))
+    findings |= {
+        ("noncompliant", _MAIN_PATH, _STRAY_MESSAGE.format(site))
+        for site in _output_guard_stray_sites(case)
+    }
     return findings
+
+
+def _output_guard_stray_sites(case: OutputGuardCase) -> set[str]:
+    """Locate the token references the item-8 clause must report.
+
+    An altered producer command is no sanctioned check, so its `run` names
+    the token unsanctioned; an indirect `access-token` names it in the input
+    in a form other than the secret itself. Positions follow the layout the
+    renderer builds from the same decisions.
+
+    Returns
+    -------
+    set[str]
+        Dotted document paths of the stray references.
+    """
+    sites: set[str] = set()
+    upload_index = 1 + case.steps_before + case.steps_between
+    in_job_before = case.producer_before_upload and case.producer_in_upload_job
+    upload_index += int(in_job_before)
+    if case.producer_command == "altered":
+        if not case.producer_in_upload_job:
+            sites.add("jobs.token-check.steps.0.run")
+        elif case.producer_before_upload:
+            sites.add(f"jobs.coverage-upload.steps.{1 + case.steps_before}.run")
+        else:
+            sites.add(f"jobs.coverage-upload.steps.{upload_index + 1}.run")
+    if case.credential_source == "indirect":
+        sites.add(f"jobs.coverage-upload.steps.{upload_index}.with.access-token")
+    return sites
 
 
 @settings(max_examples=80, deadline=None)
@@ -409,6 +489,7 @@ _COMPLIANT_CASE: typ.Final = CoverageCase(
     publisher_dispatch=True,
     publisher_ref_guard=True,
     publisher_token_guard=True,
+    publisher_stray_site="none",
     publisher_concurrency=True,
     pr_invokes_codescene=False,
     pr_credential_site="none",
@@ -425,6 +506,7 @@ _NONCOMPLIANT_CASE: typ.Final = dataclasses.replace(
     publisher_dispatch=False,
     publisher_ref_guard=False,
     publisher_token_guard=False,
+    publisher_stray_site="workflow",
     publisher_concurrency=False,
     pr_invokes_codescene=True,
     pr_credential_site="workflow",
@@ -444,7 +526,7 @@ def test_a_fully_noncompliant_case_reports_every_clause() -> None:
     findings = _findings(_NONCOMPLIANT_CASE)
 
     assert findings == _expected(_NONCOMPLIANT_CASE), findings
-    assert len(findings) == 7, findings
+    assert len(findings) == 8, findings
 
 
 @settings(max_examples=40, deadline=None)
