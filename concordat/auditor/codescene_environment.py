@@ -93,56 +93,76 @@ def fetch(client: GithubClient, owner: str, name: str) -> CodesceneCredentials:
         return CodesceneCredentials(uploads=True, refused=("workflows",))
     if not any(_UPLOADER.search(text) for text in texts):
         return CodesceneCredentials(uploads=False)
-    refused: list[str] = []
-    repository_secrets = _read(
-        refused,
-        "repository secrets",
-        lambda: client.repository_secret_names(owner, name),
+    reader = _SettingsReader(client, owner, name)
+    repository_secrets = reader.read(
+        "repository secrets", lambda: client.repository_secret_names(owner, name), ()
     )
-    environment = _read(
-        refused, "environment", lambda: client.environment(owner, name, ENVIRONMENT)
+    environment = reader.read(
+        "environment", lambda: client.environment(owner, name, ENVIRONMENT), None
     )
-    if not environment:
-        return CodesceneCredentials(
-            uploads=True,
-            repository_secrets=repository_secrets or (),
-            refused=tuple(refused),
-        )
-    policy = environment.get("deployment_branch_policy") or {}
-    custom = bool(policy.get("custom_branch_policies", False))
-    policies = (
-        _read(
-            refused,
-            "branch policies",
-            lambda: client.environment_branch_policies(owner, name, ENVIRONMENT),
-        )
-        if custom
-        else ()
-    )
-    environment_secrets = _read(
-        refused,
-        "environment secrets",
-        lambda: client.environment_secret_names(owner, name, ENVIRONMENT),
-    )
+    settings = reader.environment_settings(environment) if environment else {}
     return CodesceneCredentials(
         uploads=True,
-        environment_exists=True,
-        protected_branches=bool(policy.get("protected_branches", False)),
-        custom_branch_policies=custom,
-        branch_policies=policies or (),
-        environment_secrets=environment_secrets or (),
-        repository_secrets=repository_secrets or (),
-        refused=tuple(refused),
+        repository_secrets=repository_secrets,
+        refused=tuple(reader.refused),
+        **settings,
     )
 
 
-def _read[T](refused: list[str], label: str, read: typ.Callable[[], T]) -> T | None:
-    """Return one read's result, recording its label when it is refused."""
-    try:
-        return read()
-    except GithubForbiddenError:
-        refused.append(label)
-        return None
+class _SettingsReader:
+    """Read one repository's settings, recording each refused read."""
+
+    def __init__(self, client: GithubClient, owner: str, name: str) -> None:
+        """Bind the reader to one repository."""
+        self.client = client
+        self.owner = owner
+        self.name = name
+        self.refused: list[str] = []
+
+    def read[T](self, label: str, read: typ.Callable[[], T], default: T) -> T:
+        """Return one read's result, or *default* when it is refused."""
+        try:
+            return read()
+        except GithubForbiddenError:
+            self.refused.append(label)
+            return default
+
+    def environment_settings(
+        self, environment: dict[str, typ.Any]
+    ) -> dict[str, typ.Any]:
+        """Return the environment's branch policy and secret names.
+
+        The custom policies are listed only under a custom policy: the
+        protected-branches shortcut has none to list.
+
+        Returns
+        -------
+        dict[str, typing.Any]
+            The `CodesceneCredentials` fields describing the environment.
+        """
+        policy = environment.get("deployment_branch_policy") or {}
+        custom = bool(policy.get("custom_branch_policies", False))
+        client, owner, name = self.client, self.owner, self.name
+        policies = (
+            self.read(
+                "branch policies",
+                lambda: client.environment_branch_policies(owner, name, ENVIRONMENT),
+                (),
+            )
+            if custom
+            else ()
+        )
+        return {
+            "environment_exists": True,
+            "protected_branches": bool(policy.get("protected_branches", False)),
+            "custom_branch_policies": custom,
+            "branch_policies": policies,
+            "environment_secrets": self.read(
+                "environment secrets",
+                lambda: client.environment_secret_names(owner, name, ENVIRONMENT),
+                (),
+            ),
+        }
 
 
 def rule() -> CheckDefinition:
