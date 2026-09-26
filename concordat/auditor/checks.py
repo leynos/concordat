@@ -61,6 +61,7 @@ def build_registry(priority_model: PriorityModel | None) -> CheckRegistry:
 
 
 def _rule_default_branch() -> CheckDefinition:
+    """Describe RS-001 for the SARIF rule catalogue."""
     return CheckDefinition(
         rule_id="RS-001",
         name="Default branch is main",
@@ -76,6 +77,7 @@ def _rule_default_branch() -> CheckDefinition:
 
 
 def _rule_merge_mode() -> CheckDefinition:
+    """Describe RS-002 for the SARIF rule catalogue."""
     return CheckDefinition(
         rule_id="RS-002",
         name="Repository merge strategy baseline",
@@ -93,6 +95,7 @@ def _rule_merge_mode() -> CheckDefinition:
 
 
 def _rule_branch_protection() -> CheckDefinition:
+    """Describe BP-001 for the SARIF rule catalogue."""
     return CheckDefinition(
         rule_id="BP-001",
         name="Default branch protection baseline",
@@ -110,6 +113,7 @@ def _rule_branch_protection() -> CheckDefinition:
 
 
 def _rule_permissions() -> CheckDefinition:
+    """Describe PM-001 for the SARIF rule catalogue."""
     return CheckDefinition(
         rule_id="PM-001",
         name="Team-managed access and no unmanaged admins",
@@ -127,6 +131,7 @@ def _rule_permissions() -> CheckDefinition:
 
 
 def _rule_priority_labels() -> CheckDefinition:
+    """Describe LB-001 for the SARIF rule catalogue."""
     return CheckDefinition(
         rule_id="LB-001",
         name="Canonical priority labels exist",
@@ -144,6 +149,7 @@ def _rule_priority_labels() -> CheckDefinition:
 
 
 def _run_default_branch(context: AuditContext) -> list[Finding]:
+    """Report a default branch other than `main` (RS-001)."""
     repo = context.repository
     if repo.default_branch == "main":
         return []
@@ -162,6 +168,7 @@ def _run_default_branch(context: AuditContext) -> list[Finding]:
 
 
 def _run_merge_mode(context: AuditContext) -> list[Finding]:
+    """Report merge settings that depart from squash-only (RS-002)."""
     repo = context.repository
     findings: list[Finding] = []
     if not repo.allow_squash_merge:
@@ -224,6 +231,7 @@ def _run_merge_mode(context: AuditContext) -> list[Finding]:
 
 
 def _run_branch_protection(context: AuditContext) -> list[Finding]:
+    """Report each gap in the default branch's protection (BP-001)."""
     repo = context.repository
     protection = context.branch_protection
     resource = f"branch:{repo.slug}@{repo.default_branch}"
@@ -368,6 +376,7 @@ def _run_branch_protection(context: AuditContext) -> list[Finding]:
 
 
 def _run_permissions(context: AuditContext) -> list[Finding]:
+    """Report missing team access and outside admins (PM-001)."""
     repo = context.repository
     resource = f"repo:{repo.slug}"
     findings: list[Finding] = []
@@ -404,6 +413,7 @@ def _run_priority_labels(
     context: AuditContext,
     model: PriorityModel,
 ) -> list[Finding]:
+    """Report priority labels missing or drifted from the model (LB-001)."""
     repo = context.repository
     resource = f"repo:{repo.slug}"
     labels = {label.name: label for label in context.labels}

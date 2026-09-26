@@ -334,6 +334,14 @@ def test_a_stray_reference_is_seen(
             [],
             id="unrelated environment",
         ),
+        pytest.param(
+            {
+                "upload": {"environment": "CodeScene", "steps": [_UPLOAD_STEP]},
+                "lint": {"environment": "CODESCENE", "steps": [{"run": "make lint"}]},
+            },
+            ["lint: declares codescene without uploading"],
+            id="names compared without case",
+        ),
     ],
 )
 def test_only_the_upload_job_declares_the_environment(

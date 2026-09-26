@@ -1024,8 +1024,10 @@ job_environment(job) := name if {
   is_string(name)
 }
 
+# GitHub resolves environment names case-insensitively, so `CodeScene` is
+# the same secret-bearing environment and is read as a declaration of it.
 declares_codescene_environment(job) if {
-  trim_space(job_environment(job)) == codescene_environment
+  lower(trim_space(job_environment(job))) == codescene_environment
 }
 
 job_uploads(job) if {

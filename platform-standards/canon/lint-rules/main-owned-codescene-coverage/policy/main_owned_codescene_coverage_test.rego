@@ -895,3 +895,23 @@ test_another_environment_elsewhere_is_not_a_finding if {
   findings := policy.deny with input as fixture
   count(findings) == 0
 }
+
+# GitHub resolves environment names case-insensitively, so `CodeScene` on the
+# upload job is the declaration, and on any other job is the same environment.
+test_environment_name_differing_only_in_case_is_compliant if {
+  fixture := json.patch(data.fixtures.clause2_direct_token_step_output_guard, [
+    {"op": "replace", "path": "/workflows/1/parsed/jobs/coverage/environment", "value": "CodeScene"},
+  ])
+  findings := policy.deny with input as fixture
+  count(findings) == 0
+}
+
+test_other_job_declaring_environment_in_another_case_is_noncompliant if {
+  fixture := json.patch(data.fixtures.clause2_direct_token_step_output_guard, [
+    {"op": "add", "path": "/workflows/1/parsed/jobs/lint", "value": {"runs-on": "ubuntu-latest", "environment": "CodeScene", "steps": [{"run": "make lint"}]}},
+  ])
+  findings := policy.deny with input as fixture
+  profile(findings) == {
+    ["noncompliant", ".github/workflows/coverage-main.yml", "job \"lint\" declares environment codescene but holds no CodeScene upload step"],
+  }
+}

@@ -9,8 +9,8 @@ never values.
 The check tolerates the estate's move in progress: an environment that is
 ready while the token is still a repository secret is reported as
 "secret not yet moved", distinct from a missing environment, so a rollout
-reads as progress. A read the token may not make is reported as
-indeterminate, never as a pass.
+reads as progress. A read that is refused or fails is reported as
+indeterminate, never as a pass, and never aborts the rest of the audit.
 """
 
 from __future__ import annotations
@@ -19,7 +19,10 @@ import dataclasses
 import re
 import typing as typ
 
-from .github import GithubForbiddenError
+from ruamel.yaml import YAML
+from ruamel.yaml.error import YAMLError
+
+from .github import GithubError
 from .models import CheckDefinition, Finding
 
 if typ.TYPE_CHECKING:
@@ -31,9 +34,70 @@ ENVIRONMENT: typ.Final = "codescene"
 # The credential's name, not a credential.
 TOKEN_NAME: typ.Final = "CS_ACCESS_TOKEN"  # noqa: S105 - a secret's name
 MAIN_ONLY: typ.Final = (("main", "branch"),)
-_UPLOADER: typ.Final = re.compile(
-    r"upload-codescene-coverage|cs-coverage\s+upload", re.IGNORECASE
-)
+UPLOAD_ACTION: typ.Final = "upload-codescene-coverage"
+_CLI_UPLOAD: typ.Final = re.compile(r"(^|[\s;&|()])cs-coverage\s+upload(\s|$)")
+_yaml = YAML(typ="safe")
+
+
+class UnreadableWorkflowError(ValueError):
+    """Raised when a workflow's text cannot be read as a YAML document."""
+
+
+def _step_uploads(step: object) -> bool:
+    """Return whether one workflow step uploads to CodeScene.
+
+    The action uploads unless its `mode` input says otherwise (`check` and
+    `install` do not), and a `run` step uploads when a command line starts
+    `cs-coverage upload`. YAML comments never reach this, since the text is
+    parsed first.
+
+    Returns
+    -------
+    bool
+        Whether the step uploads.
+    """
+    if not isinstance(step, dict):
+        return False
+    uses = step.get("uses")
+    if isinstance(uses, str) and UPLOAD_ACTION in uses.lower():
+        inputs = step.get("with")
+        mode = inputs.get("mode", "upload") if isinstance(inputs, dict) else "upload"
+        return str(mode).strip().lower() == "upload"
+    run = step.get("run")
+    return isinstance(run, str) and _CLI_UPLOAD.search(run) is not None
+
+
+def workflow_uploads(text: str) -> bool:
+    """Return whether a workflow's executable steps upload to CodeScene.
+
+    Returns
+    -------
+    bool
+        Whether any step of any job uploads.
+
+    Raises
+    ------
+    UnreadableWorkflowError
+        If the text is not a YAML mapping, so its steps cannot be read.
+    """
+    try:
+        document = _yaml.load(text)
+    except YAMLError as error:
+        raise UnreadableWorkflowError(str(error)) from error
+    if not isinstance(document, dict):
+        message = "workflow is not a mapping"
+        raise UnreadableWorkflowError(message)
+    jobs = document.get("jobs")
+    if not isinstance(jobs, dict):
+        return False
+    return any(
+        _step_uploads(step)
+        for job in jobs.values()
+        if isinstance(job, dict) and isinstance(job.get("steps"), list)
+        for step in job["steps"]
+    )
+
+
 DOC_URL: typ.Final = (
     "https://github.com/leynos/concordat/blob/main/docs/concordat-design.md"
 )
@@ -62,7 +126,9 @@ class CodesceneCredentials:
     repository_secrets:
         The names of the repository's Actions secrets.
     refused:
-        The reads the token was refused, which make the result indeterminate.
+        The reads that were refused (401 or 403) or failed (any other API
+        error, or a workflow that is not YAML), which make the result
+        indeterminate.
     """
 
     uploads: bool
@@ -78,9 +144,9 @@ class CodesceneCredentials:
 def fetch(client: GithubClient, owner: str, name: str) -> CodesceneCredentials:
     """Read the CodeScene credential settings for one repository.
 
-    A refused read is recorded rather than raised, so the check can report
-    it as indeterminate. A repository that uploads nothing is not read
-    further.
+    A refused or failed read is recorded rather than raised, so the check
+    reports it as indeterminate and the rest of the audit still runs. A
+    repository whose workflow steps upload nothing is not read further.
 
     Returns
     -------
@@ -88,10 +154,12 @@ def fetch(client: GithubClient, owner: str, name: str) -> CodesceneCredentials:
         The settings, or the reads that were refused.
     """
     try:
-        texts = client.workflow_texts(owner, name)
-    except GithubForbiddenError:
+        uploads = any(
+            workflow_uploads(text) for text in client.workflow_texts(owner, name)
+        )
+    except (GithubError, UnreadableWorkflowError):
         return CodesceneCredentials(uploads=True, refused=("workflows",))
-    if not any(_UPLOADER.search(text) for text in texts):
+    if not uploads:
         return CodesceneCredentials(uploads=False)
     reader = _SettingsReader(client, owner, name)
     repository_secrets = reader.read(
@@ -123,7 +191,7 @@ class _SettingsReader:
         """Return one read's result, or *default* when it is refused."""
         try:
             return read()
-        except GithubForbiddenError:
+        except GithubError:
             self.refused.append(label)
             return default
 
@@ -260,11 +328,11 @@ def _secret_findings(state: CodesceneCredentials, resource: str) -> list[Finding
 
 
 def _refused_message(state: CodesceneCredentials) -> str:
-    """Name the reads the token was refused."""
+    """Name the reads that were refused or failed."""
     reads = ", ".join(state.refused)
     return (
         f"cannot tell whether {TOKEN_NAME} lives in environment {ENVIRONMENT}: "
-        f"the token may not read {reads}"
+        f"could not read {reads}"
     )
 
 

@@ -355,10 +355,22 @@ adopted an earlier version moves as follows:
   workflow, job and step level.
 - Replace any direct `cs-coverage upload` command with the
   `upload-codescene-coverage` action, which binds the token from its input.
-- Declare `environment: codescene` on the upload job. In the repository
-  settings, create that environment with a deployment branch policy admitting
-  `main` alone, and move `CS_ACCESS_TOKEN` from the repository secrets into it;
-  the Concordat Auditor reports each step of that move (CV-006).
+
+CV-005 0.3.0 adds the environment that holds the token. A repository on 0.2.0
+moves as follows:
+
+- Declare `environment: codescene` on the upload job, and on no other job; a
+  pull-request workflow declares it on none. GitHub reads environment names
+  without regard to case, so `CodeScene` names the same environment.
+- In the repository settings, create that environment with a custom
+  deployment branch policy admitting the branch `main` alone, and move
+  `CS_ACCESS_TOKEN` from the repository secrets into it. The Concordat Auditor
+  reports each step of that move (CV-006).
+
+With the environment declared, a `workflow_dispatch` of the publisher from any
+branch but `main` is refused for the whole job, matrix legs that do not upload
+included, rather than skipped at the upload step. A branch proof of a coverage
+change runs through the pull-request lane's coverage run instead.
 
 Options:
 

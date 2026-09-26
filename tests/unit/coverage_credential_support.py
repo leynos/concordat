@@ -272,7 +272,9 @@ def environment_mismatches(workflow: Workflow) -> list[str]:
     found: list[str] = []
     for name, job in jobs(workflow).items():
         uploads_here = any(_is_upload(step) for step in job_steps(workflow, name, job))
-        declares = _environment_name(job) == CODESCENE_ENVIRONMENT
+        # GitHub resolves environment names case-insensitively.
+        environment = _environment_name(job)
+        declares = (environment or "").strip().lower() == CODESCENE_ENVIRONMENT
         if uploads_here and not declares:
             found.append(f"{name}: uploads without environment {CODESCENE_ENVIRONMENT}")
         elif declares and not uploads_here:

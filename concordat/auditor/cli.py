@@ -109,6 +109,7 @@ def main(argv: typ.Sequence[str] | None = None) -> int:
 
 
 def _split_repository(slug: str) -> tuple[str, str]:
+    """Split an owner/name slug, exiting on a malformed one."""
     if "/" not in slug:
         message = ERROR_REPOSITORY_SLUG.format(slug=slug)
         raise SystemExit(message)
@@ -123,6 +124,7 @@ def _context_from_snapshot(
     path: Path,
     priority_model: PriorityModel,
 ) -> AuditContext:
+    """Build the audit context from a recorded JSON snapshot."""
     data = json.loads(path.read_text())
     repository = _repository_from_dict(data["repository"])
     branch_protection = (
@@ -191,6 +193,7 @@ def _context_from_live_api(
     repo: str,
     priority_model: PriorityModel,
 ) -> AuditContext:
+    """Build the audit context from live GitHub API reads."""
     repository = client.repository(owner, repo)
     branch_protection = client.branch_protection(owner, repo, repository.default_branch)
     teams = client.teams(owner, repo)
@@ -208,6 +211,7 @@ def _context_from_live_api(
 
 
 def _repository_from_dict(payload: dict[str, object]) -> RepositorySnapshot:
+    """Read the repository settings from a snapshot mapping."""
     return RepositorySnapshot(
         owner=str(payload["owner"]),
         name=str(payload["name"]),
@@ -221,6 +225,7 @@ def _repository_from_dict(payload: dict[str, object]) -> RepositorySnapshot:
 
 
 def _branch_protection_from_dict(payload: dict[str, object]) -> BranchProtection:
+    """Read the branch protection from a snapshot mapping."""
     status_payload_raw = payload.get("status_checks")
     status_payload = (
         typ.cast("dict[str, typ.Any]", status_payload_raw)

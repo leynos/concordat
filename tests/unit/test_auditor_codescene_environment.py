@@ -10,6 +10,7 @@ import pytest
 from concordat.auditor import codescene_environment as cv006
 from concordat.auditor.github import (
     GithubClient,
+    GithubError,
     GithubForbiddenError,
     GithubNotFoundError,
 )
@@ -151,10 +152,12 @@ class _FakeClient:
     """Answer the CV-006 reads from fixed values, raising where configured."""
 
     def __init__(self, **answers: object) -> None:
+        """Answer each read from *answers*, keyed by method name."""
         self.answers = answers
         self.calls: list[str] = []
 
     def _answer(self, name: str) -> object:
+        """Record one read and return or raise its configured answer."""
         self.calls.append(name)
         answer = self.answers.get(name)
         if isinstance(answer, Exception):
@@ -162,22 +165,27 @@ class _FakeClient:
         return answer
 
     def workflow_texts(self, _owner: str, _name: str) -> object:
+        """Answer the workflow read."""
         return self._answer("workflow_texts")
 
     def repository_secret_names(self, _owner: str, _name: str) -> object:
+        """Answer the repository secret read."""
         return self._answer("repository_secret_names")
 
     def environment(self, _owner: str, _name: str, _environment: str) -> object:
+        """Answer the environment read."""
         return self._answer("environment")
 
     def environment_branch_policies(
         self, _owner: str, _name: str, _environment: str
     ) -> object:
+        """Answer the branch policy read."""
         return self._answer("environment_branch_policies")
 
     def environment_secret_names(
         self, _owner: str, _name: str, _environment: str
     ) -> object:
+        """Answer the environment secret read."""
         return self._answer("environment_secret_names")
 
 
@@ -280,3 +288,89 @@ def test_the_client_names_refusal_and_absence_apart(
     )
     with pytest.raises(error):
         client.repository_secret_names("example", "demo")
+
+
+_ACTION = "leynos/shared-actions/.github/actions/upload-codescene-coverage@abc"
+
+
+def _workflow(*step_lines: str) -> str:
+    """Render one job whose steps are the given YAML lines."""
+    body = "".join(f"      {line}\n" for line in step_lines)
+    return f"jobs:\n  u:\n    steps:\n{body}"
+
+
+def _action(mode: str | None = None) -> str:
+    """Render one upload action step, with a `mode` input when given."""
+    step = [f"- uses: {_ACTION}"]
+    if mode is not None:
+        step += ["  with:", f"    mode: {mode}"]
+    return _workflow(*step)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        pytest.param(_action(), True, id="mode defaulted"),
+        pytest.param(_action("upload"), True, id="mode upload"),
+        pytest.param(_action("check"), False, id="mode check"),
+        pytest.param(_action("install"), False, id="mode install"),
+        pytest.param(
+            _workflow(f"# - uses: {_ACTION}", "- run: make test"),
+            False,
+            id="commented-out action",
+        ),
+        pytest.param(
+            _workflow("- run: cs-coverage upload --format cobertura"),
+            True,
+            id="command-line upload",
+        ),
+        pytest.param(
+            "# cs-coverage upload is main-only\n" + _workflow("- run: make"),
+            False,
+            id="commented-out command",
+        ),
+        pytest.param("on: push\n", False, id="no jobs"),
+    ],
+)
+def test_only_executable_upload_steps_make_a_subject(text: str, expected: bool) -> None:  # noqa: FBT001 - parametrised verdict
+    """A mention, a comment or a non-upload mode is not an uploader."""
+    assert cv006.workflow_uploads(text) is expected, text
+
+
+@pytest.mark.parametrize(
+    "text", ["jobs: [\n", "- a list\n"], ids=["invalid YAML", "not a mapping"]
+)
+def test_an_unreadable_workflow_is_refused_rather_than_guessed(text: str) -> None:
+    """A workflow whose steps cannot be read cannot clear the subject test."""
+    with pytest.raises(cv006.UnreadableWorkflowError):
+        cv006.workflow_uploads(text)
+
+
+def test_fetch_treats_an_unreadable_workflow_as_indeterminate() -> None:
+    """Invalid YAML leaves the subject question open, so the result is too."""
+    state = _fetch(workflow_texts=("jobs: [\n",))
+    assert _statuses(state) == ["indeterminate"]
+
+
+def test_fetch_does_not_judge_a_check_mode_lane() -> None:
+    """A repository whose only CodeScene step checks is not a subject."""
+    client = _FakeClient(workflow_texts=(_action("check"),))
+    state = cv006.fetch(typ.cast("GithubClient", client), "example", "demo")
+    assert state == cv006.CodesceneCredentials(uploads=False)
+
+
+@pytest.mark.parametrize(
+    "failed",
+    [
+        "workflow_texts",
+        "repository_secret_names",
+        "environment",
+        "environment_branch_policies",
+        "environment_secret_names",
+    ],
+)
+def test_fetch_reports_any_failed_read_as_indeterminate(failed: str) -> None:
+    """A 5xx, a 429 or a vanished file is indeterminate, not a crash."""
+    state = _fetch(**{failed: GithubError("GET x failed: 502")})
+    assert state.refused, state
+    assert _statuses(state) == ["indeterminate"]
