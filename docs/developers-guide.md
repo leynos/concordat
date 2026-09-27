@@ -588,7 +588,9 @@ that declared kind; "Choosing the envelope for a package" below gives the
 routes. A package declaring no kind, or one no builder produces, is an
 `OperationalRuleError` rather than a guess: falling back would hand one policy
 the document another was written for, and a policy that cannot find its own
-facts reports a compliance it never established. Three kinds exist:
+facts reports a compliance it never established. The Makefile-centred kinds are
+listed here; the CodeScene coverage and Dependabot kinds are described after
+"Choosing the envelope for a package" below:
 
 - `policy-input/rust-makefile-baseline` — `envelope.build_envelope`, above.
 - `policy-input/rust-build-defaults` —

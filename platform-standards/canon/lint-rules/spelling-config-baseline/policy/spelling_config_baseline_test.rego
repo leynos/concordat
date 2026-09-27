@@ -1,4 +1,4 @@
-# Fixture tests for spelling-config-baseline (PD-007 to PD-012).
+# Fixture tests for spelling-config-baseline (PD-007 to PD-013).
 package canon.lint_rules.spelling_config_baseline_test
 
 import rego.v1
@@ -138,6 +138,14 @@ test_ci_malformed if {
   }
 }
 
+# An undecodable workflow might run typos, so the repository's scope is unknown, never passed.
+test_ci_malformed_only if {
+  findings := policy.deny with input as data.fixtures.ci_malformed_only
+  profile(findings) == {
+    ["PD-010", "indeterminate", 0, ".github/workflows/broken.yml could not be decoded, so whether the repository gates spelling is unknown: invalid YAML: while parsing a flow node\nexpected the node content, but found '<stream end>'\n  in \"<unicode string>\", line 2, column 1:\n    \n    ^ (line: 2)"],
+  }
+}
+
 test_ci_typos_action if {
   findings := policy.deny with input as data.fixtures.ci_typos_action
   profile(findings) == {
@@ -189,6 +197,12 @@ test_echo_mention if {
   count(findings) == 0
 }
 
+# A glob that ignores the cache counts, as Git applies it.
+test_gitignore_glob if {
+  findings := policy.deny with input as data.fixtures.gitignore_glob
+  count(findings) == 0
+}
+
 test_gitignore_missing if {
   findings := policy.deny with input as data.fixtures.gitignore_missing
   profile(findings) == {
@@ -196,18 +210,26 @@ test_gitignore_missing if {
   }
 }
 
+# Git lets the last matching pattern decide, so a later negation unignores the cache.
+test_gitignore_negated if {
+  findings := policy.deny with input as data.fixtures.gitignore_negated
+  profile(findings) == {
+    ["PD-011", "noncompliant", 0, ".gitignore does not ignore .typos-oxendict-base.json, the builder's untracked cache"],
+  }
+}
+
 test_gitignore_none_listed if {
   findings := policy.deny with input as data.fixtures.gitignore_none_listed
   profile(findings) == {
-    ["PD-011", "noncompliant", 0, ".gitignore does not list .typos-oxendict-base.json, the builder's untracked cache"],
-    ["PD-011", "noncompliant", 0, ".gitignore does not list .typos-oxendict-base.toml, the builder's untracked cache"],
+    ["PD-011", "noncompliant", 0, ".gitignore does not ignore .typos-oxendict-base.json, the builder's untracked cache"],
+    ["PD-011", "noncompliant", 0, ".gitignore does not ignore .typos-oxendict-base.toml, the builder's untracked cache"],
   }
 }
 
 test_gitignore_partial if {
   findings := policy.deny with input as data.fixtures.gitignore_partial
   profile(findings) == {
-    ["PD-011", "noncompliant", 0, ".gitignore does not list .typos-oxendict-base.toml, the builder's untracked cache"],
+    ["PD-011", "noncompliant", 0, ".gitignore does not ignore .typos-oxendict-base.toml, the builder's untracked cache"],
   }
 }
 

@@ -1,4 +1,4 @@
-"""Behavioural tests for `concordat artefact rule run` on PD-007 to PD-012.
+"""Behavioural tests for `concordat artefact rule run` on PD-007 to PD-013.
 
 These scenarios run the real policy over a real Makefile (parsed by the
 pinned `makeutil`), overlay and `.gitignore` through `cli.main`, so they cover
@@ -38,17 +38,23 @@ spelling:
 \t$(TYPOS_CONFIG) --repository . --check
 """
 _GITIGNORE: typ.Final = ".typos-oxendict-base.json\n.typos-oxendict-base.toml\n"
+_REPOSITORY: typ.Final = pathlib.Path(__file__).resolve().parents[2]
 _MANIFEST: typ.Final = (
-    pathlib.Path(__file__).resolve().parents[2]
+    _REPOSITORY
     / "platform-standards/canon/lint-rules/spelling-config-baseline/rule.yaml"
 )
+
+
+def _release_key(tag: str) -> tuple[int, ...]:
+    """Order release tags numerically, so ``v0.10.0`` follows ``v0.9.0``."""
+    return tuple(int(part) for part in tag.removeprefix("v").split("."))
 
 
 def _agents_md() -> str:
     """Return an AGENTS.md carrying the manifest's newest spelling block."""
     manifest = YAML(typ="safe").load(_MANIFEST.read_text(encoding="utf-8"))
     blocks = manifest["parameters"]["defaults"]["agents_md_blocks"]
-    body = blocks[max(blocks)]
+    body = blocks[max(blocks, key=_release_key)]
     return (
         "# Agents\n\n<!-- typos-config-builder:agents-md:start -->\n\n"
         f"{body}\n<!-- typos-config-builder:agents-md:end -->\n"
@@ -102,16 +108,15 @@ def given_legacy_setup(spelling_checkout: pathlib.Path) -> None:
     (scripts / "typos_rollout_check.py").write_text('"""Legacy."""\n', encoding="utf-8")
 
 
-@when("I audit the checkout for its spelling gate")
-def when_audit_checkout(
-    spelling_checkout: pathlib.Path,
+def _audit(
+    checkout: pathlib.Path,
     cli_invocation: dict[str, RunResult],
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Invoke the command and record its output and exit status."""
+    """Invoke the command on *checkout* and record its output and exit status."""
     try:
         returncode = cli.main(
-            ["artefact", "rule", "run", RULE_ID, "--repo", str(spelling_checkout)],
+            ["artefact", "rule", "run", RULE_ID, "--repo", str(checkout)],
         )
     except SystemExit as exc:
         returncode = int(exc.code or 0)
@@ -121,6 +126,25 @@ def when_audit_checkout(
         stderr=captured.err,
         returncode=returncode,
     )
+
+
+@when("I audit the checkout for its spelling gate")
+def when_audit_checkout(
+    spelling_checkout: pathlib.Path,
+    cli_invocation: dict[str, RunResult],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Audit the scenario's checkout."""
+    _audit(spelling_checkout, cli_invocation, capsys)
+
+
+@when("I audit concordat's own checkout for its spelling gate")
+def when_audit_own_checkout(
+    cli_invocation: dict[str, RunResult],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Audit this repository, so its Makefile pin and AGENTS.md block conform."""
+    _audit(_REPOSITORY, cli_invocation, capsys)
 
 
 @then(parsers.cfparse("the audit exit status is {code:d}"))

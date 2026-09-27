@@ -109,6 +109,20 @@ class SpellingEnvelope(typ.TypedDict):
     vendored: list[str]
 
 
+def _is_contained_file(root: pathlib.Path, path: pathlib.Path, operation: str) -> bool:
+    """Return whether *path* is a regular file resolving inside the checkout.
+
+    An `OperationalRuleError` propagates from the containment guard when the
+    path escapes the checkout, as it does for every fact the envelope reads.
+
+    Returns
+    -------
+    bool
+        Whether the path exists, stays inside the checkout, and is a file.
+    """
+    return _within_checkout(root, path, operation) and _is_file(path, operation)
+
+
 def _read_input(
     checkout: pathlib.Path, root: pathlib.Path, name: str, operation: str
 ) -> tuple[str | None, str | None] | None:
@@ -124,7 +138,7 @@ def _read_input(
         when the file does not exist.
     """
     path = checkout / name
-    if not _within_checkout(root, path, operation) or not _is_file(path, operation):
+    if not _is_contained_file(root, path, operation):
         return None
     try:
         return _read_text(path, operation), None
@@ -236,9 +250,7 @@ def build_spelling_envelope(
     root = _resolved_root(checkout)
     makefile_path = checkout / "Makefile"
     makefile_report: MakeutilReport | None = None
-    if _within_checkout(root, makefile_path, OPERATION_READ_MAKEFILE) and _is_file(
-        makefile_path, OPERATION_READ_MAKEFILE
-    ):
+    if _is_contained_file(root, makefile_path, OPERATION_READ_MAKEFILE):
         makefile_report = inspect_makefile(makefile_path).report
     typos_local = _load_typos_local(checkout, root)
     return {
@@ -247,8 +259,8 @@ def build_spelling_envelope(
         "repository": {"path": str(checkout), "name": None},
         "applicability": {
             "root_makefile": makefile_report is not None,
-            "typos_config": _is_file(
-                checkout / TYPOS_CONFIG_FILENAME, OPERATION_PROBE_PATH
+            "typos_config": _is_contained_file(
+                root, checkout / TYPOS_CONFIG_FILENAME, OPERATION_PROBE_PATH
             ),
             "typos_local": typos_local is not None,
         },

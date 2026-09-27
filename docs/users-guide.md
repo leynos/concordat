@@ -521,8 +521,9 @@ that mentions Typos), and reports:
   script, or their tests.
 - **PD-010**: no workflow runs Typos directly or drift-checks `typos.toml`;
   CI runs `make spelling`.
-- **PD-011**: `.gitignore` lists `.typos-oxendict-base.json` and
-  `.typos-oxendict-base.toml`.
+- **PD-011**: `.gitignore` ignores `.typos-oxendict-base.json` and
+  `.typos-oxendict-base.toml`, with the last matching pattern deciding as in
+  Git, so a later `!` pattern unignores the cache.
 - **PD-012**: `typos.local.toml` exists and declares `schema = 1`.
 - **PD-013**: `AGENTS.md` carries typos-config-builder's spelling block,
   copied verbatim from the pinned release's `docs/agents-md-spelling.md`

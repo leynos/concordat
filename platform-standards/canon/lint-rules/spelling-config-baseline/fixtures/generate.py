@@ -145,10 +145,15 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "ci_malformed": Scenario(
         workflows={"ci.yml": "make-spelling", "broken.yml": "malformed"}
     ),
+    "ci_malformed_only": dataclasses.replace(
+        BARE, workflows={"broken.yml": "malformed"}
+    ),
     # -- PD-011: the cache is ignored --------------------------------------
     "gitignore_missing": Scenario(gitignore=None),
     "gitignore_partial": Scenario(gitignore="partial"),
     "gitignore_none_listed": Scenario(gitignore="none-listed"),
+    "gitignore_negated": Scenario(gitignore="negated"),
+    "gitignore_glob": Scenario(gitignore="glob"),
     # -- PD-012: the overlay -------------------------------------------------
     "overlay_missing": Scenario(overlay=None),
     "overlay_schema_2": Scenario(overlay="schema-2"),

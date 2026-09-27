@@ -123,6 +123,19 @@ applicable if {
 	spelling_evidence
 }
 
+# A workflow that cannot be decoded might run typos, so with no other
+# evidence the repository's scope is unknown: indeterminate, never passed.
+deny contains f if {
+	envelope_ok
+	not spelling_evidence
+	some workflow in input.workflows
+	workflow.error != null
+	f := finding(
+		"PD-010", "indeterminate", workflow.path, 0,
+		sprintf("%s could not be decoded, so whether the repository gates spelling is unknown: %s", [workflow.path, workflow.error]),
+	)
+}
+
 # -- Make variable expansion -----------------------------------------------------
 #
 # As in markdown-formatting-baseline: a variable with exactly one
@@ -669,9 +682,19 @@ deny contains f if {
 
 # -- PD-011: the builder's cache stays untracked ------------------------------------
 
+# Git lets the last matching pattern decide, so a later `!` pattern unignores
+# the cache. The entries are root-level files: a pattern matches when, stripped
+# of `!` and a leading `/` or `**/`, it globs the name with `/` as the only
+# separator. A comment never matches, because no entry begins with `#`.
+gitignore_pattern(line) := trim_prefix(trim_prefix(trim_prefix(line, "!"), "**/"), "/")
+
+gitignore_matches(line, entry) if glob.match(gitignore_pattern(line), ["/"], entry)
+
 gitignore_has(entry) if {
-	some line in input.gitignore.lines
-	trim_prefix(line, "/") == entry
+	lines := input.gitignore.lines
+	matching := [index | some index, line in lines; gitignore_matches(line, entry)]
+	count(matching) > 0
+	not startswith(lines[matching[count(matching) - 1]], "!")
 }
 
 deny contains f if {
@@ -693,7 +716,7 @@ deny contains f if {
 	input.gitignore.error == null
 	some entry in gitignore_entries
 	not gitignore_has(entry)
-	f := finding("PD-011", "noncompliant", ".gitignore", 0, sprintf(".gitignore does not list %s, the builder's untracked cache", [entry]))
+	f := finding("PD-011", "noncompliant", ".gitignore", 0, sprintf(".gitignore does not ignore %s, the builder's untracked cache", [entry]))
 }
 
 # -- PD-012: the local overlay exists at the supported schema ------------------------

@@ -1,0 +1,5 @@
+.venv/
+.typos-oxendict-base.json
+.typos-oxendict-base.toml
+# Tracked on purpose, which the builder forbids.
+!.typos-oxendict-base.json

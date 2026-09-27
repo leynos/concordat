@@ -46,9 +46,12 @@ phrase corrections Typos cannot express.
   the `crate-ci/typos` action), drift-checks `typos.toml` (the builder's
   `--check`, or `git diff` over the file), runs vendored machinery, or drives a
   legacy helper target. CI runs `make spelling`.
-- **PD-011** (error): `.gitignore` lists `.typos-oxendict-base.json` and
-  `.typos-oxendict-base.toml`, the builder's untracked cache. A root-anchored
-  line (`/.typos-oxendict-base.json`) names the same file.
+- **PD-011** (error): `.gitignore` ignores `.typos-oxendict-base.json` and
+  `.typos-oxendict-base.toml`, the builder's untracked cache. As in Git, the
+  last matching pattern decides: a root-anchored line
+  (`/.typos-oxendict-base.json`), a `**/` prefix, or a glob such as
+  `.typos-oxendict-base.*` ignores the file, and a later `!` pattern that
+  matches it unignores it again.
 - **PD-012** (error): `typos.local.toml` exists and declares `schema = 1`,
   even when it holds nothing else.
 - **PD-013** (error): `AGENTS.md` carries exactly one spelling block between
@@ -124,7 +127,10 @@ words, and a line that only prints (`echo`, `printf`) is a mention.
 A variable the policy cannot resolve, a conditional rule or `include` in the
 closure, a recovered parse, or a dynamic recursive Make invocation is
 `indeterminate` rather than guessed, as is a workflow or overlay that cannot be
-decoded. Workflow facts carry no line numbers, so PD-010 findings cite line `0`.
+decoded. A workflow that cannot be decoded might run Typos, so when it is the
+checkout's only possible spelling evidence the repository's scope is itself
+`indeterminate`, never passed as out of scope. Workflow facts carry no line
+numbers, so PD-010 findings cite line `0`.
 
 ## Verdicts
 

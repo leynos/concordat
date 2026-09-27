@@ -16,6 +16,11 @@ Feature: Spelling configuration baseline rule run
     Then the audit exit status is 0
     And the audit table reports zero findings
 
+  Scenario: concordat's own spelling gate is audited clean
+    When I audit concordat's own checkout for its spelling gate
+    Then the audit exit status is 0
+    And the audit table reports zero findings
+
   Scenario: a release below the floor is reported
     Given a checkout whose spelling target pins v0.1.1
     When I audit the checkout for its spelling gate

@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "kind": "policy-input/spelling-config-baseline",
+  "repository": {
+    "path": ".",
+    "name": null
+  },
+  "applicability": {
+    "root_makefile": false,
+    "typos_config": false,
+    "typos_local": false
+  },
+  "makefile": null,
+  "workflows": [
+    {
+      "path": ".github/workflows/broken.yml",
+      "parsed": null,
+      "error": "invalid YAML: while parsing a flow node\nexpected the node content, but found '<stream end>'\n  in \"<unicode string>\", line 2, column 1:\n    \n    ^ (line: 2)"
+    }
+  ],
+  "typos_local": null,
+  "gitignore": null,
+  "agents_md": null,
+  "vendored": []
+}
