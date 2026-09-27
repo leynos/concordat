@@ -180,6 +180,7 @@ def _main_workflow(case: CoverageCase) -> dict[str, object]:
     """Render the push-to-main publisher described by one case."""
     upload_job: dict[str, object] = {
         "runs-on": _PLATFORM_LABELS["Linux"],
+        "environment": "codescene",
         "steps": _publisher_steps(case),
     }
     if case.publisher_stray_site == "job":

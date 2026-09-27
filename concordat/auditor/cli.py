@@ -8,6 +8,7 @@ import os
 import typing as typ
 from pathlib import Path
 
+from . import codescene_environment
 from .checks import build_registry
 from .github import DEFAULT_API_URL, GithubClient
 from .models import (
@@ -108,6 +109,7 @@ def main(argv: typ.Sequence[str] | None = None) -> int:
 
 
 def _split_repository(slug: str) -> tuple[str, str]:
+    """Split an owner/name slug, exiting on a malformed one."""
     if "/" not in slug:
         message = ERROR_REPOSITORY_SLUG.format(slug=slug)
         raise SystemExit(message)
@@ -122,6 +124,7 @@ def _context_from_snapshot(
     path: Path,
     priority_model: PriorityModel,
 ) -> AuditContext:
+    """Build the audit context from a recorded JSON snapshot."""
     data = json.loads(path.read_text())
     repository = _repository_from_dict(data["repository"])
     branch_protection = (
@@ -158,6 +161,29 @@ def _context_from_snapshot(
         collaborators=collaborators,
         labels=labels,
         priority_model=priority_model,
+        codescene=_codescene_from_dict(data.get("codescene")),
+    )
+
+
+def _codescene_from_dict(
+    payload: object,
+) -> codescene_environment.CodesceneCredentials | None:
+    """Read the CV-006 settings from a snapshot, or None when it has none."""
+    if not isinstance(payload, dict):
+        return None
+    data = typ.cast("dict[str, typ.Any]", payload)
+    return codescene_environment.CodesceneCredentials(
+        uploads=bool(data.get("uploads", False)),
+        environment_exists=bool(data.get("environment_exists", False)),
+        protected_branches=bool(data.get("protected_branches", False)),
+        custom_branch_policies=bool(data.get("custom_branch_policies", False)),
+        branch_policies=tuple(
+            (str(entry["name"]), str(entry.get("type", "branch")))
+            for entry in data.get("branch_policies", [])
+        ),
+        environment_secrets=tuple(data.get("environment_secrets", [])),
+        repository_secrets=tuple(data.get("repository_secrets", [])),
+        refused=tuple(data.get("refused", [])),
     )
 
 
@@ -167,6 +193,7 @@ def _context_from_live_api(
     repo: str,
     priority_model: PriorityModel,
 ) -> AuditContext:
+    """Build the audit context from live GitHub API reads."""
     repository = client.repository(owner, repo)
     branch_protection = client.branch_protection(owner, repo, repository.default_branch)
     teams = client.teams(owner, repo)
@@ -179,10 +206,12 @@ def _context_from_live_api(
         collaborators=collaborators,
         labels=labels,
         priority_model=priority_model,
+        codescene=codescene_environment.fetch(client, owner, repo),
     )
 
 
 def _repository_from_dict(payload: dict[str, object]) -> RepositorySnapshot:
+    """Read the repository settings from a snapshot mapping."""
     return RepositorySnapshot(
         owner=str(payload["owner"]),
         name=str(payload["name"]),
@@ -196,6 +225,7 @@ def _repository_from_dict(payload: dict[str, object]) -> RepositorySnapshot:
 
 
 def _branch_protection_from_dict(payload: dict[str, object]) -> BranchProtection:
+    """Read the branch protection from a snapshot mapping."""
     status_payload_raw = payload.get("status_checks")
     status_payload = (
         typ.cast("dict[str, typ.Any]", status_payload_raw)

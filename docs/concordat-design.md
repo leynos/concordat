@@ -1781,6 +1781,7 @@ breakdown of what constitutes "compliance" within the framework.
 | BP-001       | Default branch protection enforces admin parity, signed commits, reviews, and strict status checks (including the Auditor).                                                                                                                                                                                                                                                                                                                 | Branch Governance               | Python/GitHub API                                       | error                | 1                        |
 | PM-001       | Repository permissions route through at least one team with maintain/admin scope and expose no outside collaborators with admin.                                                                                                                                                                                                                                                                                                            | Repository Access Controls      | Python/GitHub API                                       | error                | 1                        |
 | LB-001       | Canonical priority labels (`priority/p0`–`priority/p3`) exist with the correct colour and description metadata.                                                                                                                                                                                                                                                                                                                             | Label Governance                | Python/GitHub API                                       | warning              | 1                        |
+| CV-006       | A repository whose workflows upload to CodeScene keeps `CS_ACCESS_TOKEN` as a secret of environment `codescene` alone, whose deployment branch policy is a custom policy admitting the branch `main` alone; a token still held as a repository secret is reported as not yet moved.                                                                                                                                                         | Secrets Management              | Python/GitHub API                                       | error                | 4                        |
 | CI-001       | The `.github/workflows/ci.yml` file must call the canonical reusable CI workflow.                                                                                                                                                                                                                                                                                                                                                           | CI/CD Integrity                 | OPA/Conftest                                            | error                | 1                        |
 | CI-002       | The `.github/workflows/release.yml` file must call the canonical reusable release workflow (if `ci.needs_release_workflow` is true).                                                                                                                                                                                                                                                                                                        | CI/CD Integrity                 | OPA/Conftest                                            | error                | 2                        |
 | CI-003       | Workflows must not use disallowed third-party GitHub Actions.                                                                                                                                                                                                                                                                                                                                                                               | CI/CD Integrity                 | OPA/Conftest                                            | error                | 2                        |
@@ -1943,17 +1944,34 @@ coverage generated after a merge on `main`.
   secret as its action input. A workflow that uploads names the token nowhere
   else, so no `env` block, other `run` body, other action input or condition
   holds it; static-analysis tools kept flagging the older `env` binding, which
-  the composite upload action also handed to every nested step. Arbitrary shell
-  provenance and cross-job outputs remain outside this local policy's proof.
-  Workflow discovery is explicitly fallible: an absent `.github/workflows` is a
-  repository with no workflows, while an unreadable or unlistable one is an
-  operational error rather than an empty list that would clear the rule.
-  Adopting this rule removes a quality gate from the pull-request lane, so an
-  adoption is reviewed in full rather than merged mechanically on green.
-  Actions caches saved on a pull-request branch are invisible to other
-  branches, so a PR-only ratchet cannot provide the authoritative baseline. The
-  secret-store sensor lists secret names via the GitHub API for both stores and
-  cross-references every `if: env.X != ''` guard in the repository's workflows.
+  the composite upload action also handed to every nested step. The upload job
+  declares `environment: codescene` and no other job does, because the token is
+  a secret of that environment, whose branch policy admits `main` alone: a
+  branch copy of the publisher dispatched by any pusher cannot read it. The ref
+  guard stays as defence in depth. The Concordat Auditor checks the environment
+  itself as CV-006, since repository settings are outside any checkout. It
+  reads, through the API, whether `codescene` exists, whether its deployment
+  branch policy is a custom policy admitting the branch `main` alone, and the
+  names (never the values) of the environment's and the repository's secrets.
+  Each remaining step of a move is a finding of its own: a missing environment,
+  a protected-branches or wider policy, the token still a repository secret
+  ("secret not yet moved"), or the token absent from the environment. A read
+  the token may not make is reported as indeterminate rather than passed. A
+  `workflow_dispatch` of the publisher from any branch but `main` is therefore
+  refused for the whole job, matrix legs that do not upload included, rather
+  than skipped at the upload step. That is intended: a branch proof of a
+  coverage change runs through the pull-request lane's coverage run instead.
+  Arbitrary shell provenance and cross-job outputs remain outside this local
+  policy's proof. Workflow discovery is explicitly fallible: an absent
+  `.github/workflows` is a repository with no workflows, while an unreadable or
+  unlistable one is an operational error rather than an empty list that would
+  clear the rule. Adopting this rule removes a quality gate from the
+  pull-request lane, so an adoption is reviewed in full rather than merged
+  mechanically on green. Actions caches saved on a pull-request branch are
+  invisible to other branches, so a PR-only ratchet cannot provide the
+  authoritative baseline. The secret-store sensor lists secret names via the
+  GitHub API for both stores and cross-references every `if: env.X != ''` guard
+  in the repository's workflows.
 - **Actuators:** canonical `coverage-main.yml` file-copy and coverage-job
   patches retain the local PR ratchet and the main-only CodeScene upload. A
   `concordat`-driven secret provisioning command sets an operator-supplied

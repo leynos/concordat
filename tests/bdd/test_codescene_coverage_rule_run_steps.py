@@ -55,6 +55,7 @@ concurrency:
 jobs:
   coverage-upload:
     runs-on: ubuntu-latest
+    environment: codescene
     steps:
       - uses: leynos/shared-actions/.github/actions/generate-coverage@0000000
         with:
@@ -79,6 +80,7 @@ concurrency:
 jobs:
   coverage-upload:
     runs-on: ubuntu-latest
+    environment: codescene
     steps:
       - uses: leynos/shared-actions/.github/actions/generate-coverage@0000000
         with:

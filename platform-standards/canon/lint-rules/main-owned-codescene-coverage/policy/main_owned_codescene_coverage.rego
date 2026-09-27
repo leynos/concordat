@@ -1002,6 +1002,80 @@ deny contains f if {
   f := finding("noncompliant", workflow_path(workflow), sprintf("CodeScene uploader names CS_ACCESS_TOKEN outside the check step's command and the upload's access-token input, at %s", [path]))
 }
 
+# The token lives as a secret of the `codescene` environment, whose branch
+# policy admits `main` alone. A branch copy of the publisher, dispatched by
+# anyone who can push, then runs without the secret: the ref guard stops the
+# upload, and the environment stops the token being readable at all. The ref
+# guard stays as defence in depth. So the job holding the upload step
+# declares that environment, by its exact name, and no other job does:
+# another job declaring it could read the token, and a pull-request lane
+# never needs it.
+codescene_environment := "codescene"
+
+job_environment(job) := name if {
+  name := object.get(job, "environment", null)
+  is_string(name)
+}
+
+job_environment(job) := name if {
+  declared := object.get(job, "environment", null)
+  is_object(declared)
+  name := object.get(declared, "name", null)
+  is_string(name)
+}
+
+# GitHub resolves environment names case-insensitively, so `CodeScene` is
+# the same secret-bearing environment and is read as a declaration of it.
+declares_codescene_environment(job) if {
+  lower(trim_space(job_environment(job))) == codescene_environment
+}
+
+job_uploads(job) if {
+  steps := object.get(job, "steps", null)
+  is_array(steps)
+  some step in steps
+  is_object(step)
+  is_upload_step(step)
+}
+
+deny contains f if {
+  envelope_ok
+  some workflow in workflows
+  not unsupported_workflow(workflow)
+  not has_pr_trigger(workflow)
+  jobs := workflow_jobs(workflow)
+  some name, job in jobs
+  is_object(job)
+  job_uploads(job)
+  not declares_codescene_environment(job)
+  f := finding("noncompliant", workflow_path(workflow), sprintf("CodeScene upload job %q does not declare environment: codescene", [name]))
+}
+
+deny contains f if {
+  envelope_ok
+  some workflow in workflows
+  not unsupported_workflow(workflow)
+  not has_pr_trigger(workflow)
+  jobs := workflow_jobs(workflow)
+  some name, job in jobs
+  is_object(job)
+  declares_codescene_environment(job)
+  not job_uploads(job)
+  f := finding("noncompliant", workflow_path(workflow), sprintf("job %q declares environment codescene but holds no CodeScene upload step", [name]))
+}
+
+deny contains f if {
+  envelope_ok
+  some workflow in workflows
+  not unsupported_workflow(workflow)
+  has_pr_trigger(workflow)
+  jobs := workflow_jobs(workflow)
+  some name, job in jobs
+  is_object(job)
+  declares_codescene_environment(job)
+  f := finding("noncompliant", workflow_path(workflow), sprintf("pull-request workflow job %q declares environment codescene", [name]))
+}
+
 # The command line reads the token from its environment, so a direct upload
 # cannot keep it to the two sanctioned places. The action binds the token
 # itself from its `access-token` input: it is the one sanctioned route.

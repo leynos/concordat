@@ -30,6 +30,9 @@ concurrency:
 jobs:
   coverage-upload:
     runs-on: ubuntu-latest
+    # CS_ACCESS_TOKEN is a secret of this environment, whose branch policy
+    # admits main alone, so a branch copy of this workflow cannot read it.
+    environment: codescene
     env:
       # makeutil v0.1.0's x86_64 musl release asset and its SHA-256 digest.
       # Bump the version and the digest together.

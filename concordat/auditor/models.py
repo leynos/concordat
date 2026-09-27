@@ -6,6 +6,7 @@ import dataclasses
 import typing as typ
 
 if typ.TYPE_CHECKING:
+    from .codescene_environment import CodesceneCredentials
     from .priority import PriorityModel
 
 Severity = str
@@ -97,6 +98,7 @@ class AuditContext:
     collaborators: tuple[CollaboratorPermission, ...]
     labels: tuple[LabelState, ...]
     priority_model: PriorityModel | None
+    codescene: CodesceneCredentials | None = None
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

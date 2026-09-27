@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import typing as typ
 
 import requests
@@ -25,6 +26,14 @@ class GithubError(RuntimeError):
 
 class GithubNotFoundError(GithubError):
     """Raised when the GitHub API returns a 404 for an optional resource."""
+
+
+class GithubForbiddenError(GithubError):
+    """Raised when the token may not read a resource (401 or 403).
+
+    A refusal is neither presence nor absence, so a check reading one reports
+    an indeterminate result rather than a pass.
+    """
 
 
 class GithubClient:
@@ -137,18 +146,92 @@ class GithubClient:
             for entry in entries
         )
 
+    def environment(
+        self, owner: str, name: str, environment: str
+    ) -> dict[str, typ.Any] | None:
+        """Return one deployment environment, or None when it does not exist."""
+        try:
+            return self._get_json(
+                "GET", f"/repos/{owner}/{name}/environments/{environment}"
+            )
+        except GithubNotFoundError:
+            return None
+
+    def environment_branch_policies(
+        self, owner: str, name: str, environment: str
+    ) -> tuple[tuple[str, str], ...]:
+        """Return an environment's custom deployment branch policies.
+
+        Returns
+        -------
+        tuple[tuple[str, str], ...]
+            Each policy's name pattern and type (`branch` or `tag`).
+        """
+        path = (
+            f"/repos/{owner}/{name}/environments/{environment}"
+            "/deployment-branch-policies"
+        )
+        return tuple(
+            (str(entry.get("name", "")), str(entry.get("type", "branch")))
+            for entry in self._paginate_key(path, "branch_policies")
+        )
+
+    def environment_secret_names(
+        self, owner: str, name: str, environment: str
+    ) -> tuple[str, ...]:
+        """Return the names, never the values, of an environment's secrets."""
+        path = f"/repos/{owner}/{name}/environments/{environment}/secrets"
+        return tuple(
+            str(entry["name"]) for entry in self._paginate_key(path, "secrets")
+        )
+
+    def repository_secret_names(self, owner: str, name: str) -> tuple[str, ...]:
+        """Return the names, never the values, of the repository's Actions secrets."""
+        path = f"/repos/{owner}/{name}/actions/secrets"
+        return tuple(
+            str(entry["name"]) for entry in self._paginate_key(path, "secrets")
+        )
+
+    def workflow_texts(self, owner: str, name: str) -> tuple[str, ...]:
+        """Return the text of every root workflow file on the default branch."""
+        try:
+            listing = self._request(
+                "GET", f"/repos/{owner}/{name}/contents/.github/workflows"
+            ).json()
+        except GithubNotFoundError:
+            return ()
+        texts = []
+        for entry in listing:
+            if entry.get("type") != "file" or not str(entry.get("name", "")).endswith((
+                ".yml",
+                ".yaml",
+            )):
+                continue
+            body = self._get_json(
+                "GET", f"/repos/{owner}/{name}/contents/{entry['path']}"
+            )
+            texts.append(
+                base64.b64decode(body.get("content", "")).decode("utf-8", "replace")
+            )
+        return tuple(texts)
+
     # Internal helpers -------------------------------------------------
 
     def _get_json(self, method: str, path: str) -> dict[str, typ.Any]:
+        """Send one request and return its decoded JSON body."""
         response = self._request(method, path)
         return response.json()
 
     def _request(self, method: str, path: str) -> requests.Response:
+        """Send one request, raising on a refusal, an absence or a failure."""
         url = f"{self.api_url}{path}"
         response = self.session.request(method, url, timeout=self.timeout)
         if response.status_code == 404:
             message = f"{method} {path} returned 404."
             raise GithubNotFoundError(message)
+        if response.status_code in {401, 403}:
+            message = f"{method} {path} was refused: {response.status_code}"
+            raise GithubForbiddenError(message)
         if response.status_code >= 400:
             detail = response.text[:400]
             message = f"{method} {path} failed: {response.status_code} {detail}"
@@ -158,6 +241,7 @@ class GithubClient:
     def _paginate(
         self, path: str, *, params: dict[str, typ.Any] | None = None
     ) -> typ.Iterable[dict[str, typ.Any]]:
+        """Yield every entry of a bare-list listing across its pages."""
         url = f"{self.api_url}{path}"
         next_url: str | None = url
         next_params = params
@@ -173,10 +257,32 @@ class GithubClient:
             next_url = response.links.get("next", {}).get("url")
             next_params = None
 
+    def _paginate_key(self, path: str, key: str) -> list[dict[str, typ.Any]]:
+        """Collect a list the API wraps in an object, across every page.
+
+        The secret and branch-policy listings return `{"total_count": n,
+        key: [...]}` rather than a bare list, so `_paginate` cannot serve
+        them; a first page alone would miss an entry on page two.
+
+        Returns
+        -------
+        list[dict[str, typing.Any]]
+            Every entry under *key*, in page order.
+        """
+        items: list[dict[str, typ.Any]] = []
+        next_path: str | None = f"{path}?per_page=100"
+        while next_path:
+            response = self._request("GET", next_path)
+            items.extend(response.json().get(key, []))
+            next_url = response.links.get("next", {}).get("url")
+            next_path = next_url.removeprefix(self.api_url) if next_url else None
+        return items
+
     @staticmethod
     def _parse_status_checks(
         payload: dict[str, typ.Any] | None,
     ) -> RequiredStatusChecks | None:
+        """Read the required status checks, or None when unset."""
         if not payload:
             return None
         contexts = payload.get("contexts") or []
@@ -189,6 +295,7 @@ class GithubClient:
     def _parse_pull_request_reviews(
         payload: dict[str, typ.Any] | None,
     ) -> RequiredPullRequestReviews | None:
+        """Read the review requirements, or None when unset."""
         if not payload:
             return None
         return RequiredPullRequestReviews(

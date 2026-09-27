@@ -887,6 +887,43 @@ source checkout. The runner resolves the rule-package tree through
 `platform-standards`, `scripts`, and `tests`. This preserves the sdist contents
 the previous build backend shipped, per the file's own comment.
 
+## The Concordat Auditor and CV-006
+
+The Auditor (`python -m concordat.auditor`) checks repository settings that no
+checkout carries. `cli.main` builds one `AuditContext` either from live API
+reads (`_context_from_live_api`) or from a recorded JSON snapshot
+(`_context_from_snapshot`), then runs every check the registry in
+`checks.build_registry` holds and writes SARIF. A check is a `CheckDefinition`
+for the rule catalogue plus a function from the context to a list of `Finding`s.
+
+CV-006 lives in `concordat/auditor/codescene_environment.py` and follows the
+same split. `fetch(client, owner, name)` reads the settings into a frozen
+`CodesceneCredentials`, which `AuditContext.codescene` carries (None when a
+snapshot has no `codescene` section). `run(context)` judges it without further
+reads, so the check is tested over plain states.
+
+- **Subject.** `workflow_uploads` parses each root workflow and matches
+  executable steps only: the upload action with an effective `mode` of
+  `upload`, or a `run` command line starting `cs-coverage upload`. Comments and
+  `check` or `install` modes do not make a repository a subject.
+- **Reads.** `GithubClient` gains `workflow_texts`, `environment` (a 404 is
+  None, the environment's absence), `environment_branch_policies`,
+  `environment_secret_names` and `repository_secret_names`. The listings wrap
+  their entries in an object, so `_paginate_key` follows the `next` links that
+  `_paginate` follows for bare lists. Secret names are read, never values.
+- **Failures.** `_request` raises `GithubForbiddenError` for 401 and 403,
+  `GithubNotFoundError` for 404, and `GithubError` for anything else.
+  `_SettingsReader.read` records any `GithubError` against the read's label
+  instead of raising, and an unparsable workflow does the same, so CV-006
+  reports `indeterminate` and the rest of the audit still runs.
+- **Statuses.** Each finding carries a `status` property. A missing
+  environment is reported alone; otherwise the policy status (if any) and the
+  secret status (if any) are reported together, so a rollout reads as progress.
+
+Adding a settings check follows the same shape: a state dataclass filled by a
+`fetch` that never raises for an unreadable resource, a pure `run`, a
+registration in `build_registry`, and a snapshot section parsed in `cli.py`.
+
 ## Parabellum boundaries
 
 `scripts/parabellum_sweep.py` is the campaign driver for auditing the Rust
