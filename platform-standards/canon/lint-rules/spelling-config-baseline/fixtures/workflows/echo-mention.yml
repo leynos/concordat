@@ -1,0 +1,9 @@
+name: CI
+on: [push]
+jobs:
+  spelling:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "typos runs inside the builder"
+          make spelling

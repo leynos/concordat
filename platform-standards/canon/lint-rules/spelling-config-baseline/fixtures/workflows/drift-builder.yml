@@ -1,0 +1,8 @@
+name: CI
+on: [push]
+jobs:
+  spelling:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check typos.toml drift
+        run: uvx --from "git+https://github.com/leynos/typos-config-builder.git@v0.1.2" typos-config-builder --check

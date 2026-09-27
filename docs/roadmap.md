@@ -605,6 +605,15 @@ the Section 2.1.2 format.
   Progress: shipped audit-only as `markdown-formatting-baseline` with a Rego
   sensor, generated fixtures, policy tests, and envelope selection by the
   manifest's declared `sensor.input` kind; mutations remain open.
+- [x] Ship the spelling configuration rule package (PD-007 to PD-012), from
+  issue #118 as revised by typos-config-builder 0.1.x: the spelling target runs
+  the pinned `gate` at or above the floor release, bindingly; no legacy pins,
+  helper targets, or vendored machinery remain; CI neither runs Typos directly
+  nor drift-checks `typos.toml`; the builder's cache is ignored; and
+  `typos.local.toml` declares schema 1. Acceptance: compliant and noncompliant
+  generated fixtures for every check, each clause mutation-proved in both
+  directions, and live runs over `leynos/cuprum` (compliant), a `v0.1.1`
+  repository, and a pre-release drift-check repository.
 - [ ] Ship the Rust formatting and linting rule packages (RT-001 to RT-005):
   rustfmt wiring and template-matched configuration, clippy presence with
   `[lints]` entries at the template level or stricter, and Whitaker presence

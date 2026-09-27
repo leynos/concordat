@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "kind": "policy-input/spelling-config-baseline",
+  "repository": {
+    "path": ".",
+    "name": null
+  },
+  "applicability": {
+    "root_makefile": false,
+    "typos_config": true,
+    "typos_local": true
+  },
+  "makefile": null,
+  "workflows": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "parsed": {
+        "name": "CI",
+        "on": [
+          "push"
+        ],
+        "jobs": {
+          "lint": {
+            "runs-on": "ubuntu-latest",
+            "steps": [
+              {
+                "uses": "actions/checkout@0000000000000000000000000000000000000000"
+              },
+              {
+                "run": "make spelling"
+              }
+            ]
+          }
+        }
+      },
+      "error": null
+    }
+  ],
+  "typos_local": {
+    "path": "typos.local.toml",
+    "parsed": {
+      "schema": 1
+    },
+    "error": null
+  },
+  "gitignore": {
+    "path": ".gitignore",
+    "lines": [
+      ".venv/",
+      ".typos-oxendict-base.json",
+      ".typos-oxendict-base.toml"
+    ],
+    "error": null
+  },
+  "vendored": []
+}

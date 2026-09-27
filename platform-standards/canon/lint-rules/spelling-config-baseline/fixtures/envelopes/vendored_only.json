@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "kind": "policy-input/spelling-config-baseline",
+  "repository": {
+    "path": ".",
+    "name": null
+  },
+  "applicability": {
+    "root_makefile": false,
+    "typos_config": false,
+    "typos_local": false
+  },
+  "makefile": null,
+  "workflows": [],
+  "typos_local": null,
+  "gitignore": null,
+  "vendored": [
+    "scripts/typos_rollout.py"
+  ]
+}

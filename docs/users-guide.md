@@ -495,6 +495,40 @@ repository that records the exception elsewhere can be accommodated without
 changing the policy. So are the two flags, the backend name, and the platform
 list that makes the linker clause applicable.
 
+### Auditing the spelling gate
+
+The `spelling-config-baseline` package audits a checkout's spelling gate
+against typos-config-builder's 0.1.x design, using `leynos/cuprum` as the
+reference wiring:
+
+```shell
+concordat artefact rule run spelling-config-baseline --repo /path/to/checkout
+```
+
+It applies when the checkout has any part of a spelling setup (a `spelling`
+target, `typos.toml`, `typos.local.toml`, vendored machinery, or a workflow
+that mentions Typos), and reports:
+
+- **PD-007**: a recipe reachable from `spelling` runs
+  `typos-config-builder gate`, through `uvx` or `uv tool run` with `--from`
+  naming the builder repository at a release tag at or above `v0.1.2`, and its
+  exit status reaches Make. A commit or branch pin, `--check`, the render-only
+  default command, and a direct Typos run are each reported.
+- **PD-008**: no `TYPOS_VERSION`, `PATHSPEC_VERSION` or builder commit
+  variable, and no `spelling-helper-test`, `spelling-phrase-check` or
+  `spelling-config` target.
+- **PD-009**: no vendored generator, `typos_rollout*` script, phrase-check
+  script, or their tests.
+- **PD-010**: no workflow runs Typos directly or drift-checks `typos.toml`;
+  CI runs `make spelling`.
+- **PD-011**: `.gitignore` lists `.typos-oxendict-base.json` and
+  `.typos-oxendict-base.toml`.
+- **PD-012**: `typos.local.toml` exists and declares `schema = 1`.
+
+`typos.toml` is regenerated on every run and is never checked for drift. The
+builder release is pinned, but the shared dictionary it reads is live, so an
+edit to it reaches every repository on its next run.
+
 ### Auditing Markdown formatting wiring
 
 The `markdown-formatting-baseline` package audits how a checkout formats and

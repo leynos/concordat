@@ -1,0 +1,146 @@
+{
+  "schema_version": 1,
+  "kind": "policy-input/spelling-config-baseline",
+  "repository": {
+    "path": ".",
+    "name": null
+  },
+  "applicability": {
+    "root_makefile": true,
+    "typos_config": true,
+    "typos_local": true
+  },
+  "makefile": {
+    "schema_version": 1,
+    "tool": {
+      "name": "makeutil",
+      "version": "0.1.0",
+      "parser": "makefile-lossless",
+      "parser_version": "0.3.40"
+    },
+    "source": {
+      "path": "Makefile",
+      "sha256": "e451a1855c0b1cc11492b272419b91617175fb5c91bcf53d4d7b256ee54cd946",
+      "byte_length": 232
+    },
+    "parse": {
+      "status": "complete",
+      "diagnostics": []
+    },
+    "rules": [
+      {
+        "ordinal": 0,
+        "targets": [
+          ".PHONY"
+        ],
+        "prerequisites": [
+          "spelling"
+        ],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [],
+        "location": {
+          "start_byte": 0,
+          "end_byte": 17,
+          "start_line": 1,
+          "start_column": 1,
+          "end_line": 2,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 1,
+        "targets": [
+          "spelling"
+        ],
+        "prerequisites": [],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.2\" typos-config-builder gate",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 47,
+              "end_byte": 149,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "text": "git ls-files -z '*.md' | xargs -0 -r uv tool run typos@1.48.0 --config typos.toml",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 149,
+              "end_byte": 232,
+              "start_line": 4,
+              "start_column": 1,
+              "end_line": 5,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 17,
+          "end_byte": 232,
+          "start_line": 2,
+          "start_column": 1,
+          "end_line": 5,
+          "end_column": 1
+        }
+      }
+    ],
+    "variables": [],
+    "includes": []
+  },
+  "workflows": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "parsed": {
+        "name": "CI",
+        "on": [
+          "push"
+        ],
+        "jobs": {
+          "lint": {
+            "runs-on": "ubuntu-latest",
+            "steps": [
+              {
+                "uses": "actions/checkout@0000000000000000000000000000000000000000"
+              },
+              {
+                "run": "make spelling"
+              }
+            ]
+          }
+        }
+      },
+      "error": null
+    }
+  ],
+  "typos_local": {
+    "path": "typos.local.toml",
+    "parsed": {
+      "schema": 1
+    },
+    "error": null
+  },
+  "gitignore": {
+    "path": ".gitignore",
+    "lines": [
+      ".venv/",
+      ".typos-oxendict-base.json",
+      ".typos-oxendict-base.toml"
+    ],
+    "error": null
+  },
+  "vendored": []
+}

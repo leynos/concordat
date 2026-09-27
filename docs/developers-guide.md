@@ -610,6 +610,17 @@ facts reports a compliance it never established. Three kinds exist:
   leaves it empty; the rule-run command fills it in a separate step
   ([ADR-002](adr-002-resolve-action-pins-against-github.md)).
 
+- `policy-input/spelling-config-baseline` —
+  `spelling_envelope.build_spelling_envelope`. It reuses `markdown_envelope`'s
+  containment guard and readers: the same `makeutil` report for the root
+  `Makefile` and the same decoded workflows, plus `typos.local.toml` decoded
+  with `tomllib`, the root `.gitignore` as its stripped non-blank lines, and
+  the repository-relative paths that match the manifest's `vendored_paths`
+  globs (the walk prunes the same directories and never follows links).
+  Applicability is decided in the policy, from any part of a spelling setup.
+  The package is registered by identifier, because its builder reads the
+  `vendored_paths` parameter, and it also declares its kind.
+
 The Markdown package's `fixtures/generate.py` lays each scenario out as a
 temporary checkout and records what `build_markdown_envelope` produces, so the
 checked-in envelopes are exactly the production builder's output;
