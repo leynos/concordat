@@ -167,6 +167,16 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
 }
 
 
+# The single-file fixtures: the scenario field naming the stem, the directory
+# and suffix it is read from, and the name it is installed under.
+_COPIES: typ.Final = (
+    ("makefile", MAKEFILES_DIR, ".mk", "Makefile"),
+    ("overlay", OVERLAYS_DIR, ".toml", "typos.local.toml"),
+    ("gitignore", GITIGNORES_DIR, ".gitignore", ".gitignore"),
+    ("agents", AGENTS_DIR, ".agents", "AGENTS.md"),
+)
+
+
 def lay_out(scenario: Scenario, checkout: Path) -> None:
     """Populate *checkout* with the files *scenario* names.
 
@@ -178,33 +188,32 @@ def lay_out(scenario: Scenario, checkout: Path) -> None:
         An existing empty directory to lay the files out in.
     """
     (checkout / "README.md").write_text("# Fixture\n", encoding="utf-8")
-    if scenario.makefile is not None:
-        shutil.copyfile(
-            MAKEFILES_DIR / f"{scenario.makefile}.mk", checkout / "Makefile"
-        )
-    if scenario.overlay is not None:
-        shutil.copyfile(
-            OVERLAYS_DIR / f"{scenario.overlay}.toml", checkout / "typos.local.toml"
-        )
-    if scenario.gitignore is not None:
-        shutil.copyfile(
-            GITIGNORES_DIR / f"{scenario.gitignore}.gitignore", checkout / ".gitignore"
-        )
+    for field, directory, suffix, target in _COPIES:
+        stem = getattr(scenario, field)
+        if stem is not None:
+            shutil.copyfile(directory / f"{stem}{suffix}", checkout / target)
     if scenario.typos_config:
         (checkout / "typos.toml").write_text("[default]\n", encoding="utf-8")
-    if scenario.agents is not None:
-        shutil.copyfile(
-            AGENTS_DIR / f"{scenario.agents}.agents", checkout / "AGENTS.md"
-        )
-    for relative in scenario.vendored:
+    _write_vendored(checkout, scenario.vendored)
+    _write_workflows(checkout, scenario.workflows)
+
+
+def _write_vendored(checkout: Path, paths: cabc.Sequence[str]) -> None:
+    """Create each named piece of legacy machinery as a one-line module."""
+    for relative in paths:
         path = checkout / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text('"""Vendored."""\n', encoding="utf-8")
-    if scenario.workflows:
-        workflows = checkout / ".github" / "workflows"
-        workflows.mkdir(parents=True)
-        for name, stem in scenario.workflows.items():
-            shutil.copyfile(WORKFLOWS_DIR / f"{stem}.yml", workflows / name)
+
+
+def _write_workflows(checkout: Path, workflows: cabc.Mapping[str, str]) -> None:
+    """Install each named workflow fixture under `.github/workflows`."""
+    if not workflows:
+        return
+    directory = checkout / ".github" / "workflows"
+    directory.mkdir(parents=True)
+    for name, stem in workflows.items():
+        shutil.copyfile(WORKFLOWS_DIR / f"{stem}.yml", directory / name)
 
 
 def build_fixture_envelope(scenario: Scenario) -> SpellingEnvelope:
