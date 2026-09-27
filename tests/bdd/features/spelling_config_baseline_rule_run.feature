@@ -25,7 +25,7 @@ Feature: Spelling configuration baseline rule run
     Given a checkout whose spelling target pins v0.1.1
     When I audit the checkout for its spelling gate
     Then the audit exit status is 1
-    And the audit output reports "PD-007" "below the floor v0.1.2"
+    And the audit output reports "PD-007" "below the floor v0.1.3"
 
   Scenario: the legacy drift-check setup is reported
     Given a checkout with the legacy drift-check setup

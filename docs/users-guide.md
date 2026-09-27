@@ -511,7 +511,7 @@ that mentions Typos), and reports:
 
 - **PD-007**: a recipe reachable from `spelling` runs
   `typos-config-builder gate`, through `uvx` or `uv tool run` with `--from`
-  naming the builder repository at a release tag at or above `v0.1.2`, and its
+  naming the builder repository at a release tag at or above `v0.1.3`, and its
   exit status reaches Make. A commit or branch pin, `--check`, the render-only
   default command, and a direct Typos run are each reported.
 - **PD-008**: no `TYPOS_VERSION`, `PATHSPEC_VERSION` or builder commit

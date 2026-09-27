@@ -153,10 +153,10 @@ artifacts:
     description: >
       Audit-only PD-007 to PD-012 policy holding the spelling gate to one
       pinned typos-config-builder gate with no legacy machinery.
-    sha256: d75376e773db4fe55f6888b4a518f01cc840bc191f0f67f5b0a7a82e092c20a7
+    sha256: ff5f8909cb08b9b3bd89c76d95f314ed5cf07f3628e27704b9caadd155b66651
   - id: lint-rule-spelling-config-baseline-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/spelling-config-baseline/rule.yaml
     description: >
       Rule package manifest for the spelling configuration baseline policy.
-    sha256: 27db18cfef53d01884f60b90be162c1325e3a89fe06c1311e7a8c51811808540
+    sha256: 83a3293466486414e60783d2bda31fcfe290fb530ba02388fb0514edaf432541

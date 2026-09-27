@@ -31,8 +31,8 @@ _ENVELOPE_FIXTURE: typ.Final = (
     / _RULE_ID
     / "fixtures/envelopes/compliant.json"
 )
-_FLOOR: typ.Final = (0, 1, 2)
-_PINNED: typ.Final = "@v0.1.2"
+_FLOOR: typ.Final = (0, 1, 3)
+_PINNED: typ.Final = "@v0.1.3"
 _CACHE: typ.Final = ".typos-oxendict-base.json"
 
 # Lines that do or do not match the JSON cache, in each of Git's spellings,

@@ -21,7 +21,7 @@ default spelling_target := "spelling"
 
 spelling_target := data.parameters.spelling_target
 
-default builder_floor := "v0.1.2"
+default builder_floor := "v0.1.3"
 
 builder_floor := data.parameters.builder_floor
 
@@ -356,7 +356,7 @@ spelling_recipes := {recipe |
 # -- builder invocations ---------------------------------------------------------
 #
 # The builder runs through a uv runner that names its release (`uvx --from
-# "git+https://github.com/leynos/typos-config-builder.git@v0.1.2"
+# "git+https://github.com/leynos/typos-config-builder.git@v0.1.3"
 # typos-config-builder gate`, or `uv tool run --from ...`), or directly as the
 # command word, unpinned. The runner's options are captured so the `--from`
 # spec can be read; the builder's own arguments are captured separately.

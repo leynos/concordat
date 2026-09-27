@@ -83,7 +83,7 @@ test_agents_two_blocks if {
 test_below_floor if {
   findings := policy.deny with input as data.fixtures.below_floor
   profile(findings) == {
-    ["PD-007", "noncompliant", 3, "\"spelling\"-path recipe pins typos-config-builder v0.1.1, below the floor v0.1.2"],
+    ["PD-007", "noncompliant", 3, "\"spelling\"-path recipe pins typos-config-builder v0.1.2, below the floor v0.1.3"],
   }
 }
 
@@ -91,7 +91,7 @@ test_below_floor if {
 test_branch_pin if {
   findings := policy.deny with input as data.fixtures.branch_pin
   profile(findings) == {
-    ["PD-007", "noncompliant", 3, "\"spelling\"-path recipe pins typos-config-builder to \"main\", which is not a release tag; pin one at or above v0.1.2"],
+    ["PD-007", "noncompliant", 3, "\"spelling\"-path recipe pins typos-config-builder to \"main\", which is not a release tag; pin one at or above v0.1.3"],
   }
 }
 
@@ -286,7 +286,7 @@ test_not_applicable if {
 test_other_repository if {
   findings := policy.deny with input as data.fixtures.other_repository
   profile(findings) == {
-    ["PD-007", "noncompliant", 3, "\"spelling\"-path recipe pins git+https://github.com/example/typos-config-builder.git@v0.1.2, not the github.com/leynos/typos-config-builder repository"],
+    ["PD-007", "noncompliant", 3, "\"spelling\"-path recipe pins git+https://github.com/example/typos-config-builder.git@v0.1.3, not the github.com/leynos/typos-config-builder repository"],
   }
 }
 
@@ -323,7 +323,7 @@ test_overlay_schema_2 if {
 test_sha_pin if {
   findings := policy.deny with input as data.fixtures.sha_pin
   profile(findings) == {
-    ["PD-007", "noncompliant", 3, "\"spelling\"-path recipe pins typos-config-builder to commit d6da92f02240a79a945c835f69bdd08a888da1d0; pin a release tag at or above v0.1.2"],
+    ["PD-007", "noncompliant", 3, "\"spelling\"-path recipe pins typos-config-builder to commit d6da92f02240a79a945c835f69bdd08a888da1d0; pin a release tag at or above v0.1.3"],
   }
 }
 
@@ -389,7 +389,7 @@ test_with_include if {
 test_raised_floor_rejects_the_pinned_release if {
   findings := policy.deny with input as data.fixtures.compliant with data.parameters.builder_floor as "v0.2.0"
   profile(findings) == {
-    ["PD-007", "noncompliant", 3, "\"spelling\"-path recipe pins typos-config-builder v0.1.2, below the floor v0.2.0"],
+    ["PD-007", "noncompliant", 3, "\"spelling\"-path recipe pins typos-config-builder v0.1.3, below the floor v0.2.0"],
   }
 }
 

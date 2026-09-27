@@ -32,7 +32,7 @@ spelling:
 """
 _LEGACY_MAKEFILE: typ.Final = """\
 TYPOS_VERSION ?= 1.48.0
-TYPOS_CONFIG = uvx --from "{builder}@v0.1.2" typos-config-builder
+TYPOS_CONFIG = uvx --from "{builder}@v0.1.3" typos-config-builder
 .PHONY: spelling
 spelling:
 \t$(TYPOS_CONFIG) --repository . --check
@@ -87,7 +87,7 @@ def given_no_setup(spelling_checkout: pathlib.Path) -> None:
 def given_pinned_gate(spelling_checkout: pathlib.Path) -> None:
     """Write the canonical gate at the floor release."""
     _write_setup(
-        spelling_checkout, _GATE_MAKEFILE.format(builder=_BUILDER, release="v0.1.2")
+        spelling_checkout, _GATE_MAKEFILE.format(builder=_BUILDER, release="v0.1.3")
     )
 
 

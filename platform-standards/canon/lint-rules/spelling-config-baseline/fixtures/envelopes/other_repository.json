@@ -20,7 +20,7 @@
     },
     "source": {
       "path": "Makefile",
-      "sha256": "13dabb8cb6aae38c9c66522e39af7b9103990882d4a6ce6abb6e9ab8e5aed432",
+      "sha256": "b2ad7b52475648dd8caf013614dc1d763719fe4052814618f35711db311ea47a",
       "byte_length": 165
     },
     "parse": {
@@ -59,7 +59,7 @@
         "recipes": [
           {
             "ordinal": 0,
-            "text": "uvx --from \"git+https://github.com/example/typos-config-builder.git@v0.1.2\" typos-config-builder gate",
+            "text": "uvx --from \"git+https://github.com/example/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
             "silent": false,
             "ignore_errors": false,
             "always_execute": false,

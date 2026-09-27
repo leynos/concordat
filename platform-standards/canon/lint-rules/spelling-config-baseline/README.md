@@ -15,7 +15,7 @@ command,
 
 ```shell
 uv tool run --python 3.14 \
-  --from "git+https://github.com/leynos/typos-config-builder.git@v0.1.2" \
+  --from "git+https://github.com/leynos/typos-config-builder.git@v0.1.3" \
   typos-config-builder gate --repository . --scope all
 ```
 
@@ -28,12 +28,14 @@ phrase corrections Typos cannot express.
 - **PD-007** (error): a recipe reachable from `spelling` runs
   `typos-config-builder gate`, through `uvx` or `uv tool run` with `--from`
   naming the `leynos/typos-config-builder` repository at a release tag
-  (`vMAJOR.MINOR.PATCH`) at or above the floor (`v0.1.2` by default), and its
-  exit status reaches Make. A commit pin is immutable but is not a release, and
-  cannot be compared with the floor. A branch, another repository, an unpinned
-  `typos-config-builder`, the default command (which renders `typos.toml` but
-  neither runs Typos nor checks phrases), `--check`, and a direct Typos run on
-  the same path are each reported in their own right.
+  (`vMAJOR.MINOR.PATCH`) at or above the floor (`v0.1.3` by default), and its
+  exit status reaches Make. The floor is the first release that publishes the
+  AGENTS.md block PD-013 compares, so the pin and the block move together. A
+  commit pin is immutable but is not a release, and cannot be compared with the
+  floor. A branch, another repository, an unpinned `typos-config-builder`, the
+  default command (which renders `typos.toml` but neither runs Typos nor checks
+  phrases), `--check`, and a direct Typos run on the same path are each
+  reported in their own right.
 - **PD-008** (error): the Makefile assigns none of the legacy pins
   (`TYPOS_VERSION`, `PATHSPEC_VERSION`, or a builder commit variable) and
   defines none of the legacy helper targets (`spelling-helper-test`,

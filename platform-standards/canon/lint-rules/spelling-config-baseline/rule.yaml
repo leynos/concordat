@@ -73,7 +73,7 @@ parameters:
           between the markers of that release's docs/agents-md-spelling.md.
   defaults:
     spelling_target: spelling
-    builder_floor: v0.1.2
+    builder_floor: v0.1.3
     builder_repository: github.com/leynos/typos-config-builder
     legacy_variables:
       - TYPOS_VERSION
@@ -97,9 +97,9 @@ parameters:
       - scripts/tests/test_typos_rollout*.py
       - scripts/*phrase*check*.py
       - scripts/tests/test_*phrase*check*.py
-    # From leynos/typos-config-builder docs/agents-md-spelling.md at dd1087f
-    # (pull request 96), which ships in the release after v0.1.2. Key it to
-    # that release's tag when it is cut, and add a key for each later text.
+    # From leynos/typos-config-builder docs/agents-md-spelling.md at the
+    # v0.1.3 tag (commit c8a4f95d; the text is unchanged since pull request
+    # 96). Add a key for each later release whose text differs.
     agents_md_blocks:
       v0.1.3: |
         ## Spelling
