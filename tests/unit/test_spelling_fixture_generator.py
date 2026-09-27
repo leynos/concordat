@@ -81,22 +81,39 @@ def test_the_bare_scenario_leaves_only_prose(
     assert sorted(path.name for path in tmp_path.iterdir()) == ["README.md"]
 
 
-def test_every_fixture_file_is_used_by_a_scenario(generate: types.ModuleType) -> None:
+def _used_stems(generate: types.ModuleType, field: str) -> set[str]:
+    """Return the fixture stems the scenarios name through one field."""
+    stems: set[str] = set()
+    for scenario in generate.SCENARIOS.values():
+        value = getattr(scenario, field)
+        if field == "workflows":
+            stems.update(value.values())
+        elif value:
+            stems.add(value)
+    return stems
+
+
+def _present_stems(directory: pathlib.Path, suffix: str) -> set[str]:
+    """Return the stems of the fixture files in one directory."""
+    return {path.stem for path in directory.glob(f"*{suffix}")}
+
+
+@pytest.mark.parametrize(
+    ("field", "directory", "suffix"),
+    [
+        ("makefile", "MAKEFILES_DIR", ".mk"),
+        ("overlay", "OVERLAYS_DIR", ".toml"),
+        ("gitignore", "GITIGNORES_DIR", ".gitignore"),
+        ("workflows", "WORKFLOWS_DIR", ".yml"),
+        ("agents", "AGENTS_DIR", ".agents"),
+    ],
+)
+def test_every_fixture_file_is_used_by_a_scenario(
+    generate: types.ModuleType, field: str, directory: str, suffix: str
+) -> None:
     """An orphaned fixture file is a behaviour nobody tests."""
-    scenarios = list(generate.SCENARIOS.values())
-    used = {
-        "makefiles": {s.makefile for s in scenarios if s.makefile},
-        "overlays": {s.overlay for s in scenarios if s.overlay},
-        "gitignores": {s.gitignore for s in scenarios if s.gitignore},
-        "workflows": {stem for s in scenarios for stem in s.workflows.values()},
-    }
-    present = {
-        "makefiles": {p.stem for p in generate.MAKEFILES_DIR.glob("*.mk")},
-        "overlays": {p.stem for p in generate.OVERLAYS_DIR.glob("*.toml")},
-        "gitignores": {p.stem for p in generate.GITIGNORES_DIR.glob("*.gitignore")},
-        "workflows": {p.stem for p in generate.WORKFLOWS_DIR.glob("*.yml")},
-    }
-    assert used == present
+    present = _present_stems(getattr(generate, directory), suffix)
+    assert _used_stems(generate, field) == present, field
 
 
 def test_the_recorded_repository_path_is_stable(generate: types.ModuleType) -> None:
@@ -126,4 +143,7 @@ def test_checked_in_envelopes_match_regeneration(generate: types.ModuleType) -> 
     bundle = json.loads(
         (generate.FIXTURES_DIR / "data.json").read_text(encoding="utf-8")
     )
-    assert bundle == {"fixtures": expected}
+    assert bundle == {
+        "fixtures": expected,
+        "parameters": generate.manifest_parameters(),
+    }

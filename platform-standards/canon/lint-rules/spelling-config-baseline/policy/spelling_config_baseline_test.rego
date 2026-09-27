@@ -15,6 +15,71 @@ test_above_floor if {
   count(findings) == 0
 }
 
+# A pin newer than every published text compares with the newest.
+test_agents_above_newest_text if {
+  findings := policy.deny with input as data.fixtures.agents_above_newest_text
+  count(findings) == 0
+}
+
+# A reworded block drifts from the published text.
+test_agents_drifted if {
+  findings := policy.deny with input as data.fixtures.agents_drifted
+  profile(findings) == {
+    ["PD-013", "noncompliant", 0, "AGENTS.md's spelling block differs from typos-config-builder v0.1.3's docs/agents-md-spelling.md; copy it verbatim"],
+  }
+}
+
+# A second `make spelling` instruction outside the block duplicates it.
+test_agents_duplicate_guidance if {
+  findings := policy.deny with input as data.fixtures.agents_duplicate_guidance
+  profile(findings) == {
+    ["PD-013", "noncompliant", 6, "AGENTS.md gives spelling guidance outside the canonical block; the block replaces it"],
+  }
+}
+
+# Markers in the wrong order bound no block.
+test_agents_end_before_start if {
+  findings := policy.deny with input as data.fixtures.agents_end_before_start
+  profile(findings) == {
+    ["PD-013", "noncompliant", 0, "AGENTS.md does not carry exactly one spelling block between <!-- typos-config-builder:agents-md:start --> and <!-- typos-config-builder:agents-md:end -->"],
+  }
+}
+
+test_agents_missing if {
+  findings := policy.deny with input as data.fixtures.agents_missing
+  profile(findings) == {
+    ["PD-013", "noncompliant", 0, "AGENTS.md is missing; it must carry typos-config-builder's spelling block between its markers"],
+  }
+}
+
+# The text alone, without markers, is not the block.
+test_agents_no_markers if {
+  findings := policy.deny with input as data.fixtures.agents_no_markers
+  profile(findings) == {
+    ["PD-013", "noncompliant", 0, "AGENTS.md does not carry exactly one spelling block between <!-- typos-config-builder:agents-md:start --> and <!-- typos-config-builder:agents-md:end -->"],
+  }
+}
+
+# `typos.local.toml` guidance outside the block is a repository's own, not a duplicate.
+test_agents_overlay_mention if {
+  findings := policy.deny with input as data.fixtures.agents_overlay_mention
+  count(findings) == 0
+}
+
+# Whitespace is normalized, so a rewrapped block still matches.
+test_agents_reflowed if {
+  findings := policy.deny with input as data.fixtures.agents_reflowed
+  count(findings) == 0
+}
+
+# Two blocks leave the canonical one ambiguous.
+test_agents_two_blocks if {
+  findings := policy.deny with input as data.fixtures.agents_two_blocks
+  profile(findings) == {
+    ["PD-013", "noncompliant", 0, "AGENTS.md does not carry exactly one spelling block between <!-- typos-config-builder:agents-md:start --> and <!-- typos-config-builder:agents-md:end -->"],
+  }
+}
+
 test_below_floor if {
   findings := policy.deny with input as data.fixtures.below_floor
   profile(findings) == {
@@ -286,6 +351,7 @@ test_vendored_only if {
     ["PD-009", "noncompliant", 0, "scripts/typos_rollout.py is vendored spelling machinery; typos-config-builder owns generation and phrase checks"],
     ["PD-011", "noncompliant", 0, ".gitignore is missing; it must list .typos-oxendict-base.json and .typos-oxendict-base.toml"],
     ["PD-012", "noncompliant", 0, "typos.local.toml is missing; the gate needs a schema 1 overlay, even an empty one"],
+    ["PD-013", "noncompliant", 0, "AGENTS.md is missing; it must carry typos-config-builder's spelling block between its markers"],
   }
 }
 
@@ -310,5 +376,38 @@ test_wrong_kind_is_indeterminate if {
   findings := policy.deny with input as object.union(data.fixtures.compliant, {"kind": "policy-input/other"})
   profile(findings) == {
     ["EN-001", "indeterminate", 0, "policy input is not a policy-input/spelling-config-baseline envelope at schema version 1"],
+  }
+}
+
+# Each pin compares with the newest published text at or below it.
+test_a_pin_compares_with_the_newest_text_at_or_below_it if {
+  blocks := {"v0.1.3": data.parameters.agents_md_blocks["v0.1.3"], "v0.2.0": "## Spelling\n\nA later text."}
+  findings := policy.deny with input as data.fixtures.above_floor with data.parameters.agents_md_blocks as blocks
+  profile(findings) == {
+    ["PD-013", "noncompliant", 0, "AGENTS.md's spelling block differs from typos-config-builder v0.2.0's docs/agents-md-spelling.md; copy it verbatim"],
+  }
+}
+
+# A pin older than every published text compares with the earliest.
+test_a_pin_older_than_every_text_compares_with_the_earliest if {
+  blocks := {"v0.1.3": data.parameters.agents_md_blocks["v0.1.3"], "v0.2.0": "## Spelling\n\nA later text."}
+  findings := policy.deny with input as data.fixtures.compliant with data.parameters.agents_md_blocks as blocks
+  count(findings) == 0
+}
+
+# A gate whose pin cannot be proven compares with the newest published text.
+test_an_unproven_pin_compares_with_the_newest_text if {
+  blocks := {"v0.1.3": data.parameters.agents_md_blocks["v0.1.3"], "v0.2.0": "## Spelling\n\nA later text."}
+  findings := policy.deny with input as data.fixtures.unpinned with data.parameters.agents_md_blocks as blocks
+  some finding in findings
+  finding.rule_id == "PD-013"
+  finding.msg == "AGENTS.md's spelling block differs from typos-config-builder v0.2.0's docs/agents-md-spelling.md; copy it verbatim"
+}
+
+# Without any published text the block cannot be compared, so it is not passed.
+test_no_configured_text_is_indeterminate if {
+  findings := policy.deny with input as data.fixtures.compliant with data.parameters.agents_md_blocks as {}
+  profile(findings) == {
+    ["PD-013", "indeterminate", 0, "no canonical AGENTS.md spelling block is configured; the block cannot be compared"],
   }
 }

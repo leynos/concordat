@@ -197,5 +197,10 @@
     ],
     "error": null
   },
+  "agents_md": {
+    "path": "AGENTS.md",
+    "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+    "error": null
+  },
   "vendored": []
 }

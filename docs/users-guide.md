@@ -524,6 +524,10 @@ that mentions Typos), and reports:
 - **PD-011**: `.gitignore` lists `.typos-oxendict-base.json` and
   `.typos-oxendict-base.toml`.
 - **PD-012**: `typos.local.toml` exists and declares `schema = 1`.
+- **PD-013**: `AGENTS.md` carries typos-config-builder's spelling block,
+  copied verbatim from the pinned release's `docs/agents-md-spelling.md`
+  between its `typos-config-builder:agents-md` markers, and gives no other
+  `make spelling` or `typos.toml` guidance outside it.
 
 `typos.toml` is regenerated on every run and is never checked for drift. The
 builder release is pinned, but the shared dictionary it reads is live, so an

@@ -614,12 +614,15 @@ facts reports a compliance it never established. Three kinds exist:
   `spelling_envelope.build_spelling_envelope`. It reuses `markdown_envelope`'s
   containment guard and readers: the same `makeutil` report for the root
   `Makefile` and the same decoded workflows, plus `typos.local.toml` decoded
-  with `tomllib`, the root `.gitignore` as its stripped non-blank lines, and
-  the repository-relative paths that match the manifest's `vendored_paths`
-  globs (the walk prunes the same directories and never follows links).
-  Applicability is decided in the policy, from any part of a spelling setup.
-  The package is registered by identifier, because its builder reads the
-  `vendored_paths` parameter, and it also declares its kind.
+  with `tomllib`, the root `.gitignore` as its stripped non-blank lines, the
+  root `AGENTS.md` text, and the repository-relative paths that match the
+  manifest's `vendored_paths` globs (the walk prunes the same directories and
+  never follows links). Applicability is decided in the policy, from any part
+  of a spelling setup. The package is registered by identifier, because its
+  builder reads the `vendored_paths` parameter, and it also declares its kind.
+  The canonical AGENTS.md texts reach the policy as the `agents_md_blocks`
+  manifest parameter; the fixture generator copies them into `data.json`'s
+  `parameters`, so the Rego suite compares against the runner's text.
 
 The Markdown package's `fixtures/generate.py` lays each scenario out as a
 temporary checkout and records what `build_markdown_envelope` produces, so the

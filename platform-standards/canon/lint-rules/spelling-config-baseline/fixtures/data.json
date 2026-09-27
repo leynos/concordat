@@ -129,6 +129,11 @@
         ],
         "error": null
       },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
       "vendored": []
     },
     "uv_tool_run": {
@@ -415,6 +420,11 @@
         ],
         "error": null
       },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
       "vendored": []
     },
     "delegated": {
@@ -567,6 +577,11 @@
         ],
         "error": null
       },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
       "vendored": []
     },
     "above_floor": {
@@ -696,6 +711,11 @@
           ".typos-oxendict-base.json",
           ".typos-oxendict-base.toml"
         ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
         "error": null
       },
       "vendored": []
@@ -841,6 +861,11 @@
         ],
         "error": null
       },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
       "vendored": []
     },
     "gitignore_rooted": {
@@ -971,6 +996,11 @@
         ],
         "error": null
       },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
       "vendored": []
     },
     "not_applicable": {
@@ -989,6 +1019,7 @@
       "workflows": [],
       "typos_local": null,
       "gitignore": null,
+      "agents_md": null,
       "vendored": []
     },
     "no_makefile": {
@@ -1043,6 +1074,11 @@
           ".typos-oxendict-base.json",
           ".typos-oxendict-base.toml"
         ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
         "error": null
       },
       "vendored": []
@@ -1176,6 +1212,11 @@
         ],
         "error": null
       },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
       "vendored": []
     },
     "no_gate": {
@@ -1305,6 +1346,11 @@
           ".typos-oxendict-base.json",
           ".typos-oxendict-base.toml"
         ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
         "error": null
       },
       "vendored": []
@@ -1438,6 +1484,11 @@
         ],
         "error": null
       },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
       "vendored": []
     },
     "sha_pin": {
@@ -1567,6 +1618,11 @@
           ".typos-oxendict-base.json",
           ".typos-oxendict-base.toml"
         ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
         "error": null
       },
       "vendored": []
@@ -1700,6 +1756,11 @@
         ],
         "error": null
       },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
       "vendored": []
     },
     "below_floor": {
@@ -1829,6 +1890,11 @@
           ".typos-oxendict-base.json",
           ".typos-oxendict-base.toml"
         ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
         "error": null
       },
       "vendored": []
@@ -1962,6 +2028,11 @@
         ],
         "error": null
       },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
       "vendored": []
     },
     "soft_skip": {
@@ -2091,6 +2162,11 @@
           ".typos-oxendict-base.json",
           ".typos-oxendict-base.toml"
         ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
         "error": null
       },
       "vendored": []
@@ -2224,6 +2300,11 @@
         ],
         "error": null
       },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
       "vendored": []
     },
     "drift_check": {
@@ -2353,6 +2434,11 @@
           ".typos-oxendict-base.json",
           ".typos-oxendict-base.toml"
         ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
         "error": null
       },
       "vendored": []
@@ -2501,6 +2587,11 @@
         ],
         "error": null
       },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
       "vendored": []
     },
     "unresolved": {
@@ -2630,6 +2721,11 @@
           ".typos-oxendict-base.json",
           ".typos-oxendict-base.toml"
         ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
         "error": null
       },
       "vendored": []
@@ -2777,6 +2873,11 @@
           ".typos-oxendict-base.json",
           ".typos-oxendict-base.toml"
         ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
         "error": null
       },
       "vendored": []
@@ -2963,6 +3064,11 @@
           ".typos-oxendict-base.json",
           ".typos-oxendict-base.toml"
         ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
         "error": null
       },
       "vendored": []
@@ -3166,6 +3272,11 @@
         ],
         "error": null
       },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
       "vendored": []
     },
     "vendored": {
@@ -3297,6 +3408,11 @@
         ],
         "error": null
       },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
       "vendored": [
         "scripts/generate_typos_config.py",
         "scripts/tests/test_typos_rollout_check.py",
@@ -3319,6 +3435,7 @@
       "workflows": [],
       "typos_local": null,
       "gitignore": null,
+      "agents_md": null,
       "vendored": [
         "scripts/typos_rollout.py"
       ]
@@ -3450,6 +3567,11 @@
         ],
         "error": null
       },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
       "vendored": []
     },
     "ci_typos_action": {
@@ -3579,6 +3701,11 @@
         ],
         "error": null
       },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
       "vendored": []
     },
     "ci_drift_builder": {
@@ -3706,6 +3833,11 @@
           ".typos-oxendict-base.json",
           ".typos-oxendict-base.toml"
         ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
         "error": null
       },
       "vendored": []
@@ -3840,6 +3972,11 @@
         ],
         "error": null
       },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
       "vendored": []
     },
     "ci_legacy_script": {
@@ -3968,6 +4105,11 @@
         ],
         "error": null
       },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
       "vendored": []
     },
     "ci_legacy_target": {
@@ -4094,6 +4236,11 @@
           ".typos-oxendict-base.json",
           ".typos-oxendict-base.toml"
         ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
         "error": null
       },
       "vendored": []
@@ -4232,6 +4379,11 @@
         ],
         "error": null
       },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
       "vendored": []
     },
     "gitignore_missing": {
@@ -4355,6 +4507,11 @@
         "error": null
       },
       "gitignore": null,
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
       "vendored": []
     },
     "gitignore_partial": {
@@ -4482,6 +4639,11 @@
         "lines": [
           ".typos-oxendict-base.json"
         ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
         "error": null
       },
       "vendored": []
@@ -4613,6 +4775,11 @@
         ],
         "error": null
       },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
       "vendored": []
     },
     "overlay_missing": {
@@ -4736,6 +4903,11 @@
           ".typos-oxendict-base.json",
           ".typos-oxendict-base.toml"
         ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
         "error": null
       },
       "vendored": []
@@ -4867,6 +5039,11 @@
           ".typos-oxendict-base.json",
           ".typos-oxendict-base.toml"
         ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
         "error": null
       },
       "vendored": []
@@ -5002,6 +5179,11 @@
         ],
         "error": null
       },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
       "vendored": []
     },
     "overlay_malformed": {
@@ -5131,7 +5313,1237 @@
         ],
         "error": null
       },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
       "vendored": []
+    },
+    "agents_reflowed": {
+      "schema_version": 1,
+      "kind": "policy-input/spelling-config-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "typos_config": true,
+        "typos_local": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "dc31eaec74e208faae6eb0742db088abd0953290bb4477798fa6b752c512dce2",
+          "byte_length": 176
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "spelling"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 17,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "targets": [
+              "spelling"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.2\" typos-config-builder gate --scope all",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 62,
+                  "end_byte": 176,
+                  "start_line": 3,
+                  "start_column": 1,
+                  "end_line": 4,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 17,
+              "end_byte": 176,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "CI",
+            "on": [
+              "push"
+            ],
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "actions/checkout@0000000000000000000000000000000000000000"
+                  },
+                  {
+                    "run": "make spelling"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "typos_local": {
+        "path": "typos.local.toml",
+        "parsed": {
+          "schema": 1
+        },
+        "error": null
+      },
+      "gitignore": {
+        "path": ".gitignore",
+        "lines": [
+          ".venv/",
+          ".typos-oxendict-base.json",
+          ".typos-oxendict-base.toml"
+        ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n- `make spelling` runs the pinned `typos-config-builder gate`, which regenerates `typos.toml` from the shared en-GB-oxendict dictionary and `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow repository-specific exceptions in `typos.local.toml`, as exact or full-line patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If the change is unrelated to your work, commit it in a separate base pull request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
+      "vendored": []
+    },
+    "agents_overlay_mention": {
+      "schema_version": 1,
+      "kind": "policy-input/spelling-config-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "typos_config": true,
+        "typos_local": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "dc31eaec74e208faae6eb0742db088abd0953290bb4477798fa6b752c512dce2",
+          "byte_length": 176
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "spelling"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 17,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "targets": [
+              "spelling"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.2\" typos-config-builder gate --scope all",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 62,
+                  "end_byte": 176,
+                  "start_line": 3,
+                  "start_column": 1,
+                  "end_line": 4,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 17,
+              "end_byte": 176,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "CI",
+            "on": [
+              "push"
+            ],
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "actions/checkout@0000000000000000000000000000000000000000"
+                  },
+                  {
+                    "run": "make spelling"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "typos_local": {
+        "path": "typos.local.toml",
+        "parsed": {
+          "schema": 1
+        },
+        "error": null
+      },
+      "gitignore": {
+        "path": ".gitignore",
+        "lines": [
+          ".venv/",
+          ".typos-oxendict-base.json",
+          ".typos-oxendict-base.toml"
+        ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n- Record repository exceptions in `typos.local.toml`.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
+      "vendored": []
+    },
+    "agents_missing": {
+      "schema_version": 1,
+      "kind": "policy-input/spelling-config-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "typos_config": true,
+        "typos_local": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "dc31eaec74e208faae6eb0742db088abd0953290bb4477798fa6b752c512dce2",
+          "byte_length": 176
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "spelling"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 17,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "targets": [
+              "spelling"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.2\" typos-config-builder gate --scope all",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 62,
+                  "end_byte": 176,
+                  "start_line": 3,
+                  "start_column": 1,
+                  "end_line": 4,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 17,
+              "end_byte": 176,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "CI",
+            "on": [
+              "push"
+            ],
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "actions/checkout@0000000000000000000000000000000000000000"
+                  },
+                  {
+                    "run": "make spelling"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "typos_local": {
+        "path": "typos.local.toml",
+        "parsed": {
+          "schema": 1
+        },
+        "error": null
+      },
+      "gitignore": {
+        "path": ".gitignore",
+        "lines": [
+          ".venv/",
+          ".typos-oxendict-base.json",
+          ".typos-oxendict-base.toml"
+        ],
+        "error": null
+      },
+      "agents_md": null,
+      "vendored": []
+    },
+    "agents_drifted": {
+      "schema_version": 1,
+      "kind": "policy-input/spelling-config-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "typos_config": true,
+        "typos_local": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "dc31eaec74e208faae6eb0742db088abd0953290bb4477798fa6b752c512dce2",
+          "byte_length": 176
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "spelling"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 17,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "targets": [
+              "spelling"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.2\" typos-config-builder gate --scope all",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 62,
+                  "end_byte": 176,
+                  "start_line": 3,
+                  "start_column": 1,
+                  "end_line": 4,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 17,
+              "end_byte": 176,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "CI",
+            "on": [
+              "push"
+            ],
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "actions/checkout@0000000000000000000000000000000000000000"
+                  },
+                  {
+                    "run": "make spelling"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "typos_local": {
+        "path": "typos.local.toml",
+        "parsed": {
+          "schema": 1
+        },
+        "error": null
+      },
+      "gitignore": {
+        "path": ".gitignore",
+        "lines": [
+          ".venv/",
+          ".typos-oxendict-base.json",
+          ".typos-oxendict-base.toml"
+        ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: edit it freely. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
+      "vendored": []
+    },
+    "agents_no_markers": {
+      "schema_version": 1,
+      "kind": "policy-input/spelling-config-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "typos_config": true,
+        "typos_local": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "dc31eaec74e208faae6eb0742db088abd0953290bb4477798fa6b752c512dce2",
+          "byte_length": 176
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "spelling"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 17,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "targets": [
+              "spelling"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.2\" typos-config-builder gate --scope all",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 62,
+                  "end_byte": 176,
+                  "start_line": 3,
+                  "start_column": 1,
+                  "end_line": 4,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 17,
+              "end_byte": 176,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "CI",
+            "on": [
+              "push"
+            ],
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "actions/checkout@0000000000000000000000000000000000000000"
+                  },
+                  {
+                    "run": "make spelling"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "typos_local": {
+        "path": "typos.local.toml",
+        "parsed": {
+          "schema": 1
+        },
+        "error": null
+      },
+      "gitignore": {
+        "path": ".gitignore",
+        "lines": [
+          ".venv/",
+          ".typos-oxendict-base.json",
+          ".typos-oxendict-base.toml"
+        ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n",
+        "error": null
+      },
+      "vendored": []
+    },
+    "agents_two_blocks": {
+      "schema_version": 1,
+      "kind": "policy-input/spelling-config-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "typos_config": true,
+        "typos_local": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "dc31eaec74e208faae6eb0742db088abd0953290bb4477798fa6b752c512dce2",
+          "byte_length": 176
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "spelling"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 17,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "targets": [
+              "spelling"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.2\" typos-config-builder gate --scope all",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 62,
+                  "end_byte": 176,
+                  "start_line": 3,
+                  "start_column": 1,
+                  "end_line": 4,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 17,
+              "end_byte": 176,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "CI",
+            "on": [
+              "push"
+            ],
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "actions/checkout@0000000000000000000000000000000000000000"
+                  },
+                  {
+                    "run": "make spelling"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "typos_local": {
+        "path": "typos.local.toml",
+        "parsed": {
+          "schema": 1
+        },
+        "error": null
+      },
+      "gitignore": {
+        "path": ".gitignore",
+        "lines": [
+          ".venv/",
+          ".typos-oxendict-base.json",
+          ".typos-oxendict-base.toml"
+        ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
+      "vendored": []
+    },
+    "agents_end_before_start": {
+      "schema_version": 1,
+      "kind": "policy-input/spelling-config-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "typos_config": true,
+        "typos_local": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "dc31eaec74e208faae6eb0742db088abd0953290bb4477798fa6b752c512dce2",
+          "byte_length": 176
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "spelling"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 17,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "targets": [
+              "spelling"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.2\" typos-config-builder gate --scope all",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 62,
+                  "end_byte": 176,
+                  "start_line": 3,
+                  "start_column": 1,
+                  "end_line": 4,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 17,
+              "end_byte": 176,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "CI",
+            "on": [
+              "push"
+            ],
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "actions/checkout@0000000000000000000000000000000000000000"
+                  },
+                  {
+                    "run": "make spelling"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "typos_local": {
+        "path": "typos.local.toml",
+        "parsed": {
+          "schema": 1
+        },
+        "error": null
+      },
+      "gitignore": {
+        "path": ".gitignore",
+        "lines": [
+          ".venv/",
+          ".typos-oxendict-base.json",
+          ".typos-oxendict-base.toml"
+        ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:end -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:start -->\n",
+        "error": null
+      },
+      "vendored": []
+    },
+    "agents_duplicate_guidance": {
+      "schema_version": 1,
+      "kind": "policy-input/spelling-config-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "typos_config": true,
+        "typos_local": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "dc31eaec74e208faae6eb0742db088abd0953290bb4477798fa6b752c512dce2",
+          "byte_length": 176
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "spelling"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 17,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "targets": [
+              "spelling"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.2\" typos-config-builder gate --scope all",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 62,
+                  "end_byte": 176,
+                  "start_line": 3,
+                  "start_column": 1,
+                  "end_line": 4,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 17,
+              "end_byte": 176,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "CI",
+            "on": [
+              "push"
+            ],
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "actions/checkout@0000000000000000000000000000000000000000"
+                  },
+                  {
+                    "run": "make spelling"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "typos_local": {
+        "path": "typos.local.toml",
+        "parsed": {
+          "schema": 1
+        },
+        "error": null
+      },
+      "gitignore": {
+        "path": ".gitignore",
+        "lines": [
+          ".venv/",
+          ".typos-oxendict-base.json",
+          ".typos-oxendict-base.toml"
+        ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n- Run `make spelling` before committing.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
+      "vendored": []
+    },
+    "agents_above_newest_text": {
+      "schema_version": 1,
+      "kind": "policy-input/spelling-config-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "typos_config": true,
+        "typos_local": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "e0bd0bde86bb3ecf85021f7b9dd884d8d75d20fb57f8de35c81636328ff45e71",
+          "byte_length": 164
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "spelling"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 17,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "targets": [
+              "spelling"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.2.0\" typos-config-builder gate",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 62,
+                  "end_byte": 164,
+                  "start_line": 3,
+                  "start_column": 1,
+                  "end_line": 4,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 17,
+              "end_byte": 164,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "CI",
+            "on": [
+              "push"
+            ],
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "actions/checkout@0000000000000000000000000000000000000000"
+                  },
+                  {
+                    "run": "make spelling"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "typos_local": {
+        "path": "typos.local.toml",
+        "parsed": {
+          "schema": 1
+        },
+        "error": null
+      },
+      "gitignore": {
+        "path": ".gitignore",
+        "lines": [
+          ".venv/",
+          ".typos-oxendict-base.json",
+          ".typos-oxendict-base.toml"
+        ],
+        "error": null
+      },
+      "agents_md": {
+        "path": "AGENTS.md",
+        "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+        "error": null
+      },
+      "vendored": []
+    }
+  },
+  "parameters": {
+    "agents_md_blocks": {
+      "v0.1.3": "## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n"
     }
   }
 }

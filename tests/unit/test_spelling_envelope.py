@@ -140,3 +140,26 @@ def test_a_linked_overlay_outside_the_checkout_is_refused(
 
     with pytest.raises(OperationalRuleError, match="outside the checkout"):
         build_spelling_envelope(checkout)
+
+
+def test_agents_md_is_carried_as_text(tmp_path: pathlib.Path) -> None:
+    """The policy reads the block from the file's text, markers included."""
+    text = "# Agents\n\n<!-- typos-config-builder:agents-md:start -->\n"
+    _write(tmp_path, "AGENTS.md", text)
+
+    assert build_spelling_envelope(tmp_path)["agents_md"] == {
+        "path": "AGENTS.md",
+        "text": text,
+        "error": None,
+    }
+
+
+def test_an_undecodable_agents_md_keeps_its_reason(tmp_path: pathlib.Path) -> None:
+    """Undecodable bytes are evidence for an indeterminate verdict."""
+    (tmp_path / "AGENTS.md").write_bytes(b"\xff\xfe")
+
+    agents = build_spelling_envelope(tmp_path)["agents_md"]
+
+    assert agents is not None
+    assert agents["text"] is None
+    assert "not UTF-8" in str(agents["error"]), agents

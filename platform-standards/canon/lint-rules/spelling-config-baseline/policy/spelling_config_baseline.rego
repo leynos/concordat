@@ -1,4 +1,4 @@
-# spelling-config-baseline: PD-007 to PD-012.
+# spelling-config-baseline: PD-007 to PD-013.
 #
 # Input is a policy-input/spelling-config-baseline envelope. Makefile facts come
 # from the pinned `makeutil parse` report, workflows from a YAML decode, the
@@ -51,6 +51,13 @@ gitignore_entries := data.parameters.gitignore_entries
 default overlay_schema := 1
 
 overlay_schema := data.parameters.overlay_schema
+
+# The canonical AGENTS.md spelling block, keyed by the builder release that
+# publishes it. The manifest carries the texts; the Rego default is empty, so a
+# run without them is indeterminate rather than compared with nothing.
+default agents_md_blocks := {}
+
+agents_md_blocks := data.parameters.agents_md_blocks
 
 default makefile_path := "Makefile"
 
@@ -714,3 +721,169 @@ deny contains f if {
 		sprintf("typos.local.toml declares schema %v; the builder reads schema %d", [object.get(input.typos_local.parsed, "schema", "none"), overlay_schema]),
 	)
 }
+
+# -- PD-013: AGENTS.md carries the canonical spelling block --------------------------
+#
+# typos-config-builder publishes the block agents read, between two markers, in
+# docs/agents-md-spelling.md. A repository copies it verbatim; the policy
+# compares the text strictly between the markers, with whitespace normalized,
+# against the text for the pinned release: the newest published text at or
+# below the pin. A pin older than every published text is compared with the
+# earliest one, since the block is policy text rather than builder behaviour,
+# and a checkout whose pin cannot be proven is compared with the newest.
+
+agents_start_marker := "<!-- typos-config-builder:agents-md:start -->"
+
+agents_end_marker := "<!-- typos-config-builder:agents-md:end -->"
+
+agents_text := input.agents_md.text if {
+	input.agents_md != null
+	input.agents_md.error == null
+}
+
+normalized(text) := trim_space(regex.replace(text, `\s+`, " "))
+
+marker_offsets(marker) := indexof_n(agents_text, marker)
+
+block_bounds := [start, end] if {
+	starts := marker_offsets(agents_start_marker)
+	ends := marker_offsets(agents_end_marker)
+	count(starts) == 1
+	count(ends) == 1
+	start := starts[0] + count(agents_start_marker)
+	end := ends[0]
+	end >= start
+}
+
+block_body := substring(agents_text, bounds[0], bounds[1] - bounds[0]) if {
+	bounds := block_bounds
+}
+
+pinned_releases := {version |
+	some recipe in spelling_recipes
+	some invocation in builder_invocations(recipe)
+	runs_gate(invocation)
+	version := release_version(git_ref(from_spec(invocation)))
+}
+
+block_versions := {key: release_version(key) | some key, _ in agents_md_blocks}
+
+version_after(a, b) if {
+	a != b
+	version_at_least(a, b)
+}
+
+newest_key(keys) := key if {
+	some key in keys
+	not any_newer(key, keys)
+}
+
+any_newer(key, keys) if {
+	some other in keys
+	version_after(block_versions[other], block_versions[key])
+}
+
+oldest_key(keys) := key if {
+	some key in keys
+	not any_older(key, keys)
+}
+
+any_older(key, keys) if {
+	some other in keys
+	version_after(block_versions[key], block_versions[other])
+}
+
+published_keys := {key | some key, _ in block_versions}
+
+expected_key := newest_key({key |
+	some key in published_keys
+	version_at_least(pin, block_versions[key])
+}) if {
+	count(pinned_releases) == 1
+	some pin in pinned_releases
+	some key in published_keys
+	version_at_least(pin, block_versions[key])
+} else := oldest_key(published_keys) if {
+	count(pinned_releases) == 1
+} else := newest_key(published_keys)
+
+deny contains f if {
+	applicable
+	count(agents_md_blocks) == 0
+	f := finding("PD-013", "indeterminate", "AGENTS.md", 0, "no canonical AGENTS.md spelling block is configured; the block cannot be compared")
+}
+
+deny contains f if {
+	applicable
+	count(agents_md_blocks) > 0
+	input.agents_md == null
+	f := finding("PD-013", "noncompliant", "AGENTS.md", 0, "AGENTS.md is missing; it must carry typos-config-builder's spelling block between its markers")
+}
+
+deny contains f if {
+	applicable
+	input.agents_md != null
+	input.agents_md.error != null
+	f := finding("PD-013", "indeterminate", "AGENTS.md", 0, sprintf("AGENTS.md could not be read: %s", [input.agents_md.error]))
+}
+
+deny contains f if {
+	applicable
+	count(agents_md_blocks) > 0
+	agents_text
+	not block_bounds
+	f := finding(
+		"PD-013", "noncompliant", "AGENTS.md", 0,
+		sprintf("AGENTS.md does not carry exactly one spelling block between %s and %s", [agents_start_marker, agents_end_marker]),
+	)
+}
+
+deny contains f if {
+	applicable
+	key := expected_key
+	normalized(block_body) != normalized(agents_md_blocks[key])
+	f := finding(
+		"PD-013", "noncompliant", "AGENTS.md", 0,
+		sprintf("AGENTS.md's spelling block differs from typos-config-builder %s's docs/agents-md-spelling.md; copy it verbatim", [key]),
+	)
+}
+
+# Spelling guidance outside the block duplicates it and drifts from it. The
+# pattern is narrow on purpose: a `make spelling` command or the generated
+# `typos.toml` named outside the markers, judged only when the file carries
+# exactly one well-formed block (a malformed one is already its own finding). `typos.local.toml`, where a repository
+# may document its own exceptions, is a different word and is not matched.
+agents_lines := split(agents_text, "\n")
+
+block_line_range := [first, last] if {
+	bounds := block_bounds
+	first := count(indexof_n(substring(agents_text, 0, bounds[0]), "\n"))
+	last := count(indexof_n(substring(agents_text, 0, bounds[1]), "\n"))
+}
+
+outside_block(index) if {
+	range := block_line_range
+	index < range[0]
+}
+
+outside_block(index) if {
+	range := block_line_range
+	index > range[1]
+}
+
+duplicate_guidance(line) if regex.match(`(^|[^A-Za-z0-9_.-])make[[:space:]]+spelling([^A-Za-z0-9_-]|$)`, line)
+
+duplicate_guidance(line) if regex.match(`(^|[^A-Za-z0-9_.-])typos\.toml([^A-Za-z0-9_-]|$)`, line)
+
+deny contains f if {
+	applicable
+	count(agents_md_blocks) > 0
+	some index, line in agents_lines
+	outside_block(index)
+	duplicate_guidance(line)
+	f := finding(
+		"PD-013", "noncompliant", "AGENTS.md", index + 1,
+		"AGENTS.md gives spelling guidance outside the canonical block; the block replaces it",
+	)
+}
+

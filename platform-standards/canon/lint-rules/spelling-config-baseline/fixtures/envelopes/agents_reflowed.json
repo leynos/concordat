@@ -20,8 +20,8 @@
     },
     "source": {
       "path": "Makefile",
-      "sha256": "1b1e693430099517519724458ff750a395d917d3a4f214cc6b86981fd2e08795",
-      "byte_length": 193
+      "sha256": "dc31eaec74e208faae6eb0742db088abd0953290bb4477798fa6b752c512dce2",
+      "byte_length": 176
     },
     "parse": {
       "status": "complete",
@@ -34,15 +34,14 @@
           ".PHONY"
         ],
         "prerequisites": [
-          "spelling",
-          "spelling-gate"
+          "spelling"
         ],
         "double_colon": false,
         "conditions": [],
         "recipes": [],
         "location": {
           "start_byte": 0,
-          "end_byte": 31,
+          "end_byte": 17,
           "start_line": 1,
           "start_column": 1,
           "end_line": 2,
@@ -54,52 +53,32 @@
         "targets": [
           "spelling"
         ],
-        "prerequisites": [
-          "spelling-gate"
-        ],
-        "double_colon": false,
-        "conditions": [],
-        "recipes": [],
-        "location": {
-          "start_byte": 31,
-          "end_byte": 76,
-          "start_line": 2,
-          "start_column": 1,
-          "end_line": 4,
-          "end_column": 1
-        }
-      },
-      {
-        "ordinal": 2,
-        "targets": [
-          "spelling-gate"
-        ],
         "prerequisites": [],
         "double_colon": false,
         "conditions": [],
         "recipes": [
           {
             "ordinal": 0,
-            "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.2\" typos-config-builder gate",
+            "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.2\" typos-config-builder gate --scope all",
             "silent": false,
             "ignore_errors": false,
             "always_execute": false,
             "location": {
-              "start_byte": 91,
-              "end_byte": 193,
-              "start_line": 5,
+              "start_byte": 62,
+              "end_byte": 176,
+              "start_line": 3,
               "start_column": 1,
-              "end_line": 6,
+              "end_line": 4,
               "end_column": 1
             }
           }
         ],
         "location": {
-          "start_byte": 76,
-          "end_byte": 193,
-          "start_line": 4,
+          "start_byte": 17,
+          "end_byte": 176,
+          "start_line": 2,
           "start_column": 1,
-          "end_line": 6,
+          "end_line": 4,
           "end_column": 1
         }
       }
@@ -150,7 +129,7 @@
   },
   "agents_md": {
     "path": "AGENTS.md",
-    "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n\n- `make spelling` runs the pinned `typos-config-builder gate`, which\n  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and\n  `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow\n  repository-specific exceptions in `typos.local.toml`, as exact or full-line\n  patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If\n  the change is unrelated to your work, commit it in a separate base pull\n  request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
+    "text": "# Assistant instructions\n\n## Markdown guidance\n\n- Wrap prose at 80 columns.\n\n<!-- typos-config-builder:agents-md:start -->\n\n## Spelling\n- `make spelling` runs the pinned `typos-config-builder gate`, which regenerates `typos.toml` from the shared en-GB-oxendict dictionary and `typos.local.toml`, then checks spelling and the shared phrase corrections.\n- `typos.toml` is generated: never edit it by hand. Put narrow repository-specific exceptions in `typos.local.toml`, as exact or full-line patterns rather than bare accepted words.\n- When `make spelling` changes `typos.toml`, commit the regenerated file. If the change is unrelated to your work, commit it in a separate base pull request and stack your branch on it, so each review diff stays focused.\n\n<!-- typos-config-builder:agents-md:end -->\n",
     "error": null
   },
   "vendored": []

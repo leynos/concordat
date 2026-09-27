@@ -1,12 +1,14 @@
 """Regenerate the policy-input fixture envelopes for spelling-config-baseline.
 
 Each scenario lays out a synthetic checkout from the fixture files under
-``makefiles/``, ``workflows/``, ``overlays/``, and ``gitignores/``, then hands
+``makefiles/``, ``workflows/``, ``overlays/``, ``gitignores/``, and ``agents/``,
+then hands
 it to the production ``build_spelling_envelope`` so the recorded envelopes are
 exactly what ``concordat artefact rule run`` would send to Conftest. The
 Makefile facts therefore come from the pinned ``makeutil`` on PATH.
 ``data.json`` bundles every envelope under a ``fixtures`` key for
-``conftest verify``.
+``conftest verify``, beside the manifest's ``agents_md_blocks`` under
+``parameters``, so the Rego suite compares against the text the runner uses.
 
 Run from the repository root::
 
@@ -23,6 +25,8 @@ import tempfile
 import typing as typ
 from pathlib import Path
 
+from ruamel.yaml import YAML
+
 from concordat.rules.spelling_envelope import (
     SpellingEnvelope,
     build_spelling_envelope,
@@ -36,6 +40,8 @@ MAKEFILES_DIR = FIXTURES_DIR / "makefiles"
 WORKFLOWS_DIR = FIXTURES_DIR / "workflows"
 OVERLAYS_DIR = FIXTURES_DIR / "overlays"
 GITIGNORES_DIR = FIXTURES_DIR / "gitignores"
+AGENTS_DIR = FIXTURES_DIR / "agents"
+MANIFEST_PATH = FIXTURES_DIR.parent / "rule.yaml"
 ENVELOPES_DIR = FIXTURES_DIR / "envelopes"
 
 # The recorded repository path must not leak the temporary directory the
@@ -63,6 +69,10 @@ class Scenario:
         ``.gitignore``, or ``None`` for none.
     vendored:
         Repository-relative paths of legacy machinery to create.
+    agents:
+        Stem of the ``agents/*.agents`` fixture to install as ``AGENTS.md``,
+        or ``None`` for none. The suffix keeps the Markdown gates off these
+        deliberately malformed files.
     typos_config:
         Whether the checkout carries a generated ``typos.toml``.
     """
@@ -75,10 +85,16 @@ class Scenario:
     gitignore: str | None = "complete"
     vendored: tuple[str, ...] = ()
     typos_config: bool = True
+    agents: str | None = "compliant"
 
 
 BARE: typ.Final = Scenario(
-    makefile=None, workflows={}, overlay=None, gitignore=None, typos_config=False
+    makefile=None,
+    workflows={},
+    overlay=None,
+    gitignore=None,
+    typos_config=False,
+    agents=None,
 )
 
 SCENARIOS: typ.Final[dict[str, Scenario]] = {
@@ -138,6 +154,16 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "overlay_schema_2": Scenario(overlay="schema-2"),
     "overlay_no_schema": Scenario(overlay="no-schema"),
     "overlay_malformed": Scenario(overlay="malformed"),
+    # -- PD-013: the AGENTS.md spelling block ------------------------------
+    "agents_reflowed": Scenario(agents="reflowed"),
+    "agents_overlay_mention": Scenario(agents="overlay-mention"),
+    "agents_missing": Scenario(agents=None),
+    "agents_drifted": Scenario(agents="drifted"),
+    "agents_no_markers": Scenario(agents="no-markers"),
+    "agents_two_blocks": Scenario(agents="two-blocks"),
+    "agents_end_before_start": Scenario(agents="end-before-start"),
+    "agents_duplicate_guidance": Scenario(agents="duplicate-guidance"),
+    "agents_above_newest_text": Scenario(makefile="above-floor"),
 }
 
 
@@ -166,6 +192,10 @@ def lay_out(scenario: Scenario, checkout: Path) -> None:
         )
     if scenario.typos_config:
         (checkout / "typos.toml").write_text("[default]\n", encoding="utf-8")
+    if scenario.agents is not None:
+        shutil.copyfile(
+            AGENTS_DIR / f"{scenario.agents}.agents", checkout / "AGENTS.md"
+        )
     for relative in scenario.vendored:
         path = checkout / relative
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -199,6 +229,19 @@ def build_fixture_envelope(scenario: Scenario) -> SpellingEnvelope:
     return envelope
 
 
+def manifest_parameters() -> dict[str, object]:
+    """Return the manifest parameters the Rego suite must share with the runner.
+
+    Returns
+    -------
+    dict[str, object]
+        The ``agents_md_blocks`` default from ``rule.yaml``.
+    """
+    manifest = YAML(typ="safe").load(MANIFEST_PATH.read_text(encoding="utf-8"))
+    defaults = manifest["parameters"]["defaults"]
+    return {"agents_md_blocks": defaults["agents_md_blocks"]}
+
+
 def main() -> None:
     """Regenerate every envelope and the bundled data document.
 
@@ -215,7 +258,11 @@ def main() -> None:
         target.write_text(json.dumps(envelope, indent=2) + "\n", encoding="utf-8")
     bundle = FIXTURES_DIR / "data.json"
     bundle.write_text(
-        json.dumps({"fixtures": envelopes}, indent=2) + "\n", encoding="utf-8"
+        json.dumps(
+            {"fixtures": envelopes, "parameters": manifest_parameters()}, indent=2
+        )
+        + "\n",
+        encoding="utf-8",
     )
 
 

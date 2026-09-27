@@ -9,18 +9,17 @@ The Rego suite proves the clauses; this proves the command delivers them.
 
 from __future__ import annotations
 
+import pathlib
 import re
 import typing as typ
 
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
+from ruamel.yaml import YAML
 
 from concordat import cli
 
 from .conftest import RunResult
-
-if typ.TYPE_CHECKING:
-    import pathlib
 
 scenarios("features/spelling_config_baseline_rule_run.feature")
 
@@ -39,6 +38,21 @@ spelling:
 \t$(TYPOS_CONFIG) --repository . --check
 """
 _GITIGNORE: typ.Final = ".typos-oxendict-base.json\n.typos-oxendict-base.toml\n"
+_MANIFEST: typ.Final = (
+    pathlib.Path(__file__).resolve().parents[2]
+    / "platform-standards/canon/lint-rules/spelling-config-baseline/rule.yaml"
+)
+
+
+def _agents_md() -> str:
+    """Return an AGENTS.md carrying the manifest's newest spelling block."""
+    manifest = YAML(typ="safe").load(_MANIFEST.read_text(encoding="utf-8"))
+    blocks = manifest["parameters"]["defaults"]["agents_md_blocks"]
+    body = blocks[max(blocks)]
+    return (
+        "# Agents\n\n<!-- typos-config-builder:agents-md:start -->\n\n"
+        f"{body}\n<!-- typos-config-builder:agents-md:end -->\n"
+    )
 
 
 @pytest.fixture
@@ -55,6 +69,7 @@ def _write_setup(checkout: pathlib.Path, makefile: str) -> None:
     (checkout / "Makefile").write_text(makefile, encoding="utf-8")
     (checkout / "typos.local.toml").write_text("schema = 1\n", encoding="utf-8")
     (checkout / ".gitignore").write_text(_GITIGNORE, encoding="utf-8")
+    (checkout / "AGENTS.md").write_text(_agents_md(), encoding="utf-8")
 
 
 @given("a checkout with no spelling setup")

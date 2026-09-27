@@ -1883,6 +1883,7 @@ breakdown of what constitutes "compliance" within the framework.
 | PD-010       | No workflow runs Typos directly (a `typos` run or `crate-ci/typos`), drift-checks `typos.toml`, runs vendored machinery, or drives a legacy helper target.                                                                                                                                                                                                                                                                                  | Prose and Documentation Quality | Conftest (`spelling-config-baseline`)                   | error                | 2                        |
 | PD-011       | `.gitignore` lists `.typos-oxendict-base.json` and `.typos-oxendict-base.toml`, the builder's untracked cache.                                                                                                                                                                                                                                                                                                                              | Prose and Documentation Quality | Conftest (`spelling-config-baseline`)                   | error                | 2                        |
 | PD-012       | `typos.local.toml` exists and declares `schema = 1`.                                                                                                                                                                                                                                                                                                                                                                                        | Prose and Documentation Quality | Conftest (`spelling-config-baseline`)                   | error                | 2                        |
+| PD-013       | `AGENTS.md` carries exactly one spelling block between the typos-config-builder markers, matching the builder's published `docs/agents-md-spelling.md` for the pinned release with whitespace normalized, and no duplicate spelling guidance outside it.                                                                                                                                                                                    | Prose and Documentation Quality | Conftest (`spelling-config-baseline`)                   | error                | 2                        |
 | SP-001       | The Open Source Security Foundation Scorecard must achieve a minimum score of 7.0.                                                                                                                                                                                                                                                                                                                                                          | Security Posture                | Open Source Security Foundation Scorecard               | warning              | 1                        |
 | LG-001       | The `docs/library-users-guide.md` file must match the canonical version from the consumed library tag.                                                                                                                                                                                                                                                                                                                                      | File and Content Presence       | Python/Content Check                                    | error                | 4                        |
 | QG-002       | Lint tooling is installed from a pinned release via the hardened step: version-keyed cache, shell-variable indirection in `run:` blocks, `--locked`, binstall-or-build fallback, `--cranelift` preserved where the repository builds with Cranelift.                                                                                                                                                                                        | Quality-Gate Integrity          | OPA/Conftest                                            | error                | 4                        |
@@ -2349,7 +2350,7 @@ Markdown let unformatted prose reach `main`. These checks have shipped as the
   ships audit-only; the mutations follow the shared mutation vocabulary
   (Section 2.1.2).
 
-##### Spelling configuration (PD-007 to PD-012)
+##### Spelling configuration (PD-007 to PD-013)
 
 Issue #118 found two spelling mechanisms across the estate, each carrying its
 machinery in every repository: an in-repo generator regenerating `typos.toml`
@@ -2376,9 +2377,11 @@ wiring.
   vendored machinery by a parameterized glob list. A workflow policy refuses
   steps that run Typos directly, drift-check `typos.toml`, or run vendored
   machinery. `.gitignore` must list the builder's cache, and `typos.local.toml`
-  must declare `schema = 1`. An unresolvable variable, a conditional or
-  `include` in the closure, or an undecodable workflow or overlay is
-  indeterminate.
+  must declare `schema = 1`. `AGENTS.md` must carry the builder's published
+  spelling block for the pinned release between its markers, compared with
+  whitespace normalized, with no duplicate guidance outside it. An unresolvable
+  variable, a conditional or `include` in the closure, or an undecodable
+  workflow or overlay is indeterminate.
 - **Actuators:** none yet; the package ships audit-only, and each migration
   pull request uses it as its proof of compliance.
 

@@ -51,6 +51,19 @@ phrase corrections Typos cannot express.
   line (`/.typos-oxendict-base.json`) names the same file.
 - **PD-012** (error): `typos.local.toml` exists and declares `schema = 1`,
   even when it holds nothing else.
+- **PD-013** (error): `AGENTS.md` carries exactly one spelling block between
+  `<!-- typos-config-builder:agents-md:start -->` and
+  `<!-- typos-config-builder:agents-md:end -->`, and the text between the
+  markers matches the text typos-config-builder publishes at
+  `docs/agents-md-spelling.md` for the pinned release, with whitespace
+  normalized. The texts are the `agents_md_blocks` parameter, keyed by release
+  tag: a pin compares with the newest text at or below it, a pin older than
+  every text compares with the earliest (the block is policy text rather than
+  builder behaviour), and a gate whose pin cannot be proven compares with the
+  newest. A `make spelling` command or `typos.toml` named outside the markers
+  duplicates the block and is reported by line; `typos.local.toml`, where a
+  repository may document its own exceptions, is not matched, and duplicates
+  are judged only when exactly one well-formed block exists.
 - **EN-001** (error, indeterminate): the envelope is not a
   `policy-input/spelling-config-baseline` document at schema version 1.
 

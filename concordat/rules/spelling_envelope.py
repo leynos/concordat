@@ -1,9 +1,10 @@
 """Build the `policy-input/spelling-config-baseline` envelope.
 
-The spelling rule package reasons over five kinds of fact: the root
+The spelling rule package reasons over six kinds of fact: the root
 `Makefile` (parsed by the pinned `makeutil`, as the Markdown and Rust
 envelopes do), every GitHub Actions workflow under `.github/workflows`, the
-`typos.local.toml` overlay, the root `.gitignore`, and the paths of any
+`typos.local.toml` overlay, the root `.gitignore`, the root `AGENTS.md`
+text, and the paths of any
 vendored spelling machinery the checkout still carries. Each fact is recorded
 as it was found: a file that exists but cannot be decoded is carried with its
 `error`, so the policy reports an indeterminate verdict rather than reading
@@ -44,6 +45,7 @@ ENVELOPE_KIND: typ.Final = "policy-input/spelling-config-baseline"
 TYPOS_LOCAL_FILENAME: typ.Final = "typos.local.toml"
 TYPOS_CONFIG_FILENAME: typ.Final = "typos.toml"
 GITIGNORE_FILENAME: typ.Final = ".gitignore"
+AGENTS_FILENAME: typ.Final = "AGENTS.md"
 # Paths a legacy spelling setup vendored into consumers; the builder now owns
 # all of it. Repository-relative globs, matched against POSIX paths.
 DEFAULT_VENDORED_PATTERNS: typ.Final = (
@@ -57,6 +59,7 @@ DEFAULT_VENDORED_PATTERNS: typ.Final = (
 
 OPERATION_READ_TYPOS_LOCAL: typ.Final = "read-typos-local"
 OPERATION_READ_GITIGNORE: typ.Final = "read-gitignore"
+OPERATION_READ_AGENTS: typ.Final = "read-agents-md"
 
 
 class DecodedFile(typ.TypedDict):
@@ -72,6 +75,14 @@ class GitignoreFile(typ.TypedDict):
 
     path: str
     lines: list[str]
+    error: str | None
+
+
+class TextFile(typ.TypedDict):
+    """One root text file, or the file with the reason it was not decoded."""
+
+    path: str
+    text: str | None
     error: str | None
 
 
@@ -94,6 +105,7 @@ class SpellingEnvelope(typ.TypedDict):
     workflows: list[WorkflowFile]
     typos_local: DecodedFile | None
     gitignore: GitignoreFile | None
+    agents_md: TextFile | None
     vendored: list[str]
 
 
@@ -157,6 +169,21 @@ def _load_gitignore(checkout: pathlib.Path, root: pathlib.Path) -> GitignoreFile
     text, error = read
     lines = [line.strip() for line in (text or "").splitlines() if line.strip()]
     return {"path": GITIGNORE_FILENAME, "lines": lines, "error": error}
+
+
+def _load_agents_md(checkout: pathlib.Path, root: pathlib.Path) -> TextFile | None:
+    """Return the root `AGENTS.md` text, or ``None`` when it is absent.
+
+    Returns
+    -------
+    TextFile | None
+        The file's text, or carrying its decoding error.
+    """
+    read = _read_input(checkout, root, AGENTS_FILENAME, OPERATION_READ_AGENTS)
+    if read is None:
+        return None
+    text, error = read
+    return {"path": AGENTS_FILENAME, "text": text, "error": error}
 
 
 def _vendored_paths(checkout: pathlib.Path, patterns: cabc.Sequence[str]) -> list[str]:
@@ -229,5 +256,6 @@ def build_spelling_envelope(
         "workflows": _load_workflows(checkout, root),
         "typos_local": typos_local,
         "gitignore": _load_gitignore(checkout, root),
+        "agents_md": _load_agents_md(checkout, root),
         "vendored": _vendored_paths(checkout, vendored_patterns),
     }
