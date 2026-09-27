@@ -251,12 +251,27 @@ def stray_token_references(publisher: Workflow) -> list[str]:
 CODESCENE_ENVIRONMENT: typ.Final = "codescene"
 
 
-def _environment_name(job: cabc.Mapping[str, object]) -> str | None:
-    """Return the environment a job declares, in either spelling, if any."""
+def _declares_environment(job: cabc.Mapping[str, object]) -> bool:
+    """Return whether a job declares `codescene`, in either spelling.
+
+    GitHub resolves environment names without regard to case.
+
+    Returns
+    -------
+        Whether the job's environment is `codescene`.
+    """
     declared = job.get("environment")
     if isinstance(declared, dict):
         declared = declared.get("name")
-    return declared if isinstance(declared, str) else None
+    return (
+        isinstance(declared, str) and declared.strip().lower() == CODESCENE_ENVIRONMENT
+    )
+
+
+_MISMATCHES: typ.Final = {
+    (True, False): f"uploads without environment {CODESCENE_ENVIRONMENT}",
+    (False, True): f"declares {CODESCENE_ENVIRONMENT} without uploading",
+}
 
 
 def environment_mismatches(workflow: Workflow) -> list[str]:
@@ -272,11 +287,7 @@ def environment_mismatches(workflow: Workflow) -> list[str]:
     found: list[str] = []
     for name, job in jobs(workflow).items():
         uploads_here = any(_is_upload(step) for step in job_steps(workflow, name, job))
-        # GitHub resolves environment names case-insensitively.
-        environment = _environment_name(job)
-        declares = (environment or "").strip().lower() == CODESCENE_ENVIRONMENT
-        if uploads_here and not declares:
-            found.append(f"{name}: uploads without environment {CODESCENE_ENVIRONMENT}")
-        elif declares and not uploads_here:
-            found.append(f"{name}: declares {CODESCENE_ENVIRONMENT} without uploading")
+        problem = _MISMATCHES.get((uploads_here, _declares_environment(job)))
+        if problem:
+            found.append(f"{name}: {problem}")
     return found

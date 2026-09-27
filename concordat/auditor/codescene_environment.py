@@ -70,15 +70,29 @@ def _step_uploads(step: object) -> bool:
 def workflow_uploads(text: str) -> bool:
     """Return whether a workflow's executable steps upload to CodeScene.
 
+    A text that is not a YAML mapping cannot have its steps read, so
+    `_document` raises `UnreadableWorkflowError` rather than this answering.
+
     Returns
     -------
     bool
         Whether any step of any job uploads.
+    """
+    return any(_step_uploads(step) for step in _steps(_document(text)))
+
+
+def _document(text: str) -> dict[object, object]:
+    """Parse a workflow into its top-level mapping.
+
+    Returns
+    -------
+    dict[object, object]
+        The decoded document.
 
     Raises
     ------
     UnreadableWorkflowError
-        If the text is not a YAML mapping, so its steps cannot be read.
+        If the text is not YAML, or not a mapping.
     """
     try:
         document = _yaml.load(text)
@@ -87,15 +101,20 @@ def workflow_uploads(text: str) -> bool:
     if not isinstance(document, dict):
         message = "workflow is not a mapping"
         raise UnreadableWorkflowError(message)
+    return document
+
+
+def _steps(document: dict[object, object]) -> list[object]:
+    """Return every step of every job, in document order."""
     jobs = document.get("jobs")
     if not isinstance(jobs, dict):
-        return False
-    return any(
-        _step_uploads(step)
-        for job in jobs.values()
-        if isinstance(job, dict) and isinstance(job.get("steps"), list)
-        for step in job["steps"]
-    )
+        return []
+    steps: list[object] = []
+    for job in jobs.values():
+        declared = job.get("steps") if isinstance(job, dict) else None
+        if isinstance(declared, list):
+            steps.extend(declared)
+    return steps
 
 
 DOC_URL: typ.Final = (

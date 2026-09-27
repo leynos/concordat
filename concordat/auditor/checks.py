@@ -8,6 +8,13 @@ from . import codescene_environment
 from .models import AuditContext, CheckDefinition, Finding
 
 if typ.TYPE_CHECKING:
+    from .models import (
+        BranchProtection,
+        RequiredPullRequestReviews,
+        RequiredStatusChecks,
+    )
+
+if typ.TYPE_CHECKING:
     from .priority import PriorityModel
 
 DOC_URL = "https://github.com/leynos/concordat/blob/main/docs/concordat-design.md"
@@ -237,142 +244,102 @@ def _run_branch_protection(context: AuditContext) -> list[Finding]:
     resource = f"branch:{repo.slug}@{repo.default_branch}"
     if protection is None:
         return [
-            Finding(
-                rule_id="BP-001",
-                message=f"No branch protection configured for {resource}.",
-                level="error",
-                resource=resource,
+            _branch_finding(
+                resource, f"No branch protection configured for {resource}.", "error"
             )
         ]
+    gaps = (
+        _protection_gaps(protection)
+        + _status_check_gaps(protection.status_checks)
+        + _review_gaps(protection.pull_request_reviews)
+    )
+    return [_branch_finding(resource, message, level) for message, level in gaps]
 
-    findings: list[Finding] = []
-    if not protection.enforce_admins:
-        findings.append(
-            Finding(
-                rule_id="BP-001",
-                message="Admins bypass branch protection; enable enforce_admins.",
-                level="error",
-                resource=resource,
-            )
-        )
-    if protection.require_signed_commits is not True:
-        findings.append(
-            Finding(
-                rule_id="BP-001",
-                message="Signed commits are not enforced on the default branch.",
-                level="error",
-                resource=resource,
-            )
-        )
-    if not protection.required_linear_history:
-        findings.append(
-            Finding(
-                rule_id="BP-001",
-                message=(
-                    "Linear history is disabled; enable it to preserve the "
-                    "squash-only workflow."
-                ),
-                level="error",
-                resource=resource,
-            )
-        )
-    if not protection.require_conversation_resolution:
-        findings.append(
-            Finding(
-                rule_id="BP-001",
-                message="Conversation resolution is not required before merging.",
-                level="warning",
-                resource=resource,
-            )
-        )
-    if protection.allows_force_pushes:
-        findings.append(
-            Finding(
-                rule_id="BP-001",
-                message=(
-                    "Force pushes are allowed; disable them to protect the default "
-                    "branch."
-                ),
-                level="error",
-                resource=resource,
-            )
-        )
-    if protection.allows_deletions:
-        findings.append(
-            Finding(
-                rule_id="BP-001",
-                message=(
-                    "Branch deletions are allowed; Concordat keeps protected "
-                    "branches durable."
-                ),
-                level="warning",
-                resource=resource,
-            )
-        )
-    status_checks = protection.status_checks
+
+def _branch_finding(resource: str, message: str, level: str) -> Finding:
+    """Build one BP-001 finding for the default branch."""
+    return Finding(rule_id="BP-001", message=message, level=level, resource=resource)
+
+
+def _failed(rules: tuple[tuple[bool, str, str], ...]) -> list[tuple[str, str]]:
+    """Return the message and level of each rule whose condition failed."""
+    return [(message, level) for failed, message, level in rules if failed]
+
+
+def _protection_gaps(protection: BranchProtection) -> list[tuple[str, str]]:
+    """Report the protection flags that depart from the baseline, in order."""
+    return _failed((
+        (
+            not protection.enforce_admins,
+            "Admins bypass branch protection; enable enforce_admins.",
+            "error",
+        ),
+        (
+            protection.require_signed_commits is not True,
+            "Signed commits are not enforced on the default branch.",
+            "error",
+        ),
+        (
+            not protection.required_linear_history,
+            (
+                "Linear history is disabled; enable it to preserve the "
+                "squash-only workflow."
+            ),
+            "error",
+        ),
+        (
+            not protection.require_conversation_resolution,
+            "Conversation resolution is not required before merging.",
+            "warning",
+        ),
+        (
+            protection.allows_force_pushes,
+            "Force pushes are allowed; disable them to protect the default branch.",
+            "error",
+        ),
+        (
+            protection.allows_deletions,
+            "Branch deletions are allowed; Concordat keeps protected branches durable.",
+            "warning",
+        ),
+    ))
+
+
+def _status_check_gaps(
+    status_checks: RequiredStatusChecks | None,
+) -> list[tuple[str, str]]:
+    """Report missing strict status checks, or the Auditor's missing context."""
     if status_checks is None or not status_checks.strict:
-        findings.append(
-            Finding(
-                rule_id="BP-001",
-                message="Strict required status checks are missing.",
-                level="error",
-                resource=resource,
-            )
-        )
-    else:
-        required_context = "concordat/auditor"
-        if required_context not in status_checks.contexts:
-            findings.append(
-                Finding(
-                    rule_id="BP-001",
-                    message=f"Required status checks omit {required_context!r}.",
-                    level="warning",
-                    resource=resource,
-                )
-            )
-    reviews = protection.pull_request_reviews
+        return [("Strict required status checks are missing.", "error")]
+    required_context = "concordat/auditor"
+    if required_context not in status_checks.contexts:
+        return [(f"Required status checks omit {required_context!r}.", "warning")]
+    return []
+
+
+def _review_gaps(
+    reviews: RequiredPullRequestReviews | None,
+) -> list[tuple[str, str]]:
+    """Report missing or weak pull request review requirements, in order."""
     if reviews is None:
-        findings.append(
-            Finding(
-                rule_id="BP-001",
-                message="Pull request review requirements are missing.",
-                level="error",
-                resource=resource,
-            )
-        )
-    else:
-        if reviews.required_approvals < 2:
-            findings.append(
-                Finding(
-                    rule_id="BP-001",
-                    message=(
-                        "At least two approvals are required on the default branch."
-                    ),
-                    level="error",
-                    resource=resource,
-                )
-            )
-        if not reviews.dismiss_stale_reviews:
-            findings.append(
-                Finding(
-                    rule_id="BP-001",
-                    message="Dismiss stale reviews to prevent outdated approvals.",
-                    level="warning",
-                    resource=resource,
-                )
-            )
-        if not reviews.require_code_owner_reviews:
-            findings.append(
-                Finding(
-                    rule_id="BP-001",
-                    message=(
-                        "Require CODEOWNERS reviews to enforce ownership boundaries."
-                    ),
-                    level="error",
-                    resource=resource,
-                )
-            )
-    return findings
+        return [("Pull request review requirements are missing.", "error")]
+    return _failed((
+        (
+            reviews.required_approvals < 2,
+            "At least two approvals are required on the default branch.",
+            "error",
+        ),
+        (
+            not reviews.dismiss_stale_reviews,
+            "Dismiss stale reviews to prevent outdated approvals.",
+            "warning",
+        ),
+        (
+            not reviews.require_code_owner_reviews,
+            "Require CODEOWNERS reviews to enforce ownership boundaries.",
+            "error",
+        ),
+    ))
 
 
 def _run_permissions(context: AuditContext) -> list[Finding]:
