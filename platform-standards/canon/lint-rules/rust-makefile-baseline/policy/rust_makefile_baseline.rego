@@ -389,8 +389,8 @@ surface_qualified(recipe, surface) if {
 	gate_variable_is_simple
 	matches := regex.find_all_string_submatch_n(
 		sprintf(
-			`^[[:space:]]*[-@+]*[[:space:]]*cd[[:space:]]+([^[:space:];|&]+)[[:space:]]+&&[[:space:]]*(\$\(%s\)|\$\{%s\})%s`,
-			[gate_variable, gate_variable, gate_binding_tail],
+			`^[[:space:]]*[-@+]*[[:space:]]*cd[[:space:]]+([^[:space:];|&]+)[[:space:]]+&&[[:space:]]*(?:%s)*(\$\(%s\)|\$\{%s\})%s`,
+			[gate_command_prefix, gate_variable, gate_variable, gate_binding_tail],
 		),
 		recipe.text,
 		1,
@@ -403,14 +403,16 @@ direct_manifest_path(recipe, manifest_path) if {
 	gate_variable_is_simple
 	matches := regex.find_all_string_submatch_n(
 		sprintf(
-			`^[[:space:]]*[-@+]*[[:space:]]*\$\(%s\)([[:space:]]+[^[:space:];|&]+)*[[:space:]]+--manifest-path[[:space:]]+([^[:space:];|&]+)[[:space:]]*$`,
-			[gate_variable],
+			`^[[:space:]]*[-@+]*[[:space:]]*(?:%s)*\$\(%s\)([[:space:]]+[^[:space:];|&]+)*[[:space:]]+--manifest-path[[:space:]]+([^[:space:];|&]+)[[:space:]]*$`,
+			[gate_command_prefix, gate_variable],
 		),
 		recipe.text,
 		1,
 	)
 	count(matches) == 1
-	captured_path := matches[0][2]
+	# The prefix grammar carries its own groups, so the path is read as the
+	# last group rather than by a fixed index.
+	captured_path := matches[0][count(matches[0]) - 1]
 	manifest_path == captured_path
 }
 
@@ -418,14 +420,16 @@ direct_manifest_path(recipe, manifest_path) if {
 	gate_variable_is_simple
 	matches := regex.find_all_string_submatch_n(
 		sprintf(
-			`^[[:space:]]*[-@+]*[[:space:]]*\$\{%s\}([[:space:]]+[^[:space:];|&]+)*[[:space:]]+--manifest-path[[:space:]]+([^[:space:];|&]+)[[:space:]]*$`,
-			[gate_variable],
+			`^[[:space:]]*[-@+]*[[:space:]]*(?:%s)*\$\{%s\}([[:space:]]+[^[:space:];|&]+)*[[:space:]]+--manifest-path[[:space:]]+([^[:space:];|&]+)[[:space:]]*$`,
+			[gate_command_prefix, gate_variable],
 		),
 		recipe.text,
 		1,
 	)
 	count(matches) == 1
-	captured_path := matches[0][2]
+	# The prefix grammar carries its own groups, so the path is read as the
+	# last group rather than by a fixed index.
+	captured_path := matches[0][count(matches[0]) - 1]
 	manifest_path == captured_path
 }
 
@@ -595,8 +599,9 @@ deny contains f if {
 	some rule in input.makefile.rules
 	lint_path_rule(rule)
 	some recipe in rule.recipes
-	regex.match(which_command_pattern, recipe.text)
-	contains(recipe.text, "||")
+	shell_text := without_quoted_text(recipe.text)
+	regex.match(which_command_pattern, shell_text)
+	contains(shell_text, "||")
 	f := finding(
 		"QG-001", "noncompliant", recipe.location.start_line,
 		"lint-path recipe soft-skips the gate (\"which\" existence guard)",
@@ -676,8 +681,10 @@ deny contains f if {
 # `$(GATE_RUSTFLAGS) $(WHITAKER) --all`. Make expands it before the shell
 # runs, so the gate is still the command word. A variable with any other
 # definition, such as `ECHO = echo`, is not seen through, and the gate stays
-# unproven.
-env_assignment_value_pattern := `^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=("[^"]*"|'[^']*'|[^[:space:][:cntrl:]"']*)[[:space:]]*)+$`
+# unproven. An unquoted value may not carry a shell operator, a redirection,
+# a subshell or a substitution: `X=1||true` and `X=1;true` expand to a
+# command that runs `true`, not the gate.
+env_assignment_value_pattern := "^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=(\"[^\"]*\"|'[^']*'|[^[:space:][:cntrl:]\"';&|<>()`]*)[[:space:]]*)+$"
 
 # An `export` or `unexport` directive naming the variable assigns nothing, so
 # only value-carrying facts count; a `define` block does carry a value.
@@ -719,13 +726,27 @@ recipe_soft_skips(text, "|| true") if contains(text, "|| true")
 recipe_soft_skips(text, "command -v") if {
 	probes := count(regex.find_n(`command -v`, text, -1))
 	probes > 0
-	probes != count(regex.find_n(command_probe_hard_fail_pattern, text, -1))
+	probes != count(hard_failing_probes(text))
 }
+
+# A failure block counts only if its one `exit` is the non-zero one it ends
+# with: in `{ exit 0; exit 1; }` the first exit ends the recipe successfully.
+# Quoted text is removed first, so prose mentioning "exit" does not count.
+hard_failing_probes(text) := [probe |
+	some probe in regex.find_n(command_probe_hard_fail_pattern, text, -1)
+	count(regex.find_n(`\bexit\b`, without_quoted_text(probe), -1)) == 1
+]
+
+# Replace every single- or double-quoted string with an empty pair of quotes,
+# so separators and words inside quoted prose are not read as shell.
+without_quoted_text(text) := regex.replace(text, `'[^']*'|"([^"\\]|\\.)*"`, "''")
 
 command_probe_hard_fail_pattern := `command -v[^|;]*\|\|[[:space:]\\]*(\{([^{}]*;)?[[:space:]\\]*exit[[:space:]]+[1-9][0-9]*[[:space:];\\]*\}|exit[[:space:]]+[1-9][0-9]*)`
 
 # `which` counts only as a command word: at the start of the recipe, after a
-# separator, a subshell or a command substitution, or after `if` or `!`. The
-# word inside quoted prose, as in `printf '... which writes ...'`, is not a
+# separator, a subshell, a brace group or a command substitution, or after
+# `if`, `then`, `else`, `do` or `!`. It is matched against the recipe with its
+# quoted text removed, so the word inside quoted prose, as in
+# `printf '... which writes ...'` or `printf 'note; which tool'`, is not a
 # guard.
-which_command_pattern := "(^|[;&|(`]|\\$\\()[[:space:]]*[-@+]*[[:space:]]*((if|!)[[:space:]]+)?which[[:space:]]"
+which_command_pattern := "(^|[;&|({`]|\\$\\(|(^|[[:space:];&|({])(if|then|else|do|!))[[:space:]]*[-@+]*[[:space:]]*((if|!)[[:space:]]+)?which[[:space:]]"

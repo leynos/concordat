@@ -185,3 +185,128 @@ test_a_variable_known_only_from_an_export_directive_hides_the_gate if {
 	findings := policy.deny with input as lint_input(lint, [directive])
 	profile(findings) == {["QG-001", "indeterminate"]}
 }
+
+# -- review round: holes in the three readings ------------------------------
+
+prefixed_lint(value) := lint_input(
+	[recipe_at(`$(GATE_ENV) $(WHITAKER) --all`, 1)],
+	[variable_fact("GATE_ENV", "=", value)],
+)
+
+# `X=1||true` expands to a command that runs `true` when the assignment
+# succeeds, and `X=1;true` to one that runs `true` with the gate as an
+# argument. Neither prefix may be seen through.
+test_an_or_operator_in_a_prefix_value_hides_the_gate if {
+	findings := policy.deny with input as prefixed_lint("X=1||true")
+	profile(findings) == {["QG-001", "indeterminate"]}
+}
+
+test_a_semicolon_in_a_prefix_value_hides_the_gate if {
+	findings := policy.deny with input as prefixed_lint("RUSTFLAGS=x;true")
+	profile(findings) == {["QG-001", "indeterminate"]}
+}
+
+test_a_subshell_in_a_prefix_value_hides_the_gate if {
+	findings := policy.deny with input as prefixed_lint("X=$(true)")
+	profile(findings) == {["QG-001", "indeterminate"]}
+}
+
+# Inside quotes the same characters are part of the value.
+test_operators_inside_a_quoted_prefix_value_are_seen_through if {
+	findings := policy.deny with input as prefixed_lint(`RUSTFLAGS="-D warnings; -C x|y"`)
+	profile(findings) == set()
+}
+
+# An earlier successful exit ends the recipe before the non-zero one.
+test_a_block_with_an_earlier_zero_exit_is_a_soft_skip if {
+	findings := policy.deny with input as guarded_lint("command -v tool || { exit 0; exit 1; }")
+	some f in findings
+	contains(f.msg, "command -v")
+}
+
+test_a_block_with_an_earlier_exit_of_any_status_is_a_soft_skip if {
+	findings := policy.deny with input as guarded_lint("command -v tool || { test -n x && exit 0; exit 1; }")
+	some f in findings
+	contains(f.msg, "command -v")
+}
+
+# "exit" inside quoted prose is not an exit.
+test_exit_inside_quoted_prose_does_not_spoil_a_hard_failure if {
+	guard := "command -v tool || { printf 'will exit now\\n' >&2; exit 1; }"
+	findings := policy.deny with input as guarded_lint(guard)
+	profile(findings) == set()
+}
+
+# A separator inside quoted prose is not a command boundary.
+test_a_separator_inside_quoted_prose_does_not_make_a_which_guard if {
+	findings := policy.deny with input as guarded_lint("printf 'note; which tool' || exit 1")
+	every f in findings {
+		not contains(f.msg, "which")
+	}
+}
+
+test_a_which_guard_in_a_brace_group_is_still_reported if {
+	lint := [recipe_at("{ which actionlint >/dev/null || exit 0; } && $(WHITAKER) --all", 1)]
+	findings := policy.deny with input as lint_input(lint, [])
+	some f in findings
+	contains(f.msg, "\"which\" existence guard")
+}
+
+test_a_which_guard_after_then_is_still_reported if {
+	findings := policy.deny with input as guarded_lint("if true; then which actionlint || exit 0; fi")
+	some f in findings
+	contains(f.msg, "\"which\" existence guard")
+}
+
+test_a_which_guard_after_else_is_still_reported if {
+	findings := policy.deny with input as guarded_lint("if false; then :; else which actionlint || exit 0; fi")
+	some f in findings
+	contains(f.msg, "\"which\" existence guard")
+}
+
+test_a_which_guard_after_do_is_still_reported if {
+	findings := policy.deny with input as guarded_lint("for t in a; do which $$t || exit 0; done")
+	some f in findings
+	contains(f.msg, "\"which\" existence guard")
+}
+
+# Nested surfaces qualify through the same prefix grammar as the root.
+nested_input(path, recipe, variables) := object.union(
+	manifest_surface_input(path, recipe),
+	{"makefile": object.union(
+		manifest_surface_input(path, recipe).makefile,
+		{"variables": array.concat([variable_fact("WHITAKER", "?=", "whitaker")], variables)},
+	)},
+)
+
+test_a_prefixed_gate_after_cd_qualifies_a_nested_surface if {
+	input_doc := nested_input("rust/Cargo.toml", `cd rust && $(GATE_RUSTFLAGS) $(WHITAKER) --all`, [gate_rustflags])
+	findings := policy.deny with input as input_doc
+	profile(findings) == set()
+}
+
+test_a_prefixed_gate_with_manifest_path_qualifies_a_nested_surface if {
+	input_doc := nested_input("rust/Cargo.toml", `$(GATE_RUSTFLAGS) $(WHITAKER) --manifest-path rust/Cargo.toml`, [gate_rustflags])
+	findings := policy.deny with input as input_doc
+	profile(findings) == set()
+}
+
+test_a_command_prefix_after_cd_does_not_qualify_a_nested_surface if {
+	input_doc := nested_input("rust/Cargo.toml", `cd rust && $(ECHO) $(WHITAKER) --all`, [variable_fact("ECHO", "=", "echo")])
+	findings := policy.deny with input as input_doc
+	profile(findings) != set()
+}
+
+test_a_prefixed_manifest_path_for_another_surface_does_not_qualify if {
+	input_doc := nested_input("rust/Cargo.toml", `$(GATE_RUSTFLAGS) $(WHITAKER) --manifest-path other/Cargo.toml`, [gate_rustflags])
+	findings := policy.deny with input as input_doc
+	profile(findings) != set()
+}
+
+# An unquoted `which` that is an argument, not a command word, is not a guard.
+test_which_as_an_unquoted_argument_is_not_a_guard if {
+	findings := policy.deny with input as guarded_lint("echo which tool || exit 1")
+	every f in findings {
+		not contains(f.msg, "which")
+	}
+}
