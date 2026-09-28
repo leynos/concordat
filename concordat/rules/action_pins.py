@@ -140,20 +140,13 @@ def _resolve_with(
 ) -> PinResolution:
     """Ask the commit endpoint, then the tag endpoint only if it must."""
     status, body, failure = _get(client, f"{base}/repos/{repository}/git/commits/{sha}")
-    if failure is None and body is None and status in _NOT_A_COMMIT:
-        return _resolve_tag(client, base, repository, sha)
-    return _commit_answer(sha, status, body, failure)
-
-
-def _commit_answer(
-    sha: str, status: int | None, body: dict[str, object] | None, failure: str | None
-) -> PinResolution:
-    """Turn the commit endpoint's reply into a resolution."""
     if failure is not None:
         return unresolved_pin(failure)
     if body is not None:
         return commit_pin(sha)
-    return unresolved_pin(f"git/commits/{sha} returned HTTP {status}")
+    if status not in _NOT_A_COMMIT:
+        return unresolved_pin(f"git/commits/{sha} returned HTTP {status}")
+    return _resolve_tag(client, base, repository, sha)
 
 
 def _resolve_tag(
