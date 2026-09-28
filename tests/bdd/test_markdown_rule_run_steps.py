@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import importlib.util
 import json
 import pathlib
@@ -169,18 +170,44 @@ def given_conftest_shell_lint(cmd_mox: CmdMox) -> None:
     cmd_mox.mock("conftest").returns(exit_code=1, stdout=_conftest_result([failure]))
 
 
-@when("I run the Markdown rule against the checkout")
-def when_run_rule(
-    checkout: pathlib.Path,
-    cmd_mox: CmdMox,
-    cli_invocation: dict[str, RunResult],
-    capsys: pytest.CaptureFixture[str],
-    fake_github_api: FakeGithubApi,
-) -> None:
-    """Invoke the CLI and capture its output and exit status.
+@dataclasses.dataclass(frozen=True, slots=True)
+class _RuleCli:
+    """The command line with its subprocess and GitHub doubles attached."""
 
-    Pins resolve against a local GitHub double that answers as the real API
-    does for v24.2.0, so the run never leaves the host.
+    cmd_mox: CmdMox
+    github_api_url: str
+
+    def run(self, checkout: pathlib.Path) -> int:
+        """Run the Markdown rule over *checkout*, returning the exit status."""
+        self.cmd_mox.replay()
+        try:
+            returncode = cli.main([
+                "artefact",
+                "rule",
+                "run",
+                RULE_ID,
+                "--repo",
+                str(checkout),
+                "--github-api-url",
+                self.github_api_url,
+            ])
+        except SystemExit as exc:
+            returncode = int(exc.code or 0)
+        self.cmd_mox.verify()
+        return returncode
+
+
+@pytest.fixture
+def rule_cli(cmd_mox: CmdMox, fake_github_api: FakeGithubApi) -> _RuleCli:
+    """Provide the command line, with pins answered as GitHub does for v24.2.0.
+
+    The GitHub double knows the v24.2.0 commit and its annotated tag object,
+    so a scenario's pins resolve without the run leaving the host.
+
+    Returns
+    -------
+    _RuleCli
+        The command line bound to this test's doubles.
     """
     generate = _load_generator()
     fake_github_api.routes.update(
@@ -190,21 +217,18 @@ def when_run_rule(
             tags={generate.V24_2_0_TAG_OBJECT: generate.V24_2_0_COMMIT},
         )
     )
-    cmd_mox.replay()
-    try:
-        returncode = cli.main([
-            "artefact",
-            "rule",
-            "run",
-            RULE_ID,
-            "--repo",
-            str(checkout),
-            "--github-api-url",
-            fake_github_api.url,
-        ])
-    except SystemExit as exc:
-        returncode = int(exc.code or 0)
-    cmd_mox.verify()
+    return _RuleCli(cmd_mox, fake_github_api.url)
+
+
+@when("I run the Markdown rule against the checkout")
+def when_run_rule(
+    checkout: pathlib.Path,
+    rule_cli: _RuleCli,
+    cli_invocation: dict[str, RunResult],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Invoke the CLI and capture its output and exit status."""
+    returncode = rule_cli.run(checkout)
     captured = capsys.readouterr()
     cli_invocation["result"] = RunResult(
         stdout=captured.out,
