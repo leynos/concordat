@@ -54,16 +54,9 @@ local API double, so none of them reaches GitHub.
 ## Consequences
 
 - `concordat artefact rule run markdown-formatting-baseline` makes up to two
-  GET requests per distinct pin, and answers a pin repeated within the run from
-  the resolver's own record. A checkout with no pinned action makes none and
-  reads no credentials. `--github-api-url` selects another API root.
-- The API budget is the operational limit. Unauthenticated, GitHub allows 60
-  calls an hour, which an estate sweep spends within a few repositories, so the
-  command authenticates with `GITHUB_TOKEN`, the concordat credentials, or
-  `gh auth token`, in that order. A lookup refused because the limit is spent
-  (429, or 403 with `X-RateLimit-Remaining: 0`) is recorded with
-  `rate_limited: true`, and PD-006 reports it as indeterminate with the remedy
-  instead of as an unknown pin.
+  unauthenticated or token-authenticated GET requests per distinct pin. A
+  checkout with no pinned action makes none and reads no credentials.
+  `--github-api-url` selects another API root.
 - The rule is no longer a pure function of the checkout for PD-006. An offline
   run reports PD-006 indeterminate on every pinned workflow, which is the
   fail-closed behaviour the package already applies to facts it cannot prove.
@@ -76,3 +69,22 @@ local API double, so none of them reaches GitHub.
   action pin names. Another rule package that needs the same fact composes
   `resolving_pins` or calls `with_action_pins`, rather than calling the API
   from its envelope builder.
+
+## Addendum (2026-09-28): The API budget
+
+The first estate sweeps showed the API budget is the operational limit.
+Unauthenticated, GitHub allows 60 calls an hour, which a sweep spends within a
+few repositories; every later pin was then indeterminate, with a message that
+read like an unknown pin.
+
+- The command authenticates with `GITHUB_TOKEN` or the concordat credentials,
+  and otherwise with `gh auth token --hostname <host>`, where the host is
+  derived from `--github-api-url` (`api.github.com` is `github.com`), so a
+  token is never sent to a host it was not issued for.
+- `GithubClient` raises `GithubRateLimitError`, a `GithubForbiddenError`, for a
+  429 or a 403 with `X-RateLimit-Remaining: 0`. The pin is recorded with
+  `rate_limited: true`, and PD-006 reports it as indeterminate with its remedy:
+  wait for the limit to reset, or run with a token that has quota left.
+- `GithubPinResolver` keeps each answer for the run, so a pin repeated within
+  one `rule run` costs one lookup. Each run is one repository; a pin shared
+  across repositories costs one lookup per repository.

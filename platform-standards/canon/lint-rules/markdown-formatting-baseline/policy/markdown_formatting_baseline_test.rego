@@ -314,7 +314,7 @@ test_unresolved_pin_is_indeterminate if {
 test_rate_limited_pin_is_indeterminate_with_its_own_message if {
 	findings := policy.deny with input as data.fixtures.workflow_pin_rate_limited
 	profile(findings) == {["PD-006", "indeterminate"]}
-	messages(findings, "PD-006") == {"job \"lint-test\" pins DavidAnson/markdownlint-cli2-action to fedcba9876543210fedcba9876543210fedcba98, which was not checked because the GitHub API rate limit is spent; set GITHUB_TOKEN or log in with `gh auth login`, then run the rule again"}
+	messages(findings, "PD-006") == {"job \"lint-test\" pins DavidAnson/markdownlint-cli2-action to fedcba9876543210fedcba9876543210fedcba98, which was not checked because the GitHub API rate limit is spent; wait for the limit to reset, or run with a token that has quota left (GITHUB_TOKEN, or `gh auth login` when no token is set)"}
 }
 
 # An envelope from a builder that predates pin resolution carries no

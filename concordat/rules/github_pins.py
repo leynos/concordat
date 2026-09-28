@@ -70,6 +70,7 @@ class GithubPinResolver:
         """
         known = self._answers.get((repository, sha))
         if known is not None:
+            _logger.debug("reused the answer for action pin %s@%s", repository, sha)
             return known
         started = time.perf_counter()
         resolution = self._lookup(repository, sha)

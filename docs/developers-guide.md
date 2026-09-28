@@ -639,13 +639,16 @@ Pin resolution is split so that building an envelope stays a query:
   tests reach the local double in `tests/helpers/github_api.py`.
 
 The command authenticates with `GITHUB_TOKEN` or the concordat credentials, and
-otherwise with `gh auth token` (`cli._gh_cli_token`, which returns `None`
-rather than failing when `gh` is missing, logged out or slow). The shared
-`GithubClient` raises `GithubRateLimitError`, a `GithubForbiddenError`, for a
-429 or a 403 with `X-RateLimit-Remaining: 0`; the adapter records it as an
-unresolved pin with `rate_limited: true`, and PD-006 reports that apart from an
-unknown pin. `GithubPinResolver` keeps every answer for its own lifetime, so a
-pin repeated in one run costs one lookup.
+otherwise with `gh auth token --hostname`, for the host `cli._github_host`
+derives from `--github-api-url` (`api.github.com` is `github.com`), so a token
+never reaches a host it was not issued for. `cli._gh_cli_token` returns `None`,
+and logs why at debug level, when `gh` is missing, logged out or slow. The
+shared `GithubClient` raises `GithubRateLimitError`, a `GithubForbiddenError`,
+for a 429 or a 403 with `X-RateLimit-Remaining: 0`; the adapter records it as
+an unresolved pin with `rate_limited: true`, and PD-006 reports that apart from
+an unknown pin, naming the remedy. `GithubPinResolver` keeps every answer for
+its own lifetime, so a pin repeated in one run costs one lookup, and logs each
+reuse at debug level.
 
 Regenerate the Markdown fixtures with the `makeutil` release CI pins, not
 whichever `makeutil` is first on `PATH`: a newer build reports some Makefiles
@@ -654,6 +657,7 @@ into a scratch directory with the values from `.github/workflows/ci.yml`, then
 put it first on `PATH`:
 
 ```shell
+rm -f .makeutil-pin/path  # the installer appends to it
 MAKEUTIL_VERSION=0.1.0 \
 MAKEUTIL_ASSET=makeutil-x86_64-unknown-linux-musl \
 MAKEUTIL_SHA256=99dd28a138dbe07e88e4dc5dd3954e6b29b46cc959635311d326cb537253115d \

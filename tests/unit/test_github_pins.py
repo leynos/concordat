@@ -7,10 +7,13 @@ body shape the adapter translates is exercised without the network.
 
 from __future__ import annotations
 
+import itertools
 import typing as typ
 
 import pytest
 import requests
+from hypothesis import given
+from hypothesis import strategies as st
 
 from concordat.auditor.github import GithubClient
 from concordat.rules.action_pins import commit_pin, tag_pin
@@ -272,3 +275,32 @@ def test_each_pin_is_looked_up_once_per_resolver(
     asked = list(session.requested)
     assert resolver(ACTION, sha) == first
     assert session.requested == asked
+
+
+_REPOSITORIES: typ.Final = ("o/one", "o/two", "p/one")
+_SHAS: typ.Final = (COMMIT, TAG_OBJECT, "0" * 40)
+
+
+@given(
+    st.lists(
+        st.tuples(st.sampled_from(_REPOSITORIES), st.sampled_from(_SHAS)), max_size=20
+    )
+)
+def test_each_repository_and_pin_is_looked_up_once_in_any_order(
+    calls: list[tuple[str, str]],
+) -> None:
+    """Memoization is per `(repository, sha)`, whatever the call order.
+
+    Repeated and interleaved pairs cost one lookup each; the same SHA in
+    another repository is a different pair and is looked up on its own.
+    """
+    routes: dict[str, _Response | Exception] = {
+        f"/repos/{repository}/git/commits/{sha}": _Response(200, {"sha": sha})
+        for repository in _REPOSITORIES
+        for sha in _SHAS
+    }
+    resolver, session = _resolver(routes)
+    answers = list(itertools.starmap(resolver, calls))
+    assert answers == [commit_pin(sha) for _, sha in calls]
+    expected = {f"/repos/{repository}/git/commits/{sha}" for repository, sha in calls}
+    assert sorted(session.requested) == sorted(expected)

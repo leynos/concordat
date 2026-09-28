@@ -942,7 +942,7 @@ deny contains f if {
 	pin_rate_limited(step)
 	f := finding(
 		"PD-006", "indeterminate", workflow.path, 0,
-		sprintf("job %q pins %s to %s, which was not checked because the GitHub API rate limit is spent; set GITHUB_TOKEN or log in with `gh auth login`, then run the rule again", [job_id, markdownlint_action, action_ref(step)]),
+		sprintf("job %q pins %s to %s, which was not checked because the GitHub API rate limit is spent; wait for the limit to reset, or run with a token that has quota left (GITHUB_TOKEN, or `gh auth login` when no token is set)", [job_id, markdownlint_action, action_ref(step)]),
 	)
 }
 

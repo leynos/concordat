@@ -229,10 +229,11 @@ def test_the_gh_cli_token_authenticates_when_no_token_is_configured(
     mocker: pytest_mock.MockFixture,
 ) -> None:
     """Without GITHUB_TOKEN, the lookups carry the token `gh auth token` gives."""
-    mocker.patch.object(cli, "_gh_cli_token", return_value="gho-fixture")
+    token = mocker.patch.object(cli, "_gh_cli_token", return_value="gho-fixture")
     returncode, _ = _run("compliant", tmp_path, github, capsys)
     assert returncode == 0
     assert github.authorizations == ["Bearer gho-fixture"]
+    token.assert_called_once_with("127.0.0.1")
 
 
 @pytest.mark.timeout(120)
@@ -247,7 +248,9 @@ def test_a_rate_limited_lookup_is_reported_as_such(
     assert returncode == 1, document
     [(verdict, message)] = _pd006(document)
     assert verdict == "indeterminate", message
-    assert "the GitHub API rate limit is spent; set GITHUB_TOKEN" in message, message
+    assert (
+        "the GitHub API rate limit is spent; wait for the limit to reset" in message
+    ), message
 
 
 @pytest.mark.parametrize(
@@ -278,5 +281,21 @@ def test_the_gh_cli_token_is_read_or_skipped(
         run.side_effect = completed
     else:
         run.return_value = completed
-    assert cli._gh_cli_token() == expected
-    assert run.call_args.args[0] == ["gh", "auth", "token"]
+    assert cli._gh_cli_token("github.com") == expected
+    assert run.call_args.args[0] == ["gh", "auth", "token", "--hostname", "github.com"]
+
+
+@pytest.mark.parametrize(
+    ("api_url", "host"),
+    [
+        pytest.param("https://api.github.com", "github.com", id="github.com"),
+        pytest.param("https://api.github.com/", "github.com", id="trailing-slash"),
+        pytest.param(
+            "https://ghe.example.com/api/v3", "ghe.example.com", id="enterprise"
+        ),
+        pytest.param("http://127.0.0.1:8123", "127.0.0.1", id="loopback"),
+    ],
+)
+def test_the_token_host_follows_the_api_root(api_url: str, host: str) -> None:
+    """`gh` is asked for the token of the host the API root belongs to."""
+    assert cli._github_host(api_url) == host

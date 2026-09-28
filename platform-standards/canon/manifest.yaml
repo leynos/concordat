@@ -96,7 +96,7 @@ artifacts:
       check-fmt targets, PD-005 the baseline markdownlint configuration, and
       PD-006 the markdownlint-cli2 action in CI, pinned to a commit rather
       than an annotated tag object.
-    sha256: 8223ff4dce3b358aada734e2a12b9c89bd8bc881b0ea18eb3ba296529103cd2e
+    sha256: 5f8a1080030cbc34e53844868ff768c50d2d3991b969e9feac7bcba4ce0c6f5b
   - id: lint-rule-markdown-formatting-baseline-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/markdown-formatting-baseline/rule.yaml
