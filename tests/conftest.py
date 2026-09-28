@@ -11,6 +11,8 @@ import subprocess
 import pygit2
 import pytest
 
+from tests.helpers.github_api import FakeGithubApi, serve
+
 
 @dataclasses.dataclass
 class _Expectation:
@@ -179,6 +181,21 @@ def _isolated_xdg_bases(
     monkeypatch.setenv("XDG_CONFIG_HOME", str(base / "config"))
     monkeypatch.setenv("XDG_CACHE_HOME", str(base / "cache"))
     monkeypatch.setenv("XDG_STATE_HOME", str(base / "state"))
+
+
+@pytest.fixture
+def fake_github_api(monkeypatch: pytest.MonkeyPatch) -> cabc.Iterator[FakeGithubApi]:
+    """Serve a GitHub REST API double on a loopback port.
+
+    `GITHUB_TOKEN` is cleared so no real token is sent to the double.
+
+    Yields
+    ------
+    FakeGithubApi
+        The running double, answering from its initially empty routes.
+    """
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    yield from serve(FakeGithubApi())
 
 
 @pytest.fixture

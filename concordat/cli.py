@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import os
 import pathlib
 import sys
@@ -10,6 +11,7 @@ import typing as typ
 from cyclopts import App, Parameter
 
 from . import credentials, xdg
+from .auditor.github import DEFAULT_API_URL, GithubClient
 from .enrol import disenrol_repositories, enrol_repositories
 from .errors import ConcordatError, OperationalRuleError
 from .estate import (
@@ -330,11 +332,18 @@ def rule_run(
         typ.Literal["table", "json"],
         Parameter(name="--format"),
     ] = "table",
+    github_api_url: typ.Annotated[
+        str,
+        Parameter(name="--github-api-url"),
+    ] = DEFAULT_API_URL,
 ) -> int:
     """Audit a local checkout against a canon lint rule package.
 
     Exit codes: 0 compliant; 1 at least one finding (including
     indeterminate verdicts, which fail closed); 2 operational failure.
+
+    The Markdown package asks the GitHub API at *github_api_url* what each
+    pinned action SHA names; the client is built only if a pin needs it.
 
     Returns
     -------
@@ -343,11 +352,41 @@ def rule_run(
 
     """
     from .rules import render_json, render_table, run_rule
+    from .rules.github_pins import GithubPinResolver
+    from .rules.packages import default_envelope_builder, resolving_pins
 
-    result = run_rule(rule_id, repo)
+    resolver = GithubPinResolver(functools.partial(_pin_client, github_api_url))
+    builder = resolving_pins(default_envelope_builder, resolver)
+    result = run_rule(rule_id, repo, envelope_builder=builder)
     rendered = render_json(result) if output_format == "json" else render_table(result)
     print(rendered)
     return result.exit_code
+
+
+def _pin_client(api_url: str) -> GithubClient:
+    """Build the GitHub client pin resolution uses, with the configured token.
+
+    An unreadable or insecure credentials file means the audit cannot run as
+    configured, so it is an operational failure rather than a finding.
+
+    Returns
+    -------
+    GithubClient
+        A client for *api_url*, authenticated when a token is configured.
+
+    Raises
+    ------
+    OperationalRuleError
+        If the GitHub credentials cannot be read.
+    """
+    try:
+        token = credentials.github_token()
+    except ConcordatError as error:
+        message = f"cannot read the GitHub credentials: {error}"
+        raise OperationalRuleError(
+            message, operation="read-github-credentials"
+        ) from error
+    return GithubClient(token=token, api_url=api_url)
 
 
 artefact_app.command(rule_app, name="rule")

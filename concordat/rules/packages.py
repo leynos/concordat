@@ -23,10 +23,8 @@ import typing as typ
 from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
-from concordat import credentials
 from concordat.errors import OperationalRuleError
 
-from .action_pins import PinResolution, PinResolver, github_resolver
 from .codescene_coverage_envelope import (
     ENVELOPE_KIND as COVERAGE_ENVELOPE_KIND,
 )
@@ -45,11 +43,18 @@ from .envelope import (
     build_envelope,
 )
 from .fs_probe import probe_file
+from .markdown_envelope import (
+    DEFAULT_MARKDOWNLINT_ACTION,
+    MarkdownEnvelope,
+    build_markdown_envelope,
+    with_action_pins,
+)
 from .markdown_envelope import ENVELOPE_KIND as MARKDOWN_ENVELOPE_KIND
-from .markdown_envelope import MarkdownEnvelope, build_markdown_envelope
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+
+    from .action_pins import PinResolver
 
 type RuleEnvelope = (
     PolicyEnvelope
@@ -260,26 +265,6 @@ def _makefile_envelope(
     return build_envelope(checkout)
 
 
-@functools.cache
-def _github_pin_resolver() -> PinResolver:
-    """Return the one GitHub-backed pin resolver this process uses.
-
-    Built on first use, so a checkout with no pinned action reads no
-    credentials and opens no session.
-
-    Returns
-    -------
-    PinResolver
-        The process-wide GitHub resolver.
-    """
-    return github_resolver(token=credentials.github_token())
-
-
-def _resolve_pin_online(repository: str, sha: str) -> PinResolution:
-    """Ask GitHub what the pinned *sha* names in *repository*."""
-    return _github_pin_resolver()(repository, sha)
-
-
 def _markdown_envelope(
     checkout: pathlib.Path,
     _parameters: cabc.Mapping[str, object] | None = None,
@@ -288,10 +273,7 @@ def _markdown_envelope(
 
     `markdown-formatting-baseline` reads its tunables through
     `data.parameters` in the policy, as `rust-makefile-baseline` does, so the
-    second argument exists only to give every builder one callable type. The
-    action's full-SHA pins are resolved against GitHub, so PD-006 can refuse
-    an annotated tag object; without network access they stay unresolved and
-    the policy reports them indeterminate.
+    second argument exists only to give every builder one callable type.
 
     Returns
     -------
@@ -299,7 +281,7 @@ def _markdown_envelope(
         The `policy-input/markdown-formatting-baseline` document for
         *checkout*.
     """
-    return build_markdown_envelope(checkout, resolver=_resolve_pin_online)
+    return build_markdown_envelope(checkout)
 
 
 def _coverage_envelope(
@@ -447,3 +429,49 @@ def default_envelope_builder(rule_id: str, checkout: pathlib.Path) -> RuleEnvelo
             resource=rule_id,
         )
     return builder(checkout, rule_parameters(rule_dir))
+
+
+def resolving_pins(
+    builder: EnvelopeResolver, resolver: PinResolver
+) -> EnvelopeResolver:
+    """Return *builder* with a Markdown envelope's action pins resolved.
+
+    Building an envelope is a query over the checkout. Asking what a pinned
+    SHA names may reach the network, so it is a separate step the rule-run
+    command composes explicitly with its own resolver. Other envelope kinds
+    pass through unchanged, and a checkout with no pinned action never calls
+    *resolver*.
+
+    Returns
+    -------
+    EnvelopeResolver
+        A resolver that builds with *builder*, then records the pins.
+    """
+    return functools.partial(_build_resolving_pins, builder, resolver)
+
+
+def _build_resolving_pins(
+    builder: EnvelopeResolver,
+    resolver: PinResolver,
+    rule_id: str,
+    checkout: pathlib.Path,
+) -> RuleEnvelope:
+    """Build *rule_id*'s envelope, resolving pins when it is a Markdown one.
+
+    The action whose pins are resolved is the package's `markdownlint_action`
+    parameter, the one PD-006 judges.
+
+    Returns
+    -------
+    RuleEnvelope
+        The built envelope, with `action_pins` recorded for a Markdown one.
+    """
+    envelope = builder(rule_id, checkout)
+    if envelope.get("kind") != MARKDOWN_ENVELOPE_KIND:
+        return envelope
+    action = rule_parameters(rule_package_dir(rule_id)).get("markdownlint_action")
+    return with_action_pins(
+        typ.cast("MarkdownEnvelope", envelope),
+        resolver,
+        action if isinstance(action, str) else DEFAULT_MARKDOWNLINT_ACTION,
+    )

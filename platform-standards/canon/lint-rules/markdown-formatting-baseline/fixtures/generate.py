@@ -33,6 +33,7 @@ from concordat.rules.action_pins import (
 from concordat.rules.markdown_envelope import (
     MarkdownEnvelope,
     build_markdown_envelope,
+    with_action_pins,
 )
 
 if typ.TYPE_CHECKING:
@@ -212,7 +213,9 @@ def build_fixture_envelope(scenario: Scenario) -> MarkdownEnvelope:
     with tempfile.TemporaryDirectory(prefix="markdown-fixture-") as scratch:
         checkout = Path(scratch)
         lay_out(scenario, checkout)
-        envelope = build_markdown_envelope(checkout, resolver=resolve_from_table)
+        envelope = with_action_pins(
+            build_markdown_envelope(checkout), resolve_from_table
+        )
     envelope["repository"]["path"] = RECORDED_REPOSITORY_PATH
     return envelope
 

@@ -1,32 +1,28 @@
-"""Resolve whether a GitHub Action pin names a commit or an annotated tag.
+"""Facts about whether a GitHub Action pin names a commit or an annotated tag.
 
 A 40-hex `uses:` ref looks like a commit pin whatever object it names. An
 annotated tag has its own object SHA, and GitHub Actions accepts it, so a
 workflow pinned to one runs green while pinning a mutable tag rather than
-the commit the baseline asks for. Only the repository's object store can tell
-the two apart, so the resolution is recorded as a fact in the envelope and the
-policy judges it.
+the commit the baseline asks for. Only the action repository's object store
+can tell the two apart, so the answer is recorded as a fact in the envelope
+and the policy judges it.
 
-Resolution is injected. The production resolver asks the GitHub REST API
-(`git/commits/{sha}`, then `git/tags/{sha}`); the fixture generator and the
-unit tests answer from a fixed table. A resolver never raises: a refusal, an unknown
-object or an unreachable API is reported as an unresolved pin carrying its
-reason, which the policy treats as indeterminate rather than as a pass.
+This module is the transport-free half: the resolution type, the resolver
+signature, and the collection of full-SHA pins from decoded workflows. The
+GitHub adapter lives in `concordat.rules.github_pins`; the rule-run command
+composes it, and tests or the fixture generator pass their own resolvers. A
+resolver never raises for an ordinary failure: a refusal, an unknown object or
+an unreachable API is an unresolved pin carrying its reason, which the policy
+reports as indeterminate rather than as a pass.
 """
 
 from __future__ import annotations
 
-import functools
 import re
 import typing as typ
 
-import requests
-
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
-
-DEFAULT_API_URL: typ.Final = "https://api.github.com"
-REQUEST_TIMEOUT_SECONDS: typ.Final = 15
 
 # A pin the policy treats as a full SHA; anything else is judged as a
 # floating ref by the policy itself and is not resolved here.
@@ -67,98 +63,6 @@ def tag_pin(commit: str | None) -> PinResolution:
 def unresolved_pin(reason: str) -> PinResolution:
     """Return the resolution of a pin whose object could not be determined."""
     return PinResolution(object_type=None, commit=None, error=reason)
-
-
-def _get(
-    session: requests.Session, url: str
-) -> tuple[int | None, dict[str, object] | None, str | None]:
-    """Fetch *url*, returning its status, decoded body and any failure."""
-    try:
-        response = session.get(url, timeout=REQUEST_TIMEOUT_SECONDS)
-    except requests.RequestException as error:
-        return None, None, f"request failed: {error}"
-    if response.status_code != 200:
-        return response.status_code, None, None
-    try:
-        body = response.json()
-    except ValueError as error:
-        return response.status_code, None, f"undecodable response: {error}"
-    return (
-        (response.status_code, body, None)
-        if isinstance(body, dict)
-        else (
-            response.status_code,
-            None,
-            "response is not a JSON object",
-        )
-    )
-
-
-def _peeled_commit(body: dict[str, object]) -> str | None:
-    """Return the commit an annotated tag points at, if it points at one."""
-    target = body.get("object")
-    if not isinstance(target, dict) or target.get("type") != OBJECT_COMMIT:
-        return None
-    sha = target.get("sha")
-    return sha if isinstance(sha, str) else None
-
-
-def github_resolver(
-    *,
-    token: str | None = None,
-    api_url: str = DEFAULT_API_URL,
-    session: requests.Session | None = None,
-) -> PinResolver:
-    """Return a resolver that asks the GitHub REST API what a pin names.
-
-    The commit endpoint is asked first; only when it does not know the SHA is
-    the tag endpoint asked. Any failure along the way, including a refusal or
-    rate limit, leaves the pin unresolved with the reason.
-
-    Returns
-    -------
-    PinResolver
-        A resolver bound to one session, and to *token* when one is given.
-    """
-    client = session or requests.Session()
-    client.headers.update({
-        "Accept": "application/vnd.github+json",
-        "User-Agent": "concordat-rule-runner",
-    })
-    if token:
-        client.headers["Authorization"] = f"Bearer {token}"
-    return functools.partial(_resolve_with, client, api_url.rstrip("/"))
-
-
-# Statuses with which the commit endpoint says it does not know the SHA as a
-# commit, so the tag endpoint is worth asking. Anything else is a refusal.
-_NOT_A_COMMIT: typ.Final = frozenset({404, 422})
-
-
-def _resolve_with(
-    client: requests.Session, base: str, repository: str, sha: str
-) -> PinResolution:
-    """Ask the commit endpoint, then the tag endpoint only if it must."""
-    status, body, failure = _get(client, f"{base}/repos/{repository}/git/commits/{sha}")
-    if failure is not None:
-        return unresolved_pin(failure)
-    if body is not None:
-        return commit_pin(sha)
-    if status not in _NOT_A_COMMIT:
-        return unresolved_pin(f"git/commits/{sha} returned HTTP {status}")
-    return _resolve_tag(client, base, repository, sha)
-
-
-def _resolve_tag(
-    client: requests.Session, base: str, repository: str, sha: str
-) -> PinResolution:
-    """Ask the tag endpoint what *sha* names, peeling a tag to its commit."""
-    status, body, failure = _get(client, f"{base}/repos/{repository}/git/tags/{sha}")
-    if failure is not None:
-        return unresolved_pin(failure)
-    if body is None:
-        return unresolved_pin(f"{sha} is neither a commit nor a tag (HTTP {status})")
-    return tag_pin(_peeled_commit(body))
 
 
 def _steps(workflow: cabc.Mapping[str, object]) -> cabc.Iterator[object]:

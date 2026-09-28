@@ -24,8 +24,8 @@ store knows whether it is a commit or a tag.
 
 ## Decision
 
-The Markdown envelope builder resolves every full-SHA pin of the action through
-the GitHub REST API and records the answer as the envelope's `action_pins` fact:
+The rule-run command resolves every full-SHA pin of the action through the
+GitHub REST API and records the answer as the envelope's `action_pins` fact:
 
 - `git/commits/{sha}` answering means the pin names a commit;
 - otherwise `git/tags/{sha}` answering means the pin names an annotated tag
@@ -39,22 +39,33 @@ the commit it peels to so the fix is a copy. An unresolved pin, or a pin the
 envelope does not mention, is indeterminate: offline, the rule cannot prove the
 pin names a commit, so it does not pass.
 
-Resolution is injected. `build_markdown_envelope` takes a resolver whose
-default leaves every pin unresolved; the production package builder supplies
-the GitHub resolver, built on first use with the token from
-`credentials.github_token()`. The fixture generator and the behavioural tests
-supply a table, so neither reaches the network.
+Resolution happens at the command boundary, not in the envelope query.
+`build_markdown_envelope` reads the checkout and leaves `action_pins` empty;
+`with_action_pins` is the separate step that calls a resolver, and
+`packages.resolving_pins` composes that step onto the envelope builder. The
+domain (`action_pins.py`) knows nothing of HTTP; the adapter (`github_pins.py`)
+reuses the auditor's `GithubClient` rather than a second client.
+`concordat artefact rule run` constructs the adapter with a client factory that
+reads the token on first use, so a checkout with no pin reads no credentials,
+and an unreadable credentials file is an operational failure. The fixture
+generator and the tests supply their own resolvers or point the command at a
+local API double, so none of them reaches GitHub.
 
 ## Consequences
 
 - `concordat artefact rule run markdown-formatting-baseline` makes up to two
   unauthenticated or token-authenticated GET requests per distinct pin. A
   checkout with no pinned action makes none and reads no credentials.
+  `--github-api-url` selects another API root.
 - The rule is no longer a pure function of the checkout for PD-006. An offline
   run reports PD-006 indeterminate on every pinned workflow, which is the
   fail-closed behaviour the package already applies to facts it cannot prove.
 - Envelopes built before this change carry no `action_pins`, and the policy
   reports their pins indeterminate rather than trusting them.
-- `concordat/rules/action_pins.py` is the only place that asks what an action
-  pin names. Another rule package that needs the same fact reuses its resolvers
-  and `resolve_pins` rather than calling the API itself.
+- A caller that builds the envelope without the command step, such as
+  `run_rule` with the default builder, gets every pin indeterminate rather than
+  trusted.
+- `concordat/rules/github_pins.py` is the only place that asks GitHub what an
+  action pin names. Another rule package that needs the same fact composes
+  `resolving_pins` or calls `with_action_pins`, rather than calling the API
+  from its envelope builder.

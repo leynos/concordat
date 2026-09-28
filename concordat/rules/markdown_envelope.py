@@ -22,7 +22,7 @@ from ruamel.yaml.error import YAMLError
 from concordat.errors import OperationalRuleError
 
 from . import fs_probe
-from .action_pins import PinResolution, PinResolver, resolve_pins, unresolved_pin
+from .action_pins import PinResolution, PinResolver, resolve_pins
 from .jsonc import JsoncError, loads_jsonc
 from .makefile_facts import MakeutilReport, inspect_makefile
 
@@ -434,29 +434,19 @@ def _load_workflows(checkout: pathlib.Path, root: pathlib.Path) -> list[Workflow
     ]
 
 
-def _offline(repository: str, sha: str) -> PinResolution:
-    """Leave every pin unresolved when no resolver is supplied."""
-    return unresolved_pin(f"{repository}@{sha} was not resolved: no resolver")
-
-
-def build_markdown_envelope(
-    checkout: pathlib.Path,
-    *,
-    action: str = DEFAULT_MARKDOWNLINT_ACTION,
-    resolver: PinResolver = _offline,
-) -> MarkdownEnvelope:
+def build_markdown_envelope(checkout: pathlib.Path) -> MarkdownEnvelope:
     """Assemble the Markdown formatting policy input for one local checkout.
+
+    This is a query over the checkout: it reads files and runs `makeutil`, and
+    never asks the network anything. `action_pins` is left empty, which the
+    policy reads as "not resolved" and reports indeterminate for every
+    full-SHA pin; `with_action_pins` records the resolutions at the command
+    boundary.
 
     Parameters
     ----------
     checkout:
         Path to the checkout under audit.
-    action:
-        The Markdown lint action whose full-SHA pins are resolved.
-    resolver:
-        Answers whether a pin names a commit or an annotated tag. Without one,
-        every pin is recorded unresolved, which the policy reports as
-        indeterminate rather than compliant.
 
     An `OperationalRuleError` propagates from the fact readers if the root
     `Makefile` cannot be parsed by `makeutil`, a fact file exists but cannot
@@ -476,7 +466,6 @@ def build_markdown_envelope(
     ):
         makefile_report = inspect_makefile(makefile_path).report
     markdownlint = _load_markdownlint_config(checkout, root)
-    workflows = _load_workflows(checkout, root)
     return {
         "schema_version": ENVELOPE_SCHEMA_VERSION,
         "kind": ENVELOPE_KIND,
@@ -490,8 +479,25 @@ def build_markdown_envelope(
         "makefile": makefile_report,
         "markdownlint": markdownlint,
         "alternate_markdownlint_configs": _alternate_configs(checkout),
-        "workflows": workflows,
-        "action_pins": resolve_pins(
-            typ.cast("list[dict[str, object]]", workflows), action, resolver
-        ),
+        "workflows": _load_workflows(checkout, root),
+        "action_pins": {},
     }
+
+
+def with_action_pins(
+    envelope: MarkdownEnvelope,
+    resolver: PinResolver,
+    action: str = DEFAULT_MARKDOWNLINT_ACTION,
+) -> MarkdownEnvelope:
+    """Return a copy of *envelope* recording what each pin of *action* names.
+
+    This is the command step: *resolver* may reach the network. It is called
+    once per distinct full-SHA pin found in the envelope's workflows.
+
+    Returns
+    -------
+    MarkdownEnvelope
+        *envelope* with `action_pins` replaced by the resolutions.
+    """
+    workflows = typ.cast("list[dict[str, object]]", envelope["workflows"])
+    return {**envelope, "action_pins": resolve_pins(workflows, action, resolver)}

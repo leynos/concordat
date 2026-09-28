@@ -1,9 +1,10 @@
-"""Unit tests for resolving what a GitHub Action's full-SHA pin names.
+"""Unit and property tests for collecting and resolving action pins.
 
-`concordat.rules.action_pins` turns the `uses:` refs of a workflow into facts
-the Markdown policy judges: which 40-hex pins the action carries, and whether
-each names a commit, an annotated tag object, or could not be resolved. The
-GitHub resolver is driven through a fake session so no test reaches the API.
+`concordat.rules.action_pins` is the transport-free half of PD-006's pin
+resolution: it finds the full-SHA pins of an action in decoded workflows and
+asks a resolver about each distinct one. `build_markdown_envelope` stays a
+query and `with_action_pins` is the step that calls the resolver; both are
+exercised here without any network.
 """
 
 from __future__ import annotations
@@ -11,31 +12,45 @@ from __future__ import annotations
 import typing as typ
 
 import pytest
-import requests
+from hypothesis import given
+from hypothesis import strategies as st
 
 from concordat.rules.action_pins import (
     PinResolution,
     commit_pin,
-    github_resolver,
     pinned_shas,
     resolve_pins,
     tag_pin,
-    unresolved_pin,
 )
-from concordat.rules.markdown_envelope import build_markdown_envelope
+from concordat.rules.markdown_envelope import build_markdown_envelope, with_action_pins
 
 if typ.TYPE_CHECKING:
     import pathlib
 
 ACTION: typ.Final = "DavidAnson/markdownlint-cli2-action"
+OTHER_ACTION: typ.Final = "actions/checkout"
 COMMIT: typ.Final = "21c1be1b93ad9ed58fa840aacc3f279cde2a72ff"
 TAG_OBJECT: typ.Final = "4580e1612f6407034edd6c0e4e316d725920867b"
-API: typ.Final = "https://api.example.test"
-BEARER: typ.Final = "fixture-bearer"
+
+_HEX: typ.Final = "0123456789abcdef"
+_FULL_SHAS: typ.Final = st.text(alphabet=_HEX, min_size=40, max_size=40)
+# Refs that must never be collected: floating tags, short or long SHAs, and
+# upper-case hexadecimal, which the policy does not treat as a full SHA.
+_OTHER_REFS: typ.Final = st.one_of(
+    st.sampled_from(["v24", "main", "v24.2.0"]),
+    st.text(alphabet=_HEX, min_size=1, max_size=39),
+    st.text(alphabet=_HEX, min_size=41, max_size=44),
+    _FULL_SHAS.map(str.upper).filter(lambda ref: ref != ref.lower()),
+)
+_MALFORMED: typ.Final[tuple[dict[str, object], ...]] = (
+    {"path": "bad.yml", "parsed": None, "error": "undecodable"},
+    {"path": "list.yml", "parsed": {"jobs": []}, "error": None},
+    {"path": "steps.yml", "parsed": {"jobs": {"a": {"steps": "no"}}}, "error": None},
+)
 
 
-def _workflow(*uses: str) -> dict[str, object]:
-    """Return a decoded workflow whose one job runs a step per `uses` ref."""
+def _workflow(*uses: object) -> dict[str, object]:
+    """Return a decoded workflow whose one job runs a step per `uses` value."""
     steps = [{"uses": ref} for ref in uses]
     return {
         "path": "ci.yml",
@@ -44,173 +59,127 @@ def _workflow(*uses: str) -> dict[str, object]:
     }
 
 
-class FakeResponse:
-    """The slice of `requests.Response` the resolver reads."""
-
-    def __init__(self, status_code: int, body: object = None) -> None:
-        """Record the status and the JSON body to return."""
-        self.status_code = status_code
-        self._body = body
-
-    def json(self) -> object:
-        """Return the body, or fail as `requests` does on a non-JSON reply."""
-        if self._body is None:
-            message = "no JSON"
-            raise ValueError(message)
-        return self._body
+def _draw_uses(draw: st.DrawFn, kind: str, expected: set[str]) -> object:
+    """Draw one `uses:` value of *kind*, recording a target pin in *expected*."""
+    if kind == "pin":
+        sha = draw(_FULL_SHAS)
+        expected.add(sha)
+        return f"{ACTION}@{sha}"
+    if kind == "other":
+        return f"{ACTION}@{draw(_OTHER_REFS)}"
+    if kind == "action":
+        return f"{OTHER_ACTION}@{draw(_FULL_SHAS)}"
+    return draw(st.one_of(st.none(), st.integers(), st.just(["x"])))
 
 
-class FakeSession:
-    """Answer GETs from a table keyed by URL and record every request."""
+@st.composite
+def _workflows(draw: st.DrawFn) -> tuple[list[dict[str, object]], set[str]]:
+    """Draw workflows mixing target pins with every shape that must be ignored.
 
-    def __init__(self, replies: dict[str, FakeResponse | Exception]) -> None:
-        """Store the canned replies; an unlisted URL answers 404."""
-        self.headers: dict[str, str] = {}
-        self.replies = replies
-        self.requested: list[str] = []
-
-    def get(self, url: str, *, timeout: float) -> FakeResponse:
-        """Return the canned reply for *url*, raising a canned exception."""
-        assert timeout > 0
-        self.requested.append(url)
-        reply = self.replies.get(url, FakeResponse(404, {"message": "Not Found"}))
-        if isinstance(reply, Exception):
-            raise reply
-        return reply
-
-
-def _commit_url(sha: str) -> str:
-    return f"{API}/repos/{ACTION}/git/commits/{sha}"
+    Returns
+    -------
+    tuple[list[dict[str, object]], set[str]]
+        The workflows, and the set of full-SHA pins of `ACTION` they hold.
+    """
+    expected: set[str] = set()
+    kinds = st.lists(st.sampled_from(["pin", "other", "action", "junk"]), max_size=6)
+    workflows = [
+        _workflow(*(_draw_uses(draw, kind, expected) for kind in draw(kinds)))
+        for _ in range(draw(st.integers(min_value=0, max_value=4)))
+    ]
+    workflows.extend(draw(st.lists(st.sampled_from(_MALFORMED), max_size=3)))
+    return draw(st.permutations(workflows)), expected
 
 
-def _tag_url(sha: str) -> str:
-    return f"{API}/repos/{ACTION}/git/tags/{sha}"
+@given(_workflows())
+def test_pinned_shas_are_exactly_the_sorted_distinct_target_pins(
+    case: tuple[list[dict[str, object]], set[str]],
+) -> None:
+    """Every full-SHA pin of the action is collected once, in sorted order.
+
+    Other actions, floating or malformed refs, non-string `uses:` values and
+    undecodable workflows contribute nothing, whatever their order.
+    """
+    workflows, expected = case
+    assert pinned_shas(workflows, ACTION) == sorted(expected)
 
 
-def _resolve(session: FakeSession, sha: str) -> dict[str, object]:
-    resolver = github_resolver(
-        token=BEARER, api_url=API, session=typ.cast("requests.Session", session)
+@given(st.data())
+def test_pinned_shas_do_not_depend_on_workflow_order(data: st.DataObject) -> None:
+    """Reordering the workflows leaves the collected pins unchanged."""
+    workflows, _ = data.draw(_workflows())
+    shuffled = data.draw(st.permutations(workflows))
+    assert pinned_shas(shuffled, ACTION) == pinned_shas(workflows, ACTION)
+
+
+@given(_workflows())
+def test_resolve_pins_asks_once_per_distinct_pin(
+    case: tuple[list[dict[str, object]], set[str]],
+) -> None:
+    """The resolver sees each distinct pin once, and its answers key the result."""
+    workflows, expected = case
+    asked: list[tuple[str, str]] = []
+
+    def resolver(repository: str, sha: str) -> PinResolution:
+        asked.append((repository, sha))
+        return commit_pin(sha)
+
+    resolved = resolve_pins(workflows, ACTION, resolver)
+    assert sorted(asked) == [(ACTION, sha) for sha in sorted(expected)]
+    assert resolved == {sha: commit_pin(sha) for sha in expected}
+
+
+@pytest.mark.parametrize(
+    "workflow",
+    [
+        pytest.param(_MALFORMED[0], id="undecoded"),
+        pytest.param(_MALFORMED[1], id="jobs-list"),
+        pytest.param(_workflow(f"{ACTION}@{COMMIT.upper()}"), id="uppercase-hex"),
+        pytest.param(_workflow(f"{OTHER_ACTION}@{COMMIT}"), id="other-action"),
+    ],
+)
+def test_malformed_or_non_sha_input_yields_nothing(workflow: dict[str, object]) -> None:
+    """Shapes the policy reports in its own right contribute no pin."""
+    assert pinned_shas([workflow], ACTION) == []
+
+
+def _checkout_pinning(tmp_path: pathlib.Path, *shas: str) -> pathlib.Path:
+    """Return a checkout whose one workflow pins `ACTION` to each of *shas*."""
+    workflows = tmp_path / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    steps = "".join(f"      - uses: {ACTION}@{sha}\n" for sha in shas)
+    (workflows / "ci.yml").write_text(
+        f"jobs:\n  lint:\n    steps:\n{steps}", encoding="utf-8"
     )
-    return dict(resolver(ACTION, sha))
+    return tmp_path
 
 
-class TestPinnedShas:
-    """Only full-SHA refs of the named action are collected."""
-
-    def test_collects_distinct_full_sha_pins_sorted(self) -> None:
-        """Repeated pins appear once; floating refs and other actions do not."""
-        workflows = [
-            _workflow(
-                f"{ACTION}@{TAG_OBJECT}", f"{ACTION}@v24", "actions/checkout@" + COMMIT
-            ),
-            _workflow(f"{ACTION}@{COMMIT}", f"{ACTION}@{TAG_OBJECT}"),
-        ]
-        assert pinned_shas(workflows, ACTION) == [COMMIT, TAG_OBJECT]
-
-    @pytest.mark.parametrize(
-        "workflow",
-        [
-            pytest.param({"path": "x", "parsed": None, "error": "bad"}, id="undecoded"),
-            pytest.param(
-                {"path": "x", "parsed": {"jobs": []}, "error": None}, id="jobs-list"
-            ),
-            pytest.param(
-                {
-                    "path": "x",
-                    "parsed": {"jobs": {"a": {"steps": "no"}}},
-                    "error": None,
-                },
-                id="steps-string",
-            ),
-            pytest.param(_workflow(f"{ACTION}@{COMMIT.upper()}"), id="uppercase-hex"),
-        ],
-    )
-    def test_malformed_or_non_sha_input_yields_nothing(
-        self, workflow: dict[str, object]
-    ) -> None:
-        """Shapes the policy reports in its own right contribute no pin."""
-        assert pinned_shas([workflow], ACTION) == []
+def test_building_the_envelope_resolves_nothing(tmp_path: pathlib.Path) -> None:
+    """The builder is a query: pins are left for the command step to resolve."""
+    envelope = build_markdown_envelope(_checkout_pinning(tmp_path, COMMIT))
+    assert envelope["action_pins"] == {}
 
 
-def test_resolve_pins_keys_each_pin_by_sha() -> None:
-    """Every collected pin is resolved once and keyed by its SHA."""
+def test_with_action_pins_records_the_resolver_answers(tmp_path: pathlib.Path) -> None:
+    """The command step asks about each pin and records the answers, copying."""
+    envelope = build_markdown_envelope(_checkout_pinning(tmp_path, COMMIT, TAG_OBJECT))
     answers = {COMMIT: commit_pin(COMMIT), TAG_OBJECT: tag_pin(COMMIT)}
+    resolved = with_action_pins(envelope, lambda _repository, sha: answers[sha])
+    assert resolved["action_pins"] == answers
+    assert envelope["action_pins"] == {}
+
+
+def test_with_action_pins_reads_the_named_action(tmp_path: pathlib.Path) -> None:
+    """A non-default action is the one whose pins are collected and asked about."""
+    envelope = build_markdown_envelope(_checkout_pinning(tmp_path, COMMIT))
     asked: list[str] = []
 
     def resolver(repository: str, sha: str) -> PinResolution:
-        assert repository == ACTION
-        asked.append(sha)
-        return answers[sha]
+        asked.append(repository)
+        return commit_pin(sha)
 
-    workflows = [
-        _workflow(f"{ACTION}@{COMMIT}", f"{ACTION}@{TAG_OBJECT}"),
-        _workflow(f"{ACTION}@{COMMIT}"),
-    ]
-    assert resolve_pins(workflows, ACTION, resolver) == answers
-    assert asked == [COMMIT, TAG_OBJECT]
-
-
-class TestGithubResolver:
-    """The REST resolver tells commits from tag objects and never raises."""
-
-    def test_commit_is_resolved_without_asking_for_a_tag(self) -> None:
-        """A SHA the commit endpoint knows is a commit pin."""
-        session = FakeSession({_commit_url(COMMIT): FakeResponse(200, {"sha": COMMIT})})
-        assert _resolve(session, COMMIT) == commit_pin(COMMIT)
-        assert session.requested == [_commit_url(COMMIT)]
-        assert session.headers["Authorization"] == f"Bearer {BEARER}"
-
-    def test_tag_object_is_peeled_to_its_commit(self) -> None:
-        """A SHA only the tag endpoint knows is a tag naming its target."""
-        body = {"object": {"type": "commit", "sha": COMMIT}}
-        session = FakeSession({_tag_url(TAG_OBJECT): FakeResponse(200, body)})
-        assert _resolve(session, TAG_OBJECT) == tag_pin(COMMIT)
-
-    def test_tag_of_a_tag_does_not_claim_a_commit(self) -> None:
-        """A tag whose target is another tag records no peeled commit."""
-        body = {"object": {"type": "tag", "sha": COMMIT}}
-        session = FakeSession({_tag_url(TAG_OBJECT): FakeResponse(200, body)})
-        assert _resolve(session, TAG_OBJECT) == tag_pin(None)
-
-    def test_unknown_object_is_unresolved(self) -> None:
-        """A SHA neither endpoint knows is unresolved, not a commit."""
-        resolution = _resolve(FakeSession({}), TAG_OBJECT)
-        assert resolution["object_type"] is None
-        assert "neither a commit nor a tag" in str(resolution["error"])
-
-    @pytest.mark.parametrize(
-        "reply",
-        [
-            pytest.param(FakeResponse(403, {"message": "rate limited"}), id="refused"),
-            pytest.param(requests.ConnectionError("offline"), id="offline"),
-            pytest.param(FakeResponse(200, None), id="undecodable"),
-            pytest.param(
-                FakeResponse(200, ["not", "an", "object"]), id="not-an-object"
-            ),
-        ],
-    )
-    def test_failure_leaves_the_pin_unresolved(
-        self, reply: FakeResponse | Exception
-    ) -> None:
-        """A refusal or transport failure is reported, never taken as a commit."""
-        session = FakeSession({_commit_url(COMMIT): reply})
-        resolution = _resolve(session, COMMIT)
-        assert resolution["object_type"] is None, resolution
-        assert resolution["error"], resolution
-        assert session.requested == [_commit_url(COMMIT)]
-
-
-def test_envelope_without_a_resolver_records_pins_unresolved(
-    tmp_path: pathlib.Path,
-) -> None:
-    """The builder's default resolver fails closed rather than trusting a pin."""
-    workflows = tmp_path / ".github" / "workflows"
-    workflows.mkdir(parents=True)
-    (workflows / "ci.yml").write_text(
-        f"jobs:\n  lint:\n    steps:\n      - uses: {ACTION}@{COMMIT}\n",
-        encoding="utf-8",
-    )
-    envelope = build_markdown_envelope(tmp_path)
-    assert envelope["action_pins"] == {
-        COMMIT: unresolved_pin(f"{ACTION}@{COMMIT} was not resolved: no resolver")
+    assert with_action_pins(envelope, resolver, OTHER_ACTION)["action_pins"] == {}
+    assert with_action_pins(envelope, resolver, ACTION)["action_pins"] == {
+        COMMIT: commit_pin(COMMIT)
     }
+    assert asked == [ACTION]

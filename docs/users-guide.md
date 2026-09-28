@@ -532,7 +532,9 @@ cache directories, and reports:
   GitHub API what each pin names, reports a tag object as noncompliant with the
   commit to pin instead, and reports PD-006 as `indeterminate` when it cannot
   reach the API. Set `GITHUB_TOKEN`, or configure concordat credentials, to
-  avoid the unauthenticated rate limit.
+  avoid the unauthenticated rate limit; pass `--github-api-url` to use another
+  API root, such as a GitHub Enterprise Server. An unreadable credentials file
+  stops the run with exit code 2.
 
 The Makefile checks expand Make variables that are assigned exactly once and
 unconditionally, so `$(MDTABLEFIX) --check $(MDTABLEFIX_SELECT)` is audited

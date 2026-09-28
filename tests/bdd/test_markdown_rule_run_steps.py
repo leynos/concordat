@@ -12,16 +12,15 @@ import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from concordat import cli
-from concordat.rules import packages
+from tests.helpers.github_api import git_object_routes
 
 from .conftest import RunResult
 
 if typ.TYPE_CHECKING:
     import types
 
-    import pytest_mock
-
     from tests.conftest import CmdMox
+    from tests.helpers.github_api import FakeGithubApi
 
 scenarios("features/markdown_rule_run.feature")
 
@@ -102,22 +101,11 @@ def checkout(tmp_path: pathlib.Path) -> pathlib.Path:
         'a Markdown checkout laid out from the "{scenario}" fixture scenario'
     )
 )
-def given_markdown_checkout(
-    checkout: pathlib.Path, scenario: str, mocker: pytest_mock.MockFixture
-) -> None:
-    """Lay the named generator scenario out as the checkout under audit.
-
-    Pins resolve from the generator's table, as the recorded envelopes did,
-    so the run never reaches the GitHub API.
-    """
+def given_markdown_checkout(checkout: pathlib.Path, scenario: str) -> None:
+    """Lay the named generator scenario out as the checkout under audit."""
     generate = _load_generator()
     checkout.mkdir()
     generate.lay_out(generate.SCENARIOS[scenario], checkout)
-    mocker.patch.object(
-        packages,
-        "_resolve_pin_online",
-        generate.resolve_from_table,
-    )
 
 
 @given(parsers.cfparse('makeutil reports the Markdown "{fixture}" fixture facts'))
@@ -187,13 +175,33 @@ def when_run_rule(
     cmd_mox: CmdMox,
     cli_invocation: dict[str, RunResult],
     capsys: pytest.CaptureFixture[str],
+    fake_github_api: FakeGithubApi,
 ) -> None:
-    """Invoke the CLI and capture its output and exit status."""
+    """Invoke the CLI and capture its output and exit status.
+
+    Pins resolve against a local GitHub double that answers as the real API
+    does for v24.2.0, so the run never leaves the host.
+    """
+    generate = _load_generator()
+    fake_github_api.routes.update(
+        git_object_routes(
+            "DavidAnson/markdownlint-cli2-action",
+            commits=[generate.V24_2_0_COMMIT],
+            tags={generate.V24_2_0_TAG_OBJECT: generate.V24_2_0_COMMIT},
+        )
+    )
     cmd_mox.replay()
     try:
-        returncode = cli.main(
-            ["artefact", "rule", "run", RULE_ID, "--repo", str(checkout)],
-        )
+        returncode = cli.main([
+            "artefact",
+            "rule",
+            "run",
+            RULE_ID,
+            "--repo",
+            str(checkout),
+            "--github-api-url",
+            fake_github_api.url,
+        ])
     except SystemExit as exc:
         returncode = int(exc.code or 0)
     cmd_mox.verify()

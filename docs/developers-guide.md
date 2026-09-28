@@ -606,8 +606,8 @@ facts reports a compliance it never established. Three kinds exist:
   brings the checkout into scope. `markdown-formatting-baseline` is not
   registered by identifier: it declares this kind, which is the ordinary shape
   for a package bringing its own builder. It also carries `action_pins`, what
-  each full-SHA pin of `DavidAnson/markdownlint-cli2-action` names, from the
-  resolver the builder is given
+  each full-SHA pin of `DavidAnson/markdownlint-cli2-action` names. The builder
+  leaves it empty; the rule-run command fills it in a separate step
   ([ADR-002](adr-002-resolve-action-pins-against-github.md)).
 
 The Markdown package's `fixtures/generate.py` lays each scenario out as a
@@ -615,18 +615,33 @@ temporary checkout and records what `build_markdown_envelope` produces, so the
 checked-in envelopes are exactly the production builder's output;
 `tests/unit/test_markdown_fixture_generator.py` fails if they drift.
 
-`concordat/rules/action_pins.py` owns the question "what does this action pin
-name?". A resolver is a `(repository, sha) -> PinResolution` callable that
-never raises; `github_resolver` is the production one and asks the REST API.
-`build_markdown_envelope` defaults to a resolver that resolves nothing, so a
-caller that supplies none gets indeterminate pins rather than trusted ones.
-Only the package builder in `packages.py` constructs the GitHub resolver,
-lazily, through `_resolve_pin_online`. Offline resolvers live with their
-callers, not in the package: the fixture generator answers from its `PIN_TABLE`
-through `resolve_from_table`, which the behavioural steps also patch in, and
-the unit tests pass their own. None of them reaches the network. A rule package
-that needs the same fact reuses `github_resolver` and `resolve_pins` rather
-than calling the API itself.
+Pin resolution is split so that building an envelope stays a query:
+
+- `concordat/rules/action_pins.py` is the transport-free domain: the
+  `PinResolution` fact, the `(repository, sha) -> PinResolution` resolver
+  signature, and `pinned_shas` and `resolve_pins`, which collect the distinct
+  full-SHA pins of an action and ask a resolver about each once.
+- `concordat/rules/github_pins.py` is the adapter. `GithubPinResolver` asks
+  the shared `concordat.auditor.github.GithubClient` for `git/commits/{sha}`,
+  then `git/tags/{sha}`, and translates every reply, including refusals,
+  transport failures and malformed bodies, into a resolution. It builds its
+  client on the first lookup, so a checkout with no pinned action reads no
+  credentials.
+- `build_markdown_envelope` never calls a resolver and leaves `action_pins`
+  empty. `markdown_envelope.with_action_pins` is the command step that calls
+  one, and `packages.resolving_pins` composes it onto any envelope builder,
+  reading the action from the package's `markdownlint_action` parameter.
+- `concordat artefact rule run` is the only production caller. It builds the
+  `GithubPinResolver` with a client factory that reads the GitHub token, and
+  turns an unreadable credentials file into an operational failure (exit 2).
+  `--github-api-url` points it at another API root, which is how the end-to-end
+  tests reach the local double in `tests/helpers/github_api.py`.
+
+Offline resolvers live with their callers: the fixture generator answers from
+its `PIN_TABLE` through `resolve_from_table`, and the unit tests pass their
+own. A rule package that needs the same fact composes `resolving_pins` or calls
+`with_action_pins` with the command's resolver, rather than calling the API
+from its envelope builder.
 
 ### Choosing the envelope for a package
 

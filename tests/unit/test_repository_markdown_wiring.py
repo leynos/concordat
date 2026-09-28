@@ -24,7 +24,7 @@ from ruamel.yaml import YAML
 
 from concordat.rules import runner
 from concordat.rules.action_pins import PinResolution, commit_pin, unresolved_pin
-from concordat.rules.markdown_envelope import build_markdown_envelope
+from concordat.rules.markdown_envelope import build_markdown_envelope, with_action_pins
 
 _RULE_ID: typ.Final = "markdown-formatting-baseline"
 REPO_ROOT: typ.Final = pathlib.Path(__file__).resolve().parents[2]
@@ -104,7 +104,6 @@ def _step_using(job: dict[str, object], action: str) -> dict[str, object]:
     return matches[0]
 
 
-@pytest.mark.timeout(120)
 def _resolve_offline(repository: str, sha: str) -> PinResolution:
     """Answer that the v24.2.0 commit is a commit, and nothing else."""
     if sha == MARKDOWNLINT_ACTION_COMMIT:
@@ -112,6 +111,7 @@ def _resolve_offline(repository: str, sha: str) -> PinResolution:
     return unresolved_pin(f"{repository}@{sha} is not the v24.2.0 commit")
 
 
+@pytest.mark.timeout(120)
 def test_repository_satisfies_its_own_markdown_baseline() -> None:
     """Running the shipped rule over this checkout reports no findings.
 
@@ -122,7 +122,7 @@ def test_repository_satisfies_its_own_markdown_baseline() -> None:
     `test_ci_pins_the_action_to_its_v24_2_0_commit` holds the workflow to the
     one SHA the offline resolver knows.
     """
-    envelope = build_markdown_envelope(REPO_ROOT, resolver=_resolve_offline)
+    envelope = with_action_pins(build_markdown_envelope(REPO_ROOT), _resolve_offline)
     results = runner._invoke_conftest(_RULE_ID, envelope)
     findings = runner._findings_from_results(results)
     assert list(findings) == [], findings

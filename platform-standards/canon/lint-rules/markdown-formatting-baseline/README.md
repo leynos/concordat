@@ -96,13 +96,13 @@ rule or `include` in the closure, a recovered parse, or a dynamic recursive
 Make invocation is reported as `indeterminate` rather than guessed. Flags
 hidden behind an unresolvable variable are likewise indeterminate.
 
-The pin's object type is not visible in the checkout. The envelope builder asks
-the GitHub REST API what each full-SHA pin of the action names
-(`git/commits/{sha}`, then `git/tags/{sha}`) and records the answer under
-`action_pins`; the policy judges that fact. Offline, refused, or unknown pins
-are recorded unresolved, and an envelope without the fact is treated the same,
-so a run without network access reports PD-006 indeterminate rather than
-passing. See
+The pin's object type is not visible in the checkout. The envelope builder
+leaves `action_pins` empty; `concordat artefact rule run` then asks the GitHub
+REST API what each full-SHA pin of the action names (`git/commits/{sha}`, then
+`git/tags/{sha}`) and records the answer there, and the policy judges that
+fact. Offline, refused, or unknown pins are recorded unresolved, and an
+envelope without the fact is treated the same, so a run without network access
+reports PD-006 indeterminate rather than passing. See
 [ADR-002](../../../../docs/adr-002-resolve-action-pins-against-github.md).
 
 Workflow facts carry no line numbers, so PD-006 findings cite line `0`. A job
