@@ -321,5 +321,12 @@
       },
       "error": null
     }
-  ]
+  ],
+  "action_pins": {
+    "21c1be1b93ad9ed58fa840aacc3f279cde2a72ff": {
+      "object_type": "commit",
+      "commit": "21c1be1b93ad9ed58fa840aacc3f279cde2a72ff",
+      "error": null
+    }
+  }
 }

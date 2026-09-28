@@ -151,6 +151,8 @@ For the full story, head to the docs:
   workflows
 - [ADR-001: Four-tier Python linting](docs/adr-001-four-tier-python-linting.md)
   – Lint architecture and dead-code policy
+- [ADR-002: Resolve action pins against GitHub](docs/adr-002-resolve-action-pins-against-github.md)
+  – PD-006 pin object types and the rule run's GitHub boundary
 - [OpenTofu coding standards](docs/opentofu-coding-standards.md) – House rules
   for writing OpenTofu code
 

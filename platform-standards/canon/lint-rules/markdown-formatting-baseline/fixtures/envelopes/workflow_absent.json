@@ -292,5 +292,6 @@
     "error": null
   },
   "alternate_markdownlint_configs": [],
-  "workflows": []
+  "workflows": [],
+  "action_pins": {}
 }

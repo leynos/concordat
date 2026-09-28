@@ -282,6 +282,42 @@ test_narrow_globs_are_noncompliant if {
 	messages(findings, "PD-006") == {"job \"lint-test\" must pass globs: \"**/*.md\" to DavidAnson/markdownlint-cli2-action"}
 }
 
+# A 40-hex pin to an annotated tag object passes the SHA-shape check and runs
+# on Actions, but pins a mutable tag. The finding names the commit to use.
+test_tag_object_pin_is_noncompliant_and_names_the_peeled_commit if {
+	findings := policy.deny with input as data.fixtures.workflow_tag_object
+	profile(findings) == {["PD-006", "noncompliant"]}
+	messages(findings, "PD-006") == {"job \"lint-test\" pins DavidAnson/markdownlint-cli2-action to 4580e1612f6407034edd6c0e4e316d725920867b, an annotated tag object, not a commit; pin the commit it peels to, 21c1be1b93ad9ed58fa840aacc3f279cde2a72ff"}
+}
+
+tag_without_commit := json.patch(data.fixtures.workflow_tag_object, [{
+	"op": "replace",
+	"path": "/action_pins/4580e1612f6407034edd6c0e4e316d725920867b/commit",
+	"value": null,
+}])
+
+test_tag_object_pin_that_does_not_peel_to_a_commit_is_noncompliant if {
+	findings := policy.deny with input as tag_without_commit
+	profile(findings) == {["PD-006", "noncompliant"]}
+	messages(findings, "PD-006") == {"job \"lint-test\" pins DavidAnson/markdownlint-cli2-action to 4580e1612f6407034edd6c0e4e316d725920867b, an annotated tag object, not a commit; the tag does not peel to a commit"}
+}
+
+# Offline, refused, or unknown: the policy cannot prove the pin names a
+# commit, so it reports indeterminate rather than passing.
+test_unresolved_pin_is_indeterminate if {
+	findings := policy.deny with input as data.fixtures.workflow_pin_unresolved
+	profile(findings) == {["PD-006", "indeterminate"]}
+	messages(findings, "PD-006") == {"job \"lint-test\" pins DavidAnson/markdownlint-cli2-action to 0123456789abcdef0123456789abcdef01234567, which could not be resolved to a commit: DavidAnson/markdownlint-cli2-action@0123456789abcdef0123456789abcdef01234567 is not in the resolution table"}
+}
+
+# An envelope from a builder that predates pin resolution carries no
+# `action_pins`; its commit-shaped pin is not taken on trust.
+test_envelope_without_pin_resolution_is_indeterminate if {
+	findings := policy.deny with input as object.remove(data.fixtures.compliant, ["action_pins"])
+	profile(findings) == {["PD-006", "indeterminate"]}
+	messages(findings, "PD-006") == {"job \"lint-test\" pins DavidAnson/markdownlint-cli2-action to 21c1be1b93ad9ed58fa840aacc3f279cde2a72ff, which could not be resolved to a commit: the envelope records no resolution for it"}
+}
+
 test_no_markdown_lint_in_any_workflow_is_noncompliant if {
 	findings := policy.deny with input as data.fixtures.workflow_none
 	profile(findings) == {["PD-006", "noncompliant"]}

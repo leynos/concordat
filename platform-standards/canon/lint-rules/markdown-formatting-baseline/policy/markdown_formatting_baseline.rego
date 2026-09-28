@@ -879,6 +879,55 @@ action_pinned(step) if regex.match(`^[0-9a-f]{40}$`, action_ref(step))
 
 action_globs(step) := object.get(object.get(step, "with", {}), "globs", null)
 
+# A 40-hex ref only looks like a commit. An annotated tag object has a SHA of
+# its own, and Actions runs it, so the envelope records what each full-SHA pin
+# names in the action's repository. A pin the builder could not resolve
+# (offline, refused, unknown object), or one the envelope does not mention,
+# is indeterminate: the policy cannot prove it names a commit.
+pin_resolution(step) := object.get(object.get(input, "action_pins", {}), action_ref(step), null)
+
+pin_names_tag(step) if pin_resolution(step).object_type == "tag"
+
+pin_unresolved(step) if pin_resolution(step) == null
+
+pin_unresolved(step) if pin_resolution(step).object_type == null
+
+pin_unresolved_reason(step) := reason if {
+	reason := pin_resolution(step).error
+	is_string(reason)
+} else := "the envelope records no resolution for it"
+
+peeled_advice(step) := sprintf("pin the commit it peels to, %s", [commit]) if {
+	commit := pin_resolution(step).commit
+	is_string(commit)
+} else := "the tag does not peel to a commit"
+
+deny contains f if {
+	applicable
+	some workflow in input.workflows
+	some [job_id, _, step] in workflow_steps(workflow)
+	action_step(step)
+	action_pinned(step)
+	pin_names_tag(step)
+	f := finding(
+		"PD-006", "noncompliant", workflow.path, 0,
+		sprintf("job %q pins %s to %s, an annotated tag object, not a commit; %s", [job_id, markdownlint_action, action_ref(step), peeled_advice(step)]),
+	)
+}
+
+deny contains f if {
+	applicable
+	some workflow in input.workflows
+	some [job_id, _, step] in workflow_steps(workflow)
+	action_step(step)
+	action_pinned(step)
+	pin_unresolved(step)
+	f := finding(
+		"PD-006", "indeterminate", workflow.path, 0,
+		sprintf("job %q pins %s to %s, which could not be resolved to a commit: %s", [job_id, markdownlint_action, action_ref(step), pin_unresolved_reason(step)]),
+	)
+}
+
 deny contains f if {
 	applicable
 	some workflow in input.workflows

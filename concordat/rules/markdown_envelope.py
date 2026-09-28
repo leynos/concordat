@@ -22,11 +22,13 @@ from ruamel.yaml.error import YAMLError
 from concordat.errors import OperationalRuleError
 
 from . import fs_probe
+from .action_pins import PinResolution, PinResolver, resolve_pins
 from .jsonc import JsoncError, loads_jsonc
 from .makefile_facts import MakeutilReport, inspect_makefile
 
 ENVELOPE_SCHEMA_VERSION: typ.Final = 1
 ENVELOPE_KIND: typ.Final = "policy-input/markdown-formatting-baseline"
+DEFAULT_MARKDOWNLINT_ACTION: typ.Final = "DavidAnson/markdownlint-cli2-action"
 
 MARKDOWNLINT_CONFIG_FILENAME: typ.Final = ".markdownlint-cli2.jsonc"
 # Every other configuration file name markdownlint-cli2 would honour. The
@@ -115,6 +117,7 @@ class MarkdownEnvelope(typ.TypedDict):
     markdownlint: MarkdownlintConfig | None
     alternate_markdownlint_configs: list[str]
     workflows: list[WorkflowFile]
+    action_pins: dict[str, PinResolution]
 
 
 def _resolved_root(checkout: pathlib.Path) -> pathlib.Path:
@@ -434,6 +437,12 @@ def _load_workflows(checkout: pathlib.Path, root: pathlib.Path) -> list[Workflow
 def build_markdown_envelope(checkout: pathlib.Path) -> MarkdownEnvelope:
     """Assemble the Markdown formatting policy input for one local checkout.
 
+    This is a query over the checkout: it reads files and runs `makeutil`, and
+    never asks the network anything. `action_pins` is left empty, which the
+    policy reads as "not resolved" and reports indeterminate for every
+    full-SHA pin; `with_action_pins` records the resolutions at the command
+    boundary.
+
     Parameters
     ----------
     checkout:
@@ -471,4 +480,24 @@ def build_markdown_envelope(checkout: pathlib.Path) -> MarkdownEnvelope:
         "markdownlint": markdownlint,
         "alternate_markdownlint_configs": _alternate_configs(checkout),
         "workflows": _load_workflows(checkout, root),
+        "action_pins": {},
     }
+
+
+def with_action_pins(
+    envelope: MarkdownEnvelope,
+    resolver: PinResolver,
+    action: str = DEFAULT_MARKDOWNLINT_ACTION,
+) -> MarkdownEnvelope:
+    """Return a copy of *envelope* recording what each pin of *action* names.
+
+    This is the command step: *resolver* may reach the network. It is called
+    once per distinct full-SHA pin found in the envelope's workflows.
+
+    Returns
+    -------
+    MarkdownEnvelope
+        *envelope* with `action_pins` replaced by the resolutions.
+    """
+    workflows = typ.cast("list[dict[str, object]]", envelope["workflows"])
+    return {**envelope, "action_pins": resolve_pins(workflows, action, resolver)}

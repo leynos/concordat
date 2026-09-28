@@ -43,11 +43,18 @@ from .envelope import (
     build_envelope,
 )
 from .fs_probe import probe_file
+from .markdown_envelope import (
+    DEFAULT_MARKDOWNLINT_ACTION,
+    MarkdownEnvelope,
+    build_markdown_envelope,
+    with_action_pins,
+)
 from .markdown_envelope import ENVELOPE_KIND as MARKDOWN_ENVELOPE_KIND
-from .markdown_envelope import MarkdownEnvelope, build_markdown_envelope
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+
+    from .action_pins import PinResolver
 
 type RuleEnvelope = (
     PolicyEnvelope
@@ -422,3 +429,49 @@ def default_envelope_builder(rule_id: str, checkout: pathlib.Path) -> RuleEnvelo
             resource=rule_id,
         )
     return builder(checkout, rule_parameters(rule_dir))
+
+
+def resolving_pins(
+    builder: EnvelopeResolver, resolver: PinResolver
+) -> EnvelopeResolver:
+    """Return *builder* with a Markdown envelope's action pins resolved.
+
+    Building an envelope is a query over the checkout. Asking what a pinned
+    SHA names may reach the network, so it is a separate step the rule-run
+    command composes explicitly with its own resolver. Other envelope kinds
+    pass through unchanged, and a checkout with no pinned action never calls
+    *resolver*.
+
+    Returns
+    -------
+    EnvelopeResolver
+        A resolver that builds with *builder*, then records the pins.
+    """
+    return functools.partial(_build_resolving_pins, builder, resolver)
+
+
+def _build_resolving_pins(
+    builder: EnvelopeResolver,
+    resolver: PinResolver,
+    rule_id: str,
+    checkout: pathlib.Path,
+) -> RuleEnvelope:
+    """Build *rule_id*'s envelope, resolving pins when it is a Markdown one.
+
+    The action whose pins are resolved is the package's `markdownlint_action`
+    parameter, the one PD-006 judges.
+
+    Returns
+    -------
+    RuleEnvelope
+        The built envelope, with `action_pins` recorded for a Markdown one.
+    """
+    envelope = builder(rule_id, checkout)
+    if envelope.get("kind") != MARKDOWN_ENVELOPE_KIND:
+        return envelope
+    action = rule_parameters(rule_package_dir(rule_id)).get("markdownlint_action")
+    return with_action_pins(
+        typ.cast("MarkdownEnvelope", envelope),
+        resolver,
+        action if isinstance(action, str) else DEFAULT_MARKDOWNLINT_ACTION,
+    )

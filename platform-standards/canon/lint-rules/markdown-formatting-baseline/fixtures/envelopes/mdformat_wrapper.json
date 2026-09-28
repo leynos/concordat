@@ -255,7 +255,7 @@
               },
               {
                 "name": "Lint Markdown",
-                "uses": "DavidAnson/markdownlint-cli2-action@4580e1612f6407034edd6c0e4e316d725920867b",
+                "uses": "DavidAnson/markdownlint-cli2-action@21c1be1b93ad9ed58fa840aacc3f279cde2a72ff",
                 "with": {
                   "globs": "**/*.md"
                 }
@@ -266,5 +266,12 @@
       },
       "error": null
     }
-  ]
+  ],
+  "action_pins": {
+    "21c1be1b93ad9ed58fa840aacc3f279cde2a72ff": {
+      "object_type": "commit",
+      "commit": "21c1be1b93ad9ed58fa840aacc3f279cde2a72ff",
+      "error": null
+    }
+  }
 }

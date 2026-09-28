@@ -42,19 +42,24 @@ class GithubClient:
     def __init__(
         self,
         *,
-        token: str,
+        token: str | None,
         api_url: str = DEFAULT_API_URL,
         timeout: int = 30,
     ) -> None:
-        """Configure a GitHub session scoped to the provided token."""
+        """Configure a GitHub session scoped to the provided token.
+
+        Without a token the session is unauthenticated, which public
+        repositories answer at GitHub's lower anonymous rate limit.
+        """
         self.api_url = api_url.rstrip("/")
         self.timeout = timeout
         self.session = requests.Session()
         self.session.headers.update({
-            "Authorization": f"Bearer {token}",
             "Accept": "application/vnd.github+json",
             "User-Agent": "concordat-auditor",
         })
+        if token:
+            self.session.headers["Authorization"] = f"Bearer {token}"
 
     def repository(self, owner: str, name: str) -> RepositorySnapshot:
         """Return repository metadata used by the repository checks."""
@@ -154,6 +159,20 @@ class GithubClient:
             return self._get_json(
                 "GET", f"/repos/{owner}/{name}/environments/{environment}"
             )
+        except GithubNotFoundError:
+            return None
+
+    def git_commit(self, owner: str, name: str, sha: str) -> dict[str, typ.Any] | None:
+        """Return the Git commit object *sha* names, or None when it names none."""
+        try:
+            return self._get_json("GET", f"/repos/{owner}/{name}/git/commits/{sha}")
+        except GithubNotFoundError:
+            return None
+
+    def git_tag(self, owner: str, name: str, sha: str) -> dict[str, typ.Any] | None:
+        """Return the annotated tag object *sha* names, or None when it names none."""
+        try:
+            return self._get_json("GET", f"/repos/{owner}/{name}/git/tags/{sha}")
         except GithubNotFoundError:
             return None
 
