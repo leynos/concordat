@@ -16,6 +16,7 @@ reason, which the policy treats as indeterminate rather than as a pass.
 
 from __future__ import annotations
 
+import functools
 import re
 import typing as typ
 
@@ -126,30 +127,45 @@ def github_resolver(
     })
     if token:
         client.headers["Authorization"] = f"Bearer {token}"
-    base = api_url.rstrip("/")
+    return functools.partial(_resolve_with, client, api_url.rstrip("/"))
 
-    def resolve(repository: str, sha: str) -> PinResolution:
-        status, body, failure = _get(
-            client, f"{base}/repos/{repository}/git/commits/{sha}"
-        )
-        if failure is not None:
-            return unresolved_pin(failure)
-        if body is not None:
-            return commit_pin(sha)
-        if status not in {404, 422}:
-            return unresolved_pin(f"git/commits/{sha} returned HTTP {status}")
-        status, body, failure = _get(
-            client, f"{base}/repos/{repository}/git/tags/{sha}"
-        )
-        if failure is not None:
-            return unresolved_pin(failure)
-        if body is None:
-            return unresolved_pin(
-                f"{sha} is neither a commit nor a tag (HTTP {status})"
-            )
-        return tag_pin(_peeled_commit(body))
 
-    return resolve
+# Statuses with which the commit endpoint says it does not know the SHA as a
+# commit, so the tag endpoint is worth asking. Anything else is a refusal.
+_NOT_A_COMMIT: typ.Final = frozenset({404, 422})
+
+
+def _resolve_with(
+    client: requests.Session, base: str, repository: str, sha: str
+) -> PinResolution:
+    """Ask the commit endpoint, then the tag endpoint only if it must."""
+    status, body, failure = _get(client, f"{base}/repos/{repository}/git/commits/{sha}")
+    if failure is None and body is None and status in _NOT_A_COMMIT:
+        return _resolve_tag(client, base, repository, sha)
+    return _commit_answer(sha, status, body, failure)
+
+
+def _commit_answer(
+    sha: str, status: int | None, body: dict[str, object] | None, failure: str | None
+) -> PinResolution:
+    """Turn the commit endpoint's reply into a resolution."""
+    if failure is not None:
+        return unresolved_pin(failure)
+    if body is not None:
+        return commit_pin(sha)
+    return unresolved_pin(f"git/commits/{sha} returned HTTP {status}")
+
+
+def _resolve_tag(
+    client: requests.Session, base: str, repository: str, sha: str
+) -> PinResolution:
+    """Ask the tag endpoint what *sha* names, peeling a tag to its commit."""
+    status, body, failure = _get(client, f"{base}/repos/{repository}/git/tags/{sha}")
+    if failure is not None:
+        return unresolved_pin(failure)
+    if body is None:
+        return unresolved_pin(f"{sha} is neither a commit nor a tag (HTTP {status})")
+    return tag_pin(_peeled_commit(body))
 
 
 def _steps(workflow: cabc.Mapping[str, object]) -> cabc.Iterator[object]:
@@ -164,20 +180,34 @@ def _steps(workflow: cabc.Mapping[str, object]) -> cabc.Iterator[object]:
             yield from steps
 
 
+def _step_uses(step: object) -> str | None:
+    """Return a step's textual ``uses:`` value, or ``None`` when it has none."""
+    uses = step.get("uses") if isinstance(step, dict) else None
+    return uses if isinstance(uses, str) else None
+
+
+def _uses_refs(
+    workflows: cabc.Iterable[cabc.Mapping[str, object]],
+) -> cabc.Iterator[str]:
+    """Yield the ``uses:`` value of every step that has a textual one."""
+    for workflow in workflows:
+        refs = (_step_uses(step) for step in _steps(workflow))
+        yield from (uses for uses in refs if uses is not None)
+
+
+def _full_sha_ref(uses: str, prefix: str) -> str | None:
+    """Return the full-SHA ref of *uses* when it pins the prefixed action."""
+    ref = uses.removeprefix(prefix)
+    return ref if uses.startswith(prefix) and FULL_SHA.match(ref) else None
+
+
 def pinned_shas(
     workflows: cabc.Iterable[cabc.Mapping[str, object]], action: str
 ) -> list[str]:
     """Return every distinct full-SHA ref of *action* the workflows use, sorted."""
     prefix = f"{action}@"
-    found = set()
-    for workflow in workflows:
-        for step in _steps(workflow):
-            uses = step.get("uses") if isinstance(step, dict) else None
-            if isinstance(uses, str) and uses.startswith(prefix):
-                ref = uses.removeprefix(prefix)
-                if FULL_SHA.match(ref):
-                    found.add(ref)
-    return sorted(found)
+    refs = (_full_sha_ref(uses, prefix) for uses in _uses_refs(workflows))
+    return sorted({ref for ref in refs if ref is not None})
 
 
 def resolve_pins(
