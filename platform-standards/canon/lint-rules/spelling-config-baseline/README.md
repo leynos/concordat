@@ -135,6 +135,11 @@ checkout's only possible spelling evidence the repository's scope is itself
 `indeterminate`, never passed as out of scope. Workflow facts carry no line
 numbers, so PD-010 findings cite line `0`.
 
+A `builder_floor` parameter or `agents_md_blocks` key that is not a
+`vMAJOR.MINOR.PATCH` release is also `indeterminate`, and the finding names it:
+the manifest schema declares the pattern, but concordat does not enforce the
+schema at run time, and a floor that cannot be compared judges nothing.
+
 ## Verdicts
 
 Findings carry a three-valued `verdict`:

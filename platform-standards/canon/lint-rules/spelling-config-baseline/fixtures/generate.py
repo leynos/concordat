@@ -122,6 +122,8 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "drift_check": Scenario(makefile="drift-check"),
     "direct_typos": Scenario(makefile="direct-typos"),
     "unresolved": Scenario(makefile="unresolved"),
+    "pin_unresolved_paren": Scenario(makefile="pin-unresolved-paren"),
+    "pin_unresolved_brace": Scenario(makefile="pin-unresolved-brace"),
     "with_include": Scenario(makefile="with-include"),
     # -- PD-008: legacy pins and helper targets ----------------------------
     "legacy_variables": Scenario(makefile="legacy-variables"),

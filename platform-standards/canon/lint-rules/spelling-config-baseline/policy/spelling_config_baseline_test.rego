@@ -328,6 +328,22 @@ test_overlay_schema_2 if {
   }
 }
 
+# The `${VAR}` reference form is unresolved in the same way as `$(VAR)`.
+test_pin_unresolved_brace if {
+  findings := policy.deny with input as data.fixtures.pin_unresolved_brace
+  profile(findings) == {
+    ["PD-007", "indeterminate", 9, "\"spelling\"-path recipe pins typos-config-builder with unresolved Make variables (git+https://github.com/leynos/typos-config-builder.git@${BUILDER_VERSION}); the release cannot be proven"],
+  }
+}
+
+# A pin behind a conditionally assigned variable names no release the policy can read: unknown, not failed.
+test_pin_unresolved_paren if {
+  findings := policy.deny with input as data.fixtures.pin_unresolved_paren
+  profile(findings) == {
+    ["PD-007", "indeterminate", 9, "\"spelling\"-path recipe pins typos-config-builder with unresolved Make variables (git+https://github.com/leynos/typos-config-builder.git@$(BUILDER_VERSION)); the release cannot be proven"],
+  }
+}
+
 # A commit is immutable but not a release, and cannot be compared with the floor.
 test_sha_pin if {
   findings := policy.deny with input as data.fixtures.sha_pin
@@ -422,8 +438,27 @@ test_a_pin_compares_with_the_newest_text_at_or_below_it if {
 # A pin older than every published text compares with the earliest.
 test_a_pin_older_than_every_text_compares_with_the_earliest if {
   blocks := {"v0.1.3": data.parameters.agents_md_blocks["v0.1.3"], "v0.2.0": "## Spelling\n\nA later text."}
+  findings := policy.deny with input as data.fixtures.below_floor with data.parameters.agents_md_blocks as blocks
+  profile(findings) == {
+    ["PD-007", "noncompliant", 3, "\"spelling\"-path recipe pins typos-config-builder v0.1.2, below the floor v0.1.3"],
+  }
+}
+
+# A floor that is not a release is named, not compared with every pin.
+test_a_malformed_floor_is_indeterminate if {
+  findings := policy.deny with input as data.fixtures.compliant with data.parameters.builder_floor as "v0.2"
+  profile(findings) == {
+    ["PD-007", "indeterminate", 0, "the builder_floor \"v0.2\" parameter is not a vMAJOR.MINOR.PATCH release, so it cannot be compared"],
+  }
+}
+
+# A text keyed by something other than a release is named, and the others still compare.
+test_a_malformed_text_key_is_indeterminate if {
+  blocks := {"v0.1.3": data.parameters.agents_md_blocks["v0.1.3"], "latest": "## Spelling\n\nA later text."}
   findings := policy.deny with input as data.fixtures.compliant with data.parameters.agents_md_blocks as blocks
-  count(findings) == 0
+  profile(findings) == {
+    ["PD-013", "indeterminate", 0, "the agents_md_blocks key \"latest\" parameter is not a vMAJOR.MINOR.PATCH release, so it cannot be compared"],
+  }
 }
 
 # A gate whose pin cannot be proven compares with the newest published text.

@@ -437,7 +437,7 @@ pin_problem(invocation) := "runs typos-config-builder without pinning a release;
 	not from_spec(invocation)
 } else := sprintf("pins typos-config-builder with unresolved Make variables (%s); the release cannot be proven", [spec]) if {
 	spec := from_spec(invocation)
-	contains(spec, "$(")
+	unresolved_spec(spec)
 } else := sprintf("pins %s, not the %s repository", [spec, builder_repository]) if {
 	spec := from_spec(invocation)
 	not git_ref(spec)
@@ -450,6 +450,35 @@ pin_problem(invocation) := "runs typos-config-builder without pinning a release;
 } else := sprintf("pins typos-config-builder %s, below the floor %s", [ref, builder_floor]) if {
 	ref := git_ref(from_spec(invocation))
 	not version_at_least(release_version(ref), floor_version)
+}
+
+# A spec still holding a Make reference, in either form, names no release the
+# policy can read, so its verdict is unknown rather than a failure.
+unresolved_spec(spec) if regex.match(`\$[({]`, spec)
+
+pin_verdict(invocation) := "indeterminate" if {
+	unresolved_spec(from_spec(invocation))
+} else := "noncompliant"
+
+# A floor or text key that is not `vMAJOR.MINOR.PATCH` cannot be compared, and
+# the manifest schema is not enforced at run time, so the policy names it
+# instead of judging every pin against nothing.
+malformed_parameters contains ["PD-007", sprintf("builder_floor %q", [builder_floor])] if {
+	not release_version(builder_floor)
+}
+
+malformed_parameters contains ["PD-013", sprintf("agents_md_blocks key %q", [key])] if {
+	some key, _ in agents_md_blocks
+	not release_version(key)
+}
+
+deny contains f if {
+	applicable
+	some [rule_id, parameter] in malformed_parameters
+	f := finding(
+		rule_id, "indeterminate", makefile_path, 0,
+		sprintf("the %s parameter is not a vMAJOR.MINOR.PATCH release, so it cannot be compared", [parameter]),
+	)
 }
 
 # `typos` itself as a word: a command word, an argument to `xargs` or `env`, or
@@ -500,7 +529,7 @@ deny contains f if {
 	some invocation in builder_invocations(recipe)
 	runs_gate(invocation)
 	msg := pin_problem(invocation)
-	f := finding("PD-007", "noncompliant", makefile_path, recipe.location.start_line, sprintf("%q-path recipe %s", [spelling_target, msg]))
+	f := finding("PD-007", pin_verdict(invocation), makefile_path, recipe.location.start_line, sprintf("%q-path recipe %s", [spelling_target, msg]))
 }
 
 deny contains f if {
@@ -792,7 +821,10 @@ pinned_releases := {version |
 	version := release_version(git_ref(from_spec(invocation)))
 }
 
-block_versions := {key: release_version(key) | some key, _ in agents_md_blocks}
+block_versions := {key: version |
+	some key, _ in agents_md_blocks
+	version := release_version(key)
+}
 
 version_after(a, b) if {
 	a != b
