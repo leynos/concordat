@@ -52,6 +52,32 @@ def _is_rate_limited(response: requests.Response) -> bool:
     return response.status_code == 403 and remaining == "0"
 
 
+def _response_error(response: requests.Response, request: str) -> GithubError | None:
+    """Return the error a non-successful *response* stands for, or None.
+
+    An absence, a spent rate limit and a refusal are told apart, because
+    their callers react differently: an absence may be an answer, a spent
+    limit wants a token or a wait, and a refusal wants permissions.
+
+    Returns
+    -------
+    GithubError | None
+        The error to raise for *request*, or None when the response succeeded.
+    """
+    status = response.status_code
+    if status == 404:
+        return GithubNotFoundError(f"{request} returned 404.")
+    if _is_rate_limited(response):
+        return GithubRateLimitError(
+            f"{request} was refused: the GitHub API rate limit is spent"
+        )
+    if status in {401, 403}:
+        return GithubForbiddenError(f"{request} was refused: {status}")
+    if status >= 400:
+        return GithubError(f"{request} failed: {status} {response.text[:400]}")
+    return None
+
+
 class GithubClient:
     """Minimal GitHub client using the REST API."""
 
@@ -261,19 +287,9 @@ class GithubClient:
         """Send one request, raising on a refusal, an absence or a failure."""
         url = f"{self.api_url}{path}"
         response = self.session.request(method, url, timeout=self.timeout)
-        if response.status_code == 404:
-            message = f"{method} {path} returned 404."
-            raise GithubNotFoundError(message)
-        if _is_rate_limited(response):
-            message = f"{method} {path} was refused: the GitHub API rate limit is spent"
-            raise GithubRateLimitError(message)
-        if response.status_code in {401, 403}:
-            message = f"{method} {path} was refused: {response.status_code}"
-            raise GithubForbiddenError(message)
-        if response.status_code >= 400:
-            detail = response.text[:400]
-            message = f"{method} {path} failed: {response.status_code} {detail}"
-            raise GithubError(message)
+        error = _response_error(response, f"{method} {path}")
+        if error is not None:
+            raise error
         return response
 
     def _paginate(
