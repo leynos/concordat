@@ -137,7 +137,7 @@ jobs:
         # the publisher measured on 3.13, and the ratchet compared the two.
         env:
           UV_PYTHON: '3.13'
-        uses: leynos/shared-actions/.github/actions/generate-coverage@a5765019912a8ab6882b12db049c7cde635f3a85
+        uses: leynos/shared-actions/.github/actions/generate-coverage@a06e1b8f83ce7f9da5bb26625ef2b7021adbf958
         with:
           output-path: coverage.xml
           format: cobertura
