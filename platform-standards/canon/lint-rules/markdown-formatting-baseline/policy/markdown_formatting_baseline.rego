@@ -892,6 +892,10 @@ pin_unresolved(step) if pin_resolution(step) == null
 
 pin_unresolved(step) if pin_resolution(step).object_type == null
 
+# A spent GitHub API rate limit says nothing about the pin; the remedy is to
+# authenticate or wait, so it is reported apart from a pin that is unknown.
+pin_rate_limited(step) if pin_resolution(step).rate_limited == true
+
 pin_unresolved_reason(step) := reason if {
 	reason := pin_resolution(step).error
 	is_string(reason)
@@ -922,9 +926,23 @@ deny contains f if {
 	action_step(step)
 	action_pinned(step)
 	pin_unresolved(step)
+	not pin_rate_limited(step)
 	f := finding(
 		"PD-006", "indeterminate", workflow.path, 0,
 		sprintf("job %q pins %s to %s, which could not be resolved to a commit: %s", [job_id, markdownlint_action, action_ref(step), pin_unresolved_reason(step)]),
+	)
+}
+
+deny contains f if {
+	applicable
+	some workflow in input.workflows
+	some [job_id, _, step] in workflow_steps(workflow)
+	action_step(step)
+	action_pinned(step)
+	pin_rate_limited(step)
+	f := finding(
+		"PD-006", "indeterminate", workflow.path, 0,
+		sprintf("job %q pins %s to %s, which was not checked because the GitHub API rate limit is spent; wait for the limit to reset, or run with a token that has quota left (GITHUB_TOKEN, or `gh auth login` when no token is set)", [job_id, markdownlint_action, action_ref(step)]),
 	)
 }
 

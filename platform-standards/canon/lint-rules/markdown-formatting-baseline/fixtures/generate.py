@@ -54,9 +54,14 @@ RECORDED_REPOSITORY_PATH: typ.Final = "."
 # annotated tag object that peels to it. Any other SHA is unresolved.
 V24_2_0_COMMIT: typ.Final = "21c1be1b93ad9ed58fa840aacc3f279cde2a72ff"
 V24_2_0_TAG_OBJECT: typ.Final = "4580e1612f6407034edd6c0e4e316d725920867b"
+# A SHA the table answers as GitHub does once the rate limit is spent.
+RATE_LIMITED_SHA: typ.Final = "fedcba9876543210fedcba9876543210fedcba98"
 PIN_TABLE: typ.Final = {
     V24_2_0_COMMIT: commit_pin(V24_2_0_COMMIT),
     V24_2_0_TAG_OBJECT: tag_pin(V24_2_0_COMMIT),
+    RATE_LIMITED_SHA: unresolved_pin(
+        f"git/commits/{RATE_LIMITED_SHA} was rate limited", rate_limited=True
+    ),
 }
 
 
@@ -159,6 +164,7 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "workflow_echo_mention": Scenario(workflows={"ci.yml": "echo-mention"}),
     "workflow_tag_object": Scenario(workflows={"ci.yml": "tag-object"}),
     "workflow_pin_unresolved": Scenario(workflows={"ci.yml": "unresolved-pin"}),
+    "workflow_pin_rate_limited": Scenario(workflows={"ci.yml": "rate-limited-pin"}),
 }
 
 

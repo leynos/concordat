@@ -531,10 +531,18 @@ cache directories, and reports:
   The pin must name a commit, not an annotated tag object: the rule asks the
   GitHub API what each pin names, reports a tag object as noncompliant with the
   commit to pin instead, and reports PD-006 as `indeterminate` when it cannot
-  reach the API. Set `GITHUB_TOKEN`, or configure concordat credentials, to
-  avoid the unauthenticated rate limit; pass `--github-api-url` to use another
-  API root, such as a GitHub Enterprise Server. An unreadable credentials file
-  stops the run with exit code 2.
+  reach the API. Each distinct pin costs one or two API calls, and a pin
+  repeated within one run is looked up once and the answer reused.
+  Unauthenticated, GitHub allows 60 calls an hour, so a sweep over many
+  repositories spends it quickly and every later pin reports indeterminate. The
+  rule therefore authenticates with `GITHUB_TOKEN` or the concordat credentials
+  when either is set, and otherwise with `gh auth token` for the API's own host
+  when the GitHub CLI is logged in there. A pin that could not be checked
+  because the limit was spent says so, and names the remedy (wait for the
+  reset, or use a token with quota left), rather than reading like an unknown
+  pin. Pass `--github-api-url` to use another API root, such as a GitHub
+  Enterprise Server. An unreadable credentials file stops the run with exit
+  code 2.
 
 The Makefile checks expand Make variables that are assigned exactly once and
 unconditionally, so `$(MDTABLEFIX) --check $(MDTABLEFIX_SELECT)` is audited

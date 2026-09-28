@@ -198,17 +198,22 @@ class _RuleCli:
 
 
 @pytest.fixture
-def rule_cli(cmd_mox: CmdMox, fake_github_api: FakeGithubApi) -> _RuleCli:
+def rule_cli(
+    cmd_mox: CmdMox, fake_github_api: FakeGithubApi, monkeypatch: pytest.MonkeyPatch
+) -> _RuleCli:
     """Provide the command line, with pins answered as GitHub does for v24.2.0.
 
     The GitHub double knows the v24.2.0 commit and its annotated tag object,
-    so a scenario's pins resolve without the run leaving the host.
+    so a scenario's pins resolve without the run leaving the host. A token is
+    configured so the command never asks `gh`, which the subprocess double
+    would reject.
 
     Returns
     -------
     _RuleCli
         The command line bound to this test's doubles.
     """
+    monkeypatch.setenv("GITHUB_TOKEN", "fixture-token")
     generate = _load_generator()
     fake_github_api.routes.update(
         git_object_routes(

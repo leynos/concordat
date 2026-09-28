@@ -7,10 +7,13 @@ body shape the adapter translates is exercised without the network.
 
 from __future__ import annotations
 
+import itertools
 import typing as typ
 
 import pytest
 import requests
+from hypothesis import given
+from hypothesis import strategies as st
 
 from concordat.auditor.github import GithubClient
 from concordat.rules.action_pins import commit_pin, tag_pin
@@ -25,11 +28,17 @@ API: typ.Final = "https://api.example.test"
 class _Response:
     """The slice of `requests.Response` the client reads."""
 
-    def __init__(self, status_code: int, body: object = None) -> None:
-        """Record the status and the JSON body to return."""
+    def __init__(
+        self,
+        status_code: int,
+        body: object = None,
+        headers: dict[str, str] | None = None,
+    ) -> None:
+        """Record the status, the JSON body and the headers to return."""
         self.status_code = status_code
         self._body = body
         self.text = "" if body is None else str(body)
+        self.headers = headers or {}
 
     def json(self) -> object:
         """Return the body, or fail as `requests` does on a non-JSON reply."""
@@ -193,15 +202,109 @@ def test_the_client_authenticates_only_with_a_token(
 def test_each_lookup_is_logged_with_its_outcome(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """A debug record names the pin and what it resolved to, or why not."""
-    resolver, _ = _resolver({_commit(COMMIT): _Response(403, {"message": "refused"})})
+    """A debug record names the pin and a bounded outcome, never the body."""
+    resolver, _ = _resolver({
+        _commit(COMMIT): _Response(500, {"message": "secret-body-text"}),
+        _commit(TAG_OBJECT): _Response(429, {"message": "slow"}),
+        _commit("0" * 40): _Response(200, {"sha": "0" * 40}),
+    })
     with caplog.at_level("DEBUG", logger="concordat.rules.github_pins"):
         resolver(ACTION, COMMIT)
         resolver(ACTION, TAG_OBJECT)
+        resolver(ACTION, "0" * 40)
     messages = [record.getMessage() for record in caplog.records]
-    assert len(messages) == 2, messages
-    assert (
-        f"{ACTION}@{COMMIT}: unresolved (git/commits/{COMMIT} could not be read"
-        in messages[0]
+    assert len(messages) == 3, messages
+    assert f"{ACTION}@{COMMIT}: unresolved in " in messages[0]
+    assert f"{ACTION}@{TAG_OBJECT}: rate_limited in " in messages[1]
+    assert f"{ACTION}@{'0' * 40}: commit in " in messages[2]
+    assert not any("secret-body-text" in message for message in messages)
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        pytest.param(_Response(429, {"message": "slow down"}), id="429"),
+        pytest.param(
+            _Response(403, {"message": "limit"}, {"X-RateLimit-Remaining": "0"}),
+            id="403-spent",
+        ),
+    ],
+)
+def test_a_spent_rate_limit_is_flagged(reply: _Response) -> None:
+    """A rate-limit refusal is unresolved and marked, so its remedy can be named."""
+    resolver, _ = _resolver({_commit(COMMIT): reply})
+    resolution = resolver(ACTION, COMMIT)
+    assert resolution["object_type"] is None, resolution
+    assert resolution["rate_limited"] is True, resolution
+    assert f"git/commits/{COMMIT} was rate limited" in str(resolution["error"])
+
+
+def test_a_plain_refusal_is_not_a_rate_limit() -> None:
+    """A 403 with rate limit left is a refusal, not a spent limit."""
+    reply = _Response(403, {"message": "no"}, {"X-RateLimit-Remaining": "12"})
+    resolver, _ = _resolver({_commit(COMMIT): reply})
+    assert resolver(ACTION, COMMIT)["rate_limited"] is False
+
+
+def test_a_rate_limited_tag_lookup_is_flagged() -> None:
+    """After a 404 on the commit endpoint, a spent limit on the tag one is marked."""
+    resolver, _ = _resolver({
+        _tag(TAG_OBJECT): _Response(429, {"message": "slow down"})
+    })
+    resolution = resolver(ACTION, TAG_OBJECT)
+    assert resolution["rate_limited"] is True, resolution
+    assert f"git/tags/{TAG_OBJECT} was rate limited" in str(resolution["error"])
+
+
+@pytest.mark.parametrize(
+    ("routes", "sha"),
+    [
+        pytest.param(
+            {_commit(COMMIT): _Response(200, {"sha": COMMIT})}, COMMIT, id="commit"
+        ),
+        pytest.param(
+            {_commit(COMMIT): _Response(429, {"message": "x"})},
+            COMMIT,
+            id="rate-limited",
+        ),
+        pytest.param({}, TAG_OBJECT, id="unknown"),
+    ],
+)
+def test_each_pin_is_looked_up_once_per_resolver(
+    routes: dict[str, _Response | Exception], sha: str
+) -> None:
+    """Asking again about the same pin reuses the answer, whatever it was."""
+    resolver, session = _resolver(routes)
+    first = resolver(ACTION, sha)
+    asked = list(session.requested)
+    assert resolver(ACTION, sha) == first
+    assert session.requested == asked
+
+
+_REPOSITORIES: typ.Final = ("o/one", "o/two", "p/one")
+_SHAS: typ.Final = (COMMIT, TAG_OBJECT, "0" * 40)
+
+
+@given(
+    st.lists(
+        st.tuples(st.sampled_from(_REPOSITORIES), st.sampled_from(_SHAS)), max_size=20
     )
-    assert f"{ACTION}@{TAG_OBJECT}: unresolved ({TAG_OBJECT} is neither" in messages[1]
+)
+def test_each_repository_and_pin_is_looked_up_once_in_any_order(
+    calls: list[tuple[str, str]],
+) -> None:
+    """Memoization is per `(repository, sha)`, whatever the call order.
+
+    Repeated and interleaved pairs cost one lookup each; the same SHA in
+    another repository is a different pair and is looked up on its own.
+    """
+    routes: dict[str, _Response | Exception] = {
+        f"/repos/{repository}/git/commits/{sha}": _Response(200, {"sha": sha})
+        for repository in _REPOSITORIES
+        for sha in _SHAS
+    }
+    resolver, session = _resolver(routes)
+    answers = list(itertools.starmap(resolver, calls))
+    assert answers == [commit_pin(sha) for _, sha in calls]
+    expected = {f"/repos/{repository}/git/commits/{sha}" for repository, sha in calls}
+    assert sorted(session.requested) == sorted(expected)

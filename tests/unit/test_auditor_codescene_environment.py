@@ -268,6 +268,7 @@ class _Response:
 
     status_code: int
     text: str = ""
+    headers: dict[str, str] = dataclasses.field(default_factory=dict)
 
 
 @pytest.mark.parametrize(

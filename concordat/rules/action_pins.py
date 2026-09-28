@@ -39,12 +39,15 @@ class PinResolution(typ.TypedDict):
     ``None`` when the pin could not be resolved. ``commit`` is the commit the
     pin reaches: the pin itself for a commit, the peeled target for a tag,
     and ``None`` otherwise. ``error`` carries the reason a pin stayed
-    unresolved.
+    unresolved, and ``rate_limited`` says the reason was a spent GitHub API
+    rate limit, whose remedy (authenticate, or wait) differs from a missing
+    or refused object.
     """
 
     object_type: str | None
     commit: str | None
     error: str | None
+    rate_limited: bool
 
 
 type PinResolver = cabc.Callable[[str, str], PinResolution]
@@ -52,17 +55,23 @@ type PinResolver = cabc.Callable[[str, str], PinResolution]
 
 def commit_pin(sha: str) -> PinResolution:
     """Return the resolution of a pin that names a commit."""
-    return PinResolution(object_type=OBJECT_COMMIT, commit=sha, error=None)
+    return PinResolution(
+        object_type=OBJECT_COMMIT, commit=sha, error=None, rate_limited=False
+    )
 
 
 def tag_pin(commit: str | None) -> PinResolution:
     """Return the resolution of a pin that names an annotated tag object."""
-    return PinResolution(object_type=OBJECT_TAG, commit=commit, error=None)
+    return PinResolution(
+        object_type=OBJECT_TAG, commit=commit, error=None, rate_limited=False
+    )
 
 
-def unresolved_pin(reason: str) -> PinResolution:
+def unresolved_pin(reason: str, *, rate_limited: bool = False) -> PinResolution:
     """Return the resolution of a pin whose object could not be determined."""
-    return PinResolution(object_type=None, commit=None, error=reason)
+    return PinResolution(
+        object_type=None, commit=None, error=reason, rate_limited=rate_limited
+    )
 
 
 def _steps(workflow: cabc.Mapping[str, object]) -> cabc.Iterator[object]:

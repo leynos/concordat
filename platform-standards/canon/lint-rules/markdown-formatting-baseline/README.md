@@ -138,7 +138,8 @@ The canonical `.markdownlint-cli2.jsonc` file that consumers copy verbatim is at
 
 ## Validation
 
-From the repository root:
+From the repository root, with the pinned `makeutil` first on `PATH` (the
+developers' guide gives the install command):
 
 ```shell
 uv run python platform-standards/canon/lint-rules/markdown-formatting-baseline/fixtures/generate.py

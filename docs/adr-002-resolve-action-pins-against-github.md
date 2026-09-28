@@ -69,3 +69,22 @@ local API double, so none of them reaches GitHub.
   action pin names. Another rule package that needs the same fact composes
   `resolving_pins` or calls `with_action_pins`, rather than calling the API
   from its envelope builder.
+
+## Addendum (2026-09-28): The API budget
+
+The first estate sweeps showed the API budget is the operational limit.
+Unauthenticated, GitHub allows 60 calls an hour, which a sweep spends within a
+few repositories; every later pin was then indeterminate, with a message that
+read like an unknown pin.
+
+- The command authenticates with `GITHUB_TOKEN` or the concordat credentials,
+  and otherwise with `gh auth token --hostname <host>`, where the host is
+  derived from `--github-api-url` (`api.github.com` is `github.com`), so a
+  token is never sent to a host it was not issued for.
+- `GithubClient` raises `GithubRateLimitError`, a `GithubForbiddenError`, for a
+  429 or a 403 with `X-RateLimit-Remaining: 0`. The pin is recorded with
+  `rate_limited: true`, and PD-006 reports it as indeterminate with its remedy:
+  wait for the limit to reset, or run with a token that has quota left.
+- `GithubPinResolver` keeps each answer for the run, so a pin repeated within
+  one `rule run` costs one lookup. Each run is one repository; a pin shared
+  across repositories costs one lookup per repository.

@@ -33,11 +33,13 @@ class FakeGithubApi:
 
     routes: dict[str, Reply] = dataclasses.field(default_factory=dict)
     requested: list[str] = dataclasses.field(default_factory=list)
+    authorizations: list[str | None] = dataclasses.field(default_factory=list)
     url: str = ""
 
-    def answer(self, path: str) -> Reply:
-        """Record *path* and return its route, or a 404 for an unknown one."""
+    def answer(self, path: str, authorization: str | None = None) -> Reply:
+        """Record *path* and its credential, and return its route or a 404."""
         self.requested.append(path)
+        self.authorizations.append(authorization)
         return self.routes.get(path, Reply(404, {"message": "Not Found"}))
 
 
@@ -49,7 +51,7 @@ def _handler(api: FakeGithubApi) -> type[http.server.BaseHTTPRequestHandler]:
 
         def do_GET(self) -> None:
             """Write the routed status and JSON body."""
-            reply = api.answer(self.path)
+            reply = api.answer(self.path, self.headers.get("Authorization"))
             payload = b"" if reply.body is None else json.dumps(reply.body).encode()
             self.send_response(reply.status)
             self.send_header("Content-Type", "application/json")

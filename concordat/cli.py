@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import functools
+import logging
 import os
 import pathlib
+import subprocess
 import sys
 import typing as typ
+import urllib.parse
 
 from cyclopts import App, Parameter
 
@@ -35,6 +38,8 @@ from .estate_execution import ExecutionIO, ExecutionOptions, run_apply, run_plan
 from .listing import list_namespace_repositories
 from .persistence import PersistenceOptions, persist_estate
 from .platform_standards import PlatformStandardsConfig
+
+_logger = logging.getLogger(__name__)
 
 app = App()
 
@@ -366,6 +371,9 @@ def rule_run(
 def _pin_client(api_url: str) -> GithubClient:
     """Build the GitHub client pin resolution uses, with the configured token.
 
+    The token comes from `GITHUB_TOKEN` or the concordat credentials file,
+    and otherwise from `gh auth token`: unauthenticated, GitHub allows 60
+    requests an hour, which one estate sweep spends in a few repositories.
     An unreadable or insecure credentials file means the audit cannot run as
     configured, so it is an operational failure rather than a finding.
 
@@ -386,7 +394,60 @@ def _pin_client(api_url: str) -> GithubClient:
         raise OperationalRuleError(
             message, operation="read-github-credentials"
         ) from error
-    return GithubClient(token=token, api_url=api_url)
+    return GithubClient(
+        token=token or _gh_cli_token(_github_host(api_url)), api_url=api_url
+    )
+
+
+def _github_host(api_url: str) -> str:
+    """Return the GitHub host that issues tokens for the API root *api_url*.
+
+    `api.github.com` belongs to `github.com`; any other root, such as a GitHub
+    Enterprise Server's `https://ghe.example.com/api/v3`, is its own host.
+
+    Returns
+    -------
+    str
+        The host name `gh auth token --hostname` expects.
+    """
+    host = urllib.parse.urlsplit(api_url).hostname or ""
+    return "github.com" if host == "api.github.com" else host
+
+
+def _gh_cli_token(hostname: str) -> str | None:
+    """Return the GitHub CLI's token for *hostname*, or None when it has none.
+
+    The host is named explicitly so a token issued for one GitHub host is
+    never sent to another. A missing `gh`, a logged-out `gh`, or a slow one
+    leaves the client unauthenticated rather than stopping the audit.
+
+    Returns
+    -------
+    str | None
+        The token `gh auth token --hostname` prints, or None.
+    """
+    try:
+        completed = subprocess.run(  # noqa: S603 - fixed argv; the host comes from a parsed URL, and no shell runs
+            ["gh", "auth", "token", "--hostname", hostname],  # noqa: S607 - gh is resolved on PATH by design
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        _logger.debug(
+            "gh auth token unavailable for %s: %s", hostname, type(error).__name__
+        )
+        return None
+    token = completed.stdout.strip()
+    if completed.returncode != 0 or not token:
+        _logger.debug(
+            "gh auth token gave no token for %s (exit %d)",
+            hostname,
+            completed.returncode,
+        )
+        return None
+    return token
 
 
 artefact_app.command(rule_app, name="rule")

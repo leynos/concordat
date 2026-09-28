@@ -226,3 +226,6 @@ platform-standards/**/.terraform/
 .memdb/
 .grepai/
 *.swo
+
+# Pinned makeutil for regenerating rule fixtures (see the developers guide).
+.makeutil-pin/
