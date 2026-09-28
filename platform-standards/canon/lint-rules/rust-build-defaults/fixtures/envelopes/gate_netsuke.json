@@ -1,0 +1,416 @@
+{
+  "schema_version": 1,
+  "kind": "policy-input/rust-build-defaults",
+  "repository": {
+    "path": "gate-netsuke",
+    "name": null
+  },
+  "applicability": {
+    "root_cargo_toml": true,
+    "rust_surfaces_declared": false,
+    "cargo_config": true,
+    "toolchain_file": true
+  },
+  "cargo": {
+    "parsed": {
+      "package": {
+        "name": "fixture",
+        "version": "0.1.0"
+      }
+    },
+    "surfaces": [
+      {
+        "path": "Cargo.toml",
+        "role": "crate",
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        }
+      }
+    ]
+  },
+  "toolchain": {
+    "path": "rust-toolchain.toml",
+    "channel": "nightly-2026-08-23",
+    "channel_kind": "nightly-dated",
+    "parse_error": null
+  },
+  "cargo_config": {
+    "path": ".cargo/config.toml",
+    "sources": [
+      {
+        "name": "build",
+        "kind": "build",
+        "key": null,
+        "linux": false,
+        "linux_only": false,
+        "classified": true,
+        "flags": [
+          "-Zthreads=8"
+        ]
+      },
+      {
+        "name": "target.cfg(target_os = \"linux\")",
+        "kind": "target",
+        "key": "cfg(target_os = \"linux\")",
+        "linux": true,
+        "linux_only": true,
+        "classified": true,
+        "flags": [
+          "-Zthreads=8",
+          "-Clink-arg=-fuse-ld=mold"
+        ]
+      }
+    ],
+    "backends": [
+      {
+        "source": "profile.dev",
+        "scope": "profile",
+        "profile": "dev",
+        "backend": "cranelift"
+      }
+    ],
+    "unstable_codegen_backend": true,
+    "parse_error": null
+  },
+  "exceptions": [
+    {
+      "path": "docs/developers-guide.md",
+      "present": false,
+      "read_error": null,
+      "sections": []
+    }
+  ],
+  "makefile": {
+    "schema_version": 1,
+    "tool": {
+      "name": "makeutil",
+      "version": "0.1.0",
+      "parser": "makefile-lossless",
+      "parser_version": "0.3.40"
+    },
+    "source": {
+      "path": "Makefile",
+      "sha256": "abc300ef4609340403459b2ad0f6134752dacc0fb2c4707240ba6497456b7a0e",
+      "byte_length": 708
+    },
+    "parse": {
+      "status": "complete",
+      "diagnostics": []
+    },
+    "rules": [
+      {
+        "ordinal": 7,
+        "targets": [
+          ".PHONY"
+        ],
+        "prerequisites": [
+          "build",
+          "lint",
+          "test",
+          "typecheck"
+        ],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [],
+        "location": {
+          "start_byte": 411,
+          "end_byte": 445,
+          "start_line": 9,
+          "start_column": 1,
+          "end_line": 10,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 8,
+        "targets": [
+          "build"
+        ],
+        "prerequisites": [
+          "target/debug/app"
+        ],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [],
+        "location": {
+          "start_byte": 445,
+          "end_byte": 470,
+          "start_line": 10,
+          "start_column": 1,
+          "end_line": 12,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 9,
+        "targets": [
+          "target/debug/app"
+        ],
+        "prerequisites": [],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "$(DEBUG_RUSTFLAGS) $(CARGO) build --bin app",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 488,
+              "end_byte": 533,
+              "start_line": 13,
+              "start_column": 1,
+              "end_line": 14,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 470,
+          "end_byte": 534,
+          "start_line": 12,
+          "start_column": 1,
+          "end_line": 15,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 10,
+        "targets": [
+          "lint"
+        ],
+        "prerequisites": [],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "$(GATE_RUSTFLAGS) $(CARGO) clippy --all-targets",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 540,
+              "end_byte": 589,
+              "start_line": 16,
+              "start_column": 1,
+              "end_line": 17,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 534,
+          "end_byte": 590,
+          "start_line": 15,
+          "start_column": 1,
+          "end_line": 18,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 11,
+        "targets": [
+          "test"
+        ],
+        "prerequisites": [],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "$(GATE_RUSTFLAGS) $(CARGO) nextest run --workspace",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 596,
+              "end_byte": 648,
+              "start_line": 19,
+              "start_column": 1,
+              "end_line": 20,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 590,
+          "end_byte": 649,
+          "start_line": 18,
+          "start_column": 1,
+          "end_line": 21,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 12,
+        "targets": [
+          "typecheck"
+        ],
+        "prerequisites": [],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "$(GATE_RUSTFLAGS) $(CARGO) check --all-targets",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 660,
+              "end_byte": 708,
+              "start_line": 22,
+              "start_column": 1,
+              "end_line": 23,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 649,
+          "end_byte": 708,
+          "start_line": 21,
+          "start_column": 1,
+          "end_line": 23,
+          "end_column": 1
+        }
+      }
+    ],
+    "variables": [
+      {
+        "ordinal": 0,
+        "name": "CARGO",
+        "operator": "?=",
+        "raw_value": "cargo",
+        "exported": false,
+        "overridden": false,
+        "define_block": false,
+        "conditions": [],
+        "location": {
+          "start_byte": 0,
+          "end_byte": 15,
+          "start_line": 1,
+          "start_column": 1,
+          "end_line": 2,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "STANDARD_THREADS_FLAG",
+        "operator": "?=",
+        "raw_value": "-Zthreads=8",
+        "exported": false,
+        "overridden": false,
+        "define_block": false,
+        "conditions": [],
+        "location": {
+          "start_byte": 15,
+          "end_byte": 52,
+          "start_line": 2,
+          "start_column": 1,
+          "end_line": 3,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "STANDARD_MOLD_FLAG",
+        "operator": "?=",
+        "raw_value": "-Clink-arg=-fuse-ld=mold",
+        "exported": false,
+        "overridden": false,
+        "define_block": false,
+        "conditions": [],
+        "location": {
+          "start_byte": 52,
+          "end_byte": 99,
+          "start_line": 3,
+          "start_column": 1,
+          "end_line": 4,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "BUILD_HOST_OS",
+        "operator": ":=",
+        "raw_value": "$(shell uname -s)",
+        "exported": false,
+        "overridden": false,
+        "define_block": false,
+        "conditions": [],
+        "location": {
+          "start_byte": 99,
+          "end_byte": 134,
+          "start_line": 4,
+          "start_column": 1,
+          "end_line": 5,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "STANDARD_RUSTFLAGS",
+        "operator": "=",
+        "raw_value": "$(STANDARD_THREADS_FLAG)$(if $(filter Linux,$(BUILD_HOST_OS)), $(STANDARD_MOLD_FLAG))",
+        "exported": false,
+        "overridden": false,
+        "define_block": false,
+        "conditions": [],
+        "location": {
+          "start_byte": 134,
+          "end_byte": 241,
+          "start_line": 5,
+          "start_column": 1,
+          "end_line": 6,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "GATE_RUSTFLAGS",
+        "operator": "=",
+        "raw_value": "RUSTFLAGS=\"$${RUSTFLAGS:+$$RUSTFLAGS }-D warnings $(STANDARD_RUSTFLAGS)\"",
+        "exported": false,
+        "overridden": false,
+        "define_block": false,
+        "conditions": [],
+        "location": {
+          "start_byte": 241,
+          "end_byte": 331,
+          "start_line": 6,
+          "start_column": 1,
+          "end_line": 7,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "DEBUG_RUSTFLAGS",
+        "operator": "=",
+        "raw_value": "RUSTFLAGS=\"$${RUSTFLAGS:+$$RUSTFLAGS }$(STANDARD_RUSTFLAGS)\"",
+        "exported": false,
+        "overridden": false,
+        "define_block": false,
+        "conditions": [],
+        "location": {
+          "start_byte": 331,
+          "end_byte": 410,
+          "start_line": 7,
+          "start_column": 1,
+          "end_line": 8,
+          "end_column": 1
+        }
+      }
+    ],
+    "includes": []
+  },
+  "makefile_error": null,
+  "workflows": []
+}

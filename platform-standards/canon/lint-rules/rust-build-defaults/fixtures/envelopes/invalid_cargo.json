@@ -17,5 +17,8 @@
   },
   "toolchain": null,
   "cargo_config": null,
-  "exceptions": []
+  "exceptions": [],
+  "makefile": null,
+  "makefile_error": null,
+  "workflows": []
 }

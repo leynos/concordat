@@ -1,0 +1,163 @@
+{
+  "schema_version": 1,
+  "kind": "policy-input/rust-build-defaults",
+  "repository": {
+    "path": "coverage-make-prefix",
+    "name": null
+  },
+  "applicability": {
+    "root_cargo_toml": true,
+    "rust_surfaces_declared": false,
+    "cargo_config": true,
+    "toolchain_file": true
+  },
+  "cargo": {
+    "parsed": {
+      "package": {
+        "name": "fixture",
+        "version": "0.1.0"
+      }
+    },
+    "surfaces": [
+      {
+        "path": "Cargo.toml",
+        "role": "crate",
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        }
+      }
+    ]
+  },
+  "toolchain": {
+    "path": "rust-toolchain.toml",
+    "channel": "nightly-2026-08-23",
+    "channel_kind": "nightly-dated",
+    "parse_error": null
+  },
+  "cargo_config": {
+    "path": ".cargo/config.toml",
+    "sources": [
+      {
+        "name": "build",
+        "kind": "build",
+        "key": null,
+        "linux": false,
+        "linux_only": false,
+        "classified": true,
+        "flags": [
+          "-Zthreads=8"
+        ]
+      },
+      {
+        "name": "target.cfg(target_os = \"linux\")",
+        "kind": "target",
+        "key": "cfg(target_os = \"linux\")",
+        "linux": true,
+        "linux_only": true,
+        "classified": true,
+        "flags": [
+          "-Zthreads=8",
+          "-Clink-arg=-fuse-ld=mold"
+        ]
+      }
+    ],
+    "backends": [
+      {
+        "source": "profile.dev",
+        "scope": "profile",
+        "profile": "dev",
+        "backend": "cranelift"
+      }
+    ],
+    "unstable_codegen_backend": true,
+    "parse_error": null
+  },
+  "exceptions": [
+    {
+      "path": "docs/developers-guide.md",
+      "present": false,
+      "read_error": null,
+      "sections": []
+    }
+  ],
+  "makefile": {
+    "schema_version": 1,
+    "tool": {
+      "name": "makeutil",
+      "version": "0.1.0",
+      "parser": "makefile-lossless",
+      "parser_version": "0.3.40"
+    },
+    "source": {
+      "path": "Makefile",
+      "sha256": "f1c9734728195ce0f4ba08163d301a297e78617e3e1517888e9b25d585e002cc",
+      "byte_length": 160
+    },
+    "parse": {
+      "status": "complete",
+      "diagnostics": []
+    },
+    "rules": [
+      {
+        "ordinal": 1,
+        "targets": [
+          "coverage"
+        ],
+        "prerequisites": [],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm \\\n\tRUSTFLAGS=\"-C link-arg=-fuse-ld=lld\" \\\n\t$(CARGO) llvm-cov --lcov --output-path lcov.info",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 26,
+              "end_byte": 160,
+              "start_line": 4,
+              "start_column": 1,
+              "end_line": 7,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 16,
+          "end_byte": 160,
+          "start_line": 3,
+          "start_column": 1,
+          "end_line": 7,
+          "end_column": 1
+        }
+      }
+    ],
+    "variables": [
+      {
+        "ordinal": 0,
+        "name": "CARGO",
+        "operator": "?=",
+        "raw_value": "cargo",
+        "exported": false,
+        "overridden": false,
+        "define_block": false,
+        "conditions": [],
+        "location": {
+          "start_byte": 0,
+          "end_byte": 15,
+          "start_line": 1,
+          "start_column": 1,
+          "end_line": 2,
+          "end_column": 1
+        }
+      }
+    ],
+    "includes": []
+  },
+  "makefile_error": null,
+  "workflows": []
+}

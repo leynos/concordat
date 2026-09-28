@@ -1,0 +1,153 @@
+{
+  "schema_version": 1,
+  "kind": "policy-input/rust-build-defaults",
+  "repository": {
+    "path": "release-workflow",
+    "name": null
+  },
+  "applicability": {
+    "root_cargo_toml": true,
+    "rust_surfaces_declared": false,
+    "cargo_config": true,
+    "toolchain_file": true
+  },
+  "cargo": {
+    "parsed": {
+      "package": {
+        "name": "fixture",
+        "version": "0.1.0"
+      }
+    },
+    "surfaces": [
+      {
+        "path": "Cargo.toml",
+        "role": "crate",
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        }
+      }
+    ]
+  },
+  "toolchain": {
+    "path": "rust-toolchain.toml",
+    "channel": "nightly-2026-08-23",
+    "channel_kind": "nightly-dated",
+    "parse_error": null
+  },
+  "cargo_config": {
+    "path": ".cargo/config.toml",
+    "sources": [
+      {
+        "name": "build",
+        "kind": "build",
+        "key": null,
+        "linux": false,
+        "linux_only": false,
+        "classified": true,
+        "flags": [
+          "-Zthreads=8"
+        ]
+      },
+      {
+        "name": "target.cfg(target_os = \"linux\")",
+        "kind": "target",
+        "key": "cfg(target_os = \"linux\")",
+        "linux": true,
+        "linux_only": true,
+        "classified": true,
+        "flags": [
+          "-Zthreads=8",
+          "-Clink-arg=-fuse-ld=mold"
+        ]
+      }
+    ],
+    "backends": [
+      {
+        "source": "profile.dev",
+        "scope": "profile",
+        "profile": "dev",
+        "backend": "cranelift"
+      }
+    ],
+    "unstable_codegen_backend": true,
+    "parse_error": null
+  },
+  "exceptions": [
+    {
+      "path": "docs/developers-guide.md",
+      "present": false,
+      "read_error": null,
+      "sections": []
+    }
+  ],
+  "makefile": null,
+  "makefile_error": null,
+  "workflows": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "parsed": {
+        "on": "pull_request",
+        "jobs": {
+          "build": {
+            "runs-on": "ubuntu-latest",
+            "steps": [
+              {
+                "name": "Not a release",
+                "run": "cargo build"
+              }
+            ]
+          }
+        }
+      },
+      "error": null
+    },
+    {
+      "path": ".github/workflows/release.yml",
+      "parsed": {
+        "on": {
+          "push": {
+            "tags": [
+              "v*"
+            ]
+          }
+        },
+        "jobs": {
+          "build": {
+            "runs-on": "ubuntu-latest",
+            "steps": [
+              {
+                "name": "Dev-profile build",
+                "run": "cargo build --target x86_64-unknown-linux-gnu"
+              },
+              {
+                "name": "Release build",
+                "env": {
+                  "RUSTFLAGS": ""
+                },
+                "run": "cross +stable build --release --target x86_64-unknown-linux-gnu"
+              },
+              {
+                "name": "Distribution-profile build",
+                "run": "cargo build --profile dist"
+              },
+              {
+                "name": "Cross distribution-profile build",
+                "run": "cross build --profile dist --target aarch64-unknown-linux-gnu"
+              },
+              {
+                "uses": "leynos/shared-actions/.github/actions/rust-build-release@0123456789abcdef0123456789abcdef01234567",
+                "with": {
+                  "target": "x86_64-unknown-linux-gnu"
+                }
+              }
+            ]
+          }
+        }
+      },
+      "error": null
+    }
+  ]
+}

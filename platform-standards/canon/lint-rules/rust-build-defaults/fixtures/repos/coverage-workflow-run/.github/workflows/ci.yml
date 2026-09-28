@@ -1,0 +1,28 @@
+on: pull_request
+jobs:
+  unselected:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Coverage
+        run: cargo llvm-cov --lcov --output-path lcov.info
+  job-env:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_PROFILE_DEV_CODEGEN_BACKEND: llvm
+    steps:
+      - name: Coverage
+        run: cargo llvm-cov --lcov --output-path lcov.info
+  inline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Coverage
+        run: |
+          CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm \
+            cargo llvm-cov --lcov --output-path lcov.info
+  expression:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Coverage
+        env:
+          CARGO_PROFILE_DEV_CODEGEN_BACKEND: ${{ vars.COVERAGE_BACKEND }}
+        run: cargo llvm-cov --lcov --output-path lcov.info
