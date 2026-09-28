@@ -19,10 +19,17 @@ syntax.
   deliberately unproven until the static grammar supports that spelling. It is
   noncompliant when a reachable recipe ignores errors (`-` prefix), carries a
   `command -v`/`which` existence guard, suppresses failure with `|| true`, or
-  no reachable recipe invokes the gate. The gate variable's `?=` assignment
-  (`WHITAKER ?= whitaker`) is the sanctioned estate pattern — local override
-  permitted, CI installs the real binary — and is deliberately not a finding
-  (doctrine decision, 2026-07-19).
+  no reachable recipe invokes the gate. A `command -v` probe followed by
+  `|| exit N`, or by `|| { ...; exit N; }` whose only exit is that final one,
+  with a non-zero `N`, fails hard rather than skipping, so it is not a guard.
+  `which` counts only as a command word, including after `{`, `then`, `else` and
+  `do`, and never inside quoted text. Before the gate, a Make variable whose
+  every definition is a run of `NAME=value` assignments with no unquoted shell
+  operator, such as `$(GATE_RUSTFLAGS)`, is read as the environment prefix it
+  expands to, for root and nested surfaces alike. The gate variable's `?=`
+  assignment (`WHITAKER ?= whitaker`) is the sanctioned estate pattern — local
+  override permitted, CI installs the real binary — and is deliberately not a
+  finding (doctrine decision, 2026-07-19).
 - **AP-001** (error, indeterminate): no `language.rust.surfaces` list was
   declared and the checkout has no root `Cargo.toml`, so Rust applicability
   cannot be established.

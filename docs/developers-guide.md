@@ -1043,6 +1043,15 @@ Under v0.3.0 the `two_hop` fixture's expectation changes from indeterminate to
 compliant. `build` and `test` targets are kept present in every case, so FP-003
 stays silent and QG-001 is the only variable under test.
 
+QG-001's shell readings (rule version 0.3.2) are pinned in two places.
+`policy/rust_makefile_baseline_precision_test.rego` holds named Rego cases for
+each reading in both directions, including every hole a review found. The
+second is `tests/unit/test_rust_makefile_baseline_shell_properties.py`, which
+generates bounded recipes and uses bash as an independent oracle: it runs each
+recipe with stub tools and asserts that whatever the policy accepts, bash
+cannot skip. A change to any of the three readings should add a named Rego case
+and, where the shape can be generated, widen the property's fragments.
+
 This policy suite is not wired into the Makefile. It is run directly with
 Conftest:
 

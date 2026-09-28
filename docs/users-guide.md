@@ -261,6 +261,23 @@ every governed Rust Cargo surface and the root `Makefile` for canonical `build`,
 concordat artefact rule run rust-makefile-baseline --repo /path/to/checkout
 ```
 
+From rule version 0.3.2, QG-001 reads three common recipe shapes as the shell
+runs them, so correct Makefiles no longer draw false findings:
+
+- A `command -v` probe followed by `|| exit N`, or by `|| { ...; exit N; }`
+  whose only exit is a final non-zero one, fails hard when the tool is missing.
+  It is no longer reported as a soft skip. A zero exit, an earlier exit in the
+  block, or a probe guarding `&&` still is.
+- `which` counts as an existence guard only where it is a command word.
+  Quoted prose such as `printf '... which writes ...'` does not count.
+- Before the gate, a Make variable whose every definition is a run of
+  `NAME=value` assignments, such as `$(GATE_RUSTFLAGS)`, is read as the
+  environment prefix it expands to, including for nested surfaces. An unquoted
+  value holding a shell operator, such as `X=1||true`, is not.
+
+A Makefile that 0.3.1 reported as noncompliant or indeterminate only because of
+one of these shapes can now be compliant. Nothing needs migrating.
+
 `dependabot-update-shape` audits `.github/dependabot.yml` against the estate's
 update shape (DB-005):
 
