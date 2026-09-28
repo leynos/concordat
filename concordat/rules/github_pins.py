@@ -14,6 +14,8 @@ boundary.
 
 from __future__ import annotations
 
+import logging
+import time
 import typing as typ
 
 import requests
@@ -30,6 +32,8 @@ from .action_pins import (
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+
+_logger = logging.getLogger(__name__)
 
 # What the client raises for a reply it could not use: a refusal or other
 # HTTP failure, a transport failure, or a body that is not JSON.
@@ -50,7 +54,30 @@ class GithubPinResolver:
         self._client: GithubClient | None = None
 
     def __call__(self, repository: str, sha: str) -> PinResolution:
-        """Return what *sha* names in *repository* (``owner/name``)."""
+        """Return what *sha* names in *repository* (``owner/name``).
+
+        Each lookup is logged at debug level with its outcome and duration,
+        so a slow or refused API can be told apart from an unknown pin.
+
+        Returns
+        -------
+        PinResolution
+            A commit, a tag object with its peeled commit, or an unresolved
+            pin carrying the reason.
+        """
+        started = time.perf_counter()
+        resolution = self._lookup(repository, sha)
+        _logger.debug(
+            "resolved action pin %s@%s: %s in %.3fs",
+            repository,
+            sha,
+            resolution["object_type"] or f"unresolved ({resolution['error']})",
+            time.perf_counter() - started,
+        )
+        return resolution
+
+    def _lookup(self, repository: str, sha: str) -> PinResolution:
+        """Ask the commit endpoint, then the tag endpoint only if it must."""
         owner, _, name = repository.partition("/")
         client = self._connected()
         try:

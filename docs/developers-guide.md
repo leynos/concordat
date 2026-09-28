@@ -626,7 +626,8 @@ Pin resolution is split so that building an envelope stays a query:
   then `git/tags/{sha}`, and translates every reply, including refusals,
   transport failures and malformed bodies, into a resolution. It builds its
   client on the first lookup, so a checkout with no pinned action reads no
-  credentials.
+  credentials, and logs each lookup's outcome and duration at debug level on the
+  `concordat.rules.github_pins` logger.
 - `build_markdown_envelope` never calls a resolver and leaves `action_pins`
   empty. `markdown_envelope.with_action_pins` is the command step that calls
   one, and `packages.resolving_pins` composes it onto any envelope builder,

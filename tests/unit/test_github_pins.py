@@ -188,3 +188,20 @@ def test_the_client_authenticates_only_with_a_token(
     """Without a token the client sends no Authorization header at all."""
     client = GithubClient(token=token, api_url=API)
     assert client.session.headers.get("Authorization") == authorization
+
+
+def test_each_lookup_is_logged_with_its_outcome(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A debug record names the pin and what it resolved to, or why not."""
+    resolver, _ = _resolver({_commit(COMMIT): _Response(403, {"message": "refused"})})
+    with caplog.at_level("DEBUG", logger="concordat.rules.github_pins"):
+        resolver(ACTION, COMMIT)
+        resolver(ACTION, TAG_OBJECT)
+    messages = [record.getMessage() for record in caplog.records]
+    assert len(messages) == 2, messages
+    assert (
+        f"{ACTION}@{COMMIT}: unresolved (git/commits/{COMMIT} could not be read"
+        in messages[0]
+    )
+    assert f"{ACTION}@{TAG_OBJECT}: unresolved ({TAG_OBJECT} is neither" in messages[1]
