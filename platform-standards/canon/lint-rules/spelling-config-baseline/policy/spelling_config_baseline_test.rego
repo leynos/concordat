@@ -253,6 +253,7 @@ test_legacy_targets if {
   profile(findings) == {
     ["PD-008", "noncompliant", 5, "Makefile defines the legacy \"spelling-helper-test\" helper target; gate replaces it"],
     ["PD-008", "noncompliant", 8, "Makefile defines the legacy \"spelling-phrase-check\" helper target; gate replaces it"],
+    ["PD-008", "noncompliant", 11, "Makefile defines the legacy \"spelling-config\" helper target; gate replaces it"],
   }
 }
 
@@ -262,6 +263,9 @@ test_legacy_variables if {
     ["PD-008", "noncompliant", 1, "Makefile assigns TYPOS_VERSION; the builder pins its own Typos and dependencies"],
     ["PD-008", "noncompliant", 2, "Makefile assigns PATHSPEC_VERSION; the builder pins its own Typos and dependencies"],
     ["PD-008", "noncompliant", 3, "Makefile assigns TYPOS_CONFIG_BUILDER_COMMIT; the builder pins its own Typos and dependencies"],
+    ["PD-008", "noncompliant", 4, "Makefile assigns TYPOS_CONFIG_BUILDER_REV; the builder pins its own Typos and dependencies"],
+    ["PD-008", "noncompliant", 5, "Makefile assigns TYPOS_CONFIG_BUILDER_REVISION; the builder pins its own Typos and dependencies"],
+    ["PD-008", "noncompliant", 6, "Makefile assigns TYPOS_CONFIG_BUILDER_SHA; the builder pins its own Typos and dependencies"],
   }
 }
 
