@@ -685,8 +685,11 @@ deny contains f if {
 # Git lets the last matching pattern decide, so a later `!` pattern unignores
 # the cache. The entries are root-level files: a pattern matches when, stripped
 # of `!` and a leading `/` or `**/`, it globs the name with `/` as the only
-# separator. A comment never matches, because no entry begins with `#`.
-gitignore_pattern(line) := trim_prefix(trim_prefix(trim_prefix(line, "!"), "**/"), "/")
+# separator. A comment never matches, because no entry begins with `#`. Git
+# reads braces literally where the glob would expand them, so they are escaped.
+literal_braces(pattern) := replace(replace(pattern, "{", `\{`), "}", `\}`)
+
+gitignore_pattern(line) := literal_braces(trim_prefix(trim_prefix(trim_prefix(line, "!"), "**/"), "/"))
 
 gitignore_matches(line, entry) if glob.match(gitignore_pattern(line), ["/"], entry)
 

@@ -154,6 +154,7 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "gitignore_none_listed": Scenario(gitignore="none-listed"),
     "gitignore_negated": Scenario(gitignore="negated"),
     "gitignore_glob": Scenario(gitignore="glob"),
+    "gitignore_braces": Scenario(gitignore="braces"),
     # -- PD-012: the overlay -------------------------------------------------
     "overlay_missing": Scenario(overlay=None),
     "overlay_schema_2": Scenario(overlay="schema-2"),

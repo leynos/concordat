@@ -36,8 +36,8 @@ _PINNED: typ.Final = "@v0.1.3"
 _CACHE: typ.Final = ".typos-oxendict-base.json"
 
 # Lines that do or do not match the JSON cache, in each of Git's spellings,
-# and ones that must never count: a comment, a directory-only pattern, and
-# the other cache file.
+# and ones that must never count: a comment, a directory-only pattern, a brace
+# list (Git reads braces literally), and the other cache file.
 _GITIGNORE_LINES: typ.Final = (
     _CACHE,
     f"/{_CACHE}",
@@ -47,6 +47,7 @@ _GITIGNORE_LINES: typ.Final = (
     "*.json",
     "!*.json",
     ".typos-oxendict-base.*",
+    ".typos-oxendict-base.{json,toml}",
     f"# {_CACHE}",
     f"{_CACHE}/",
     ".venv/",

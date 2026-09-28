@@ -53,7 +53,8 @@ phrase corrections Typos cannot express.
   last matching pattern decides: a root-anchored line
   (`/.typos-oxendict-base.json`), a `**/` prefix, or a glob such as
   `.typos-oxendict-base.*` ignores the file, and a later `!` pattern that
-  matches it unignores it again.
+  matches it unignores it again. Braces are literal, as in Git, so
+  `.typos-oxendict-base.{json,toml}` ignores neither file.
 - **PD-012** (error): `typos.local.toml` exists and declares `schema = 1`,
   even when it holds nothing else.
 - **PD-013** (error): `AGENTS.md` carries exactly one spelling block between

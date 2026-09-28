@@ -197,6 +197,15 @@ test_echo_mention if {
   count(findings) == 0
 }
 
+# Git reads braces literally, so a brace list ignores neither cache file.
+test_gitignore_braces if {
+  findings := policy.deny with input as data.fixtures.gitignore_braces
+  profile(findings) == {
+    ["PD-011", "noncompliant", 0, ".gitignore does not ignore .typos-oxendict-base.json, the builder's untracked cache"],
+    ["PD-011", "noncompliant", 0, ".gitignore does not ignore .typos-oxendict-base.toml, the builder's untracked cache"],
+  }
+}
+
 # A glob that ignores the cache counts, as Git applies it.
 test_gitignore_glob if {
   findings := policy.deny with input as data.fixtures.gitignore_glob
