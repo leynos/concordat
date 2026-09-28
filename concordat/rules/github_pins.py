@@ -79,7 +79,7 @@ class GithubPinResolver:
             "resolved action pin %s@%s: %s in %.3fs",
             repository,
             sha,
-            resolution["object_type"] or f"unresolved ({resolution['error']})",
+            _outcome(resolution),
             time.perf_counter() - started,
         )
         return resolution
@@ -145,3 +145,19 @@ def _failure(endpoint: str, error: Exception) -> PinResolution:
             f"{endpoint} was rate limited: {error}", rate_limited=True
         )
     return unresolved_pin(f"{endpoint} could not be read: {error}")
+
+
+def _outcome(resolution: PinResolution) -> str:
+    """Return a bounded category for *resolution*, safe to log.
+
+    The unresolved reason can carry part of a GitHub response body, so logs
+    record only the category; the reason itself reaches the finding.
+
+    Returns
+    -------
+    str
+        `commit`, `tag`, `rate_limited` or `unresolved`.
+    """
+    if resolution["object_type"] is not None:
+        return resolution["object_type"]
+    return "rate_limited" if resolution["rate_limited"] else "unresolved"

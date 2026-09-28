@@ -202,18 +202,22 @@ def test_the_client_authenticates_only_with_a_token(
 def test_each_lookup_is_logged_with_its_outcome(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """A debug record names the pin and what it resolved to, or why not."""
-    resolver, _ = _resolver({_commit(COMMIT): _Response(403, {"message": "refused"})})
+    """A debug record names the pin and a bounded outcome, never the body."""
+    resolver, _ = _resolver({
+        _commit(COMMIT): _Response(500, {"message": "secret-body-text"}),
+        _commit(TAG_OBJECT): _Response(429, {"message": "slow"}),
+        _commit("0" * 40): _Response(200, {"sha": "0" * 40}),
+    })
     with caplog.at_level("DEBUG", logger="concordat.rules.github_pins"):
         resolver(ACTION, COMMIT)
         resolver(ACTION, TAG_OBJECT)
+        resolver(ACTION, "0" * 40)
     messages = [record.getMessage() for record in caplog.records]
-    assert len(messages) == 2, messages
-    assert (
-        f"{ACTION}@{COMMIT}: unresolved (git/commits/{COMMIT} could not be read"
-        in messages[0]
-    )
-    assert f"{ACTION}@{TAG_OBJECT}: unresolved ({TAG_OBJECT} is neither" in messages[1]
+    assert len(messages) == 3, messages
+    assert f"{ACTION}@{COMMIT}: unresolved in " in messages[0]
+    assert f"{ACTION}@{TAG_OBJECT}: rate_limited in " in messages[1]
+    assert f"{ACTION}@{'0' * 40}: commit in " in messages[2]
+    assert not any("secret-body-text" in message for message in messages)
 
 
 @pytest.mark.parametrize(
