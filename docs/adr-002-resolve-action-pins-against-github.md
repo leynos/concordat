@@ -54,9 +54,16 @@ local API double, so none of them reaches GitHub.
 ## Consequences
 
 - `concordat artefact rule run markdown-formatting-baseline` makes up to two
-  unauthenticated or token-authenticated GET requests per distinct pin. A
-  checkout with no pinned action makes none and reads no credentials.
-  `--github-api-url` selects another API root.
+  GET requests per distinct pin, and answers a pin repeated within the run from
+  the resolver's own record. A checkout with no pinned action makes none and
+  reads no credentials. `--github-api-url` selects another API root.
+- The API budget is the operational limit. Unauthenticated, GitHub allows 60
+  calls an hour, which an estate sweep spends within a few repositories, so the
+  command authenticates with `GITHUB_TOKEN`, the concordat credentials, or
+  `gh auth token`, in that order. A lookup refused because the limit is spent
+  (429, or 403 with `X-RateLimit-Remaining: 0`) is recorded with
+  `rate_limited: true`, and PD-006 reports it as indeterminate with the remedy
+  instead of as an unknown pin.
 - The rule is no longer a pure function of the checkout for PD-006. An offline
   run reports PD-006 indeterminate on every pinned workflow, which is the
   fail-closed behaviour the package already applies to facts it cannot prove.

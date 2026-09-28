@@ -638,6 +638,32 @@ Pin resolution is split so that building an envelope stays a query:
   `--github-api-url` points it at another API root, which is how the end-to-end
   tests reach the local double in `tests/helpers/github_api.py`.
 
+The command authenticates with `GITHUB_TOKEN` or the concordat credentials, and
+otherwise with `gh auth token` (`cli._gh_cli_token`, which returns `None`
+rather than failing when `gh` is missing, logged out or slow). The shared
+`GithubClient` raises `GithubRateLimitError`, a `GithubForbiddenError`, for a
+429 or a 403 with `X-RateLimit-Remaining: 0`; the adapter records it as an
+unresolved pin with `rate_limited: true`, and PD-006 reports that apart from an
+unknown pin. `GithubPinResolver` keeps every answer for its own lifetime, so a
+pin repeated in one run costs one lookup.
+
+Regenerate the Markdown fixtures with the `makeutil` release CI pins, not
+whichever `makeutil` is first on `PATH`: a newer build reports some Makefiles
+differently and rewrites envelopes the change never touched. Install the pin
+into a scratch directory with the values from `.github/workflows/ci.yml`, then
+put it first on `PATH`:
+
+```shell
+MAKEUTIL_VERSION=0.1.0 \
+MAKEUTIL_ASSET=makeutil-x86_64-unknown-linux-musl \
+MAKEUTIL_SHA256=99dd28a138dbe07e88e4dc5dd3954e6b29b46cc959635311d326cb537253115d \
+MAKEUTIL_RELEASES=https://github.com/leynos/makeutil/releases/download \
+RUNNER_TEMP="$PWD/.makeutil-pin" GITHUB_PATH="$PWD/.makeutil-pin/path" \
+  uv run scripts/install_release_binary.py install makeutil
+PATH="$(cat .makeutil-pin/path):$PATH" uv run python \
+  platform-standards/canon/lint-rules/markdown-formatting-baseline/fixtures/generate.py
+```
+
 Offline resolvers live with their callers: the fixture generator answers from
 its `PIN_TABLE` through `resolve_from_table`, and the unit tests pass their
 own. A rule package that needs the same fact composes `resolving_pins` or calls

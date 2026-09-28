@@ -19,6 +19,7 @@ from concordat.auditor.github import (
     GithubError,
     GithubForbiddenError,
     GithubNotFoundError,
+    GithubRateLimitError,
 )
 
 API = "https://api.example.test"
@@ -32,6 +33,7 @@ class _Response:
     payload: object = None
     links: dict[str, dict[str, str]] = dataclasses.field(default_factory=dict)
     text: str = ""
+    headers: dict[str, str] = dataclasses.field(default_factory=dict)
 
     def json(self) -> object:
         """Return the canned payload."""
@@ -177,3 +179,30 @@ def test_refusal_and_failure_are_named_apart_from_absence(
     with pytest.raises(error) as caught:
         client.repository_secret_names("o", "r")
     assert not isinstance(caught.value, GithubNotFoundError), caught.value
+
+
+@pytest.mark.parametrize(
+    ("response", "error"),
+    [
+        pytest.param(_Response(429), GithubRateLimitError, id="429"),
+        pytest.param(
+            _Response(403, headers={"X-RateLimit-Remaining": "0"}),
+            GithubRateLimitError,
+            id="403-spent",
+        ),
+        pytest.param(
+            _Response(403, headers={"X-RateLimit-Remaining": "7"}),
+            GithubForbiddenError,
+            id="403-refused",
+        ),
+    ],
+)
+def test_a_spent_rate_limit_is_named_apart_from_a_refusal(
+    response: _Response, error: type[GithubError]
+) -> None:
+    """A spent limit raises its own error, which is still a refusal."""
+    client, _ = _client({"/repos/o/r/environments/codescene": response})
+    with pytest.raises(error) as raised:
+        client.environment("o", "r", "codescene")
+    assert type(raised.value) is error
+    assert isinstance(raised.value, GithubForbiddenError)

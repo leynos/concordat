@@ -335,7 +335,8 @@
     "4580e1612f6407034edd6c0e4e316d725920867b": {
       "object_type": "tag",
       "commit": "21c1be1b93ad9ed58fa840aacc3f279cde2a72ff",
-      "error": null
+      "error": null,
+      "rate_limited": false
     }
   }
 }

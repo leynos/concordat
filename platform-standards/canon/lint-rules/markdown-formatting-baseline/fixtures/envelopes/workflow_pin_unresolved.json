@@ -335,7 +335,8 @@
     "0123456789abcdef0123456789abcdef01234567": {
       "object_type": null,
       "commit": null,
-      "error": "DavidAnson/markdownlint-cli2-action@0123456789abcdef0123456789abcdef01234567 is not in the resolution table"
+      "error": "DavidAnson/markdownlint-cli2-action@0123456789abcdef0123456789abcdef01234567 is not in the resolution table",
+      "rate_limited": false
     }
   }
 }

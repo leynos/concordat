@@ -310,6 +310,13 @@ test_unresolved_pin_is_indeterminate if {
 	messages(findings, "PD-006") == {"job \"lint-test\" pins DavidAnson/markdownlint-cli2-action to 0123456789abcdef0123456789abcdef01234567, which could not be resolved to a commit: DavidAnson/markdownlint-cli2-action@0123456789abcdef0123456789abcdef01234567 is not in the resolution table"}
 }
 
+# A spent rate limit is reported apart from an unknown pin, with the remedy.
+test_rate_limited_pin_is_indeterminate_with_its_own_message if {
+	findings := policy.deny with input as data.fixtures.workflow_pin_rate_limited
+	profile(findings) == {["PD-006", "indeterminate"]}
+	messages(findings, "PD-006") == {"job \"lint-test\" pins DavidAnson/markdownlint-cli2-action to fedcba9876543210fedcba9876543210fedcba98, which was not checked because the GitHub API rate limit is spent; set GITHUB_TOKEN or log in with `gh auth login`, then run the rule again"}
+}
+
 # An envelope from a builder that predates pin resolution carries no
 # `action_pins`; its commit-shaped pin is not taken on trust.
 test_envelope_without_pin_resolution_is_indeterminate if {

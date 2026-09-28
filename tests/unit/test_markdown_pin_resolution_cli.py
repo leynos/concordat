@@ -12,6 +12,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import pathlib
+import subprocess
 import sys
 import typing as typ
 
@@ -64,6 +65,12 @@ def _commit_path(sha: str) -> str:
 
 def _tag_path(sha: str) -> str:
     return f"/repos/{ACTION}/git/tags/{sha}"
+
+
+@pytest.fixture(autouse=True)
+def _no_gh_cli_token(mocker: pytest_mock.MockFixture) -> None:
+    """Keep the host's `gh` login out of these runs; one test opts back in."""
+    mocker.patch.object(cli, "_gh_cli_token", return_value=None)
 
 
 @pytest.fixture
@@ -212,3 +219,64 @@ def test_unreadable_credentials_are_an_operational_failure(
     assert returncode == 2
     assert "cannot read the GitHub credentials" in capsys.readouterr().err
     assert github.requested == []
+
+
+@pytest.mark.timeout(120)
+def test_the_gh_cli_token_authenticates_when_no_token_is_configured(
+    tmp_path: pathlib.Path,
+    github: FakeGithubApi,
+    capsys: pytest.CaptureFixture[str],
+    mocker: pytest_mock.MockFixture,
+) -> None:
+    """Without GITHUB_TOKEN, the lookups carry the token `gh auth token` gives."""
+    mocker.patch.object(cli, "_gh_cli_token", return_value="gho-fixture")
+    returncode, _ = _run("compliant", tmp_path, github, capsys)
+    assert returncode == 0
+    assert github.authorizations == ["Bearer gho-fixture"]
+
+
+@pytest.mark.timeout(120)
+def test_a_rate_limited_lookup_is_reported_as_such(
+    tmp_path: pathlib.Path, github: FakeGithubApi, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A spent rate limit is indeterminate with its remedy, not an unknown pin."""
+    github.routes[_commit_path(COMMIT)] = Reply(
+        429, {"message": "API rate limit exceeded"}
+    )
+    returncode, document = _run("compliant", tmp_path, github, capsys)
+    assert returncode == 1, document
+    [(verdict, message)] = _pd006(document)
+    assert verdict == "indeterminate", message
+    assert "the GitHub API rate limit is spent; set GITHUB_TOKEN" in message, message
+
+
+@pytest.mark.parametrize(
+    ("completed", "expected"),
+    [
+        pytest.param(
+            subprocess.CompletedProcess([], 0, "gho-x\n", ""), "gho-x", id="logged-in"
+        ),
+        pytest.param(
+            subprocess.CompletedProcess([], 1, "stale\n", "not logged in"),
+            None,
+            id="logged-out",
+        ),
+        pytest.param(subprocess.CompletedProcess([], 0, "\n", ""), None, id="empty"),
+        pytest.param(FileNotFoundError("gh"), None, id="no-gh"),
+        pytest.param(subprocess.TimeoutExpired(["gh"], 10), None, id="slow"),
+    ],
+)
+def test_the_gh_cli_token_is_read_or_skipped(
+    completed: subprocess.CompletedProcess[str] | Exception,
+    expected: str | None,
+    mocker: pytest_mock.MockFixture,
+) -> None:
+    """`gh auth token` supplies a token when it has one and never stops the run."""
+    mocker.stopall()
+    run = mocker.patch.object(subprocess, "run")
+    if isinstance(completed, Exception):
+        run.side_effect = completed
+    else:
+        run.return_value = completed
+    assert cli._gh_cli_token() == expected
+    assert run.call_args.args[0] == ["gh", "auth", "token"]

@@ -36,6 +36,22 @@ class GithubForbiddenError(GithubError):
     """
 
 
+class GithubRateLimitError(GithubForbiddenError):
+    """Raised when GitHub refuses a request because the rate limit is spent.
+
+    GitHub answers 429, or 403 with ``X-RateLimit-Remaining: 0``. It is a
+    refusal like any other, but the remedy differs: authenticate, or wait.
+    """
+
+
+def _is_rate_limited(response: requests.Response) -> bool:
+    """Return whether *response* is GitHub refusing a spent rate limit."""
+    if response.status_code == 429:
+        return True
+    remaining = response.headers.get("X-RateLimit-Remaining")
+    return response.status_code == 403 and remaining == "0"
+
+
 class GithubClient:
     """Minimal GitHub client using the REST API."""
 
@@ -248,6 +264,9 @@ class GithubClient:
         if response.status_code == 404:
             message = f"{method} {path} returned 404."
             raise GithubNotFoundError(message)
+        if _is_rate_limited(response):
+            message = f"{method} {path} was refused: the GitHub API rate limit is spent"
+            raise GithubRateLimitError(message)
         if response.status_code in {401, 403}:
             message = f"{method} {path} was refused: {response.status_code}"
             raise GithubForbiddenError(message)

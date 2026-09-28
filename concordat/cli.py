@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 import os
 import pathlib
+import subprocess
 import sys
 import typing as typ
 
@@ -366,6 +367,9 @@ def rule_run(
 def _pin_client(api_url: str) -> GithubClient:
     """Build the GitHub client pin resolution uses, with the configured token.
 
+    The token comes from `GITHUB_TOKEN` or the concordat credentials file,
+    and otherwise from `gh auth token`: unauthenticated, GitHub allows 60
+    requests an hour, which one estate sweep spends in a few repositories.
     An unreadable or insecure credentials file means the audit cannot run as
     configured, so it is an operational failure rather than a finding.
 
@@ -386,7 +390,32 @@ def _pin_client(api_url: str) -> GithubClient:
         raise OperationalRuleError(
             message, operation="read-github-credentials"
         ) from error
-    return GithubClient(token=token, api_url=api_url)
+    return GithubClient(token=token or _gh_cli_token(), api_url=api_url)
+
+
+def _gh_cli_token() -> str | None:
+    """Return the GitHub CLI's token, or None when `gh` has none to give.
+
+    A missing `gh`, a logged-out `gh`, or a slow one leaves the client
+    unauthenticated rather than stopping the audit.
+
+    Returns
+    -------
+    str | None
+        The token `gh auth token` prints, or None.
+    """
+    try:
+        completed = subprocess.run(
+            ["gh", "auth", "token"],  # noqa: S607 - gh is resolved on PATH by design
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    token = completed.stdout.strip()
+    return token if completed.returncode == 0 and token else None
 
 
 artefact_app.command(rule_app, name="rule")

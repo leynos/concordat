@@ -20,7 +20,7 @@ import typing as typ
 
 import requests
 
-from concordat.auditor.github import GithubClient, GithubError
+from concordat.auditor.github import GithubClient, GithubError, GithubRateLimitError
 
 from .action_pins import (
     OBJECT_COMMIT,
@@ -52,12 +52,15 @@ class GithubPinResolver:
         """Keep the factory that builds the client on first use."""
         self._client_factory = client_factory
         self._client: GithubClient | None = None
+        self._answers: dict[tuple[str, str], PinResolution] = {}
 
     def __call__(self, repository: str, sha: str) -> PinResolution:
         """Return what *sha* names in *repository* (``owner/name``).
 
         Each lookup is logged at debug level with its outcome and duration,
-        so a slow or refused API can be told apart from an unknown pin.
+        so a slow or refused API can be told apart from an unknown pin. An
+        answer is kept for the life of the resolver, so a pin repeated within
+        one run costs one lookup, and a spent rate limit is not hammered.
 
         Returns
         -------
@@ -65,8 +68,12 @@ class GithubPinResolver:
             A commit, a tag object with its peeled commit, or an unresolved
             pin carrying the reason.
         """
+        known = self._answers.get((repository, sha))
+        if known is not None:
+            return known
         started = time.perf_counter()
         resolution = self._lookup(repository, sha)
+        self._answers[repository, sha] = resolution
         _logger.debug(
             "resolved action pin %s@%s: %s in %.3fs",
             repository,
@@ -83,7 +90,7 @@ class GithubPinResolver:
         try:
             commit = client.git_commit(owner, name, sha)
         except _LOOKUP_FAILURES as error:
-            return unresolved_pin(f"git/commits/{sha} could not be read: {error}")
+            return _failure(f"git/commits/{sha}", error)
         if commit is not None:
             return commit_pin(sha)
         return _tag_resolution(client, owner, name, sha)
@@ -102,7 +109,7 @@ def _tag_resolution(
     try:
         tag = client.git_tag(owner, name, sha)
     except _LOOKUP_FAILURES as error:
-        return unresolved_pin(f"git/tags/{sha} could not be read: {error}")
+        return _failure(f"git/tags/{sha}", error)
     if tag is None:
         return unresolved_pin(f"{sha} is neither a commit nor a tag in {owner}/{name}")
     if not isinstance(tag, dict):
@@ -119,3 +126,21 @@ def _peeled_commit(tag: cabc.Mapping[str, object]) -> str | None:
         return None
     sha = target.get("sha")
     return sha if isinstance(sha, str) else None
+
+
+def _failure(endpoint: str, error: Exception) -> PinResolution:
+    """Return the unresolved pin for a lookup of *endpoint* that failed.
+
+    A spent rate limit is flagged, so the policy can say that authenticating
+    or waiting would resolve the pin, rather than suggest the pin is wrong.
+
+    Returns
+    -------
+    PinResolution
+        An unresolved pin carrying the endpoint and the failure.
+    """
+    if isinstance(error, GithubRateLimitError):
+        return unresolved_pin(
+            f"{endpoint} was rate limited: {error}", rate_limited=True
+        )
+    return unresolved_pin(f"{endpoint} could not be read: {error}")

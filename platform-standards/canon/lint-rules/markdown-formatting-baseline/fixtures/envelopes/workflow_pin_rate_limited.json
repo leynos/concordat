@@ -21,8 +21,8 @@
     },
     "source": {
       "path": "Makefile",
-      "sha256": "c1d7a17477f4dfe415764b3745362907e23ec404930c13ce35c4254da8cfca2d",
-      "byte_length": 422
+      "sha256": "bc09d41d91fc2526e8821f37591d427bfd2a793bad0848f354947767d9733903",
+      "byte_length": 566
     },
     "parse": {
       "status": "complete",
@@ -30,7 +30,7 @@
     },
     "rules": [
       {
-        "ordinal": 3,
+        "ordinal": 5,
         "targets": [
           ".PHONY"
         ],
@@ -42,16 +42,16 @@
         "conditions": [],
         "recipes": [],
         "location": {
-          "start_byte": 244,
-          "end_byte": 267,
-          "start_line": 5,
+          "start_byte": 269,
+          "end_byte": 292,
+          "start_line": 7,
           "start_column": 1,
-          "end_line": 7,
+          "end_line": 9,
           "end_column": 1
         }
       },
       {
-        "ordinal": 4,
+        "ordinal": 6,
         "targets": [
           "fmt"
         ],
@@ -61,46 +61,61 @@
         "recipes": [
           {
             "ordinal": 0,
-            "text": "$(MDTABLEFIX) --in-place $(MDTABLEFIX_SELECT)",
+            "text": "$(RUFF) format",
             "silent": false,
             "ignore_errors": false,
             "always_execute": false,
             "location": {
-              "start_byte": 272,
-              "end_byte": 319,
-              "start_line": 8,
+              "start_byte": 315,
+              "end_byte": 331,
+              "start_line": 10,
               "start_column": 1,
-              "end_line": 9,
+              "end_line": 11,
               "end_column": 1
             }
           },
           {
             "ordinal": 1,
+            "text": "$(MDTABLEFIX) --in-place $(MDTABLEFIX_SELECT) $(MDTABLEFIX_RULES)",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 331,
+              "end_byte": 398,
+              "start_line": 11,
+              "start_column": 1,
+              "end_line": 12,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 2,
             "text": "@unset FORCE_COLOR; $(MDLINT) --fix \"**/*.md\"",
             "silent": true,
             "ignore_errors": false,
             "always_execute": false,
             "location": {
-              "start_byte": 319,
-              "end_byte": 366,
-              "start_line": 9,
+              "start_byte": 398,
+              "end_byte": 445,
+              "start_line": 12,
               "start_column": 1,
-              "end_line": 10,
+              "end_line": 13,
               "end_column": 1
             }
           }
         ],
         "location": {
-          "start_byte": 267,
-          "end_byte": 367,
-          "start_line": 7,
+          "start_byte": 292,
+          "end_byte": 446,
+          "start_line": 9,
           "start_column": 1,
-          "end_line": 11,
+          "end_line": 14,
           "end_column": 1
         }
       },
       {
-        "ordinal": 5,
+        "ordinal": 7,
         "targets": [
           "check-fmt"
         ],
@@ -110,26 +125,41 @@
         "recipes": [
           {
             "ordinal": 0,
-            "text": "$(MDTABLEFIX) --check $(MDTABLEFIX_SELECT)",
+            "text": "$(RUFF) format --check",
             "silent": false,
             "ignore_errors": false,
             "always_execute": false,
             "location": {
-              "start_byte": 378,
-              "end_byte": 422,
-              "start_line": 12,
+              "start_byte": 478,
+              "end_byte": 502,
+              "start_line": 15,
               "start_column": 1,
-              "end_line": 13,
+              "end_line": 16,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "text": "$(MDTABLEFIX) --check $(MDTABLEFIX_SELECT) $(MDTABLEFIX_RULES)",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 502,
+              "end_byte": 566,
+              "start_line": 16,
+              "start_column": 1,
+              "end_line": 17,
               "end_column": 1
             }
           }
         ],
         "location": {
-          "start_byte": 367,
-          "end_byte": 422,
-          "start_line": 11,
+          "start_byte": 446,
+          "end_byte": 566,
+          "start_line": 14,
           "start_column": 1,
-          "end_line": 13,
+          "end_line": 17,
           "end_column": 1
         }
       }
@@ -137,16 +167,16 @@
     "variables": [
       {
         "ordinal": 0,
-        "name": "MDLINT",
-        "operator": "?=",
-        "raw_value": "$(shell command -v markdownlint-cli2 2>/dev/null || echo \"$(HOME)/.bun/bin/markdownlint-cli2\")",
+        "name": "RUFF",
+        "operator": ":=",
+        "raw_value": "uv run ruff",
         "exported": false,
         "overridden": false,
         "define_block": false,
         "conditions": [],
         "location": {
           "start_byte": 0,
-          "end_byte": 105,
+          "end_byte": 20,
           "start_line": 1,
           "start_column": 1,
           "end_line": 2,
@@ -155,16 +185,16 @@
       },
       {
         "ordinal": 1,
-        "name": "MDTABLEFIX",
+        "name": "MDLINT",
         "operator": "?=",
-        "raw_value": "$(shell which mdtablefix 2>/dev/null || echo \"$(HOME)/.cargo/bin/mdtablefix\")",
+        "raw_value": "$(shell command -v markdownlint-cli2 2>/dev/null || printf '%s' \"$$HOME/.bun/bin/markdownlint-cli2\")",
         "exported": false,
         "overridden": false,
         "define_block": false,
         "conditions": [],
         "location": {
-          "start_byte": 105,
-          "end_byte": 197,
+          "start_byte": 20,
+          "end_byte": 131,
           "start_line": 2,
           "start_column": 1,
           "end_line": 3,
@@ -173,6 +203,24 @@
       },
       {
         "ordinal": 2,
+        "name": "MDTABLEFIX",
+        "operator": "?=",
+        "raw_value": "mdtablefix",
+        "exported": false,
+        "overridden": false,
+        "define_block": false,
+        "conditions": [],
+        "location": {
+          "start_byte": 131,
+          "end_byte": 156,
+          "start_line": 3,
+          "start_column": 1,
+          "end_line": 4,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 3,
         "name": "MDTABLEFIX_SELECT",
         "operator": "=",
         "raw_value": "--git --include-untracked",
@@ -181,11 +229,29 @@
         "define_block": false,
         "conditions": [],
         "location": {
-          "start_byte": 197,
-          "end_byte": 243,
-          "start_line": 3,
+          "start_byte": 156,
+          "end_byte": 202,
+          "start_line": 4,
           "start_column": 1,
-          "end_line": 4,
+          "end_line": 5,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "MDTABLEFIX_RULES",
+        "operator": "=",
+        "raw_value": "--wrap --renumber --breaks --ellipsis --fences",
+        "exported": false,
+        "overridden": false,
+        "define_block": false,
+        "conditions": [],
+        "location": {
+          "start_byte": 202,
+          "end_byte": 268,
+          "start_line": 5,
+          "start_column": 1,
+          "end_line": 6,
           "end_column": 1
         }
       }
@@ -253,7 +319,7 @@
               },
               {
                 "name": "Lint Markdown",
-                "uses": "DavidAnson/markdownlint-cli2-action@21c1be1b93ad9ed58fa840aacc3f279cde2a72ff",
+                "uses": "DavidAnson/markdownlint-cli2-action@fedcba9876543210fedcba9876543210fedcba98",
                 "with": {
                   "globs": "**/*.md"
                 }
@@ -266,11 +332,11 @@
     }
   ],
   "action_pins": {
-    "21c1be1b93ad9ed58fa840aacc3f279cde2a72ff": {
-      "object_type": "commit",
-      "commit": "21c1be1b93ad9ed58fa840aacc3f279cde2a72ff",
-      "error": null,
-      "rate_limited": false
+    "fedcba9876543210fedcba9876543210fedcba98": {
+      "object_type": null,
+      "commit": null,
+      "error": "git/commits/fedcba9876543210fedcba9876543210fedcba98 was rate limited",
+      "rate_limited": true
     }
   }
 }
