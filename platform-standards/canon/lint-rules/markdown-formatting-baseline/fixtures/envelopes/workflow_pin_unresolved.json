@@ -298,6 +298,11 @@
       "parsed": {
         "name": "CI",
         "on": {
+          "push": {
+            "branches": [
+              "main"
+            ]
+          },
           "pull_request": null
         },
         "jobs": {
@@ -305,11 +310,16 @@
             "runs-on": "ubuntu-latest",
             "steps": [
               {
+                "name": "Check out repository",
                 "uses": "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0"
               },
               {
+                "name": "Check formatting",
+                "run": "make check-fmt"
+              },
+              {
                 "name": "Lint Markdown",
-                "uses": "DavidAnson/markdownlint-cli2-action@v24",
+                "uses": "DavidAnson/markdownlint-cli2-action@0123456789abcdef0123456789abcdef01234567",
                 "with": {
                   "globs": "**/*.md"
                 }
@@ -321,5 +331,11 @@
       "error": null
     }
   ],
-  "action_pins": {}
+  "action_pins": {
+    "0123456789abcdef0123456789abcdef01234567": {
+      "object_type": null,
+      "commit": null,
+      "error": "DavidAnson/markdownlint-cli2-action@0123456789abcdef0123456789abcdef01234567 is not in the resolution table"
+    }
+  }
 }

@@ -23,6 +23,7 @@ import pytest
 from ruamel.yaml import YAML
 
 from concordat.rules import runner
+from concordat.rules.action_pins import PinResolution, commit_pin, unresolved_pin
 from concordat.rules.markdown_envelope import build_markdown_envelope
 
 _RULE_ID: typ.Final = "markdown-formatting-baseline"
@@ -34,6 +35,9 @@ USERS_GUIDE: typ.Final = REPO_ROOT / "docs" / "users-guide.md"
 # fails both recipes at once, so the floor is part of the wiring.
 MDTABLEFIX_FLOOR: typ.Final = "0.6.0"
 MARKDOWNLINT_ACTION: typ.Final = "DavidAnson/markdownlint-cli2-action"
+# The v24.2.0 commit, as `git/commits/{sha}` answers for it. The annotated tag
+# object `4580e161…` peels to it; PD-006 refuses that object as a pin.
+MARKDOWNLINT_ACTION_COMMIT: typ.Final = "21c1be1b93ad9ed58fa840aacc3f279cde2a72ff"
 INSTALL_MDTABLEFIX_ACTION: typ.Final = (
     "leynos/shared-actions/.github/actions/install-mdtablefix"
 )
@@ -101,14 +105,24 @@ def _step_using(job: dict[str, object], action: str) -> dict[str, object]:
 
 
 @pytest.mark.timeout(120)
+def _resolve_offline(repository: str, sha: str) -> PinResolution:
+    """Answer that the v24.2.0 commit is a commit, and nothing else."""
+    if sha == MARKDOWNLINT_ACTION_COMMIT:
+        return commit_pin(sha)
+    return unresolved_pin(f"{repository}@{sha} is not the v24.2.0 commit")
+
+
 def test_repository_satisfies_its_own_markdown_baseline() -> None:
     """Running the shipped rule over this checkout reports no findings.
 
     This is the wiring change the rule exists to mandate: `fmt` and
     `check-fmt` calling the tools directly, the canonical markdownlint
-    configuration, and CI linting only through the pinned action.
+    configuration, and CI linting only through the pinned action. The pin
+    resolves offline so the suite never reaches the network;
+    `test_ci_pins_the_action_to_its_v24_2_0_commit` holds the workflow to the
+    one SHA the offline resolver knows.
     """
-    envelope = build_markdown_envelope(REPO_ROOT)
+    envelope = build_markdown_envelope(REPO_ROOT, resolver=_resolve_offline)
     results = runner._invoke_conftest(_RULE_ID, envelope)
     findings = runner._findings_from_results(results)
     assert list(findings) == [], findings
@@ -119,6 +133,11 @@ def test_ci_pins_the_action_to_a_full_commit_sha() -> None:
     pins = _pins(CI_WORKFLOW)
     assert len(pins) == 1, pins
     assert _FULL_SHA.fullmatch(pins[0]), pins[0]
+
+
+def test_ci_pins_the_action_to_its_v24_2_0_commit() -> None:
+    """The pin is the v24.2.0 commit, not the tag object that peels to it."""
+    assert _pins(CI_WORKFLOW) == [MARKDOWNLINT_ACTION_COMMIT]
 
 
 def test_the_documented_pin_matches_the_workflow() -> None:

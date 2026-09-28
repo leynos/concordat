@@ -605,12 +605,28 @@ facts reports a compliance it never established. Three kinds exist:
   Markdown file outside the pruned dependency, build, and cache directories
   brings the checkout into scope. `markdown-formatting-baseline` is not
   registered by identifier: it declares this kind, which is the ordinary shape
-  for a package bringing its own builder.
+  for a package bringing its own builder. It also carries `action_pins`, what
+  each full-SHA pin of `DavidAnson/markdownlint-cli2-action` names, from the
+  resolver the builder is given
+  ([ADR-002](adr-002-resolve-action-pins-against-github.md)).
 
 The Markdown package's `fixtures/generate.py` lays each scenario out as a
 temporary checkout and records what `build_markdown_envelope` produces, so the
 checked-in envelopes are exactly the production builder's output;
 `tests/unit/test_markdown_fixture_generator.py` fails if they drift.
+
+`concordat/rules/action_pins.py` owns the question "what does this action pin
+name?". A resolver is a `(repository, sha) -> PinResolution` callable that
+never raises; `github_resolver` is the production one and asks the REST API.
+`build_markdown_envelope` defaults to a resolver that resolves nothing, so a
+caller that supplies none gets indeterminate pins rather than trusted ones.
+Only the package builder in `packages.py` constructs the GitHub resolver,
+lazily, through `_resolve_pin_online`. Offline resolvers live with their
+callers, not in the package: the fixture generator answers from its `PIN_TABLE`
+through `resolve_from_table`, which the behavioural steps also patch in, and
+the unit tests pass their own. None of them reaches the network. A rule package
+that needs the same fact reuses `github_resolver` and `resolve_pins` rather
+than calling the API itself.
 
 ### Choosing the envelope for a package
 

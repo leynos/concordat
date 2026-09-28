@@ -150,6 +150,7 @@ For the full story, head to the docs:
 - [Developers' guide](docs/developers-guide.md) – Local gates and contributor
   workflows
 - [ADR-001: Four-tier Python linting](docs/adr-001-four-tier-python-linting.md)
+- [ADR-002: Resolve action pins against GitHub](docs/adr-002-resolve-action-pins-against-github.md)
   – Lint architecture and dead-code policy
 - [OpenTofu coding standards](docs/opentofu-coding-standards.md) – House rules
   for writing OpenTofu code

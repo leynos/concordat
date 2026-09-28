@@ -22,11 +22,13 @@ from ruamel.yaml.error import YAMLError
 from concordat.errors import OperationalRuleError
 
 from . import fs_probe
+from .action_pins import PinResolution, PinResolver, resolve_pins, unresolved_pin
 from .jsonc import JsoncError, loads_jsonc
 from .makefile_facts import MakeutilReport, inspect_makefile
 
 ENVELOPE_SCHEMA_VERSION: typ.Final = 1
 ENVELOPE_KIND: typ.Final = "policy-input/markdown-formatting-baseline"
+DEFAULT_MARKDOWNLINT_ACTION: typ.Final = "DavidAnson/markdownlint-cli2-action"
 
 MARKDOWNLINT_CONFIG_FILENAME: typ.Final = ".markdownlint-cli2.jsonc"
 # Every other configuration file name markdownlint-cli2 would honour. The
@@ -115,6 +117,7 @@ class MarkdownEnvelope(typ.TypedDict):
     markdownlint: MarkdownlintConfig | None
     alternate_markdownlint_configs: list[str]
     workflows: list[WorkflowFile]
+    action_pins: dict[str, PinResolution]
 
 
 def _resolved_root(checkout: pathlib.Path) -> pathlib.Path:
@@ -431,13 +434,29 @@ def _load_workflows(checkout: pathlib.Path, root: pathlib.Path) -> list[Workflow
     ]
 
 
-def build_markdown_envelope(checkout: pathlib.Path) -> MarkdownEnvelope:
+def _offline(repository: str, sha: str) -> PinResolution:
+    """Leave every pin unresolved when no resolver is supplied."""
+    return unresolved_pin(f"{repository}@{sha} was not resolved: no resolver")
+
+
+def build_markdown_envelope(
+    checkout: pathlib.Path,
+    *,
+    action: str = DEFAULT_MARKDOWNLINT_ACTION,
+    resolver: PinResolver = _offline,
+) -> MarkdownEnvelope:
     """Assemble the Markdown formatting policy input for one local checkout.
 
     Parameters
     ----------
     checkout:
         Path to the checkout under audit.
+    action:
+        The Markdown lint action whose full-SHA pins are resolved.
+    resolver:
+        Answers whether a pin names a commit or an annotated tag. Without one,
+        every pin is recorded unresolved, which the policy reports as
+        indeterminate rather than compliant.
 
     An `OperationalRuleError` propagates from the fact readers if the root
     `Makefile` cannot be parsed by `makeutil`, a fact file exists but cannot
@@ -457,6 +476,7 @@ def build_markdown_envelope(checkout: pathlib.Path) -> MarkdownEnvelope:
     ):
         makefile_report = inspect_makefile(makefile_path).report
     markdownlint = _load_markdownlint_config(checkout, root)
+    workflows = _load_workflows(checkout, root)
     return {
         "schema_version": ENVELOPE_SCHEMA_VERSION,
         "kind": ENVELOPE_KIND,
@@ -470,5 +490,8 @@ def build_markdown_envelope(checkout: pathlib.Path) -> MarkdownEnvelope:
         "makefile": makefile_report,
         "markdownlint": markdownlint,
         "alternate_markdownlint_configs": _alternate_configs(checkout),
-        "workflows": _load_workflows(checkout, root),
+        "workflows": workflows,
+        "action_pins": resolve_pins(
+            typ.cast("list[dict[str, object]]", workflows), action, resolver
+        ),
     }

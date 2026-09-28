@@ -43,7 +43,9 @@ dependency graph so nothing is resolved from the registry at run time.
   false condition (`if: false` or `if: ${{ false }}`), or sitting in a job
   guarded by one, never runs and is not evidence that CI lints Markdown; it is
   reported in its own right. A checkout with no action step at all is
-  noncompliant.
+  noncompliant. A 40-character pin must name a commit: a pin to an annotated
+  tag object is noncompliant, and the finding names the commit the tag peels
+  to. A pin the runner could not resolve is indeterminate.
 - **EN-001** (error, indeterminate): the policy-input envelope has an unknown
   schema version.
 
@@ -94,6 +96,15 @@ rule or `include` in the closure, a recovered parse, or a dynamic recursive
 Make invocation is reported as `indeterminate` rather than guessed. Flags
 hidden behind an unresolvable variable are likewise indeterminate.
 
+The pin's object type is not visible in the checkout. The envelope builder asks
+the GitHub REST API what each full-SHA pin of the action names
+(`git/commits/{sha}`, then `git/tags/{sha}`) and records the answer under
+`action_pins`; the policy judges that fact. Offline, refused, or unknown pins
+are recorded unresolved, and an envelope without the fact is treated the same,
+so a run without network access reports PD-006 indeterminate rather than
+passing. See
+[ADR-002](../../../../docs/adr-002-resolve-action-pins-against-github.md).
+
 Workflow facts carry no line numbers, so PD-006 findings cite line `0`. A job
 that calls a reusable workflow is not inspected; when no action step exists and
 such a job does, the absence is indeterminate rather than proven.
@@ -119,7 +130,8 @@ A repository is `compliant` only when the finding set is empty.
   `conftest verify --data`.
 - `fixtures/generate.py` — lays each scenario out as a checkout and records
   the envelope the production builder produces for it; rerun it whenever the
-  `makeutil` pin or a fixture changes.
+  `makeutil` pin or a fixture changes. Action pins resolve from its
+  `PIN_TABLE`, not the network, so regeneration is deterministic.
 
 The canonical `.markdownlint-cli2.jsonc` file that consumers copy verbatim is at
 `platform-standards/canon/lint/markdown/.markdownlint-cli2.jsonc`.

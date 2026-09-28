@@ -23,8 +23,10 @@ import typing as typ
 from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
+from concordat import credentials
 from concordat.errors import OperationalRuleError
 
+from .action_pins import PinResolution, PinResolver, github_resolver
 from .codescene_coverage_envelope import (
     ENVELOPE_KIND as COVERAGE_ENVELOPE_KIND,
 )
@@ -258,6 +260,26 @@ def _makefile_envelope(
     return build_envelope(checkout)
 
 
+@functools.cache
+def _github_pin_resolver() -> PinResolver:
+    """Return the one GitHub-backed pin resolver this process uses.
+
+    Built on first use, so a checkout with no pinned action reads no
+    credentials and opens no session.
+
+    Returns
+    -------
+    PinResolver
+        The process-wide GitHub resolver.
+    """
+    return github_resolver(token=credentials.github_token())
+
+
+def _resolve_pin_online(repository: str, sha: str) -> PinResolution:
+    """Ask GitHub what the pinned *sha* names in *repository*."""
+    return _github_pin_resolver()(repository, sha)
+
+
 def _markdown_envelope(
     checkout: pathlib.Path,
     _parameters: cabc.Mapping[str, object] | None = None,
@@ -266,7 +288,10 @@ def _markdown_envelope(
 
     `markdown-formatting-baseline` reads its tunables through
     `data.parameters` in the policy, as `rust-makefile-baseline` does, so the
-    second argument exists only to give every builder one callable type.
+    second argument exists only to give every builder one callable type. The
+    action's full-SHA pins are resolved against GitHub, so PD-006 can refuse
+    an annotated tag object; without network access they stay unresolved and
+    the policy reports them indeterminate.
 
     Returns
     -------
@@ -274,7 +299,7 @@ def _markdown_envelope(
         The `policy-input/markdown-formatting-baseline` document for
         *checkout*.
     """
-    return build_markdown_envelope(checkout)
+    return build_markdown_envelope(checkout, resolver=_resolve_pin_online)
 
 
 def _coverage_envelope(

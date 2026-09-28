@@ -298,6 +298,11 @@
       "parsed": {
         "name": "CI",
         "on": {
+          "push": {
+            "branches": [
+              "main"
+            ]
+          },
           "pull_request": null
         },
         "jobs": {
@@ -305,11 +310,16 @@
             "runs-on": "ubuntu-latest",
             "steps": [
               {
+                "name": "Check out repository",
                 "uses": "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0"
               },
               {
+                "name": "Check formatting",
+                "run": "make check-fmt"
+              },
+              {
                 "name": "Lint Markdown",
-                "uses": "DavidAnson/markdownlint-cli2-action@v24",
+                "uses": "DavidAnson/markdownlint-cli2-action@4580e1612f6407034edd6c0e4e316d725920867b",
                 "with": {
                   "globs": "**/*.md"
                 }
@@ -321,5 +331,11 @@
       "error": null
     }
   ],
-  "action_pins": {}
+  "action_pins": {
+    "4580e1612f6407034edd6c0e4e316d725920867b": {
+      "object_type": "tag",
+      "commit": "21c1be1b93ad9ed58fa840aacc3f279cde2a72ff",
+      "error": null
+    }
+  }
 }

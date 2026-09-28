@@ -528,6 +528,11 @@ cache directories, and reports:
   is provisioning for something else (a test suite that runs the linter as a
   subprocess, say). An action step guarded by a literally false condition, or
   sitting in a job guarded by one, never runs and does not satisfy the check.
+  The pin must name a commit, not an annotated tag object: the rule asks the
+  GitHub API what each pin names, reports a tag object as noncompliant with the
+  commit to pin instead, and reports PD-006 as `indeterminate` when it cannot
+  reach the API. Set `GITHUB_TOKEN`, or configure concordat credentials, to
+  avoid the unauthenticated rate limit.
 
 The Makefile checks expand Make variables that are assigned exactly once and
 unconditionally, so `$(MDTABLEFIX) --check $(MDTABLEFIX_SELECT)` is audited

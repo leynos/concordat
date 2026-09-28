@@ -4,8 +4,10 @@ Each scenario lays out a synthetic checkout from the fixture files under
 ``makefiles/``, ``markdownlint/``, and ``workflows/``, then hands it to the
 production ``build_markdown_envelope`` so the recorded envelopes are exactly
 what ``concordat artefact rule run`` would send to Conftest. The Makefile
-facts therefore come from the pinned ``makeutil`` on PATH. ``data.json``
-bundles every envelope under a ``fixtures`` key for ``conftest verify``.
+facts therefore come from the pinned ``makeutil`` on PATH. Action pins are
+resolved from ``PIN_TABLE`` rather than the GitHub API, so regeneration is
+offline and deterministic. ``data.json`` bundles every envelope under a
+``fixtures`` key for ``conftest verify``.
 
 Run from the repository root::
 
@@ -22,6 +24,12 @@ import tempfile
 import typing as typ
 from pathlib import Path
 
+from concordat.rules.action_pins import (
+    PinResolution,
+    commit_pin,
+    tag_pin,
+    unresolved_pin,
+)
 from concordat.rules.markdown_envelope import (
     MarkdownEnvelope,
     build_markdown_envelope,
@@ -39,6 +47,33 @@ ENVELOPES_DIR = FIXTURES_DIR / "envelopes"
 # The recorded repository path must not leak the temporary directory the
 # scenario was laid out in; every envelope names the checkout as `.`.
 RECORDED_REPOSITORY_PATH: typ.Final = "."
+
+# What the fixture pins name in DavidAnson/markdownlint-cli2-action, as the
+# REST API answers: v24.2.0 is the commit 21c1be1b, and 4580e161 is the
+# annotated tag object that peels to it. Any other SHA is unresolved.
+V24_2_0_COMMIT: typ.Final = "21c1be1b93ad9ed58fa840aacc3f279cde2a72ff"
+V24_2_0_TAG_OBJECT: typ.Final = "4580e1612f6407034edd6c0e4e316d725920867b"
+PIN_TABLE: typ.Final = {
+    V24_2_0_COMMIT: commit_pin(V24_2_0_COMMIT),
+    V24_2_0_TAG_OBJECT: tag_pin(V24_2_0_COMMIT),
+}
+
+
+def resolve_from_table(repository: str, sha: str) -> PinResolution:
+    """Answer what *sha* names from ``PIN_TABLE``, never from the network.
+
+    A SHA missing from the table is unresolved, never assumed to be a commit,
+    which is what the ``workflow_pin_unresolved`` scenario records.
+
+    Returns
+    -------
+    PinResolution
+        The table's entry for *sha*, or an unresolved pin.
+    """
+    found = PIN_TABLE.get(sha)
+    if found is None:
+        return unresolved_pin(f"{repository}@{sha} is not in the resolution table")
+    return found
 
 
 @dataclasses.dataclass(frozen=True)
@@ -121,6 +156,8 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "workflow_disabled_action": Scenario(workflows={"ci.yml": "disabled-action"}),
     "workflow_disabled_job": Scenario(workflows={"ci.yml": "disabled-job"}),
     "workflow_echo_mention": Scenario(workflows={"ci.yml": "echo-mention"}),
+    "workflow_tag_object": Scenario(workflows={"ci.yml": "tag-object"}),
+    "workflow_pin_unresolved": Scenario(workflows={"ci.yml": "unresolved-pin"}),
 }
 
 
@@ -175,7 +212,7 @@ def build_fixture_envelope(scenario: Scenario) -> MarkdownEnvelope:
     with tempfile.TemporaryDirectory(prefix="markdown-fixture-") as scratch:
         checkout = Path(scratch)
         lay_out(scenario, checkout)
-        envelope = build_markdown_envelope(checkout)
+        envelope = build_markdown_envelope(checkout, resolver=resolve_from_table)
     envelope["repository"]["path"] = RECORDED_REPOSITORY_PATH
     return envelope
 

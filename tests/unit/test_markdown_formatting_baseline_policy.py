@@ -86,6 +86,8 @@ EXPECTED_PROFILES: typ.Final[dict[str, Profile]] = {
     "workflow_disabled_action": frozenset({("PD-006", "noncompliant")}),
     "workflow_disabled_job": frozenset({("PD-006", "noncompliant")}),
     "workflow_echo_mention": frozenset(),
+    "workflow_tag_object": frozenset({("PD-006", "noncompliant")}),
+    "workflow_pin_unresolved": frozenset({("PD-006", "indeterminate")}),
 }
 
 

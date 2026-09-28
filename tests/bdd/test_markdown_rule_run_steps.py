@@ -12,11 +12,14 @@ import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from concordat import cli
+from concordat.rules import packages
 
 from .conftest import RunResult
 
 if typ.TYPE_CHECKING:
     import types
+
+    import pytest_mock
 
     from tests.conftest import CmdMox
 
@@ -99,11 +102,22 @@ def checkout(tmp_path: pathlib.Path) -> pathlib.Path:
         'a Markdown checkout laid out from the "{scenario}" fixture scenario'
     )
 )
-def given_markdown_checkout(checkout: pathlib.Path, scenario: str) -> None:
-    """Lay the named generator scenario out as the checkout under audit."""
+def given_markdown_checkout(
+    checkout: pathlib.Path, scenario: str, mocker: pytest_mock.MockFixture
+) -> None:
+    """Lay the named generator scenario out as the checkout under audit.
+
+    Pins resolve from the generator's table, as the recorded envelopes did,
+    so the run never reaches the GitHub API.
+    """
     generate = _load_generator()
     checkout.mkdir()
     generate.lay_out(generate.SCENARIOS[scenario], checkout)
+    mocker.patch.object(
+        packages,
+        "_resolve_pin_online",
+        generate.resolve_from_table,
+    )
 
 
 @given(parsers.cfparse('makeutil reports the Markdown "{fixture}" fixture facts'))

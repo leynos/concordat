@@ -17,6 +17,6 @@ jobs:
         run: make check-fmt
 
       - name: Lint Markdown
-        uses: DavidAnson/markdownlint-cli2-action@21c1be1b93ad9ed58fa840aacc3f279cde2a72ff  # v24.2.0
+        uses: DavidAnson/markdownlint-cli2-action@0123456789abcdef0123456789abcdef01234567  # not in the resolution table
         with:
           globs: '**/*.md'
