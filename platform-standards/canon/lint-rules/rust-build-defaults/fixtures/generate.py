@@ -7,11 +7,13 @@ envelope builder is run over each one, so the fixtures the Rego suite verifies
 against are the documents the sensor actually produces rather than a
 handwritten approximation of them.
 
-Three synthetic envelopes cover cases that cannot be built from a checkout: an
+Four synthetic envelopes cover cases that cannot be built from a checkout: an
 envelope of an unknown schema version, one whose ``cargo`` payload has the
-wrong shape, and one whose exception document the filesystem refused to read.
-The last cannot be a checkout because git records no permission bits beyond the
-executable one, so an unreadable file does not survive a clone.
+wrong shape, one whose exception document the filesystem refused to read, and
+one whose Makefile ``makeutil`` refused. An unreadable file cannot be a
+checkout because git records no permission bits beyond the executable one, so
+it does not survive a clone; and the pinned ``makeutil`` recovers from every
+malformed Makefile tried rather than refusing it.
 
 Run from the rule package directory::
 
@@ -132,6 +134,9 @@ def _malformed(
         "toolchain": None,
         "cargo_config": None,
         "exceptions": [],
+        "makefile": None,
+        "makefile_error": None,
+        "workflows": [],
     }
 
 
@@ -168,11 +173,37 @@ def _exception_unreadable() -> dict[str, object]:
                 "sections": [],
             }
         ],
+        "makefile": None,
+        "makefile_error": None,
+        "workflows": [],
     }
 
 
-def synthetic_envelopes() -> dict[str, dict[str, object]]:
+def _makefile_refused(cranelift: dict[str, object]) -> dict[str, object]:
+    """Return a Cranelift checkout whose Makefile `makeutil` refused.
+
+    Not a checkout, because the pinned `makeutil` recovers from every
+    malformed Makefile tried so far rather than exiting; the refusal is the
+    envelope builder's own fact, so it is set here.
+
+    Returns
+    -------
+    dict[str, object]
+        The compliant Cranelift envelope with a refused Makefile.
+    """
+    return cranelift | {
+        "repository": {"path": "makefile-refused", "name": None},
+        "makefile": None,
+        "makefile_error": "makeutil exited with status 2 for Makefile",
+    }
+
+
+def synthetic_envelopes(
+    built: dict[str, dict[str, object]],
+) -> dict[str, dict[str, object]]:
     """Return the envelopes that no checkout could produce.
+
+    *built* supplies the checkout envelopes a synthetic case varies.
 
     Returns
     -------
@@ -185,13 +216,15 @@ def synthetic_envelopes() -> dict[str, dict[str, object]]:
             "invalid-cargo", schema_version=1, surfaces="Cargo.toml"
         ),
         "exception_unreadable": _exception_unreadable(),
+        "makefile_refused": _makefile_refused(built["compliant_cranelift"]),
     }
 
 
 def main() -> None:
     """Regenerate every envelope and the bundled data document."""
     ENVELOPES_DIR.mkdir(exist_ok=True)
-    envelopes = build_envelopes() | synthetic_envelopes()
+    built = build_envelopes()
+    envelopes = built | synthetic_envelopes(built)
     for key, envelope in sorted(envelopes.items()):
         target = ENVELOPES_DIR / f"{key}.json"
         target.write_text(json.dumps(envelope, indent=2) + "\n", encoding="utf-8")

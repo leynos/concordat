@@ -629,10 +629,16 @@ the Section 2.1.2 format.
   and the mold linker as defaults, the `rustflags` sources held equal because
   Cargo replaces one with another rather than merging them, and the Cranelift
   codegen backend either configured for the development profile or refused by a
-  recorded exception naming the pinned toolchain channel. The package reads
-  only the files Cargo and rustup auto-discover; it carries no Makefile facts,
-  because a repository whose flags live behind an opt-in Make target has no
-  `.cargo/config.toml` and fails on that alone.
+  recorded exception naming the pinned toolchain channel. These clauses read
+  only the files Cargo and rustup auto-discover, because a repository whose
+  flags live behind an opt-in Make target has no `.cargo/config.toml` and fails
+  on that alone.
+- [x] Extend `rust-build-defaults` to the builds that replace its defaults
+  (RT-019 to RT-021, BD-007 to BD-009): coverage paths and dev-profile release
+  builds select LLVM where Cranelift is the default, and Makefile gate recipes
+  and direct cargo workflow steps that assign `RUSTFLAGS` restate the fast
+  flags. The envelope now carries the `makeutil` report and decoded workflows
+  (ADR-003).
 - [ ] Ship the remaining Rust toolchain and acceleration rule packages (RT-006,
   RT-007, RT-010, RT-011): nightly pins no older than one year, required
   toolchain components, Polonius-next for application-only repositories, and

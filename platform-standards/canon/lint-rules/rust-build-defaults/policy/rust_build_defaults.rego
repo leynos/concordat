@@ -392,12 +392,22 @@ deny contains f if {
 }
 
 # A backend the estate has not adopted is a deviation in its own right: the
-# clause accepts two states, and an unmeasured third backend is neither.
+# clause accepts two states, and an unmeasured third backend is neither. LLVM
+# on a profile other than `dev` is not a third backend but the dedicated
+# coverage profile BD-007 accepts: rustc's own default, selected where the
+# instrumentation needs it.
+coverage_profile_selection(backend) if {
+	backend.scope == "profile"
+	backend.profile != "dev"
+	backend.backend == "llvm"
+}
+
 deny contains f if {
 	applicable
 	config_readable
 	some backend in backends
 	backend.backend != codegen_backend
+	not coverage_profile_selection(backend)
 	f := finding(
 		"BD-005", "noncompliant", config_path,
 		sprintf(

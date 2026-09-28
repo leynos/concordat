@@ -2,13 +2,16 @@
 
 One builder per rule package that needs different facts. `rust-makefile-
 baseline` reads the Makefile through the pinned `makeutil`; `rust-build-
-defaults` reads the files Cargo and rustup auto-discover, and the document a
-repository records its codegen-backend exception in.
+defaults` reads the files Cargo and rustup auto-discover, the document a
+repository records its codegen-backend exception in, and the Makefile and
+workflows whose builds assign `RUSTFLAGS` or select a backend.
 """
 
 from __future__ import annotations
 
 import typing as typ
+
+from concordat.errors import OperationalRuleError
 
 from .cargo_config import CargoConfigFacts, inspect_cargo_config
 from .exception_docs import DocumentScan, find_exception_sections
@@ -17,6 +20,13 @@ from .makefile_facts import (
     OPERATION_PARSE_MAKEFILE,
     MakeutilReport,
     inspect_makefile,
+)
+from .markdown_envelope import (
+    WorkflowFile,
+    _is_file,
+    _load_workflows,
+    _resolved_root,
+    _within_checkout,
 )
 from .rust_surfaces import (
     CargoManifest,
@@ -133,12 +143,14 @@ class BuildDefaultsApplicability(typ.TypedDict):
 class BuildDefaultsEnvelope(typ.TypedDict):
     """The `policy-input/rust-build-defaults` document sent to Conftest.
 
-    Deliberately carries no Makefile facts. The build standard is a default
-    only because Cargo auto-discovers `.cargo/config.toml`; a repository whose
-    flags live behind a Make target has no such file and fails on that alone.
-    Reading the Makefile as well would add nothing this policy can decide, and
-    would make the rule unrunnable against any checkout the pinned `makeutil`
-    cannot parse.
+    BD-001 to BD-006 read only what Cargo and rustup auto-discover: the
+    standard is a default because a bare `cargo build` gets it. BD-007 to
+    BD-009 read the builds that replace that default, because an assigned
+    `RUSTFLAGS` replaces every `rustflags` source and a coverage build cannot
+    use the Cranelift default at all. So the envelope also carries the root
+    Makefile's `makeutil` report and the decoded workflows. A Makefile
+    `makeutil` refuses is carried as `makefile_error` rather than raised, so
+    the clauses that never read it still run.
     """
 
     schema_version: int
@@ -149,6 +161,34 @@ class BuildDefaultsEnvelope(typ.TypedDict):
     toolchain: ToolchainFacts | None
     cargo_config: CargoConfigFacts | None
     exceptions: list[DocumentScan]
+    makefile: MakeutilReport | None
+    makefile_error: str | None
+    workflows: list[WorkflowFile]
+
+
+def _read_makefile(
+    checkout: pathlib.Path, root: pathlib.Path
+) -> tuple[MakeutilReport | None, str | None]:
+    """Return the root Makefile's `makeutil` report, or why there is none.
+
+    A Makefile that resolves outside the checkout still raises, as every
+    other fact does; one `makeutil` refuses is returned as its reason.
+
+    Returns
+    -------
+    tuple[MakeutilReport | None, str | None]
+        ``(report, None)``, ``(None, reason)`` when `makeutil` refused the
+        file, or ``(None, None)`` when there is no Makefile.
+    """
+    path = checkout / "Makefile"
+    if not _within_checkout(root, path, OPERATION_PARSE_MAKEFILE) or not _is_file(
+        path, OPERATION_PARSE_MAKEFILE
+    ):
+        return None, None
+    try:
+        return inspect_makefile(path).report, None
+    except OperationalRuleError as error:
+        return None, str(error)
 
 
 def _exception_documents(parameters: cabc.Mapping[str, object]) -> list[str]:
@@ -199,6 +239,8 @@ def build_build_defaults_envelope(
     )
     cargo_config = inspect_cargo_config(checkout)
     toolchain = inspect_toolchain(checkout)
+    root = _resolved_root(checkout)
+    makefile, makefile_error = _read_makefile(checkout, root)
     return {
         "schema_version": ENVELOPE_SCHEMA_VERSION,
         "kind": BUILD_DEFAULTS_ENVELOPE_KIND,
@@ -217,4 +259,7 @@ def build_build_defaults_envelope(
             _exception_documents(resolved),
             _exception_keyword(resolved),
         ),
+        "makefile": makefile,
+        "makefile_error": makefile_error,
+        "workflows": _load_workflows(checkout, root),
     }

@@ -484,8 +484,9 @@ The `rust-build-defaults` package audits the estate's build standard:
 concordat artefact rule run rust-build-defaults --repo /path/to/checkout
 ```
 
-It reads the files Cargo and rustup auto-discover, so it needs `conftest` on
-`PATH` but not `makeutil`. Four clauses:
+It reads the files Cargo and rustup auto-discover, and the Makefile and
+workflows whose builds replace them, so it needs `conftest` and `makeutil` on
+`PATH`. Four clauses read the configuration:
 
 - the parallel `rustc` frontend is carried by every `rustflags` source, where
   `rust-toolchain.toml` pins a nightly channel;
@@ -525,6 +526,29 @@ Both the document list and the heading keyword are rule parameters, so a
 repository that records the exception elsewhere can be accommodated without
 changing the policy. So are the two flags, the backend name, and the platform
 list that makes the linker clause applicable.
+
+Three more clauses read the builds that replace those defaults:
+
+- **BD-007** — where Cranelift is the development default, every
+  `cargo llvm-cov` run, in a Makefile recipe or a workflow step, selects LLVM,
+  because coverage instrumentation is LLVM-only. So does a build without
+  `--release` in a release- or tag-triggered workflow. Prefix the command with
+  `CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm`, export it, or pass `--profile` for
+  a profile that selects `llvm`. A shared-actions `generate-coverage` step
+  needs nothing: it selects LLVM itself.
+- **BD-008** — a Makefile recipe reachable from `lint`, `test`, `typecheck` or
+  `build` that assigns `RUSTFLAGS` restates `-Zthreads=8` and the `mold` linker
+  flag. An assigned `RUSTFLAGS` replaces every `rustflags` source, so
+  `RUSTFLAGS="-D warnings"` alone turns the standard off for that gate.
+  netsuke's `GATE_RUSTFLAGS` is the reference shape.
+- **BD-009** — a workflow step that runs `cargo build`, `check`, `clippy`,
+  `doc`, `nextest` or `test` directly with `RUSTFLAGS` set carries the same
+  flags. shared-actions `setup-rust` sets it to `-D warnings` by default for
+  every later step; pass `rustflags: ''` to leave the configuration in charge,
+  or a value carrying the fast flags.
+
+A Makefile `makeutil` cannot fully parse makes BD-007 and BD-008
+`indeterminate` rather than passed; the other clauses still report.
 
 ### Auditing the spelling gate
 

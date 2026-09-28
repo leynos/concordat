@@ -153,6 +153,8 @@ For the full story, head to the docs:
   – Lint architecture and dead-code policy
 - [ADR-002: Resolve action pins against GitHub](docs/adr-002-resolve-action-pins-against-github.md)
   – PD-006 pin object types and the rule run's GitHub boundary
+- [ADR-003: rust-build-defaults reads the builds that replace its defaults](docs/adr-003-rust-build-defaults-reads-the-builds-that-replace-them.md)
+  – BD-007 to BD-009 and the Makefile and workflow facts they read
 - [OpenTofu coding standards](docs/opentofu-coding-standards.md) – House rules
   for writing OpenTofu code
 

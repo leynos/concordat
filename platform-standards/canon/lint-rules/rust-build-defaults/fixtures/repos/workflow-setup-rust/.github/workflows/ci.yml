@@ -1,0 +1,30 @@
+on: pull_request
+jobs:
+  default-input:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: leynos/shared-actions/.github/actions/setup-rust@0123456789abcdef0123456789abcdef01234567
+      - name: Test
+        run: cargo nextest run --workspace
+  empty-input:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: leynos/shared-actions/.github/actions/setup-rust@0123456789abcdef0123456789abcdef01234567
+        with:
+          rustflags: ''
+      - name: Test
+        run: cargo nextest run --workspace
+  fast-input:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: leynos/shared-actions/.github/actions/setup-rust@0123456789abcdef0123456789abcdef01234567
+        with:
+          rustflags: -D warnings -Zthreads=8 -C link-arg=-fuse-ld=mold
+      - name: Test
+        run: cargo nextest run --workspace
+  through-make:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: leynos/shared-actions/.github/actions/setup-rust@0123456789abcdef0123456789abcdef01234567
+      - name: Test
+        run: make test
