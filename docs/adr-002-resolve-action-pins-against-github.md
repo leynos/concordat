@@ -88,3 +88,44 @@ read like an unknown pin.
 - `GithubPinResolver` keeps each answer for the run, so a pin repeated within
   one `rule run` costs one lookup. Each run is one repository; a pin shared
   across repositories costs one lookup per repository.
+
+## Addendum (2026-09-29): The on-disk cache
+
+The per-run memo does not help a sweep: each repository is a separate process,
+so a pin shared across repositories still costs a lookup in each. What a SHA
+names in an action repository never changes, so `concordat/rules/pin_cache.py`
+keeps definite answers on disk.
+
+- **What is cached.** A commit, or an annotated tag object with its peeled
+  commit (which may be absent). An unresolved pin is never cached: its reason
+  is a spent rate limit, an outage or a refusal a new token would lift, and
+  keeping it would freeze the reason past its cause.
+- **Key.** `owner/repository/sha`, lower-cased, one file per key under the cache
+  directory. A repository that is not a plain `owner/name` pair of
+  `[A-Za-z0-9][A-Za-z0-9_.-]*` segments, or a pin that is not forty lowercase
+  hexadecimal digits, is not a key: the repository comes from a workflow the
+  audit does not control and becomes a path.
+- **Format.** One JSON object per file, version 1:
+
+  ```json
+  {"version": 1, "repository": "davidanson/markdownlint-cli2-action",
+   "sha": "21c1be1b93ad9ed58fa840aacc3f279cde2a72ff",
+   "object_type": "commit", "commit": "21c1be1b93ad9ed58fa840aacc3f279cde2a72ff"}
+  ```
+
+  `object_type` is `commit` or `tag`. For a commit, `commit` equals `sha`; for
+  a tag it is the peeled commit or `null`. A change to this shape bumps
+  `version`, and an entry of any other version is read as corrupt.
+- **Atomic writes.** An entry is written to a temporary file in its own
+  directory and renamed into place, so a run killed mid-write leaves the old
+  entry or none, and concurrent runs cannot interleave.
+- **Corrupt entries.** An entry that is not valid JSON, has another version,
+  names another key, or describes an answer no resolver would give, is deleted
+  and read as a miss, so the lookup repairs it. A cache that cannot be read or
+  written costs a warning, never the audit.
+- **Location and switches.** `--pin-cache-dir`, then `CONCORDAT_PIN_CACHE_DIR`,
+  then `$XDG_CACHE_HOME/concordat/action-pins`, then
+  `~/.cache/concordat/action-pins`. `--no-pin-cache` neither reads nor writes.
+- **Layering.** `cached_resolver` wraps the resolver the command builds, so the
+  per-run memo in `GithubPinResolver` remains the inner layer and the domain
+  module `action_pins.py` still knows nothing of storage.

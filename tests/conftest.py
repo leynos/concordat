@@ -183,6 +183,22 @@ def _isolated_xdg_bases(
     monkeypatch.setenv("XDG_STATE_HOME", str(base / "state"))
 
 
+@pytest.fixture(autouse=True)
+def _isolated_pin_cache(
+    monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """Keep every test's action-pin cache out of the host's cache directory.
+
+    A run that resolves pins writes definite answers to disk, so an unpatched
+    default would leak them between tests and into the developer's real cache,
+    hiding a lookup a later test expects to see.
+    """
+    from concordat.rules import pin_cache
+
+    directory = tmp_path_factory.mktemp("pin-cache")
+    monkeypatch.setattr(pin_cache, "default_directory", lambda _environ: directory)
+
+
 @pytest.fixture
 def fake_github_api(monkeypatch: pytest.MonkeyPatch) -> cabc.Iterator[FakeGithubApi]:
     """Serve a GitHub REST API double on a loopback port.

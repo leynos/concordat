@@ -666,6 +666,20 @@ an unknown pin, naming the remedy. `GithubPinResolver` keeps every answer for
 its own lifetime, so a pin repeated in one run costs one lookup, and logs each
 reuse at debug level.
 
+`concordat/rules/pin_cache.py` keeps definite answers between runs, because a
+sweep audits many repositories that pin the same few actions and each run is a
+new process. `cached_resolver` wraps any resolver: it reads `PinCache` first,
+and after a lookup writes the answer back. The command composes it around
+`GithubPinResolver`, so the per-run memo stays the inner layer. The policy in
+short: cache a commit or a tag object, never an unresolved pin; key by
+`owner/repository/sha` (lower-cased, and only when the repository is a plain
+`owner/name` pair and the pin is forty hex digits, since both become path
+segments); write through a sibling temporary file and a rename; treat an entry
+that cannot be decoded, or that names a different key, as a miss and delete it.
+`default_directory` takes the environment as a mapping, so tests inject it, and
+`tests/conftest.py` points every test's cache at a temporary directory so a run
+never writes to the host's cache. The entry format is recorded in ADR-002.
+
 Regenerate the Markdown fixtures with the `makeutil` release CI pins, not
 whichever `makeutil` is first on `PATH`: a newer build reports some Makefiles
 differently and rewrites envelopes the change never touched. Install the pin

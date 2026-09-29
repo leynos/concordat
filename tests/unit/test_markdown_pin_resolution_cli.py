@@ -87,9 +87,19 @@ def _run(
     tmp_path: pathlib.Path,
     github: FakeGithubApi,
     capsys: pytest.CaptureFixture[str],
+    *extra: str,
 ) -> tuple[int, dict[str, typ.Any]]:
-    """Lay *scenario* out, run the rule over it, and return the exit and JSON."""
-    checkout = tmp_path / scenario
+    """Lay *scenario* out, run the rule over it, and return the exit and JSON.
+
+    *extra* arguments follow the command's own. Each call lays out a fresh
+    checkout, so a test may run the rule twice from one `tmp_path`.
+
+    Returns
+    -------
+    tuple[int, dict[str, typing.Any]]
+        The exit status and the decoded JSON document.
+    """
+    checkout = tmp_path / f"{scenario}-{len(list(tmp_path.iterdir()))}"
     checkout.mkdir()
     GENERATE.lay_out(GENERATE.SCENARIOS[scenario], checkout)
     returncode = _main([
@@ -103,6 +113,7 @@ def _run(
         "json",
         "--github-api-url",
         github.url,
+        *extra,
     ])
     return returncode, json.loads(capsys.readouterr().out)
 
@@ -299,3 +310,62 @@ def test_the_gh_cli_token_is_read_or_skipped(
 def test_the_token_host_follows_the_api_root(api_url: str, host: str) -> None:
     """`gh` is asked for the token of the host the API root belongs to."""
     assert cli._github_host(api_url) == host
+
+
+@pytest.mark.timeout(120)
+def test_a_second_run_asks_github_nothing(
+    tmp_path: pathlib.Path, github: FakeGithubApi, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A pin answered once is served from the disk cache by the next process."""
+    cache = ("--pin-cache-dir", str(tmp_path / "cache"))
+    first, _ = _run("compliant", tmp_path, github, capsys, *cache)
+    assert first == 0
+    assert github.requested == [_commit_path(COMMIT)]
+    assert any((tmp_path / "cache").rglob(COMMIT)), "the answer went elsewhere"
+    github.requested.clear()
+    second, document = _run("compliant", tmp_path, github, capsys, *cache)
+    assert (second, document["verdict"]) == (0, "compliant"), document
+    assert github.requested == []
+
+
+@pytest.mark.timeout(120)
+def test_a_tag_object_answer_is_served_from_the_cache_with_its_commit(
+    tmp_path: pathlib.Path, github: FakeGithubApi, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A cached tag object still names the commit it peels to."""
+    cache = ("--pin-cache-dir", str(tmp_path / "cache"))
+    _run("workflow_tag_object", tmp_path, github, capsys, *cache)
+    github.requested.clear()
+    _, document = _run("workflow_tag_object", tmp_path, github, capsys, *cache)
+    assert github.requested == []
+    [(_, message)] = _pd006(document)
+    assert COMMIT in message, message
+
+
+@pytest.mark.timeout(120)
+def test_a_rate_limited_answer_is_not_cached(
+    tmp_path: pathlib.Path, github: FakeGithubApi, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A spent limit is asked again next run, so the pin resolves once it lifts."""
+    cache = ("--pin-cache-dir", str(tmp_path / "cache"))
+    limited = github.routes[_commit_path(COMMIT)]
+    github.routes[_commit_path(COMMIT)] = Reply(429, {"message": "rate limited"})
+    _, document = _run("compliant", tmp_path, github, capsys, *cache)
+    assert [verdict for verdict, _ in _pd006(document)] == ["indeterminate"]
+    github.routes[_commit_path(COMMIT)] = limited
+    returncode, document = _run("compliant", tmp_path, github, capsys, *cache)
+    assert (returncode, document["verdict"]) == (0, "compliant"), document
+    assert github.requested.count(_commit_path(COMMIT)) == 2
+
+
+@pytest.mark.timeout(120)
+def test_no_pin_cache_neither_reads_nor_writes(
+    tmp_path: pathlib.Path, github: FakeGithubApi, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--no-pin-cache` asks every time and leaves the directory empty."""
+    cache = tmp_path / "cache"
+    flags = ("--pin-cache-dir", str(cache), "--no-pin-cache")
+    _run("compliant", tmp_path, github, capsys, *flags)
+    _run("compliant", tmp_path, github, capsys, *flags)
+    assert github.requested == [_commit_path(COMMIT)] * 2
+    assert not cache.exists()
