@@ -445,6 +445,37 @@ The command requires two external tools on `PATH`: `conftest` and the pinned
 `platform-standards/canon/lint-rules/rust-makefile-baseline/README.md` for the
 pin and regeneration workflow).
 
+### Auditing Whitaker provisioning
+
+The `whitaker-provisioning` package audits how a checkout provisions the
+Whitaker lint suite (QG-002):
+
+```shell
+concordat artefact rule run whitaker-provisioning --repo /path/to/checkout
+```
+
+The estate provisions Whitaker one way: the shared-actions `install-whitaker`
+action, pinned to a revision listed in the rule's
+`compliant_install_whitaker_refs` parameter. The action installs an exact
+`whitaker-installer` version, never pins the lint suite, and always passes
+`--no-source-fallback`; its own contract proves those rules, so this package
+does not re-check installer flags. It reports:
+
+- an install of `whitaker-installer`, `cargo-dylint` or `dylint-link` by Cargo
+  or another action, a download of one, or a direct `whitaker-installer` run,
+  in a workflow, a composite action, a Makefile or a script;
+- an `install-whitaker` pin that is not listed, a fork of the action, or a
+  local copy of it.
+
+A revision joins the list only once
+`git merge-base --is-ancestor <first entry> <revision>` succeeds in a
+shared-actions clone. Whitaker itself is exempt as the producer, and a
+developer-environment script that CI never runs may be exempted by name,
+repository and reason in the rule's parameters. Exemptions match the repository
+slug read from the `origin` remote. See
+`platform-standards/canon/lint-rules/whitaker-provisioning/README.md` for what
+the policy recognizes and what it declines to judge.
+
 ### Auditing the Rust build defaults
 
 The `rust-build-defaults` package audits the estate's build standard:

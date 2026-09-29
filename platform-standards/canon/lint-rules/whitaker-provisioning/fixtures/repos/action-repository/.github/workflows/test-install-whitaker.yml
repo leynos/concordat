@@ -1,0 +1,9 @@
+name: Test install-whitaker
+on:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/install-whitaker
+      - uses: $/.github/actions/install-whitaker

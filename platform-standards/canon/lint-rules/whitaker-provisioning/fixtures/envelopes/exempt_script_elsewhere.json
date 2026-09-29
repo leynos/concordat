@@ -1,0 +1,17 @@
+{
+  "actions": [],
+  "kind": "policy-input/whitaker-provisioning",
+  "repository": {
+    "name": "leynos/consumer",
+    "path": "exempt-script-elsewhere"
+  },
+  "schema_version": 1,
+  "scripts": [
+    {
+      "error": null,
+      "path": "get-rust-tooling",
+      "text": "#!/usr/bin/env bash\nset -euo pipefail\nWHITAKER_INSTALLER_VERSION=${WHITAKER_INSTALLER_VERSION:-0.2.9}\ncargo binstall --locked --no-confirm \"whitaker-installer@${WHITAKER_INSTALLER_VERSION}\"\nwhitaker-installer --no-source-fallback\n"
+    }
+  ],
+  "workflows": []
+}

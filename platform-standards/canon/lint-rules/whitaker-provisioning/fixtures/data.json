@@ -1,0 +1,608 @@
+{
+  "fixtures": {
+    "action_repository": {
+      "actions": [
+        {
+          "error": null,
+          "parsed": {
+            "name": "Install Whitaker",
+            "runs": {
+              "steps": [
+                {
+                  "run": "curl -fsSL \"https://github.com/leynos/whitaker/releases/download/v0.2.9/whitaker-installer.tgz\" -o archive.tgz\n\"$WHITAKER_INSTALLER_PATH\" --no-source-fallback\n",
+                  "shell": "bash"
+                }
+              ],
+              "using": "composite"
+            }
+          },
+          "path": ".github/actions/install-whitaker/action.yml"
+        }
+      ],
+      "kind": "policy-input/whitaker-provisioning",
+      "repository": {
+        "name": "leynos/shared-actions",
+        "path": "action-repository"
+      },
+      "schema_version": 1,
+      "scripts": [],
+      "workflows": [
+        {
+          "error": null,
+          "parsed": {
+            "jobs": {
+              "test": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "./.github/actions/install-whitaker"
+                  },
+                  {
+                    "uses": "$/.github/actions/install-whitaker"
+                  }
+                ]
+              }
+            },
+            "name": "Test install-whitaker",
+            "on": {
+              "pull_request": null
+            }
+          },
+          "path": ".github/workflows/test-install-whitaker.yml"
+        }
+      ]
+    },
+    "binstall_step": {
+      "actions": [],
+      "kind": "policy-input/whitaker-provisioning",
+      "repository": {
+        "name": "leynos/consumer",
+        "path": "binstall-step"
+      },
+      "schema_version": 1,
+      "scripts": [],
+      "workflows": [
+        {
+          "error": null,
+          "parsed": {
+            "env": {
+              "WHITAKER_INSTALLER_VERSION": "0.2.6"
+            },
+            "jobs": {
+              "build-test": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "name": "Install Whitaker",
+                    "run": "if ! command -v whitaker-installer >/dev/null 2>&1; then\n  if cargo binstall -V >/dev/null 2>&1; then\n    cargo binstall --no-confirm --locked \"whitaker-installer@${WHITAKER_INSTALLER_VERSION}\"\n  else\n    cargo install --locked whitaker-installer --version \"${WHITAKER_INSTALLER_VERSION}\"\n  fi\nfi\nwhitaker-installer\n"
+                  }
+                ]
+              }
+            },
+            "name": "CI",
+            "on": {
+              "pull_request": null
+            }
+          },
+          "path": ".github/workflows/ci.yml"
+        }
+      ]
+    },
+    "cargo_install_git": {
+      "actions": [],
+      "kind": "policy-input/whitaker-provisioning",
+      "repository": {
+        "name": "leynos/consumer",
+        "path": "cargo-install-git"
+      },
+      "schema_version": 1,
+      "scripts": [],
+      "workflows": [
+        {
+          "error": null,
+          "parsed": {
+            "jobs": {
+              "build-test": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "name": "Install Whitaker",
+                    "run": "cargo install --locked \\\n  --git https://github.com/leynos/whitaker \\\n  --rev \"${WHITAKER_REV}\" \\\n  whitaker-installer\n"
+                  }
+                ]
+              }
+            },
+            "name": "CI",
+            "on": {
+              "pull_request": null
+            }
+          },
+          "path": ".github/workflows/ci.yml"
+        }
+      ]
+    },
+    "compliant": {
+      "actions": [],
+      "kind": "policy-input/whitaker-provisioning",
+      "repository": {
+        "name": "leynos/consumer",
+        "path": "compliant"
+      },
+      "schema_version": 1,
+      "scripts": [
+        {
+          "error": null,
+          "path": "Makefile",
+          "text": "WHITAKER ?= whitaker\n\nlint:\n\t# cargo install whitaker-installer is not how this repository gets it.\n\t$(WHITAKER) --all -- --all-targets\n"
+        },
+        {
+          "error": null,
+          "path": "scripts/fetch-mdtablefix.sh",
+          "text": "#!/usr/bin/env bash\n# Fetches an unrelated tool; the lints themselves come from install-whitaker.\nset -euo pipefail\ncurl -fsSL \"https://github.com/leynos/mdtablefix/releases/download/v0.6.0/mdtablefix.tgz\" -o mdtablefix.tgz\nwhitaker --all\n"
+        }
+      ],
+      "workflows": [
+        {
+          "error": null,
+          "parsed": {
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "name": "Cache the installer the action installs",
+                    "uses": "actions/cache@v4",
+                    "with": {
+                      "key": "whitaker",
+                      "path": "~/.cargo/bin/whitaker-installer"
+                    }
+                  },
+                  {
+                    "name": "Install Whitaker",
+                    "uses": "leynos/shared-actions/.github/actions/install-whitaker@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                  },
+                  {
+                    "name": "Lint",
+                    "run": "# Whitaker used to come from: cargo binstall whitaker-installer\necho \"installed by whitaker-installer\"\ntest -x \"${HOME}/.cargo/bin/whitaker-installer\"\nmake lint\n"
+                  }
+                ]
+              }
+            },
+            "name": "CI",
+            "on": {
+              "pull_request": null
+            }
+          },
+          "path": ".github/workflows/ci.yml"
+        }
+      ]
+    },
+    "composite_action_route": {
+      "actions": [
+        {
+          "error": null,
+          "parsed": {
+            "name": "Setup",
+            "runs": {
+              "steps": [
+                {
+                  "run": "cargo binstall --no-confirm dylint-link@6.0.1",
+                  "shell": "bash"
+                }
+              ],
+              "using": "composite"
+            }
+          },
+          "path": ".github/actions/setup/action.yml"
+        }
+      ],
+      "kind": "policy-input/whitaker-provisioning",
+      "repository": {
+        "name": "leynos/consumer",
+        "path": "composite-action-route"
+      },
+      "schema_version": 1,
+      "scripts": [],
+      "workflows": []
+    },
+    "curl_download": {
+      "actions": [],
+      "kind": "policy-input/whitaker-provisioning",
+      "repository": {
+        "name": "leynos/consumer",
+        "path": "curl-download"
+      },
+      "schema_version": 1,
+      "scripts": [],
+      "workflows": [
+        {
+          "error": null,
+          "parsed": {
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "name": "Fetch the installer",
+                    "run": "url=\"https://github.com/leynos/whitaker/releases/download/v0.2.9\"\ncurl -fsSL \"${url}/installer.tgz\" -o installer.tgz\n"
+                  }
+                ]
+              }
+            },
+            "name": "CI",
+            "on": {
+              "pull_request": null
+            }
+          },
+          "path": ".github/workflows/ci.yml"
+        }
+      ]
+    },
+    "direct_invocation": {
+      "actions": [],
+      "kind": "policy-input/whitaker-provisioning",
+      "repository": {
+        "name": "leynos/consumer",
+        "path": "direct-invocation"
+      },
+      "schema_version": 1,
+      "scripts": [],
+      "workflows": [
+        {
+          "error": null,
+          "parsed": {
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "name": "Run a preinstalled installer",
+                    "run": "RUST_LOG=info ~/.cargo/bin/whitaker-installer --cranelift"
+                  }
+                ]
+              }
+            },
+            "name": "CI",
+            "on": {
+              "pull_request": null
+            }
+          },
+          "path": ".github/workflows/ci.yml"
+        }
+      ]
+    },
+    "exempt_developer_script": {
+      "actions": [],
+      "kind": "policy-input/whitaker-provisioning",
+      "repository": {
+        "name": "leynos/agent-helper-scripts",
+        "path": "exempt-developer-script"
+      },
+      "schema_version": 1,
+      "scripts": [
+        {
+          "error": null,
+          "path": "get-rust-tooling",
+          "text": "#!/usr/bin/env bash\nset -euo pipefail\nWHITAKER_INSTALLER_VERSION=${WHITAKER_INSTALLER_VERSION:-0.2.9}\ncargo binstall --locked --no-confirm \"whitaker-installer@${WHITAKER_INSTALLER_VERSION}\"\nwhitaker-installer --no-source-fallback\n"
+        }
+      ],
+      "workflows": []
+    },
+    "exempt_script_elsewhere": {
+      "actions": [],
+      "kind": "policy-input/whitaker-provisioning",
+      "repository": {
+        "name": "leynos/consumer",
+        "path": "exempt-script-elsewhere"
+      },
+      "schema_version": 1,
+      "scripts": [
+        {
+          "error": null,
+          "path": "get-rust-tooling",
+          "text": "#!/usr/bin/env bash\nset -euo pipefail\nWHITAKER_INSTALLER_VERSION=${WHITAKER_INSTALLER_VERSION:-0.2.9}\ncargo binstall --locked --no-confirm \"whitaker-installer@${WHITAKER_INSTALLER_VERSION}\"\nwhitaker-installer --no-source-fallback\n"
+        }
+      ],
+      "workflows": []
+    },
+    "fork_action": {
+      "actions": [],
+      "kind": "policy-input/whitaker-provisioning",
+      "repository": {
+        "name": "leynos/consumer",
+        "path": "fork-action"
+      },
+      "schema_version": 1,
+      "scripts": [],
+      "workflows": [
+        {
+          "error": null,
+          "parsed": {
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "someone/shared-actions/.github/actions/install-whitaker@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                  }
+                ]
+              }
+            },
+            "name": "CI",
+            "on": {
+              "pull_request": null
+            }
+          },
+          "path": ".github/workflows/ci.yml"
+        }
+      ]
+    },
+    "install_action_tool": {
+      "actions": [],
+      "kind": "policy-input/whitaker-provisioning",
+      "repository": {
+        "name": "leynos/consumer",
+        "path": "install-action-tool"
+      },
+      "schema_version": 1,
+      "scripts": [],
+      "workflows": [
+        {
+          "error": null,
+          "parsed": {
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "taiki-e/install-action@v2",
+                    "with": {
+                      "tool": "nextest,cargo-dylint@6.0.1"
+                    }
+                  }
+                ]
+              }
+            },
+            "name": "CI",
+            "on": {
+              "pull_request": null
+            }
+          },
+          "path": ".github/workflows/ci.yml"
+        }
+      ]
+    },
+    "local_copy": {
+      "actions": [
+        {
+          "error": null,
+          "parsed": {
+            "name": "Install Whitaker",
+            "runs": {
+              "steps": [
+                {
+                  "run": "cargo binstall --no-confirm whitaker-installer@0.2.9",
+                  "shell": "bash"
+                }
+              ],
+              "using": "composite"
+            }
+          },
+          "path": ".github/actions/install-whitaker/action.yml"
+        }
+      ],
+      "kind": "policy-input/whitaker-provisioning",
+      "repository": {
+        "name": "leynos/consumer",
+        "path": "local-copy"
+      },
+      "schema_version": 1,
+      "scripts": [],
+      "workflows": [
+        {
+          "error": null,
+          "parsed": {
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "./.github/actions/install-whitaker"
+                  }
+                ]
+              }
+            },
+            "name": "CI",
+            "on": {
+              "pull_request": null
+            }
+          },
+          "path": ".github/workflows/ci.yml"
+        }
+      ]
+    },
+    "makefile_install": {
+      "actions": [],
+      "kind": "policy-input/whitaker-provisioning",
+      "repository": {
+        "name": "leynos/consumer",
+        "path": "makefile-install"
+      },
+      "schema_version": 1,
+      "scripts": [
+        {
+          "error": null,
+          "path": "Makefile",
+          "text": "tools:\n\tcargo +stable binstall --no-confirm whitaker-installer@0.2.9\n"
+        }
+      ],
+      "workflows": []
+    },
+    "no_whitaker": {
+      "actions": [],
+      "kind": "policy-input/whitaker-provisioning",
+      "repository": {
+        "name": "leynos/consumer",
+        "path": "no-whitaker"
+      },
+      "schema_version": 1,
+      "scripts": [],
+      "workflows": []
+    },
+    "producer": {
+      "actions": [],
+      "kind": "policy-input/whitaker-provisioning",
+      "repository": {
+        "name": "leynos/whitaker",
+        "path": "producer"
+      },
+      "schema_version": 1,
+      "scripts": [],
+      "workflows": [
+        {
+          "error": null,
+          "parsed": {
+            "jobs": {
+              "build": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "run": "cargo install --locked --path installer whitaker-installer"
+                  },
+                  {
+                    "run": "./target/release/whitaker-installer --build-only"
+                  }
+                ]
+              }
+            },
+            "name": "Release",
+            "on": {
+              "push": {
+                "tags": [
+                  "v*"
+                ]
+              }
+            }
+          },
+          "path": ".github/workflows/release.yml"
+        }
+      ]
+    },
+    "release_asset_script": {
+      "actions": [],
+      "kind": "policy-input/whitaker-provisioning",
+      "repository": {
+        "name": "leynos/consumer",
+        "path": "release-asset-script"
+      },
+      "schema_version": 1,
+      "scripts": [
+        {
+          "error": null,
+          "path": "scripts/install_whitaker_binary.sh",
+          "text": "#!/usr/bin/env bash\n# Install the released Whitaker binary used by OrthoConfig's Linux CI lane.\n#\n# This helper owns only CI bootstrap from leynos/whitaker release assets.  The\n# caller supplies the resolved release version and the workflow token through\n# INSTALL_TOKEN; the helper does not build from source or install a user tool.\n\nset -euo pipefail\n\nreadonly WHITAKER_REPOSITORY=\"leynos/whitaker\"\nreadonly CACHE_DIRECTORY=\"${XDG_CACHE_HOME:-${HOME}/.cache}/ortho-config/whitaker-installer\"\ntemporary_directory=\"\"\n\n\ndie() {\n    printf '%s\\n' \"$*\" >&2\n    exit 1\n}\n\n\nreport_status() {\n    case \"$1\" in\n        cache=download | cache=repair | cache=reused | verification=passed | verification=failed)\n            printf 'whitaker-installer: %s\\n' \"$1\" >&2\n            ;;\n        *) die \"invalid Whitaker installer status\" ;;\n    esac\n}\n\n\ncleanup_temporary_directory() {\n    rm -rf -- \"$temporary_directory\"\n}\n\n\nrequire_command() {\n    command -v \"$1\" >/dev/null 2>&1 || die \"required command is unavailable: $1\"\n}\n\n\ntarget_from_architecture() {\n    case \"$1\" in\n        X64 | x86_64) printf '%s\\n' \"x86_64-unknown-linux-gnu\" ;;\n        ARM64 | aarch64) printf '%s\\n' \"aarch64-unknown-linux-gnu\" ;;\n        *) die \"unsupported Whitaker installer architecture: $1\" ;;\n    esac\n}\n\n\nasset_metadata() {\n    local release_path=\"$1\"\n    local asset_name=\"$2\"\n\n    jq -er --arg name \"$asset_name\" '\n        [.assets[] | select(.name == $name and .state == \"uploaded\")] as $assets\n        | if ($assets | length) == 1 then $assets[0] else error(\"expected one asset\") end\n        | \"\\(.id)\\t\\(.digest)\"\n    ' \"$release_path\"\n}\n\n\nis_sha256_digest() {\n    [[ \"$1\" =~ ^sha256:[0-9a-f]{64}$ ]]\n}\n\n\ncached_assets_verify() {\n    local archive_path=\"$1\"\n    local checksum_path=\"$2\"\n    local archive_name=\"$3\"\n    local archive_digest=\"$4\"\n    local checksum_digest=\"$5\"\n    local actual_checksum_digest\n    local sidecar_digest\n    local sidecar_name\n\n    [[ -s \"$archive_path\" && -s \"$checksum_path\" ]] || return 1\n    actual_checksum_digest=\"$(sha256sum \"$checksum_path\" | awk '{print $1}')\"\n    [[ \"$actual_checksum_digest\" == \"${checksum_digest#sha256:}\" ]] || return 1\n    read -r sidecar_digest sidecar_name < \"$checksum_path\"\n    [[ \"$sidecar_digest\" == \"${archive_digest#sha256:}\" ]] || return 1\n    [[ \"$sidecar_name\" == \"$archive_name\" ]] || return 1\n    (\n        cd \"$(dirname \"$archive_path\")\"\n        sha256sum --check --status \"$(basename \"$checksum_path\")\"\n    )\n}\n\n\ndownload_asset() {\n    local asset_id=\"$1\"\n    local destination=\"$2\"\n\n    GH_TOKEN=\"${INSTALL_TOKEN}\" gh api -H \"Accept: application/octet-stream\" \\\n        \"repos/${WHITAKER_REPOSITORY}/releases/assets/${asset_id}\" > \"$destination\"\n}\n\n\nmain() {\n    local version=\"${WHITAKER_INSTALLER_VERSION:?WHITAKER_INSTALLER_VERSION is required}\"\n    local architecture=\"${RUNNER_ARCH:-$(uname -m)}\"\n    local target\n    local archive_name\n    local checksum_name\n    local member_name\n    local release_path\n    local archive_id\n    local archive_digest\n    local checksum_id\n    local checksum_digest\n    local archive_path\n    local checksum_path\n\n    [[ \"$version\" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+$ ]] || die \"invalid Whitaker version: $version\"\n    [[ -n \"${INSTALL_TOKEN:-}\" ]] || die \"INSTALL_TOKEN is required\"\n    for tool in gh jq sha256sum tar install mktemp; do\n        require_command \"$tool\"\n    done\n\n    target=\"$(target_from_architecture \"$architecture\")\"\n    archive_name=\"whitaker-installer-${target}-v${version}.tgz\"\n    checksum_name=\"${archive_name}.sha256\"\n    member_name=\"whitaker-installer-${target}-v${version}/whitaker-installer\"\n    temporary_directory=\"$(mktemp -d)\"\n    trap cleanup_temporary_directory EXIT\n    release_path=\"${temporary_directory}/release.json\"\n\n    GH_TOKEN=\"${INSTALL_TOKEN}\" gh api \\\n        \"repos/${WHITAKER_REPOSITORY}/releases/tags/v${version}\" > \"$release_path\"\n    IFS=$'\\t' read -r archive_id archive_digest < <(asset_metadata \"$release_path\" \"$archive_name\")\n    IFS=$'\\t' read -r checksum_id checksum_digest < <(\n        asset_metadata \"$release_path\" \"$checksum_name\"\n    )\n    if ! is_sha256_digest \"$archive_digest\"; then\n        report_status \"verification=failed\"\n        die \"archive has no SHA-256 API digest\"\n    fi\n    if ! is_sha256_digest \"$checksum_digest\"; then\n        report_status \"verification=failed\"\n        die \"checksum has no SHA-256 API digest\"\n    fi\n\n    mkdir -p \"$CACHE_DIRECTORY\"\n    archive_path=\"${CACHE_DIRECTORY}/${archive_name}\"\n    checksum_path=\"${CACHE_DIRECTORY}/${checksum_name}\"\n    if cached_assets_verify \"$archive_path\" \"$checksum_path\" \"$archive_name\" \\\n        \"$archive_digest\" \"$checksum_digest\"; then\n        report_status \"cache=reused\"\n    else\n        if [[ -e \"$archive_path\" || -e \"$checksum_path\" ]]; then\n            report_status \"cache=repair\"\n        else\n            report_status \"cache=download\"\n        fi\n        rm -f -- \"$archive_path\" \"$checksum_path\"\n        download_asset \"$archive_id\" \"${temporary_directory}/${archive_name}\"\n        download_asset \"$checksum_id\" \"${temporary_directory}/${checksum_name}\"\n        if ! cached_assets_verify \"${temporary_directory}/${archive_name}\" \\\n            \"${temporary_directory}/${checksum_name}\" \"$archive_name\" \"$archive_digest\" \\\n            \"$checksum_digest\"; then\n            report_status \"verification=failed\"\n            die \"downloaded Whitaker release assets failed verification\"\n        fi\n        install -m 0644 \"${temporary_directory}/${archive_name}\" \"$archive_path\"\n        install -m 0644 \"${temporary_directory}/${checksum_name}\" \"$checksum_path\"\n    fi\n    if ! cached_assets_verify \"$archive_path\" \"$checksum_path\" \"$archive_name\" \\\n        \"$archive_digest\" \"$checksum_digest\"; then\n        report_status \"verification=failed\"\n        die \"cached Whitaker release assets failed verification\"\n    fi\n    report_status \"verification=passed\"\n\n    tar --extract --gzip --no-same-owner --file \"$archive_path\" \\\n        --directory \"$temporary_directory\" \"$member_name\"\n    install -D -m 0755 \"${temporary_directory}/${member_name}\" \\\n        \"${CARGO_HOME:-${HOME}/.cargo}/bin/whitaker-installer\"\n}\n\n\nmain \"$@\"\n"
+        }
+      ],
+      "workflows": [
+        {
+          "error": null,
+          "parsed": {
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "name": "Install Whitaker",
+                    "run": "scripts/install_whitaker_binary.sh \"${WHITAKER_VERSION}\""
+                  }
+                ]
+              }
+            },
+            "name": "CI",
+            "on": {
+              "pull_request": null
+            }
+          },
+          "path": ".github/workflows/ci.yml"
+        }
+      ]
+    },
+    "unknown_schema": {
+      "actions": [],
+      "kind": "policy-input/whitaker-provisioning",
+      "repository": {
+        "name": "leynos/consumer",
+        "path": "unknown-schema"
+      },
+      "schema_version": 2,
+      "scripts": [],
+      "workflows": []
+    },
+    "unlisted_pin": {
+      "actions": [],
+      "kind": "policy-input/whitaker-provisioning",
+      "repository": {
+        "name": "leynos/consumer",
+        "path": "unlisted-pin"
+      },
+      "schema_version": 1,
+      "scripts": [],
+      "workflows": [
+        {
+          "error": null,
+          "parsed": {
+            "jobs": {
+              "lint": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "leynos/shared-actions/.github/actions/install-whitaker@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                  }
+                ]
+              }
+            },
+            "name": "CI",
+            "on": {
+              "pull_request": null
+            }
+          },
+          "path": ".github/workflows/ci.yml"
+        }
+      ]
+    },
+    "unreadable_action": {
+      "actions": [
+        {
+          "error": "invalid YAML: while parsing a flow mapping\n  in \"<unicode string>\", line 2, column 7:\n    runs: {using: composite\n          ^ (line: 2)\nexpected ',' or '}', but got ':'\n  in \"<unicode string>\", line 3, column 6:\n    steps: [\n         ^ (line: 3)",
+          "parsed": null,
+          "path": ".github/actions/setup/action.yml"
+        }
+      ],
+      "kind": "policy-input/whitaker-provisioning",
+      "repository": {
+        "name": "leynos/consumer",
+        "path": "unreadable-action"
+      },
+      "schema_version": 1,
+      "scripts": [],
+      "workflows": []
+    },
+    "unreadable_workflow": {
+      "actions": [],
+      "kind": "policy-input/whitaker-provisioning",
+      "repository": {
+        "name": "leynos/consumer",
+        "path": "unreadable-workflow"
+      },
+      "schema_version": 1,
+      "scripts": [],
+      "workflows": [
+        {
+          "error": "invalid YAML: while parsing a flow sequence\n  in \"<unicode string>\", line 2, column 5:\n    on: [pull_request\n        ^ (line: 2)\nexpected ',' or ']', but got ':'\n  in \"<unicode string>\", line 3, column 5:\n    jobs: {\n        ^ (line: 3)",
+          "parsed": null,
+          "path": ".github/workflows/ci.yml"
+        }
+      ]
+    }
+  }
+}

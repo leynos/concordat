@@ -1805,8 +1805,8 @@ breakdown of what constitutes "compliance" within the framework.
 | PD-013       | `AGENTS.md` carries exactly one spelling block between the typos-config-builder markers, matching the builder's published `docs/agents-md-spelling.md` for the pinned release with whitespace normalized, and no duplicate spelling guidance outside it.                                                                                                                                                                                                                                                                                                                                                                            | Prose and Documentation Quality | Conftest (`spelling-config-baseline`)                   | error                | 2                        |
 | SP-001       | The Open Source Security Foundation Scorecard must achieve a minimum score of 7.0.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Security Posture                | Open Source Security Foundation Scorecard               | warning              | 1                        |
 | LG-001       | The `docs/library-users-guide.md` file must match the canonical version from the consumed library tag.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | File and Content Presence       | Python/Content Check                                    | error                | 4                        |
-| QG-002       | Lint tooling is installed from a pinned release via the hardened step: version-keyed cache, shell-variable indirection in `run:` blocks, `--locked`, binstall-or-build fallback, `--cranelift` preserved where the repository builds with Cranelift.                                                                                                                                                                                                                                                                                                                                                                                | Quality-Gate Integrity          | OPA/Conftest                                            | error                | 4                        |
-| QG-003       | The lint suite itself is pinned (e.g. `whitaker-installer --ref <tag>`), not floating on a rolling release.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Quality-Gate Integrity          | OPA/Conftest                                            | warning              | 4                        |
+| QG-002       | Whitaker is provisioned only through `leynos/shared-actions/.github/actions/install-whitaker`, pinned to a revision listed in the rule as descending from the change that made the action carry the install rules. No workflow, composite action, Makefile or script installs, downloads or runs `whitaker-installer`, `cargo-dylint` or `dylint-link` by another route. Whitaker itself is exempt as the producer.                                                                                                                                                                                                                 | Quality-Gate Integrity          | OPA/Conftest (`whitaker-provisioning`)                  | error                | 4                        |
+| QG-003       | Superseded by QG-002. The lint suite is a rolling release and is never pinned; `install-whitaker` refuses a suite pin, and its own contract proves it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Quality-Gate Integrity          | Superseded                                              | n/a                  | n/a                      |
 | QG-004       | Test invocation uses the canonical `TEST_CMD` nextest fallback, test-tool installs pass `--locked`, and doctests are executed by a dedicated target (nextest does not run them).                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Quality-Gate Integrity          | OPA/Conftest + Makefile parse                           | warning              | 4                        |
 | QG-005       | A test-only lane does not duplicate a coverage lane that runs the same scope, platform, nextest profile, resolved feature set, and test selection on the same trigger.                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Quality-Gate Integrity          | OPA/Conftest + workflow envelope                        | warning              | 4                        |
 | QG-006       | No two otherwise-equivalent legs of one matrix resolve to the same feature set once Cargo's default features are applied.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Quality-Gate Integrity          | OPA/Conftest + workflow envelope + manifest parse       | warning              | 4                        |
@@ -1883,8 +1883,20 @@ linter from a stale git revision whose cache key never rotated. QG-001 has
 since shipped as the `rust-makefile-baseline` rule package, which also settled
 the doctrine for the gate variable: `WHITAKER ?= whitaker` is the sanctioned
 estate pattern — a local override is permitted because CI installs the real
-binary — and is deliberately not a finding. QG-002 and QG-003 extend the gate
-from the Makefile to the install step.
+binary — and is deliberately not a finding. QG-002 extends the gate from the
+Makefile to the install step.
+
+QG-002 was first framed as a hardened install step for each repository to
+carry, and QG-003 as a pin on the lint suite. The user ruled otherwise on
+2026-09-24, and both changed. The estate provisions Whitaker one way: the
+shared-actions `install-whitaker` action. It installs an exact
+`whitaker-installer` version, never pins the lint suite (the lints are a
+rolling release), and always passes `--no-source-fallback`, so a missing
+published asset fails the run rather than being compiled. The action's own
+contract proves those rules, so QG-002 does not re-check installer flags. It
+refuses every other route, and every pin of the action to a revision not listed
+as carrying the rules. QG-003 is superseded: pinning the suite is now refused
+by the action itself.
 
 Rule version 0.3.2 refines three of QG-001's textual readings so that they
 match what the shell executes; run against netsuke's Makefile, the older
@@ -1897,16 +1909,13 @@ before the gate only when every value-carrying definition is a run of
 towards reporting: a shape the reading cannot prove still produces a finding.
 
 - **Sensors:** parse the Makefile for conditional lint invocation in
-  gate-critical targets (the shipped QG-001 sensor); evaluate workflow YAML for
-  the hardened install step (release-pinned installer, cache keyed by the
-  version variable, plain shell variables rather than inline `${{ env }}`
-  interpolation in `run:` blocks — a zizmor template-injection finding —
-  `--locked` on binstall and its fallback, `--cranelift` retained where
-  `.cargo/config.toml` selects the Cranelift backend); flag installs that track
-  a rolling release once ref-pinning is available upstream.
+  gate-critical targets (the shipped QG-001 sensor); `whitaker-provisioning`
+  reads decoded workflows and composite actions, Makefiles and scripts, and
+  recognizes an install, download or direct run of a Whitaker tool, and an
+  `install-whitaker` pin that is not listed (the shipped QG-002 sensor).
 - **Actuators:** comment-preserving patches replacing soft-skip recipes
-  with the canonical mandatory form, and file patches replacing bespoke install
-  steps with the canonical hardened step from `canon/`.
+  with the canonical mandatory form, and file patches replacing a bespoke
+  install step with the `install-whitaker` step at a listed revision.
 
 ##### Test-runner completeness (QG-004)
 

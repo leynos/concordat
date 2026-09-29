@@ -1,0 +1,13 @@
+name: CI
+on:
+  pull_request:
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Whitaker
+        run: |
+          cargo install --locked \
+            --git https://github.com/leynos/whitaker \
+            --rev "${WHITAKER_REV}" \
+            whitaker-installer

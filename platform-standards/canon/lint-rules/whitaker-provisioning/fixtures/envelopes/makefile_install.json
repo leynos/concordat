@@ -1,0 +1,17 @@
+{
+  "actions": [],
+  "kind": "policy-input/whitaker-provisioning",
+  "repository": {
+    "name": "leynos/consumer",
+    "path": "makefile-install"
+  },
+  "schema_version": 1,
+  "scripts": [
+    {
+      "error": null,
+      "path": "Makefile",
+      "text": "tools:\n\tcargo +stable binstall --no-confirm whitaker-installer@0.2.9\n"
+    }
+  ],
+  "workflows": []
+}

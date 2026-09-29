@@ -56,6 +56,13 @@ from .spelling_envelope import (
     build_spelling_envelope,
 )
 from .spelling_envelope import ENVELOPE_KIND as SPELLING_ENVELOPE_KIND
+from .whitaker_provisioning_envelope import (
+    ENVELOPE_KIND as PROVISIONING_ENVELOPE_KIND,
+)
+from .whitaker_provisioning_envelope import (
+    ProvisioningEnvelope,
+    build_whitaker_provisioning_envelope,
+)
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -69,6 +76,7 @@ type RuleEnvelope = (
     | CoverageEnvelope
     | DependabotEnvelope
     | SpellingEnvelope
+    | ProvisioningEnvelope
 )
 type EnvelopeResolver = cabc.Callable[[str, pathlib.Path], RuleEnvelope]
 
@@ -351,6 +359,24 @@ def _spelling_envelope(
     return build_spelling_envelope(checkout, patterns)
 
 
+def _provisioning_envelope(
+    checkout: pathlib.Path,
+    _parameters: cabc.Mapping[str, object] | None = None,
+) -> ProvisioningEnvelope:
+    """Build the Whitaker provisioning envelope, ignoring the parameters.
+
+    `whitaker-provisioning` reads its listed revisions, producers and
+    exemptions through `data.parameters` in the policy, so the second
+    argument exists only to give every builder one callable type.
+
+    Returns
+    -------
+    ProvisioningEnvelope
+        The `policy-input/whitaker-provisioning` document for *checkout*.
+    """
+    return build_whitaker_provisioning_envelope(checkout)
+
+
 # Every rule package's envelope builder, keyed by package identifier. The
 # mapping is the complete list rather than the exceptions to a default: a
 # package that reads facts of one shape and a policy that expects another
@@ -366,6 +392,7 @@ PACKAGE_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     "main-owned-codescene-coverage": _coverage_envelope,
     "dependabot-update-shape": _dependabot_envelope,
     "spelling-config-baseline": _spelling_envelope,
+    "whitaker-provisioning": _provisioning_envelope,
 })
 
 # The same builders by the envelope kind they produce, so a package whose input
@@ -378,6 +405,7 @@ INPUT_KIND_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     COVERAGE_ENVELOPE_KIND: _coverage_envelope,
     DEPENDABOT_ENVELOPE_KIND: _dependabot_envelope,
     SPELLING_ENVELOPE_KIND: _spelling_envelope,
+    PROVISIONING_ENVELOPE_KIND: _provisioning_envelope,
 })
 
 

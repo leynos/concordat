@@ -1,0 +1,11 @@
+name: CI
+on:
+  pull_request:
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch the installer
+        run: |
+          url="https://github.com/leynos/whitaker/releases/download/v0.2.9"
+          curl -fsSL "${url}/installer.tgz" -o installer.tgz

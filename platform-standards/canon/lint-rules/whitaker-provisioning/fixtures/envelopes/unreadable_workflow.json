@@ -1,0 +1,17 @@
+{
+  "actions": [],
+  "kind": "policy-input/whitaker-provisioning",
+  "repository": {
+    "name": "leynos/consumer",
+    "path": "unreadable-workflow"
+  },
+  "schema_version": 1,
+  "scripts": [],
+  "workflows": [
+    {
+      "error": "invalid YAML: while parsing a flow sequence\n  in \"<unicode string>\", line 2, column 5:\n    on: [pull_request\n        ^ (line: 2)\nexpected ',' or ']', but got ':'\n  in \"<unicode string>\", line 3, column 5:\n    jobs: {\n        ^ (line: 3)",
+      "parsed": null,
+      "path": ".github/workflows/ci.yml"
+    }
+  ]
+}

@@ -595,6 +595,20 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
 - `policy-input/rust-makefile-baseline` — `envelope.build_envelope`, above.
 - `policy-input/rust-build-defaults` —
   `envelope.build_build_defaults_envelope`, below.
+- `policy-input/whitaker-provisioning` —
+  `whitaker_provisioning_envelope.build_whitaker_provisioning_envelope`. It
+  reuses the CV-005 workflow decoder for `.github/workflows`, decodes every
+  composite action manifest in the checkout the same way, and carries every
+  Makefile, and every script under `.github/`, `bin/`, `ci/`, `scripts/` or
+  `tools/` with a common interpreter suffix or a shebang, or at the root with a
+  shebang, as text. A directory that cannot be listed raises an
+  `OperationalRuleError`, because skipping it would hide a script. Dependency,
+  build and cache directories are pruned, test code is left out, a binary is
+  left out, a symlink within the checkout is read as its target, and a script
+  that cannot be read is carried with its `error` for an indeterminate finding.
+  The repository slug comes from the `origin` remote through
+  `parse_github_slug`, so the policy's producer and exemption parameters can
+  match it. The package is registered by identifier and declares the kind.
 - `policy-input/markdown-formatting-baseline` —
   `markdown_envelope.build_markdown_envelope`. Alongside the same `makeutil`
   report for the root `Makefile`, it carries `.markdownlint-cli2.jsonc` decoded

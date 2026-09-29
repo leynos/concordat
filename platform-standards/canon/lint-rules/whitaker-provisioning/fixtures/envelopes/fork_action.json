@@ -1,0 +1,32 @@
+{
+  "actions": [],
+  "kind": "policy-input/whitaker-provisioning",
+  "repository": {
+    "name": "leynos/consumer",
+    "path": "fork-action"
+  },
+  "schema_version": 1,
+  "scripts": [],
+  "workflows": [
+    {
+      "error": null,
+      "parsed": {
+        "jobs": {
+          "lint": {
+            "runs-on": "ubuntu-latest",
+            "steps": [
+              {
+                "uses": "someone/shared-actions/.github/actions/install-whitaker@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              }
+            ]
+          }
+        },
+        "name": "CI",
+        "on": {
+          "pull_request": null
+        }
+      },
+      "path": ".github/workflows/ci.yml"
+    }
+  ]
+}

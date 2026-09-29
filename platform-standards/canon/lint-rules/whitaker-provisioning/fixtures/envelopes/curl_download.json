@@ -1,0 +1,33 @@
+{
+  "actions": [],
+  "kind": "policy-input/whitaker-provisioning",
+  "repository": {
+    "name": "leynos/consumer",
+    "path": "curl-download"
+  },
+  "schema_version": 1,
+  "scripts": [],
+  "workflows": [
+    {
+      "error": null,
+      "parsed": {
+        "jobs": {
+          "lint": {
+            "runs-on": "ubuntu-latest",
+            "steps": [
+              {
+                "name": "Fetch the installer",
+                "run": "url=\"https://github.com/leynos/whitaker/releases/download/v0.2.9\"\ncurl -fsSL \"${url}/installer.tgz\" -o installer.tgz\n"
+              }
+            ]
+          }
+        },
+        "name": "CI",
+        "on": {
+          "pull_request": null
+        }
+      },
+      "path": ".github/workflows/ci.yml"
+    }
+  ]
+}

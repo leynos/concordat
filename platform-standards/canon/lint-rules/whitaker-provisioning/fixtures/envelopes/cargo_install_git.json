@@ -1,0 +1,33 @@
+{
+  "actions": [],
+  "kind": "policy-input/whitaker-provisioning",
+  "repository": {
+    "name": "leynos/consumer",
+    "path": "cargo-install-git"
+  },
+  "schema_version": 1,
+  "scripts": [],
+  "workflows": [
+    {
+      "error": null,
+      "parsed": {
+        "jobs": {
+          "build-test": {
+            "runs-on": "ubuntu-latest",
+            "steps": [
+              {
+                "name": "Install Whitaker",
+                "run": "cargo install --locked \\\n  --git https://github.com/leynos/whitaker \\\n  --rev \"${WHITAKER_REV}\" \\\n  whitaker-installer\n"
+              }
+            ]
+          }
+        },
+        "name": "CI",
+        "on": {
+          "pull_request": null
+        }
+      },
+      "path": ".github/workflows/ci.yml"
+    }
+  ]
+}

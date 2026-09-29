@@ -161,3 +161,16 @@ artifacts:
     description: >
       Rule package manifest for the spelling configuration baseline policy.
     sha256: 905b08a399dc8ce651aa49c996a4bb62b48b77ebaf2506aa7ffab6fc90844cb3
+  - id: lint-rule-whitaker-provisioning
+    type: opa-policy
+    path: platform-standards/canon/lint-rules/whitaker-provisioning/policy/whitaker_provisioning.rego
+    description: >
+      QG-002 policy refusing every route to Whitaker other than the
+      shared-actions install-whitaker action pinned to a listed revision.
+    sha256: 9baf87f4267a94962e579db50b5576382c6daa65c41c8eb1a85947bdd52b98ec
+  - id: lint-rule-whitaker-provisioning-manifest
+    type: lint-config
+    path: platform-standards/canon/lint-rules/whitaker-provisioning/rule.yaml
+    description: >
+      Rule package manifest for the Whitaker provisioning policy.
+    sha256: 009abf41480130a1b9c438eb24567a999b29cf600d430a08ce710cbd7a3df412

@@ -1,0 +1,6 @@
+name: Install Whitaker
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: cargo binstall --no-confirm whitaker-installer@0.2.9

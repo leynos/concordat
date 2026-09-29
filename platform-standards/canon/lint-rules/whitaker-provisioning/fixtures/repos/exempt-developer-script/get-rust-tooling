@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+WHITAKER_INSTALLER_VERSION=${WHITAKER_INSTALLER_VERSION:-0.2.9}
+cargo binstall --locked --no-confirm "whitaker-installer@${WHITAKER_INSTALLER_VERSION}"
+whitaker-installer --no-source-fallback

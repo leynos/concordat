@@ -1,0 +1,9 @@
+name: CI
+on:
+  pull_request:
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Whitaker
+        run: scripts/install_whitaker_binary.sh "${WHITAKER_VERSION}"
