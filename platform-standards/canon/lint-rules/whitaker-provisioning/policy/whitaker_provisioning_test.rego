@@ -168,6 +168,12 @@ test_an_unreadable_workflow_is_indeterminate if {
 	profile(data.fixtures.unreadable_workflow) == {["QG-002", "indeterminate", ".github/workflows/ci.yml"]}
 }
 
+# A composite action that is not valid YAML stays in the envelope with its
+# reason, as a workflow does, rather than dropping out of the audit.
+test_an_unreadable_action_is_indeterminate if {
+	profile(data.fixtures.unreadable_action) == {["QG-002", "indeterminate", ".github/actions/setup/action.yml"]}
+}
+
 test_an_unknown_envelope_is_indeterminate if {
 	profile(data.fixtures.unknown_schema) == {["EN-001", "indeterminate", "."]}
 }

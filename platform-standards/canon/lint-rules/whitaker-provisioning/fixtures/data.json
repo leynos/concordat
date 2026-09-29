@@ -570,6 +570,23 @@
         }
       ]
     },
+    "unreadable_action": {
+      "actions": [
+        {
+          "error": "invalid YAML: while parsing a flow mapping\n  in \"<unicode string>\", line 2, column 7:\n    runs: {using: composite\n          ^ (line: 2)\nexpected ',' or '}', but got ':'\n  in \"<unicode string>\", line 3, column 6:\n    steps: [\n         ^ (line: 3)",
+          "parsed": null,
+          "path": ".github/actions/setup/action.yml"
+        }
+      ],
+      "kind": "policy-input/whitaker-provisioning",
+      "repository": {
+        "name": "leynos/consumer",
+        "path": "unreadable-action"
+      },
+      "schema_version": 1,
+      "scripts": [],
+      "workflows": []
+    },
     "unreadable_workflow": {
       "actions": [],
       "kind": "policy-input/whitaker-provisioning",

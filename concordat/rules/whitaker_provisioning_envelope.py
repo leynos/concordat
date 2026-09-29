@@ -215,13 +215,23 @@ def _is_makefile(relative: pathlib.PurePosixPath) -> bool:
     return relative.name in MAKEFILE_NAMES or relative.suffix == MAKEFILE_SUFFIX
 
 
-def _has_shebang(path: pathlib.Path) -> bool:
-    """Return whether *path* starts with `#!`, treating a read failure as no."""
+def _starts_a_script(path: pathlib.Path) -> bool:
+    """Return whether *path* starts with `#!`, or cannot be read to tell.
+
+    An unreadable file is answered yes rather than no: the file is then carried
+    with its read failure, and the policy reports it as indeterminate, where a
+    no would drop it and let an unreadable script pass as absent.
+
+    Returns
+    -------
+    bool
+        True for a shebang or a read failure.
+    """
     try:
         with path.open("rb") as handle:
             return handle.read(2) == b"#!"
     except OSError:
-        return False
+        return True
 
 
 def _is_test(relative: pathlib.PurePosixPath) -> bool:
@@ -262,9 +272,9 @@ def _is_script(checkout: pathlib.Path, relative: pathlib.PurePosixPath) -> bool:
     if relative.suffix in {".yml", ".yaml"} or _is_test(relative):
         return False
     if len(relative.parts) == 1:
-        return _has_shebang(checkout / relative)
+        return _starts_a_script(checkout / relative)
     return relative.parts[0] in SCRIPT_DIRECTORIES and (
-        relative.suffix in SCRIPT_SUFFIXES or _has_shebang(checkout / relative)
+        relative.suffix in SCRIPT_SUFFIXES or _starts_a_script(checkout / relative)
     )
 
 

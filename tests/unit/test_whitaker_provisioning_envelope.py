@@ -144,6 +144,61 @@ class TestSurfaces:
             "error": "symlink that leaves the checkout",
         }
 
+    def test_records_a_dangling_symlink_as_unreadable(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A link that resolves nowhere is evidence of a gap, not an absence."""
+        (tmp_path / "scripts").mkdir()
+        (tmp_path / "scripts" / "install.sh").symlink_to("missing.sh")
+
+        envelope = build_whitaker_provisioning_envelope(tmp_path)
+
+        (fact,) = typ.cast("list[dict[str, object]]", envelope["scripts"])
+        assert fact["text"] is None
+        assert fact["error"] == "symlink that leaves the checkout"
+
+    @pytest.mark.skipif(
+        os.name == "nt" or os.geteuid() == 0,
+        reason="a file mode only denies reading to an unprivileged POSIX user",
+    )
+    @pytest.mark.parametrize(
+        "relative", ["scripts/install.sh", "scripts/setup", "installer"]
+    )
+    def test_records_an_unreadable_script_with_its_reason(
+        self, tmp_path: pathlib.Path, relative: str
+    ) -> None:
+        """A script that cannot be read is kept, so the audit is indeterminate.
+
+        The root-level and suffixless cases matter because a shebang decides
+        whether they are scripts at all; a failed read must not answer no.
+        """
+        _write(tmp_path, relative, "#!/bin/sh\ncurl whitaker-installer\n")
+        script = tmp_path / relative
+        script.chmod(0)
+        try:
+            envelope = build_whitaker_provisioning_envelope(tmp_path)
+            result = runner.run_rule(RULE_ID, tmp_path)
+        finally:
+            script.chmod(0o600)
+
+        (fact,) = typ.cast("list[dict[str, object]]", envelope["scripts"])
+        assert fact["text"] is None
+        assert "cannot read" in typ.cast("str", fact["error"])
+        assert result.verdict == "indeterminate", result
+
+    def test_records_a_malformed_action_and_reports_it_indeterminate(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A composite action that is not valid YAML is kept with its error."""
+        _write(tmp_path, ".github/actions/setup/action.yml", "runs: {using: [\n")
+
+        envelope = build_whitaker_provisioning_envelope(tmp_path)
+        result = runner.run_rule(RULE_ID, tmp_path)
+
+        (fact,) = typ.cast("list[dict[str, object]]", envelope["actions"])
+        assert typ.cast("str", fact["error"]).startswith("invalid YAML")
+        assert result.verdict == "indeterminate", result
+
     def test_leaves_out_an_oversized_binary(self, tmp_path: pathlib.Path) -> None:
         """A large compiled tool is a binary, not an unreadable script."""
         binary = tmp_path / "bin" / "act"
@@ -231,6 +286,7 @@ class TestRepositoryName:
         """A corrupt `.git` is a checkout without a name, not a raw git error."""
 
         def refuse(_path: str) -> str:
+            """Fail as git does on a corrupt `.git` directory."""
             message = "corrupt repository"
             raise pygit2.GitError(message)
 
