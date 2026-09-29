@@ -1,8 +1,8 @@
 .PHONY: fmt check-fmt
 
 fmt:
-	mdtablefix --in-place --git --include-untracked --wrap
+	mdtablefix --in-place --git --include-untracked --wrap --renumber --breaks --ellipsis --fences
 	markdownlint-cli2 --fix "**/*.md"
 
 check-fmt:
-	mdtablefix --check --git --include-untracked --wrap
+	mdtablefix --check --git --include-untracked --wrap --renumber --breaks --ellipsis --fences

@@ -96,14 +96,14 @@ artifacts:
       check-fmt targets, PD-005 the baseline markdownlint configuration, and
       PD-006 the markdownlint-cli2 action in CI, pinned to a commit rather
       than an annotated tag object.
-    sha256: 5f8a1080030cbc34e53844868ff768c50d2d3991b969e9feac7bcba4ce0c6f5b
+    sha256: c34b527da3b16235821aa883146d4e04dc71d06f366314b1e636b410f274f9e8
   - id: lint-rule-markdown-formatting-baseline-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/markdown-formatting-baseline/rule.yaml
     description: >
       Rule package manifest (sensor wiring, input kind, parameters, defaults)
       for markdown-formatting-baseline.
-    sha256: 2ef3cbabbb9bb1fcff2bc12c7a41a812bfd25b968e2987501e10732461ac2626
+    sha256: a122a145a678a2015477e4aa0c0468448e6519173d578a4b455b4dc5d1908c98
   - id: lint-rule-rust-build-defaults
     type: opa-policy
     path: platform-standards/canon/lint-rules/rust-build-defaults/policy/rust_build_defaults.rego

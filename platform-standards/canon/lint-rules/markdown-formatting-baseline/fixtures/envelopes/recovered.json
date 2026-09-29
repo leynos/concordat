@@ -21,8 +21,8 @@
     },
     "source": {
       "path": "Makefile",
-      "sha256": "4d073e177edb3048e7847ae2513f70dd1a18e92431d9cb5beac4d1dd10b2342b",
-      "byte_length": 201
+      "sha256": "226da2da4ae46f6de0ac75af44f0e5c6230251338640e521f8b320a51e7796ce",
+      "byte_length": 295
     },
     "parse": {
       "status": "recovered",
@@ -43,8 +43,8 @@
           "message": "expected ':'",
           "code": null,
           "location": {
-            "start_byte": 201,
-            "end_byte": 201,
+            "start_byte": 295,
+            "end_byte": 295,
             "start_line": 11,
             "start_column": 1,
             "end_line": 11,
@@ -86,13 +86,13 @@
         "recipes": [
           {
             "ordinal": 0,
-            "text": "$(MDTABLEFIX) --in-place --git --include-untracked",
+            "text": "$(MDTABLEFIX) --in-place --git --include-untracked --wrap --renumber --breaks --ellipsis --fences",
             "silent": false,
             "ignore_errors": false,
             "always_execute": false,
             "location": {
               "start_byte": 54,
-              "end_byte": 106,
+              "end_byte": 153,
               "start_line": 6,
               "start_column": 1,
               "end_line": 7,
@@ -106,8 +106,8 @@
             "ignore_errors": false,
             "always_execute": false,
             "location": {
-              "start_byte": 106,
-              "end_byte": 141,
+              "start_byte": 153,
+              "end_byte": 188,
               "start_line": 7,
               "start_column": 1,
               "end_line": 8,
@@ -117,7 +117,7 @@
         ],
         "location": {
           "start_byte": 49,
-          "end_byte": 142,
+          "end_byte": 189,
           "start_line": 5,
           "start_column": 1,
           "end_line": 9,
@@ -134,8 +134,8 @@
         "conditions": [],
         "recipes": [],
         "location": {
-          "start_byte": 142,
-          "end_byte": 152,
+          "start_byte": 189,
+          "end_byte": 199,
           "start_line": 9,
           "start_column": 1,
           "end_line": 10,

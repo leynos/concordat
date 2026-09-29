@@ -54,6 +54,14 @@ EXPECTED_PROFILES: typ.Final[dict[str, Profile]] = {
     "missing_targets": frozenset({("FP-003", "noncompliant")}),
     "mdformat_wrapper": _NONCOMPLIANT_RECIPES,
     "missing_flags": _NONCOMPLIANT_RECIPES,
+    "missing_rule_flags": frozenset({
+        ("PD-002", "noncompliant"),
+        ("PD-003", "noncompliant"),
+    }),
+    "partial_rule_flags": frozenset({
+        ("PD-002", "noncompliant"),
+        ("PD-003", "noncompliant"),
+    }),
     "soft_skip": _NONCOMPLIANT_RECIPES,
     "echo_decoy": _NONCOMPLIANT_RECIPES,
     "extra_invocation": frozenset({("PD-002", "noncompliant")}),
@@ -118,5 +126,5 @@ def test_soft_skip_findings_cite_recipe_lines() -> None:
     results = runner._invoke_conftest(_RULE_ID, _load_envelope("soft_skip"))
     findings = runner._findings_from_results(results)
     lines = {f.rule_id: f.line for f in findings}
-    assert lines == {"PD-003": 7, "PD-004": 8, "PD-002": 11}, findings
+    assert lines == {"PD-003": 8, "PD-004": 9, "PD-002": 12}, findings
     assert all(f.path == "Makefile" for f in findings), findings

@@ -34,6 +34,14 @@ parameters:
         description: >-
           Flags every mdtablefix invocation must pass to select the Markdown
           files Git tracks plus the untracked files Git does not ignore.
+      mdtablefix_rule_flags:
+        type: array
+        items:
+          type: string
+        description: >-
+          Flags every mdtablefix invocation must pass to apply the estate's
+          rewrites: wrapping, list renumbering, thematic breaks, ellipses and
+          fences. A check without them passes files the formatter would change.
       markdownlint_action:
         type: string
         description: The GitHub Action that must lint Markdown in CI.
@@ -62,6 +70,12 @@ parameters:
     mdtablefix_select_flags:
       - --git
       - --include-untracked
+    mdtablefix_rule_flags:
+      - --wrap
+      - --renumber
+      - --breaks
+      - --ellipsis
+      - --fences
     markdownlint_action: DavidAnson/markdownlint-cli2-action
     markdownlint_globs: "**/*.md"
     markdownlint_config_path: .markdownlint-cli2.jsonc

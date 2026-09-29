@@ -548,10 +548,13 @@ cache directories, and reports:
 
 - **FP-003** — the root `Makefile` exists and defines `fmt` and `check-fmt`.
 - **PD-002** — a recipe reachable from `check-fmt` runs
-  `mdtablefix --check --git --include-untracked`, and its exit status reaches
-  Make.
+  `mdtablefix --check --git --include-untracked --wrap --renumber --breaks
+  --ellipsis --fences`,
+  and its exit status reaches Make. The rewrite flags are required as well as
+  the selection flags: a check without `--wrap` passes files the formatter
+  would still change.
 - **PD-003** — a recipe reachable from `fmt` runs
-  `mdtablefix --in-place --git --include-untracked` directly, not through the
+  `mdtablefix --in-place` with the same flags directly, not through the
   `mdformat-all` wrapper.
 - **PD-004** — a recipe reachable from `fmt` runs `markdownlint-cli2 --fix`
   directly, not through the `mdformat-all` wrapper.

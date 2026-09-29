@@ -105,9 +105,28 @@ test_missing_select_flags_are_noncompliant if {
 		["PD-003", "noncompliant"],
 		["PD-004", "noncompliant"],
 	}
-	messages(findings, "PD-002") == {"\"check-fmt\"-path recipe runs mdtablefix --check without --include-untracked"}
-	messages(findings, "PD-003") == {"\"fmt\"-path recipe runs mdtablefix --in-place without --include-untracked"}
+	messages(findings, "PD-002") == {"\"check-fmt\"-path recipe runs mdtablefix --check without --include-untracked --wrap --renumber --breaks --ellipsis --fences"}
+	messages(findings, "PD-003") == {"\"fmt\"-path recipe runs mdtablefix --in-place without --include-untracked --wrap --renumber --breaks --ellipsis --fences"}
 	messages(findings, "PD-004") == {"\"fmt\"-path recipe runs markdownlint-cli2 without --fix"}
+}
+
+# A check that selects the right files but omits the rewrite flags passes files
+# the formatter would still change, so the missing rewrites are named.
+test_missing_rule_flags_are_noncompliant if {
+	findings := policy.deny with input as data.fixtures.missing_rule_flags
+	profile(findings) == {
+		["PD-002", "noncompliant"],
+		["PD-003", "noncompliant"],
+	}
+	messages(findings, "PD-002") == {"\"check-fmt\"-path recipe runs mdtablefix --check without --wrap --renumber --breaks --ellipsis --fences"}
+	messages(findings, "PD-003") == {"\"fmt\"-path recipe runs mdtablefix --in-place without --wrap --renumber --breaks --ellipsis --fences"}
+}
+
+# Only the flags that are absent are named, so a partial set is not over-reported.
+test_partial_rule_flags_name_only_the_missing_ones if {
+	findings := policy.deny with input as data.fixtures.partial_rule_flags
+	messages(findings, "PD-002") == {"\"check-fmt\"-path recipe runs mdtablefix --check without --breaks --ellipsis --fences"}
+	messages(findings, "PD-003") == {"\"fmt\"-path recipe runs mdtablefix --in-place without --breaks --ellipsis --fences"}
 }
 
 test_soft_skipped_tools_are_noncompliant_with_lines if {
@@ -119,7 +138,7 @@ test_soft_skipped_tools_are_noncompliant_with_lines if {
 	}
 	some f in findings
 	f.rule_id == "PD-002"
-	f.line == 11
+	f.line == 12
 	contains(f.msg, "soft-skips mdtablefix")
 }
 

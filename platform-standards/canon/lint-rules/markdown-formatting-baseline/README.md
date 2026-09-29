@@ -20,10 +20,12 @@ dependency graph so nothing is resolved from the registry at run time.
   required targets (`fmt` and `check-fmt` by default).
 - **PD-002** (error): a recipe reachable from `check-fmt` must run
   `mdtablefix --check` with the select flags (`--git --include-untracked` by
-  default), and its exit status must reach Make.
+  default) and the rule flags (`--wrap --renumber --breaks --ellipsis --fences`
+  by default), and its exit status must reach Make. A check without the rule
+  flags passes files the formatter would still change.
 - **PD-003** (error): a recipe reachable from `fmt` must run
-  `mdtablefix --in-place` with the select flags, directly rather than through
-  the `mdformat-all` wrapper, and its exit status must reach Make.
+  `mdtablefix --in-place` with the select and rule flags, directly rather than
+  through the `mdformat-all` wrapper, and its exit status must reach Make.
 - **PD-004** (error): a recipe reachable from `fmt` must run
   `markdownlint-cli2 --fix` directly rather than through the `mdformat-all`
   wrapper, and its exit status must reach Make.

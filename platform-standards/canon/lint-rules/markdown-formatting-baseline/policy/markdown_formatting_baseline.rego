@@ -20,6 +20,10 @@ default mdtablefix_select_flags := ["--git", "--include-untracked"]
 
 mdtablefix_select_flags := data.parameters.mdtablefix_select_flags
 
+default mdtablefix_rule_flags := ["--wrap", "--renumber", "--breaks", "--ellipsis", "--fences"]
+
+mdtablefix_rule_flags := data.parameters.mdtablefix_rule_flags
+
 default markdownlint_action := "DavidAnson/markdownlint-cli2-action"
 
 markdownlint_action := data.parameters.markdownlint_action
@@ -415,8 +419,11 @@ mdtablefix_mode(recipe, mode) if {
 	mode in tokens
 }
 
+# The select flags choose which files an invocation reads; the rule flags choose
+# which rewrites it applies. Both are part of the estate standard, and a check
+# that omits a rule flag passes files the formatter would still change.
 missing_select_flags(tokens) := [flag |
-	some flag in mdtablefix_select_flags
+	some flag in array.concat(mdtablefix_select_flags, mdtablefix_rule_flags)
 	not flag in tokens
 ]
 
