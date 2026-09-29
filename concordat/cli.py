@@ -341,6 +341,14 @@ def rule_run(
         str,
         Parameter(name="--github-api-url"),
     ] = DEFAULT_API_URL,
+    pin_cache_dir: typ.Annotated[
+        pathlib.Path | None,
+        Parameter(name="--pin-cache-dir"),
+    ] = None,
+    no_pin_cache: typ.Annotated[
+        bool,
+        Parameter(name="--no-pin-cache"),
+    ] = False,
 ) -> int:
     """Audit a local checkout against a canon lint rule package.
 
@@ -349,6 +357,9 @@ def rule_run(
 
     The Markdown package asks the GitHub API at *github_api_url* what each
     pinned action SHA names; the client is built only if a pin needs it.
+    Definite answers are kept on disk, so the next run asks nothing about a
+    pin it has seen: in *pin_cache_dir*, else `CONCORDAT_PIN_CACHE_DIR`, else
+    the user cache directory. *no_pin_cache* neither reads nor writes it.
 
     Returns
     -------
@@ -359,8 +370,17 @@ def rule_run(
     from .rules import render_json, render_table, run_rule
     from .rules.github_pins import GithubPinResolver
     from .rules.packages import default_envelope_builder, resolving_pins
+    from .rules.pin_cache import PinCache, cached_resolver, default_directory
 
-    resolver = GithubPinResolver(functools.partial(_pin_client, github_api_url))
+    github = GithubPinResolver(functools.partial(_pin_client, github_api_url))
+    resolver = (
+        github
+        if no_pin_cache
+        else cached_resolver(
+            github,
+            PinCache(pin_cache_dir or default_directory(os.environ), github_api_url),
+        )
+    )
     builder = resolving_pins(default_envelope_builder, resolver)
     result = run_rule(rule_id, repo, envelope_builder=builder)
     rendered = render_json(result) if output_format == "json" else render_table(result)
