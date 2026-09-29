@@ -266,8 +266,8 @@ Findings carry a three-valued `verdict`:
   cannot be placed on or off Linux, an unreadable exception document, and a
   recorded exception with no pinned channel to measure it against. For BD-007
   to BD-009, also a Makefile `makeutil` refused or recovered from, an
-  `include`, a computed `$(MAKE) $(VAR)` delegation from a gate target, and a
-  selection or `RUSTFLAGS` value that cannot be read.
+  `include`, a computed `$(MAKE) $(VAR)` or `-C`/`-f` delegation from a gate
+  target, and a selection or `RUSTFLAGS` value that cannot be read.
 
 A repository is `compliant` only when the finding set is empty.
 
