@@ -71,7 +71,7 @@ parameters:
           change that removes it.
   defaults:
     compliant_install_whitaker_refs:
-      - "0000000000000000000000000000000000000000"
+      - "6dea5677a84fec60ca51b07202570e3af12ffdb4"
     producer_repositories:
       - leynos/whitaker
     action_repository: leynos/shared-actions
