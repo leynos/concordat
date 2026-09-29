@@ -178,7 +178,7 @@ known_targets := {target |
 }
 
 static_make_targets(recipe) := {match[2] |
-	some match in regex.find_all_string_submatch_n(`\$[({]MAKE[)}]((?:[[:space:]]+-[A-Za-z]+)*)[[:space:]]+([A-Za-z0-9_.-]+)`, recipe.text, -1)
+	some match in regex.find_all_string_submatch_n(`\$[({]MAKE[)}]((?:[[:space:]]+-[A-Za-z-][A-Za-z0-9-]*(?:=[^[:space:]]+)?)*)[[:space:]]+([A-Za-z0-9_.][A-Za-z0-9_.-]*)`, recipe.text, -1)
 }
 
 target_edges[target] contains next if {
@@ -204,7 +204,7 @@ dynamic_make(root) if {
 	some target in rule.targets
 	target in closure(root)
 	some recipe in rule.recipes
-	regex.match(`\$[({]MAKE[)}][[:space:]]+(\$[({]|-C)`, recipe.text)
+	regex.match(`\$[({]MAKE[)}][[:space:]]+(\$[({]|-C|-f|--directory|--file|--makefile)`, recipe.text)
 }
 
 makefile_unprovable_reason := "the Makefile includes other files, so its variables cannot be proven" if {

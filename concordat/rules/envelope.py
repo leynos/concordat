@@ -11,13 +11,12 @@ from __future__ import annotations
 
 import typing as typ
 
-from concordat.errors import OperationalRuleError
-
 from .cargo_config import CargoConfigFacts, inspect_cargo_config
 from .exception_docs import DocumentScan, find_exception_sections
 from .fs_probe import regular_file_exists
 from .makefile_facts import (
     OPERATION_PARSE_MAKEFILE,
+    MakefileRefusedError,
     MakeutilReport,
     inspect_makefile,
 )
@@ -171,8 +170,9 @@ def _read_makefile(
 ) -> tuple[MakeutilReport | None, str | None]:
     """Return the root Makefile's `makeutil` report, or why there is none.
 
-    A Makefile that resolves outside the checkout still raises, as every
-    other fact does; one `makeutil` refuses is returned as its reason.
+    A Makefile that resolves outside the checkout still raises, as does any
+    `makeutil` failure other than a refusal; a refusal is returned as its
+    reason.
 
     Returns
     -------
@@ -187,7 +187,7 @@ def _read_makefile(
         return None, None
     try:
         return inspect_makefile(path).report, None
-    except OperationalRuleError as error:
+    except MakefileRefusedError as error:
         return None, str(error)
 
 

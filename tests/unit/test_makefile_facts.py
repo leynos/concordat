@@ -18,7 +18,7 @@ import typing as typ
 import pytest
 
 from concordat.errors import OperationalRuleError
-from concordat.rules.makefile_facts import inspect_makefile
+from concordat.rules.makefile_facts import MakefileRefusedError, inspect_makefile
 from tests.unit.rule_test_support import (
     MINIMAL_REPORT,
     SpawnFailureCase,
@@ -114,6 +114,31 @@ class TestInspectMakefile:
         cmd_mox.replay()
         facts = inspect_makefile(tmp_path / "Makefile")
         assert facts.status == "recovered", facts.status
+
+    def test_exit_status_two_is_a_refusal(
+        self,
+        tmp_path: pathlib.Path,
+        cmd_mox: CmdMox,
+    ) -> None:
+        """Only exit status 2 names a Makefile `makeutil` declined to parse."""
+        _write_checkout(tmp_path, cargo=False, makefile=True)
+        cmd_mox.mock("makeutil").returns(exit_code=2, stderr="unsupported syntax")
+        cmd_mox.replay()
+        with pytest.raises(MakefileRefusedError, match="unsupported syntax"):
+            inspect_makefile(tmp_path / "Makefile")
+
+    def test_another_fatal_exit_status_is_not_a_refusal(
+        self,
+        tmp_path: pathlib.Path,
+        cmd_mox: CmdMox,
+    ) -> None:
+        """A crash is an operational error, never a fact about the checkout."""
+        _write_checkout(tmp_path, cargo=False, makefile=True)
+        cmd_mox.mock("makeutil").returns(exit_code=101, stderr="panicked")
+        cmd_mox.replay()
+        with pytest.raises(OperationalRuleError, match="panicked") as exc_info:
+            inspect_makefile(tmp_path / "Makefile")
+        assert not isinstance(exc_info.value, MakefileRefusedError), exc_info.value
 
     @pytest.mark.parametrize(
         "case",

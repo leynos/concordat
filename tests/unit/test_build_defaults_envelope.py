@@ -22,6 +22,7 @@ from concordat.rules.envelope import (
     BUILD_DEFAULTS_ENVELOPE_KIND,
     build_build_defaults_envelope,
 )
+from concordat.rules.makefile_facts import MakefileRefusedError
 
 if typ.TYPE_CHECKING:
     import os
@@ -198,7 +199,7 @@ class TestBuildPathFacts:
 
         def refuse(path: pathlib.Path) -> typ.NoReturn:
             message = f"makeutil exited with status 2 for {path.name}"
-            raise OperationalRuleError(
+            raise MakefileRefusedError(
                 message, operation="parse-makefile", resource=path
             )
 
@@ -211,6 +212,27 @@ class TestBuildPathFacts:
         assert envelope["kind"] == BUILD_DEFAULTS_ENVELOPE_KIND, (
             "the rest of the envelope is still built"
         )
+
+    def test_a_makeutil_failure_that_is_not_a_refusal_still_raises(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A missing or timed-out `makeutil` is not a fact about the checkout.
+
+        Only an explicit refusal is carried as a reason; anything else would
+        turn a broken toolchain into a quiet `indeterminate` verdict.
+        """
+        _write_manifest(tmp_path)
+        (tmp_path / "Makefile").write_text("all:\n", encoding="utf-8")
+
+        def fail(path: pathlib.Path) -> typ.NoReturn:
+            message = f"makeutil timed out after 30s on {path}"
+            raise OperationalRuleError(
+                message, operation="parse-makefile", resource=path
+            )
+
+        monkeypatch.setattr(envelope_module, "inspect_makefile", fail)
+        with pytest.raises(OperationalRuleError, match="timed out"):
+            build_build_defaults_envelope(tmp_path)
 
     def test_a_makefile_linked_outside_the_checkout_is_refused(
         self, tmp_path: pathlib.Path

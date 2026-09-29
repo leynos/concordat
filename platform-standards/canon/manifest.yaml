@@ -120,7 +120,7 @@ artifacts:
       Makefile half of rust-build-defaults BD-007 and BD-008: coverage
       recipes select LLVM where Cranelift is the default, and gate recipes
       that assign RUSTFLAGS restate the fast flags.
-    sha256: 61cdb71846476c424c4f91b68e8fe6a66f129479e7876e7bde834af58fd1d303
+    sha256: 7ae0837a4a43227ca450bf24cc2d45af7a97e2c2d225909c03608f507f163986
   - id: lint-rule-rust-build-defaults-build-paths-workflows
     type: opa-policy
     path: >-

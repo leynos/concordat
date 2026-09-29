@@ -217,6 +217,23 @@ test_gate_delegated if {
 	}
 }
 
+# Long options and options with attached values precede the delegated target.
+test_gate_delegated_options if {
+	findings := policy.deny with input as data.fixtures.gate_delegated_options
+	profile(findings) == {
+		["BD-008", "noncompliant", 5, "the clippy recipe sets RUSTFLAGS without \"-Clink-arg=-fuse-ld=mold\"; an assigned RUSTFLAGS replaces every rustflags source in the Cargo configuration, so the gate build loses it"],
+		["BD-008", "noncompliant", 5, "the clippy recipe sets RUSTFLAGS without \"-Zthreads=8\"; an assigned RUSTFLAGS replaces every rustflags source in the Cargo configuration, so the gate build loses it"],
+	}
+}
+
+# `-f` and `--file` name another makefile, so the delegation cannot be followed.
+test_gate_dynamic_file if {
+	findings := policy.deny with input as data.fixtures.gate_dynamic_file
+	profile(findings) == {
+		["BD-008", "indeterminate", 0, "the \"test\" target reaches a dynamic recursive Make invocation, so its recipes cannot be proven"],
+	}
+}
+
 # A computed `$(MAKE) $(VAR)` delegation cannot be followed.
 test_gate_dynamic if {
 	findings := policy.deny with input as data.fixtures.gate_dynamic
