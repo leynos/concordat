@@ -21,8 +21,8 @@
     },
     "source": {
       "path": "Makefile",
-      "sha256": "9ad168179e292796003183961b524802b42c5926fcc1080da78ecbf9a4fc23a4",
-      "byte_length": 431
+      "sha256": "106f4b4a5f9a629f3118a40b8b45bc80d8362198ded82694e8153ca284a0f053",
+      "byte_length": 238
     },
     "parse": {
       "status": "complete",
@@ -30,7 +30,7 @@
     },
     "rules": [
       {
-        "ordinal": 4,
+        "ordinal": 2,
         "targets": [
           ".PHONY"
         ],
@@ -42,16 +42,16 @@
         "conditions": [],
         "recipes": [],
         "location": {
-          "start_byte": 166,
-          "end_byte": 189,
-          "start_line": 6,
+          "start_byte": 72,
+          "end_byte": 95,
+          "start_line": 4,
           "start_column": 1,
-          "end_line": 8,
+          "end_line": 6,
           "end_column": 1
         }
       },
       {
-        "ordinal": 5,
+        "ordinal": 3,
         "targets": [
           "fmt"
         ],
@@ -61,46 +61,46 @@
         "recipes": [
           {
             "ordinal": 0,
-            "text": "$(MDTABLEFIX) --in-place $(MDTABLEFIX_SELECT) $(MDTABLEFIX_RULES)",
+            "text": "$(MDTABLEFIX) --in-place $(MDTABLEFIX_SELECT)",
             "silent": false,
             "ignore_errors": false,
             "always_execute": false,
             "location": {
-              "start_byte": 194,
-              "end_byte": 261,
-              "start_line": 9,
+              "start_byte": 100,
+              "end_byte": 147,
+              "start_line": 7,
               "start_column": 1,
-              "end_line": 10,
+              "end_line": 8,
               "end_column": 1
             }
           },
           {
             "ordinal": 1,
-            "text": "$(MDLINT) --fix \"**/*.md\"",
+            "text": "markdownlint-cli2 --fix \"**/*.md\"",
             "silent": false,
             "ignore_errors": false,
             "always_execute": false,
             "location": {
-              "start_byte": 261,
-              "end_byte": 288,
-              "start_line": 10,
+              "start_byte": 147,
+              "end_byte": 182,
+              "start_line": 8,
               "start_column": 1,
-              "end_line": 11,
+              "end_line": 9,
               "end_column": 1
             }
           }
         ],
         "location": {
-          "start_byte": 189,
-          "end_byte": 289,
-          "start_line": 8,
+          "start_byte": 95,
+          "end_byte": 183,
+          "start_line": 6,
           "start_column": 1,
-          "end_line": 12,
+          "end_line": 10,
           "end_column": 1
         }
       },
       {
-        "ordinal": 6,
+        "ordinal": 4,
         "targets": [
           "check-fmt"
         ],
@@ -110,41 +110,26 @@
         "recipes": [
           {
             "ordinal": 0,
-            "text": "$(MDTABLEFIX) --check $(MDTABLEFIX_SELECT) $(MDTABLEFIX_RULES)",
+            "text": "$(MDTABLEFIX) --check $(MDTABLEFIX_SELECT)",
             "silent": false,
             "ignore_errors": false,
             "always_execute": false,
             "location": {
-              "start_byte": 300,
-              "end_byte": 364,
-              "start_line": 13,
+              "start_byte": 194,
+              "end_byte": 238,
+              "start_line": 11,
               "start_column": 1,
-              "end_line": 14,
-              "end_column": 1
-            }
-          },
-          {
-            "ordinal": 1,
-            "text": "$(MDTABLEFIX) --in-place $(MDTABLEFIX_SELECT) $(MDTABLEFIX_RULES)",
-            "silent": false,
-            "ignore_errors": false,
-            "always_execute": false,
-            "location": {
-              "start_byte": 364,
-              "end_byte": 431,
-              "start_line": 14,
-              "start_column": 1,
-              "end_line": 15,
+              "end_line": 12,
               "end_column": 1
             }
           }
         ],
         "location": {
-          "start_byte": 289,
-          "end_byte": 431,
-          "start_line": 12,
+          "start_byte": 183,
+          "end_byte": 238,
+          "start_line": 10,
           "start_column": 1,
-          "end_line": 15,
+          "end_line": 12,
           "end_column": 1
         }
       }
@@ -183,42 +168,6 @@
           "start_line": 2,
           "start_column": 1,
           "end_line": 3,
-          "end_column": 1
-        }
-      },
-      {
-        "ordinal": 2,
-        "name": "MDTABLEFIX_RULES",
-        "operator": "=",
-        "raw_value": "--wrap --renumber --breaks --ellipsis --fences",
-        "exported": false,
-        "overridden": false,
-        "define_block": false,
-        "conditions": [],
-        "location": {
-          "start_byte": 71,
-          "end_byte": 137,
-          "start_line": 3,
-          "start_column": 1,
-          "end_line": 4,
-          "end_column": 1
-        }
-      },
-      {
-        "ordinal": 3,
-        "name": "MDLINT",
-        "operator": "?=",
-        "raw_value": "markdownlint-cli2",
-        "exported": false,
-        "overridden": false,
-        "define_block": false,
-        "conditions": [],
-        "location": {
-          "start_byte": 137,
-          "end_byte": 165,
-          "start_line": 4,
-          "start_column": 1,
-          "end_line": 5,
           "end_column": 1
         }
       }

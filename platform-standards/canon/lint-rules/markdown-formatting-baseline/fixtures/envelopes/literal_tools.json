@@ -21,8 +21,8 @@
     },
     "source": {
       "path": "Makefile",
-      "sha256": "19682400e54c3888c98844d0a41153acdef165b651744529bb7065139cd4dfb7",
-      "byte_length": 184
+      "sha256": "5556bc023ec8893dec9b9c5515d7e6b70c33d66c9201334caf55da027a5410bc",
+      "byte_length": 264
     },
     "parse": {
       "status": "complete",
@@ -61,13 +61,13 @@
         "recipes": [
           {
             "ordinal": 0,
-            "text": "mdtablefix --in-place --git --include-untracked --wrap",
+            "text": "mdtablefix --in-place --git --include-untracked --wrap --renumber --breaks --ellipsis --fences",
             "silent": false,
             "ignore_errors": false,
             "always_execute": false,
             "location": {
               "start_byte": 28,
-              "end_byte": 84,
+              "end_byte": 124,
               "start_line": 4,
               "start_column": 1,
               "end_line": 5,
@@ -81,8 +81,8 @@
             "ignore_errors": false,
             "always_execute": false,
             "location": {
-              "start_byte": 84,
-              "end_byte": 119,
+              "start_byte": 124,
+              "end_byte": 159,
               "start_line": 5,
               "start_column": 1,
               "end_line": 6,
@@ -92,7 +92,7 @@
         ],
         "location": {
           "start_byte": 23,
-          "end_byte": 120,
+          "end_byte": 160,
           "start_line": 3,
           "start_column": 1,
           "end_line": 7,
@@ -110,13 +110,13 @@
         "recipes": [
           {
             "ordinal": 0,
-            "text": "mdtablefix --check --git --include-untracked --wrap",
+            "text": "mdtablefix --check --git --include-untracked --wrap --renumber --breaks --ellipsis --fences",
             "silent": false,
             "ignore_errors": false,
             "always_execute": false,
             "location": {
-              "start_byte": 131,
-              "end_byte": 184,
+              "start_byte": 171,
+              "end_byte": 264,
               "start_line": 8,
               "start_column": 1,
               "end_line": 9,
@@ -125,8 +125,8 @@
           }
         ],
         "location": {
-          "start_byte": 120,
-          "end_byte": 184,
+          "start_byte": 160,
+          "end_byte": 264,
           "start_line": 7,
           "start_column": 1,
           "end_line": 9,

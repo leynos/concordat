@@ -21,8 +21,8 @@
     },
     "source": {
       "path": "Makefile",
-      "sha256": "1b49be0c01740fbb3554aa448e3c102635d55288aad09897266c4a862defc374",
-      "byte_length": 193
+      "sha256": "04b5783c67331ee9b401ffa2e1569a2ae886d3802c5b7ddb5cc1bfd89c1d60ce",
+      "byte_length": 287
     },
     "parse": {
       "status": "complete",
@@ -61,13 +61,13 @@
         "recipes": [
           {
             "ordinal": 0,
-            "text": "$(MARKDOWN_FORMATTER) --in-place --git --include-untracked",
+            "text": "$(MARKDOWN_FORMATTER) --in-place --git --include-untracked --wrap --renumber --breaks --ellipsis --fences",
             "silent": false,
             "ignore_errors": false,
             "always_execute": false,
             "location": {
               "start_byte": 28,
-              "end_byte": 88,
+              "end_byte": 135,
               "start_line": 4,
               "start_column": 1,
               "end_line": 5,
@@ -81,8 +81,8 @@
             "ignore_errors": false,
             "always_execute": false,
             "location": {
-              "start_byte": 88,
-              "end_byte": 124,
+              "start_byte": 135,
+              "end_byte": 171,
               "start_line": 5,
               "start_column": 1,
               "end_line": 6,
@@ -92,7 +92,7 @@
         ],
         "location": {
           "start_byte": 23,
-          "end_byte": 125,
+          "end_byte": 172,
           "start_line": 3,
           "start_column": 1,
           "end_line": 7,
@@ -110,13 +110,13 @@
         "recipes": [
           {
             "ordinal": 0,
-            "text": "$(MARKDOWN_FORMATTER) --check --git --include-untracked",
+            "text": "$(MARKDOWN_FORMATTER) --check --git --include-untracked --wrap --renumber --breaks --ellipsis --fences",
             "silent": false,
             "ignore_errors": false,
             "always_execute": false,
             "location": {
-              "start_byte": 136,
-              "end_byte": 193,
+              "start_byte": 183,
+              "end_byte": 287,
               "start_line": 8,
               "start_column": 1,
               "end_line": 9,
@@ -125,8 +125,8 @@
           }
         ],
         "location": {
-          "start_byte": 125,
-          "end_byte": 193,
+          "start_byte": 172,
+          "end_byte": 287,
           "start_line": 7,
           "start_column": 1,
           "end_line": 9,

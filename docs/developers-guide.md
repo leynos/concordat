@@ -84,6 +84,12 @@ earlier wrapper walked the tree with `fd` and silently skipped `.rules/`.
 `--renumber`, `--breaks`, `--ellipsis`, `--fences`) and is identical in both
 targets, so what `fmt` writes is what `check-fmt` accepts.
 
+The rule requires both flag sets, select and rewrite, on every `mdtablefix`
+invocation (parameters `mdtablefix_select_flags` and `mdtablefix_rule_flags`).
+A check that omitted the rewrite flags would pass files that `fmt` still
+changes, which is how the formatting gate can be green while the estate's
+80-column rule goes unenforced.
+
 `fmt` rewrites: `mdtablefix --in-place` then `markdownlint-cli2 --fix`.
 `check-fmt` verifies with `mdtablefix --check` and rewrites nothing. Running
 `--in-place` anywhere on the `check-fmt` path is itself a PD-002 finding,

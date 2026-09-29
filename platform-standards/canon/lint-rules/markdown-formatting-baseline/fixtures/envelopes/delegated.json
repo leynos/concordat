@@ -21,8 +21,8 @@
     },
     "source": {
       "path": "Makefile",
-      "sha256": "342c9464f7f393dab807792dc8770ec468a674fd2df38ee3c997ac59b7f31916",
-      "byte_length": 369
+      "sha256": "c401a775b83f696cfed68ca02c8f9aea2730916fe323ec08cfc333a30db9eafe",
+      "byte_length": 475
     },
     "parse": {
       "status": "complete",
@@ -30,7 +30,7 @@
     },
     "rules": [
       {
-        "ordinal": 2,
+        "ordinal": 3,
         "targets": [
           ".PHONY"
         ],
@@ -44,16 +44,16 @@
         "conditions": [],
         "recipes": [],
         "location": {
-          "start_byte": 72,
-          "end_byte": 115,
-          "start_line": 4,
+          "start_byte": 138,
+          "end_byte": 181,
+          "start_line": 5,
           "start_column": 1,
-          "end_line": 6,
+          "end_line": 7,
           "end_column": 1
         }
       },
       {
-        "ordinal": 3,
+        "ordinal": 4,
         "targets": [
           "fmt"
         ],
@@ -70,26 +70,26 @@
             "ignore_errors": false,
             "always_execute": false,
             "location": {
-              "start_byte": 131,
-              "end_byte": 147,
-              "start_line": 7,
+              "start_byte": 197,
+              "end_byte": 213,
+              "start_line": 8,
               "start_column": 1,
-              "end_line": 8,
+              "end_line": 9,
               "end_column": 1
             }
           }
         ],
         "location": {
-          "start_byte": 115,
-          "end_byte": 148,
-          "start_line": 6,
+          "start_byte": 181,
+          "end_byte": 214,
+          "start_line": 7,
           "start_column": 1,
-          "end_line": 9,
+          "end_line": 10,
           "end_column": 1
         }
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "targets": [
           "fmt-python"
         ],
@@ -104,26 +104,26 @@
             "ignore_errors": false,
             "always_execute": false,
             "location": {
-              "start_byte": 160,
-              "end_byte": 173,
-              "start_line": 10,
+              "start_byte": 226,
+              "end_byte": 239,
+              "start_line": 11,
               "start_column": 1,
-              "end_line": 11,
+              "end_line": 12,
               "end_column": 1
             }
           }
         ],
         "location": {
-          "start_byte": 148,
-          "end_byte": 174,
-          "start_line": 9,
+          "start_byte": 214,
+          "end_byte": 240,
+          "start_line": 10,
           "start_column": 1,
-          "end_line": 12,
+          "end_line": 13,
           "end_column": 1
         }
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "targets": [
           "fmt-md"
         ],
@@ -133,16 +133,16 @@
         "recipes": [
           {
             "ordinal": 0,
-            "text": "$(MDTABLEFIX) --in-place $(MDTABLEFIX_SELECT)",
+            "text": "$(MDTABLEFIX) --in-place $(MDTABLEFIX_SELECT) $(MDTABLEFIX_RULES)",
             "silent": false,
             "ignore_errors": false,
             "always_execute": false,
             "location": {
-              "start_byte": 182,
-              "end_byte": 229,
-              "start_line": 13,
+              "start_byte": 248,
+              "end_byte": 315,
+              "start_line": 14,
               "start_column": 1,
-              "end_line": 14,
+              "end_line": 15,
               "end_column": 1
             }
           },
@@ -153,26 +153,26 @@
             "ignore_errors": false,
             "always_execute": false,
             "location": {
-              "start_byte": 229,
-              "end_byte": 264,
-              "start_line": 14,
+              "start_byte": 315,
+              "end_byte": 350,
+              "start_line": 15,
               "start_column": 1,
-              "end_line": 15,
+              "end_line": 16,
               "end_column": 1
             }
           }
         ],
         "location": {
-          "start_byte": 174,
-          "end_byte": 265,
-          "start_line": 12,
+          "start_byte": 240,
+          "end_byte": 351,
+          "start_line": 13,
           "start_column": 1,
-          "end_line": 16,
+          "end_line": 17,
           "end_column": 1
         }
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "targets": [
           "check-fmt"
         ],
@@ -189,26 +189,26 @@
             "ignore_errors": false,
             "always_execute": false,
             "location": {
-              "start_byte": 289,
-              "end_byte": 310,
-              "start_line": 17,
+              "start_byte": 375,
+              "end_byte": 396,
+              "start_line": 18,
               "start_column": 1,
-              "end_line": 18,
+              "end_line": 19,
               "end_column": 1
             }
           }
         ],
         "location": {
-          "start_byte": 265,
-          "end_byte": 311,
-          "start_line": 16,
+          "start_byte": 351,
+          "end_byte": 397,
+          "start_line": 17,
           "start_column": 1,
-          "end_line": 19,
+          "end_line": 20,
           "end_column": 1
         }
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "targets": [
           "check-fmt-md"
         ],
@@ -218,26 +218,26 @@
         "recipes": [
           {
             "ordinal": 0,
-            "text": "$(MDTABLEFIX) --check $(MDTABLEFIX_SELECT)",
+            "text": "$(MDTABLEFIX) --check $(MDTABLEFIX_SELECT) $(MDTABLEFIX_RULES)",
             "silent": false,
             "ignore_errors": false,
             "always_execute": false,
             "location": {
-              "start_byte": 325,
-              "end_byte": 369,
-              "start_line": 20,
+              "start_byte": 411,
+              "end_byte": 475,
+              "start_line": 21,
               "start_column": 1,
-              "end_line": 21,
+              "end_line": 22,
               "end_column": 1
             }
           }
         ],
         "location": {
-          "start_byte": 311,
-          "end_byte": 369,
-          "start_line": 19,
+          "start_byte": 397,
+          "end_byte": 475,
+          "start_line": 20,
           "start_column": 1,
-          "end_line": 21,
+          "end_line": 22,
           "end_column": 1
         }
       }
@@ -276,6 +276,24 @@
           "start_line": 2,
           "start_column": 1,
           "end_line": 3,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "MDTABLEFIX_RULES",
+        "operator": "=",
+        "raw_value": "--wrap --renumber --breaks --ellipsis --fences",
+        "exported": false,
+        "overridden": false,
+        "define_block": false,
+        "conditions": [],
+        "location": {
+          "start_byte": 71,
+          "end_byte": 137,
+          "start_line": 3,
+          "start_column": 1,
+          "end_line": 4,
           "end_column": 1
         }
       }

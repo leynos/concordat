@@ -20,6 +20,10 @@ default mdtablefix_select_flags := ["--git", "--include-untracked"]
 
 mdtablefix_select_flags := data.parameters.mdtablefix_select_flags
 
+default mdtablefix_rule_flags := ["--wrap", "--renumber", "--breaks", "--ellipsis", "--fences"]
+
+mdtablefix_rule_flags := data.parameters.mdtablefix_rule_flags
+
 default markdownlint_action := "DavidAnson/markdownlint-cli2-action"
 
 markdownlint_action := data.parameters.markdownlint_action
@@ -415,15 +419,18 @@ mdtablefix_mode(recipe, mode) if {
 	mode in tokens
 }
 
-missing_select_flags(tokens) := [flag |
-	some flag in mdtablefix_select_flags
+# The select flags choose which files an invocation reads; the rule flags choose
+# which rewrites it applies. Both are part of the estate standard, and a check
+# that omits a rule flag passes files the formatter would still change.
+missing_required_flags(tokens) := [flag |
+	some flag in array.concat(mdtablefix_select_flags, mdtablefix_rule_flags)
 	not flag in tokens
 ]
 
 mdtablefix_compliant(recipe, mode) if {
 	some tokens in binding_arguments(recipe, "mdtablefix")
 	mode in tokens
-	count(missing_select_flags(tokens)) == 0
+	count(missing_required_flags(tokens)) == 0
 }
 
 markdownlint_compliant(recipe) if {
@@ -540,7 +547,7 @@ deny contains f if {
 	some tokens in tool_arguments(recipe, "mdtablefix")
 	mode in tokens
 	count(unresolved_tokens(tokens)) == 0
-	missing := missing_select_flags(tokens)
+	missing := missing_required_flags(tokens)
 	count(missing) > 0
 	f := finding(
 		check_id, "noncompliant", makefile_path, recipe.location.start_line,

@@ -20,10 +20,12 @@ dependency graph so nothing is resolved from the registry at run time.
   required targets (`fmt` and `check-fmt` by default).
 - **PD-002** (error): a recipe reachable from `check-fmt` must run
   `mdtablefix --check` with the select flags (`--git --include-untracked` by
-  default), and its exit status must reach Make.
+  default) and the rule flags (`--wrap --renumber --breaks --ellipsis --fences`
+  by default), and its exit status must reach Make. A check without the rule
+  flags passes files the formatter would still change.
 - **PD-003** (error): a recipe reachable from `fmt` must run
-  `mdtablefix --in-place` with the select flags, directly rather than through
-  the `mdformat-all` wrapper, and its exit status must reach Make.
+  `mdtablefix --in-place` with the select and rule flags, directly rather than
+  through the `mdformat-all` wrapper, and its exit status must reach Make.
 - **PD-004** (error): a recipe reachable from `fmt` must run
   `markdownlint-cli2 --fix` directly rather than through the `mdformat-all`
   wrapper, and its exit status must reach Make.
@@ -73,19 +75,30 @@ the tool's arguments run to the end of the line or to `&&`; a following `;`,
 `TMPDIR`, `USER`) are rewritten to their shell spelling, so a tool under
 `$(HOME)/.cargo/bin/` still reads as the command word.
 
-Flags and status are read from the same invocation.
-`mdtablefix --check --git --include-untracked || true; mdtablefix --version`
-puts the required flags on one invocation and the binding exit status on
-another; taking them from whichever invocation supplies each reports the recipe
-compliant while the check cannot fail the target. Compliance therefore reads
-only the arguments of the invocation whose status reaches Make, and any other
-invocation of the tool on the line is reported as soft-skipped in its own right.
+Flags and status are read from the same invocation. This line puts the required
+flags on one invocation and the binding exit status on another:
+
+```sh
+mdtablefix --check --git --include-untracked --wrap --renumber --breaks --ellipsis --fences || true; mdtablefix --version
+```
+
+Taking the flags and the status from whichever invocation supplies each reports
+the recipe compliant while the check cannot fail the target. Compliance
+therefore reads only the arguments of the invocation whose status reaches Make,
+and any other invocation of the tool on the line is reported as soft-skipped in
+its own right.
 
 Every invocation on an audited path is judged on its own. A `check-fmt` path
-that runs the required `mdtablefix --check --git --include-untracked` and then
-runs `mdtablefix --in-place` rewrites the files the target was asked to verify,
-and is noncompliant: satisfying a check once does not license a second,
-contradictory invocation beside it.
+that runs the required check and then runs `mdtablefix --in-place` rewrites the
+files the target was asked to verify, and is noncompliant. The required check
+is:
+
+```sh
+mdtablefix --check --git --include-untracked --wrap --renumber --breaks --ellipsis --fences
+```
+
+Satisfying a check once does not license a second, contradictory invocation
+beside it.
 
 Only the literal is read as a disabled condition. Any other expression depends
 on run-time context the policy cannot evaluate, so the step is treated as one

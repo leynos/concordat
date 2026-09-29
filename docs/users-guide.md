@@ -579,10 +579,13 @@ cache directories, and reports:
 
 - **FP-003** — the root `Makefile` exists and defines `fmt` and `check-fmt`.
 - **PD-002** — a recipe reachable from `check-fmt` runs
-  `mdtablefix --check --git --include-untracked`, and its exit status reaches
-  Make.
+  `mdtablefix --check --git --include-untracked --wrap --renumber --breaks
+  --ellipsis --fences`,
+  and its exit status reaches Make. The rewrite flags are required as well as
+  the selection flags: a check without `--wrap` passes files the formatter
+  would still change.
 - **PD-003** — a recipe reachable from `fmt` runs
-  `mdtablefix --in-place --git --include-untracked` directly, not through the
+  `mdtablefix --in-place` with the same flags directly, not through the
   `mdformat-all` wrapper.
 - **PD-004** — a recipe reachable from `fmt` runs `markdownlint-cli2 --fix`
   directly, not through the `mdformat-all` wrapper.
@@ -679,6 +682,16 @@ Expect the first `make fmt` after the change to rewrite more files than usual.
 untracked files it does not ignore, including hidden directories such as
 `.rules/` that a wrapper's directory walk skipped. Commit that reformatting on
 its own so the wiring change stays readable.
+
+Upgrading to rule 0.2.0: PD-002 and PD-003 now require the rewrite flags
+`--wrap --renumber --breaks --ellipsis --fences` as well as the selection flags
+on every `mdtablefix` invocation. A repository whose `check-fmt` passed only
+`--git --include-untracked` was compliant under 0.1.0 and is noncompliant under
+0.2.0, because that check applies no rewrite and passes files `fmt` would still
+change. To comply, pass `$(MDTABLEFIX_RULES)` in both targets as in the recipes
+above, then run `make fmt` and commit the reformatting on its own. The default
+list is the rule parameter `mdtablefix_rule_flags`, and an override replaces it
+for that package; `mdtablefix_select_flags` works the same way.
 
 Run the audit to confirm the result:
 

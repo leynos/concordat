@@ -21,8 +21,8 @@
     },
     "source": {
       "path": "Makefile",
-      "sha256": "9ad168179e292796003183961b524802b42c5926fcc1080da78ecbf9a4fc23a4",
-      "byte_length": 431
+      "sha256": "e4591ddfd2f0d5e0bd0bf34f29d072f0ef8f8c9334fa5956e5877fb8c573117a",
+      "byte_length": 315
     },
     "parse": {
       "status": "complete",
@@ -30,7 +30,7 @@
     },
     "rules": [
       {
-        "ordinal": 4,
+        "ordinal": 3,
         "targets": [
           ".PHONY"
         ],
@@ -42,16 +42,16 @@
         "conditions": [],
         "recipes": [],
         "location": {
-          "start_byte": 166,
-          "end_byte": 189,
-          "start_line": 6,
+          "start_byte": 109,
+          "end_byte": 132,
+          "start_line": 5,
           "start_column": 1,
-          "end_line": 8,
+          "end_line": 7,
           "end_column": 1
         }
       },
       {
-        "ordinal": 5,
+        "ordinal": 4,
         "targets": [
           "fmt"
         ],
@@ -66,41 +66,41 @@
             "ignore_errors": false,
             "always_execute": false,
             "location": {
-              "start_byte": 194,
-              "end_byte": 261,
-              "start_line": 9,
+              "start_byte": 137,
+              "end_byte": 204,
+              "start_line": 8,
               "start_column": 1,
-              "end_line": 10,
+              "end_line": 9,
               "end_column": 1
             }
           },
           {
             "ordinal": 1,
-            "text": "$(MDLINT) --fix \"**/*.md\"",
+            "text": "markdownlint-cli2 --fix \"**/*.md\"",
             "silent": false,
             "ignore_errors": false,
             "always_execute": false,
             "location": {
-              "start_byte": 261,
-              "end_byte": 288,
-              "start_line": 10,
+              "start_byte": 204,
+              "end_byte": 239,
+              "start_line": 9,
               "start_column": 1,
-              "end_line": 11,
+              "end_line": 10,
               "end_column": 1
             }
           }
         ],
         "location": {
-          "start_byte": 189,
-          "end_byte": 289,
-          "start_line": 8,
+          "start_byte": 132,
+          "end_byte": 240,
+          "start_line": 7,
           "start_column": 1,
-          "end_line": 12,
+          "end_line": 11,
           "end_column": 1
         }
       },
       {
-        "ordinal": 6,
+        "ordinal": 5,
         "targets": [
           "check-fmt"
         ],
@@ -115,36 +115,21 @@
             "ignore_errors": false,
             "always_execute": false,
             "location": {
-              "start_byte": 300,
-              "end_byte": 364,
-              "start_line": 13,
+              "start_byte": 251,
+              "end_byte": 315,
+              "start_line": 12,
               "start_column": 1,
-              "end_line": 14,
-              "end_column": 1
-            }
-          },
-          {
-            "ordinal": 1,
-            "text": "$(MDTABLEFIX) --in-place $(MDTABLEFIX_SELECT) $(MDTABLEFIX_RULES)",
-            "silent": false,
-            "ignore_errors": false,
-            "always_execute": false,
-            "location": {
-              "start_byte": 364,
-              "end_byte": 431,
-              "start_line": 14,
-              "start_column": 1,
-              "end_line": 15,
+              "end_line": 13,
               "end_column": 1
             }
           }
         ],
         "location": {
-          "start_byte": 289,
-          "end_byte": 431,
-          "start_line": 12,
+          "start_byte": 240,
+          "end_byte": 315,
+          "start_line": 11,
           "start_column": 1,
-          "end_line": 15,
+          "end_line": 13,
           "end_column": 1
         }
       }
@@ -190,35 +175,17 @@
         "ordinal": 2,
         "name": "MDTABLEFIX_RULES",
         "operator": "=",
-        "raw_value": "--wrap --renumber --breaks --ellipsis --fences",
+        "raw_value": "--wrap --renumber",
         "exported": false,
         "overridden": false,
         "define_block": false,
         "conditions": [],
         "location": {
           "start_byte": 71,
-          "end_byte": 137,
+          "end_byte": 108,
           "start_line": 3,
           "start_column": 1,
           "end_line": 4,
-          "end_column": 1
-        }
-      },
-      {
-        "ordinal": 3,
-        "name": "MDLINT",
-        "operator": "?=",
-        "raw_value": "markdownlint-cli2",
-        "exported": false,
-        "overridden": false,
-        "define_block": false,
-        "conditions": [],
-        "location": {
-          "start_byte": 137,
-          "end_byte": 165,
-          "start_line": 4,
-          "start_column": 1,
-          "end_line": 5,
           "end_column": 1
         }
       }

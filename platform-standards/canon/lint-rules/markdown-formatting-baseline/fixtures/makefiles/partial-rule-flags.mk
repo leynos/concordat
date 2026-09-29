@@ -1,21 +1,12 @@
 MDTABLEFIX ?= mdtablefix
 MDTABLEFIX_SELECT = --git --include-untracked
-MDTABLEFIX_RULES = --wrap --renumber --breaks --ellipsis --fences
+MDTABLEFIX_RULES = --wrap --renumber
 
-.PHONY: fmt fmt-md check-fmt check-fmt-md
+.PHONY: fmt check-fmt
 
-fmt: fmt-python
-	$(MAKE) fmt-md
-
-fmt-python:
-	ruff format
-
-fmt-md:
+fmt:
 	$(MDTABLEFIX) --in-place $(MDTABLEFIX_SELECT) $(MDTABLEFIX_RULES)
 	markdownlint-cli2 --fix "**/*.md"
 
-check-fmt: check-fmt-md
-	ruff format --check
-
-check-fmt-md:
+check-fmt:
 	$(MDTABLEFIX) --check $(MDTABLEFIX_SELECT) $(MDTABLEFIX_RULES)
