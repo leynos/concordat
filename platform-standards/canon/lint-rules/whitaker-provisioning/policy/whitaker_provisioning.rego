@@ -104,14 +104,24 @@ download_pattern := `\b(curl|wget|Invoke-WebRequest|iwr|Invoke-RestMethod|urlret
 
 release_pattern := `\b(whitaker-installer|cargo-dylint|dylint-link)\b|\bleynos/whitaker\b`
 
-# Shell and Make comments are prose, not commands. A continued line is one
-# command, so its halves are joined before a clause reads it.
+# Shell and Make comments are prose, not commands, whether they fill a line or
+# trail a command. A trailing comment starts at a `#` that follows whitespace
+# outside quotes, so `url#fragment` and `"a # b"` keep their text and
+# `echo done # cargo install whitaker-installer` loses only the comment. A lone
+# quote, such as an apostrophe in prose, is passed over rather than allowed to
+# hide the rest of the line. A continued line is one command, so its halves are
+# joined before a clause reads it.
+code_of(line) := trim_space(regex.find_all_string_submatch_n(
+	`^((?:'[^']*'|"[^"]*"|[^\s'"#]#|[^'"#]|['"])*)`,
+	line,
+	1,
+)[0][1])
+
 command_lines(text) := [line |
 	joined := replace(replace(text, "\\\r\n", " "), "\\\n", " ")
 	some raw in split(joined, "\n")
-	line := trim_space(raw)
+	line := code_of(trim_space(raw))
 	line != ""
-	not startswith(line, "#")
 ]
 
 installs_a_tool(text) if {

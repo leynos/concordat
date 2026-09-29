@@ -48,7 +48,8 @@ message says which of the following it is.
   it. The message says how a revision joins the list.
 - An indeterminate finding for a surface the policy cannot read: a
   workflow or action that is not valid YAML, a script larger than 1 MiB, or a
-  script that is a symlink leaving the checkout.
+  script that is a symlink leaving the checkout. A directory the audit cannot
+  list is an operational error rather than a skipped subtree.
 - **EN-001** (error, indeterminate): the envelope is not a schema-1
   `policy-input/whitaker-provisioning` document.
 
@@ -57,7 +58,11 @@ message says which of the following it is.
 The policy recognizes commands; it does not interpret shell. A command
 assembled at run time from variables, or a tool installed by a reusable
 workflow in another repository, is not recognized. Shell and Make comments are
-prose, and a continued line is read as one command.
+prose, whether they fill a line or follow a command after whitespace outside
+quotes, and a continued line is read as one command. A script is read when it
+sits under `.github/`, `bin/`, `ci/`, `scripts/` or `tools/` with a common
+interpreter suffix (`.sh`, `.py`, `.js`, `.rb`, `.pl` and the like) or a
+shebang.
 
 These are not routes, and fixtures prove each stays compliant: caching
 `~/.cargo/bin/whitaker-installer` in an `actions/cache` `path`, an `echo` or a

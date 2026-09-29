@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import os
 import typing as typ
 
 import pygit2
 import pytest
 
+from concordat.errors import OperationalRuleError
 from concordat.rules import packages, runner
 from concordat.rules.whitaker_provisioning_envelope import (
     ENVELOPE_KIND,
@@ -162,6 +164,46 @@ class TestSurfaces:
 
         assert _paths(envelope, "scripts") == []
 
+    @pytest.mark.parametrize(
+        "relative",
+        ["scripts/setup.js", "tools/setup.rb", "ci/setup.pl", "bin/setup.ts"],
+    )
+    def test_reads_a_script_in_any_common_interpreter(
+        self, tmp_path: pathlib.Path, relative: str
+    ) -> None:
+        """A workflow may run `node scripts/setup.js`, so its suffix is read."""
+        _write(tmp_path, relative, "curl\n")
+
+        envelope = build_whitaker_provisioning_envelope(tmp_path)
+
+        assert _paths(envelope, "scripts") == [relative]
+
+    def test_reads_a_script_with_an_unlisted_suffix_by_its_shebang(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """An interpreter the suffix list omits is still named by `#!`."""
+        _write(tmp_path, "scripts/setup.lua", "#!/usr/bin/env lua\nprint(1)\n")
+        _write(tmp_path, "scripts/notes.txt", "plain prose\n")
+
+        envelope = build_whitaker_provisioning_envelope(tmp_path)
+
+        assert _paths(envelope, "scripts") == ["scripts/setup.lua"]
+
+    @pytest.mark.skipif(
+        os.name == "nt" or os.geteuid() == 0,
+        reason="a directory mode only denies listing to an unprivileged POSIX user",
+    )
+    def test_refuses_a_directory_it_cannot_list(self, tmp_path: pathlib.Path) -> None:
+        """An unlistable directory is an error, not a silently skipped subtree."""
+        _write(tmp_path, "scripts/hidden/install.sh", "curl\n")
+        hidden = tmp_path / "scripts" / "hidden"
+        hidden.chmod(0)
+        try:
+            with pytest.raises(OperationalRuleError, match="cannot list"):
+                build_whitaker_provisioning_envelope(tmp_path)
+        finally:
+            hidden.chmod(0o700)
+
 
 class TestRepositoryName:
     """Cover the slug the exemption clauses match on."""
@@ -178,6 +220,21 @@ class TestRepositoryName:
     def test_has_no_name_without_an_origin(self, tmp_path: pathlib.Path) -> None:
         """No origin means no name, so no exemption can match."""
         pygit2.init_repository(str(tmp_path))
+
+        envelope = build_whitaker_provisioning_envelope(tmp_path)
+
+        assert envelope["repository"]["name"] is None
+
+    def test_has_no_name_when_git_cannot_discover_the_repository(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A corrupt `.git` is a checkout without a name, not a raw git error."""
+
+        def refuse(_path: str) -> str:
+            message = "corrupt repository"
+            raise pygit2.GitError(message)
+
+        monkeypatch.setattr(pygit2, "discover_repository", refuse)
 
         envelope = build_whitaker_provisioning_envelope(tmp_path)
 
@@ -215,6 +272,56 @@ class TestRuleRun:
         result = runner.run_rule(RULE_ID, tmp_path)
 
         assert result.verdict == "compliant", result
+
+    @pytest.mark.parametrize(
+        ("makefile", "verdict"),
+        [
+            pytest.param(
+                "lint:\n\techo done # cargo install whitaker-installer\n",
+                "compliant",
+                id="trailing-comment-is-prose",
+            ),
+            pytest.param(
+                "lint:\n\tcargo install whitaker-installer # the old way\n",
+                "noncompliant",
+                id="command-before-a-comment-is-a-route",
+            ),
+            pytest.param(
+                "lint:\n\techo 'a # b'; cargo install whitaker-installer\n",
+                "noncompliant",
+                id="hash-inside-quotes-hides-nothing",
+            ),
+            pytest.param(
+                "lint:\n\techo it's; cargo install whitaker-installer\n",
+                "noncompliant",
+                id="lone-apostrophe-hides-nothing",
+            ),
+        ],
+    )
+    def test_a_trailing_comment_is_prose_only_outside_quotes(
+        self, tmp_path: pathlib.Path, makefile: str, verdict: str
+    ) -> None:
+        """A `#` after whitespace outside quotes ends the command it follows."""
+        _write(tmp_path, "Makefile", makefile)
+
+        result = runner.run_rule(RULE_ID, tmp_path)
+
+        assert result.verdict == verdict, result
+
+    def test_a_download_in_a_javascript_script_is_noncompliant(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A script CI runs with `node` is audited like a shell script."""
+        _write(
+            tmp_path,
+            "scripts/fetch.js",
+            "fetch('https://example.invalid/whitaker-installer'); // curl\n",
+        )
+        _write(tmp_path, "scripts/fetch2.js", "run('curl whitaker-installer')\n")
+
+        result = runner.run_rule(RULE_ID, tmp_path)
+
+        assert result.verdict == "noncompliant", result
 
 
 @pytest.mark.parametrize("surface", ["workflows", "actions", "scripts"])

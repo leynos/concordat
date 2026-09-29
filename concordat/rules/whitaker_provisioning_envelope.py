@@ -29,6 +29,7 @@ import typing as typ
 
 import pygit2
 
+from concordat.errors import OperationalRuleError
 from concordat.platform_standards import parse_github_slug
 
 from .codescene_coverage_envelope import (
@@ -40,6 +41,7 @@ from .codescene_coverage_envelope import (
 
 ENVELOPE_SCHEMA_VERSION: typ.Final = 1
 ENVELOPE_KIND: typ.Final = "policy-input/whitaker-provisioning"
+OPERATION_LIST_DIRECTORY: typ.Final = "list-directory"
 
 #: Directories that hold dependencies, build output or tool caches rather than
 #: the repository's own automation. Walking them would only slow the audit and
@@ -62,7 +64,25 @@ MAKEFILE_SUFFIX: typ.Final = ".mk"
 
 #: Top-level directories whose scripts CI conventionally runs.
 SCRIPT_DIRECTORIES: typ.Final = frozenset({".github", "bin", "ci", "scripts", "tools"})
-SCRIPT_SUFFIXES: typ.Final = frozenset({"", ".bash", ".ps1", ".py", ".sh", ".zsh"})
+SCRIPT_SUFFIXES: typ.Final = frozenset({
+    "",
+    ".bash",
+    ".bat",
+    ".cjs",
+    ".cmd",
+    ".fish",
+    ".js",
+    ".ksh",
+    ".mjs",
+    ".php",
+    ".pl",
+    ".ps1",
+    ".py",
+    ".rb",
+    ".sh",
+    ".ts",
+    ".zsh",
+})
 
 #: A script larger than this is recorded as unreadable rather than loaded.
 MAX_SCRIPT_BYTES: typ.Final = 1024 * 1024
@@ -129,12 +149,14 @@ def _origin_slug(checkout: pathlib.Path) -> str | None:
     -------
     str | None
         The `owner/name` slug, or None when there is no repository, no
-        origin, or an origin that is not a GitHub URL.
+        origin, an origin that is not a GitHub URL, or a repository git
+        cannot open. A checkout git cannot read has no name to match an
+        exemption against, which leaves it fully audited.
     """
-    discovered = pygit2.discover_repository(str(checkout))
-    if discovered is None:
-        return None
     try:
+        discovered = pygit2.discover_repository(str(checkout))
+        if discovered is None:
+            return None
         origin = pygit2.Repository(discovered).remotes["origin"]
     except (KeyError, pygit2.GitError):
         return None
@@ -145,20 +167,38 @@ def _walk(checkout: pathlib.Path) -> list[pathlib.PurePosixPath]:
     """Return every non-skipped file path under the checkout, sorted.
 
     Symbolic links to directories are not followed, so a link cannot make
-    the audit read another tree as this one.
+    the audit read another tree as this one. A directory that cannot be listed
+    is an error rather than a gap: `os.walk` would skip it silently, and a
+    script inside it could then provision Whitaker unseen.
 
     Returns
     -------
     list[pathlib.PurePosixPath]
         Checkout-relative file paths in POSIX form.
+
+    Raises
+    ------
+    OperationalRuleError
+        When a directory under the checkout cannot be listed.
     """
+    failures: list[OSError] = []
     found: list[pathlib.PurePosixPath] = []
-    for root, directories, files in os.walk(checkout, followlinks=False):
+    for root, directories, files in os.walk(
+        checkout, followlinks=False, onerror=failures.append
+    ):
         directories[:] = sorted(d for d in directories if d not in SKIPPED_DIRECTORIES)
         relative_root = pathlib.Path(root).relative_to(checkout)
         found.extend(
             pathlib.PurePosixPath(relative_root.as_posix()) / name for name in files
         )
+    if failures:
+        first = failures[0]
+        message = f"cannot list {first.filename}: {first.strerror}"
+        raise OperationalRuleError(
+            message,
+            operation=OPERATION_LIST_DIRECTORY,
+            resource=str(first.filename),
+        ) from first
     return sorted(found)
 
 
@@ -208,7 +248,9 @@ def _is_script(checkout: pathlib.Path, relative: pathlib.PurePosixPath) -> bool:
     """Return whether *relative* is a script CI could run.
 
     A script lives under a conventional automation directory with a script
-    suffix, or sits at the root with a shebang. Workflow and action YAML is
+    suffix or a shebang, or sits at the root with a shebang. The shebang covers
+    an interpreter whose suffix is not listed, so `node scripts/setup` is read
+    as well as `scripts/setup.js`. Workflow and action YAML is
     read structurally instead, and test code is not automation, so both are
     excluded here.
 
@@ -221,8 +263,8 @@ def _is_script(checkout: pathlib.Path, relative: pathlib.PurePosixPath) -> bool:
         return False
     if len(relative.parts) == 1:
         return _has_shebang(checkout / relative)
-    return (
-        relative.parts[0] in SCRIPT_DIRECTORIES and relative.suffix in SCRIPT_SUFFIXES
+    return relative.parts[0] in SCRIPT_DIRECTORIES and (
+        relative.suffix in SCRIPT_SUFFIXES or _has_shebang(checkout / relative)
     )
 
 
@@ -336,8 +378,8 @@ def build_whitaker_provisioning_envelope(
         The repository checkout to read.
 
     An `OperationalRuleError` reaches the caller when the workflow directory
-    resolves outside the checkout or cannot be listed; every other surface
-    that cannot be read is recorded as a fact with its reason.
+    resolves outside the checkout, or a directory cannot be listed; every
+    other surface that cannot be read is recorded as a fact with its reason.
 
     Returns
     -------

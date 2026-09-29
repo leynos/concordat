@@ -30,3 +30,27 @@ def test_manifest_entries_have_valid_paths_and_hashes() -> None:
         assert artifact.get("description"), (
             f"artifact description missing for {rel_path}"
         )
+
+
+def test_every_lint_rule_package_is_registered() -> None:
+    """Ensure each rule package ships its policy and manifest through the canon.
+
+    `compare_manifest_to_published` and `sync_artifacts` iterate only the
+    manifest, so a package missing from it is never published to consumers,
+    however green its own suite is.
+    """
+    data = yaml.load(MANIFEST.read_text(encoding="utf-8"))
+    registered = {artifact["path"] for artifact in data["artifacts"]}
+    rules = ROOT / "platform-standards" / "canon" / "lint-rules"
+    expected = {
+        path.relative_to(ROOT).as_posix()
+        for package in sorted(rules.iterdir())
+        if package.is_dir()
+        for path in (
+            package / "rule.yaml",
+            *sorted((package / "policy").glob("*.rego")),
+        )
+        if not path.name.endswith("_test.rego")
+    }
+
+    assert expected - registered == set()
