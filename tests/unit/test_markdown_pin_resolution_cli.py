@@ -9,7 +9,9 @@ the pins resolve over HTTP, and the real Conftest judges the policy.
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import json
 import pathlib
 import subprocess
@@ -86,7 +88,6 @@ def _run(
     scenario: str,
     tmp_path: pathlib.Path,
     github: FakeGithubApi,
-    capsys: pytest.CaptureFixture[str],
     *extra: str,
 ) -> tuple[int, dict[str, typ.Any]]:
     """Lay *scenario* out, run the rule over it, and return the exit and JSON.
@@ -102,7 +103,7 @@ def _run(
     checkout = tmp_path / f"{scenario}-{len(list(tmp_path.iterdir()))}"
     checkout.mkdir()
     GENERATE.lay_out(GENERATE.SCENARIOS[scenario], checkout)
-    returncode = _main([
+    argv = [
         "artefact",
         "rule",
         "run",
@@ -114,8 +115,11 @@ def _run(
         "--github-api-url",
         github.url,
         *extra,
-    ])
-    return returncode, json.loads(capsys.readouterr().out)
+    ]
+    output = io.StringIO()
+    with contextlib.redirect_stdout(output):
+        returncode = _main(argv)
+    return returncode, json.loads(output.getvalue())
 
 
 def _main(argv: list[str]) -> int:
@@ -137,20 +141,20 @@ def _pd006(document: dict[str, typ.Any]) -> list[tuple[str, str]]:
 
 @pytest.mark.timeout(120)
 def test_a_commit_pin_is_compliant_after_one_lookup(
-    tmp_path: pathlib.Path, github: FakeGithubApi, capsys: pytest.CaptureFixture[str]
+    tmp_path: pathlib.Path, github: FakeGithubApi
 ) -> None:
     """A pin the commit endpoint knows passes, and the tag endpoint is not asked."""
-    returncode, document = _run("compliant", tmp_path, github, capsys)
+    returncode, document = _run("compliant", tmp_path, github)
     assert (returncode, document["verdict"]) == (0, "compliant"), document
     assert github.requested == [_commit_path(COMMIT)]
 
 
 @pytest.mark.timeout(120)
 def test_a_tag_object_pin_is_refused_naming_the_peeled_commit(
-    tmp_path: pathlib.Path, github: FakeGithubApi, capsys: pytest.CaptureFixture[str]
+    tmp_path: pathlib.Path, github: FakeGithubApi
 ) -> None:
     """A pin only the tag endpoint knows fails, and the finding names the commit."""
-    returncode, document = _run("workflow_tag_object", tmp_path, github, capsys)
+    returncode, document = _run("workflow_tag_object", tmp_path, github)
     assert returncode == 1, document
     [(verdict, message)] = _pd006(document)
     assert verdict == "noncompliant", message
@@ -162,10 +166,10 @@ def test_a_tag_object_pin_is_refused_naming_the_peeled_commit(
 
 @pytest.mark.timeout(120)
 def test_an_unknown_pin_is_indeterminate(
-    tmp_path: pathlib.Path, github: FakeGithubApi, capsys: pytest.CaptureFixture[str]
+    tmp_path: pathlib.Path, github: FakeGithubApi
 ) -> None:
     """A SHA neither endpoint knows is indeterminate, never a pass."""
-    returncode, document = _run("workflow_pin_unresolved", tmp_path, github, capsys)
+    returncode, document = _run("workflow_pin_unresolved", tmp_path, github)
     assert returncode == 1, document
     [(verdict, message)] = _pd006(document)
     assert verdict == "indeterminate", message
@@ -174,11 +178,11 @@ def test_an_unknown_pin_is_indeterminate(
 
 @pytest.mark.timeout(120)
 def test_a_refused_lookup_is_indeterminate_without_asking_for_a_tag(
-    tmp_path: pathlib.Path, github: FakeGithubApi, capsys: pytest.CaptureFixture[str]
+    tmp_path: pathlib.Path, github: FakeGithubApi
 ) -> None:
     """A refusal from the commit endpoint is not taken as "not a commit"."""
     github.routes[_commit_path(COMMIT)] = Reply(403, {"message": "rate limited"})
-    returncode, document = _run("compliant", tmp_path, github, capsys)
+    returncode, document = _run("compliant", tmp_path, github)
     assert returncode == 1, document
     [(verdict, message)] = _pd006(document)
     assert verdict == "indeterminate", message
@@ -190,12 +194,11 @@ def test_a_refused_lookup_is_indeterminate_without_asking_for_a_tag(
 def test_a_checkout_without_pins_asks_nothing_and_reads_no_credentials(
     tmp_path: pathlib.Path,
     github: FakeGithubApi,
-    capsys: pytest.CaptureFixture[str],
     mocker: pytest_mock.MockFixture,
 ) -> None:
     """With no full-SHA pin, the client is never built and GitHub never asked."""
     token = mocker.patch.object(credentials, "github_token")
-    returncode, document = _run("workflow_floating_tag", tmp_path, github, capsys)
+    returncode, document = _run("workflow_floating_tag", tmp_path, github)
     assert returncode == 1, document
     assert github.requested == []
     token.assert_not_called()
@@ -217,16 +220,18 @@ def test_unreadable_credentials_are_an_operational_failure(
     checkout = tmp_path / "compliant"
     checkout.mkdir()
     GENERATE.lay_out(GENERATE.SCENARIOS["compliant"], checkout)
-    returncode = _main([
-        "artefact",
-        "rule",
-        "run",
-        RULE_ID,
-        "--repo",
-        str(checkout),
-        "--github-api-url",
-        github.url,
-    ])
+    output = io.StringIO()
+    with contextlib.redirect_stdout(output):
+        returncode = _main([
+            "artefact",
+            "rule",
+            "run",
+            RULE_ID,
+            "--repo",
+            str(checkout),
+            "--github-api-url",
+            github.url,
+        ])
     assert returncode == 2
     assert "cannot read the GitHub credentials" in capsys.readouterr().err
     assert github.requested == []
@@ -236,12 +241,11 @@ def test_unreadable_credentials_are_an_operational_failure(
 def test_the_gh_cli_token_authenticates_when_no_token_is_configured(
     tmp_path: pathlib.Path,
     github: FakeGithubApi,
-    capsys: pytest.CaptureFixture[str],
     mocker: pytest_mock.MockFixture,
 ) -> None:
     """Without GITHUB_TOKEN, the lookups carry the token `gh auth token` gives."""
     token = mocker.patch.object(cli, "_gh_cli_token", return_value="gho-fixture")
-    returncode, _ = _run("compliant", tmp_path, github, capsys)
+    returncode, _ = _run("compliant", tmp_path, github)
     assert returncode == 0
     assert github.authorizations == ["Bearer gho-fixture"]
     token.assert_called_once_with("127.0.0.1")
@@ -249,13 +253,13 @@ def test_the_gh_cli_token_authenticates_when_no_token_is_configured(
 
 @pytest.mark.timeout(120)
 def test_a_rate_limited_lookup_is_reported_as_such(
-    tmp_path: pathlib.Path, github: FakeGithubApi, capsys: pytest.CaptureFixture[str]
+    tmp_path: pathlib.Path, github: FakeGithubApi
 ) -> None:
     """A spent rate limit is indeterminate with its remedy, not an unknown pin."""
     github.routes[_commit_path(COMMIT)] = Reply(
         429, {"message": "API rate limit exceeded"}
     )
-    returncode, document = _run("compliant", tmp_path, github, capsys)
+    returncode, document = _run("compliant", tmp_path, github)
     assert returncode == 1, document
     [(verdict, message)] = _pd006(document)
     assert verdict == "indeterminate", message
@@ -314,29 +318,29 @@ def test_the_token_host_follows_the_api_root(api_url: str, host: str) -> None:
 
 @pytest.mark.timeout(120)
 def test_a_second_run_asks_github_nothing(
-    tmp_path: pathlib.Path, github: FakeGithubApi, capsys: pytest.CaptureFixture[str]
+    tmp_path: pathlib.Path, github: FakeGithubApi
 ) -> None:
     """A pin answered once is served from the disk cache by the next process."""
     cache = ("--pin-cache-dir", str(tmp_path / "cache"))
-    first, _ = _run("compliant", tmp_path, github, capsys, *cache)
+    first, _ = _run("compliant", tmp_path, github, *cache)
     assert first == 0
     assert github.requested == [_commit_path(COMMIT)]
     assert any((tmp_path / "cache").rglob(COMMIT)), "the answer went elsewhere"
     github.requested.clear()
-    second, document = _run("compliant", tmp_path, github, capsys, *cache)
+    second, document = _run("compliant", tmp_path, github, *cache)
     assert (second, document["verdict"]) == (0, "compliant"), document
     assert github.requested == []
 
 
 @pytest.mark.timeout(120)
 def test_a_tag_object_answer_is_served_from_the_cache_with_its_commit(
-    tmp_path: pathlib.Path, github: FakeGithubApi, capsys: pytest.CaptureFixture[str]
+    tmp_path: pathlib.Path, github: FakeGithubApi
 ) -> None:
     """A cached tag object still names the commit it peels to."""
     cache = ("--pin-cache-dir", str(tmp_path / "cache"))
-    _run("workflow_tag_object", tmp_path, github, capsys, *cache)
+    _run("workflow_tag_object", tmp_path, github, *cache)
     github.requested.clear()
-    _, document = _run("workflow_tag_object", tmp_path, github, capsys, *cache)
+    _, document = _run("workflow_tag_object", tmp_path, github, *cache)
     assert github.requested == []
     [(_, message)] = _pd006(document)
     assert COMMIT in message, message
@@ -344,28 +348,46 @@ def test_a_tag_object_answer_is_served_from_the_cache_with_its_commit(
 
 @pytest.mark.timeout(120)
 def test_a_rate_limited_answer_is_not_cached(
-    tmp_path: pathlib.Path, github: FakeGithubApi, capsys: pytest.CaptureFixture[str]
+    tmp_path: pathlib.Path, github: FakeGithubApi
 ) -> None:
     """A spent limit is asked again next run, so the pin resolves once it lifts."""
     cache = ("--pin-cache-dir", str(tmp_path / "cache"))
     limited = github.routes[_commit_path(COMMIT)]
     github.routes[_commit_path(COMMIT)] = Reply(429, {"message": "rate limited"})
-    _, document = _run("compliant", tmp_path, github, capsys, *cache)
+    _, document = _run("compliant", tmp_path, github, *cache)
     assert [verdict for verdict, _ in _pd006(document)] == ["indeterminate"]
     github.routes[_commit_path(COMMIT)] = limited
-    returncode, document = _run("compliant", tmp_path, github, capsys, *cache)
+    returncode, document = _run("compliant", tmp_path, github, *cache)
     assert (returncode, document["verdict"]) == (0, "compliant"), document
     assert github.requested.count(_commit_path(COMMIT)) == 2
 
 
 @pytest.mark.timeout(120)
 def test_no_pin_cache_neither_reads_nor_writes(
-    tmp_path: pathlib.Path, github: FakeGithubApi, capsys: pytest.CaptureFixture[str]
+    tmp_path: pathlib.Path, github: FakeGithubApi
 ) -> None:
     """`--no-pin-cache` asks every time and leaves the directory empty."""
     cache = tmp_path / "cache"
     flags = ("--pin-cache-dir", str(cache), "--no-pin-cache")
-    _run("compliant", tmp_path, github, capsys, *flags)
-    _run("compliant", tmp_path, github, capsys, *flags)
+    _run("compliant", tmp_path, github, *flags)
+    _run("compliant", tmp_path, github, *flags)
     assert github.requested == [_commit_path(COMMIT)] * 2
     assert not cache.exists()
+
+
+@pytest.mark.timeout(120)
+def test_a_cached_answer_is_not_reused_for_another_api_root(
+    tmp_path: pathlib.Path, github: FakeGithubApi
+) -> None:
+    """The same slug and SHA on another host is asked again, not assumed."""
+    cache = ("--pin-cache-dir", str(tmp_path / "cache"))
+    _run("compliant", tmp_path, github, *cache)
+    other_root = github.url.replace("127.0.0.1", "localhost")
+    checkout = tmp_path / "other"
+    checkout.mkdir()
+    GENERATE.lay_out(GENERATE.SCENARIOS["compliant"], checkout)
+    argv = ["artefact", "rule", "run", RULE_ID, "--repo", str(checkout)]
+    with contextlib.redirect_stdout(io.StringIO()):
+        returncode = _main([*argv, "--github-api-url", other_root, *cache])
+    assert returncode == 0
+    assert github.requested == [_commit_path(COMMIT)] * 2

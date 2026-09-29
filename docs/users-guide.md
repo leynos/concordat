@@ -591,7 +591,9 @@ cache directories, and reports:
   when that is unset. `CONCORDAT_PIN_CACHE_DIR` or `--pin-cache-dir` names
   another directory (the flag wins), and `--no-pin-cache` neither reads nor
   writes it. An entry that cannot be decoded is deleted and asked again, so
-  removing the directory is always safe.
+  removing the directory is always safe. Answers are kept per API root, so a
+  `--github-api-url` for a GitHub Enterprise Server never receives an answer
+  cached from github.com.
 
 The Makefile checks expand Make variables that are assigned exactly once and
 unconditionally, so `$(MDTABLEFIX) --check $(MDTABLEFIX_SELECT)` is audited

@@ -12,16 +12,20 @@ a spent rate limit, an outage, a refusal that a new token would lift. Caching
 one would freeze that reason past its cause, so `put` refuses it and the next
 run asks again.
 
-Entries are keyed by `owner/repository/sha` and written atomically, so a run
-killed mid-write leaves either the old entry or none. A cache is an
-optimisation, never a source of truth: an entry that cannot be decoded, or
-that does not match its own key, is deleted and treated as a miss, and a
-cache that cannot be written costs a warning rather than the audit.
+Entries are keyed by the API root, `owner/repository` and `sha`, and written
+atomically, so a run killed mid-write leaves either the old entry or none. A
+cache is an optimization, never a source of truth: an entry that cannot be
+decoded, or that does not match its own key, is read as a miss and discarded
+by the caller, and a cache that cannot be written costs a warning rather than
+the audit.
 """
 
 from __future__ import annotations
 
 import contextlib
+import dataclasses
+import enum
+import hashlib
 import json
 import logging
 import os
@@ -53,6 +57,27 @@ DIRECTORY_VARIABLE: typ.Final = "CONCORDAT_PIN_CACHE_DIR"
 # a path segment, so anything but a plain owner/name pair is not cached.
 _SEGMENT: typ.Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 _DEFINITE: typ.Final = frozenset({OBJECT_COMMIT, OBJECT_TAG})
+# Hex digits of the API-root digest kept as a directory name: enough that two
+# roots do not collide, short enough to read in a listing.
+_ROOT_DIGEST_LENGTH: typ.Final = 16
+
+
+class ReadOutcome(enum.Enum):
+    """What reading one cache key found; the values are safe to log."""
+
+    HIT = "hit"
+    MISS = "miss"
+    CORRUPT = "corrupt"
+    UNREADABLE = "unreadable"
+    BYPASSED = "bypassed"
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class CacheRead:
+    """The result of reading a key: an outcome, and the answer on a hit."""
+
+    outcome: ReadOutcome
+    resolution: PinResolution | None = None
 
 
 def default_directory(environ: cabc.Mapping[str, str]) -> pathlib.Path:
@@ -81,40 +106,66 @@ def default_directory(environ: cabc.Mapping[str, str]) -> pathlib.Path:
     return root / "concordat" / "action-pins"
 
 
+def _normalized_root(api_root: str) -> str:
+    """Return *api_root* in the form that names one GitHub host's namespace."""
+    return api_root.strip().rstrip("/").lower()
+
+
 class PinCache:
-    """Read and write definite pin answers under one directory."""
+    """Read and write definite pin answers for one GitHub API root.
 
-    def __init__(self, directory: pathlib.Path) -> None:
-        """Keep *directory*; nothing is created until the first write."""
+    Whether a SHA names a commit depends on the host that was asked: the same
+    `owner/repository/sha` on github.com and on a GitHub Enterprise Server are
+    different questions. Each API root therefore has its own directory, named
+    by a digest of the normalized root, and every entry records the root it
+    answers for.
+    """
+
+    def __init__(self, directory: pathlib.Path, api_root: str) -> None:
+        """Keep *directory* and the *api_root* it answers for.
+
+        Nothing is created until the first write.
+        """
         self._directory = directory
+        self._api_root = _normalized_root(api_root)
+        digest = hashlib.sha256(self._api_root.encode("utf-8")).hexdigest()
+        self._root_directory = directory / digest[:_ROOT_DIGEST_LENGTH]
 
-    def get(self, repository: str, sha: str) -> PinResolution | None:
-        """Return the kept answer for *sha* in *repository*, or ``None``.
+    def get(self, repository: str, sha: str) -> CacheRead:
+        """Return what the cache holds for *sha* in *repository*, changing nothing.
 
-        A corrupt entry is deleted and reported as a miss, so the next lookup
-        repairs it rather than tripping over it again.
+        A missing, corrupt, unreadable and unsafe key are distinct outcomes,
+        so the caller decides whether a corrupt entry is repaired; see
+        `discard`.
 
         Returns
         -------
-        PinResolution | None
-            The kept answer, or ``None`` on a miss or a discarded entry.
+        CacheRead
+            The outcome and, on a hit, the kept answer.
         """
         path = self._path(repository, sha)
         if path is None:
-            return None
+            return CacheRead(ReadOutcome.BYPASSED)
         try:
-            text = path.read_text(encoding="utf-8")
+            data = path.read_bytes()
         except FileNotFoundError:
-            return None
+            return CacheRead(ReadOutcome.MISS)
         except OSError as error:
             _logger.warning("could not read pin cache entry %s: %s", path, error)
-            return None
-        resolution = _decode(text, repository, sha)
+            return CacheRead(ReadOutcome.UNREADABLE)
+        resolution = _decode(data, self._api_root, repository, sha)
         if resolution is None:
-            _logger.warning("discarded corrupt pin cache entry %s", path)
-            with contextlib.suppress(OSError):
-                path.unlink()
-        return resolution
+            return CacheRead(ReadOutcome.CORRUPT)
+        return CacheRead(ReadOutcome.HIT, resolution)
+
+    def discard(self, repository: str, sha: str) -> None:
+        """Delete the entry for the key, if there is one and it can be deleted."""
+        path = self._path(repository, sha)
+        if path is None:
+            return
+        _logger.warning("discarding pin cache entry %s", path)
+        with contextlib.suppress(OSError):
+            path.unlink()
 
     def put(self, repository: str, sha: str, resolution: PinResolution) -> None:
         """Keep *resolution* unless it is unresolved, writing atomically.
@@ -126,9 +177,9 @@ class PinCache:
         path = self._path(repository, sha)
         if path is None or resolution["object_type"] not in _DEFINITE:
             return
-        payload = json.dumps(_encode(repository, sha, resolution), sort_keys=True)
+        document = _encode(self._api_root, repository, sha, resolution)
         try:
-            _write_atomically(path, payload)
+            _write_atomically(path, json.dumps(document, sort_keys=True))
         except OSError as error:
             _logger.warning("could not write pin cache entry %s: %s", path, error)
 
@@ -141,11 +192,14 @@ class PinCache:
         ):
             return None
         # GitHub names are case-insensitive, so one action is one directory.
-        return self._directory.joinpath(*(part.lower() for part in segments), sha)
+        return self._root_directory.joinpath(*(part.lower() for part in segments), sha)
 
 
 def cached_resolver(resolver: PinResolver, cache: PinCache) -> PinResolver:
     """Return *resolver* consulting *cache* first and feeding it after.
+
+    A corrupt entry is discarded before the lookup that replaces it. Each
+    read's outcome is logged at debug level as a bounded category.
 
     Returns
     -------
@@ -161,18 +215,24 @@ def cached_resolver(resolver: PinResolver, cache: PinCache) -> PinResolver:
     >>> def ask(repository, pin):
     ...     calls.append(pin)
     ...     return commit_pin(pin)
+    >>> root = "https://api.github.com"
     >>> with tempfile.TemporaryDirectory() as tmp:
-    ...     first = cached_resolver(ask, PinCache(pathlib.Path(tmp)))
-    ...     second = cached_resolver(ask, PinCache(pathlib.Path(tmp)))
+    ...     first = cached_resolver(ask, PinCache(pathlib.Path(tmp), root))
+    ...     second = cached_resolver(ask, PinCache(pathlib.Path(tmp), root))
     ...     _ = first("o/r", sha), second("o/r", sha)
     >>> len(calls)
     1
     """
 
     def resolve(repository: str, sha: str) -> PinResolution:
-        known = cache.get(repository, sha)
-        if known is not None:
-            return known
+        read = cache.get(repository, sha)
+        _logger.debug(
+            "read pin cache for %s@%s: %s", repository, sha, read.outcome.value
+        )
+        if read.resolution is not None:
+            return read.resolution
+        if read.outcome is ReadOutcome.CORRUPT:
+            cache.discard(repository, sha)
         resolution = resolver(repository, sha)
         cache.put(repository, sha, resolution)
         return resolution
@@ -180,10 +240,13 @@ def cached_resolver(resolver: PinResolver, cache: PinCache) -> PinResolver:
     return resolve
 
 
-def _encode(repository: str, sha: str, resolution: PinResolution) -> dict[str, object]:
+def _encode(
+    api_root: str, repository: str, sha: str, resolution: PinResolution
+) -> dict[str, object]:
     """Return the JSON document for one definite answer."""
     return {
         "version": FORMAT_VERSION,
+        "api_root": api_root,
         "repository": repository.lower(),
         "sha": sha,
         "object_type": resolution["object_type"],
@@ -191,44 +254,72 @@ def _encode(repository: str, sha: str, resolution: PinResolution) -> dict[str, o
     }
 
 
-def _decode(text: str, repository: str, sha: str) -> PinResolution | None:
-    """Return the answer *text* records for the key, or ``None`` if it is bad.
+def _document(data: bytes) -> dict[str, object] | None:
+    """Return the JSON object in *data*, or ``None`` if it is anything else.
 
-    An entry is bad when it is not the JSON object `_encode` writes, names a
-    different key than the file it sits in, or describes an answer no
-    resolver would give (a commit pin that reaches another commit, or an
-    object type other than a commit or a tag).
+    Bytes that are not valid UTF-8 are not JSON either, so they are as corrupt
+    as a truncated file.
 
     Returns
     -------
-    PinResolution | None
-        The recorded answer, or ``None`` for a bad entry.
+    dict[str, object] | None
+        The decoded object, or ``None``.
     """
     try:
-        document = json.loads(text)
+        document = json.loads(data)
     except ValueError:
         return None
-    if not isinstance(document, dict) or not _matches_key(document, repository, sha):
-        return None
-    commit = document.get("commit")
-    if document.get("object_type") == OBJECT_COMMIT:
-        return commit_pin(sha) if commit == sha else None
-    if document.get("object_type") == OBJECT_TAG and (
-        commit is None or (isinstance(commit, str) and FULL_SHA.match(commit))
-    ):
-        return tag_pin(commit)
-    return None
+    return document if isinstance(document, dict) else None
 
 
 def _matches_key(
-    document: cabc.Mapping[str, object], repository: str, sha: str
+    document: cabc.Mapping[str, object], api_root: str, repository: str, sha: str
 ) -> bool:
     """Say whether *document* is a current-format entry for this exact key."""
     return (
         document.get("version") == FORMAT_VERSION
+        and document.get("api_root") == api_root
         and document.get("repository") == repository.lower()
         and document.get("sha") == sha
     )
+
+
+def _answer(document: cabc.Mapping[str, object], sha: str) -> PinResolution | None:
+    """Return the answer *document* records, or ``None`` if none could arise.
+
+    A commit pin reaches itself; a tag object reaches a commit or, when its
+    target is not a commit, nothing. Any other shape no resolver would give.
+
+    Returns
+    -------
+    PinResolution | None
+        The recorded answer, or ``None`` for an impossible one.
+    """
+    kind, commit = document.get("object_type"), document.get("commit")
+    if kind == OBJECT_COMMIT:
+        return commit_pin(sha) if commit == sha else None
+    is_peeled_or_absent = commit is None or (
+        isinstance(commit, str) and FULL_SHA.match(commit) is not None
+    )
+    return tag_pin(commit) if kind == OBJECT_TAG and is_peeled_or_absent else None
+
+
+def _decode(
+    data: bytes, api_root: str, repository: str, sha: str
+) -> PinResolution | None:
+    """Return the answer *data* records for the key, or ``None`` if it is bad.
+
+    Returns
+    -------
+    PinResolution | None
+        The recorded answer, or ``None`` for an entry that is not the JSON
+        object `_encode` writes, names another key, or records an impossible
+        answer.
+    """
+    document = _document(data)
+    if document is None or not _matches_key(document, api_root, repository, sha):
+        return None
+    return _answer(document, sha)
 
 
 def _write_atomically(path: pathlib.Path, payload: str) -> None:

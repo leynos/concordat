@@ -377,7 +377,8 @@ def rule_run(
         github
         if no_pin_cache
         else cached_resolver(
-            github, PinCache(pin_cache_dir or default_directory(os.environ))
+            github,
+            PinCache(pin_cache_dir or default_directory(os.environ), github_api_url),
         )
     )
     builder = resolving_pins(default_envelope_builder, resolver)

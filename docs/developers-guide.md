@@ -671,11 +671,13 @@ sweep audits many repositories that pin the same few actions and each run is a
 new process. `cached_resolver` wraps any resolver: it reads `PinCache` first,
 and after a lookup writes the answer back. The command composes it around
 `GithubPinResolver`, so the per-run memo stays the inner layer. The policy in
-short: cache a commit or a tag object, never an unresolved pin; key by
-`owner/repository/sha` (lower-cased, and only when the repository is a plain
-`owner/name` pair and the pin is forty hex digits, since both become path
-segments); write through a sibling temporary file and a rename; treat an entry
-that cannot be decoded, or that names a different key, as a miss and delete it.
+short: cache a commit or a tag object, never an unresolved pin; key by the API
+root and `owner/repository/sha` (lower-cased, and only when the repository is a
+plain `owner/name` pair and the pin is forty hex digits, since both become path
+segments); write through a sibling temporary file and a rename. `PinCache.get`
+is a query that returns a `CacheRead` (`hit`, `miss`, `corrupt`, `unreadable` or
+`bypassed`) and changes nothing; `cached_resolver` discards a corrupt entry
+with `PinCache.discard` and logs each outcome at debug level.
 `default_directory` takes the environment as a mapping, so tests inject it, and
 `tests/conftest.py` points every test's cache at a temporary directory so a run
 never writes to the host's cache. The entry format is recorded in ADR-002.
