@@ -103,7 +103,7 @@ artifacts:
     description: >
       Rule package manifest (sensor wiring, input kind, parameters, defaults)
       for markdown-formatting-baseline.
-    sha256: a122a145a678a2015477e4aa0c0468448e6519173d578a4b455b4dc5d1908c98
+    sha256: 7c4b110d486def5226b96507a09ee8c4a494fde7e19242af4675d1a4dd100180
   - id: lint-rule-rust-build-defaults
     type: opa-policy
     path: platform-standards/canon/lint-rules/rust-build-defaults/policy/rust_build_defaults.rego

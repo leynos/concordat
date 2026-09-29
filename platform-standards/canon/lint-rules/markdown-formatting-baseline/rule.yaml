@@ -8,7 +8,7 @@ description: >-
   PD-004), .markdownlint-cli2.jsonc must carry the estate baseline (PD-005),
   and CI must lint Markdown through the pinned markdownlint-cli2 action
   (PD-006). Audit-only: this rule declares no mutations.
-version: 0.1.0
+version: 0.2.0
 sensor:
   type: conftest
   input: policy-input/markdown-formatting-baseline
