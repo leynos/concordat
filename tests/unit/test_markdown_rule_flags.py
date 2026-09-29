@@ -10,7 +10,9 @@ its parameters rather than a hard-coded list.
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import json
 import pathlib
 import sys
@@ -60,6 +62,23 @@ def _generator() -> types.ModuleType:
 GENERATE: typ.Final = _generator()
 
 
+def _argv(checkout: pathlib.Path, api_url: str) -> list[str]:
+    """Return the rule-run command line over ``checkout`` against ``api_url``."""
+    return [
+        "artefact",
+        "rule",
+        "run",
+        RULE_ID,
+        "--repo",
+        str(checkout),
+        "--format",
+        "json",
+        "--github-api-url",
+        api_url,
+        "--no-pin-cache",
+    ]
+
+
 def _main(argv: list[str]) -> int:
     """Run the CLI, returning its exit status however cyclopts reports it."""
     try:
@@ -87,7 +106,6 @@ def test_the_command_reports_the_missing_rewrite_flags(
     missing: str,
     tmp_path: pathlib.Path,
     fake_github_api: FakeGithubApi,
-    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """The command exits 1 and names exactly the flags PD-002 and PD-003 lack."""
     fake_github_api.routes.update(
@@ -96,20 +114,10 @@ def test_the_command_reports_the_missing_rewrite_flags(
     checkout = tmp_path / scenario
     checkout.mkdir()
     GENERATE.lay_out(GENERATE.SCENARIOS[scenario], checkout)
-    returncode = _main([
-        "artefact",
-        "rule",
-        "run",
-        RULE_ID,
-        "--repo",
-        str(checkout),
-        "--format",
-        "json",
-        "--github-api-url",
-        fake_github_api.url,
-        "--no-pin-cache",
-    ])
-    document = json.loads(capsys.readouterr().out)
+    output = io.StringIO()
+    with contextlib.redirect_stdout(output):
+        returncode = _main(_argv(checkout, fake_github_api.url))
+    document = json.loads(output.getvalue())
     messages = {
         finding["rule_id"]: finding["message"]
         for finding in document["findings"]
