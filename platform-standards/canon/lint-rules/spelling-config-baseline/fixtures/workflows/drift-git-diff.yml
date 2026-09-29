@@ -1,0 +1,9 @@
+name: CI
+on: [push]
+jobs:
+  spelling:
+    runs-on: ubuntu-latest
+    steps:
+      - run: make spelling
+      - name: Check typos.toml is current
+        run: git diff --exit-code typos.toml

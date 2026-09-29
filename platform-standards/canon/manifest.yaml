@@ -146,3 +146,18 @@ artifacts:
     description: >
       Rule package manifest for the Dependabot update-shape policy.
     sha256: e1a41a66ef0bd795c9e701aa51a7d7f0cabe3b4d972d55017016d87aa42efb27
+  - id: lint-rule-spelling-config-baseline
+    type: opa-policy
+    path: >-
+      platform-standards/canon/lint-rules/spelling-config-baseline/policy/spelling_config_baseline.rego
+    description: >
+      Audit-only PD-007 to PD-013 policy holding the spelling gate to one
+      pinned typos-config-builder gate with no legacy machinery, and
+      AGENTS.md to the builder's published spelling block.
+    sha256: f90ca770936f9cb022b16bb03fa1649fc51fdfaca75754cb316bbc819d18cfdd
+  - id: lint-rule-spelling-config-baseline-manifest
+    type: lint-config
+    path: platform-standards/canon/lint-rules/spelling-config-baseline/rule.yaml
+    description: >
+      Rule package manifest for the spelling configuration baseline policy.
+    sha256: 905b08a399dc8ce651aa49c996a4bb62b48b77ebaf2506aa7ffab6fc90844cb3

@@ -1,0 +1,8 @@
+name: CI
+on: [push]
+jobs:
+  spelling:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run typos
+        run: uvx typos@1.48.0 --config typos.toml

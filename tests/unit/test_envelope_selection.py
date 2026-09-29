@@ -31,6 +31,9 @@ from concordat.rules.envelope import (
 from concordat.rules.markdown_envelope import (
     ENVELOPE_KIND as MARKDOWN_ENVELOPE_KIND,
 )
+from concordat.rules.spelling_envelope import (
+    ENVELOPE_KIND as SPELLING_ENVELOPE_KIND,
+)
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -106,6 +109,11 @@ class TestRegisteredPackages:
                 "dependabot-update-shape",
                 DEPENDABOT_ENVELOPE_KIND,
                 id="dependabot-update-shape",
+            ),
+            pytest.param(
+                "spelling-config-baseline",
+                SPELLING_ENVELOPE_KIND,
+                id="spelling-config-baseline",
             ),
         ],
     )
@@ -331,6 +339,7 @@ class TestDeclaredInputKind:
             ("markdown-formatting-baseline", MARKDOWN_ENVELOPE_KIND),
             ("main-owned-codescene-coverage", COVERAGE_ENVELOPE_KIND),
             ("dependabot-update-shape", DEPENDABOT_ENVELOPE_KIND),
+            ("spelling-config-baseline", SPELLING_ENVELOPE_KIND),
         ):
             rule_dir = packages.rule_package_dir(rule_id)
             declared = packages._declared_input_kind(rule_dir)

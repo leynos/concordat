@@ -588,7 +588,9 @@ that declared kind; "Choosing the envelope for a package" below gives the
 routes. A package declaring no kind, or one no builder produces, is an
 `OperationalRuleError` rather than a guess: falling back would hand one policy
 the document another was written for, and a policy that cannot find its own
-facts reports a compliance it never established. Three kinds exist:
+facts reports a compliance it never established. The Makefile-centred kinds are
+listed here; the CodeScene coverage and Dependabot kinds are described after
+"Choosing the envelope for a package" below:
 
 - `policy-input/rust-makefile-baseline` — `envelope.build_envelope`, above.
 - `policy-input/rust-build-defaults` —
@@ -609,6 +611,20 @@ facts reports a compliance it never established. Three kinds exist:
   each full-SHA pin of `DavidAnson/markdownlint-cli2-action` names. The builder
   leaves it empty; the rule-run command fills it in a separate step
   ([ADR-002](adr-002-resolve-action-pins-against-github.md)).
+
+- `policy-input/spelling-config-baseline` —
+  `spelling_envelope.build_spelling_envelope`. It reuses `markdown_envelope`'s
+  containment guard and readers: the same `makeutil` report for the root
+  `Makefile` and the same decoded workflows, plus `typos.local.toml` decoded
+  with `tomllib`, the root `.gitignore` as its stripped non-blank lines, the
+  root `AGENTS.md` text, and the repository-relative paths that match the
+  manifest's `vendored_paths` globs (the walk prunes the same directories and
+  never follows links). Applicability is decided in the policy, from any part
+  of a spelling setup. The package is registered by identifier, because its
+  builder reads the `vendored_paths` parameter, and it also declares its kind.
+  The canonical AGENTS.md texts reach the policy as the `agents_md_blocks`
+  manifest parameter; the fixture generator copies them into `data.json`'s
+  `parameters`, so the Rego suite compares against the runner's text.
 
 The Markdown package's `fixtures/generate.py` lays each scenario out as a
 temporary checkout and records what `build_markdown_envelope` produces, so the

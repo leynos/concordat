@@ -50,6 +50,12 @@ from .markdown_envelope import (
     with_action_pins,
 )
 from .markdown_envelope import ENVELOPE_KIND as MARKDOWN_ENVELOPE_KIND
+from .spelling_envelope import (
+    DEFAULT_VENDORED_PATTERNS,
+    SpellingEnvelope,
+    build_spelling_envelope,
+)
+from .spelling_envelope import ENVELOPE_KIND as SPELLING_ENVELOPE_KIND
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -62,6 +68,7 @@ type RuleEnvelope = (
     | MarkdownEnvelope
     | CoverageEnvelope
     | DependabotEnvelope
+    | SpellingEnvelope
 )
 type EnvelopeResolver = cabc.Callable[[str, pathlib.Path], RuleEnvelope]
 
@@ -320,6 +327,30 @@ def _dependabot_envelope(
     return build_dependabot_envelope(checkout)
 
 
+def _spelling_envelope(
+    checkout: pathlib.Path,
+    parameters: cabc.Mapping[str, object] | None = None,
+) -> SpellingEnvelope:
+    """Build the spelling envelope, scanning for the manifest's vendored paths.
+
+    `spelling-config-baseline` names the legacy machinery it looks for as a
+    manifest parameter, so the list can grow without a code change; the
+    builder falls back to its own defaults when the manifest sets none.
+
+    Returns
+    -------
+    SpellingEnvelope
+        The `policy-input/spelling-config-baseline` document for *checkout*.
+    """
+    declared = (parameters or {}).get("vendored_paths")
+    patterns = (
+        tuple(str(pattern) for pattern in declared)
+        if isinstance(declared, list)
+        else DEFAULT_VENDORED_PATTERNS
+    )
+    return build_spelling_envelope(checkout, patterns)
+
+
 # Every rule package's envelope builder, keyed by package identifier. The
 # mapping is the complete list rather than the exceptions to a default: a
 # package that reads facts of one shape and a policy that expects another
@@ -334,6 +365,7 @@ PACKAGE_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     "rust-build-defaults": build_build_defaults_envelope,
     "main-owned-codescene-coverage": _coverage_envelope,
     "dependabot-update-shape": _dependabot_envelope,
+    "spelling-config-baseline": _spelling_envelope,
 })
 
 # The same builders by the envelope kind they produce, so a package whose input
@@ -345,6 +377,7 @@ INPUT_KIND_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     MARKDOWN_ENVELOPE_KIND: _markdown_envelope,
     COVERAGE_ENVELOPE_KIND: _coverage_envelope,
     DEPENDABOT_ENVELOPE_KIND: _dependabot_envelope,
+    SPELLING_ENVELOPE_KIND: _spelling_envelope,
 })
 
 

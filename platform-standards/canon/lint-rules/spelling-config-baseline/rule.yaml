@@ -1,0 +1,118 @@
+schema_version: 1
+id: spelling-config-baseline
+name: Spelling configuration baseline
+description: >-
+  Audits a checkout's spelling gate against typos-config-builder's 0.1.x
+  design: the spelling target runs the builder's `gate` command, pinned to a
+  release at or above the floor, with a binding exit status (PD-007); no
+  legacy Typos or builder pins or helper targets remain (PD-008); no vendored
+  generator or phrase checker remains (PD-009); CI neither runs Typos
+  directly nor drift-checks the regenerated typos.toml (PD-010); the
+  builder's cache is ignored (PD-011); typos.local.toml exists at schema 1
+  (PD-012); and AGENTS.md carries the builder's canonical spelling block
+  for the pinned release (PD-013). A repository with no spelling setup is
+  out of scope.
+  Audit-only: this rule declares no mutations.
+version: 0.1.0
+sensor:
+  type: conftest
+  input: policy-input/spelling-config-baseline
+  policy: policy/
+  tests:
+    - policy/
+  data:
+    - fixtures/data.json
+parameters:
+  schema:
+    type: object
+    additionalProperties: false
+    properties:
+      spelling_target:
+        type: string
+        description: The Make target that runs the spelling gate.
+      builder_floor:
+        type: string
+        pattern: '^v?[0-9]+\.[0-9]+\.[0-9]+$'
+        description: >-
+          The lowest typos-config-builder release tag the gate may pin, as
+          vMAJOR.MINOR.PATCH.
+      builder_repository:
+        type: string
+        description: The repository whose release the gate must pin.
+      legacy_variables:
+        type: array
+        items:
+          type: string
+        description: Makefile variables left from the legacy setup.
+      legacy_targets:
+        type: array
+        items:
+          type: string
+        description: Make targets left from the legacy setup.
+      gitignore_entries:
+        type: array
+        items:
+          type: string
+        description: Lines `.gitignore` must carry for the builder's cache.
+      overlay_schema:
+        type: integer
+        description: The `schema` value `typos.local.toml` must declare.
+      vendored_paths:
+        type: array
+        items:
+          type: string
+        description: >-
+          Repository-relative globs naming vendored spelling machinery the
+          checkout must not carry.
+      agents_md_blocks:
+        type: object
+        propertyNames:
+          pattern: '^v?[0-9]+\.[0-9]+\.[0-9]+$'
+        additionalProperties:
+          type: string
+        description: >-
+          The canonical AGENTS.md spelling block, keyed by the
+          typos-config-builder release that publishes it: the text strictly
+          between the markers of that release's docs/agents-md-spelling.md.
+  defaults:
+    spelling_target: spelling
+    builder_floor: v0.1.3
+    builder_repository: github.com/leynos/typos-config-builder
+    legacy_variables:
+      - TYPOS_VERSION
+      - PATHSPEC_VERSION
+      - TYPOS_CONFIG_BUILDER_COMMIT
+      - TYPOS_CONFIG_BUILDER_REV
+      - TYPOS_CONFIG_BUILDER_REVISION
+      - TYPOS_CONFIG_BUILDER_SHA
+    legacy_targets:
+      - spelling-helper-test
+      - spelling-phrase-check
+      - spelling-config
+    gitignore_entries:
+      - .typos-oxendict-base.json
+      - .typos-oxendict-base.toml
+    overlay_schema: 1
+    vendored_paths:
+      - scripts/generate_typos_config.py
+      - scripts/typos_rollout*.py
+      - scripts/tests/test_generate_typos_config.py
+      - scripts/tests/test_typos_rollout*.py
+      - scripts/*phrase*check*.py
+      - scripts/tests/test_*phrase*check*.py
+    # From leynos/typos-config-builder docs/agents-md-spelling.md at the
+    # v0.1.3 tag (commit c8a4f95d; the text is unchanged since pull request
+    # 96). Add a key for each later release whose text differs.
+    agents_md_blocks:
+      v0.1.3: |
+        ## Spelling
+
+        - `make spelling` runs the pinned `typos-config-builder gate`, which
+          regenerates `typos.toml` from the shared en-GB-oxendict dictionary and
+          `typos.local.toml`, then checks spelling and the shared phrase corrections.
+        - `typos.toml` is generated: never edit it by hand. Put narrow
+          repository-specific exceptions in `typos.local.toml`, as exact or full-line
+          patterns rather than bare accepted words.
+        - When `make spelling` changes `typos.toml`, commit the regenerated file. If
+          the change is unrelated to your work, commit it in a separate base pull
+          request and stack your branch on it, so each review diff stays focused.

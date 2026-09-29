@@ -1,0 +1,8 @@
+name: CI
+on: [push]
+jobs:
+  spelling:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Typos
+        uses: crate-ci/typos@v1.48.0
