@@ -102,7 +102,7 @@ jobs:
         # so without this a dispatch from a feature branch would publish that
         # branch's coverage as the trunk's.
         if: steps.codescene-token.outputs.available == 'true' && github.ref == 'refs/heads/main'
-        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@a5765019912a8ab6882b12db049c7cde635f3a85
+        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@c856f4c570e8d83d64318ee2768a4906d0d807f6
         with:
           format: cobertura
           mode: upload
