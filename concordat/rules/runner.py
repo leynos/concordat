@@ -35,6 +35,9 @@ from .packages import (
 from .packages import rule_package_dir as _rule_package_dir
 from .packages import rule_parameters as _rule_parameters
 
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
 CONFTEST_TIMEOUT: typ.Final = 60.0
 # Conftest reports an evaluated policy with 0 (clean) or 1 (failures); any
 # other status means it did not evaluate one, whatever it printed on stdout.
@@ -68,6 +71,7 @@ class _ConftestFailure(typ.TypedDict, total=False):
 class _ConftestResult(typ.TypedDict, total=False):
     """One Conftest result document (one per evaluated input file)."""
 
+    filename: str
     failures: list[_ConftestFailure]
 
 
@@ -214,12 +218,52 @@ def _invoke_conftest(
     envelope: RuleEnvelope,
 ) -> list[_ConftestResult]:
     """Evaluate *envelope* against *rule_id*'s policy and return the results."""
+    return _evaluate_envelopes(rule_id, [envelope])
+
+
+def _envelope_file_names(count: int) -> list[str]:
+    """Return the file names *count* envelopes are written under.
+
+    A lone envelope keeps the name `envelope.json` that a single evaluation has
+    always used, so what Conftest is asked to read is unchanged for callers
+    that evaluate one checkout.
+
+    Returns
+    -------
+    list[str]
+        One distinct file name per envelope, in envelope order.
+    """
+    if count == 1:
+        return ["envelope.json"]
+    return [f"envelope-{index}.json" for index in range(count)]
+
+
+def _evaluate_envelopes(
+    rule_id: str,
+    envelopes: cabc.Sequence[RuleEnvelope],
+) -> list[_ConftestResult]:
+    """Run one Conftest process over *envelopes* and return its results.
+
+    Returns
+    -------
+    list[_ConftestResult]
+        Every validated result Conftest emitted, one per evaluated file.
+
+    Raises
+    ------
+    OperationalRuleError
+        If Conftest cannot evaluate the policy or emits unusable output.
+    """
     rule_dir = _rule_package_dir(rule_id)
     policy_dir = rule_dir / "policy"
     parameters = _rule_parameters(rule_dir)
     with tempfile.TemporaryDirectory(prefix="concordat-rule-") as scratch:
-        envelope_path = pathlib.Path(scratch) / "envelope.json"
-        envelope_path.write_text(json.dumps(envelope), encoding="utf-8")
+        envelope_paths = [
+            pathlib.Path(scratch) / name
+            for name in _envelope_file_names(len(envelopes))
+        ]
+        for path, envelope in zip(envelope_paths, envelopes, strict=True):
+            path.write_text(json.dumps(envelope), encoding="utf-8")
         data_path = pathlib.Path(scratch) / "parameters.json"
         data_path.write_text(
             json.dumps({"parameters": parameters}),
@@ -236,7 +280,7 @@ def _invoke_conftest(
             _policy_namespace(rule_id),
             "--output",
             "json",
-            str(envelope_path),
+            *map(str, envelope_paths),
         ]
         completed = _run_conftest(argv, rule_id)
 

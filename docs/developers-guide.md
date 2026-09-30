@@ -1136,6 +1136,22 @@ real directory rather than a `tmp_path` fixture: Hypothesis rejects
 function-scoped fixtures, since they would be created once and then shared
 across every generated example rather than being fresh per example.
 
+### Property tests that evaluate a policy
+
+A property that judges a Rego policy must not start one Conftest process per
+generated case: at 80 cases that took 12 s alone and passed the suite's 30 s
+`pytest-timeout` on a loaded host, and widening the timeout would only hide the
+cost. Draw a fixed-size list of cases instead
+(`st.lists(…, min_size=n, max_size=n)`) and evaluate it with
+`invoke_conftest_batch` from `tests/unit/conftest_batch_support.py`, which runs
+one process over every envelope and returns one result list per envelope. It
+matches results to envelopes by the file name Conftest reports, not by
+position, and raises an `OperationalRuleError` when an envelope has no result,
+so a dropped result cannot pass as a clean one. The helper is private to the
+runner and is for tests that judge many envelopes against one rule; production
+callers evaluate one checkout and use `_invoke_conftest`. Keep one
+single-envelope test on that path as a smoke test.
+
 ### The bounded Rego reachability test
 
 The rule package's `policy/rust_makefile_baseline_test.rego`, under the

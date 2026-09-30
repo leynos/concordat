@@ -23,6 +23,7 @@ from hypothesis import example, given, settings
 from hypothesis import strategies as st
 
 from concordat.rules import runner
+from tests.unit.conftest_batch_support import invoke_conftest_batch
 
 _RULE_ID: typ.Final = "main-owned-codescene-coverage"
 _KIND: typ.Final = "policy-input/main-owned-codescene-coverage"
@@ -319,6 +320,26 @@ def _findings(case: CoverageCase) -> set[tuple[str, str, str]]:
     }
 
 
+# Each generated case costs a Conftest process if evaluated alone, which made
+# these properties slow enough to hit the suite's 30 s timeout on a loaded
+# host. Cases are therefore drawn in batches and evaluated in one process each.
+_BATCH_SIZE: typ.Final = 10
+
+
+def _batch_findings(
+    envelopes: list[dict[str, object]],
+) -> list[set[tuple[str, str, str]]]:
+    """Evaluate every envelope in one Conftest process, one finding set each."""
+    batches = invoke_conftest_batch(_RULE_ID, typ.cast("typ.Any", envelopes))
+    return [
+        {
+            (finding.verdict, finding.path, finding.message)
+            for finding in runner._findings_from_results(results)
+        }
+        for results in batches
+    ]
+
+
 @dataclasses.dataclass(frozen=True)
 class OutputGuardCase:
     """Describe an upload and its candidate credential producer."""
@@ -462,22 +483,26 @@ def _output_guard_stray_sites(case: OutputGuardCase) -> set[str]:
     return sites
 
 
-@settings(max_examples=80, deadline=None)
-@example(case=_OUTPUT_COMPLIANT_CASE)
-@given(case=_OUTPUT_GUARD_CASES)
-def test_step_output_guard_matches_generated_topology(case: OutputGuardCase) -> None:
+@settings(max_examples=8, deadline=None)
+@example(cases=[_OUTPUT_COMPLIANT_CASE] * _BATCH_SIZE)
+@given(cases=st.lists(_OUTPUT_GUARD_CASES, min_size=_BATCH_SIZE, max_size=_BATCH_SIZE))
+def test_step_output_guard_matches_generated_topology(
+    cases: list[OutputGuardCase],
+) -> None:
     """Varied step positions and provenance have the independent verdict."""
-    envelope = _envelope(_COMPLIANT_CASE)
-    envelope["workflows"] = [
-        _pr_workflow(_COMPLIANT_CASE),
-        _output_guard_main_workflow(case),
+    envelopes = [
+        {
+            **_envelope(_COMPLIANT_CASE),
+            "workflows": [
+                _pr_workflow(_COMPLIANT_CASE),
+                _output_guard_main_workflow(case),
+            ],
+        }
+        for case in cases
     ]
-    results = runner._invoke_conftest(_RULE_ID, typ.cast("typ.Any", envelope))
-    findings = {
-        (finding.verdict, finding.path, finding.message)
-        for finding in runner._findings_from_results(results)
-    }
-    assert findings == _output_guard_expected(case), case
+    found = _batch_findings(envelopes)
+    for case, findings in zip(cases, found, strict=True):
+        assert findings == _output_guard_expected(case), case
 
 
 _COMPLIANT_CASE: typ.Final = CoverageCase(
@@ -530,8 +555,12 @@ def test_a_fully_noncompliant_case_reports_every_clause() -> None:
     assert len(findings) == 8, findings
 
 
-@settings(max_examples=40, deadline=None)
-@given(_CASES)
-def test_policy_findings_match_the_generated_topology(case: CoverageCase) -> None:
+@settings(max_examples=4, deadline=None)
+@given(st.lists(_CASES, min_size=_BATCH_SIZE, max_size=_BATCH_SIZE))
+def test_policy_findings_match_the_generated_topology(
+    cases: list[CoverageCase],
+) -> None:
     """Every generated topology yields exactly the findings its decisions imply."""
-    assert _findings(case) == _expected(case), case
+    found = _batch_findings([_envelope(case) for case in cases])
+    for case, findings in zip(cases, found, strict=True):
+        assert findings == _expected(case), case
