@@ -202,6 +202,12 @@ test_gate_global if {
 	}
 }
 
+# A Makefile-wide RUSTFLAGS is a gate override only where a gate target exists to reach.
+test_gate_global_without_a_gate_target if {
+	findings := policy.deny with input as data.fixtures.gate_global_no_gate
+	profile(findings) == set()
+}
+
 # Coverage and release-profile recipes are BD-007's, and targets outside the gates are not judged.
 test_gate_exempt if {
 	findings := policy.deny with input as data.fixtures.gate_exempt

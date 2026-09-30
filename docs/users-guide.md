@@ -550,6 +550,26 @@ Three more clauses read the builds that replace those defaults:
 A Makefile `makeutil` cannot fully parse makes BD-007 and BD-008
 `indeterminate` rather than passed; the other clauses still report.
 
+Upgrading to rule 0.2.0: a repository that passed 0.1.1 can now fail or report
+`indeterminate`, because BD-007 to BD-009 read the Makefile and the workflows,
+which 0.1.1 never opened.
+
+- Install the pinned `makeutil` on `PATH` beside `conftest`; the command now
+  needs it for any checkout that has a root `Makefile`, even one whose
+  configuration alone would have passed.
+- Where Cranelift is the development default, add the LLVM selection to every
+  `cargo llvm-cov` recipe or step and every release-triggered build (BD-007).
+- Restate `-Zthreads=8` and the `mold` linker flag in every gate recipe that
+  assigns `RUSTFLAGS`, or in the workflow step that sets it, or let the Cargo
+  configuration decide by leaving `RUSTFLAGS` unassigned (BD-008 and BD-009).
+  For a shared-actions `setup-rust` step, pass `rustflags: ''` or a value that
+  carries the flags.
+- A Makefile `makeutil` refuses, or a gate that delegates through `-C`, `-f` or
+  a computed target, is `indeterminate`, not compliant. Write the delegation
+  literally, as `$(MAKE) target`, to have it followed.
+- Clauses BD-001 to BD-006 read the same files as before, so their verdicts do
+  not change.
+
 ### Auditing the spelling gate
 
 The `spelling-config-baseline` package audits a checkout's spelling gate
