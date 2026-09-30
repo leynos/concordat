@@ -77,7 +77,7 @@ jobs:
         # coverage compared against it are measured by one interpreter.
         env:
           UV_PYTHON: '3.13'
-        uses: leynos/shared-actions/.github/actions/generate-coverage@774cc5a01e457714aede66e14a97b3e257812fc2
+        uses: leynos/shared-actions/.github/actions/generate-coverage@c856f4c570e8d83d64318ee2768a4906d0d807f6
         with:
           output-path: coverage.xml
           format: cobertura
