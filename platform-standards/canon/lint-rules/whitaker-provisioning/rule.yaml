@@ -33,11 +33,21 @@ parameters:
           type: string
           pattern: "^[0-9a-f]{40}$"
         description: >-
-          shared-actions revisions an install-whitaker pin may name. The first
-          entry is the merge of the change that made the action carry the
-          install rules. A revision is added only once `git merge-base
-          --is-ancestor <first entry> <revision>` succeeds in a shared-actions
-          clone, so every entry descends from it.
+          shared-actions revisions an install-whitaker pin may name. Derived,
+          never edited by hand: `scripts/whitaker_revisions.py sync` lists
+          every revision that descends from an entry of install_whitaker_roots
+          with the action directory unchanged, oldest first, so a root leads.
+      install_whitaker_roots:
+        type: array
+        items:
+          type: string
+          pattern: "^[0-9a-f]{40}$"
+        description: >-
+          The shared-actions commits whose install-whitaker directory has been
+          reviewed. `scripts/whitaker_revisions.py sync` derives
+          compliant_install_whitaker_refs from them: every first-parent commit
+          on shared-actions main that is a root, or descends from one and
+          leaves the directory's Git tree id equal to that root's.
       producer_repositories:
         type: array
         items:
@@ -70,8 +80,37 @@ parameters:
           here, and otherwise only a temporary entry whose reason names the
           change that removes it.
   defaults:
+    install_whitaker_roots:
+      - "6dea5677a84fec60ca51b07202570e3af12ffdb4"
     compliant_install_whitaker_refs:
       - "6dea5677a84fec60ca51b07202570e3af12ffdb4"
+      - "8a83824b29dfe8f861714b544dc85fb925ed010c"
+      - "14c325b60788814cd50298eb8060228daee3b842"
+      - "d4d248bbbecdcf7b4f5bc79ffd4d6caee370bd79"
+      - "9a27950942334d69ff79005b3a8db23bf151f43f"
+      - "a904888c815dc5919a3b24d41a9bb4d566459a93"
+      - "fc73b3fe2da2be3e641b4809268b6e350dfd0d28"
+      - "a38feb9be25755c30eca5bda96bd3786a5b89c6b"
+      - "d65313b25cc6db5a23518fe409280b167a3305e1"
+      - "b23b7b8d2b9438f8f697d2b7976463020bb0d1ea"
+      - "a8ca3302e60c6852561c19b75fa39020f86cb207"
+      - "6346e6a781b9c7db16ea2647b41076e6bf170b91"
+      - "03d0ed80b88628cca2b6f96bf32e4220b0121926"
+      - "6738afdb486258ed4f1dd5f526a58309be30396e"
+      - "584a0793a634e119673fd1e71f88f78970611f25"
+      - "63f7dbac64f6fc6217b859d71fff46f85df97e9e"
+      - "1cb2cfb9faf06424690cdf7753045745982de128"
+      - "2802a8448ceabe34995b091da62ef60e5276a7c7"
+      - "2573e4ccc4dadb9d30b18e408d393890989c1b9a"
+      - "ce8d747242ab3c9d58674d5838cf04c801eeb2f9"
+      - "32741eab2df11defd36eb06eaf2ac047ac8729ba"
+      - "2f58fab140cc8dfe69756aaa6a3bbb987c426023"
+      - "c856f4c570e8d83d64318ee2768a4906d0d807f6"
+      - "8901b50fda116a1a33304809b8767809dc17c203"
+      - "b7d70b5d3ff0ac0199416b9678ea7af25bb3254e"
+      - "8250c914bd32aeacfdf8d9e87b804ec0024ee83e"
+      - "d57cb19b82281236088108f2ffb7e13bc00fc2f8"
+      - "5e218e3c055da635947aa823e98387aa2ace0306"
     producer_repositories:
       - leynos/whitaker
     action_repository: leynos/shared-actions

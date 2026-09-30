@@ -467,9 +467,12 @@ does not re-check installer flags. It reports:
 - an `install-whitaker` pin that is not listed, a fork of the action, or a
   local copy of it.
 
-A revision joins the list only once
-`git merge-base --is-ancestor <first entry> <revision>` succeeds in a
-shared-actions clone. Whitaker itself is exempt as the producer, and a
+The list is every shared-actions commit at or after an approved root that
+leaves the `install-whitaker` directory content-identical to it; a commit that
+changes the directory is refused until a reviewer approves it. After
+shared-actions gains commits,
+`scripts/whitaker_revisions.py sync --clone <shared-actions clone>` regenerates
+the list. Whitaker itself is exempt as the producer, and a
 developer-environment script that CI never runs may be exempted by name,
 repository and reason in the rule's parameters. Exemptions match the repository
 slug read from the `origin` remote. See

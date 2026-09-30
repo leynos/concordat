@@ -241,7 +241,7 @@ names_the_action(uses) if endswith(split(uses, "@")[0], "/install-whitaker")
 names_the_action(uses) if endswith(uses, "/install-whitaker")
 
 pin_refusal(path, uses) := sprintf(
-	"%s uses %s, which is not a revision known to carry the Whitaker install rules. Pin %s to a listed revision. A revision joins compliant_install_whitaker_refs in this rule's parameters only after `git merge-base --is-ancestor <first listed revision> <candidate>` succeeds in a shared-actions clone",
+	"%s uses %s, which is not a revision known to carry the Whitaker install rules. Pin %s to a listed revision. compliant_install_whitaker_refs in this rule's parameters lists every shared-actions commit at or after an approved root that leaves the install-whitaker directory content-identical; `scripts/whitaker_revisions.py sync --clone <shared-actions clone>` regenerates it",
 	[path, uses, remote_prefix],
 )
 
