@@ -82,6 +82,35 @@ def _root_trees(
     return trees
 
 
+def _is_root_or_descendant(
+    repository: pygit2.Repository, commit: pygit2.Commit, root: str
+) -> bool:
+    """Report whether *commit* is *root* or descends from it."""
+    return str(commit.id) == root or repository.descendant_of(commit.id, root)
+
+
+def _carries_approved_action(
+    repository: pygit2.Repository,
+    commit: pygit2.Commit,
+    tree: pygit2.Oid | None,
+    trees: cabc.Mapping[str, pygit2.Oid],
+) -> bool:
+    """Report whether *commit* holds an approved root's action directory.
+
+    The tree id must equal the root's and the commit must be that root or
+    descend from it, so neither an older commit nor a changed directory passes.
+
+    Returns
+    -------
+    bool
+        True when an approved root accepts the commit.
+    """
+    return any(
+        tree == root_tree and _is_root_or_descendant(repository, commit, root)
+        for root, root_tree in trees.items()
+    )
+
+
 def compliant_revisions(
     repository: pygit2.Repository,
     roots: cabc.Sequence[str],
@@ -96,6 +125,9 @@ def compliant_revisions(
     another root approves the new contents, which is what makes the rule refuse
     an unreviewed change to the action.
 
+    A shallow clone ends the first-parent walk at its boundary, so the list
+    derived from it would silently omit older qualifying commits.
+
     Returns
     -------
     list[str]
@@ -104,8 +136,11 @@ def compliant_revisions(
     Raises
     ------
     OperationalRuleError
-        When a root or *tip* cannot be resolved in the clone.
+        When the clone is shallow, or a root or *tip* cannot be resolved in it.
     """
+    if repository.is_shallow:
+        message = "the shared-actions clone is shallow; run git fetch --unshallow"
+        raise OperationalRuleError(message, operation=OPERATION_DERIVE_REVISIONS)
     trees = _root_trees(repository, roots, directory)
     try:
         tip_id = typ.cast("pygit2.Commit", repository.revparse_single(tip)).id
@@ -119,11 +154,7 @@ def compliant_revisions(
     found: list[str] = []
     for commit in walker:
         tree = directory_tree_id(repository, commit, directory)
-        if any(
-            tree == root_tree
-            and (str(commit.id) == root or repository.descendant_of(commit.id, root))
-            for root, root_tree in trees.items()
-        ):
+        if _carries_approved_action(repository, commit, tree, trees):
             found.append(str(commit.id))
     found.reverse()
     return found
