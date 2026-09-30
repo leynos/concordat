@@ -88,7 +88,7 @@ def _collect_single_input(
     if default:
         return default
 
-    raise PersistenceError(  # noqa: TRY003  # Domain error provides operator remediation.
+    raise PersistenceError(  # ruff: ignore[raise-vanilla-args]  # Domain error provides operator remediation.
         f"{label} is required in non-interactive mode; provide a flag or "
         "environment variable."
     )
@@ -105,7 +105,7 @@ def _prompt_with_default(
         return response
     if default:
         return default
-    raise PersistenceError(  # noqa: TRY003  # Domain error identifies required input.
+    raise PersistenceError(  # ruff: ignore[raise-vanilla-args]  # Domain error identifies required input.
         f"{label} is required."
     )
 

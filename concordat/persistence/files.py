@@ -100,7 +100,7 @@ def _enforce_existing_policy(
     if is_same:
         return False
     if not force:
-        raise PersistenceError(  # noqa: TRY003  # Domain error provides operator remediation.
+        raise PersistenceError(  # ruff: ignore[raise-vanilla-args]  # Domain error provides operator remediation.
             f"{path} already exists; rerun with --force to replace."
         )
     return True

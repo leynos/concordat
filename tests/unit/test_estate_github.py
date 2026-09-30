@@ -256,7 +256,7 @@ def test_build_client_uses_token(mocker: pytest_mock.MockFixture) -> None:
     client = _build_client("secret")
 
     assert client is fake
-    mocked_ctor.assert_called_once_with(token="secret")  # noqa: S106
+    mocked_ctor.assert_called_once_with(token="secret")  # ruff: ignore[hardcoded-password-func-arg]
 
 
 @pytest.mark.parametrize(

@@ -145,7 +145,7 @@ def test_ensure_repository_pr_updates_existing_remote_branch_without_non_fast_fo
             repo_url=origin_url,
             base_branch="main",
             inventory_path="tofu/inventory/repositories.yaml",
-            github_token="fake-token",  # noqa: S106
+            github_token="fake-token",  # ruff: ignore[hardcoded-password-func-arg]
         ),
     )
 
@@ -221,7 +221,7 @@ def test_ensure_repository_pr_reports_existing_branch_pr_when_not_merged(
             repo_url=origin_url,
             base_branch="main",
             inventory_path="tofu/inventory/repositories.yaml",
-            github_token="fake-token",  # noqa: S106
+            github_token="fake-token",  # ruff: ignore[hardcoded-password-func-arg]
         ),
     )
 

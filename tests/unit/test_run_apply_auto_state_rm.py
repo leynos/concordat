@@ -184,7 +184,7 @@ def _setup_test_environment(
     io_streams = ExecutionIO(stdout=io.StringIO(), stderr=io.StringIO())
     options = ExecutionOptions(
         github_owner="leynos",
-        github_token="token",  # noqa: S106
+        github_token="token",  # ruff: ignore[hardcoded-password-func-arg]
         extra_args=("-auto-approve",),
     )
 

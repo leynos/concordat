@@ -45,7 +45,7 @@ def _validate_inputs(
 def _validate_path_safety(path: str, field_name: str) -> None:
     """Ensure path segments do not include traversal elements."""
     if ".." in path.split("/"):
-        raise PersistenceError(  # noqa: TRY003  # Domain error identifies invalid input.
+        raise PersistenceError(  # ruff: ignore[raise-vanilla-args]  # Domain error identifies invalid input.
             f"{field_name} may not include directory traversals."
         )
 
@@ -53,7 +53,7 @@ def _validate_path_safety(path: str, field_name: str) -> None:
 def _validate_key_suffix_not_empty(key_suffix: str) -> None:
     """Ensure the key suffix is not empty or whitespace only."""
     if not key_suffix.strip():
-        raise PersistenceError(  # noqa: TRY003  # Domain error identifies required input.
+        raise PersistenceError(  # ruff: ignore[raise-vanilla-args]  # Domain error identifies required input.
             "Key suffix is required."
         )
 
@@ -61,11 +61,11 @@ def _validate_key_suffix_not_empty(key_suffix: str) -> None:
 def _validate_required_fields(descriptor: PersistenceDescriptor) -> None:
     """Ensure required descriptor fields are populated."""
     if not descriptor.bucket:
-        raise PersistenceError(  # noqa: TRY003  # Domain error identifies required input.
+        raise PersistenceError(  # ruff: ignore[raise-vanilla-args]  # Domain error identifies required input.
             "Bucket is required."
         )
     if not descriptor.region:
-        raise PersistenceError(  # noqa: TRY003  # Domain error identifies required input.
+        raise PersistenceError(  # ruff: ignore[raise-vanilla-args]  # Domain error identifies required input.
             "Region is required."
         )
 
@@ -79,12 +79,12 @@ def _check_endpoint_scheme(endpoint: str, *, allow_insecure: bool) -> None:
         return
 
     if "://" not in endpoint:
-        raise PersistenceError(  # noqa: TRY003  # Domain error provides operator remediation.
+        raise PersistenceError(  # ruff: ignore[raise-vanilla-args]  # Domain error provides operator remediation.
             "Endpoint must include an https:// scheme (for example, "
             "https://s3.example.com)."
         )
 
-    raise PersistenceError(  # noqa: TRY003  # Domain error provides operator remediation.
+    raise PersistenceError(  # ruff: ignore[raise-vanilla-args]  # Domain error provides operator remediation.
         "Endpoint must use HTTPS (for example, https://s3.example.com)."
     )
 
@@ -94,7 +94,7 @@ def _validate_endpoint_protocol(
 ) -> None:
     """Ensure endpoints use HTTPS unless explicitly allowed for dev use."""
     if not (endpoint := endpoint.strip()):
-        raise PersistenceError(  # noqa: TRY003  # Domain error identifies required input.
+        raise PersistenceError(  # ruff: ignore[raise-vanilla-args]  # Domain error identifies required input.
             "Endpoint is required."
         )
     endpoint = normalize_endpoint_url(endpoint)

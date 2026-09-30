@@ -101,7 +101,7 @@ def captured_client_kwargs(
                     "AWS_SECRET_ACCESS_KEY": "aws-secret",
                 },
                 access_key="aws-access",
-                secret_key="aws-secret",  # noqa: S106 - synthetic test credential
+                secret_key="aws-secret",  # ruff: ignore[hardcoded-password-func-arg] - synthetic test credential
             ),
             id="aws_credentials",
         ),
@@ -109,7 +109,7 @@ def captured_client_kwargs(
             CredentialsCase(
                 env={"SCW_ACCESS_KEY": "scw-access", "SCW_SECRET_KEY": "scw-secret"},
                 access_key="scw-access",
-                secret_key="scw-secret",  # noqa: S106 - synthetic test credential
+                secret_key="scw-secret",  # ruff: ignore[hardcoded-password-func-arg] - synthetic test credential
             ),
             id="scw_credentials",
         ),
@@ -120,7 +120,7 @@ def captured_client_kwargs(
                     "SPACES_SECRET_ACCESS_KEY": "spaces-secret",
                 },
                 access_key="spaces-access",
-                secret_key="spaces-secret",  # noqa: S106 - synthetic test credential
+                secret_key="spaces-secret",  # ruff: ignore[hardcoded-password-func-arg] - synthetic test credential
             ),
             id="spaces_credentials",
         ),
@@ -161,7 +161,7 @@ def test_default_s3_client_factory_maps_environment_credentials(
                     "SCW_SECRET_KEY": "scw-secret",
                 },
                 access_key="aws-access",
-                secret_key="aws-secret",  # noqa: S106 - synthetic test credential
+                secret_key="aws-secret",  # ruff: ignore[hardcoded-password-func-arg] - synthetic test credential
             ),
             id="aws-precedes-scw",
         ),
@@ -173,7 +173,7 @@ def test_default_s3_client_factory_maps_environment_credentials(
                     "AWS_SESSION_TOKEN": "   ",
                 },
                 access_key="scw-access",
-                secret_key="scw-secret",  # noqa: S106 - synthetic test credential
+                secret_key="scw-secret",  # ruff: ignore[hardcoded-password-func-arg] - synthetic test credential
                 # Stated rather than defaulted: a token *is* present in the
                 # environment here, and the expectation is that it is dropped.
                 session_token=None,
@@ -188,8 +188,8 @@ def test_default_s3_client_factory_maps_environment_credentials(
                     "AWS_SESSION_TOKEN": "session-token",
                 },
                 access_key="scw-access",
-                secret_key="scw-secret",  # noqa: S106 - synthetic test credential
-                session_token="session-token",  # noqa: S106 - synthetic test credential
+                secret_key="scw-secret",  # ruff: ignore[hardcoded-password-func-arg] - synthetic test credential
+                session_token="session-token",  # ruff: ignore[hardcoded-password-func-arg] - synthetic test credential
             ),
             id="session-token-is-forwarded",
         ),
@@ -297,7 +297,7 @@ class TestOwnerScopedS3Credentials:
             owner="bravo",
         )
 
-        expected_secret = "bravo-secret"  # noqa: S105 - synthetic test credential
+        expected_secret = "bravo-secret"  # ruff: ignore[hardcoded-password-string] - synthetic test credential
         kwargs = _client_kwargs(captured_kwargs)
         assert kwargs["aws_access_key_id"] == "bravo-access", (
             f"the named owner's credentials should win over the active one: {kwargs}"
@@ -336,7 +336,7 @@ class TestOwnerScopedS3Credentials:
             owner="bravo",
         )
 
-        expected_secret = "env-secret"  # noqa: S105 - synthetic test credential
+        expected_secret = "env-secret"  # ruff: ignore[hardcoded-password-string] - synthetic test credential
         kwargs = _client_kwargs(captured_kwargs)
         assert kwargs["aws_access_key_id"] == "env-access", (
             f"the environment should outrank the owner's file: {kwargs}"

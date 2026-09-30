@@ -84,7 +84,7 @@ _MAKE_EXECUTABLE: typ.Final = _make_executable()
 
 def _makefile_report() -> dict[str, object]:
     """Return Makeutil's complete, successfully parsed Makefile report."""
-    completed = subprocess.run(  # noqa: S603 - Fixed parser command.
+    completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - Fixed parser command.
         _MAKEUTIL_COMMAND,
         capture_output=True,
         check=True,
@@ -215,7 +215,7 @@ def _run_skylos_allow(
         "--no-print-directory",
         "skylos-allow",
     )
-    return subprocess.run(  # noqa: S603 - Fixed Make target and arguments.
+    return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - Fixed Make target and arguments.
         command,
         capture_output=True,
         check=False,
@@ -256,7 +256,7 @@ def _run_skylos_allow_with_recorder(
         f"SKYLOS_CLI={recorder}",
         "skylos-allow",
     )
-    completed = subprocess.run(  # noqa: S603 - Fixed Make target and temporary recorder.
+    completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - Fixed Make target and temporary recorder.
         command,
         capture_output=True,
         check=False,

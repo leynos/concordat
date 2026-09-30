@@ -250,7 +250,7 @@ def when_run_estate_init(cli_invocation: dict[str, RunResult]) -> None:
     """Initialise an estate remote via CLI."""
     _run_estate_init_cli(
         cli_invocation,
-        github_token="betamax-token",  # noqa: S106
+        github_token="betamax-token",  # ruff: ignore[hardcoded-password-func-arg]
         yes=True,
     )
 
@@ -272,7 +272,7 @@ def when_run_estate_init_with_token(cli_invocation: dict[str, RunResult]) -> Non
     """Initialise an estate remote with a token but without `--yes`."""
     _run_estate_init_cli(
         cli_invocation,
-        github_token="betamax-token",  # noqa: S106
+        github_token="betamax-token",  # ruff: ignore[hardcoded-password-func-arg]
     )
 
 

@@ -66,7 +66,7 @@ def test_run_apply_offers_to_import_existing_github_repositories(
     io_streams = ExecutionIO(stdout=io.StringIO(), stderr=io.StringIO())
     options = ExecutionOptions(
         github_owner="leynos",
-        github_token="token",  # noqa: S106
+        github_token="token",  # ruff: ignore[hardcoded-password-func-arg]
         extra_args=("-auto-approve",),
     )
 
@@ -142,7 +142,7 @@ def test_run_apply_imports_existing_repo_with_fallback_id(
     io_streams = ExecutionIO(stdout=io.StringIO(), stderr=io.StringIO())
     options = ExecutionOptions(
         github_owner="leynos",
-        github_token="token",  # noqa: S106
+        github_token="token",  # ruff: ignore[hardcoded-password-func-arg]
         extra_args=("-auto-approve",),
     )
 
@@ -210,7 +210,7 @@ def test_run_apply_non_interactive_does_not_attempt_auto_import(
     io_streams = ExecutionIO(stdout=io.StringIO(), stderr=stderr_buffer)
     options = ExecutionOptions(
         github_owner="leynos",
-        github_token="token",  # noqa: S106
+        github_token="token",  # ruff: ignore[hardcoded-password-func-arg]
         extra_args=("-auto-approve",),
     )
 
@@ -270,7 +270,7 @@ def test_run_apply_user_declines_auto_import_prompt(
     io_streams = ExecutionIO(stdout=io.StringIO(), stderr=io.StringIO())
     options = ExecutionOptions(
         github_owner="leynos",
-        github_token="token",  # noqa: S106
+        github_token="token",  # ruff: ignore[hardcoded-password-func-arg]
         extra_args=("-auto-approve",),
     )
 
@@ -338,7 +338,7 @@ def test_run_apply_all_import_attempts_fail(
     io_streams = ExecutionIO(stdout=io.StringIO(), stderr=stderr_buffer)
     options = ExecutionOptions(
         github_owner="leynos",
-        github_token="token",  # noqa: S106
+        github_token="token",  # ruff: ignore[hardcoded-password-func-arg]
         extra_args=("-auto-approve",),
     )
 

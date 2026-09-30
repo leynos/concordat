@@ -27,12 +27,12 @@ def _verify_checkout_succeeded(repository: pygit2.Repository, branch_name: str) 
     try:
         current = repository.head.shorthand
     except (KeyError, ValueError, pygit2.GitError) as exc:
-        raise PersistenceError(  # noqa: TRY003  # Domain error provides operator remediation.
+        raise PersistenceError(  # ruff: ignore[raise-vanilla-args]  # Domain error provides operator remediation.
             f"Failed to confirm checkout away from {branch_name!r}."
         ) from exc
 
     if current == branch_name:
-        raise PersistenceError(  # noqa: TRY003  # Domain error provides operator remediation.
+        raise PersistenceError(  # ruff: ignore[raise-vanilla-args]  # Domain error provides operator remediation.
             f"Failed to leave branch {branch_name!r} before recreation."
         )
 
@@ -49,7 +49,7 @@ def _ensure_not_on_branch(
     try:
         repository.checkout(f"refs/heads/{base_branch}")
     except pygit2.GitError as exc:
-        raise PersistenceError(  # noqa: TRY003  # Domain error provides operator remediation.
+        raise PersistenceError(  # ruff: ignore[raise-vanilla-args]  # Domain error provides operator remediation.
             f"Unable to checkout base branch {base_branch!r} before "
             f"recreating {branch_name!r}."
         ) from exc
@@ -69,7 +69,7 @@ def _recreate_branch_if_exists(
     try:
         repository.branches.delete(branch_name)
     except pygit2.GitError as exc:
-        raise PersistenceError(  # noqa: TRY003  # Domain error provides operator remediation.
+        raise PersistenceError(  # ruff: ignore[raise-vanilla-args]  # Domain error provides operator remediation.
             f"Unable to delete existing branch {branch_name!r}."
         ) from exc
 
@@ -134,7 +134,7 @@ def _resolve_remote(repository: pygit2.Repository, repo_url: str) -> pygit2.Remo
     """Select a remote matching repo_url, falling back to origin or the first remote."""
     remotes = list(repository.remotes)
     if not remotes:
-        raise PersistenceError(  # noqa: TRY003  # Domain error provides operator remediation.
+        raise PersistenceError(  # ruff: ignore[raise-vanilla-args]  # Domain error provides operator remediation.
             "Repository has no remotes configured for persistence."
         )
 

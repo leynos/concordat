@@ -25,7 +25,7 @@ from .priority import PriorityModel, load_priority_model
 from .sarif import SarifBuilder
 
 DEFAULT_SARIF_PATH = Path("artifacts/concordat-auditor.sarif")
-ERROR_TOKEN_REQUIRED = "GITHUB_TOKEN or --token is required when not using a snapshot."  # noqa: S105 - descriptive error message, not a credential
+ERROR_TOKEN_REQUIRED = "GITHUB_TOKEN or --token is required when not using a snapshot."  # ruff: ignore[hardcoded-password-string] - descriptive error message, not a credential
 ERROR_REPOSITORY_SLUG = "Invalid repository slug {slug!r}; expected owner/name."
 
 

@@ -11,8 +11,8 @@ from concordat import credentials, xdg
 if typ.TYPE_CHECKING:
     import pathlib
 
-ENV_TOKEN = "ghp_env"  # noqa: S105 - test fixture value
-FILE_TOKEN = "ghp_file"  # noqa: S105 - test fixture value
+ENV_TOKEN = "ghp_env"  # ruff: ignore[hardcoded-password-string] - test fixture value
+FILE_TOKEN = "ghp_file"  # ruff: ignore[hardcoded-password-string] - test fixture value
 
 
 @pytest.fixture

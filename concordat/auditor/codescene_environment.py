@@ -32,7 +32,7 @@ if typ.TYPE_CHECKING:
 RULE_ID: typ.Final = "CV-006"
 ENVIRONMENT: typ.Final = "codescene"
 # The credential's name, not a credential.
-TOKEN_NAME: typ.Final = "CS_ACCESS_TOKEN"  # noqa: S105 - a secret's name
+TOKEN_NAME: typ.Final = "CS_ACCESS_TOKEN"  # ruff: ignore[hardcoded-password-string] - a secret's name
 MAIN_ONLY: typ.Final = (("main", "branch"),)
 UPLOAD_ACTION: typ.Final = "upload-codescene-coverage"
 _CLI_UPLOAD: typ.Final = re.compile(r"(^|[\s;&|()])cs-coverage\s+upload(\s|$)")

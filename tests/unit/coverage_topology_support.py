@@ -26,7 +26,7 @@ UPLOAD_ACTION: typ.Final = "upload-codescene-coverage@"
 MAIN_REF_GUARD: typ.Final = "github.ref == 'refs/heads/main'"
 # The credential's name, not a credential: the contract asserts where the
 # name may and may not appear.
-TOKEN_VARIABLE: typ.Final = "CS_ACCESS_TOKEN"  # noqa: S105 - a variable name
+TOKEN_VARIABLE: typ.Final = "CS_ACCESS_TOKEN"  # ruff: ignore[hardcoded-password-string] - a variable name
 CODESCENE_HOST: typ.Final = "codescene.io"
 
 # The two spellings a trigger mapping arrives under. YAML 1.1 reads an

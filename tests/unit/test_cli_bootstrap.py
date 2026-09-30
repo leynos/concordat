@@ -178,7 +178,7 @@ class TestPluginCache:
         env = estate_execution._prepare_execution_environment(
             estate_execution.ExecutionOptions(
                 github_owner="leynos",
-                github_token="token",  # noqa: S106
+                github_token="token",  # ruff: ignore[hardcoded-password-func-arg]
             )
         )
 
@@ -203,7 +203,7 @@ class TestPluginCache:
         env = estate_execution._prepare_execution_environment(
             estate_execution.ExecutionOptions(
                 github_owner="leynos",
-                github_token="token",  # noqa: S106
+                github_token="token",  # ruff: ignore[hardcoded-password-func-arg]
                 environment={"TF_PLUGIN_CACHE_DIR": str(supplied)},
             )
         )

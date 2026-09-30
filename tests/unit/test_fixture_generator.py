@@ -190,7 +190,7 @@ class TestSyntheticEnvelopes:
         self,
         generate: types.ModuleType,
         key: str,
-        root_cargo_toml: bool,  # noqa: FBT001 - a parametrized case, not a flag
+        root_cargo_toml: bool,  # ruff: ignore[boolean-type-hint-positional-argument] - a parametrized case, not a flag
     ) -> None:
         """Both lack a Makefile; only one is a Rust repository.
 

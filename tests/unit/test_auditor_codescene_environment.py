@@ -283,7 +283,7 @@ def test_the_client_names_refusal_and_absence_apart(
     monkeypatch: pytest.MonkeyPatch, status: int, error: type[Exception]
 ) -> None:
     """A 401 or 403 is a refusal and a 404 an absence; neither is a pass."""
-    client = GithubClient(token="t")  # noqa: S106 - a placeholder, never sent
+    client = GithubClient(token="t")  # ruff: ignore[hardcoded-password-func-arg] - a placeholder, never sent
     monkeypatch.setattr(
         client.session, "request", lambda *_args, **_kwargs: _Response(status)
     )
@@ -333,7 +333,7 @@ def _action(mode: str | None = None) -> str:
         pytest.param("on: push\n", False, id="no jobs"),
     ],
 )
-def test_only_executable_upload_steps_make_a_subject(text: str, expected: bool) -> None:  # noqa: FBT001 - parametrised verdict
+def test_only_executable_upload_steps_make_a_subject(text: str, expected: bool) -> None:  # ruff: ignore[boolean-type-hint-positional-argument] - parametrised verdict
     """A mention, a comment or a non-upload mode is not an uploader."""
     assert cv006.workflow_uploads(text) is expected, text
 

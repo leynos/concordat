@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import os
 import typing as typ
-from pathlib import Path  # noqa: TC003  # Runtime annotations require this import.
+from pathlib import (
+    Path,  # ruff: ignore[typing-only-standard-library-import]  # Runtime annotations require this import.
+)
 
 from concordat.errors import ConcordatError
 from concordat.persistence import models as persistence_models
@@ -24,7 +26,7 @@ SPACES_BACKEND_ENV = (
     "SPACES_ACCESS_KEY_ID",
     "SPACES_SECRET_ACCESS_KEY",
 )
-AWS_SESSION_TOKEN_VAR = "AWS_SESSION_TOKEN"  # noqa: S105  # Environment-variable name, not a credential.
+AWS_SESSION_TOKEN_VAR = "AWS_SESSION_TOKEN"  # ruff: ignore[hardcoded-password-string]  # Environment-variable name, not a credential.
 
 # All backend environment variables for iteration.
 ALL_BACKEND_ENV_VARS = (

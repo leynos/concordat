@@ -40,7 +40,7 @@ def test_auditor_workflow_produces_sarif(tmp_path: Path) -> None:
     ]
     env = os.environ.copy()
     env.setdefault("GITHUB_TOKEN", "local-dev-token")
-    completed = subprocess.run(  # noqa: S603
+    completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]
         command,
         capture_output=True,
         text=True,

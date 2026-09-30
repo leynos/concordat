@@ -48,8 +48,8 @@ def test_the_discovery_finds_the_shipped_packages() -> None:
 @pytest.mark.parametrize("package", rule_packages(), ids=lambda package: package.name)
 def test_the_package_policy_suite_passes(package: pathlib.Path) -> None:
     """`conftest verify` runs the package's Rego tests against its fixtures."""
-    completed = subprocess.run(  # noqa: S603 - fixed argv, no shell
-        [  # noqa: S607 - resolved from PATH, as the runner resolves it
+    completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed argv, no shell
+        [  # ruff: ignore[start-process-with-partial-path] - resolved from PATH, as the runner resolves it
             "conftest",
             "verify",
             "--policy",

@@ -14,7 +14,7 @@ from concordat.canon_artifacts import compare_manifest_to_published, load_manife
 from scripts import canon_artifacts
 
 if typ.TYPE_CHECKING:
-    from collections.abc import Sequence  # noqa: ICN003
+    from collections.abc import Sequence  # ruff: ignore[banned-import-from]
     from importlib.machinery import ModuleSpec
     from types import ModuleType
 

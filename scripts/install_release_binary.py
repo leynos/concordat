@@ -111,7 +111,7 @@ def fetch_https(url: str) -> bytes:
         message = f"refusing a non-HTTPS release URL: {url}"
         raise InstallError(message)
     try:
-        with urllib.request.urlopen(url, timeout=DOWNLOAD_TIMEOUT_SECONDS) as response:  # noqa: S310 - scheme checked above
+        with urllib.request.urlopen(url, timeout=DOWNLOAD_TIMEOUT_SECONDS) as response:  # ruff: ignore[suspicious-url-open-usage] - scheme checked above
             return response.read()
     except (urllib.error.URLError, TimeoutError) as error:
         message = f"could not download {url}: {error}"
