@@ -144,7 +144,7 @@ test_an_unlisted_revision_is_refused if {
 	not is_route(data.fixtures.unlisted_pin)
 	some msg in messages(data.fixtures.unlisted_pin)
 	contains(msg, "compliant_install_whitaker_refs")
-	contains(msg, "git merge-base --is-ancestor")
+	contains(msg, "scripts/whitaker_revisions.py")
 }
 
 test_a_fork_of_the_action_is_refused if {
