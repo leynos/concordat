@@ -17,6 +17,7 @@ import pytest
 from concordat.errors import OperationalRuleError
 from concordat.rules import packages, runner
 from concordat.rules.runner import run_rule
+from tests.unit.conftest_batch_support import invoke_conftest_batch
 from tests.unit.rule_test_support import (
     MINIMAL_REPORT,
     SpawnFailureCase,
@@ -499,6 +500,62 @@ class TestConftestExitCodes:
         )
 
         assert results == [{"failures": []}], results
+
+
+class TestConftestBatch:
+    """One Conftest process evaluates many envelopes and keeps them apart."""
+
+    @staticmethod
+    def _completed(
+        results: list[dict[str, object]],
+    ) -> subprocess.CompletedProcess[str]:
+        """Return a Conftest run that reports *results*."""
+        return subprocess.CompletedProcess(
+            args=["conftest"], returncode=1, stdout=json.dumps(results), stderr=""
+        )
+
+    def test_results_follow_their_envelopes_not_their_position(
+        self,
+        mocker: pytest_mock.MockFixture,
+    ) -> None:
+        """A result is matched by file name, so reordered output stays correct.
+
+        Positional matching would swap the two verdicts here, which a property
+        test reading the batch would then report as a policy defect.
+        """
+        completed = self._completed([
+            {"filename": "/scratch/envelope-1.json", "failures": [{"msg": "b"}]},
+            {"filename": "/scratch/envelope-0.json", "failures": [{"msg": "a"}]},
+        ])
+        run = mocker.patch.object(runner, "_run_conftest", return_value=completed)
+        mocker.patch.object(runner, "_rule_parameters", return_value={})
+
+        batches = invoke_conftest_batch(
+            "rust-makefile-baseline", [typ.cast("PolicyEnvelope", {})] * 2
+        )
+
+        messages = [
+            [finding.message for finding in runner._findings_from_results(results)]
+            for results in batches
+        ]
+        assert messages == [["a"], ["b"]], messages
+        assert run.call_count == 1, "both envelopes share one Conftest process"
+
+    def test_an_envelope_without_a_result_is_an_operational_error(
+        self,
+        mocker: pytest_mock.MockFixture,
+    ) -> None:
+        """A dropped result must not read as a clean envelope."""
+        completed = self._completed([
+            {"filename": "/scratch/envelope-0.json", "failures": []}
+        ])
+        mocker.patch.object(runner, "_run_conftest", return_value=completed)
+        mocker.patch.object(runner, "_rule_parameters", return_value={})
+
+        with pytest.raises(OperationalRuleError, match=r"envelope-1\.json"):
+            invoke_conftest_batch(
+                "rust-makefile-baseline", [typ.cast("PolicyEnvelope", {})] * 2
+            )
 
 
 class TestRulePackagesDirIsLazy:

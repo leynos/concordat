@@ -46,11 +46,11 @@ extend-ignore-re = [
     "\\bcolor-(?:mix|contrast)\\b",
     "\\bflavor = ",
     "\\brust-analyzer\\b",
-    "\\bvar\\.iamge_id\\b",
     "\\{COLOR\\}",
     "\\{color\\}",
     "`color`",
     "`var\\.iamge_id`",
+    "`var\\.iamge_id` instead of `var\\.image_id`",
     "currentColor",
 ]
 

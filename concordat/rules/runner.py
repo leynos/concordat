@@ -35,6 +35,9 @@ from .packages import (
 from .packages import rule_package_dir as _rule_package_dir
 from .packages import rule_parameters as _rule_parameters
 
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
 CONFTEST_TIMEOUT: typ.Final = 60.0
 # Conftest reports an evaluated policy with 0 (clean) or 1 (failures); any
 # other status means it did not evaluate one, whatever it printed on stdout.
@@ -68,6 +71,7 @@ class _ConftestFailure(typ.TypedDict, total=False):
 class _ConftestResult(typ.TypedDict, total=False):
     """One Conftest result document (one per evaluated input file)."""
 
+    filename: str
     failures: list[_ConftestFailure]
 
 
@@ -214,32 +218,106 @@ def _invoke_conftest(
     envelope: RuleEnvelope,
 ) -> list[_ConftestResult]:
     """Evaluate *envelope* against *rule_id*'s policy and return the results."""
+    return _evaluate_envelopes(rule_id, [envelope])
+
+
+def _envelope_file_names(count: int) -> list[str]:
+    """Return the file names *count* envelopes are written under.
+
+    A lone envelope keeps the name `envelope.json` that a single evaluation has
+    always used, so what Conftest is asked to read is unchanged for callers
+    that evaluate one checkout.
+
+    Returns
+    -------
+    list[str]
+        One distinct file name per envelope, in envelope order.
+    """
+    if count == 1:
+        return ["envelope.json"]
+    return [f"envelope-{index}.json" for index in range(count)]
+
+
+def _write_conftest_inputs(
+    scratch: pathlib.Path,
+    envelopes: cabc.Sequence[RuleEnvelope],
+    parameters: cabc.Mapping[str, object],
+) -> tuple[list[pathlib.Path], pathlib.Path]:
+    """Write the envelopes and the rule parameters under *scratch*.
+
+    Returns
+    -------
+    tuple[list[pathlib.Path], pathlib.Path]
+        The envelope paths in envelope order, and the parameters data file.
+    """
+    envelope_paths = [scratch / name for name in _envelope_file_names(len(envelopes))]
+    for path, envelope in zip(envelope_paths, envelopes, strict=True):
+        path.write_text(json.dumps(envelope), encoding="utf-8")
+    data_path = scratch / "parameters.json"
+    data_path.write_text(json.dumps({"parameters": parameters}), encoding="utf-8")
+    return envelope_paths, data_path
+
+
+def _conftest_argv(
+    rule_id: str,
+    policy_dir: pathlib.Path,
+    data_path: pathlib.Path,
+    envelope_paths: cabc.Sequence[pathlib.Path],
+) -> list[str]:
+    """Return the Conftest command line that evaluates *envelope_paths*."""
+    return [
+        "conftest",
+        "test",
+        "--policy",
+        str(policy_dir),
+        "--data",
+        str(data_path),
+        "--namespace",
+        _policy_namespace(rule_id),
+        "--output",
+        "json",
+        *map(str, envelope_paths),
+    ]
+
+
+def _evaluate_envelopes(
+    rule_id: str,
+    envelopes: cabc.Sequence[RuleEnvelope],
+) -> list[_ConftestResult]:
+    """Run one Conftest process over *envelopes* and return its results.
+
+    Returns
+    -------
+    list[_ConftestResult]
+        Every validated result Conftest emitted, one per evaluated file.
+    """
     rule_dir = _rule_package_dir(rule_id)
-    policy_dir = rule_dir / "policy"
     parameters = _rule_parameters(rule_dir)
     with tempfile.TemporaryDirectory(prefix="concordat-rule-") as scratch:
-        envelope_path = pathlib.Path(scratch) / "envelope.json"
-        envelope_path.write_text(json.dumps(envelope), encoding="utf-8")
-        data_path = pathlib.Path(scratch) / "parameters.json"
-        data_path.write_text(
-            json.dumps({"parameters": parameters}),
-            encoding="utf-8",
+        envelope_paths, data_path = _write_conftest_inputs(
+            pathlib.Path(scratch), envelopes, parameters
         )
-        argv = [
-            "conftest",
-            "test",
-            "--policy",
-            str(policy_dir),
-            "--data",
-            str(data_path),
-            "--namespace",
-            _policy_namespace(rule_id),
-            "--output",
-            "json",
-            str(envelope_path),
-        ]
+        argv = _conftest_argv(rule_id, rule_dir / "policy", data_path, envelope_paths)
         completed = _run_conftest(argv, rule_id)
+    return _decode_results(completed, rule_id)
 
+
+def _decode_results(
+    completed: subprocess.CompletedProcess[str],
+    rule_id: str,
+) -> list[_ConftestResult]:
+    """Return the validated results in a finished Conftest run's output.
+
+    Returns
+    -------
+    list[_ConftestResult]
+        One validated result per evaluated input.
+
+    Raises
+    ------
+    OperationalRuleError
+        If Conftest did not evaluate the policy or printed unusable output.
+    """
     # Conftest exits 0 on success and 1 on policy failures; both emit a JSON
     # result document. Anything else (or unparseable output) is operational.
     _require_policy_exit_code(completed, rule_id)
