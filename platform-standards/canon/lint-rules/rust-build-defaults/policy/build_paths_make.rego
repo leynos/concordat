@@ -416,8 +416,11 @@ gate_rustflags contains [sprintf("the %s target-specific assignment", [target]),
 # Make exports a variable that came from the environment, and CI's toolchain
 # setup puts `RUSTFLAGS` there, so a Makefile-wide assignment reaches every
 # gate recipe whether or not it is marked `export`. Its assignments are read
-# together, as an append (`+=`) combines them.
+# together, as an append (`+=`) combines them. It is a gate override only when
+# the Makefile defines a gate target for it to reach.
 gate_rustflags contains ["the Makefile-wide assignment", line, "$(RUSTFLAGS)"] if {
+	some target in gate_targets
+	target in known_targets
 	lines := [variable.location.start_line | some variable in assignments_of("RUSTFLAGS")]
 	count(lines) > 0
 	line := min(lines)
