@@ -77,7 +77,14 @@ def list_revisions(clone: Path, tip: str = "origin/main") -> int:
 def sync(clone: Path, tip: str = "origin/main") -> int:
     """Rewrite the rule manifest's revision list from the clone."""
     revisions, manifest = _derive(clone, tip)
-    manifest.write_text(replace_refs(manifest.read_text("utf-8"), revisions), "utf-8")
+    try:
+        updated = replace_refs(manifest.read_text("utf-8"), revisions)
+        manifest.write_text(updated, "utf-8")
+    except OSError as error:
+        message = f"cannot update {manifest}: {error}"
+        raise OperationalRuleError(
+            message, operation="write-whitaker-revisions", resource=manifest
+        ) from error
     print(f"{manifest}: {len(revisions)} revisions")
     return 0
 
@@ -102,7 +109,7 @@ def check(clone: Path, tip: str = "origin/main") -> int:
 def main() -> int:
     """Run the command line and return its exit status."""
     try:
-        return typ.cast("int", app())
+        return typ.cast("int", app(sys.argv[1:]))
     except OperationalRuleError as error:
         print(f"error: {error}", file=sys.stderr)
         return 2

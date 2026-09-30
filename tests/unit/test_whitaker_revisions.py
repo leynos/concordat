@@ -8,7 +8,10 @@ real history answers both.
 
 from __future__ import annotations
 
+import os
 import pathlib
+import re
+import sys
 import typing as typ
 
 import pygit2
@@ -21,6 +24,7 @@ from concordat.rules.whitaker_revisions import (
     compliant_revisions,
     replace_refs,
 )
+from scripts import whitaker_revisions
 
 DIRECTORY: typ.Final = ".github/actions/install-whitaker"
 ACTION_V1: typ.Final = "name: install-whitaker\nversion: 1\n"
@@ -43,6 +47,31 @@ class History:
         tree = self._tree(files)
         oid = self.repository.create_commit(
             "refs/heads/main", SIGNATURE, SIGNATURE, message, tree, self.parents
+        )
+        self.parents = [oid]
+        return str(oid)
+
+    def branch(self, files: dict[str, str], message: str, parent: str) -> str:
+        """Commit *files* on a side branch off *parent* without moving main."""
+        oid = self.repository.create_commit(
+            None,
+            SIGNATURE,
+            SIGNATURE,
+            message,
+            self._tree(files),
+            [pygit2.Oid(hex=parent)],
+        )
+        return str(oid)
+
+    def merge(self, files: dict[str, str], message: str, second: str) -> str:
+        """Commit a merge of *second* into main, with main as first parent."""
+        oid = self.repository.create_commit(
+            "refs/heads/main",
+            SIGNATURE,
+            SIGNATURE,
+            message,
+            self._tree(files),
+            [*self.parents, pygit2.Oid(hex=second)],
         )
         self.parents = [oid]
         return str(oid)
@@ -131,6 +160,26 @@ def test_reverting_to_the_approved_contents_is_listed_again(history: History) ->
     assert found == [root, back]
 
 
+def test_only_the_first_parent_line_is_listed(history: History) -> None:
+    """A merged-in side commit is not on main's line, even with approved contents.
+
+    The merge itself is listed because main's own tree holds the approved
+    directory. The side commit that kept the directory is excluded because
+    nothing on main's line reviewed it, and the one that changed it is excluded
+    either way, so a pin cannot land on a commit main never reviewed.
+    """
+    root = history.commit(_files(ACTION_V1), "root")
+    side_same = history.branch(_files(ACTION_V1, "side"), "side, same action", root)
+    side_changed = history.branch(_files(ACTION_V2), "side, changed action", side_same)
+    merged = history.merge(_files(ACTION_V1, "merged"), "merge", side_changed)
+
+    found = compliant_revisions(history.repository, [root], DIRECTORY, "main")
+
+    assert found == [root, merged]
+    assert side_same not in found
+    assert side_changed not in found
+
+
 def test_a_missing_directory_is_refused(history: History) -> None:
     """A commit without the action cannot carry its rules."""
     root = history.commit(_files(ACTION_V1), "root")
@@ -208,8 +257,6 @@ def test_check_reports_revisions_the_clone_does_not_derive(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """`check` fails, naming both directions, when the manifest drifts."""
-    from scripts import whitaker_revisions
-
     root = history.commit(_files(ACTION_V1), "root")
     real = packages.rule_parameters
     monkeypatch.setattr(
@@ -237,3 +284,82 @@ def test_the_shipped_list_leads_with_its_roots() -> None:
     assert refs[0] == roots[0]
     assert set(roots) <= set(refs)
     assert len(refs) == len(set(refs))
+
+
+def _rule_copy(tmp_path: pathlib.Path, root: str) -> pathlib.Path:
+    """Copy the shipped rule manifest with *root* as its only approved root."""
+    real = packages.rule_package_dir("whitaker-provisioning")
+    package = tmp_path / "package"
+    package.mkdir()
+    text = (real / "rule.yaml").read_text("utf-8")
+    text = re.sub(
+        r'(install_whitaker_roots:\n)((?:      - "[0-9a-f]{40}"\n)+)',
+        lambda m: m.group(1) + f'      - "{root}"\n',
+        text,
+        count=1,
+    )
+    text = replace_refs(text, [root])
+    (package / "rule.yaml").write_text(text, "utf-8")
+    return package
+
+
+@pytest.fixture
+def rule_package(
+    tmp_path: pathlib.Path, history: History, monkeypatch: pytest.MonkeyPatch
+) -> tuple[pathlib.Path, str, str]:
+    """Point the command at a copy of the rule manifest rooted in *history*."""
+    root = history.commit(_files(ACTION_V1), "root")
+    later = history.commit(_files(ACTION_V1, "b"), "readme only")
+    package = _rule_copy(tmp_path, root)
+    monkeypatch.setattr(packages, "rule_package_dir", lambda _rule_id: package)
+    return package, root, later
+
+
+def test_sync_then_check_round_trips_through_the_command(
+    rule_package: tuple[pathlib.Path, str, str],
+    history: History,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`check` fails while the manifest lags, and `sync` brings it level."""
+    package, root, later = rule_package
+    clone = pathlib.Path(history.repository.workdir)
+
+    assert whitaker_revisions.check(clone, "main") == 1
+    assert f"missing: {later}" in capsys.readouterr().out
+    assert whitaker_revisions.sync(clone, "main") == 0
+    assert whitaker_revisions.check(clone, "main") == 0
+    listed = packages.rule_parameters(package)[REFS_KEY]
+    assert listed == [root, later]
+    assert whitaker_revisions.list_revisions(clone, "main") == 0
+    assert capsys.readouterr().out.endswith(f"{root}\n{later}\n")
+
+
+def test_sync_reports_an_unwritable_manifest_as_an_operational_error(
+    rule_package: tuple[pathlib.Path, str, str], history: History
+) -> None:
+    """A manifest that cannot be written is an error, not a raw OSError."""
+    package, _root, _later = rule_package
+    manifest = package / "rule.yaml"
+    manifest.chmod(0o400)
+    clone = pathlib.Path(history.repository.workdir)
+    try:
+        if os.access(manifest, os.W_OK):
+            pytest.skip("the manifest stays writable for this user")
+        with pytest.raises(OperationalRuleError, match="cannot update"):
+            whitaker_revisions.sync(clone, "main")
+    finally:
+        manifest.chmod(0o600)
+
+
+def test_main_exits_2_for_a_clone_that_is_not_a_repository(
+    rule_package: tuple[pathlib.Path, str, str],
+    tmp_path_factory: pytest.TempPathFactory,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The entry point turns an operational error into status 2."""
+    empty = tmp_path_factory.mktemp("not-a-clone")
+    monkeypatch.setattr(sys, "argv", ["whitaker_revisions", "check", str(empty)])
+
+    assert whitaker_revisions.main() == 2
+    assert "is not a Git repository" in capsys.readouterr().err
