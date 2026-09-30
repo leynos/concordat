@@ -154,6 +154,19 @@ def test_an_unknown_root_is_an_operational_error(
         compliant_revisions(history.repository, roots, DIRECTORY, "main")
 
 
+def test_a_shallow_clone_is_an_operational_error(
+    history: History, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A shallow walk would drop older qualifying commits without a word."""
+    root = history.commit(_files(ACTION_V1), "root")
+    monkeypatch.setattr(
+        type(history.repository), "is_shallow", property(lambda _self: True)
+    )
+
+    with pytest.raises(OperationalRuleError, match="shallow"):
+        compliant_revisions(history.repository, [root], DIRECTORY, "main")
+
+
 def test_replacing_the_list_touches_only_the_defaults() -> None:
     """The schema entry of the same key is prose and keeps its wording."""
     text = (
