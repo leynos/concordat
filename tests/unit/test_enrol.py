@@ -392,7 +392,7 @@ def test_disenrollment_outcome_render_missing_document_without_platform_pr() -> 
 
     outcome = DisenrollmentOutcome(
         repository="git@github.com:test-owner/sample.git",
-        location=pathlib.Path("/tmp/sample"),  # noqa: S108
+        location=pathlib.Path("/tmp/sample"),  # ruff: ignore[hardcoded-temp-file]
         updated=False,
         missing_document=True,
         committed=False,
@@ -418,7 +418,7 @@ def test_disenrollment_outcome_render_missing_document_with_platform_pr() -> Non
 
     outcome = DisenrollmentOutcome(
         repository="git@github.com:test-owner/sample.git",
-        location=pathlib.Path("/tmp/sample"),  # noqa: S108
+        location=pathlib.Path("/tmp/sample"),  # ruff: ignore[hardcoded-temp-file]
         updated=False,
         missing_document=True,
         committed=False,
@@ -446,7 +446,7 @@ def test_disenrollment_outcome_render_already_disenrolled_with_platform_pr() -> 
 
     outcome = DisenrollmentOutcome(
         repository="git@github.com:test-owner/sample.git",
-        location=pathlib.Path("/tmp/sample"),  # noqa: S108
+        location=pathlib.Path("/tmp/sample"),  # ruff: ignore[hardcoded-temp-file]
         updated=False,
         missing_document=False,
         committed=False,
@@ -474,7 +474,7 @@ def test_disenrollment_outcome_render_normal_disenrolment_with_platform_pr() -> 
 
     outcome = DisenrollmentOutcome(
         repository="git@github.com:test-owner/sample.git",
-        location=pathlib.Path("/tmp/sample"),  # noqa: S108
+        location=pathlib.Path("/tmp/sample"),  # ruff: ignore[hardcoded-temp-file]
         updated=True,
         missing_document=False,
         committed=True,

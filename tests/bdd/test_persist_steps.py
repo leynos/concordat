@@ -443,7 +443,7 @@ def then_no_pr(pr_stub: dict[str, typ.Any]) -> None:
 @then("credentials are not written to the backend files")
 def then_no_credentials_leaked(estate_alias: str) -> None:
     """Ensure secret-looking values are absent from persisted files."""
-    secret = "super-secret-key"  # noqa: S105
+    secret = "super-secret-key"  # ruff: ignore[hardcoded-password-string]
     backend = _estate_path(estate_alias, "backend/core.tfbackend")
     manifest = _estate_path(estate_alias, "backend/persistence.yaml")
     combined = ""

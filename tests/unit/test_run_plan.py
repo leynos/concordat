@@ -79,7 +79,7 @@ def _run_plan_test(
 
     options = ExecutionOptions(
         github_owner="example",
-        github_token="token",  # noqa: S106
+        github_token="token",  # ruff: ignore[hardcoded-password-func-arg]
         environment=options_environment,
     )
     io_streams = ExecutionIO(stdout=io.StringIO(), stderr=io.StringIO())
@@ -135,7 +135,7 @@ def test_run_plan_uses_persistence_backend_when_enabled(
     stderr_buffer = io.StringIO()
     options = ExecutionOptions(
         github_owner="example",
-        github_token="token",  # noqa: S106
+        github_token="token",  # ruff: ignore[hardcoded-password-func-arg]
     )
     io_streams = ExecutionIO(stdout=stdout_buffer, stderr=stderr_buffer)
 
@@ -144,7 +144,7 @@ def test_run_plan_uses_persistence_backend_when_enabled(
     assert exit_code == 0
     tofu = fake_tofu[-1]
     assert tofu.env["AWS_ACCESS_KEY_ID"] == "scw-access"
-    assert tofu.env["AWS_SECRET_ACCESS_KEY"] == "scw-secret"  # noqa: S105
+    assert tofu.env["AWS_SECRET_ACCESS_KEY"] == "scw-secret"  # ruff: ignore[hardcoded-password-string]
     assert [
         "init",
         "-input=false",
@@ -181,7 +181,7 @@ def test_run_plan_executes_from_tofu_directory_when_present(
 
     options = ExecutionOptions(
         github_owner="example",
-        github_token="token",  # noqa: S106
+        github_token="token",  # ruff: ignore[hardcoded-password-func-arg]
     )
     io_streams = ExecutionIO(stdout=io.StringIO(), stderr=io.StringIO())
 
@@ -228,7 +228,7 @@ def test_run_plan_sanitizes_inventory_yaml_directives_for_tofu(
 
     options = ExecutionOptions(
         github_owner="example",
-        github_token="token",  # noqa: S106
+        github_token="token",  # ruff: ignore[hardcoded-password-func-arg]
         keep_workdir=True,
     )
     io_streams = ExecutionIO(stdout=io.StringIO(), stderr=io.StringIO())
@@ -294,7 +294,7 @@ def test_run_plan_surfaces_the_cli_plan_diff_output(
     io_streams = ExecutionIO(stdout=stdout_buffer, stderr=io.StringIO())
     options = ExecutionOptions(
         github_owner="example",
-        github_token="token",  # noqa: S106
+        github_token="token",  # ruff: ignore[hardcoded-password-func-arg]
     )
 
     exit_code, _ = run_plan(_make_record(git_repo.path), options, io_streams)
@@ -356,7 +356,7 @@ def test_run_plan_backend_config_validation(
     monkeypatch.setattr("concordat.estate_execution.Tofu", _fail_init)
     options = ExecutionOptions(
         github_owner="example",
-        github_token="token",  # noqa: S106
+        github_token="token",  # ruff: ignore[hardcoded-password-func-arg]
     )
     io_streams = ExecutionIO(stdout=io.StringIO(), stderr=io.StringIO())
 
@@ -379,7 +379,7 @@ def test_run_plan_backend_config_validation(
                 },
                 options_environment=None,
                 expected_access="spaces-access",
-                expected_secret="spaces-secret",  # noqa: S106
+                expected_secret="spaces-secret",  # ruff: ignore[hardcoded-password-func-arg]
             ),
             id="spaces-env",
         ),
@@ -391,7 +391,7 @@ def test_run_plan_backend_config_validation(
                     "SCW_SECRET_KEY": "options-secret",
                 },
                 expected_access="options-access",
-                expected_secret="options-secret",  # noqa: S106
+                expected_secret="options-secret",  # ruff: ignore[hardcoded-password-func-arg]
             ),
             id="options-mapping",
         ),
@@ -451,7 +451,7 @@ def test_run_plan_requires_backend_credentials(
     monkeypatch.setattr("concordat.estate_execution.Tofu", _fail_init)
     options = ExecutionOptions(
         github_owner="example",
-        github_token="token",  # noqa: S106
+        github_token="token",  # ruff: ignore[hardcoded-password-func-arg]
     )
     io_streams = ExecutionIO(stdout=io.StringIO(), stderr=io.StringIO())
 
@@ -525,7 +525,7 @@ def test_run_plan_respects_options_environment_mapping(
 
     assert exit_code == 0
     assert tofu.env["AWS_ACCESS_KEY_ID"] == "options-access"
-    assert tofu.env["AWS_SECRET_ACCESS_KEY"] == "options-secret"  # noqa: S105
+    assert tofu.env["AWS_SECRET_ACCESS_KEY"] == "options-secret"  # ruff: ignore[hardcoded-password-string]
     assert [
         "init",
         "-input=false",
@@ -538,14 +538,14 @@ def test_run_plan_respects_options_environment_mapping(
     [
         pytest.param(
             SessionTokenForwardingTestCase(
-                session_token_value="sts-session-token",  # noqa: S106
+                session_token_value="sts-session-token",  # ruff: ignore[hardcoded-password-func-arg]
                 expect_in_env=True,
             ),
             id="forwards_token",
         ),
         pytest.param(
             SessionTokenForwardingTestCase(
-                session_token_value="   ",  # noqa: S106
+                session_token_value="   ",  # ruff: ignore[hardcoded-password-func-arg]
                 expect_in_env=False,
             ),
             id="omits_blank",

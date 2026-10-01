@@ -151,8 +151,8 @@ def _run_makeutil(
         If makeutil cannot be started.
     """
     try:
-        return subprocess.run(  # noqa: S603 - fixed argv, no shell
-            ["makeutil", "parse", path.name],  # noqa: S607 - resolved from PATH
+        return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed argv, no shell
+            ["makeutil", "parse", path.name],  # ruff: ignore[start-process-with-partial-path] - resolved from PATH
             cwd=path.parent,
             capture_output=True,
             text=True,

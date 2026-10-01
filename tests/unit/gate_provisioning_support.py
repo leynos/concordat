@@ -676,7 +676,7 @@ def run_makeutil_parse() -> dict[str, object]:
         "the gate-provisioning contract reads Makefile facts through makeutil, "
         "which `make test` requires on PATH"
     )
-    completed = subprocess.run(  # noqa: S603 - Resolved parser path, fixed arguments.
+    completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - Resolved parser path, fixed arguments.
         (makeutil, "parse", "Makefile"),
         capture_output=True,
         check=False,
@@ -768,7 +768,7 @@ def run_make_target(target: str, search_path: Path) -> subprocess.CompletedProce
     make_executable = _make_executable()
     environment = dict(os.environ)
     environment["PATH"] = str(search_path)
-    return subprocess.run(  # noqa: S603 - Resolved Make path, fixed target.
+    return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - Resolved Make path, fixed target.
         (make_executable, "--no-print-directory", target),
         capture_output=True,
         check=False,

@@ -74,7 +74,7 @@ class InitEstateErrorScenario:
                 probe_state={"reachable": False, "exists": False, "empty": True},
                 repo_url="git@github.com:example.git",
                 github_owner=None,
-                github_token="token",  # noqa: S106
+                github_token="token",  # ruff: ignore[hardcoded-password-func-arg]
                 expected_error=RepositoryIdentityError,
             ),
             id="malformed-slug-raises",
@@ -151,7 +151,7 @@ def test_init_estate_rejects_non_empty_remote_without_building_a_client(
         init_estate(
             "core",
             "git@github.com:example/platform-standards.git",
-            github_token="token",  # noqa: S106
+            github_token="token",  # ruff: ignore[hardcoded-password-func-arg]
             confirm=lambda _: True,
             config_path=config_path,
         )
@@ -178,7 +178,7 @@ def test_init_estate_raises_when_remote_is_inaccessible(
         init_estate(
             "core",
             "git@github.com:example/platform-standards.git",
-            github_token="token",  # noqa: S106
+            github_token="token",  # ruff: ignore[hardcoded-password-func-arg]
             confirm=lambda _: True,
             config_path=config_path,
         )
@@ -206,7 +206,7 @@ def test_init_estate_creates_repository_when_remote_unreachable_and_missing(
     record = init_estate(
         "core",
         "git@github.com:example/platform-standards.git",
-        github_token="token",  # noqa: S106
+        github_token="token",  # ruff: ignore[hardcoded-password-func-arg]
         confirm=confirm,
         config_path=config_path,
     )
@@ -229,7 +229,7 @@ def test_init_estate_translates_authentication_errors(
         init_estate(
             "core",
             "git@github.com:example/core.git",
-            github_token="token",  # noqa: S106
+            github_token="token",  # ruff: ignore[hardcoded-password-func-arg]
             confirm=lambda _: True,
             config_path=config_path,
         )

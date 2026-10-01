@@ -77,7 +77,7 @@ def given_repository_remote_owner(repository_path: pathlib.Path, owner: str) -> 
 
 def _run_cli(arguments: list[str]) -> RunResult:
     command = [sys.executable, "-m", "concordat.cli", *arguments]
-    completed = subprocess.run(  # noqa: S603
+    completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]
         command,
         check=False,
         capture_output=True,

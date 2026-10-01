@@ -121,8 +121,8 @@ def _host_path() -> str:
 
 def _run_bash(script: str, stub_dir: Path) -> int:
     """Run ``script`` in bash with ``stub_dir`` first on PATH; return its status."""
-    completed = subprocess.run(  # noqa: S603 - fixed interpreter, generated script
-        ["bash", "-c", script],  # noqa: S607 - bash from PATH
+    completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed interpreter, generated script
+        ["bash", "-c", script],  # ruff: ignore[start-process-with-partial-path] - bash from PATH
         env={**os.environ, "PATH": f"{stub_dir}{os.pathsep}{_host_path()}"},
         capture_output=True,
         text=True,

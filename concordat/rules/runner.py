@@ -144,7 +144,7 @@ def _policy_namespace(rule_id: str) -> str:
 def _run_conftest(argv: list[str], rule_id: str) -> subprocess.CompletedProcess[str]:
     """Run the fixed Conftest argv, translating spawn and timeout failures."""
     try:
-        return subprocess.run(  # noqa: S603 - fixed argv, no shell
+        return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed argv, no shell
             argv,
             capture_output=True,
             text=True,

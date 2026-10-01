@@ -79,12 +79,12 @@ class PersistenceDescriptor:
             return None
         loaded = _yaml.load(path.read_text(encoding="utf-8")) or {}
         if not isinstance(loaded, dict):
-            raise PersistenceError(  # noqa: TRY003  # Domain error provides operator remediation.
+            raise PersistenceError(  # ruff: ignore[raise-vanilla-args]  # Domain error provides operator remediation.
                 f"Invalid persistence manifest at {path}"
             )
         schema_version = int(loaded.get("schema_version", 0))
         if schema_version > PERSISTENCE_SCHEMA_VERSION:
-            raise PersistenceError(  # noqa: TRY003  # Domain error provides operator remediation.
+            raise PersistenceError(  # ruff: ignore[raise-vanilla-args]  # Domain error provides operator remediation.
                 "Unsupported persistence manifest "
                 f"schema_version={schema_version} at {path}; maximum supported "
                 f"schema_version is {PERSISTENCE_SCHEMA_VERSION}"

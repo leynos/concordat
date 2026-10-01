@@ -107,9 +107,9 @@ def test_resolve_backend_environment_precedence(
                     "SCW_ACCESS_KEY": "scw-access",
                     "SCW_SECRET_KEY": "scw-secret",
                 },
-                session_token="sts-session-token",  # noqa: S106
+                session_token="sts-session-token",  # ruff: ignore[hardcoded-password-func-arg]
                 expected_access="scw-access",
-                expected_secret="scw-secret",  # noqa: S106
+                expected_secret="scw-secret",  # ruff: ignore[hardcoded-password-func-arg]
                 expect_token_in_result=True,
             ),
             id="scw_with_token",
@@ -120,9 +120,9 @@ def test_resolve_backend_environment_precedence(
                     "SPACES_ACCESS_KEY_ID": "spaces-access",
                     "SPACES_SECRET_ACCESS_KEY": "spaces-secret",
                 },
-                session_token="sts-session-token",  # noqa: S106
+                session_token="sts-session-token",  # ruff: ignore[hardcoded-password-func-arg]
                 expected_access="spaces-access",
-                expected_secret="spaces-secret",  # noqa: S106
+                expected_secret="spaces-secret",  # ruff: ignore[hardcoded-password-func-arg]
                 expect_token_in_result=True,
             ),
             id="spaces_with_token",
@@ -133,9 +133,9 @@ def test_resolve_backend_environment_precedence(
                     "AWS_ACCESS_KEY_ID": "aws-access",
                     "AWS_SECRET_ACCESS_KEY": "aws-secret",
                 },
-                session_token="sts-session-token",  # noqa: S106
+                session_token="sts-session-token",  # ruff: ignore[hardcoded-password-func-arg]
                 expected_access="aws-access",
-                expected_secret="aws-secret",  # noqa: S106
+                expected_secret="aws-secret",  # ruff: ignore[hardcoded-password-func-arg]
                 expect_token_in_result=True,
             ),
             id="aws_with_token",
@@ -146,9 +146,9 @@ def test_resolve_backend_environment_precedence(
                     "AWS_ACCESS_KEY_ID": "aws-access",
                     "AWS_SECRET_ACCESS_KEY": "aws-secret",
                 },
-                session_token="   ",  # noqa: S106
+                session_token="   ",  # ruff: ignore[hardcoded-password-func-arg]
                 expected_access="aws-access",
-                expected_secret="aws-secret",  # noqa: S106
+                expected_secret="aws-secret",  # ruff: ignore[hardcoded-password-func-arg]
                 expect_token_in_result=False,
             ),
             id="blank_token_omitted",

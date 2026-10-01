@@ -151,7 +151,7 @@ def _repository_entries(
         If *repositories* is not a list.
     """
     if not isinstance(repositories, list):
-        raise OperationalRuleError(  # noqa: TRY003  # Domain error identifies the malformed manifest.
+        raise OperationalRuleError(  # ruff: ignore[raise-vanilla-args]  # Domain error identifies the malformed manifest.
             f"estate manifest {path} has a `repositories` value that is not "
             f"a list: {repositories!r}",
             operation="load-estate-manifest",
@@ -192,14 +192,14 @@ def load_estate(path: pathlib.Path) -> Estate:
     """
     document = YAML(typ="safe").load(path.read_text(encoding="utf-8"))
     if not isinstance(document, dict):
-        raise OperationalRuleError(  # noqa: TRY003  # Domain error identifies the malformed manifest.
+        raise OperationalRuleError(  # ruff: ignore[raise-vanilla-args]  # Domain error identifies the malformed manifest.
             f"estate manifest {path} is not a mapping: {type(document).__name__}",
             operation="load-estate-manifest",
             resource=path,
         )
     for key in ("repositories", "owner"):
         if key not in document:
-            raise OperationalRuleError(  # noqa: TRY003  # Domain error identifies the malformed manifest.
+            raise OperationalRuleError(  # ruff: ignore[raise-vanilla-args]  # Domain error identifies the malformed manifest.
                 f"estate manifest {path} is missing key {key!r}",
                 operation="load-estate-manifest",
                 resource=path,

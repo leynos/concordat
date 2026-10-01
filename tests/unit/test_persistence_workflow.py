@@ -82,7 +82,7 @@ def test_persist_estate_uses_env_token_and_remote(
     result = persistence.persist_estate(ctx.record, options)
 
     assert push_calls == [("estate/persist-test", str(ctx.bare))]
-    assert pr_log["github_token"] == "env-token"  # noqa: S105
+    assert pr_log["github_token"] == "env-token"  # ruff: ignore[hardcoded-password-string]
     assert result.pr_url == "https://example.test/pr/1"
 
 
@@ -105,12 +105,12 @@ def test_persist_estate_prefers_explicit_github_token_over_env(
         input_func=lambda _: next(ctx.prompts),
         s3_client_factory=lambda region, endpoint: ctx.stub_s3(),
         pr_opener=pr_opener,
-        github_token="explicit-token",  # noqa: S106
+        github_token="explicit-token",  # ruff: ignore[hardcoded-password-func-arg]
     )
 
     persistence.persist_estate(ctx.record, options)
 
-    assert captured_token["token"] == "explicit-token"  # noqa: S105
+    assert captured_token["token"] == "explicit-token"  # ruff: ignore[hardcoded-password-string]
 
 
 class TestOwnerScopedCredentials:
@@ -158,7 +158,7 @@ class TestOwnerScopedCredentials:
             ),
         )
 
-        expected_token = "bravo-token"  # noqa: S105 - synthetic test credential
+        expected_token = "bravo-token"  # ruff: ignore[hardcoded-password-string] - synthetic test credential
         assert seen["token"] == expected_token, (
             f"the record owner's token should be used, got {seen['token']!r}"
         )

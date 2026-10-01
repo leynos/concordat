@@ -134,7 +134,7 @@ def run(name: str, *, dry_run: bool = False) -> None:
         return
 
     _act_available()
-    subprocess.run(args, check=True)  # noqa: S603  # Fixed argv, no shell.
+    subprocess.run(args, check=True)  # ruff: ignore[subprocess-without-shell-equals-true]  # Fixed argv, no shell.
 
 
 def main() -> None:  # pragma: no cover - exercised via CLI

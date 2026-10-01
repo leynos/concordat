@@ -79,7 +79,7 @@ def test_init_estate_creates_repository_when_missing(
     record = init_estate(
         "core",
         "git@github.com:example/core.git",
-        github_token="token",  # noqa: S106
+        github_token="token",  # ruff: ignore[hardcoded-password-func-arg]
         confirm=lambda _: True,
         config_path=config_path,
     )
@@ -127,7 +127,7 @@ def test_init_estate_rejects_empty_owner(
             "core",
             "git@github.com:example/core.git",
             github_owner="",
-            github_token="token",  # noqa: S106
+            github_token="token",  # ruff: ignore[hardcoded-password-func-arg]
             confirm=lambda _: True,
             config_path=config_path,
         )
@@ -147,7 +147,7 @@ def test_init_estate_allows_explicit_owner_override(
         "core",
         "git@github.com:example/core.git",
         github_owner="sandbox",
-        github_token="token",  # noqa: S106
+        github_token="token",  # ruff: ignore[hardcoded-password-func-arg]
         confirm=lambda _: True,
         config_path=config_path,
     )

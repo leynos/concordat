@@ -134,7 +134,7 @@ def test_the_cli_reports_an_incomplete_pin_as_exit_status_1(tmp_path: Path) -> N
         "RUNNER_TEMP": str(tmp_path),
         "GITHUB_PATH": str(tmp_path / "github_path"),
     }
-    completed = subprocess.run(  # noqa: S603 - fixed interpreter and script
+    completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed interpreter and script
         [sys.executable, str(_SCRIPT), "install", "makeutil"],
         env=environment,
         capture_output=True,

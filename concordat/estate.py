@@ -77,7 +77,7 @@ from .estate_errors import (
 )
 from .estate_errors import (
     # The redundant alias marks the re-export; the name is too long to wrap.
-    GitHubRepositoryCreationAuthenticationError as GitHubRepositoryCreationAuthenticationError,  # noqa: E501
+    GitHubRepositoryCreationAuthenticationError as GitHubRepositoryCreationAuthenticationError,  # ruff: ignore[line-too-long]
 )
 from .estate_errors import (
     MissingGitHubOwnerError as MissingGitHubOwnerError,

@@ -98,7 +98,7 @@ def _handler(routes: dict[str, object]) -> type[http.server.BaseHTTPRequestHandl
             self.end_headers()
             self.wfile.write(payload)
 
-        def log_message(self, format: str, *args: object) -> None:  # noqa: A002 - base signature
+        def log_message(self, format: str, *args: object) -> None:  # ruff: ignore[builtin-argument-shadowing] - base signature
             """Keep the test output quiet."""
 
     return Handler
@@ -120,7 +120,7 @@ def api(request: pytest.FixtureRequest) -> cabc.Iterator[str]:
 def _audit(api_url: str, tmp_path: Path) -> list[str]:
     """Run the Auditor CLI against *api_url* and return CV-006's statuses."""
     sarif_path = tmp_path / "audit.sarif"
-    completed = subprocess.run(  # noqa: S603 - fixed argv, no shell
+    completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed argv, no shell
         [
             sys.executable,
             "-m",

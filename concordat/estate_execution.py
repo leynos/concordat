@@ -8,7 +8,9 @@ import shutil
 import typing as typ
 import warnings
 
-from tofupy import Tofu  # noqa: TC002 - Used at runtime
+from tofupy import (
+    Tofu,  # ruff: ignore[typing-only-third-party-import] - Used at runtime
+)
 
 from concordat.persistence import backend as persistence_backend
 from concordat.persistence import models as persistence_models

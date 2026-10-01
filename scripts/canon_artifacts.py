@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import dataclasses
 import typing as typ
-from pathlib import Path  # noqa: TC003  # Runtime annotations require this import.
+from pathlib import (
+    Path,  # ruff: ignore[typing-only-standard-library-import]  # Runtime annotations require this import.
+)
 
 from cyclopts import App, Parameter
 
@@ -178,7 +180,7 @@ def _determine_sync_ids(
         }
     if config.artifact_ids:
         return set(config.artifact_ids)
-    raise CanonArtifactsError(  # noqa: TRY003  # Domain error provides operator remediation.
+    raise CanonArtifactsError(  # ruff: ignore[raise-vanilla-args]  # Domain error provides operator remediation.
         "No artifacts selected for sync. Pass explicit IDs or use --all-outdated."
     )
 
@@ -235,7 +237,7 @@ def tui(
     try:
         from scripts.canon_artifacts_tui import CanonArtifactsApp
     except ModuleNotFoundError as exc:  # pragma: no cover
-        raise CanonArtifactsError(  # noqa: TRY003  # Domain error provides operator remediation.
+        raise CanonArtifactsError(  # ruff: ignore[raise-vanilla-args]  # Domain error provides operator remediation.
             "Textual is required for `tui`. Install dev dependencies via "
             "`make build` or `uv sync --group dev`."
         ) from exc

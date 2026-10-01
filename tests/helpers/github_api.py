@@ -59,7 +59,7 @@ def _handler(api: FakeGithubApi) -> type[http.server.BaseHTTPRequestHandler]:
             self.end_headers()
             self.wfile.write(payload)
 
-        def log_message(self, format: str, *args: object) -> None:  # noqa: A002 - the base signature
+        def log_message(self, format: str, *args: object) -> None:  # ruff: ignore[builtin-argument-shadowing] - the base signature
             """Keep the test output quiet."""
 
     return Handler

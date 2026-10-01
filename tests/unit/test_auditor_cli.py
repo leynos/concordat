@@ -23,7 +23,7 @@ def test_cli_runs_with_snapshot(tmp_path: Path) -> None:
         "--sarif-path",
         str(sarif_path),
     ]
-    completed = subprocess.run(  # noqa: S603
+    completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]
         command,
         capture_output=True,
         text=True,
@@ -54,7 +54,7 @@ def test_cli_reports_a_secret_not_yet_moved(tmp_path: Path) -> None:
     snapshot_path = tmp_path / "snapshot.json"
     snapshot_path.write_text(json.dumps(snapshot))
     sarif_path = tmp_path / "audit.sarif"
-    completed = subprocess.run(  # noqa: S603
+    completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]
         [
             sys.executable,
             "-m",

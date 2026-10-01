@@ -210,8 +210,8 @@ def _git(
     resource: str,
 ) -> str:
     try:
-        completed = subprocess.run(  # noqa: S603 - fixed argv, no shell
-            ["git", *args],  # noqa: S607 - resolved from PATH
+        completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed argv, no shell
+            ["git", *args],  # ruff: ignore[start-process-with-partial-path] - resolved from PATH
             cwd=cwd,
             capture_output=True,
             text=True,

@@ -69,7 +69,7 @@ ERROR_OWNER_LOOKUP_FAILED = (
 )
 ERROR_NO_ESTATES = "No estates configured. Run `concordat estate init` first."
 ERROR_MISSING_GITHUB_TOKEN = (
-    "GITHUB_TOKEN is required for concordat plan/apply; "  # noqa: S105  # Error text only; no secret value.
+    "GITHUB_TOKEN is required for concordat plan/apply; "  # ruff: ignore[hardcoded-password-string]  # Error text only; no secret value.
     "pass --github-token or export the environment variable."
 )
 ERROR_AUTO_APPROVE_REQUIRED = "concordat apply requires --auto-approve to continue."
@@ -447,8 +447,8 @@ def _gh_cli_token(hostname: str) -> str | None:
         The token `gh auth token --hostname` prints, or None.
     """
     try:
-        completed = subprocess.run(  # noqa: S603 - fixed argv; the host comes from a parsed URL, and no shell runs
-            ["gh", "auth", "token", "--hostname", hostname],  # noqa: S607 - gh is resolved on PATH by design
+        completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed argv; the host comes from a parsed URL, and no shell runs
+            ["gh", "auth", "token", "--hostname", hostname],  # ruff: ignore[start-process-with-partial-path] - gh is resolved on PATH by design
             capture_output=True,
             text=True,
             check=False,

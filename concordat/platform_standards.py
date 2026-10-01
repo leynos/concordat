@@ -48,7 +48,7 @@ _yaml.indent(mapping=2, sequence=4, offset=2)
 _yaml.sort_base_mapping_type_on_output = False
 
 ERROR_MISSING_TOKEN = (
-    "GITHUB_TOKEN is required to open the platform-standards pull request"  # noqa: S105  # Error text only; no secret value.
+    "GITHUB_TOKEN is required to open the platform-standards pull request"  # ruff: ignore[hardcoded-password-string]  # Error text only; no secret value.
 )
 ERROR_SLUG = "Unable to determine GitHub slug from URL"
 
@@ -561,7 +561,7 @@ def _remove_inventory(path: Path, repo_slug: str) -> bool:
 
 
 def _run_cmd(args: list[str], *, cwd: Path) -> None:
-    subprocess.run(  # noqa: S603  # Fixed argv, no shell.
+    subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]  # Fixed argv, no shell.
         args,
         check=True,
         cwd=str(cwd),

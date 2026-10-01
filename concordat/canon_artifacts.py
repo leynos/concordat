@@ -142,7 +142,7 @@ def resolve_concordat_root(start: Path | None = None) -> Path:
     for candidate in (cursor, *cursor.parents):
         if (candidate / DEFAULT_MANIFEST_RELATIVE).exists():
             return candidate
-    raise CanonArtifactsError(  # noqa: TRY003  # Domain error provides operator remediation.
+    raise CanonArtifactsError(  # ruff: ignore[raise-vanilla-args]  # Domain error provides operator remediation.
         "Unable to locate platform-standards template tree. "
         f"Expected to find {DEFAULT_MANIFEST_RELATIVE} in a parent directory; "
         "pass --template-root explicitly."
@@ -154,7 +154,7 @@ def _validate_manifest_structure(
 ) -> dict[str, object]:
     """Validate basic manifest structure."""
     if not isinstance(data, dict):
-        raise CanonArtifactsError(  # noqa: TRY003  # Domain error identifies the invalid manifest.
+        raise CanonArtifactsError(  # ruff: ignore[raise-vanilla-args]  # Domain error identifies the invalid manifest.
             f"Manifest content must be a mapping: {manifest_path}"
         )
     return typ.cast("dict[str, object]", data)
@@ -164,7 +164,7 @@ def _validate_schema_version(data: dict[str, object], manifest_path: Path) -> in
     """Validate and return schema version."""
     schema_version = data.get("schema_version")
     if schema_version != 1:
-        raise CanonArtifactsError(  # noqa: TRY003  # Domain error explains the unsupported input.
+        raise CanonArtifactsError(  # ruff: ignore[raise-vanilla-args]  # Domain error explains the unsupported input.
             f"Unsupported manifest schema_version={schema_version!r} "
             f"(expected 1): {manifest_path}"
         )
@@ -185,7 +185,7 @@ def _validate_artifacts_list(
 ) -> list[object]:
     """Validate and return the artifacts list."""
     if not isinstance(artifacts_raw, list) or not artifacts_raw:
-        raise CanonArtifactsError(  # noqa: TRY003  # Domain error identifies the invalid manifest.
+        raise CanonArtifactsError(  # ruff: ignore[raise-vanilla-args]  # Domain error identifies the invalid manifest.
             f"Manifest artifacts must be a non-empty list: {manifest_path}"
         )
     return typ.cast("list[object]", artifacts_raw)
@@ -194,7 +194,7 @@ def _validate_artifacts_list(
 def _parse_single_artifact(entry: object, manifest_path: Path) -> CanonArtifact:
     """Parse a single artifact mapping into a CanonArtifact."""
     if not isinstance(entry, dict):
-        raise CanonArtifactsError(  # noqa: TRY003  # Domain error identifies the invalid manifest.
+        raise CanonArtifactsError(  # ruff: ignore[raise-vanilla-args]  # Domain error identifies the invalid manifest.
             f"Manifest artifact entries must be mappings: {manifest_path}"
         )
 
@@ -208,7 +208,7 @@ def _parse_single_artifact(entry: object, manifest_path: Path) -> CanonArtifact:
             sha256=str(entry_map["sha256"]),
         )
     except KeyError as exc:
-        raise CanonArtifactsError(  # noqa: TRY003  # Domain error identifies the invalid manifest.
+        raise CanonArtifactsError(  # ruff: ignore[raise-vanilla-args]  # Domain error identifies the invalid manifest.
             f"Manifest artifact missing key {exc.args[0]!r}: {manifest_path}"
         ) from exc
 
@@ -216,7 +216,7 @@ def _parse_single_artifact(entry: object, manifest_path: Path) -> CanonArtifact:
 def load_manifest(manifest_path: Path) -> CanonManifest:
     """Load and validate the canonical artifact manifest."""
     if not manifest_path.exists():
-        raise CanonArtifactsError(  # noqa: TRY003  # Domain error identifies the missing manifest.
+        raise CanonArtifactsError(  # ruff: ignore[raise-vanilla-args]  # Domain error identifies the missing manifest.
             f"Manifest not found: {manifest_path}"
         )
     data = _yaml.load(manifest_path.read_text(encoding="utf-8"))
@@ -235,7 +235,7 @@ def sha256_digest(path: Path) -> str:
     if path.is_file():
         return hashlib.sha256(path.read_bytes()).hexdigest()
     if not path.is_dir():
-        raise CanonArtifactsError(  # noqa: TRY003  # Domain error identifies the invalid path.
+        raise CanonArtifactsError(  # ruff: ignore[raise-vanilla-args]  # Domain error identifies the invalid path.
             f"Expected file or directory, got: {path}"
         )
 

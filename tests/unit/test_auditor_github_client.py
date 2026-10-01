@@ -58,7 +58,7 @@ class _Session:
 
 def _client(routes: dict[str, _Response]) -> tuple[GithubClient, _Session]:
     """Build a client whose session answers from *routes*."""
-    client = GithubClient(token="t", api_url=API)  # noqa: S106 - a placeholder, never sent
+    client = GithubClient(token="t", api_url=API)  # ruff: ignore[hardcoded-password-func-arg] - a placeholder, never sent
     session = _Session(routes)
     client.session = typ.cast("typ.Any", session)
     return client, session
