@@ -1,0 +1,10 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Whitaker
+        run: cargo binstall --no-confirm whitaker-installer@0.2.9

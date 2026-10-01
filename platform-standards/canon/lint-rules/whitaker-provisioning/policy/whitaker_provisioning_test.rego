@@ -17,11 +17,18 @@ parameters := {
 	"producer_repositories": ["leynos/whitaker"],
 	"action_repository": "leynos/shared-actions",
 	"action_directory": ".github/actions/install-whitaker",
-	"exemptions": [{
-		"repository": "leynos/agent-helper-scripts",
-		"path": "get-rust-tooling",
-		"reason": "developer-environment script; CI never runs it",
-	}],
+	"exemptions": [
+		{
+			"repository": "leynos/agent-helper-scripts",
+			"path": "get-rust-tooling",
+			"reason": "developer-environment script; CI never runs it",
+		},
+		{
+			"repository": "leynos/weaver",
+			"path": ".github/workflows/ci.yml",
+			"reason": "pins the suite until whitaker#311 is fixed",
+		},
+	],
 }
 
 findings(fixture) := fs if {
@@ -193,4 +200,27 @@ test_without_the_exemption_the_developer_script_is_a_route if {
 	fs := policy.deny with input as data.fixtures.exempt_developer_script
 		with data.parameters as object.union(parameters, {"exemptions": []})
 	{[f.rule_id, f.path] | some f in fs} == {["QG-002", "get-rust-tooling"]}
+}
+
+# Weaver's pinned-suite install is exempt in its one workflow, and only there:
+# a second workflow in the same repository that installs Whitaker by hand is a
+# route, so the exemption is by path and not by repository.
+test_the_weaver_exemption_covers_only_its_workflow if {
+	profile(data.fixtures.exempt_pinned_suite) == {["QG-002", "noncompliant", ".github/workflows/release.yml"]}
+	is_route(data.fixtures.exempt_pinned_suite)
+}
+
+# The same workflow in another repository is a route: the exemption names weaver.
+test_the_weaver_exemption_does_not_travel if {
+	profile(data.fixtures.exempt_pinned_suite_elsewhere) == {["QG-002", "noncompliant", ".github/workflows/ci.yml"]}
+	is_route(data.fixtures.exempt_pinned_suite_elsewhere)
+}
+
+test_without_the_exemption_weavers_workflow_is_a_route if {
+	fs := policy.deny with input as data.fixtures.exempt_pinned_suite
+		with data.parameters as object.union(parameters, {"exemptions": []})
+	{[f.rule_id, f.path] | some f in fs} == {
+		["QG-002", ".github/workflows/ci.yml"],
+		["QG-002", ".github/workflows/release.yml"],
+	}
 }

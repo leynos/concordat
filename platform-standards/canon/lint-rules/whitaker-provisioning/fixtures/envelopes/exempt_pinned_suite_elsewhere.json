@@ -1,0 +1,36 @@
+{
+  "actions": [],
+  "kind": "policy-input/whitaker-provisioning",
+  "repository": {
+    "name": "leynos/consumer",
+    "path": "exempt-pinned-suite-elsewhere"
+  },
+  "schema_version": 1,
+  "scripts": [],
+  "workflows": [
+    {
+      "error": null,
+      "parsed": {
+        "env": {
+          "WHITAKER_REV": "2bc0c3fafb86914f14bd73461a511588841f0a34"
+        },
+        "jobs": {
+          "build-test": {
+            "runs-on": "ubuntu-latest",
+            "steps": [
+              {
+                "name": "Install Whitaker",
+                "run": "cargo install --locked \\\n  --git https://github.com/leynos/whitaker \\\n  --rev \"${WHITAKER_REV}\" \\\n  whitaker-installer\nwhitaker-installer --build-only --no-update\n"
+              }
+            ]
+          }
+        },
+        "name": "CI",
+        "on": {
+          "pull_request": null
+        }
+      },
+      "path": ".github/workflows/ci.yml"
+    }
+  ]
+}

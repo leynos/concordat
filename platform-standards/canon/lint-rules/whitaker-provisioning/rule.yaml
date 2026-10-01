@@ -77,6 +77,15 @@ parameters:
     action_repository: leynos/shared-actions
     action_directory: .github/actions/install-whitaker
     exemptions:
+      - repository: leynos/weaver
+        path: .github/workflows/ci.yml
+        reason: >-
+          Weaver pins the Whitaker lint suite to source revision 2bc0c3f,
+          because leynos/whitaker#311 (no_expect_outside_tests flags cfg(test)
+          companion-module helpers since suite 4e8a8ab) regresses its lint, and
+          install-whitaker refuses a suite pin by design. Removed by the
+          change that fixes whitaker#311 and moves Weaver's CI step onto
+          install-whitaker; only that one workflow is exempt.
       - repository: leynos/agent-helper-scripts
         path: get-rust-tooling
         reason: >-

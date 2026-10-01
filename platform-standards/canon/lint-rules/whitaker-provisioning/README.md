@@ -91,6 +91,13 @@ rather than a script and is not read.
   never runs belong here, and otherwise only a temporary entry whose reason
   names the change that removes it. An exemption names its repository, so the
   same path elsewhere is still audited. Default:
+  - `leynos/weaver`, `.github/workflows/ci.yml`: Weaver pins the Whitaker lint
+    suite to source revision `2bc0c3f` because leynos/whitaker#311
+    (`no_expect_outside_tests` flags `cfg(test)` companion-module helpers since
+    suite `4e8a8ab`) regresses its lint, and `install-whitaker` refuses a suite
+    pin by design. It is removed by the change that fixes #311 and moves
+    Weaver's step onto `install-whitaker`. Only that workflow is exempt; a
+    second workflow in Weaver that installs Whitaker by hand is still a route.
   - `leynos/agent-helper-scripts`, `get-rust-tooling`: a developer-environment
     bootstrap run by hand, never by CI. It pins `whitaker-installer` 0.2.9 and
     passes `--no-source-fallback`.
