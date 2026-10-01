@@ -41,8 +41,9 @@ the same checks at the same strictness. It has four parts:
   command word, binding tail, required flags — are shared. FP-003, QG-001,
   PD-002 to PD-004, PD-007 and PD-008 keep their identifiers and meaning.
 - **CI invocation.** Workflow recognizers read `netsuke build <target>` where
-  they read `make <target>` today. BO-003 requires CI to invoke the
-  authoritative orchestrator, and BO-002 admits a transitional shim Makefile
+  they read `make <target>` today. BO-003 does not require CI to run any gate;
+  it requires that whatever CI does run through `make` or `netsuke` comes from
+  the authoritative orchestrator. BO-002 admits a transitional shim Makefile
   only when each shared target delegates to Netsuke.
 
 The Make path is unchanged in behaviour: every existing fixture, and every
@@ -341,19 +342,20 @@ Netsuke, and how the reader and policies treat it.
 
 #### Table 4: Make constructs and their Netsuke counterparts
 
-| Concern           | Make (`makeutil` facts)                               | Netsuke (reader facts)                                                            | Treatment                                                        |
-| ----------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| Entry point       | A rule's target                                       | An action or target `name`                                                        | Literal names only; any templated name makes absence unprovable  |
-| Static edge       | A prerequisite; a literal `$(MAKE) target` chain      | A `deps`, `sources` or `order_only_deps` string naming an entry; a literal `rule` | Other strings are file inputs, not edges                         |
-| Dynamic edge      | `$(MAKE) $(VAR)`, `$(MAKE) -C`                        | A templated dependency or `rule`                                                  | `indeterminate` on the path                                      |
-| Conditional       | A rule with `conditions`                              | An entry with `when` or `foreach`                                                 | `indeterminate` on the path                                      |
-| Ambiguous entry   | Several rules, or a double-colon rule, for one target | One name defined by more than one entry, as complementary `when` pairs do         | `indeterminate`                                                  |
-| Include           | An `include` directive                                | None in the manifest; a `.netsuke.toml` manifest redirect                         | `indeterminate` (BO-001 for the redirect)                        |
-| Unreadable facts  | A recovered parse                                     | A refused document                                                                | `indeterminate`                                                  |
-| Variable          | One unconditional, non-`define` assignment            | A bare `{{ name }}` over a literal global `vars` string                           | Substituted; any other Jinja is unresolved                       |
-| Recipe unit       | One recipe line in its own shell                      | One scalar `command`, or one list entry sharing a shell with its list             | Section 3.5                                                      |
-| Error suppression | The `-` prefix                                        | No prefix exists; suppression is shell text such as `\|\| true`                   | Make's `-`, `@` and `+` prefixes are not read in Netsuke recipes |
-| Script            | No counterpart                                        | `script:`                                                                         | `indeterminate` in the first slice                               |
+| Concern           | Make (`makeutil` facts)                               | Netsuke (reader facts)                                                    | Treatment                                                        |
+| ----------------- | ----------------------------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Entry point       | A rule's target                                       | An action or target `name`                                                | Literal names only; any templated name makes absence unprovable  |
+| Static edge       | A prerequisite; a literal `$(MAKE) target` chain      | A `deps`, `sources` or `order_only_deps` string naming an entry           | Other strings are file inputs, not edges                         |
+| Recipe reference  | No counterpart                                        | A literal `rule` naming a reusable rule                                   | The rule's recipe is the entry's recipe; it is not an edge       |
+| Dynamic edge      | `$(MAKE) $(VAR)`, `$(MAKE) -C`                        | A templated dependency or `rule`                                          | `indeterminate` on the path                                      |
+| Conditional       | A rule with `conditions`                              | An entry with `when` or `foreach`                                         | `indeterminate` on the path                                      |
+| Ambiguous entry   | Several rules, or a double-colon rule, for one target | One name defined by more than one entry, as complementary `when` pairs do | `indeterminate`                                                  |
+| Include           | An `include` directive                                | None in the manifest; a `.netsuke.toml` manifest redirect                 | `indeterminate` (BO-001 for the redirect)                        |
+| Unreadable facts  | A recovered parse                                     | A refused document                                                        | `indeterminate`                                                  |
+| Variable          | One unconditional, non-`define` assignment            | A bare `{{ name }}` over a literal global `vars` string                   | Substituted; any other Jinja is unresolved                       |
+| Recipe unit       | One recipe line in its own shell                      | One scalar `command`, or one list entry sharing a shell with its list     | Section 3.5                                                      |
+| Error suppression | The `-` prefix                                        | No prefix exists; suppression is shell text such as `\|\| true`           | Make's `-`, `@` and `+` prefixes are not read in Netsuke recipes |
+| Script            | No counterpart                                        | `script:`                                                                 | `indeterminate` in the first slice                               |
 
 ### 3.4 Entry points and required targets
 
@@ -417,11 +419,26 @@ byte-identical. The Netsuke adapter is new and applies these rules.
   can change where a later one runs. A directly preceding entry that is exactly
   `cd <dir>` qualifies a gate for the surface at `<dir>`, as
   `cd <dir> && $(WHITAKER)` does in Make, and disqualifies the root surface.
-  Any other preceding entry whose command word changes shell state (`cd`
-  elsewhere, `pushd`, `popd`, `export`, `unset`, `set`, `trap`, `source`, `.`,
-  `eval`, `alias`, `shopt`, `umask`) or that is a bare assignment makes the
-  gate's context `indeterminate`. A preceding direct `exec` ends the chain, so
-  a gate after it never runs and is reported as not reached.
+  Any other preceding entry in which the command word of any command segment
+  changes shell state (`cd` elsewhere, `pushd`, `popd`, `export`, `unset`,
+  `set`, `trap`, `source`, `.`, `eval`, `alias`, `shopt`, `umask`), or that is
+  a bare assignment, makes the gate's context `indeterminate`.
+- **Termination.** Entries run in the current shell, not a subshell, so an
+  earlier entry can end the whole recipe before the gate is reached. A
+  preceding entry that is a direct `exec` or a bare `exit`, in either case with
+  any arguments, ends the chain: the gate never runs, and is reported as not
+  reached. `exit 0` is the sharper case, because the recipe then succeeds. A
+  preceding entry in which `exit`, `exec`, `return`, `kill` or `logout` is the
+  command word of any segment, as in `test -f x || exit 0`, may end the chain
+  on a condition the policy cannot evaluate, and makes the gate
+  `indeterminate`. The words count only in command position, never inside
+  quoted text, under the readings the policies already use for `which`. The
+  same reading applies to a segment before the gate within one entry, as in
+  `exit 0; whitaker --all`, which the shared command-word predicate credits
+  today on a Make recipe line too. For Make, that is a change to a shared
+  predicate, so it ships with step 1 only if gate G2 shows it alters no
+  existing fixture or recorded verdict; otherwise it becomes a separate change
+  to the Make path.
 - **Scripts and template control.** A `script:` recipe on the path is
   `indeterminate`, because `/bin/sh -e` and multi-line control flow are a
   different reading from the line-at-a-time grammar the predicates implement. A
@@ -449,12 +466,29 @@ spellings are deliberately not invocations of the audited manifest:
 
 - `netsuke <name>` without `build`, which Netsuke rejects, so the step fails
   loudly rather than bypassing anything;
-- an invocation carrying `-f`/`--file`, `-C`/`--directory` or `--config`, or
-  a step whose merged environment sets `NETSUKE_FILE` or `NETSUKE_CONFIG`,
-  which is `indeterminate` exactly as `make -C` is (design document Section
-  2.2.1); and
+- an invocation that may load another manifest or configuration, which is
+  `indeterminate` exactly as `make -C` is (design document Section 2.2.1): one
+  carrying `-f`/`--file`, `-C`/`--directory` or `--config`; one whose
+  environment may set `NETSUKE_FILE` or `NETSUKE_CONFIG`; or one that may run
+  outside the checkout root, where Netsuke would look for a different
+  `Netsukefile`; and
 - a bare `netsuke` where a `--default-target` option or project configuration
   could change the defaults, which is `indeterminate`.
+
+The environment is read where the shell sets it, not only where the workflow
+YAML does. GitHub Actions' merged `env:` at workflow, job and step scope is one
+source. Within the same `run:` body, an assignment prefix on the invocation
+(`NETSUKE_FILE=ci/Netsukefile netsuke build lint`) and an earlier `export` or
+assignment of either variable are two more. A line in an earlier step of the
+same job that writes either name to `$GITHUB_ENV` is a fourth. The working
+directory is likewise read from the step's `working-directory:` and from any
+`cd`, `pushd` or `popd` before the invocation in the same body. An unrelated
+assignment prefix such as catnap's `ACTIONLINT="…" netsuke build lint` changes
+nothing. Which further `NETSUKE_` variables select a manifest, a directory or
+default targets is settled with the configuration keys in step 1 (Section 10).
+The same reading applies to Make invocations: `-f`, `--file`, `--makefile`,
+`-C`, `--directory` and a `MAKEFILES` assignment select a graph other than the
+root `Makefile`.
 
 The recognizer changes two existing clauses, corrects the remediation text of
 three more, and adds one rule:
@@ -468,17 +502,28 @@ three more, and adds one rule:
   `make spelling`.
 - **PD-007, FP-003 and QG-001 remediation text** names the authoritative
   orchestrator throughout.
-- **BO-003** reports a workflow step that invokes a governed entry point (a
-  required target of any package, or `spelling`) through an orchestrator that
-  is not authoritative. `make lint` in a repository whose authoritative
-  orchestrator is Netsuke is a finding, because CI would run a graph concordat
-  did not audit, which breaks I1. A Make invocation of a target that BO-002
-  finds to be a conforming shim is not a finding. A step on a Windows runner
-  that invokes Netsuke without `NETSUKE_WINDOWS_SHELL: bash` in its merged
-  environment is `indeterminate`, for the reason Section 3.5 gives.
+- **BO-003** reports every workflow step that invokes the orchestrator that is
+  not authoritative, whatever target it names. `make lint` in a repository
+  whose authoritative orchestrator is Netsuke is a finding, and so is
+  `make ci`: a target with no Netsuke counterpart can carry the gates just as
+  well, and CI would still run a graph concordat did not audit, which breaks
+  I1. The only exemption is a Make invocation in which every named target is
+  one BO-002 finds to be a conforming shim. A bare `make` names the Makefile's
+  default goal, and is `indeterminate` where the facts cannot establish which
+  target that is. The rule is symmetric: under Make authority, a
+  `netsuke build` step in CI is a finding. An invocation of the authoritative
+  orchestrator that may load another graph is `indeterminate`, as set out
+  above. A step on a Windows runner that invokes Netsuke without
+  `NETSUKE_WINDOWS_SHELL: bash` in its environment is `indeterminate`, for the
+  reason Section 3.5 gives.
 
-BO-003 is narrow on purpose. It does not require CI to run any gate; it
-requires only that a gate CI does run comes from the audited manifest.
+BO-003 is narrow in one direction and broad in the other. It does not require
+CI to run any gate. It does require that whatever CI runs through an
+orchestrator comes from the audited manifest, because restricting it to the
+governed target names would let an unmatched target carry the real gates. A
+second orchestrator invoked from a script that CI runs, rather than from a
+`run:` body, is outside the recognizer's reach, as a script-driven Make
+invocation is today; Section 10 records the gap.
 
 ### 3.7 A transitional shim (BO-002)
 
@@ -489,9 +534,12 @@ a shim: exactly one binding recipe line `netsuke build <same name>`, where
 `netsuke` may be a variable with one unconditional value of `netsuke`, and no
 prerequisites other than other conforming shim targets. Any other recipe is
 BO-002 `noncompliant`, because a Makefile with gates of its own is the second
-source of truth Section 2.3 rejects. Make targets with no Netsuke counterpart
-are not audited. The shim is permitted, never required, and catnap #90 needs
-none.
+source of truth Section 2.3 rejects. BO-002 does not audit a Make target with
+no Netsuke counterpart, because a developer convenience such as
+`make install-tools` gates nothing. BO-003 closes the route such a target would
+otherwise open: CI cannot invoke it without a finding, since it cannot be a
+conforming shim when no same-named entry exists. The shim is permitted, never
+required, and catnap #90 needs none.
 
 ### 3.8 Spelling guidance and Whitaker provisioning
 
@@ -718,26 +766,34 @@ or minimally changed.
 
 #### Table 8: Netsuke adapter and recognizer fixtures
 
-| Must raise                                                                                                | Must not raise                                                                                     | Difference under test                                              |
-| --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `gate-or-true`: the `whitaker` entry ending `\|\| true`                                                   | `catnap-head`: the entry as catnap has it                                                          | Binding tail within an entry                                       |
-| `gate-after-semicolon-masked`: `whitaker --all; true` in one entry                                        | `gate-own-entry`: `whitaker --all` and `true` as two list entries                                  | Entry boundaries bind; a `;` inside an entry masks                 |
-| `gate-pipeline-same-entry`: the entry `whitaker --all \| tee lint.log`                                    | `gate-before-pipeline-entry`: the gate entry followed by a separate entry `cargo metadata \| head` | A pipe masks only within its own entry                             |
-| `lint-one-hop-only`: `lint` depends on `checks`, and `checks` on an action that never runs the gate       | `lint-two-hops`: the same chain where the second hop runs the gate                                 | The closure is transitive, not one hop                             |
-| `gate-at-prefixed`: the entry `@whitaker --all`                                                           | `catnap-head`                                                                                      | Make prefixes are not read in Netsuke                              |
-| `gate-under-when`: `rust-lint` carrying a `when` expression                                               | `catnap-head`                                                                                      | Conditional ancestry, `indeterminate`                              |
-| `lint-defined-twice`: two `lint` actions under complementary `when` expressions                           | `catnap-head`                                                                                      | Ambiguous entry, `indeterminate`                                   |
-| `gate-after-exec`: an entry `exec true` before the `whitaker` entry                                       | `gate-after-echo`: an entry `echo starting` before it                                              | `exec` ends the chain                                              |
-| `gate-after-cd-elsewhere`: an entry `cd docs` before the gate, with a root surface only                   | `gate-after-cd-surface`: an entry `cd rust` before the gate, with `rust/Cargo.toml` declared       | Shared shell context qualifies a surface and disqualifies the root |
-| `gate-in-script`: the gate inside a `script:` recipe                                                      | `catnap-head`                                                                                      | Scripts are `indeterminate` in the first slice                     |
-| `lint-dep-templated`: `deps: ["{{ lint_parts }}"]`                                                        | `catnap-head`                                                                                      | Dynamic edge, `indeterminate`                                      |
-| `gate-var-unresolved`: `{{ tool }}` where `vars.tool` itself contains Jinja                               | `gate-var-literal`: `{{ tool }}` where `vars.tool` is `whitaker`                                   | Single-literal substitution only                                   |
-| `duplicate-key`: a manifest repeating `actions:`                                                          | `catnap-head`                                                                                      | The reader refuses what Netsuke refuses                            |
-| `ci-make-under-netsuke`: a workflow running `make lint` with Netsuke authoritative and no conforming shim | `ci-netsuke-build`: the same step as `netsuke build lint`                                          | BO-003: CI runs the audited graph                                  |
-| `ci-netsuke-other-file`: `netsuke -f ci.yml build lint`                                                   | `ci-netsuke-build`                                                                                 | A selected manifest is not the audited one, `indeterminate`        |
-| `ci-netsuke-windows-powershell`: `netsuke build lint` on `windows-latest` without `NETSUKE_WINDOWS_SHELL` | `ci-netsuke-windows-bash`: the same step with `NETSUKE_WINDOWS_SHELL: bash`                        | POSIX proofs do not cover PowerShell, `indeterminate`              |
-| `ci-netsuke-markdownlint`: a `run:` step `netsuke build markdownlint` beside no action step               | `ci-netsuke-echo`: a step that echoes `netsuke build markdownlint`                                 | PD-006 reads the command word, not the text                        |
-| —                                                                                                         | `ci-netsuke-bare-target`: `netsuke lint`                                                           | Not an invocation; Netsuke rejects it, so nothing is bypassed      |
+| Must raise                                                                                                               | Must not raise                                                                                     | Difference under test                                                          |
+| ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `gate-or-true`: the `whitaker` entry ending `\|\| true`                                                                  | `catnap-head`: the entry as catnap has it                                                          | Binding tail within an entry                                                   |
+| `gate-after-semicolon-masked`: `whitaker --all; true` in one entry                                                       | `gate-own-entry`: `whitaker --all` and `true` as two list entries                                  | Entry boundaries bind; a `;` inside an entry masks                             |
+| `gate-pipeline-same-entry`: the entry `whitaker --all \| tee lint.log`                                                   | `gate-before-pipeline-entry`: the gate entry followed by a separate entry `cargo metadata \| head` | A pipe masks only within its own entry                                         |
+| `lint-one-hop-only`: `lint` depends on `checks`, and `checks` on an action that never runs the gate                      | `lint-two-hops`: the same chain where the second hop runs the gate                                 | The closure is transitive, not one hop                                         |
+| `gate-at-prefixed`: the entry `@whitaker --all`                                                                          | `catnap-head`                                                                                      | Make prefixes are not read in Netsuke                                          |
+| `gate-under-when`: `rust-lint` carrying a `when` expression                                                              | `catnap-head`                                                                                      | Conditional ancestry, `indeterminate`                                          |
+| `lint-defined-twice`: two `lint` actions under complementary `when` expressions                                          | `catnap-head`                                                                                      | Ambiguous entry, `indeterminate`                                               |
+| `gate-after-exec`: an entry `exec true` before the `whitaker` entry                                                      | `gate-after-echo`: an entry `echo starting` before it                                              | `exec` ends the chain                                                          |
+| `gate-after-exit`: an entry `exit 0` before the `whitaker` entry                                                         | `gate-after-echo-exit`: an entry `echo "exit 0"` before it                                         | `exit` ends the shared shell only in command position                          |
+| `gate-after-conditional-exit`: an entry `test -f skip-lint \|\| exit 0` before the gate                                  | `gate-after-echo`                                                                                  | A conditional exit makes the gate `indeterminate`                              |
+| `gate-after-exit-same-entry`: the entry `exit 0; whitaker --all`                                                         | `catnap-head`                                                                                      | Termination before the gate within one entry                                   |
+| `gate-after-cd-elsewhere`: an entry `cd docs` before the gate, with a root surface only                                  | `gate-after-cd-surface`: an entry `cd rust` before the gate, with `rust/Cargo.toml` declared       | Shared shell context qualifies a surface and disqualifies the root             |
+| `gate-in-script`: the gate inside a `script:` recipe                                                                     | `catnap-head`                                                                                      | Scripts are `indeterminate` in the first slice                                 |
+| `lint-dep-templated`: `deps: ["{{ lint_parts }}"]`                                                                       | `catnap-head`                                                                                      | Dynamic edge, `indeterminate`                                                  |
+| `gate-var-unresolved`: `{{ tool }}` where `vars.tool` itself contains Jinja                                              | `gate-var-literal`: `{{ tool }}` where `vars.tool` is `whitaker`                                   | Single-literal substitution only                                               |
+| `duplicate-key`: a manifest repeating `actions:`                                                                         | `catnap-head`                                                                                      | The reader refuses what Netsuke refuses                                        |
+| `ci-make-under-netsuke`: a workflow running `make lint` with Netsuke authoritative and no conforming shim                | `ci-netsuke-build`: the same step as `netsuke build lint`                                          | BO-003: CI runs the audited graph                                              |
+| `ci-make-unmatched-target`: Netsuke authoritative, a Makefile `ci` target running the gates, and `make ci` in a workflow | `make-unmatched-target-local`: the same Makefile target, which no workflow invokes                 | BO-003 covers every target of the second orchestrator, not only governed names |
+| `ci-netsuke-other-file`: `netsuke -f ci.yml build lint`                                                                  | `ci-netsuke-build`                                                                                 | A selected manifest is not the audited one, `indeterminate`                    |
+| `ci-netsuke-inline-file`: `NETSUKE_FILE=ci/Netsukefile netsuke build lint`                                               | `ci-netsuke-inline-unrelated`: catnap's `ACTIONLINT="…" netsuke build lint`                        | Which variable the assignment prefix sets                                      |
+| `ci-netsuke-exported-file`: `export NETSUKE_CONFIG=ci.toml` on an earlier line of the same `run:` body                   | `ci-netsuke-build`                                                                                 | Shell-level environment, not only the workflow's `env:`                        |
+| `ci-netsuke-github-env-file`: an earlier step in the job appends `NETSUKE_FILE=…` to `$GITHUB_ENV`                       | `ci-netsuke-build`                                                                                 | Environment written by an earlier step                                         |
+| `ci-netsuke-cd`: `cd tools && netsuke build lint`                                                                        | `ci-netsuke-build`                                                                                 | A moved working directory loads another `Netsukefile`                          |
+| `ci-netsuke-windows-powershell`: `netsuke build lint` on `windows-latest` without `NETSUKE_WINDOWS_SHELL`                | `ci-netsuke-windows-bash`: the same step with `NETSUKE_WINDOWS_SHELL: bash`                        | POSIX proofs do not cover PowerShell, `indeterminate`                          |
+| `ci-netsuke-markdownlint`: a `run:` step `netsuke build markdownlint` beside no action step                              | `ci-netsuke-echo`: a step that echoes `netsuke build markdownlint`                                 | PD-006 reads the command word, not the text                                    |
+| —                                                                                                                        | `ci-netsuke-bare-target`: `netsuke lint`                                                           | Not an invocation; Netsuke rejects it, so nothing is bypassed                  |
 
 ## 7. Contract mutations
 
@@ -760,6 +816,19 @@ raise.
   entries are kept as separate records. Netsuke's own wrapper exists for the
   same reason: each entry is evaluated inside its own brace group so that its
   text cannot change the chain's structure.
+- **Termination mutation.** Recognize only `exec` as ending the chain. The
+  rule must stop raising on `gate-after-exit`, `gate-after-conditional-exit` and
+  `gate-after-exit-same-entry`. Widening it to match `exit` anywhere in the
+  text must make it raise on `gate-after-echo-exit`, so the command-position
+  reading is load-bearing in both directions.
+- **Environment-scope mutation.** Read only the workflow's merged `env:`. The
+  recognizer must stop reporting `ci-netsuke-inline-file`,
+  `ci-netsuke-exported-file` and `ci-netsuke-github-env-file`. Widening it to
+  any assignment prefix must make it report `ci-netsuke-inline-unrelated`,
+  which is the step catnap #90 actually runs.
+- **Governed-name mutation.** Restrict BO-003 to the governed entry-point
+  names. The rule must stop raising on `ci-make-unmatched-target`, which is the
+  route a repository would use to run unaudited gates under a neutral name.
 - **Condition mutation.** Ignore `when` and `foreach`. The rule must stop
   raising on `gate-under-when` and `lint-defined-twice`.
 - **Hop mutation.** Follow direct `deps` only, one hop from the root. The rule
@@ -779,22 +848,31 @@ raise.
 
 ## 8. Properties
 
-Three predicates range over inputs no fixture table can cover, so each carries
-a Hypothesis property test written from this document, in the developers'
-guide's discipline for `tests/unit/test_properties.py`.
+Four predicates range over inputs no fixture table can cover, so each carries a
+Hypothesis property test written from this document, in the developers' guide's
+discipline for `tests/unit/test_properties.py`.
 
 - **Closure equivalence across orchestrators (H5).** Over generated acyclic
-  entry graphs, the same graph expressed as a `makeutil`-shaped report, with
-  prerequisites as edges, and as Netsuke reader facts, with `deps` as edges,
-  yields the same reachable set from every root. The `makeutil` side is
-  constructed directly as a report, so the property needs no `makeutil` binary.
-  A Netsuke adapter that walked `sources` but not `deps`, or the reverse, fails
-  it.
+  entry graphs whose every edge carries a kind drawn from `deps`, `sources` and
+  `order_only_deps`, the same graph expressed as a `makeutil`-shaped report,
+  with every edge as a prerequisite, and as Netsuke reader facts, with each
+  edge in the field its kind names, yields the same reachable set from every
+  root. Each kind is placed only on entries whose schema admits it, and the
+  generator is required to produce, for each kind, graphs where some entry is
+  reachable through that kind alone. An adapter that omits any one traversal
+  therefore fails the property. A `makeutil` side constructed directly as a
+  report means the property needs no `makeutil` binary.
+- **Recipe references.** Over the same graphs, with recipes attached to
+  generated reusable rules and entries selecting them through a literal `rule`,
+  the recipe set reachable from every root equals the set obtained by inlining
+  each rule's recipe into the entries that name it. An adapter that treated
+  `rule` as an edge to another entry, or ignored it, fails this.
 - **Command-list binding.** Over generated lists of context-neutral entries
   in which exactly one entry invokes the gate with a binding tail, the verdict
   is compliant and invariant under permuting the other entries; appending
   `|| true` to the gate entry always yields noncompliant; and inserting a
-  context-changing entry anywhere before the gate never yields compliant.
+  context-changing or terminating entry, `exit` among them, anywhere before the
+  gate never yields compliant.
 - **Resolution totality.** Over every combination of declaration (absent,
   `make`, `netsuke`, invalid), root `Makefile` (present, absent), root
   `Netsukefile` (present, absent) and project `.netsuke.toml` (absent, budgets
@@ -865,6 +943,12 @@ Make path is untouched.
    dependencies. If it does not, G1 compares entries, defaults and conditional
    flags through it, and compares edges against `netsuke graph` output produced
    in a fixture-generation sandbox, never at audit time.
+8. **Orchestrators invoked from scripts.** BO-003 reads `run:` bodies. A
+   script under `scripts/` that CI runs and that invokes `make` or `netsuke` is
+   outside its reach, as a script-driven Make invocation is outside every
+   current rule's. QG-002 already reads such scripts as text for install
+   routes, so the same surfaces could carry an orchestrator recognizer, at the
+   cost of deciding which scripts CI actually runs.
 
 ## 11. Alternatives rejected
 
