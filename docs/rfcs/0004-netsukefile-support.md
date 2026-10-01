@@ -25,9 +25,10 @@ orchestrates its build with Netsuke offers none of those facts, and today it
 can satisfy the standards only by keeping a Makefile that its continuous
 integration (CI) does not run.
 
-This RFC proposes that concordat resolve one *authoritative build orchestrator*
-per checkout, Make or Netsuke, and judge that orchestrator's entry points with
-the same checks at the same strictness. It has four parts:
+This Request for Comments (RFC) proposes that concordat resolve one
+*authoritative build orchestrator* per checkout, Make or Netsuke, and judge
+that orchestrator's entry points with the same checks at the same strictness.
+It has four parts:
 
 - **Resolution.** A `.concordat` declaration, `build.orchestrator`, is
   authoritative; absent one, the orchestrator is inferred from which root
@@ -73,9 +74,10 @@ this RFC, and Section 10 records that check as open.
 catnap #90 installs Netsuke with `cargo install --locked netsuke-build` on a
 pinned nightly, which is a TA-001 finding under RFC 0001: Netsuke v0.1.0-beta4
 publishes prebuilt binaries for `cargo binstall`, and standalone binaries with
-SHA-256 checksum files (Netsuke users' guide, "Install Netsuke"). The canonical
-workflow change in Section 3.9 therefore installs Netsuke as a verified binary,
-and this RFC introduces no acquisition rule of its own.
+Secure Hash Algorithm 256 (SHA-256) checksum files (Netsuke users' guide,
+"Install Netsuke"). The canonical workflow change in Section 3.9 therefore
+installs Netsuke as a verified binary, and this RFC introduces no acquisition
+rule of its own.
 
 ## 2. Motivation
 
@@ -248,25 +250,32 @@ same containment guard the envelope builders already apply to the Makefile.
 
 #### Table 3: Orchestrator resolution
 
-| `build.orchestrator` | Root `Makefile` | Root `Netsukefile` | Authoritative | Finding                                                                               |
-| -------------------- | --------------- | ------------------ | ------------- | ------------------------------------------------------------------------------------- |
-| absent               | present         | absent             | Make          | None from resolution                                                                  |
-| absent               | absent          | present            | Netsuke       | None from resolution                                                                  |
-| absent               | present         | present            | Make          | BO-001, `indeterminate`: both manifests exist and neither is declared                 |
-| absent               | absent          | absent             | none          | The packages' existing presence findings (FP-003, PD-007), now naming either manifest |
-| `make`               | any             | any                | Make          | None from resolution; a `Netsukefile` is not audited, and BO-003 governs CI           |
-| `netsuke`            | any             | present            | Netsuke       | None from resolution; a `Makefile` is a shim judged by BO-002                         |
-| `netsuke`            | any             | absent             | none          | BO-001, `noncompliant`: the declared manifest is missing                              |
-| any other value      | any             | any                | none          | BO-001, `indeterminate`: the declaration cannot be read                               |
+| `build.orchestrator` | Root `Makefile` | Root `Netsukefile` | Project `.netsuke.toml` | Authoritative | Finding                                                                               |
+| -------------------- | --------------- | ------------------ | ----------------------- | ------------- | ------------------------------------------------------------------------------------- |
+| absent               | present         | absent             | not consulted           | Make          | None from resolution                                                                  |
+| absent               | absent          | present            | absent or proven inert  | Netsuke       | None from resolution                                                                  |
+| absent               | absent          | present            | redirects or unprovable | none          | BO-001, `indeterminate`: the configuration may select another manifest or defaults    |
+| absent               | present         | present            | not consulted           | Make          | BO-001, `indeterminate`: both manifests exist and neither is declared                 |
+| absent               | absent          | absent             | not consulted           | none          | The packages' existing presence findings (FP-003, PD-007), now naming either manifest |
+| `make`               | any             | any                | not consulted           | Make          | None from resolution; a `Netsukefile` is not audited, and BO-003 governs CI           |
+| `netsuke`            | any             | present            | absent or proven inert  | Netsuke       | None from resolution; a `Makefile` is a shim judged by BO-002                         |
+| `netsuke`            | any             | present            | redirects or unprovable | none          | BO-001, `indeterminate`: the configuration may select another manifest or defaults    |
+| `netsuke`            | any             | absent             | not consulted           | none          | BO-001, `noncompliant`: the declared manifest is missing                              |
+| any other value      | any             | any                | not consulted           | none          | BO-001, `indeterminate`: the declaration cannot be read                               |
 
-The third row keeps Make authoritative so that adding a `Netsukefile` to a Make
-repository changes nothing about its gates, which is what I4 asks; BO-001 asks
-the repository to say which file CI should be held to. A project
+The fourth row keeps Make authoritative so that adding a `Netsukefile` to a
+Make repository changes nothing about its gates, which is what I4 asks; BO-001
+asks the repository to say which file CI should be held to. A project
 `.netsuke.toml` can select another manifest path and configure default targets,
-so where one exists the reader must prove it does neither for the authoritative
-manifest, and otherwise reports BO-001 `indeterminate`. The configuration keys
-involved are taken from Netsuke's sample configuration in step 1 rather than
-assumed here.
+so it is consulted on every row where Netsuke would otherwise be authoritative.
+It is "proven inert" when the reader shows it sets neither, through its own
+keys and its `extends` chain. A configuration that redirects, or that the
+reader cannot prove inert, leaves no authoritative orchestrator, because
+neither the root `Netsukefile` nor an unaudited selected manifest can be held
+to be what CI runs. Where Make is authoritative, Netsuke configuration cannot
+change what Make runs, so it is not consulted. The configuration keys involved
+are taken from Netsuke's sample configuration in step 1 rather than assumed
+here.
 
 BO-001 ships in a new package, `build-orchestration-baseline`, so a resolution
 problem is reported once rather than once per package. The other packages read
@@ -434,11 +443,16 @@ byte-identical. The Netsuke adapter is new and applies these rules.
   `indeterminate`. The words count only in command position, never inside
   quoted text, under the readings the policies already use for `which`. The
   same reading applies to a segment before the gate within one entry, as in
-  `exit 0; whitaker --all`, which the shared command-word predicate credits
-  today on a Make recipe line too. For Make, that is a change to a shared
-  predicate, so it ships with step 1 only if gate G2 shows it alters no
-  existing fixture or recorded verdict; otherwise it becomes a separate change
-  to the Make path.
+  `exit 0; whitaker --all`. The termination rule takes precedence over the
+  shared command-word predicate: a gate it marks as not reached or
+  `indeterminate` is never credited, whatever the command-word predicate says.
+  For Netsuke, this holds from step 1 without condition. For Make, the shared
+  predicate credits `exit 0; $(WHITAKER) --all` today, which is a pre-existing
+  false negative. Correcting it is a change to the Make path, so it ships with
+  step 1 only if gate G2 shows it alters no existing fixture or recorded
+  verdict. If G2 shows a changed verdict, the Make correction becomes a
+  separate change with its own review, and the Netsuke adapter applies the rule
+  regardless.
 - **Scripts and template control.** A `script:` recipe on the path is
   `indeterminate`, because `/bin/sh -e` and multi-line control flow are a
   different reading from the line-at-a-time grammar the predicates implement. A
@@ -481,14 +495,17 @@ source. Within the same `run:` body, an assignment prefix on the invocation
 (`NETSUKE_FILE=ci/Netsukefile netsuke build lint`) and an earlier `export` or
 assignment of either variable are two more. A line in an earlier step of the
 same job that writes either name to `$GITHUB_ENV` is a fourth. The working
-directory is likewise read from the step's `working-directory:` and from any
-`cd`, `pushd` or `popd` before the invocation in the same body. An unrelated
-assignment prefix such as catnap's `ACTIONLINT="…" netsuke build lint` changes
-nothing. Which further `NETSUKE_` variables select a manifest, a directory or
-default targets is settled with the configuration keys in step 1 (Section 10).
-The same reading applies to Make invocations: `-f`, `--file`, `--makefile`,
-`-C`, `--directory` and a `MAKEFILES` assignment select a graph other than the
-root `Makefile`.
+directory is resolved as GitHub Actions resolves it: the step's
+`working-directory:`, else the job's `defaults.run.working-directory`, else the
+workflow's, and then any `cd`, `pushd` or `popd` before the invocation in the
+same body. An effective directory other than the checkout root, or one given by
+an expression the envelope cannot resolve, makes the invocation
+`indeterminate`. An unrelated assignment prefix such as catnap's
+`ACTIONLINT="…" netsuke build lint` changes nothing. Which further `NETSUKE_`
+variables select a manifest, a directory or default targets is settled with the
+configuration keys in step 1 (Section 10). The same reading applies to Make
+invocations: `-f`, `--file`, `--makefile`, `-C`, `--directory` and a
+`MAKEFILES` assignment select a graph other than the root `Makefile`.
 
 The recognizer changes two existing clauses, corrects the remediation text of
 three more, and adds one rule:
@@ -508,14 +525,22 @@ three more, and adds one rule:
   `make ci`: a target with no Netsuke counterpart can carry the gates just as
   well, and CI would still run a graph concordat did not audit, which breaks
   I1. The only exemption is a Make invocation in which every named target is
-  one BO-002 finds to be a conforming shim. A bare `make` names the Makefile's
-  default goal, and is `indeterminate` where the facts cannot establish which
-  target that is. The rule is symmetric: under Make authority, a
-  `netsuke build` step in CI is a finding. An invocation of the authoritative
-  orchestrator that may load another graph is `indeterminate`, as set out
-  above. A step on a Windows runner that invokes Netsuke without
-  `NETSUKE_WINDOWS_SHELL: bash` in its environment is `indeterminate`, for the
-  reason Section 3.5 gives.
+  one BO-002 finds to be a conforming shim, and which passes no command-line
+  variable assignment and no `-e`/`--environment-overrides`; either could
+  replace the shim's shell or its recipe text, so such an invocation is
+  `indeterminate`. A bare `make` names the Makefile's default goal, and is
+  `indeterminate` where the facts cannot establish which target that is. The
+  rule is symmetric: under Make authority, a `netsuke build` step in CI is a
+  finding. An invocation of the authoritative orchestrator that may load
+  another graph is `indeterminate`, as set out above. A step on a Windows
+  runner that invokes Netsuke without `NETSUKE_WINDOWS_SHELL: bash` in its
+  environment is `indeterminate`, for the reason Section 3.5 gives. A job that
+  calls the canonical reusable workflow through `jobs.<id>.uses` runs whichever
+  orchestrator its `build-orchestrator` input names, and the recognizer cannot
+  see the commands inside the callee. BO-003 therefore reads the input itself:
+  a literal value, or the default `make` when the input is omitted, that
+  differs from the resolved authority is a finding, and a value given by an
+  expression the envelope cannot resolve is `indeterminate`.
 
 BO-003 is narrow in one direction and broad in the other. It does not require
 CI to run any gate. It does require that whatever CI runs through an
@@ -530,12 +555,17 @@ invocation is today; Section 10 records the gap.
 Where Netsuke is authoritative and a root `Makefile` also exists, the Makefile
 is still parsed by `makeutil`, for BO-002 alone. Each Makefile target that
 shares its name with a Netsuke entry point, or with a required target, must be
-a shim: exactly one binding recipe line `netsuke build <same name>`, where
-`netsuke` may be a variable with one unconditional value of `netsuke`, and no
-prerequisites other than other conforming shim targets. Any other recipe is
-BO-002 `noncompliant`, because a Makefile with gates of its own is the second
-source of truth Section 2.3 rejects. BO-002 does not audit a Make target with
-no Netsuke counterpart, because a developer convenience such as
+a shim: exactly one binding recipe line `netsuke build <same name>`, whose
+command word is the literal `netsuke`, and no prerequisites other than other
+conforming shim targets. A Make variable is not accepted in place of the
+literal, even one with a single unconditional value of `netsuke`. The
+environment (under `make -e`) or a command-line assignment can override such a
+variable, so `NETSUKE=true make -e lint` would run `true build lint` and
+succeed without running Netsuke. Section 3.6 makes the invocation-time
+overrides that remain, such as `SHELL=…`, `indeterminate` under BO-003. Any
+other recipe is BO-002 `noncompliant`, because a Makefile with gates of its own
+is the second source of truth Section 2.3 rejects. BO-002 does not audit a Make
+target with no Netsuke counterpart, because a developer convenience such as
 `make install-tools` gates nothing. BO-003 closes the route such a target would
 otherwise open: CI cannot invoke it without a finding, since it cannot be a
 conforming shim when no same-named entry exists. The shim is permitted, never
@@ -573,6 +603,20 @@ precedent of `cargo.surfaces`, which was added within schema 1 with a fallback
 unmeasured clean result" (`rust_makefile_baseline.rego:34-36`; design document
 Section 2.2.1).
 
+Keeping version 1 follows the rule the design document states for this
+envelope, not an exception to it. The design document's rule that a
+`schema_version` is "Bumped when new fields are introduced so older CLIs can
+refuse unsupported layouts" is stated for one artefact: the remote-state
+persistence manifest, `persistence.yaml` (design document Section 2.8.1,
+"Backend specification"). For the policy-input envelope, the design document
+records the opposite decision: additive fields are carried "so the envelope
+stays at `schema_version: 1`" (Section 2.2.1). The two consumers of an envelope
+cannot be harmed by an additive field. The policy of the same package version
+reads it. An older policy reads fixed paths and never sees `build`, so it
+reports a Netsuke checkout as missing its Makefile, which is the current
+fail-closed verdict, not a pass. A layout change that removed or retyped an
+existing field would still require a bump.
+
 **Package identifiers.** The package identifiers stay, because the Parabellum
 ledger records them (`docs/parabellum/ledger.jsonl`). Each affected package
 takes a minor version bump. Whether `rust-makefile-baseline` takes a display
@@ -589,7 +633,9 @@ validates the manifest's structure without running a recipe, and runs
 **Documentation.** The design document's catalogue rows for FP-003, QG-001 and
 PD-002 to PD-008, the users' guide's FP-003 description, the four package
 READMEs, and the `.concordat` schema table (adding `build.orchestrator`) are
-updated in the step that changes each rule's behaviour.
+updated in the step that changes each rule's behaviour, as the users' guide and
+design-record rules in `AGENTS.md` require. Each step in Section 5 lists its
+own documentation, and only PD-013's text waits on step 5's external dependency.
 
 ## 4. Hypotheses and the evidence that decides them
 
@@ -644,7 +690,11 @@ the evidence named in their gates.
 - **In scope.** Resolution and BO-001 (Section 3.2); the Netsuke reader
   (Section 3.3); the adapter split of `rust-makefile-baseline` only; the
   Netsuke adapter rules for QG-001 (Section 3.5); the additive envelope field
-  (Section 3.9); the Netsuke clause of QG-002 (Section 3.8).
+  (Section 3.9); the Netsuke clause of QG-002 (Section 3.8); and the
+  documentation for each of these: the design document's catalogue rows for
+  FP-003, QG-001, QG-002 and BO-001, the `.concordat` schema table's
+  `build.orchestrator` field, the users' guide's FP-003 and QG-001 description,
+  and the `rust-makefile-baseline` and `whitaker-provisioning` READMEs.
 - **Excluded.** The Markdown and spelling packages, CI recognizers, BO-002,
   BO-003, PD-013, `script:` recipes, Windows proofs, and `${VAR:-default}` gate
   forms.
@@ -664,7 +714,9 @@ the evidence named in their gates.
   through the same adapter; FP-003 in `markdown-formatting-baseline` follows.
 - **Question.** Does the step 1 adapter carry over without new grammar (H5)?
 - **In scope.** The adapter split of the two packages, and their Netsuke
-  adapters, reusing step 1's reader.
+  adapters, reusing step 1's reader; the catalogue rows for PD-002 to PD-004,
+  PD-007 and PD-008, the users' guide's Markdown and spelling sections, and
+  both packages' READMEs.
 - **Excluded.** PD-006, PD-010 and PD-013, which are workflow and guidance
   checks and belong to steps 3 and 5.
 - **Prerequisites.** Step 1.
@@ -681,7 +733,9 @@ the evidence named in their gates.
 - **Question.** Can CI invocation be read with Make's precision (H7), and can
   I1 be enforced without requiring CI to run anything new?
 - **In scope.** Section 3.6 and the canonical-workflow paragraph of
-  Section 3.9.
+  Section 3.9, with the catalogue rows for PD-006, PD-010 and BO-003, the
+  affected README sections, and the users' guide's description of the canonical
+  workflow's `build-orchestrator` input.
 - **Excluded.** BO-002's shim conformance, which BO-003 consults but does not
   define; until step 4 lands, a Make invocation in a Netsuke repository is a
   BO-003 finding whatever the Makefile holds.
@@ -692,7 +746,8 @@ the evidence named in their gates.
 
 ### 5.4 Step 4: admit a conforming shim
 
-- **Outcome.** BO-002 (Section 3.7) and its use in BO-003.
+- **Outcome.** BO-002 (Section 3.7) and its use in BO-003, with BO-002's
+  catalogue row and the users' guide's migration notes on shims.
 - **Question.** Does any repository want a transitional shim?
 - **Prerequisites.** Steps 1 and 3, and gate G6.
 - **Recommendation if not warranted.** Defer. catnap #90 rejects a shim, and
@@ -701,7 +756,9 @@ the evidence named in their gates.
 ### 5.5 Step 5: orchestrator-neutral spelling guidance and documentation
 
 - **Outcome.** PD-013 keyed by orchestrator, the Netsuke duplicate-guidance
-  pattern, and the documentation updates of Section 3.9.
+  pattern, and PD-013's own catalogue row and README text. Every other
+  documentation change ships with the step that changes the rule it describes,
+  so no shipped behaviour waits on this externally blocked step.
 - **Prerequisites.** Step 2, and typos-config-builder publishing a Netsuke
   block, which is outside concordat. Until then PD-013 stays `indeterminate`
   for Netsuke repositories.
@@ -749,14 +806,16 @@ Each pair differs in exactly the fact its rule claims to decide.
 
 #### Table 7: BO-001 and BO-002 fixtures
 
-| Must raise                                                                                     | Must not raise                                                                                   | Difference under test                                   |
-| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
-| `both-undeclared`: a root `Makefile` and `Netsukefile`, no declaration                         | `both-declared-netsuke`: the same files with `build.orchestrator: netsuke` and a conforming shim | Whether the authority is declared                       |
-| `declared-netsuke-missing`: `build.orchestrator: netsuke` and no `Netsukefile`                 | `declared-netsuke-present`: the same declaration with the file                                   | Presence of the declared manifest                       |
-| `netsuke-config-redirects`: a project `.netsuke.toml` selecting another manifest path          | `netsuke-config-budgets-only`: a `.netsuke.toml` that sets only resource budgets                 | Whether the configuration can move the audited manifest |
-| `shim-carries-gate`: under Netsuke authority, a Makefile `lint` recipe that runs `$(WHITAKER)` | `shim-delegates`: the same target whose sole recipe is `netsuke build lint`                      | Whether the Makefile carries a gate of its own          |
-| `shim-renames`: a Makefile `lint` recipe running `netsuke build rust-lint`                     | `shim-delegates`: as above                                                                       | Same-name delegation, not delegation to any entry       |
-| —                                                                                              | `make-only`: a Make repository with no `Netsukefile` and no declaration                          | Resolution adds no finding to the current estate (I4)   |
+| Must raise                                                                                                                                 | Must not raise                                                                                   | Difference under test                                                       |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `both-undeclared`: a root `Makefile` and `Netsukefile`, no declaration                                                                     | `both-declared-netsuke`: the same files with `build.orchestrator: netsuke` and a conforming shim | Whether the authority is declared                                           |
+| `declared-netsuke-missing`: `build.orchestrator: netsuke` and no `Netsukefile`                                                             | `declared-netsuke-present`: the same declaration with the file                                   | Presence of the declared manifest                                           |
+| `netsuke-config-redirects`: a project `.netsuke.toml` selecting another manifest path                                                      | `netsuke-config-budgets-only`: a `.netsuke.toml` that sets only resource budgets                 | Whether the configuration can move the audited manifest                     |
+| `shim-carries-gate`: under Netsuke authority, a Makefile `lint` recipe that runs `$(WHITAKER)`                                             | `shim-delegates`: the same target whose sole recipe is `netsuke build lint`                      | Whether the Makefile carries a gate of its own                              |
+| `declared-netsuke-config-redirects`: `build.orchestrator: netsuke`, a root `Netsukefile`, and a `.netsuke.toml` selecting another manifest | `declared-netsuke-present`                                                                       | A redirect leaves no authority even when Netsuke is declared                |
+| `shim-variable-executable`: a Makefile `lint` recipe `$(NETSUKE) build lint` with `NETSUKE := netsuke`                                     | `shim-delegates`                                                                                 | Only the literal executable is a shim, because a variable can be overridden |
+| `shim-renames`: a Makefile `lint` recipe running `netsuke build rust-lint`                                                                 | `shim-delegates`: as above                                                                       | Same-name delegation, not delegation to any entry                           |
+| —                                                                                                                                          | `make-only`: a Make repository with no `Netsukefile` and no declaration                          | Resolution adds no finding to the current estate (I4)                       |
 
 ### 6.2 Netsuke adapter fixtures
 
@@ -766,34 +825,37 @@ or minimally changed.
 
 #### Table 8: Netsuke adapter and recognizer fixtures
 
-| Must raise                                                                                                               | Must not raise                                                                                     | Difference under test                                                          |
-| ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `gate-or-true`: the `whitaker` entry ending `\|\| true`                                                                  | `catnap-head`: the entry as catnap has it                                                          | Binding tail within an entry                                                   |
-| `gate-after-semicolon-masked`: `whitaker --all; true` in one entry                                                       | `gate-own-entry`: `whitaker --all` and `true` as two list entries                                  | Entry boundaries bind; a `;` inside an entry masks                             |
-| `gate-pipeline-same-entry`: the entry `whitaker --all \| tee lint.log`                                                   | `gate-before-pipeline-entry`: the gate entry followed by a separate entry `cargo metadata \| head` | A pipe masks only within its own entry                                         |
-| `lint-one-hop-only`: `lint` depends on `checks`, and `checks` on an action that never runs the gate                      | `lint-two-hops`: the same chain where the second hop runs the gate                                 | The closure is transitive, not one hop                                         |
-| `gate-at-prefixed`: the entry `@whitaker --all`                                                                          | `catnap-head`                                                                                      | Make prefixes are not read in Netsuke                                          |
-| `gate-under-when`: `rust-lint` carrying a `when` expression                                                              | `catnap-head`                                                                                      | Conditional ancestry, `indeterminate`                                          |
-| `lint-defined-twice`: two `lint` actions under complementary `when` expressions                                          | `catnap-head`                                                                                      | Ambiguous entry, `indeterminate`                                               |
-| `gate-after-exec`: an entry `exec true` before the `whitaker` entry                                                      | `gate-after-echo`: an entry `echo starting` before it                                              | `exec` ends the chain                                                          |
-| `gate-after-exit`: an entry `exit 0` before the `whitaker` entry                                                         | `gate-after-echo-exit`: an entry `echo "exit 0"` before it                                         | `exit` ends the shared shell only in command position                          |
-| `gate-after-conditional-exit`: an entry `test -f skip-lint \|\| exit 0` before the gate                                  | `gate-after-echo`                                                                                  | A conditional exit makes the gate `indeterminate`                              |
-| `gate-after-exit-same-entry`: the entry `exit 0; whitaker --all`                                                         | `catnap-head`                                                                                      | Termination before the gate within one entry                                   |
-| `gate-after-cd-elsewhere`: an entry `cd docs` before the gate, with a root surface only                                  | `gate-after-cd-surface`: an entry `cd rust` before the gate, with `rust/Cargo.toml` declared       | Shared shell context qualifies a surface and disqualifies the root             |
-| `gate-in-script`: the gate inside a `script:` recipe                                                                     | `catnap-head`                                                                                      | Scripts are `indeterminate` in the first slice                                 |
-| `lint-dep-templated`: `deps: ["{{ lint_parts }}"]`                                                                       | `catnap-head`                                                                                      | Dynamic edge, `indeterminate`                                                  |
-| `gate-var-unresolved`: `{{ tool }}` where `vars.tool` itself contains Jinja                                              | `gate-var-literal`: `{{ tool }}` where `vars.tool` is `whitaker`                                   | Single-literal substitution only                                               |
-| `duplicate-key`: a manifest repeating `actions:`                                                                         | `catnap-head`                                                                                      | The reader refuses what Netsuke refuses                                        |
-| `ci-make-under-netsuke`: a workflow running `make lint` with Netsuke authoritative and no conforming shim                | `ci-netsuke-build`: the same step as `netsuke build lint`                                          | BO-003: CI runs the audited graph                                              |
-| `ci-make-unmatched-target`: Netsuke authoritative, a Makefile `ci` target running the gates, and `make ci` in a workflow | `make-unmatched-target-local`: the same Makefile target, which no workflow invokes                 | BO-003 covers every target of the second orchestrator, not only governed names |
-| `ci-netsuke-other-file`: `netsuke -f ci.yml build lint`                                                                  | `ci-netsuke-build`                                                                                 | A selected manifest is not the audited one, `indeterminate`                    |
-| `ci-netsuke-inline-file`: `NETSUKE_FILE=ci/Netsukefile netsuke build lint`                                               | `ci-netsuke-inline-unrelated`: catnap's `ACTIONLINT="…" netsuke build lint`                        | Which variable the assignment prefix sets                                      |
-| `ci-netsuke-exported-file`: `export NETSUKE_CONFIG=ci.toml` on an earlier line of the same `run:` body                   | `ci-netsuke-build`                                                                                 | Shell-level environment, not only the workflow's `env:`                        |
-| `ci-netsuke-github-env-file`: an earlier step in the job appends `NETSUKE_FILE=…` to `$GITHUB_ENV`                       | `ci-netsuke-build`                                                                                 | Environment written by an earlier step                                         |
-| `ci-netsuke-cd`: `cd tools && netsuke build lint`                                                                        | `ci-netsuke-build`                                                                                 | A moved working directory loads another `Netsukefile`                          |
-| `ci-netsuke-windows-powershell`: `netsuke build lint` on `windows-latest` without `NETSUKE_WINDOWS_SHELL`                | `ci-netsuke-windows-bash`: the same step with `NETSUKE_WINDOWS_SHELL: bash`                        | POSIX proofs do not cover PowerShell, `indeterminate`                          |
-| `ci-netsuke-markdownlint`: a `run:` step `netsuke build markdownlint` beside no action step                              | `ci-netsuke-echo`: a step that echoes `netsuke build markdownlint`                                 | PD-006 reads the command word, not the text                                    |
-| —                                                                                                                        | `ci-netsuke-bare-target`: `netsuke lint`                                                           | Not an invocation; Netsuke rejects it, so nothing is bypassed                  |
+| Must raise                                                                                                                | Must not raise                                                                                     | Difference under test                                                          |
+| ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `gate-or-true`: the `whitaker` entry ending `\|\| true`                                                                   | `catnap-head`: the entry as catnap has it                                                          | Binding tail within an entry                                                   |
+| `gate-after-semicolon-masked`: `whitaker --all; true` in one entry                                                        | `gate-own-entry`: `whitaker --all` and `true` as two list entries                                  | Entry boundaries bind; a `;` inside an entry masks                             |
+| `gate-pipeline-same-entry`: the entry `whitaker --all \| tee lint.log`                                                    | `gate-before-pipeline-entry`: the gate entry followed by a separate entry `cargo metadata \| head` | A pipe masks only within its own entry                                         |
+| `lint-one-hop-only`: `lint` depends on `checks`, and `checks` on an action that never runs the gate                       | `lint-two-hops`: the same chain where the second hop runs the gate                                 | The closure is transitive, not one hop                                         |
+| `gate-at-prefixed`: the entry `@whitaker --all`                                                                           | `catnap-head`                                                                                      | Make prefixes are not read in Netsuke                                          |
+| `gate-under-when`: `rust-lint` carrying a `when` expression                                                               | `catnap-head`                                                                                      | Conditional ancestry, `indeterminate`                                          |
+| `lint-defined-twice`: two `lint` actions under complementary `when` expressions                                           | `catnap-head`                                                                                      | Ambiguous entry, `indeterminate`                                               |
+| `gate-after-exec`: an entry `exec true` before the `whitaker` entry                                                       | `gate-after-echo`: an entry `echo starting` before it                                              | `exec` ends the chain                                                          |
+| `gate-after-exit`: an entry `exit 0` before the `whitaker` entry                                                          | `gate-after-echo-exit`: an entry `echo "exit 0"` before it                                         | `exit` ends the shared shell only in command position                          |
+| `gate-after-conditional-exit`: an entry `test -f skip-lint \|\| exit 0` before the gate                                   | `gate-after-echo`                                                                                  | A conditional exit makes the gate `indeterminate`                              |
+| `gate-after-exit-same-entry`: the entry `exit 0; whitaker --all`                                                          | `catnap-head`                                                                                      | Termination before the gate within one entry                                   |
+| `gate-after-cd-elsewhere`: an entry `cd docs` before the gate, with a root surface only                                   | `gate-after-cd-surface`: an entry `cd rust` before the gate, with `rust/Cargo.toml` declared       | Shared shell context qualifies a surface and disqualifies the root             |
+| `gate-in-script`: the gate inside a `script:` recipe                                                                      | `catnap-head`                                                                                      | Scripts are `indeterminate` in the first slice                                 |
+| `lint-dep-templated`: `deps: ["{{ lint_parts }}"]`                                                                        | `catnap-head`                                                                                      | Dynamic edge, `indeterminate`                                                  |
+| `gate-var-unresolved`: `{{ tool }}` where `vars.tool` itself contains Jinja                                               | `gate-var-literal`: `{{ tool }}` where `vars.tool` is `whitaker`                                   | Single-literal substitution only                                               |
+| `duplicate-key`: a manifest repeating `actions:`                                                                          | `catnap-head`                                                                                      | The reader refuses what Netsuke refuses                                        |
+| `ci-make-under-netsuke`: a workflow running `make lint` with Netsuke authoritative and no conforming shim                 | `ci-netsuke-build`: the same step as `netsuke build lint`                                          | BO-003: CI runs the audited graph                                              |
+| `ci-make-unmatched-target`: Netsuke authoritative, a Makefile `ci` target running the gates, and `make ci` in a workflow  | `make-unmatched-target-local`: the same Makefile target, which no workflow invokes                 | BO-003 covers every target of the second orchestrator, not only governed names |
+| `ci-netsuke-other-file`: `netsuke -f ci.yml build lint`                                                                   | `ci-netsuke-build`                                                                                 | A selected manifest is not the audited one, `indeterminate`                    |
+| `ci-netsuke-inline-file`: `NETSUKE_FILE=ci/Netsukefile netsuke build lint`                                                | `ci-netsuke-inline-unrelated`: catnap's `ACTIONLINT="…" netsuke build lint`                        | Which variable the assignment prefix sets                                      |
+| `ci-netsuke-exported-file`: `export NETSUKE_CONFIG=ci.toml` on an earlier line of the same `run:` body                    | `ci-netsuke-build`                                                                                 | Shell-level environment, not only the workflow's `env:`                        |
+| `ci-netsuke-github-env-file`: an earlier step in the job appends `NETSUKE_FILE=…` to `$GITHUB_ENV`                        | `ci-netsuke-build`                                                                                 | Environment written by an earlier step                                         |
+| `ci-netsuke-defaults-run-dir`: a job with `defaults.run.working-directory: tools` and a step `netsuke build lint`         | `ci-netsuke-build`                                                                                 | The inherited working directory, not only the step's own key                   |
+| `ci-reusable-input-mismatch`: a Make-authoritative caller passing `build-orchestrator: netsuke` to the canonical workflow | `ci-reusable-input-matches`: the same caller passing `make`, or omitting the input                 | BO-003 reads the reusable workflow's input against the resolved authority      |
+| `ci-make-shim-override`: `make SHELL=true lint` against a conforming shim under Netsuke authority                         | `ci-make-shim`: `make lint` against the same shim                                                  | Invocation-time overrides void the shim exemption, `indeterminate`             |
+| `ci-netsuke-cd`: `cd tools && netsuke build lint`                                                                         | `ci-netsuke-build`                                                                                 | A moved working directory loads another `Netsukefile`                          |
+| `ci-netsuke-windows-powershell`: `netsuke build lint` on `windows-latest` without `NETSUKE_WINDOWS_SHELL`                 | `ci-netsuke-windows-bash`: the same step with `NETSUKE_WINDOWS_SHELL: bash`                        | POSIX proofs do not cover PowerShell, `indeterminate`                          |
+| `ci-netsuke-markdownlint`: a `run:` step `netsuke build markdownlint` beside no action step                               | `ci-netsuke-echo`: a step that echoes `netsuke build markdownlint`                                 | PD-006 reads the command word, not the text                                    |
+| —                                                                                                                         | `ci-netsuke-bare-target`: `netsuke lint`                                                           | Not an invocation; Netsuke rejects it, so nothing is bypassed                  |
 
 ## 7. Contract mutations
 
@@ -845,6 +907,20 @@ raise.
   recognizer must now credit `ci-netsuke-bare-target`.
 - **Shim mutation.** Accept any `netsuke build` recipe as a shim. BO-002 must
   stop raising on `shim-renames`.
+- **Shim-executable mutation.** Accept a Make variable whose single value is
+  `netsuke` as the shim's command word. BO-002 must stop raising on
+  `shim-variable-executable`, the shape `make -e` can turn into
+  `true build lint`.
+- **Override mutation.** Exempt every Make invocation of conforming shims,
+  whatever it passes. BO-003 must stop reporting `ci-make-shim-override`.
+- **Inherited-directory mutation.** Read only a step's own
+  `working-directory:`. The recognizer must stop reporting
+  `ci-netsuke-defaults-run-dir`.
+- **Reusable-input mutation.** Read only `run:` bodies. BO-003 must stop
+  reporting `ci-reusable-input-mismatch`, which no `run:` step reveals.
+- **Redirect mutation.** Resolve a declared Netsuke checkout to Netsuke
+  whatever its `.netsuke.toml` holds. BO-001 must stop raising on
+  `declared-netsuke-config-redirects`.
 
 ## 8. Properties
 
@@ -876,9 +952,9 @@ discipline for `tests/unit/test_properties.py`.
 - **Resolution totality.** Over every combination of declaration (absent,
   `make`, `netsuke`, invalid), root `Makefile` (present, absent), root
   `Netsukefile` (present, absent) and project `.netsuke.toml` (absent, budgets
-  only, redirecting), resolution yields exactly one row of Table 3. This is the
-  combinatorial suite step 1 owns, and it is small enough to enumerate rather
-  than sample.
+  only, redirecting, unreadable), resolution yields exactly one row of Table 3.
+  This is the combinatorial suite step 1 owns, and it is small enough to
+  enumerate rather than sample.
 
 ## 9. Migration and compatibility
 
