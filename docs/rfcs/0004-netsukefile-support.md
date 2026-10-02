@@ -250,18 +250,18 @@ same containment guard the envelope builders already apply to the Makefile.
 
 #### Table 3: Orchestrator resolution
 
-| `build.orchestrator` | Root `Makefile` | Root `Netsukefile` | Project `.netsuke.toml` | Authoritative | Finding                                                                               |
-| -------------------- | --------------- | ------------------ | ----------------------- | ------------- | ------------------------------------------------------------------------------------- |
-| absent               | present         | absent             | not consulted           | Make          | None from resolution                                                                  |
-| absent               | absent          | present            | absent or proven inert  | Netsuke       | None from resolution                                                                  |
-| absent               | absent          | present            | redirects or unprovable | none          | BO-001, `indeterminate`: the configuration may select another manifest or defaults    |
-| absent               | present         | present            | not consulted           | Make          | BO-001, `indeterminate`: both manifests exist and neither is declared                 |
-| absent               | absent          | absent             | not consulted           | none          | The packages' existing presence findings (FP-003, PD-007), now naming either manifest |
-| `make`               | any             | any                | not consulted           | Make          | None from resolution; a `Netsukefile` is not audited, and BO-003 governs CI           |
-| `netsuke`            | any             | present            | absent or proven inert  | Netsuke       | None from resolution; a `Makefile` is a shim judged by BO-002                         |
-| `netsuke`            | any             | present            | redirects or unprovable | none          | BO-001, `indeterminate`: the configuration may select another manifest or defaults    |
-| `netsuke`            | any             | absent             | not consulted           | none          | BO-001, `noncompliant`: the declared manifest is missing                              |
-| any other value      | any             | any                | not consulted           | none          | BO-001, `indeterminate`: the declaration cannot be read                               |
+| `build.orchestrator` | Root `Makefile` | Root `Netsukefile` | Project `.netsuke.toml` | Authoritative | Finding                                                                             |
+| -------------------- | --------------- | ------------------ | ----------------------- | ------------- | ----------------------------------------------------------------------------------- |
+| absent               | present         | absent             | not consulted           | Make          | None from resolution                                                                |
+| absent               | absent          | present            | absent or proven inert  | Netsuke       | None from resolution                                                                |
+| absent               | absent          | present            | redirects or unprovable | none          | BO-001, `indeterminate`: the configuration may select another manifest or defaults  |
+| absent               | present         | present            | not consulted           | Make          | BO-001, `indeterminate`: both manifests exist and neither is declared               |
+| absent               | absent          | absent             | not consulted           | none          | BO-001, `indeterminate`: neither manifest exists; FP-003 and PD-007 point to BO-001 |
+| `make`               | any             | any                | not consulted           | Make          | None from resolution; a `Netsukefile` is not audited, and BO-003 governs CI         |
+| `netsuke`            | any             | present            | absent or proven inert  | Netsuke       | None from resolution; a `Makefile` is a shim judged by BO-002                       |
+| `netsuke`            | any             | present            | redirects or unprovable | none          | BO-001, `indeterminate`: the configuration may select another manifest or defaults  |
+| `netsuke`            | any             | absent             | not consulted           | none          | BO-001, `noncompliant`: the declared manifest is missing                            |
+| any other value      | any             | any                | not consulted           | none          | BO-001, `indeterminate`: the declaration cannot be read                             |
 
 The fourth row keeps Make authoritative so that adding a `Netsukefile` to a
 Make repository changes nothing about its gates, which is what I4 asks; BO-001
@@ -815,6 +815,7 @@ Each pair differs in exactly the fact its rule claims to decide.
 | `declared-netsuke-config-redirects`: `build.orchestrator: netsuke`, a root `Netsukefile`, and a `.netsuke.toml` selecting another manifest | `declared-netsuke-present`                                                                       | A redirect leaves no authority even when Netsuke is declared                |
 | `shim-variable-executable`: a Makefile `lint` recipe `$(NETSUKE) build lint` with `NETSUKE := netsuke`                                     | `shim-delegates`                                                                                 | Only the literal executable is a shim, because a variable can be overridden |
 | `shim-renames`: a Makefile `lint` recipe running `netsuke build rust-lint`                                                                 | `shim-delegates`: as above                                                                       | Same-name delegation, not delegation to any entry                           |
+| `no-manifest`: no root `Makefile`, no root `Netsukefile` and no declaration                                                                | `make-only`                                                                                      | Whether any manifest exists to resolve                                      |
 | —                                                                                                                                          | `make-only`: a Make repository with no `Netsukefile` and no declaration                          | Resolution adds no finding to the current estate (I4)                       |
 
 ### 6.2 Netsuke adapter fixtures
