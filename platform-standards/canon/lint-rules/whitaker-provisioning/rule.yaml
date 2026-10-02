@@ -13,7 +13,7 @@ description: >-
   invocation; and any install-whitaker pin that is not listed (QG-002). QG-003,
   a pin on the lint suite, is superseded. Whitaker itself is exempt as the producer. Audit-only: this rule
   declares no mutations.
-version: 0.1.0
+version: 0.1.1
 sensor:
   type: conftest
   input: policy-input/whitaker-provisioning

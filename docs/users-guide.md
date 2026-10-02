@@ -476,6 +476,15 @@ slug read from the `origin` remote. See
 `platform-standards/canon/lint-rules/whitaker-provisioning/README.md` for what
 the policy recognizes and what it declines to judge.
 
+One temporary exemption ships in the defaults: `leynos/weaver`
+`.github/workflows/ci.yml`. Weaver pins the Whitaker lint suite to source
+revision `2bc0c3f` because leynos/whitaker#311 (`no_expect_outside_tests` flags
+`cfg(test)` companion-module helpers since suite `4e8a8ab`) regresses its lint,
+and `install-whitaker` refuses a suite pin by design. Every other workflow in
+Weaver, and the same path in any other repository, is still audited. The
+exemption is removed when the fix for #311 moves Weaver's step onto
+`install-whitaker`.
+
 ### Auditing the Rust build defaults
 
 The `rust-build-defaults` package audits the estate's build standard:
