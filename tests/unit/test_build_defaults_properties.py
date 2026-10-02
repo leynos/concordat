@@ -2,10 +2,10 @@
 
 Each example writes a generated Makefile beside a compliant Cargo
 configuration, builds the real envelope (through `makeutil`) and evaluates the
-real policy (through Conftest), then compares the findings with an oracle that
-is computed from the generated decisions alone. The oracle never reads the
-Makefile back, so a defect in the policy's option, delegation or scoping
-handling cannot be shared with it.
+real policy (through Conftest, by the public `runner.run_rule`), then compares
+the findings with an oracle computed from the generated decisions alone.
+The oracle never reads the Makefile back, so a defect in the policy's option,
+delegation or scoping handling cannot be shared with it.
 
 The fixture-based Rego tests pin chosen shapes; these cover the spellings of
 `$(MAKE)` options, the ways a delegation becomes dynamic, and where a
@@ -100,10 +100,16 @@ def _evaluate(makefile: str) -> set[Finding]:
             target.write_bytes((_FIXTURE_REPO / name).read_bytes())
         (root / "Makefile").write_text(makefile, encoding="utf-8")
         envelope = build_build_defaults_envelope(root, _PARAMETERS)
-        results = runner._invoke_conftest(_RULE_ID, typ.cast("typ.Any", envelope))
+        result = runner.run_rule(
+            _RULE_ID,
+            root,
+            envelope_builder=lambda _rule_id, _checkout: typ.cast(
+                "runner.RuleEnvelope", envelope
+            ),
+        )
     return {
         (finding.verdict, finding.message)
-        for finding in runner._findings_from_results(results)
+        for finding in result.findings
         if finding.rule_id == "BD-008"
     }
 

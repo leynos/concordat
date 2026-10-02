@@ -208,6 +208,14 @@ test_gate_global_without_a_gate_target if {
 	profile(findings) == set()
 }
 
+# A workflow whose YAML did not load is reported, not silently skipped, and the finding names a category rather than the parser's message.
+test_workflow_undecodable if {
+	findings := policy.deny with input as data.fixtures.workflow_undecodable
+	profile(findings) == {
+		["BD-009", "indeterminate", 0, "the workflow could not be decoded (invalid YAML), so BD-007 and BD-009 cannot judge its cargo steps"],
+	}
+}
+
 # Coverage and release-profile recipes are BD-007's, and targets outside the gates are not judged.
 test_gate_exempt if {
 	findings := policy.deny with input as data.fixtures.gate_exempt
