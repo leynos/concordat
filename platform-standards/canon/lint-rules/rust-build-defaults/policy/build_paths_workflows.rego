@@ -249,6 +249,32 @@ deny contains f if {
 	)
 }
 
+# -- an undecodable workflow cannot be judged --------------------------------
+#
+# The decoded set silently drops a file whose YAML did not load, so without
+# this a broken workflow would read as one with nothing to report. The finding
+# names the file and a fixed category, never the parser's own message, which
+# can quote workflow content.
+
+undecoded_category(error) := "not UTF-8 text" if {
+	startswith(error, "not UTF-8 text")
+} else := "invalid YAML" if {
+	startswith(error, "invalid YAML")
+} else := "not a mapping" if {
+	error == "workflow document is not a mapping"
+} else := "unreadable"
+
+deny contains f if {
+	applicable
+	some workflow in workflow_files
+	workflow.error != null
+	category := undecoded_category(workflow.error)
+	f := finding(
+		"BD-009", "indeterminate", workflow.path,
+		sprintf("the workflow could not be decoded (%s), so BD-007 and BD-009 cannot judge its cargo steps", [category]),
+	)
+}
+
 # -- BD-009: a direct cargo gate step keeps the fast flags -------------------
 
 gate_cargo_segment(segment) := toolchain if {

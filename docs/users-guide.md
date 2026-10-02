@@ -550,6 +550,10 @@ Three more clauses read the builds that replace those defaults:
 A Makefile `makeutil` cannot fully parse makes BD-007 and BD-008
 `indeterminate` rather than passed; the other clauses still report.
 
+A workflow file that does not decode (invalid YAML, not UTF-8 text, or not a
+mapping) is reported as `indeterminate` under BD-009, naming the file and that
+category; the file is never skipped silently.
+
 Upgrading to rule 0.2.0: a repository that passed 0.1.1 can now fail or report
 `indeterminate`, because BD-007 to BD-009 read the Makefile and the workflows,
 which 0.1.1 never opened.
