@@ -20,6 +20,8 @@ import typing as typ
 
 import pytest
 
+from tests.unit.makeutil_pin import drift_hint
+
 if typ.TYPE_CHECKING:
     import types
 
@@ -157,8 +159,8 @@ def test_checked_in_envelopes_match_regeneration(generate: types.ModuleType) -> 
         recorded = json.loads(
             (generate.ENVELOPES_DIR / f"{key}.json").read_text(encoding="utf-8")
         )
-        assert recorded == envelope, key
+        assert recorded == envelope, f"{key}: {drift_hint()}"
     bundle = json.loads(
         (generate.FIXTURES_DIR / "data.json").read_text(encoding="utf-8")
     )
-    assert bundle == {"fixtures": expected}
+    assert bundle == {"fixtures": expected}, drift_hint()
