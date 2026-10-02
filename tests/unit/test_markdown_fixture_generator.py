@@ -20,6 +20,8 @@ import typing as typ
 
 import pytest
 
+from tests.unit.makeutil_pin import assert_matches_recorded, pinned_release
+
 if typ.TYPE_CHECKING:
     import types
 
@@ -142,13 +144,8 @@ class TestBuildFixtureEnvelope:
         assert envelope["kind"] == "policy-input/markdown-formatting-baseline"
 
 
-def test_checked_in_envelopes_match_regeneration(generate: types.ModuleType) -> None:
-    """The committed envelopes and bundle are exactly what generation produces.
-
-    This runs the pinned `makeutil` on every Makefile fixture, so a drift
-    between the committed evidence and the generator (or the pin) fails here
-    rather than silently changing what the Rego suite verifies.
-    """
+def _assert_checked_in_match_regeneration(generate: types.ModuleType) -> None:
+    """Compare every checked-in envelope and the bundle with regeneration."""
     expected = {
         key: generate.build_fixture_envelope(scenario)
         for key, scenario in generate.SCENARIOS.items()
@@ -157,8 +154,40 @@ def test_checked_in_envelopes_match_regeneration(generate: types.ModuleType) -> 
         recorded = json.loads(
             (generate.ENVELOPES_DIR / f"{key}.json").read_text(encoding="utf-8")
         )
-        assert recorded == envelope, key
+        assert_matches_recorded(recorded, envelope, f"envelope {key}")
     bundle = json.loads(
         (generate.FIXTURES_DIR / "data.json").read_text(encoding="utf-8")
     )
-    assert bundle == {"fixtures": expected}
+    assert_matches_recorded(bundle, {"fixtures": expected}, "the data.json bundle")
+
+
+def test_checked_in_envelopes_match_regeneration(generate: types.ModuleType) -> None:
+    """The committed envelopes and bundle are exactly what generation produces.
+
+    This runs the pinned `makeutil` on every Makefile fixture, so a drift
+    between the committed evidence and the generator (or the pin) fails here
+    rather than silently changing what the Rego suite verifies.
+    """
+    _assert_checked_in_match_regeneration(generate)
+
+
+def test_a_drifted_envelope_fails_with_the_pin_check(
+    generate: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The regeneration failure itself names the release and digest to verify.
+
+    Regeneration is made to disagree with the checked-in files, as a stale
+    local `makeutil` makes it, so the message the reader sees is the one
+    asserted, not just the helper that builds it.
+    """
+    real = generate.build_fixture_envelope
+
+    def drifted(scenario: object) -> dict[str, object]:
+        return {**real(scenario), "drifted": True}
+
+    monkeypatch.setattr(generate, "build_fixture_envelope", drifted)
+    with pytest.raises(AssertionError, match="SHA-256") as raised:
+        _assert_checked_in_match_regeneration(generate)
+    message = str(raised.value)
+    assert "makeutil-x86_64-unknown-linux-musl" in message, message
+    assert pinned_release().sha256 in message, message
