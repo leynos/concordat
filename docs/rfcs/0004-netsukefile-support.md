@@ -13,6 +13,9 @@
 - **Depends on:** the `.concordat` manifest (design document Section 2.2), the
   pinned `makeutil` facts, which this RFC leaves unchanged, and the Netsuke
   v0.1.0-beta4 manifest schema (`netsuke_version: "1.0.0"`)
+- **Decisions:** the delivery steps and gate thresholds were approved on
+  2026-10-02, and the parent's rulings of that date on the open questions are
+  recorded in Sections 5.7 and 10
 
 ## 1. Summary
 
@@ -67,7 +70,8 @@ which orchestrator is authoritative, and keeping a second one honest. `BO-001`
 to `BO-003` collide with nothing in the design document's catalogue or in RFCs
 0001 to 0003. RFC 0001 records that issue #153 proposes an `MK` family for
 Makefile shape; the full identifier list of issue #153 has not been checked for
-this RFC, and Section 10 records that check as open.
+this RFC. That check is a Day 2 goal, not a precondition for steps 1 to 3
+(Section 5.6 and Section 10, question 4).
 
 ### 1.2 Relationship to RFC 0001
 
@@ -194,11 +198,17 @@ the Netsuke users' guide (`docs/users-guide.md` for that release):
   later entry inherits the working directory, environment and shell variables
   an earlier entry leaves behind; a successful direct `exec` ends the chain.
   Scripts run under `/bin/sh -e` ("Rules and recipes"; "Review the safety
-  boundary").
+  boundary"). That state carried between entries is what makes a gate's context
+  depend on the entries before it; the ambiguity is raised upstream as
+  [leynos/netsuke#857](https://github.com/leynos/netsuke/issues/857), and
+  Section 5.7 says what an adopter does until it is settled.
 - **Windows.** On Windows every legacy recipe runs under Windows PowerShell
   unless `NETSUKE_WINDOWS_SHELL=bash` selects the Bash route, and PowerShell
   does not perform POSIX `${VAR:-default}` expansion ("Windows legacy recipe
-  contract").
+  contract"). A gate written `${WHITAKER:-whitaker}`, which Section 3.5 accepts
+  on the POSIX routes, is therefore not the gate under PowerShell; Section 3.6
+  already treats that route as `indeterminate`. The same shell-dependence is
+  part of the ambiguity raised as leynos/netsuke#857.
 - **Manifest time.** Jinja, `foreach` and `when` are evaluated when the
   manifest loads, and the template library includes host-observing helpers
   (`shell`, `fetch`, `which`, `command_available`, `env`, `glob`). The guide
@@ -306,6 +316,9 @@ The reader:
   substitutes only a bare `{{ name }}` whose global `vars` entry is a literal
   string free of Jinja, which mirrors the policies' single-assignment rule for
   Make variables;
+- recognizes, without rendering it, the one canonical test-runner fallback of
+  Section 3.4, and records it as two literal alternatives rather than as
+  unresolved Jinja;
 - records the literal `defaults` list; and
 - reports a refusal as a parse status the policies read as `indeterminate`, in
   the way they read a recovered `makeutil` parse.
@@ -378,11 +391,36 @@ is chosen at manifest load, and FP-003 asks only that `test` exists. PD-008
 carries over in the same terms: its legacy helper targets are entry names, and
 its legacy pins are `vars` keys of the same names.
 
-That same `test` action is where a later rule will need a decision. QG-004 asks
-for the canonical `TEST_CMD` nextest fallback, and in Netsuke the equivalent is
-necessarily Jinja, either `command_available` in the recipe or a complementary
-`when` pair. Neither is readable under I3. QG-004 is planned, not shipped, so
-Section 10 records the question rather than this RFC answering it.
+That same `test` action carries the nextest fallback. QG-004 asks for the
+canonical `TEST_CMD` fallback, which catnap's base Makefile spells as:
+
+```make
+TEST_CMD := $(if $(shell $(CARGO) nextest --version 2>/dev/null),nextest run,test)
+```
+
+In Netsuke the equivalent is necessarily Jinja, and I3 forbids evaluating it,
+so the reader recognizes exactly one fixed spelling as the canonical idiom
+(ruling of 2026-10-02, Section 10, question 2). It is the form catnap #90's
+`test` action uses (Table 2):
+
+```plaintext
+cargo {% if command_available("cargo-nextest", cwd_mode="never") %}nextest run{% else %}test{% endif %}
+```
+
+The pattern must appear within one scalar command or one list entry, as `cargo`
+followed by that conditional and then the shared arguments. Only whitespace
+between Jinja tokens inside a tag may vary; whitespace-control markers such as
+`{%-` are not accepted. The reader records the recipe as two literal
+alternatives, `cargo nextest run <arguments>` and `cargo test <arguments>`, and
+every check that reads it judges both, so the check holds whichever branch the
+host selects. `cwd_mode="never"` is required: under `auto`, an empty `PATH`
+component makes the search include the current directory, so a checkout file
+named `cargo-nextest` could select the branch. Any other spelling is unresolved
+Jinja and `indeterminate` wherever a check reads it. That includes `which`,
+another tool name, another `cwd_mode`, a missing `else` branch, extra template
+text, or a complementary `when` pair. QG-004 and RT-011 are planned, not
+shipped. The recognition ships with the reader in step 1 so that they can
+consume it.
 
 ### 3.5 Closure and recipe checks
 
@@ -408,10 +446,17 @@ byte-identical. The Netsuke adapter is new and applies these rules.
   new parameter, `gate_executable` (default `whitaker`), names the executable,
   which the design document already admits: "a reachable recipe referencing the
   gate variable or executable" (Section 2.2.1). In a Netsuke recipe the gate is
-  proven where the command word is `whitaker`, a path ending `/whitaker`, or a
-  substituted `{{ name }}` that resolves to either. A shell default such as
-  `${WHITAKER:-whitaker}` is `indeterminate` until the doctrine decision in
-  Section 10 is taken.
+  proven where the command word is `whitaker`, a path ending `/whitaker`, a
+  substituted `{{ name }}` that resolves to either, or the shell default
+  `${WHITAKER:-whitaker}`. The default may also be a path ending `/whitaker`,
+  and the variable is the one `gate_variable` names. The doctrine decision of
+  2026-07-19, which sanctions `WHITAKER ?= whitaker` in Make
+  (`rust_makefile_baseline.rego:567-570`), was extended to this form on
+  2026-10-02 (Section 10, question 1). A local override is permitted, and CI
+  installs the real binary. A default naming anything else, such as
+  `${WHITAKER:-true}`, is not the gate. The shell default is a POSIX expansion,
+  so it proves the gate only on the routes Section 3.6 admits; on the Windows
+  PowerShell route the invocation is already `indeterminate`.
 - **Prefixes.** Make's recipe prefixes `-`, `@` and `+` do not exist in
   Netsuke. In a Netsuke recipe, `-whitaker` and `@whitaker` name other
   programs, so the Netsuke adapter never strips them and never credits them.
@@ -582,7 +627,11 @@ typos-config-builder publishes Netsuke text, PD-013 on a Netsuke repository is
 `indeterminate` and names the missing text, rather than comparing with Make
 guidance. The duplicate-guidance pattern (`spelling_config_baseline.rego:932`)
 learns `netsuke build spelling`. Publishing the text is a change in
-leynos/typos-config-builder, outside this repository.
+leynos/typos-config-builder, outside this repository. On 2026-10-02 the parent
+made that change an adoption deliverable. The adoption opens a pull request
+against leynos/typos-config-builder adding a Netsuke variant of the spelling
+block (`netsuke build spelling` in place of `make spelling`), and step 5
+consumes the release that carries it. This RFC does not make that change.
 
 QG-002 reads Makefiles as text for Whitaker install routes. The builder adds
 files named `Netsukefile`, at any depth, to the same text surfaces
@@ -619,8 +668,10 @@ existing field would still require a bump.
 
 **Package identifiers.** The package identifiers stay, because the Parabellum
 ledger records them (`docs/parabellum/ledger.jsonl`). Each affected package
-takes a minor version bump. Whether `rust-makefile-baseline` takes a display
-name that no longer says Makefile is left to Section 10.
+takes a minor version bump. The identifier `rust-makefile-baseline` stays, but
+its display name (the `name` field of `rule.yaml`, now "Rust Makefile
+baseline") and its README title become `rust-build-manifest-baseline`, in step
+1 (ruling of 2026-10-02, Section 10, question 5).
 
 **Canonical CI.** The reusable workflow gains a `build-orchestrator` input
 defaulting to `make`, so every current caller is unaffected. Under `netsuke` it
@@ -675,10 +726,11 @@ an otherwise identical recipe, which is the I2 failure the hypothesis tests.
 
 ## 5. Delivery steps and decision gates
 
-The steps are proposals for the parent to approve. Each delivers a usable slice
-rather than a layer: the first makes one package judge a Make-free checkout end
-to end, and later steps extend the same loop. Steps 4 and 5 are conditional on
-the evidence named in their gates.
+The parent approved the step sequence on 2026-10-02. Each step delivers a
+usable slice rather than a layer: the first makes one package judge a Make-free
+checkout end to end, and later steps extend the same loop. Steps 4 and 5 are
+conditional on the evidence named in their gates. Section 5.8 proposes the
+roadmap entry that carries them.
 
 ### 5.1 Step 1: judge catnap's Rust gates without a Makefile
 
@@ -694,10 +746,12 @@ the evidence named in their gates.
   documentation for each of these: the design document's catalogue rows for
   FP-003, QG-001, QG-002 and BO-001, the `.concordat` schema table's
   `build.orchestrator` field, the users' guide's FP-003 and QG-001 description,
-  and the `rust-makefile-baseline` and `whitaker-provisioning` READMEs.
+  and the `rust-makefile-baseline` and `whitaker-provisioning` READMEs; the
+  `${WHITAKER:-whitaker}` gate form and the canonical test-runner fallback
+  (Sections 3.5 and 3.4); and the `rust-build-manifest-baseline` display name
+  (Section 3.9).
 - **Excluded.** The Markdown and spelling packages, CI recognizers, BO-002,
-  BO-003, PD-013, `script:` recipes, Windows proofs, and `${VAR:-default}` gate
-  forms.
+  BO-003, PD-013, `script:` recipes, and Windows proofs.
 - **Prerequisites.** None beyond the current packages; `netsuke` v0.1.0-beta4
   is needed to generate fixtures, never at audit time.
 - **Evidence.** Gate G0, taken before any change, then gates G1 to G3.
@@ -760,8 +814,9 @@ the evidence named in their gates.
   documentation change ships with the step that changes the rule it describes,
   so no shipped behaviour waits on this externally blocked step.
 - **Prerequisites.** Step 2, and typos-config-builder publishing a Netsuke
-  block, which is outside concordat. Until then PD-013 stays `indeterminate`
-  for Netsuke repositories.
+  block, which is outside concordat. The adoption delivers that block as a pull
+  request against leynos/typos-config-builder (Section 3.8). Until a release
+  carries it, PD-013 stays `indeterminate` for Netsuke repositories.
 
 ### 5.6 Deferred
 
@@ -773,30 +828,64 @@ the evidence named in their gates.
   control flow in recipes.
 - The OpenTofu `tf-plan` targets that `infrastructure.opentofu` enables
   (design document Section 2.2, Table 2).
+- Checking the `BO` identifiers against issue #153's full list. This is a Day 2
+  goal by the ruling of 2026-10-02, not a precondition for steps 1 to 3. If it
+  finds a collision, the catalogue renames the `BO` family before the
+  identifiers reach a released rule package's findings.
 
 ### 5.7 Decision gates
 
-Thresholds are proposals until the parent approves them, and are fixed before
-any run.
+The parent approved these thresholds on 2026-10-02. They are fixed before any
+run.
 
 #### Table 6: Decision gates
 
-| Gate | Evidence                                                                                                                                              | Proceed when                                                                                                                                                     | Revise when                                                                                                                              | Stop when                                                                                       |
-| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| G0   | Run the four packages on catnap #90's base and head with the current code                                                                             | The findings match H2's prediction                                                                                                                               | A package is already silent on the head where H2 predicts a finding: record it, then proceed                                             | Never; G0 is a baseline, and it is taken before any change                                      |
-| G1   | Reader output against `netsuke help targets --json` on catnap #90's head and on each tested example in Netsuke's guide                                | Zero differences in entries, edges, defaults and conditional flags; every document Netsuke refuses is refused                                                    | One bounded revision of the reader closes every difference                                                                               | A difference needs Jinja rendering to close; then take the upstream export (Section 11)         |
-| G2   | Existing `rust-makefile-baseline` fixtures under `conftest verify`, and a replay of the ledger's recorded envelopes for that package                  | Zero changed verdicts                                                                                                                                            | —                                                                                                                                        | Any changed verdict that a correct refactor cannot remove                                       |
-| G3   | `rust-makefile-baseline` and `build-orchestration-baseline` on catnap #90's head and base, plus the step's mutations of the head's `rust-lint` action | The head yields no FP-003 or BO-001 finding, its QG-001 verdict is compliant and equals the base's, and every Section 7 mutation that names QG-001 discriminates | QG-001 is `indeterminate` on the head for a reader limitation, or the base is unexpectedly noncompliant: fix or record once, then re-run | QG-001 is `indeterminate` on the head for a documented Netsuke semantic: escalate to the parent |
-| G4   | The Markdown and spelling packages on catnap #90's base and head                                                                                      | Identical finding sets modulo paths, lines and wording, including the shared PD-007 floor finding                                                                | A difference traced to a reader or adapter defect                                                                                        | A difference that is a genuine semantic gap the adapter cannot close                            |
-| G5   | Table 8's fixtures, and the canonical workflow exercised with `build-orchestrator: netsuke` on catnap #90                                             | Every pair discriminates; the canonical workflow passes on catnap                                                                                                | A misclassified spelling of the invocation grammar                                                                                       | —                                                                                               |
-| G6   | A sweep for estate repositories with a root `Netsukefile`, or with one proposed, that also keep or want a Makefile                                    | At least one repository requests a shim                                                                                                                          | —                                                                                                                                        | None request one: defer step 4                                                                  |
+| Gate | Evidence                                                                                                                                              | Proceed when                                                                                                                                                     | Revise when                                                                                                                                                                                                                                                                                  | Stop when                                                                                                               |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| G0   | Run the four packages on catnap #90's base and head with the current code                                                                             | The findings match H2's prediction                                                                                                                               | A package is already silent on the head where H2 predicts a finding: record it, then proceed                                                                                                                                                                                                 | Never; G0 is a baseline, and it is taken before any change                                                              |
+| G1   | Reader output against `netsuke help targets --json` on catnap #90's head and on each tested example in Netsuke's guide                                | Zero differences in entries, edges, defaults and conditional flags; every document Netsuke refuses is refused                                                    | One bounded revision of the reader closes every difference                                                                                                                                                                                                                                   | A difference needs Jinja rendering to close; then take the upstream export requested as leynos/netsuke#858 (Section 11) |
+| G2   | Existing `rust-makefile-baseline` fixtures under `conftest verify`, and a replay of the ledger's recorded envelopes for that package                  | Zero changed verdicts                                                                                                                                            | —                                                                                                                                                                                                                                                                                            | Any changed verdict that a correct refactor cannot remove                                                               |
+| G3   | `rust-makefile-baseline` and `build-orchestration-baseline` on catnap #90's head and base, plus the step's mutations of the head's `rust-lint` action | The head yields no FP-003 or BO-001 finding, its QG-001 verdict is compliant and equals the base's, and every Section 7 mutation that names QG-001 discriminates | QG-001 is `indeterminate` on the head for a reader limitation, or the base is unexpectedly noncompliant: fix or record once, then re-run. QG-001 is `indeterminate` on the head for a documented Netsuke semantic: the adopter changes its manifest to the provable shape below, then re-run | QG-001 cannot be proven even on a manifest in the provable shape: the adapter is falsified for that semantic            |
+| G4   | The Markdown and spelling packages on catnap #90's base and head                                                                                      | Identical finding sets modulo paths, lines and wording, including the shared PD-007 floor finding                                                                | A difference traced to a reader or adapter defect                                                                                                                                                                                                                                            | A difference that is a genuine semantic gap the adapter cannot close                                                    |
+| G5   | Table 8's fixtures, and the canonical workflow exercised with `build-orchestrator: netsuke` on catnap #90                                             | Every pair discriminates; the canonical workflow passes on catnap                                                                                                | A misclassified spelling of the invocation grammar                                                                                                                                                                                                                                           | —                                                                                                                       |
+| G6   | A sweep for estate repositories with a root `Netsukefile`, or with one proposed, that also keep or want a Makefile                                    | At least one repository requests a shim                                                                                                                          | —                                                                                                                                                                                                                                                                                            | None request one: defer step 4                                                                                          |
 
-The G3 stop clause matters most. If QG-001 cannot be proven on catnap's head
-because of a Netsuke semantic, such as the shared shell context, the
-proposition "a Netsuke repository can satisfy concordat without a Makefile" is
-only partly supported. The decision to accept that, to change the adopter's
-manifest shape, or to extend the grammar belongs to the parent, not to the
-implementer.
+The G3 revise clause matters most. Suppose QG-001 cannot be proven on catnap's
+head because of a documented Netsuke semantic, such as the shell state that
+command-list entries share. The parent ruled on 2026-10-02 that the adopter's
+manifest is then changed until QG-001 can be proven; the case is no longer
+escalated. The provable shape has two properties:
+
+- no entry that changes or ends the shell (Section 3.5's state-changing and
+  terminating words, or a bare assignment) precedes a gate in its command list,
+  other than the single `cd <surface>` entry that qualifies a nested surface;
+  and
+- each gate stands in its own list entry, or in its own action that the gated
+  entry point reaches through `deps`.
+
+catnap #90's `rust-lint` action already has that shape, so the ruling changes
+nothing in its manifest unless G3 finds otherwise. The ambiguity in Netsuke's
+contract that makes the rule necessary is raised as
+[leynos/netsuke#857](https://github.com/leynos/netsuke/issues/857). If that
+issue settles the semantics in a way the adapter can read, the provable shape
+may widen through a later change to this RFC's Section 3.5.
+
+### 5.8 Roadmap entry
+
+`docs/roadmap.md` has no item for this work. Its steps run from 4.1 to 4.3, and
+its tasks are unnumbered checklist items: the rule packages of RFCs 0001 to
+0003 appear as "Ship …" items under steps 4.2 and 4.3. Because this RFC touches
+both of those steps' domains, the proposal is a new step, entered on adoption,
+rather than items scattered across them:
+
+- **4.4. Judge Netsuke-orchestrated repositories at Make's strictness**, with
+  one item per step of this section, in order: 4.4.1 for step 1 (Section 5.1),
+  4.4.2 for step 2 (Section 5.2), 4.4.3 for step 3 (Section 5.3), 4.4.4 for
+  step 4 (Section 5.4), and 4.4.5 for step 5 (Section 5.5).
+
+The dotted task numbers follow the roadmap conventions' `phase.step.task`
+scheme. If the roadmap keeps its tasks unnumbered, the same five items enter
+step 4.4 in that order without numbers. This RFC does not edit the roadmap.
 
 ## 6. Fixtures
 
@@ -826,37 +915,40 @@ or minimally changed.
 
 #### Table 8: Netsuke adapter and recognizer fixtures
 
-| Must raise                                                                                                                | Must not raise                                                                                     | Difference under test                                                          |
-| ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `gate-or-true`: the `whitaker` entry ending `\|\| true`                                                                   | `catnap-head`: the entry as catnap has it                                                          | Binding tail within an entry                                                   |
-| `gate-after-semicolon-masked`: `whitaker --all; true` in one entry                                                        | `gate-own-entry`: `whitaker --all` and `true` as two list entries                                  | Entry boundaries bind; a `;` inside an entry masks                             |
-| `gate-pipeline-same-entry`: the entry `whitaker --all \| tee lint.log`                                                    | `gate-before-pipeline-entry`: the gate entry followed by a separate entry `cargo metadata \| head` | A pipe masks only within its own entry                                         |
-| `lint-one-hop-only`: `lint` depends on `checks`, and `checks` on an action that never runs the gate                       | `lint-two-hops`: the same chain where the second hop runs the gate                                 | The closure is transitive, not one hop                                         |
-| `gate-at-prefixed`: the entry `@whitaker --all`                                                                           | `catnap-head`                                                                                      | Make prefixes are not read in Netsuke                                          |
-| `gate-under-when`: `rust-lint` carrying a `when` expression                                                               | `catnap-head`                                                                                      | Conditional ancestry, `indeterminate`                                          |
-| `lint-defined-twice`: two `lint` actions under complementary `when` expressions                                           | `catnap-head`                                                                                      | Ambiguous entry, `indeterminate`                                               |
-| `gate-after-exec`: an entry `exec true` before the `whitaker` entry                                                       | `gate-after-echo`: an entry `echo starting` before it                                              | `exec` ends the chain                                                          |
-| `gate-after-exit`: an entry `exit 0` before the `whitaker` entry                                                          | `gate-after-echo-exit`: an entry `echo "exit 0"` before it                                         | `exit` ends the shared shell only in command position                          |
-| `gate-after-conditional-exit`: an entry `test -f skip-lint \|\| exit 0` before the gate                                   | `gate-after-echo`                                                                                  | A conditional exit makes the gate `indeterminate`                              |
-| `gate-after-exit-same-entry`: the entry `exit 0; whitaker --all`                                                          | `catnap-head`                                                                                      | Termination before the gate within one entry                                   |
-| `gate-after-cd-elsewhere`: an entry `cd docs` before the gate, with a root surface only                                   | `gate-after-cd-surface`: an entry `cd rust` before the gate, with `rust/Cargo.toml` declared       | Shared shell context qualifies a surface and disqualifies the root             |
-| `gate-in-script`: the gate inside a `script:` recipe                                                                      | `catnap-head`                                                                                      | Scripts are `indeterminate` in the first slice                                 |
-| `lint-dep-templated`: `deps: ["{{ lint_parts }}"]`                                                                        | `catnap-head`                                                                                      | Dynamic edge, `indeterminate`                                                  |
-| `gate-var-unresolved`: `{{ tool }}` where `vars.tool` itself contains Jinja                                               | `gate-var-literal`: `{{ tool }}` where `vars.tool` is `whitaker`                                   | Single-literal substitution only                                               |
-| `duplicate-key`: a manifest repeating `actions:`                                                                          | `catnap-head`                                                                                      | The reader refuses what Netsuke refuses                                        |
-| `ci-make-under-netsuke`: a workflow running `make lint` with Netsuke authoritative and no conforming shim                 | `ci-netsuke-build`: the same step as `netsuke build lint`                                          | BO-003: CI runs the audited graph                                              |
-| `ci-make-unmatched-target`: Netsuke authoritative, a Makefile `ci` target running the gates, and `make ci` in a workflow  | `make-unmatched-target-local`: the same Makefile target, which no workflow invokes                 | BO-003 covers every target of the second orchestrator, not only governed names |
-| `ci-netsuke-other-file`: `netsuke -f ci.yml build lint`                                                                   | `ci-netsuke-build`                                                                                 | A selected manifest is not the audited one, `indeterminate`                    |
-| `ci-netsuke-inline-file`: `NETSUKE_FILE=ci/Netsukefile netsuke build lint`                                                | `ci-netsuke-inline-unrelated`: catnap's `ACTIONLINT="…" netsuke build lint`                        | Which variable the assignment prefix sets                                      |
-| `ci-netsuke-exported-file`: `export NETSUKE_CONFIG=ci.toml` on an earlier line of the same `run:` body                    | `ci-netsuke-build`                                                                                 | Shell-level environment, not only the workflow's `env:`                        |
-| `ci-netsuke-github-env-file`: an earlier step in the job appends `NETSUKE_FILE=…` to `$GITHUB_ENV`                        | `ci-netsuke-build`                                                                                 | Environment written by an earlier step                                         |
-| `ci-netsuke-defaults-run-dir`: a job with `defaults.run.working-directory: tools` and a step `netsuke build lint`         | `ci-netsuke-build`                                                                                 | The inherited working directory, not only the step's own key                   |
-| `ci-reusable-input-mismatch`: a Make-authoritative caller passing `build-orchestrator: netsuke` to the canonical workflow | `ci-reusable-input-matches`: the same caller passing `make`, or omitting the input                 | BO-003 reads the reusable workflow's input against the resolved authority      |
-| `ci-make-shim-override`: `make SHELL=true lint` against a conforming shim under Netsuke authority                         | `ci-make-shim`: `make lint` against the same shim                                                  | Invocation-time overrides void the shim exemption, `indeterminate`             |
-| `ci-netsuke-cd`: `cd tools && netsuke build lint`                                                                         | `ci-netsuke-build`                                                                                 | A moved working directory loads another `Netsukefile`                          |
-| `ci-netsuke-windows-powershell`: `netsuke build lint` on `windows-latest` without `NETSUKE_WINDOWS_SHELL`                 | `ci-netsuke-windows-bash`: the same step with `NETSUKE_WINDOWS_SHELL: bash`                        | POSIX proofs do not cover PowerShell, `indeterminate`                          |
-| `ci-netsuke-markdownlint`: a `run:` step `netsuke build markdownlint` beside no action step                               | `ci-netsuke-echo`: a step that echoes `netsuke build markdownlint`                                 | PD-006 reads the command word, not the text                                    |
-| —                                                                                                                         | `ci-netsuke-bare-target`: `netsuke lint`                                                           | Not an invocation; Netsuke rejects it, so nothing is bypassed                  |
+| Must raise                                                                                                                                  | Must not raise                                                                                     | Difference under test                                                          |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `gate-or-true`: the `whitaker` entry ending `\|\| true`                                                                                     | `catnap-head`: the entry as catnap has it                                                          | Binding tail within an entry                                                   |
+| `gate-after-semicolon-masked`: `whitaker --all; true` in one entry                                                                          | `gate-own-entry`: `whitaker --all` and `true` as two list entries                                  | Entry boundaries bind; a `;` inside an entry masks                             |
+| `gate-pipeline-same-entry`: the entry `whitaker --all \| tee lint.log`                                                                      | `gate-before-pipeline-entry`: the gate entry followed by a separate entry `cargo metadata \| head` | A pipe masks only within its own entry                                         |
+| `lint-one-hop-only`: `lint` depends on `checks`, and `checks` on an action that never runs the gate                                         | `lint-two-hops`: the same chain where the second hop runs the gate                                 | The closure is transitive, not one hop                                         |
+| `gate-at-prefixed`: the entry `@whitaker --all`                                                                                             | `catnap-head`                                                                                      | Make prefixes are not read in Netsuke                                          |
+| `gate-under-when`: `rust-lint` carrying a `when` expression                                                                                 | `catnap-head`                                                                                      | Conditional ancestry, `indeterminate`                                          |
+| `lint-defined-twice`: two `lint` actions under complementary `when` expressions                                                             | `catnap-head`                                                                                      | Ambiguous entry, `indeterminate`                                               |
+| `gate-after-exec`: an entry `exec true` before the `whitaker` entry                                                                         | `gate-after-echo`: an entry `echo starting` before it                                              | `exec` ends the chain                                                          |
+| `gate-after-exit`: an entry `exit 0` before the `whitaker` entry                                                                            | `gate-after-echo-exit`: an entry `echo "exit 0"` before it                                         | `exit` ends the shared shell only in command position                          |
+| `gate-after-conditional-exit`: an entry `test -f skip-lint \|\| exit 0` before the gate                                                     | `gate-after-echo`                                                                                  | A conditional exit makes the gate `indeterminate`                              |
+| `gate-after-exit-same-entry`: the entry `exit 0; whitaker --all`                                                                            | `catnap-head`                                                                                      | Termination before the gate within one entry                                   |
+| `gate-after-cd-elsewhere`: an entry `cd docs` before the gate, with a root surface only                                                     | `gate-after-cd-surface`: an entry `cd rust` before the gate, with `rust/Cargo.toml` declared       | Shared shell context qualifies a surface and disqualifies the root             |
+| `gate-in-script`: the gate inside a `script:` recipe                                                                                        | `catnap-head`                                                                                      | Scripts are `indeterminate` in the first slice                                 |
+| `lint-dep-templated`: `deps: ["{{ lint_parts }}"]`                                                                                          | `catnap-head`                                                                                      | Dynamic edge, `indeterminate`                                                  |
+| `gate-var-unresolved`: `{{ tool }}` where `vars.tool` itself contains Jinja                                                                 | `gate-var-literal`: `{{ tool }}` where `vars.tool` is `whitaker`                                   | Single-literal substitution only                                               |
+| `gate-shell-default-other`: the entry `${WHITAKER:-true} --all`                                                                             | `gate-shell-default`: the entry `${WHITAKER:-whitaker} --all`                                      | The shell default proves the gate only when the default is Whitaker            |
+| `test-fallback-auto-cwd`: catnap's `test` action with `cwd_mode="auto"`; the recipe is unresolved, so a check reading it is `indeterminate` | `test-fallback-canonical`: catnap's `test` action as written                                       | Only the one canonical `command_available` spelling is read                    |
+| `test-fallback-which`: the same branch selected by `{% if which("cargo-nextest") %}`                                                        | `test-fallback-canonical`                                                                          | Another helper is not the canonical idiom                                      |
+| `duplicate-key`: a manifest repeating `actions:`                                                                                            | `catnap-head`                                                                                      | The reader refuses what Netsuke refuses                                        |
+| `ci-make-under-netsuke`: a workflow running `make lint` with Netsuke authoritative and no conforming shim                                   | `ci-netsuke-build`: the same step as `netsuke build lint`                                          | BO-003: CI runs the audited graph                                              |
+| `ci-make-unmatched-target`: Netsuke authoritative, a Makefile `ci` target running the gates, and `make ci` in a workflow                    | `make-unmatched-target-local`: the same Makefile target, which no workflow invokes                 | BO-003 covers every target of the second orchestrator, not only governed names |
+| `ci-netsuke-other-file`: `netsuke -f ci.yml build lint`                                                                                     | `ci-netsuke-build`                                                                                 | A selected manifest is not the audited one, `indeterminate`                    |
+| `ci-netsuke-inline-file`: `NETSUKE_FILE=ci/Netsukefile netsuke build lint`                                                                  | `ci-netsuke-inline-unrelated`: catnap's `ACTIONLINT="…" netsuke build lint`                        | Which variable the assignment prefix sets                                      |
+| `ci-netsuke-exported-file`: `export NETSUKE_CONFIG=ci.toml` on an earlier line of the same `run:` body                                      | `ci-netsuke-build`                                                                                 | Shell-level environment, not only the workflow's `env:`                        |
+| `ci-netsuke-github-env-file`: an earlier step in the job appends `NETSUKE_FILE=…` to `$GITHUB_ENV`                                          | `ci-netsuke-build`                                                                                 | Environment written by an earlier step                                         |
+| `ci-netsuke-defaults-run-dir`: a job with `defaults.run.working-directory: tools` and a step `netsuke build lint`                           | `ci-netsuke-build`                                                                                 | The inherited working directory, not only the step's own key                   |
+| `ci-reusable-input-mismatch`: a Make-authoritative caller passing `build-orchestrator: netsuke` to the canonical workflow                   | `ci-reusable-input-matches`: the same caller passing `make`, or omitting the input                 | BO-003 reads the reusable workflow's input against the resolved authority      |
+| `ci-make-shim-override`: `make SHELL=true lint` against a conforming shim under Netsuke authority                                           | `ci-make-shim`: `make lint` against the same shim                                                  | Invocation-time overrides void the shim exemption, `indeterminate`             |
+| `ci-netsuke-cd`: `cd tools && netsuke build lint`                                                                                           | `ci-netsuke-build`                                                                                 | A moved working directory loads another `Netsukefile`                          |
+| `ci-netsuke-windows-powershell`: `netsuke build lint` on `windows-latest` without `NETSUKE_WINDOWS_SHELL`                                   | `ci-netsuke-windows-bash`: the same step with `NETSUKE_WINDOWS_SHELL: bash`                        | POSIX proofs do not cover PowerShell, `indeterminate`                          |
+| `ci-netsuke-markdownlint`: a `run:` step `netsuke build markdownlint` beside no action step                                                 | `ci-netsuke-echo`: a step that echoes `netsuke build markdownlint`                                 | PD-006 reads the command word, not the text                                    |
+| —                                                                                                                                           | `ci-netsuke-bare-target`: `netsuke lint`                                                           | Not an invocation; Netsuke rejects it, so nothing is bypassed                  |
 
 ## 7. Contract mutations
 
@@ -892,6 +984,16 @@ raise.
 - **Governed-name mutation.** Restrict BO-003 to the governed entry-point
   names. The rule must stop raising on `ci-make-unmatched-target`, which is the
   route a repository would use to run unaudited gates under a neutral name.
+- **Shell-default mutation.** Accept any `${WHITAKER:-…}` default as the gate.
+  The rule must stop raising on `gate-shell-default-other`. Narrowing it to
+  reject the shell default altogether must make it raise on
+  `gate-shell-default`, which the ruling of 2026-10-02 makes compliant.
+- **Fallback-pattern mutation.** Accept any `command_available` conditional
+  as the canonical test-runner fallback. The reader must stop marking
+  `test-fallback-auto-cwd` unresolved, and accepting any conditional at all
+  must also stop it marking `test-fallback-which`. Rejecting the canonical
+  spelling must make `test-fallback-canonical` unresolved, so the pattern is
+  proved narrow as well as sufficient.
 - **Condition mutation.** Ignore `when` and `foreach`. The rule must stop
   raising on `gate-under-when` and `lint-defined-twice`.
 - **Hop mutation.** Follow direct `deps` only, one hop from the root. The rule
@@ -978,8 +1080,9 @@ without a declaration, which is the intended signal.
    `NETSUKE_WINDOWS_SHELL: bash`;
 4. installs Netsuke as a verified binary rather than from source (RFC 0001
    TA-001 and TA-002), and Ninja 1.10 or newer; and
-5. carries typos-config-builder's Netsuke guidance block once it exists
-   (PD-013).
+5. carries typos-config-builder's Netsuke guidance block once the release
+   from the adoption's typos-config-builder pull request exists (PD-013,
+   Section 3.8).
 
 catnap #90 already satisfies steps 2 and 3 without a shim and would need step
 4's install change and, independently of Netsuke, its builder pin moved to the
@@ -990,31 +1093,36 @@ Make path is untouched.
 
 ## 10. Open questions
 
-1. **The `${WHITAKER:-whitaker}` form.** Make's `WHITAKER ?= whitaker` is a
-   sanctioned estate pattern because a local override is permitted and CI
-   installs the real binary (`rust_makefile_baseline.rego:567-570`, doctrine
-   decision of 2026-07-19). The shell default is its closest Netsuke
-   counterpart but is resolved at run time rather than make time. Whether the
-   doctrine extends to it is a decision for the parent, and until it is taken
-   the form is `indeterminate`.
-2. **The test-runner fallback.** QG-004 and RT-011 will need a readable
-   Netsuke form of the nextest fallback. Both available forms are Jinja that a
-   hermetic reader cannot evaluate. Recognizing one fixed `command_available`
-   pattern as the canonical idiom, or asking Netsuke for a declarative form,
-   are the two candidates.
+1. **The `${WHITAKER:-whitaker}` form.** The question was whether the
+   doctrine decision of 2026-07-19 that sanctions Make's `WHITAKER ?= whitaker`
+   extends to the shell default, its closest Netsuke counterpart. Resolved
+   2026-10-02: it does, so the form is compliant on the POSIX routes (Section
+   3.5); on the Windows PowerShell route the expansion does not occur and
+   Section 3.6 keeps the invocation `indeterminate`.
+2. **The test-runner fallback.** The question was how QG-004 and RT-011 could
+   read Netsuke's nextest fallback, which is necessarily Jinja. Resolved
+   2026-10-02: the reader recognizes one canonical `command_available` pattern,
+   specified in Section 3.4, and every other spelling is `indeterminate`.
 3. **The `.netsuke.toml` keys.** Which configuration keys select a manifest
    and default targets, and how `extends` composes them, must be read from
    Netsuke's sample configuration in step 1.
-4. **Issue #153 identifiers.** The proposed `BO` family must be checked
-   against issue #153's full identifier list before the catalogue changes.
-5. **The `rust-makefile-baseline` name.** Its identifier stays for the
-   ledger's sake. Whether its display name and README should stop saying
-   Makefile is a presentation decision.
-6. **An upstream fact export.** If G1 fails, or once Netsuke reaches 1.0,
-   a `netsuke` query that emits entries, edges and unrendered recipe text as
-   versioned JSON, run hermetically, would replace the concordat-side reader as
-   `makeutil` replaces a Make parser. Netsuke is an estate project, so the
-   request can be made, but this RFC does not depend on it.
+4. **Issue #153 identifiers.** The question was whether the `BO` family must
+   be checked against issue #153's full identifier list before the catalogue
+   changes. Resolved 2026-10-02: the check is a Day 2 goal, not a precondition
+   for steps 1 to 3, and is listed in Section 5.6.
+5. **The `rust-makefile-baseline` name.** The question was whether the
+   package's display name and README should stop saying Makefile. Resolved
+   2026-10-02: the identifier stays `rust-makefile-baseline` for the ledger's
+   sake, and the display name and README become `rust-build-manifest-baseline`
+   (Section 3.9).
+6. **An upstream fact export.** The question was whether to ask Netsuke for a
+   hermetic query that emits entries, edges and unrendered recipe text as
+   versioned JSON, which would replace the concordat-side reader as `makeutil`
+   replaces a Make parser. Resolved 2026-10-02: the request is raised as
+   [leynos/netsuke#858](https://github.com/leynos/netsuke/issues/858). The
+   issue lists Netsuke roadmap items 3.15.3, 12.1.1 to 12.1.4, 12.2.3 (with its
+   RFC 0009) and 3.4.5 as blocking it. This RFC still does not depend on it;
+   G1's stop clause is where it would be taken up.
 7. **The G1 oracle's coverage.** Netsuke's guide documents the `help targets`
    JSON envelope but not whether its catalogue carries each entry's
    dependencies. If it does not, G1 compares entries, defaults and conditional
@@ -1054,7 +1162,9 @@ with Netsuke owning the translation. Rejected for the same semantic reason: the
 `makeutil` schema has no shared shell context, no serial dependency order, and
 an ignore-errors flag Netsuke lacks. The context mutation in Section 7 is
 exactly what this export would apply without anyone choosing it. A
-Netsuke-native export is different and remains open (Section 10).
+Netsuke-native export is different. It is requested as
+[leynos/netsuke#858](https://github.com/leynos/netsuke/issues/858), and this
+RFC does not depend on it (Section 10, question 6).
 
 **Parse the Ninja that `netsuke generate` writes.** Ninja is Netsuke's real
 output, and reading it would avoid modelling the manifest schema. Rejected
@@ -1069,7 +1179,9 @@ This breaks I3.
 **Use `netsuke help targets --json` as the only fact source.** Query mode is
 hermetic by design, and it is the fidelity oracle G1 uses. Rejected as the sole
 source because it skips recipe bodies, and every gate check is a check of
-recipe text.
+recipe text. The export requested in leynos/netsuke#858 would carry recipe text
+in the same hermetic mode, which is why it is the named replacement for the
+concordat-side reader.
 
 **Audit both manifests whenever both exist.** This needs no resolution rule.
 Rejected because the manifest CI does not run produces findings nobody can act
