@@ -1,139 +1,173 @@
-"""Property tests for the build-defaults readers' documented contracts.
+"""Property tests for the BD-008 Makefile clause of `rust-build-defaults`.
 
-Two readers in this rule accept input a repository author writes freely, and
-the example tests above pin the spellings the estate happens to use today. The
-properties here are derived from what the modules promise rather than from how
-they are written: that Cargo's two spellings of a value-taking flag mean the
-same thing, and that a heading inside a fenced block is never a heading.
+Each example writes a generated Makefile beside a compliant Cargo
+configuration, builds the real envelope (through `makeutil`) and evaluates the
+real policy (through Conftest, by the public `runner.run_rule`), then compares
+the findings with an oracle computed from the generated decisions alone.
+The oracle never reads the Makefile back, so a defect in the policy's option,
+delegation or scoping handling cannot be shared with it.
+
+The fixture-based Rego tests pin chosen shapes; these cover the spellings of
+`$(MAKE)` options, the ways a delegation becomes dynamic, and where a
+Makefile-wide assignment applies.
 """
 
 from __future__ import annotations
 
+import dataclasses
+import pathlib
+import tempfile
 import typing as typ
 
-from hypothesis import given
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from concordat.rules.cargo_config import (
-    VALUE_TAKING_FLAGS,
-    classify_target_key,
-    normalise_flags,
+from concordat.rules import runner
+from concordat.rules.envelope import build_build_defaults_envelope
+
+_RULE_ID: typ.Final = "rust-build-defaults"
+_PARAMETERS: typ.Final[dict[str, object]] = {
+    "exception_documents": ["docs/developers-guide.md"],
+    "exception_keyword": "Cranelift",
+}
+_FIXTURE_REPO: typ.Final = (
+    pathlib.Path(__file__).resolve().parents[2]
+    / "platform-standards/canon/lint-rules/rust-build-defaults/fixtures/repos"
+    / "gate-delegated"
 )
-from concordat.rules.exception_docs import extract_headings
-
-# A flag value, as it appears after its letter: `threads=8`, `link-arg=...`.
-values = st.text(
-    alphabet=st.characters(
-        min_codepoint=33, max_codepoint=126, exclude_characters="\\'\""
-    ),
-    min_size=1,
-    max_size=12,
+_CHECKOUT_FILES: typ.Final = (
+    "Cargo.toml",
+    "rust-toolchain.toml",
+    ".cargo/config.toml",
+)
+_THREADS: typ.Final = "-Zthreads=8"
+_MOLD: typ.Final = "-Clink-arg=-fuse-ld=mold"
+_STATIC_OPTIONS: typ.Final = (
+    "",
+    "-s ",
+    "--no-print-directory ",
+    "--jobs=2 ",
+    "-k --no-print-directory ",
+)
+_DYNAMIC_DELEGATIONS: typ.Final = ("-f other.mk unit", "-C sub unit", "$(TARGET)")
+_DYNAMIC_MESSAGE: typ.Final = (
+    'the "test" target reaches a dynamic recursive Make invocation, '
+    "so its recipes cannot be proven"
 )
 
+_MISSING_FLAG_MESSAGE: typ.Final = (
+    '{where} sets RUSTFLAGS without "{flag}"; an assigned RUSTFLAGS replaces '
+    "every rustflags source in the Cargo configuration, so the gate build "
+    "loses it"
+)
 
-@given(flag=st.sampled_from(sorted(VALUE_TAKING_FLAGS)), value=values)
-def test_the_split_and_joined_spellings_agree(flag: str, value: str) -> None:
-    """Cargo reads `["-C", "x"]` and `["-Cx"]` alike, so the reader must too.
-
-    This is the contract the estate's three spellings of one linker flag rest
-    on. If they disagreed for some value, a repository would comply under one
-    spelling and fail under the other with the same configuration.
-    """
-    split = normalise_flags([flag, value])
-    joined = normalise_flags([flag + value])
-    assert split == joined, (
-        f"{flag!r} + {value!r} normalizes to {split!r} split and {joined!r} joined"
-    )
+type Finding = tuple[str, str]
 
 
-@given(text=st.text(max_size=40))
-def test_normalising_a_string_matches_normalising_its_tokens(text: str) -> None:
-    """Cargo splits a string-valued `rustflags` on whitespace and reads the rest.
+@dataclasses.dataclass(frozen=True)
+class FlagChoice:
+    """Which of the fast flags a generated `RUSTFLAGS` value carries."""
 
-    The string form is a route to every flag the array form carries, so a
-    reader that treated them differently would let one of them past.
-    """
-    assert normalise_flags(text) == normalise_flags(text.split()), (
-        f"the string and array forms of {text!r} must read alike"
-    )
+    has_threads: bool
+    has_mold: bool
+
+    def value(self) -> str:
+        """Return the `RUSTFLAGS` value, always starting with `-D warnings`."""
+        flags = ["-D warnings"]
+        flags += [_THREADS] if self.has_threads else []
+        flags += [_MOLD] if self.has_mold else []
+        return " ".join(flags)
+
+    def missing(self) -> set[str]:
+        """Return the fast flags the value leaves out."""
+        return {
+            flag
+            for flag, present in ((_THREADS, self.has_threads), (_MOLD, self.has_mold))
+            if not present
+        }
 
 
+_FLAGS = st.builds(FlagChoice, has_threads=st.booleans(), has_mold=st.booleans())
+
+
+def _evaluate(makefile: str) -> set[Finding]:
+    """Return the BD-008 findings for a checkout carrying *makefile*."""
+    with tempfile.TemporaryDirectory(prefix="bd008-property-") as scratch:
+        root = pathlib.Path(scratch)
+        for name in _CHECKOUT_FILES:
+            target = root / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes((_FIXTURE_REPO / name).read_bytes())
+        (root / "Makefile").write_text(makefile, encoding="utf-8")
+        envelope = build_build_defaults_envelope(root, _PARAMETERS)
+        result = runner.run_rule(
+            _RULE_ID,
+            root,
+            envelope_builder=lambda _rule_id, _checkout: typ.cast(
+                "runner.RuleEnvelope", envelope
+            ),
+        )
+    return {
+        (finding.verdict, finding.message)
+        for finding in result.findings
+        if finding.rule_id == "BD-008"
+    }
+
+
+def _missing_flag_findings(where: str, missing: set[str]) -> set[Finding]:
+    """Return the findings an assignment at *where* lacking *missing* earns."""
+    return {
+        ("noncompliant", _MISSING_FLAG_MESSAGE.format(where=where, flag=flag))
+        for flag in missing
+    }
+
+
+@settings(max_examples=20, deadline=None)
 @given(
-    before=st.lists(st.text(max_size=20), max_size=4),
-    fenced=st.lists(st.text(max_size=20), max_size=4),
-    level=st.integers(min_value=1, max_value=6),
-    heading=st.text(
-        alphabet=st.characters(min_codepoint=97, max_codepoint=122),
-        min_size=1,
-        max_size=8,
-    ),
+    flags=_FLAGS,
+    options=st.sampled_from(_STATIC_OPTIONS),
+    is_delegated=st.booleans(),
 )
-def test_a_heading_inside_a_fence_is_never_extracted(
-    before: list[str], fenced: list[str], level: int, heading: str
+def test_a_delegated_gate_recipe_is_judged_like_a_direct_one(
+    flags: FlagChoice, options: str, *, is_delegated: bool
 ) -> None:
-    """The fence state machine's whole purpose, over arbitrary surrounding text.
-
-    Every one of these exception sections quotes Rust, whose attributes and
-    doc comments begin with `#`, so a heading-shaped line inside a fence is
-    the normal case rather than an odd one.
-    """
-    marker = "#" * level
-    lines = [
-        *[line for line in before if not line.lstrip().startswith(("#", "`", "~"))],
-        "```text",
-        *[line for line in fenced if not line.lstrip().startswith(("`", "~"))],
-        f"{marker} {heading}",
-        "```",
-    ]
-    found = [item.text for item in extract_headings(lines)]
-    assert heading not in found, (
-        f"a fenced heading must not be extracted, got {found!r} from {lines!r}"
+    """Every spelling of `$(MAKE)` options reaches the recipe it delegates to."""
+    recipe = f'\tRUSTFLAGS="{flags.value()}" cargo test\n'
+    if is_delegated:
+        makefile = f"test:\n\t$(MAKE) {options}inner\n\ninner:\n{recipe}"
+        where = "the inner recipe"
+    else:
+        makefile = f"test:\n{recipe}"
+        where = "the test recipe"
+    assert _evaluate(makefile) == _missing_flag_findings(where, flags.missing()), (
+        makefile
     )
 
 
-@given(
-    key=st.text(
-        alphabet=st.characters(min_codepoint=32, max_codepoint=126), max_size=40
+@settings(max_examples=12, deadline=None)
+@given(flags=_FLAGS, delegation=st.sampled_from(_DYNAMIC_DELEGATIONS))
+def test_a_delegation_that_cannot_be_followed_is_indeterminate(
+    flags: FlagChoice, delegation: str
+) -> None:
+    """A computed or foreign-file delegation is never passed or failed."""
+    makefile = (
+        f"test:\n\t$(MAKE) {delegation}\n\n"
+        f'unit:\n\tRUSTFLAGS="{flags.value()}" cargo test\n'
     )
-)
-def test_an_unplaced_key_claims_nothing(key: str) -> None:
-    """Unclassified means the reader made no claim, in either direction.
+    assert _evaluate(makefile) == {("indeterminate", _DYNAMIC_MESSAGE)}, makefile
 
-    The policy reads `linux` and `linux_only` from the fact rather than from
-    `classified`, so an unplaced key that still asserted one of them would be
-    a guess the rest of the rule would act on.
-    """
-    classification = classify_target_key(key)
-    if classification.is_classified:
-        return
-    assert classification.is_linux is False, f"{key!r} claims Linux while unplaced"
-    assert classification.is_linux_only is False, (
-        f"{key!r} claims Linux-only while unplaced"
+
+@settings(max_examples=12, deadline=None)
+@given(flags=_FLAGS, has_gate_target=st.booleans())
+def test_a_makefile_wide_assignment_applies_only_where_a_gate_exists(
+    flags: FlagChoice, *, has_gate_target: bool
+) -> None:
+    """A Makefile-wide `RUSTFLAGS` overrides a gate build only if one exists."""
+    target = "test:\n\tcargo test\n" if has_gate_target else "bench:\n\tcargo bench\n"
+    makefile = f"RUSTFLAGS := {flags.value()}\n\n{target}"
+    expected = (
+        _missing_flag_findings("the Makefile-wide assignment", flags.missing())
+        if has_gate_target
+        else set()
     )
-
-
-@given(
-    key=st.text(
-        alphabet=st.characters(min_codepoint=32, max_codepoint=126), max_size=40
-    )
-)
-def test_linux_only_implies_linux(key: str) -> None:
-    """A source that applies only on Linux is a source that applies on Linux.
-
-    BD-002 asks the first question to decide where the linker must be, and the
-    second to decide where it must not be. A key satisfying one and not the
-    other would be required to carry the flag and refused for carrying it.
-    """
-    classification = classify_target_key(key)
-    if classification.is_linux_only:
-        assert classification.is_linux, f"{key!r} is Linux-only but not Linux"
-
-
-def test_the_value_taking_flags_are_the_ones_documented() -> None:
-    """The sampled set is the module's, so a new flag joins these properties."""
-    assert {"-C", "-Z"} <= VALUE_TAKING_FLAGS, (
-        "the standard's own flags must be among the value-taking ones"
-    )
-    assert all(len(flag) == 2 for flag in typ.cast("set[str]", VALUE_TAKING_FLAGS)), (
-        "only single-letter flags are rejoined with the token that follows"
-    )
+    assert _evaluate(makefile) == expected, makefile

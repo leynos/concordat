@@ -23,9 +23,12 @@ from concordat.rules.markdown_envelope import (
     _exists,
     _has_markdown_files,
     _is_dir,
-    _is_file,
     _is_symlink,
     build_markdown_envelope,
+    is_file,
+    load_workflows,
+    resolved_root,
+    within_checkout,
 )
 from tests.unit.rule_test_support import MINIMAL_REPORT
 
@@ -487,7 +490,7 @@ class TestPathProbes:
         "probe",
         [
             pytest.param(_exists, id="exists"),
-            pytest.param(_is_file, id="is_file"),
+            pytest.param(is_file, id="is_file"),
             pytest.param(_is_dir, id="is_dir"),
             pytest.param(_is_symlink, id="is_symlink"),
         ],
@@ -514,7 +517,7 @@ class TestPathProbes:
         ("probe", "expected"),
         [
             pytest.param(_exists, True, id="exists-file"),
-            pytest.param(_is_file, True, id="is-a-file"),
+            pytest.param(is_file, True, id="is-a-file"),
             pytest.param(_is_symlink, False, id="not-a-link"),
         ],
     )
@@ -550,7 +553,7 @@ class TestPathProbes:
         "probe",
         [
             pytest.param(_exists, id="exists"),
-            pytest.param(_is_file, id="is_file"),
+            pytest.param(is_file, id="is_file"),
             pytest.param(_is_dir, id="is_dir"),
             pytest.param(_is_symlink, id="is_symlink"),
         ],
@@ -569,7 +572,7 @@ class TestPathProbes:
         "probe",
         [
             pytest.param(_exists, id="exists"),
-            pytest.param(_is_file, id="is_file"),
+            pytest.param(is_file, id="is_file"),
             pytest.param(_is_dir, id="is_dir"),
         ],
     )
@@ -619,15 +622,50 @@ class TestPathProbes:
     def test_a_symlink_is_judged_without_following_it(
         self, tmp_path: pathlib.Path
     ) -> None:
-        """`_is_symlink` reads the link itself, `_is_file` its target."""
+        """`_is_symlink` reads the link itself, `is_file` its target."""
         target = tmp_path / "real.md"
         target.write_text("# Hi\n", encoding="utf-8")
         link = tmp_path / "link.md"
         link.symlink_to(target)
         assert _is_symlink(link, "probe-path") is True, "the link is a link"
-        assert _is_file(link, "probe-path") is True, (
+        assert is_file(link, "probe-path") is True, (
             "the link resolves to a regular file"
         )
         assert _is_symlink(target, "probe-path") is False, (
             "the target is not itself a link"
         )
+
+
+class TestPublicWorkflowReaders:
+    """The readers other envelope builders import are a supported public API."""
+
+    def test_load_workflows_reports_decoded_and_undecodable_files(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A file that does not decode is returned with its error, not dropped.
+
+        The build-defaults and spelling envelopes call this by its public
+        name, so the behaviour they rely on is pinned here.
+        """
+        directory = tmp_path / ".github" / "workflows"
+        directory.mkdir(parents=True)
+        (directory / "a.yml").write_text(WORKFLOW, encoding="utf-8")
+        (directory / "b.yml").write_text("on: [push\n", encoding="utf-8")
+        facts = load_workflows(tmp_path, resolved_root(tmp_path))
+        assert [(fact["path"], fact["error"] is None) for fact in facts] == [
+            (".github/workflows/a.yml", True),
+            (".github/workflows/b.yml", False),
+        ], facts
+
+    def test_within_checkout_refuses_a_link_that_leaves_the_checkout(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A workflow linked to a file elsewhere is never read into an envelope."""
+        outside = tmp_path / "outside.yml"
+        outside.write_text(WORKFLOW, encoding="utf-8")
+        checkout = tmp_path / "checkout"
+        checkout.mkdir()
+        link = checkout / "ci.yml"
+        link.symlink_to(outside)
+        with pytest.raises(OperationalRuleError):
+            within_checkout(resolved_root(checkout), link, "read-workflow")

@@ -767,10 +767,11 @@ unregistered package to `build_envelope`, on the reasoning that existing
 packages should be left untouched. That is a fail-open default inside a
 fail-closed audit: a package whose policy expects one envelope, handed another,
 does not degrade — it answers confidently about a document it was never written
-for. `rust-build-defaults` reads no Makefile at all, so a registration mistake
-would have turned into an `EN-001` finding about the wrong input rather than a
-failure to audit. Refusing costs one line in a mapping or one line in a
-manifest; the alternative costs a verdict nobody can trust.
+for. `rust-build-defaults` expects a different document from
+`rust-makefile-baseline`, so a registration mistake would have turned into an
+`EN-001` finding about the wrong input rather than a failure to audit. Refusing
+costs one line in a mapping or one line in a manifest; the alternative costs a
+verdict nobody can trust.
 
 `main-owned-codescene-coverage` takes its own too.
 `build_codescene_coverage_envelope` (in `codescene_coverage_envelope.py`)
@@ -811,7 +812,7 @@ the rule at once.
 
 `rust-build-defaults` is the first package to take its own. Its envelope
 (`build_build_defaults_envelope`) carries the facts Cargo and rustup
-auto-discover and no Makefile facts at all:
+auto-discover, and the Makefile and workflows whose builds replace them:
 
 - `cargo_config` — the `rustflags` sources Cargo would consult, each with its
   normalized flags and whether it applies on Linux, only on Linux, or could not
@@ -824,13 +825,23 @@ auto-discover and no Makefile facts at all:
 - `exceptions` — one scan per document declared by the rule's
   `exception_documents` parameter, listing the sections whose heading names the
   backend and the channel spellings each section's body contains.
+- `makefile` — the root Makefile's `makeutil` report, read through
+  `markdown_envelope`'s containment guard, or `None` when there is none.
+- `makefile_error` — why `makeutil` refused the Makefile, or `None`. A refusal
+  is carried rather than raised, because only BD-007 and BD-008 read the
+  Makefile; raising would make BD-001 to BD-006 unrunnable against that
+  checkout too. A Makefile that resolves outside the checkout still raises.
+- `workflows` — every `.github/workflows` file decoded as YAML 1.2, or its
+  decoding error, from `markdown_envelope`'s public `load_workflows`. Each fact
+  also carries `decode_category`, a fixed word for why it did not decode
+  (`invalid YAML`, `not UTF-8 text`, `not a mapping` or `unreadable`), set by
+  the envelope builder so the policy never depends on the reader's wording.
 
-The reason it carries no Makefile facts is worth stating, because it looks like
-an omission: the standard is a default precisely because Cargo auto-discovers
-`.cargo/config.toml`, so a repository whose flags live behind an opt-in Make
-target has no such file and fails on that alone. Reading the Makefile would add
-no fact the policy decides anything from, and would make the rule unrunnable
-against any checkout the pinned `makeutil` cannot parse.
+BD-001 to BD-006 read only the first three. The standard is a default because
+Cargo auto-discovers `.cargo/config.toml`, so a repository whose flags live
+behind an opt-in Make target has no such file and fails on that alone. BD-007
+to BD-009 read the rest, because an assigned `RUSTFLAGS` replaces that default
+and a coverage build cannot use a Cranelift one. ADR-003 records the change.
 
 ### Absence is not a read failure
 

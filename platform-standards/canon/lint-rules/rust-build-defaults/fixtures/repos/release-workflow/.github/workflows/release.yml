@@ -1,0 +1,21 @@
+on:
+  push:
+    tags:
+      - "v*"
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dev-profile build
+        run: cargo build --target x86_64-unknown-linux-gnu
+      - name: Release build
+        env:
+          RUSTFLAGS: ""
+        run: cross +stable build --release --target x86_64-unknown-linux-gnu
+      - name: Distribution-profile build
+        run: cargo build --profile dist
+      - name: Cross distribution-profile build
+        run: cross build --profile dist --target aarch64-unknown-linux-gnu
+      - uses: leynos/shared-actions/.github/actions/rust-build-release@0123456789abcdef0123456789abcdef01234567
+        with:
+          target: x86_64-unknown-linux-gnu

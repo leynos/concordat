@@ -7,9 +7,13 @@ description: >-
   mold linker as defaults (RT-017, RT-008), the `rustflags` sources held
   equal so neither silently replaces the other (RT-018), and the Cranelift
   codegen backend either configured for the development profile or refused
-  by a recorded, current exception (RT-009).
+  by a recorded, current exception (RT-009). It also audits the builds that
+  replace those defaults: every coverage path and dev-profile release build
+  selects LLVM where Cranelift is the default (RT-019), and every Makefile
+  gate recipe (RT-020) and direct cargo workflow step (RT-021) that assigns
+  `RUSTFLAGS` restates the fast flags.
   Audit-only: this rule declares no mutations.
-version: 0.1.1
+version: 0.2.0
 sensor:
   type: conftest
   input: policy-input/rust-build-defaults
@@ -48,6 +52,25 @@ parameters:
       exception_keyword:
         type: string
         description: The word an exception section's heading must contain.
+      gate_targets:
+        type: array
+        items:
+          type: string
+        description: >-
+          Make targets whose static closure BD-008 reads for RUSTFLAGS
+          assignments.
+      gate_cargo_subcommands:
+        type: array
+        items:
+          type: string
+        description: >-
+          Cargo subcommands a workflow step runs as a gate build, which BD-009
+          holds to the fast flags when the step's RUSTFLAGS is set.
+      setup_rust_rustflags:
+        type: string
+        description: >-
+          The RUSTFLAGS value shared-actions setup-rust exports when its
+          `rustflags` input is not set (its default at 4fb8eb7a).
   defaults:
     threads_flag: -Zthreads=8
     linker_flag: -Clink-arg=-fuse-ld=mold
@@ -57,3 +80,16 @@ parameters:
     exception_documents:
       - docs/developers-guide.md
     exception_keyword: Cranelift
+    gate_targets:
+      - lint
+      - test
+      - typecheck
+      - build
+    gate_cargo_subcommands:
+      - build
+      - check
+      - clippy
+      - doc
+      - nextest
+      - test
+    setup_rust_rustflags: -D warnings

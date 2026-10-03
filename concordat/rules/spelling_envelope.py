@@ -29,12 +29,12 @@ from .markdown_envelope import (
     PRUNED_DIRECTORIES,
     Repository,
     WorkflowFile,
-    _is_file,
-    _load_workflows,
     _raise_walk_error,
     _read_text,
-    _resolved_root,
-    _within_checkout,
+    is_file,
+    load_workflows,
+    resolved_root,
+    within_checkout,
 )
 
 if typ.TYPE_CHECKING:
@@ -120,7 +120,7 @@ def _is_contained_file(root: pathlib.Path, path: pathlib.Path, operation: str) -
     bool
         Whether the path exists, stays inside the checkout, and is a file.
     """
-    return _within_checkout(root, path, operation) and _is_file(path, operation)
+    return within_checkout(root, path, operation) and is_file(path, operation)
 
 
 def _read_input(
@@ -247,7 +247,7 @@ def build_spelling_envelope(
     SpellingEnvelope
         The policy input document assembled from the checkout.
     """
-    root = _resolved_root(checkout)
+    root = resolved_root(checkout)
     makefile_path = checkout / "Makefile"
     makefile_report: MakeutilReport | None = None
     if _is_contained_file(root, makefile_path, OPERATION_READ_MAKEFILE):
@@ -265,7 +265,7 @@ def build_spelling_envelope(
             "typos_local": typos_local is not None,
         },
         "makefile": makefile_report,
-        "workflows": _load_workflows(checkout, root),
+        "workflows": load_workflows(checkout, root),
         "typos_local": typos_local,
         "gitignore": _load_gitignore(checkout, root),
         "agents_md": _load_agents_md(checkout, root),

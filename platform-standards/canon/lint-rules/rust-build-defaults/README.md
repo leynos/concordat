@@ -4,23 +4,35 @@ Audits a Rust checkout against the estate's build standard: the parallel
 `rustc` frontend and the `mold` linker as **defaults**, the `rustflags` sources
 held equal so neither silently replaces the other, and the Cranelift codegen
 backend either configured for the development profile or refused by a recorded,
-current exception.
+current exception. It also audits the builds that replace those defaults: a
+coverage run or dev-profile release build selects LLVM where Cranelift is the
+default, and a gate build that assigns `RUSTFLAGS` restates the fast flags.
 
 The sensor is a Conftest/Rego policy evaluated over a
 `policy-input/rust-build-defaults` envelope built by
-`concordat artefact rule run`. Facts come from TOML parsers and a Markdown
-heading walk, never from a textual search: `-Zthreads=8` in a comment is not a
-configured flag, and a comment containing the word `channel` is not a pinned
-channel. Both mistakes were made while surveying the estate for this rule,
-which is why the fixtures include each of them.
+`concordat artefact rule run`. Facts come from TOML parsers, a Markdown heading
+walk, the pinned `makeutil parse` report and a YAML decode of each workflow,
+never from a textual search: `-Zthreads=8` in a comment is not a configured
+flag, and a comment containing the word `channel` is not a pinned channel. Both
+mistakes were made while surveying the estate for this rule, which is why the
+fixtures include each of them.
 
-## Why the configuration file and not the Makefile
+## Why the configuration file first, and the Makefile after
 
 The standard is a default because Cargo auto-discovers `.cargo/config.toml`, so
 a bare `cargo build` gets it. That is also what makes the clause checkable: a
 repository whose flags live behind a `make dev-fast` target has no such file,
-and fails on the first two checks alone. The rule therefore reads the files
-Cargo and rustup discover, and does not read the Makefile.
+and fails on the first two checks alone. BD-001 to BD-006 therefore read only
+the files Cargo and rustup discover.
+
+A default holds only where nothing replaces it, and two things do. An assigned
+`RUSTFLAGS` replaces every `rustflags` source in the configuration, so a gate
+recipe or CI step that assigns it without restating the fast flags turns the
+standard off for that build. And `-Cinstrument-coverage` is LLVM-only, so a
+coverage run that inherits a Cranelift default fails outright. BD-007 to BD-009
+read the Makefile and workflows for those builds. A Makefile `makeutil` refuses
+makes only those clauses indeterminate; the others still run. See
+[ADR-003](../../../../docs/adr-003-rust-build-defaults-reads-the-builds-that-replace-them.md).
 
 ## Checks
 
@@ -49,7 +61,9 @@ Cargo and rustup discover, and does not read the Makefile.
 - **BD-005** (error): a backend selection that Cargo cannot honour, or that the
   estate has not adopted, is noncompliant. A profile key without
   `[unstable] codegen-backend = true` is refused by Cargo; an `[unstable]` key
-  under a non-nightly pin stops the file loading for every consumer.
+  under a non-nightly pin stops the file loading for every consumer. LLVM on a
+  profile other than `dev` is not a third backend: it is the dedicated coverage
+  profile BD-007 accepts, and is not reported. LLVM on `dev` still is.
 - **BD-006** (error): the recorded exception names the pinned toolchain
   channel. An exception measured on an older channel no longer covers the
   toolchain the repository builds with, which is what keeps the recorded state
@@ -58,6 +72,28 @@ Cargo and rustup discover, and does not read the Makefile.
   whether a measurement was taken on it, and the date any deferral runs to is a
   true statement of the recorded state and satisfies the clause. With no
   channel pinned at all the finding is `indeterminate`.
+- **BD-007** (error): where Cranelift is the development default (selected by
+  the `dev` profile or by `rustflags`), every coverage path and every
+  dev-profile release build selects LLVM. A coverage path is any Makefile
+  recipe, on any target, that runs `cargo llvm-cov`, and any workflow step that
+  runs it directly. A dev-profile release build is a `cargo build`,
+  `cargo zigbuild` or `cross build` without `--release`, `-r` or `--profile`,
+  in a workflow triggered by `release` or a tag push. A repository with no such
+  path is not applicable.
+- **BD-008** (error): a Makefile gate recipe that assigns `RUSTFLAGS` restates
+  `-Zthreads=8` (on a nightly pin) and the `mold` linker flag. A gate recipe is
+  one in the static closure of `lint`, `test`, `typecheck` or `build` (the
+  `gate_targets` parameter). The assignment may be a prefix on the recipe, a
+  target-specific assignment, or a Makefile-wide one. Coverage recipes and
+  release-profile builds are BD-007's and exempt. A Makefile with no such
+  assignment is not applicable.
+- **BD-009** (error): a workflow step that runs a cargo gate build directly
+  (`build`, `check`, `clippy`, `doc`, `nextest` or `test`, the
+  `gate_cargo_subcommands` parameter) with `RUSTFLAGS` set carries the same
+  flags. `RUSTFLAGS` is set by the step's own line or `env:`, the job's or
+  workflow's `env:`, or the toolchain action. shared-actions `setup-rust`
+  exports its `rustflags` input, `-D warnings` by default, to every later step;
+  `rustflags: ''` exports nothing, so the configuration applies.
 - **CF-001** (error, indeterminate): `.cargo/config.toml` exists but could not
   be read, parsed, or used, so no clause that reads it can be decided. This
   includes a configuration Cargo itself refuses:
@@ -118,6 +154,81 @@ them. The measurement confirmed the exception, but the rule would have accepted
 either outcome without changing, because it asks only that one of the two
 states is recorded.
 
+## Builds that replace the default (BD-007 to BD-009)
+
+### Selecting LLVM for coverage
+
+The estate's Cranelift repositories were surveyed on 2026-09-28. Every workflow
+coverage step used shared-actions `generate-coverage`. Eight Makefile coverage
+recipes ran `cargo llvm-cov` with no selection at all, and two selected LLVM:
+statelet with an environment prefix, and thysalion through a variable. On the
+pinned `nightly-2026-05-28`, a Cranelift development profile with
+`-Cinstrument-coverage` fails with "`-Cinstrument-coverage` is LLVM specific
+and not supported by Cranelift".
+
+A coverage path selects LLVM in any of these ways:
+
+- `CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm`, as a prefix on the command, a
+  Makefile-wide `export`, a target-specific assignment on the recipe's target,
+  or a single-valued variable that resolves to `llvm`. In a workflow it may
+  also come from the step's, job's or workflow's `env:`. Where the `test`
+  profile selects Cranelift too, `CARGO_PROFILE_TEST_CODEGEN_BACKEND=llvm` is
+  needed as well.
+- `-Zcodegen-backend=llvm` in the command's `RUSTFLAGS`. Cargo passes the
+  profile's `-Z codegen-backend=cranelift` first and `RUSTFLAGS` after it, and
+  rustc takes the last; a probe on the pinned nightly confirmed it.
+- `--profile P`, where `P` selects `codegen-backend = "llvm"` in the
+  configuration or `Cargo.toml`. `--release` counts too, unless the release
+  profile selects Cranelift.
+- Where only `rustflags` select Cranelift, any assigned `RUSTFLAGS` that does
+  not name Cranelift again, because it replaces the source that did.
+
+`cargo --config profile.dev.codegen-backend=...` is not accepted:
+shared-actions dropped that form because `cargo llvm-cov`'s child cargo does
+not inherit it.
+
+A shared-actions `generate-coverage` step selects LLVM itself. Since v1.3.13
+(2026-04-16) the action detects Cranelift in `.cargo/config.toml` or
+`Cargo.toml`. It clears any inherited backend variables, then sets both profile
+backends to `llvm`, so an override on the step would be ignored. The rule
+accepts the step as it stands. It runs offline, so it cannot prove a pinned SHA
+is at or after v1.3.13; the estate's pins all are.
+
+A reference the policy cannot substitute (a variable with conditional or
+several assignments) and a workflow value holding `${{ }}` make the verdict
+`indeterminate` when they could hold the selection.
+
+### Release builds
+
+A release build is out of BD-007's scope when it builds the release profile,
+whatever its `RUSTFLAGS`: `cargo build --release`,
+`cross +stable build --release`, `--profile`, and shared-actions
+`rust-build-release`, which passes `--release` itself. The Makefile `release`
+target is out of scope too. The estate builds it through a pattern rule,
+`target/%/$(TARGET):`, whose recipe passes
+`$(if $(findstring release,$(@)),--release)`, and a static reading can neither
+follow a pattern rule nor evaluate `$@`.
+
+### Restating the fast flags
+
+An assigned `RUSTFLAGS` value is read as everything it could expand to: its own
+text, and every assignment of every variable it reaches. The estate template
+assigns `RUST_FLAGS` twice (`?=`, then `:=` prepending `-D warnings`), and
+netsuke puts the linker flag behind
+`$(if $(filter Linux,$(BUILD_HOST_OS)), $(STANDARD_MOLD_FLAG))`. Both are read
+without evaluating Make. The reading over-approximates on purpose: a flag named
+under a condition or in one branch counts as restated. The rule proves the
+flags are carried; BD-002 governs where the linker applies. Flags are compared
+normalized, so `-C link-arg=...` and `-Z threads=8` count. A shell expansion
+such as `${RUSTFLAGS:+$RUSTFLAGS }` and a Make function joined onto a flag both
+end a token.
+
+In a workflow, the linker flag is demanded only where the job's `runs-on` names
+a literal Linux runner (`ubuntu-*`, `ubicloud-*`, or a `linux` label). An
+expression such as `${{ matrix.os }}` proves nothing, so it is not demanded
+there. `-Zthreads=8` is not demanded of a step that runs a non-nightly
+toolchain, through `cargo +stable` or setup-rust's `toolchain` input.
+
 ## Spellings the rule accepts
 
 Cargo reads `rustflags` as an array or as one space-separated string, and reads
@@ -153,11 +264,28 @@ Findings carry a three-valued `verdict`:
 - `indeterminate` — the policy could not prove compliance and fails closed.
   Triggers: an unparsable configuration or toolchain file, a target key that
   cannot be placed on or off Linux, an unreadable exception document, and a
-  recorded exception with no pinned channel to measure it against.
+  recorded exception with no pinned channel to measure it against. For BD-007
+  to BD-009, also a Makefile `makeutil` refused or recovered from, an
+  `include`, a computed `$(MAKE) $(VAR)` or `-C`/`-f` delegation from a gate
+  target, and a selection or `RUSTFLAGS` value that cannot be read.
 
 A repository is `compliant` only when the finding set is empty.
 
-## Known limitation
+## Known limitations
+
+A `makeutil` parse that recovered from a construct it does not understand is
+`indeterminate` for BD-007 and BD-008, even where the Makefile is valid.
+netsuke's Makefile reads `indeterminate` for BD-008 today for that reason. The
+pinned `makeutil` 0.1.0 does not parse its `unexport RUSTDOC_FLAGS` directive
+([makeutil#25](https://github.com/leynos/makeutil/issues/25)), and reports the
+recovery at unrelated lines. makeutil
+[#45](https://github.com/leynos/makeutil/pull/45), released in 0.1.1, fixes it,
+and netsuke then parses completely. Everything the pinned release does parse is
+compliant, and the verdict clears when concordat repins `makeutil`.
+
+BD-009 covers steps that run cargo directly. A `make` step whose recipe assigns
+no `RUSTFLAGS` still inherits the toolchain action's export, and neither clause
+reports it. A `RUSTFLAGS` a step writes to `$GITHUB_ENV` is not read either.
 
 The linker clause assumes the repository builds for Linux. A repository that
 builds for no platform the linker ships on would be reported noncompliant; the
@@ -169,7 +297,10 @@ can only be changed in this manifest. No such repository exists in the estate.
 
 - `rule.yaml` — package manifest (sensor, its declared
   `input: policy-input/rust-build-defaults`, parameters, defaults).
-- `policy/` — the Rego policy and its tests.
+- `policy/` — the Rego policy and its tests: `rust_build_defaults.rego` holds
+  BD-001 to BD-006, `build_paths_make.rego` the Makefile half of BD-007 and
+  BD-008, and `build_paths_workflows.rego` the workflow half of BD-007 and
+  BD-009.
 - `fixtures/repos/` — one miniature checkout per behaviour.
 - `fixtures/envelopes/` — generated `policy-input/rust-build-defaults`
   envelopes.

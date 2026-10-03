@@ -1,0 +1,31 @@
+on: pull_request
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - name: Test
+        env:
+          RUSTFLAGS: -D warnings
+        run: cargo test
+  matrix:
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Test
+        env:
+          RUSTFLAGS: -D warnings -Zthreads=8
+        run: cargo test
+  stable:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: leynos/shared-actions/.github/actions/setup-rust@0123456789abcdef0123456789abcdef01234567
+        with:
+          toolchain: stable
+      - name: Test
+        run: cargo test
+  expression:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test
+        env:
+          RUSTFLAGS: ${{ env.EXTRA_FLAGS }}
+        run: cargo test

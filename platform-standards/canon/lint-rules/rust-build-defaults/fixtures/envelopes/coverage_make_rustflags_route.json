@@ -1,0 +1,186 @@
+{
+  "schema_version": 1,
+  "kind": "policy-input/rust-build-defaults",
+  "repository": {
+    "path": "coverage-make-rustflags-route",
+    "name": null
+  },
+  "applicability": {
+    "root_cargo_toml": true,
+    "rust_surfaces_declared": false,
+    "cargo_config": true,
+    "toolchain_file": true
+  },
+  "cargo": {
+    "parsed": {
+      "package": {
+        "name": "fixture",
+        "version": "0.1.0"
+      }
+    },
+    "surfaces": [
+      {
+        "path": "Cargo.toml",
+        "role": "crate",
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        }
+      }
+    ]
+  },
+  "toolchain": {
+    "path": "rust-toolchain.toml",
+    "channel": "nightly-2026-08-23",
+    "channel_kind": "nightly-dated",
+    "parse_error": null
+  },
+  "cargo_config": {
+    "path": ".cargo/config.toml",
+    "sources": [
+      {
+        "name": "build",
+        "kind": "build",
+        "key": null,
+        "linux": false,
+        "linux_only": false,
+        "classified": true,
+        "flags": [
+          "-Zthreads=8",
+          "-Zcodegen-backend=cranelift"
+        ]
+      },
+      {
+        "name": "target.cfg(target_os = \"linux\")",
+        "kind": "target",
+        "key": "cfg(target_os = \"linux\")",
+        "linux": true,
+        "linux_only": true,
+        "classified": true,
+        "flags": [
+          "-Zthreads=8",
+          "-Zcodegen-backend=cranelift",
+          "-Clink-arg=-fuse-ld=mold"
+        ]
+      }
+    ],
+    "backends": [
+      {
+        "source": "build",
+        "scope": "rustflags",
+        "profile": null,
+        "backend": "cranelift"
+      },
+      {
+        "source": "target.cfg(target_os = \"linux\")",
+        "scope": "rustflags",
+        "profile": null,
+        "backend": "cranelift"
+      }
+    ],
+    "unstable_codegen_backend": null,
+    "parse_error": null
+  },
+  "exceptions": [
+    {
+      "path": "docs/developers-guide.md",
+      "present": false,
+      "read_error": null,
+      "sections": []
+    }
+  ],
+  "makefile": {
+    "schema_version": 1,
+    "tool": {
+      "name": "makeutil",
+      "version": "0.1.0",
+      "parser": "makefile-lossless",
+      "parser_version": "0.3.40"
+    },
+    "source": {
+      "path": "Makefile",
+      "sha256": "5bf8555640259003aa75f5ed6c9301ce153edf7efbcf8aeaec8d4b4cac488854",
+      "byte_length": 110
+    },
+    "parse": {
+      "status": "complete",
+      "diagnostics": []
+    },
+    "rules": [
+      {
+        "ordinal": 0,
+        "targets": [
+          "coverage-replaced"
+        ],
+        "prerequisites": [],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "RUSTFLAGS=\"-D warnings\" cargo llvm-cov --lcov",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 19,
+              "end_byte": 66,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 3,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 0,
+          "end_byte": 67,
+          "start_line": 1,
+          "start_column": 1,
+          "end_line": 4,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 1,
+        "targets": [
+          "coverage-inherited"
+        ],
+        "prerequisites": [],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "cargo llvm-cov --lcov",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 87,
+              "end_byte": 110,
+              "start_line": 5,
+              "start_column": 1,
+              "end_line": 6,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 67,
+          "end_byte": 110,
+          "start_line": 4,
+          "start_column": 1,
+          "end_line": 6,
+          "end_column": 1
+        }
+      }
+    ],
+    "variables": [],
+    "includes": []
+  },
+  "makefile_error": null,
+  "workflows": []
+}
