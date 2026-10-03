@@ -379,6 +379,37 @@ class TestRuleRun:
 
         assert result.verdict == "noncompliant", result
 
+    @pytest.mark.parametrize(
+        ("selector", "verdict"),
+        [
+            pytest.param(-1, "compliant", id="newest-listed-revision"),
+            pytest.param("a" * 39 + "5", "noncompliant", id="unlisted-revision"),
+            pytest.param(
+                "a5765019912a8ab6882b12db049c7cde635f3a85",
+                "noncompliant",
+                id="revision-before-the-install-rules",
+            ),
+        ],
+    )
+    def test_only_a_derived_revision_is_accepted(
+        self, tmp_path: pathlib.Path, selector: int | str, verdict: str
+    ) -> None:
+        """A pin is compliant exactly when the derived list names it."""
+        parameters = packages.rule_parameters(packages.rule_package_dir(RULE_ID))
+        refs = typ.cast("list[str]", parameters["compliant_install_whitaker_refs"])
+        ref = refs[selector] if isinstance(selector, int) else selector
+        _write(
+            tmp_path,
+            ".github/workflows/ci.yml",
+            "on: pull_request\njobs:\n  lint:\n    runs-on: ubuntu-latest\n"
+            "    steps:\n      - uses: leynos/shared-actions/.github/actions/"
+            f"install-whitaker@{ref}\n",
+        )
+
+        result = runner.run_rule(RULE_ID, tmp_path)
+
+        assert result.verdict == verdict, result
+
 
 @pytest.mark.parametrize("surface", ["workflows", "actions", "scripts"])
 def test_an_empty_checkout_has_empty_surfaces(
