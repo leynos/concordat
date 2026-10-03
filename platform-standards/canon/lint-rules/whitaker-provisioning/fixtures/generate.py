@@ -39,6 +39,7 @@ ENVELOPES_DIR: typ.Final = FIXTURES_DIR / "envelopes"
 REPOSITORY_NAMES: typ.Final[dict[str, str]] = {
     "action-repository": "leynos/shared-actions",
     "exempt-developer-script": "leynos/agent-helper-scripts",
+    "exempt-pinned-suite": "leynos/weaver",
     "producer": "leynos/whitaker",
 }
 CONSUMER_NAME: typ.Final = "leynos/consumer"
