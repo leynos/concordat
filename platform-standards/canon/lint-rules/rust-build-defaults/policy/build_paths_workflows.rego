@@ -73,7 +73,7 @@ setup_input(step, name, fallback) := as_text(object.get(object.get(step, "with",
 run_segments(step) := [segment |
 	is_string(step.run)
 	some line in split(regex.replace(step.run, `\\\n[[:space:]]*`, " "), "\n")
-	some segment in regex.split(`&&|\|\||;|\|`, line)
+	some segment in command_segments(line)
 	not comment_or_print(segment)
 ]
 

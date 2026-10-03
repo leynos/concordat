@@ -120,8 +120,17 @@ names_cranelift(text) if rustflags_backend(text) == "cranelift"
 
 comment_or_print(segment) if regex.match(`^[[:space:]]*[-@+]*[[:space:]]*(#|echo([[:space:]]|$)|printf([[:space:]]|$))`, segment)
 
+# Split a command line at `&&`, `||`, `;` and `|`, but not inside a quoted
+# string: a delimiter in `echo "a; cargo build"` is printed text, not a second
+# command. Each match is a maximal run of quoted strings and non-delimiter
+# characters; a lone `&` (as in `2>&1`) stays inside its run. An unterminated
+# quote is not a run on its own, so it splits as a delimiter would.
+command_segments(text) := [match[0] |
+	some match in regex.find_all_string_submatch_n(`(?:"[^"]*"|'[^']*'|[^"';&|]|&[^&"';|]|&$)+`, text, -1)
+]
+
 recipe_segments(recipe) := [segment |
-	some segment in regex.split(`&&|\|\||;|\|`, expand(recipe.text))
+	some segment in command_segments(expand(recipe.text))
 	not comment_or_print(segment)
 ]
 

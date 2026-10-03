@@ -216,6 +216,15 @@ test_workflow_undecodable if {
 	}
 }
 
+# A delimiter inside a quoted string is printed text: only the real cargo command is judged, in workflows and in Makefiles.
+test_printed_cargo_is_not_a_command if {
+	findings := policy.deny with input as data.fixtures.printed_cargo
+	profile(findings) == {
+		["BD-009", "noncompliant", 0, "job \"real\" (Test) runs cargo with the step's RUSTFLAGS (\"-D warnings\"), which lacks \"-Clink-arg=-fuse-ld=mold\" and replaces every rustflags source in the Cargo configuration"],
+		["BD-009", "noncompliant", 0, "job \"real\" (Test) runs cargo with the step's RUSTFLAGS (\"-D warnings\"), which lacks \"-Zthreads=8\" and replaces every rustflags source in the Cargo configuration"],
+	}
+}
+
 # Coverage and release-profile recipes are BD-007's, and targets outside the gates are not judged.
 test_gate_exempt if {
 	findings := policy.deny with input as data.fixtures.gate_exempt
