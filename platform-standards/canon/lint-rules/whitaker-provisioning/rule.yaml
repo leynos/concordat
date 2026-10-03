@@ -112,6 +112,14 @@ parameters:
       - "d57cb19b82281236088108f2ffb7e13bc00fc2f8"
       - "5e218e3c055da635947aa823e98387aa2ace0306"
       - "6cec89bac47a21cf756d68d638a9a510998e57f8"
+      - "abf0dcf2686de1eaf79b6dc9a16662b631bed149"
+      - "e6d7c2f25cec0576b599de9acdb3bf29c3ca6655"
+      - "e734ba497fa85a1577dba6b66715b2d41587419f"
+      - "c4ed5ffaf0640b1907d5359a87fd1677034eec27"
+      - "013346ccfd37bd1e02eb430525233f1a4cd942b8"
+      - "ff1dd759dfffc0db3459e30e833f52437ee62b57"
+      - "88977798a5c3bae1549afb99642529488c665276"
+      - "ebe2f3105334283441f4c915eb979a0f4b9f2c04"
     producer_repositories:
       - leynos/whitaker
     action_repository: leynos/shared-actions

@@ -351,6 +351,29 @@ def test_sync_reports_an_unwritable_manifest_as_an_operational_error(
         manifest.chmod(0o600)
 
 
+def test_the_documented_list_command_is_registered(
+    rule_package: tuple[pathlib.Path, str, str],
+    history: History,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`whitaker_revisions.py list <clone>` runs, as the docstring documents.
+
+    Cyclopts names a command after its function, so `list_revisions` would be
+    `list-revisions` and the documented `list` would be an unknown command. The
+    test goes through `main()` rather than calling the function, which is the
+    only route that exercises the registered name.
+    """
+    _package, root, later = rule_package
+    clone = str(history.repository.workdir)
+    monkeypatch.setattr(
+        sys, "argv", ["whitaker_revisions", "list", clone, "--tip", "main"]
+    )
+
+    assert whitaker_revisions.main() == 0
+    assert capsys.readouterr().out.endswith(f"{root}\n{later}\n")
+
+
 def test_main_exits_2_for_a_clone_that_is_not_a_repository(
     rule_package: tuple[pathlib.Path, str, str],
     tmp_path_factory: pytest.TempPathFactory,

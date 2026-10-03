@@ -65,7 +65,7 @@ def _derive(clone: Path, tip: str) -> tuple[list[str], Path]:
     ), rule_dir / "rule.yaml"
 
 
-@app.command
+@app.command(name="list")
 def list_revisions(clone: Path, tip: str = "origin/main") -> int:
     """Print the revisions the clone derives, oldest first."""
     revisions, _ = _derive(clone, tip)
@@ -109,7 +109,7 @@ def check(clone: Path, tip: str = "origin/main") -> int:
 def main() -> int:
     """Run the command line and return its exit status."""
     try:
-        return typ.cast("int", app(sys.argv[1:]))
+        return typ.cast("int", app(sys.argv[1:], result_action="return_value"))
     except OperationalRuleError as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
