@@ -9,6 +9,7 @@ workflows whose builds assign `RUSTFLAGS` or select a backend.
 
 from __future__ import annotations
 
+import logging
 import typing as typ
 
 from .cargo_config import CargoConfigFacts, inspect_cargo_config
@@ -21,11 +22,10 @@ from .makefile_facts import (
     inspect_makefile,
 )
 from .markdown_envelope import (
-    WorkflowFile,
-    _is_file,
-    _load_workflows,
-    _resolved_root,
-    _within_checkout,
+    is_file,
+    load_workflows,
+    resolved_root,
+    within_checkout,
 )
 from .rust_surfaces import (
     CargoManifest,
@@ -39,7 +39,16 @@ if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import pathlib
 
+_logger = logging.getLogger(__name__)
+
 ENVELOPE_SCHEMA_VERSION: typ.Final = 1
+
+# Prefixes of the shared reader's `WorkflowFile.error` text, in match order.
+_DECODE_CATEGORIES: typ.Final = (
+    ("not UTF-8 text", "not UTF-8 text"),
+    ("invalid YAML", "invalid YAML"),
+    ("workflow document is not a mapping", "not a mapping"),
+)
 ENVELOPE_KIND: typ.Final = "policy-input/rust-makefile-baseline"
 
 
@@ -139,6 +148,15 @@ class BuildDefaultsApplicability(typ.TypedDict):
     toolchain_file: bool
 
 
+class BuildWorkflowFile(typ.TypedDict):
+    """A workflow fact plus the fixed word for why it did not decode."""
+
+    path: str
+    parsed: object | None
+    error: str | None
+    decode_category: str | None
+
+
 class BuildDefaultsEnvelope(typ.TypedDict):
     """The `policy-input/rust-build-defaults` document sent to Conftest.
 
@@ -162,7 +180,53 @@ class BuildDefaultsEnvelope(typ.TypedDict):
     exceptions: list[DocumentScan]
     makefile: MakeutilReport | None
     makefile_error: str | None
-    workflows: list[WorkflowFile]
+    workflows: list[BuildWorkflowFile]
+
+
+def _decode_category(error: str | None) -> str | None:
+    """Return a fixed word for why a workflow did not decode, or ``None``.
+
+    The policy reports this word, never the parser's own message, which can
+    quote workflow content. Mapping it here keeps the policy independent of
+    how the shared workflow reader words its errors.
+
+    Returns
+    -------
+    str | None
+        ``None`` for a decoded workflow, else one of the category words.
+    """
+    if error is None:
+        return None
+    for prefix, category in _DECODE_CATEGORIES:
+        if error.startswith(prefix):
+            return category
+    return "unreadable"
+
+
+def _build_workflows(
+    checkout: pathlib.Path, root: pathlib.Path
+) -> list[BuildWorkflowFile]:
+    """Return the checkout's workflow facts, each tagged with its decode category.
+
+    An undecodable file is logged with its path and category, so the audit
+    leaves a trace of what it could not read as well as reporting it.
+
+    Returns
+    -------
+    list[BuildWorkflowFile]
+        One fact per workflow file, in the shared reader's order.
+    """
+    facts: list[BuildWorkflowFile] = [
+        {**fact, "decode_category": _decode_category(fact["error"])}
+        for fact in load_workflows(checkout, root)
+    ]
+    for fact in facts:
+        if fact["decode_category"] is not None:
+            _logger.warning(
+                "workflow did not decode",
+                extra={"path": fact["path"], "category": fact["decode_category"]},
+            )
+    return facts
 
 
 def _read_makefile(
@@ -181,7 +245,7 @@ def _read_makefile(
         file, or ``(None, None)`` when there is no Makefile.
     """
     path = checkout / "Makefile"
-    if not _within_checkout(root, path, OPERATION_PARSE_MAKEFILE) or not _is_file(
+    if not within_checkout(root, path, OPERATION_PARSE_MAKEFILE) or not is_file(
         path, OPERATION_PARSE_MAKEFILE
     ):
         return None, None
@@ -239,7 +303,7 @@ def build_build_defaults_envelope(
     )
     cargo_config = inspect_cargo_config(checkout)
     toolchain = inspect_toolchain(checkout)
-    root = _resolved_root(checkout)
+    root = resolved_root(checkout)
     makefile, makefile_error = _read_makefile(checkout, root)
     return {
         "schema_version": ENVELOPE_SCHEMA_VERSION,
@@ -261,5 +325,5 @@ def build_build_defaults_envelope(
         ),
         "makefile": makefile,
         "makefile_error": makefile_error,
-        "workflows": _load_workflows(checkout, root),
+        "workflows": _build_workflows(checkout, root),
     }

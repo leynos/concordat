@@ -89,7 +89,8 @@
     {
       "path": ".github/workflows/ci.yml",
       "parsed": null,
-      "error": "invalid YAML: while parsing a flow sequence\n  in \"<unicode string>\", line 1, column 5:\n    on: [push\n        ^ (line: 1)\nexpected ',' or ']', but got ':'\n  in \"<unicode string>\", line 2, column 5:\n    jobs:\n        ^ (line: 2)"
+      "error": "invalid YAML: while parsing a flow sequence\n  in \"<unicode string>\", line 1, column 5:\n    on: [push\n        ^ (line: 1)\nexpected ',' or ']', but got ':'\n  in \"<unicode string>\", line 2, column 5:\n    jobs:\n        ^ (line: 2)",
+      "decode_category": "invalid YAML"
     }
   ]
 }

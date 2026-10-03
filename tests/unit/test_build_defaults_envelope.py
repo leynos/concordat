@@ -20,6 +20,7 @@ from concordat.rules import envelope as envelope_module
 from concordat.rules import packages
 from concordat.rules.envelope import (
     BUILD_DEFAULTS_ENVELOPE_KIND,
+    _decode_category,
     build_build_defaults_envelope,
 )
 from concordat.rules.makefile_facts import MakefileRefusedError
@@ -366,3 +367,41 @@ class TestCheckedInFixtures:
         assert _comparable(on_disk) == _comparable(generated), (
             "the per-fixture files and the bundle must be regenerated together"
         )
+
+
+@pytest.mark.parametrize(
+    ("error", "category"),
+    [
+        pytest.param(None, None, id="decoded"),
+        pytest.param(
+            "invalid YAML: mapping values are not allowed", "invalid YAML", id="yaml"
+        ),
+        pytest.param("not UTF-8 text: 'utf-8' codec", "not UTF-8 text", id="encoding"),
+        pytest.param(
+            "workflow document is not a mapping", "not a mapping", id="scalar"
+        ),
+        pytest.param("something new", "unreadable", id="unknown"),
+    ],
+)
+def test_a_decode_error_becomes_a_fixed_category(
+    error: str | None, category: str | None
+) -> None:
+    """The policy sees a fixed word, whatever the shared reader's text says."""
+    assert _decode_category(error) == category, (error, category)
+
+
+def test_an_undecodable_workflow_is_logged_with_its_category(
+    tmp_path: pathlib.Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The audit leaves a trace of a workflow it could not read."""
+    _write_manifest(tmp_path)
+    directory = tmp_path / ".github" / "workflows"
+    directory.mkdir(parents=True)
+    (directory / "ci.yml").write_text("on: [push\n", encoding="utf-8")
+    with caplog.at_level("WARNING", logger="concordat.rules.envelope"):
+        envelope = build_build_defaults_envelope(tmp_path)
+    assert envelope["workflows"][0]["decode_category"] == "invalid YAML", envelope
+    logged = [vars(record) for record in caplog.records]
+    assert [(r["path"], r["category"]) for r in logged] == [
+        (".github/workflows/ci.yml", "invalid YAML")
+    ], logged
