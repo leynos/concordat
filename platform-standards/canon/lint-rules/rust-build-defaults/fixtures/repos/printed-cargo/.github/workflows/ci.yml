@@ -1,0 +1,18 @@
+on: pull_request
+jobs:
+  printed:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Say
+        env:
+          RUSTFLAGS: -D warnings
+        run: |
+          echo "next: cargo test; cargo build"
+  real:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test
+        env:
+          RUSTFLAGS: -D warnings
+        run: |
+          echo "start; done" && cargo test

@@ -571,7 +571,8 @@ which 0.1.1 never opened.
   needs it for any checkout that has a root `Makefile`, even one whose
   configuration alone would have passed.
 - Where Cranelift is the development default, add the LLVM selection to every
-  `cargo llvm-cov` recipe or step and every release-triggered build (BD-007).
+  `cargo llvm-cov` recipe or step and every non-`--release` build in a release-
+  or tag-triggered workflow (BD-007).
 - Restate `-Zthreads=8` and the `mold` linker flag in every gate recipe that
   assigns `RUSTFLAGS`, or in the workflow step that sets it, or let the Cargo
   configuration decide by leaving `RUSTFLAGS` unassigned (BD-008 and BD-009).

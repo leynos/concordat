@@ -10,6 +10,7 @@ below have only this module as a consumer, so they stay here.
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import json
 import subprocess
@@ -83,6 +84,23 @@ class MakeutilFailureCase:
     message: str
 
 
+class ParseOutcomeCase(typ.NamedTuple):
+    """A makeutil exit and the outcome word the parse log should carry."""
+
+    exit_code: int
+    stdout: str
+    outcome: str
+
+
+def _parse_records(caplog: pytest.LogCaptureFixture) -> list[dict[str, typ.Any]]:
+    """Return the structured fields of each makeutil parse log record."""
+    return [
+        vars(record)
+        for record in caplog.records
+        if record.getMessage() == "makeutil parse finished"
+    ]
+
+
 class TestInspectMakefile:
     """Behaviour of the makeutil subprocess boundary."""
 
@@ -114,6 +132,73 @@ class TestInspectMakefile:
         cmd_mox.replay()
         facts = inspect_makefile(tmp_path / "Makefile")
         assert facts.status == "recovered", facts.status
+
+    @pytest.mark.parametrize(
+        "case",
+        [
+            pytest.param(
+                ParseOutcomeCase(0, json.dumps(MINIMAL_REPORT), "complete"),
+                id="complete",
+            ),
+            pytest.param(ParseOutcomeCase(2, "", "refused"), id="refused"),
+            pytest.param(ParseOutcomeCase(101, "", "error"), id="crash"),
+        ],
+    )
+    def test_the_parse_is_logged_with_a_fixed_outcome(
+        self,
+        tmp_path: pathlib.Path,
+        cmd_mox: CmdMox,
+        caplog: pytest.LogCaptureFixture,
+        case: ParseOutcomeCase,
+    ) -> None:
+        """Each parse leaves one debug record naming the operation and outcome.
+
+        The outcome is a fixed word, never the tool's stderr, which can quote
+        Makefile content.
+        """
+        _write_checkout(tmp_path, cargo=False, makefile=True)
+        cmd_mox.mock("makeutil").returns(
+            exit_code=case.exit_code, stdout=case.stdout, stderr="secret recipe text"
+        )
+        cmd_mox.replay()
+        with (
+            caplog.at_level("DEBUG", logger="concordat.rules.makefile_facts"),
+            contextlib.suppress(OperationalRuleError),
+        ):
+            inspect_makefile(tmp_path / "Makefile")
+        records = _parse_records(caplog)
+        assert len(records) == 1, caplog.records
+        fields = records[0]
+        assert (fields["operation"], fields["tool"], fields["outcome"]) == (
+            "parse-makefile",
+            "makeutil",
+            case.outcome,
+        ), fields
+        assert fields["elapsed_seconds"] >= 0, fields
+        assert "secret recipe text" not in caplog.text, caplog.text
+
+    def test_a_timeout_and_a_launch_failure_are_logged_as_such(
+        self,
+        tmp_path: pathlib.Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """The outcome tells a hung `makeutil` from one that never started."""
+        _write_checkout(tmp_path, cargo=False, makefile=True)
+        outcomes = []
+        for error in (
+            subprocess.TimeoutExpired(cmd="makeutil", timeout=10.0),
+            PermissionError("makeutil"),
+        ):
+            monkeypatch.setattr(subprocess, "run", _raise_process_error(error))
+            caplog.clear()
+            with (
+                caplog.at_level("DEBUG", logger="concordat.rules.makefile_facts"),
+                pytest.raises(OperationalRuleError),
+            ):
+                inspect_makefile(tmp_path / "Makefile")
+            outcomes.append(_parse_records(caplog)[-1]["outcome"])
+        assert outcomes == ["timeout", "launch-failure"], outcomes
 
     def test_exit_status_two_is_a_refusal(
         self,

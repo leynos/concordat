@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import logging
 import subprocess
+import time
 import typing as typ
 
 from concordat.errors import OperationalRuleError
@@ -24,6 +26,8 @@ OPERATION_PARSE_MAKEFILE: typ.Final = "parse-makefile"
 TOOL_MAKEUTIL: typ.Final = "makeutil"
 
 # `makeutil parse` contract: exit 0 is a complete parse, 1 a recovered one.
+_logger = logging.getLogger(__name__)
+
 EXPECTED_STATUS_FOR_EXIT_CODE: typ.Final = {0: "complete", 1: "recovered"}
 
 # `makeutil` exits 2 when it refuses a Makefile outright, as opposed to
@@ -382,6 +386,17 @@ def _validate_report(
     return status
 
 
+def _failure_category(error: OperationalRuleError) -> str:
+    """Return a fixed word for why `makeutil parse` failed, for the log."""
+    match error.__cause__:
+        case subprocess.TimeoutExpired():
+            return "timeout"
+        case OSError():
+            return "launch-failure"
+        case _:
+            return "error"
+
+
 def inspect_makefile(path: pathlib.Path, *, timeout: float = 10.0) -> MakefileFacts:
     """Run `makeutil parse` on *path* and return its validated report.
 
@@ -396,9 +411,38 @@ def inspect_makefile(path: pathlib.Path, *, timeout: float = 10.0) -> MakefileFa
     MakefileFacts
         Validated Makefile facts from the makeutil report.
 
+    Raises
+    ------
+    MakefileRefusedError
+        If `makeutil` exits with its refusal status.
+    OperationalRuleError
+        If `makeutil` cannot be run, or its exit status or report is unusable.
+
     """
-    completed = _run_makeutil(path, timeout)
-    _validate_exit_code(completed, path)
-    report = _decode_report(completed.stdout, path)
-    status = _validate_report(report, completed.returncode, path)
-    return MakefileFacts(report=typ.cast("MakeutilReport", report), status=status)
+    started = time.perf_counter()
+    outcome = "error"
+    try:
+        completed = _run_makeutil(path, timeout)
+        _validate_exit_code(completed, path)
+        report = _decode_report(completed.stdout, path)
+        status = _validate_report(report, completed.returncode, path)
+        outcome = status
+        return MakefileFacts(report=typ.cast("MakeutilReport", report), status=status)
+    except MakefileRefusedError:
+        outcome = "refused"
+        raise
+    except OperationalRuleError as error:
+        outcome = _failure_category(error)
+        raise
+    finally:
+        # The category is a fixed word, never the tool's own output, which can
+        # quote Makefile content.
+        _logger.debug(
+            "makeutil parse finished",
+            extra={
+                "operation": OPERATION_PARSE_MAKEFILE,
+                "tool": TOOL_MAKEUTIL,
+                "outcome": outcome,
+                "elapsed_seconds": round(time.perf_counter() - started, 3),
+            },
+        )
