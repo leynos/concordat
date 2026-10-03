@@ -135,7 +135,8 @@
           }
         }
       },
-      "error": null
+      "error": null,
+      "decode_category": null
     }
   ]
 }

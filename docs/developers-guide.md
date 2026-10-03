@@ -832,7 +832,10 @@ auto-discover, and the Makefile and workflows whose builds replace them:
   Makefile; raising would make BD-001 to BD-006 unrunnable against that
   checkout too. A Makefile that resolves outside the checkout still raises.
 - `workflows` — every `.github/workflows` file decoded as YAML 1.2, or its
-  decoding error, from `markdown_envelope`'s `_load_workflows`.
+  decoding error, from `markdown_envelope`'s public `load_workflows`. Each fact
+  also carries `decode_category`, a fixed word for why it did not decode
+  (`invalid YAML`, `not UTF-8 text`, `not a mapping` or `unreadable`), set by
+  the envelope builder so the policy never depends on the reader's wording.
 
 BD-001 to BD-006 read only the first three. The standard is a default because
 Cargo auto-discovers `.cargo/config.toml`, so a repository whose flags live

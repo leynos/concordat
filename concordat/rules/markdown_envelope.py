@@ -120,7 +120,7 @@ class MarkdownEnvelope(typ.TypedDict):
     action_pins: dict[str, PinResolution]
 
 
-def _resolved_root(checkout: pathlib.Path) -> pathlib.Path:
+def resolved_root(checkout: pathlib.Path) -> pathlib.Path:
     """Return the checkout's fully resolved path.
 
     Returns
@@ -142,7 +142,7 @@ def _resolved_root(checkout: pathlib.Path) -> pathlib.Path:
         ) from error
 
 
-def _within_checkout(root: pathlib.Path, path: pathlib.Path, operation: str) -> bool:
+def within_checkout(root: pathlib.Path, path: pathlib.Path, operation: str) -> bool:
     """Return whether *path* resolves to a location inside *root*.
 
     Every policy input is read through this guard. The readers follow
@@ -210,8 +210,19 @@ def _exists(path: pathlib.Path, operation: str) -> bool:
     return _require(fs_probe.probe_any(path), path, operation)
 
 
-def _is_file(path: pathlib.Path, operation: str) -> bool:
-    """Return whether the path is a regular file, raising on a refusal."""
+def is_file(path: pathlib.Path, operation: str) -> bool:
+    """Return whether the path is a regular file, raising on a refusal.
+
+    Absence is an answer (``False``); anything that stops the probe from
+    answering, such as a permission error, is a refusal and raises, because
+    reading it as absence would report a broken checkout as compliant.
+
+    Returns
+    -------
+    bool
+        Whether *path* is a regular file. A refused probe raises an
+        `OperationalRuleError` naming *operation*.
+    """
     return _require(fs_probe.probe_file(path), path, operation)
 
 
@@ -273,7 +284,7 @@ def _has_markdown_files(checkout: pathlib.Path) -> bool:
             # this walk is over whatever the tree happens to hold.
             if _is_symlink(candidate, OPERATION_SCAN_MARKDOWN):
                 continue
-            if not _is_file(candidate, OPERATION_SCAN_MARKDOWN):
+            if not is_file(candidate, OPERATION_SCAN_MARKDOWN):
                 continue
             return True
     return False
@@ -320,9 +331,9 @@ def _load_markdownlint_config(
         The configuration fact, or ``None`` when the file does not exist.
     """
     path = checkout / MARKDOWNLINT_CONFIG_FILENAME
-    if not _within_checkout(root, path, OPERATION_READ_MARKDOWNLINT_CONFIG):
+    if not within_checkout(root, path, OPERATION_READ_MARKDOWNLINT_CONFIG):
         return None
-    if not _is_file(path, OPERATION_READ_MARKDOWNLINT_CONFIG):
+    if not is_file(path, OPERATION_READ_MARKDOWNLINT_CONFIG):
         return None
     fact: MarkdownlintConfig = {
         "path": MARKDOWNLINT_CONFIG_FILENAME,
@@ -355,7 +366,7 @@ def _alternate_configs(checkout: pathlib.Path) -> list[str]:
     present: list[str] = []
     for name in ALTERNATE_CONFIG_FILENAMES:
         candidate = checkout / name
-        if _is_file(candidate, OPERATION_PROBE_PATH):
+        if is_file(candidate, OPERATION_PROBE_PATH):
             present.append(name)
     return present
 
@@ -380,7 +391,7 @@ def _load_workflow(
     """
     fact: WorkflowFile = {"path": str(relative), "parsed": None, "error": None}
     path = checkout / relative
-    _within_checkout(root, path, OPERATION_READ_WORKFLOW)
+    within_checkout(root, path, OPERATION_READ_WORKFLOW)
     try:
         text = _read_text(path, OPERATION_READ_WORKFLOW)
     except UnicodeDecodeError as error:
@@ -398,7 +409,7 @@ def _load_workflow(
     return fact
 
 
-def _load_workflows(checkout: pathlib.Path, root: pathlib.Path) -> list[WorkflowFile]:
+def load_workflows(checkout: pathlib.Path, root: pathlib.Path) -> list[WorkflowFile]:
     """Return every workflow file under `.github/workflows`, sorted by name.
 
     An `OperationalRuleError` propagates from the containment guard if the
@@ -415,7 +426,7 @@ def _load_workflows(checkout: pathlib.Path, root: pathlib.Path) -> list[Workflow
         If the workflows directory exists but cannot be listed.
     """
     directory = checkout / WORKFLOWS_DIRECTORY
-    if not _within_checkout(root, directory, OPERATION_READ_WORKFLOW):
+    if not within_checkout(root, directory, OPERATION_READ_WORKFLOW):
         return []
     if not _is_dir(directory, OPERATION_LIST_WORKFLOWS):
         return []
@@ -429,7 +440,7 @@ def _load_workflows(checkout: pathlib.Path, root: pathlib.Path) -> list[Workflow
     return [
         _load_workflow(checkout, root, WORKFLOWS_DIRECTORY / entry.name)
         for entry in entries
-        if _is_file(entry, OPERATION_LIST_WORKFLOWS)
+        if is_file(entry, OPERATION_LIST_WORKFLOWS)
         and entry.suffix in WORKFLOW_SUFFIXES
     ]
 
@@ -457,11 +468,11 @@ def build_markdown_envelope(checkout: pathlib.Path) -> MarkdownEnvelope:
     MarkdownEnvelope
         The policy input document assembled from the checkout.
     """
-    root = _resolved_root(checkout)
+    root = resolved_root(checkout)
     workflows_dir = checkout / WORKFLOWS_DIRECTORY
     makefile_path = checkout / "Makefile"
     makefile_report: MakeutilReport | None = None
-    if _within_checkout(root, makefile_path, OPERATION_READ_MAKEFILE) and _is_file(
+    if within_checkout(root, makefile_path, OPERATION_READ_MAKEFILE) and is_file(
         makefile_path, OPERATION_READ_MAKEFILE
     ):
         makefile_report = inspect_makefile(makefile_path).report
@@ -479,7 +490,7 @@ def build_markdown_envelope(checkout: pathlib.Path) -> MarkdownEnvelope:
         "makefile": makefile_report,
         "markdownlint": markdownlint,
         "alternate_markdownlint_configs": _alternate_configs(checkout),
-        "workflows": _load_workflows(checkout, root),
+        "workflows": load_workflows(checkout, root),
         "action_pins": {},
     }
 

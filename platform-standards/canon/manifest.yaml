@@ -129,7 +129,7 @@ artifacts:
       Workflow half of rust-build-defaults BD-007 and BD-009: coverage steps
       and dev-profile release builds select LLVM, and direct cargo gate
       steps whose RUSTFLAGS is set keep the fast flags.
-    sha256: 035aa30734188d15a7a6e7fb00241d1922652f31ab59d57b41aae188474de51e
+    sha256: 9a6d8214ebbee567d921914ab97a548b89e9771d0a2afad802a8bd909356dcf5
   - id: lint-rule-rust-build-defaults-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/rust-build-defaults/rule.yaml
