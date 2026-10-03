@@ -467,15 +467,18 @@ does not re-check installer flags. It reports:
 - an `install-whitaker` pin that is not listed, a fork of the action, or a
   local copy of it.
 
-The list is every shared-actions commit at or after an approved root that
-leaves the `install-whitaker` directory content-identical to it; a commit that
-changes the directory is refused until a reviewer approves it. After
-shared-actions gains commits,
-`scripts/whitaker_revisions.py sync --clone <shared-actions clone>` regenerates
-the list. Whitaker itself is exempt as the producer, and a
-developer-environment script that CI never runs may be exempted by name,
-repository and reason in the rule's parameters. Exemptions match the repository
-slug read from the `origin` remote. See
+The list holds only first-parent commits on shared-actions `main`: a commit on
+a side branch that was merged in never qualifies, even when its tree matches. A
+first-parent commit qualifies when it is an approved root, or descends from one
+and leaves the `install-whitaker` directory content-identical to it; a commit
+that changes the directory is refused until a reviewer adds it as an approved
+root (`install_whitaker_roots` in the rule's parameters). After shared-actions
+gains commits, regenerate the list with
+`scripts/whitaker_revisions.py sync <shared-actions clone>`, and verify it with
+`check`; `list` prints what the clone derives. Whitaker itself is exempt as the
+producer, and a developer-environment script that CI never runs may be exempted
+by name, repository and reason in the rule's parameters. Exemptions match the
+repository slug read from the `origin` remote. See
 `platform-standards/canon/lint-rules/whitaker-provisioning/README.md` for what
 the policy recognizes and what it declines to judge.
 
