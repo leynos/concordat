@@ -620,12 +620,15 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   package; callers: `scripts/whitaker_revisions.py` and its tests only). It
   walks shared-actions main first-parent and keeps each commit that is an
   approved root, or descends from one with the action directory's Git tree id
-  equal to that root's. Run
-  `uv run python scripts/whitaker_revisions.py sync
-  --clone <shared-actions clone>`
-  after shared-actions gains commits, then commit the regenerated `rule.yaml`
-  and refresh its digest in the canon manifest. To approve a changed action,
-  add the reviewed commit to `install_whitaker_roots` first.
+  equal to that root's. After shared-actions gains commits, run
+  `uv run python scripts/whitaker_revisions.py sync <shared-actions clone>`,
+  then commit the regenerated `rule.yaml` and refresh its digest in the canon
+  manifest. `check <clone>` exits 1 and names each missing or non-derivable
+  revision when the manifest has drifted (use it in review), and `list <clone>`
+  prints what the clone derives; each takes `--tip <ref>` and exits 2 when the
+  clone or manifest cannot be read. To approve a changed action, add the
+  reviewed commit to `install_whitaker_roots` first. Git read failures while
+  walking the history surface as `OperationalRuleError`, never a traceback.
 - `policy-input/markdown-formatting-baseline` —
   `markdown_envelope.build_markdown_envelope`. Alongside the same `makeutil`
   report for the root `Makefile`, it carries `.markdownlint-cli2.jsonc` decoded

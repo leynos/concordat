@@ -386,3 +386,122 @@ def test_main_exits_2_for_a_clone_that_is_not_a_repository(
 
     assert whitaker_revisions.main() == 2
     assert "is not a Git repository" in capsys.readouterr().err
+
+
+def _run_main(
+    monkeypatch: pytest.MonkeyPatch, clone: pathlib.Path | str, command: str
+) -> int:
+    """Run the real entry point as `whitaker_revisions.py <command> <clone>`."""
+    monkeypatch.setattr(
+        sys, "argv", ["whitaker_revisions", command, str(clone), "--tip", "main"]
+    )
+    return whitaker_revisions.main()
+
+
+def test_main_runs_check_and_sync_with_their_documented_statuses(
+    rule_package: tuple[pathlib.Path, str, str],
+    history: History,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`check` reports drift with status 1, `sync` fixes it, `check` then passes.
+
+    The tests above call the functions directly; this one goes through `main()`
+    with the documented argv, so a command that is not dispatched, or a status
+    that is not returned, fails here.
+    """
+    package, root, later = rule_package
+    clone = pathlib.Path(history.repository.workdir)
+
+    assert _run_main(monkeypatch, clone, "check") == 1
+    assert _run_main(monkeypatch, clone, "sync") == 0
+    assert packages.rule_parameters(package)[REFS_KEY] == [root, later]
+    assert _run_main(monkeypatch, clone, "check") == 0
+
+
+def test_a_git_read_failure_is_a_controlled_error_through_the_cli(
+    rule_package: tuple[pathlib.Path, str, str],
+    history: History,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """An object Git cannot read while walking history exits 2, not a traceback."""
+    clone = pathlib.Path(history.repository.workdir)
+
+    def unreadable(*_args: object) -> object:
+        """Fail as Git does on a corrupt object."""
+        message = "object not found"
+        raise pygit2.GitError(message)
+
+    monkeypatch.setattr(
+        "concordat.rules.whitaker_revisions.directory_tree_id", unreadable
+    )
+
+    assert _run_main(monkeypatch, clone, "list") == 2
+    assert "cannot read" in capsys.readouterr().err
+
+
+def test_sync_reports_a_manifest_that_is_not_utf8_as_a_controlled_error(
+    rule_package: tuple[pathlib.Path, str, str],
+    history: History,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Invalid UTF-8 in the manifest exits 2 from `sync`, not with a traceback.
+
+    The manifest's parameters are read, and refused with a controlled error,
+    before `sync` reads the text to rewrite it, so the rewrite never sees the
+    invalid bytes.
+    """
+    package, _root, _later = rule_package
+    manifest = package / "rule.yaml"
+    manifest.write_bytes(manifest.read_bytes() + b"\xff\xfe")
+    clone = pathlib.Path(history.repository.workdir)
+
+    assert _run_main(monkeypatch, clone, "sync") == 2
+    assert "cannot read rule manifest" in capsys.readouterr().err
+
+
+SNAPSHOTS: typ.Final = pathlib.Path(__file__).parent / "snapshots"
+
+
+def _redacted(text: str, *, root: str, later: str, manifest: pathlib.Path) -> str:
+    """Replace the run-specific ids and paths with stable placeholders."""
+    return (
+        text
+        .replace(root, "<root>")
+        .replace(later, "<later>")
+        .replace(str(manifest), "<manifest>")
+    )
+
+
+@pytest.mark.parametrize(
+    ("command", "snapshot"),
+    [
+        pytest.param("list", "whitaker_revisions_list.txt", id="list"),
+        pytest.param("check", "whitaker_revisions_check_drift.txt", id="check-drift"),
+        pytest.param("sync", "whitaker_revisions_sync.txt", id="sync"),
+    ],
+)
+def test_the_command_output_matches_its_snapshot(
+    rule_package: tuple[pathlib.Path, str, str],
+    history: History,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    command: str,
+    snapshot: str,
+) -> None:
+    """The text a maintainer reads from each command keeps a stable shape.
+
+    The snapshot holds placeholders for the run-specific commit ids and the
+    temporary manifest path; semantic assertions for membership and status sit
+    in the tests above, and the live derived list is not snapshotted.
+    """
+    package, root, later = rule_package
+    clone = pathlib.Path(history.repository.workdir)
+    _run_main(monkeypatch, clone, command)
+
+    output = _redacted(
+        capsys.readouterr().out, root=root, later=later, manifest=package / "rule.yaml"
+    )
+
+    assert output == (SNAPSHOTS / snapshot).read_text(encoding="utf-8")

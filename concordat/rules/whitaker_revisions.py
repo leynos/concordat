@@ -136,12 +136,19 @@ def compliant_revisions(
     Raises
     ------
     OperationalRuleError
-        When the clone is shallow, or a root or *tip* cannot be resolved in it.
+        When the clone is shallow, a root or *tip* cannot be resolved in it,
+        or Git cannot read an object while walking the history.
     """
     if repository.is_shallow:
         message = "the shared-actions clone is shallow; run git fetch --unshallow"
         raise OperationalRuleError(message, operation=OPERATION_DERIVE_REVISIONS)
-    trees = _root_trees(repository, roots, directory)
+    try:
+        trees = _root_trees(repository, roots, directory)
+    except (pygit2.GitError, KeyError, ValueError) as error:
+        message = f"cannot read the approved roots from the clone: {error}"
+        raise OperationalRuleError(
+            message, operation=OPERATION_DERIVE_REVISIONS
+        ) from error
     try:
         tip_id = typ.cast("pygit2.Commit", repository.revparse_single(tip)).id
     except (KeyError, ValueError) as error:
@@ -149,6 +156,28 @@ def compliant_revisions(
         raise OperationalRuleError(
             message, operation=OPERATION_DERIVE_REVISIONS
         ) from error
+    try:
+        return _walk_first_parent(repository, tip_id, directory, trees)
+    except (pygit2.GitError, KeyError, ValueError) as error:
+        message = f"cannot read the shared-actions history: {error}"
+        raise OperationalRuleError(
+            message, operation=OPERATION_DERIVE_REVISIONS
+        ) from error
+
+
+def _walk_first_parent(
+    repository: pygit2.Repository,
+    tip_id: pygit2.Oid,
+    directory: str,
+    trees: cabc.Mapping[str, pygit2.Oid],
+) -> list[str]:
+    """Return the qualifying first-parent commits up to *tip_id*, oldest first.
+
+    Returns
+    -------
+    list[str]
+        Full commit ids of the commits an approved root accepts.
+    """
     walker = repository.walk(tip_id, pygit2.enums.SortMode.TOPOLOGICAL)
     walker.simplify_first_parent()
     found: list[str] = []
