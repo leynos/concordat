@@ -7,6 +7,7 @@ import typing as typ
 import pytest
 
 from tests.unit.makeutil_pin import (
+    PinUnavailableError,
     assert_matches_recorded,
     drift_hint,
     pinned_release,
@@ -109,10 +110,53 @@ def test_a_workflow_missing_any_pin_variable_is_an_error(
     body = "".join(
         line + "\n" for line in _WORKFLOW.splitlines() if missing not in line
     )
-    with pytest.raises(LookupError, match=missing):
+    with pytest.raises(PinUnavailableError, match=missing):
         pinned_release(_workflow(tmp_path, body))
 
 
 def test_the_repository_workflow_carries_a_pin() -> None:
     """The real workflow is the hint's source, so it must stay readable."""
     assert len(pinned_release().sha256) == 64
+
+
+@pytest.mark.parametrize(
+    "body",
+    [pytest.param(None, id="absent"), pytest.param(b"\xff\xfe", id="not-utf-8")],
+)
+def test_direct_callers_receive_the_one_documented_failure(
+    tmp_path: pathlib.Path, body: bytes | None
+) -> None:
+    """Read and decode failures are normalized, not leaked as OSError."""
+    path = tmp_path / "ci.yml"
+    if body is not None:
+        path.write_bytes(body)
+    with pytest.raises(PinUnavailableError, match="cannot read"):
+        pinned_release(path)
+
+
+def test_a_failing_comparison_shows_what_differs(tmp_path: pathlib.Path) -> None:
+    """The pin check is added to the field-level diff, not substituted for it."""
+    workflow = _workflow(tmp_path, _WORKFLOW)
+    with pytest.raises(AssertionError) as raised:
+        assert_matches_recorded(
+            {"makefile": {"start_byte": 13}},
+            {"makefile": {"start_byte": 201}},
+            "envelope x",
+            workflow,
+        )
+    message = str(raised.value)
+    assert '-    "start_byte": 13' in message, message
+    assert '+    "start_byte": 201' in message, message
+
+
+def test_a_huge_diff_is_cut_with_a_count(tmp_path: pathlib.Path) -> None:
+    """A large envelope must not bury the pin check above its diff."""
+    workflow = _workflow(tmp_path, _WORKFLOW)
+    with pytest.raises(AssertionError) as raised:
+        assert_matches_recorded(
+            {str(i): 0 for i in range(200)},
+            {str(i): 1 for i in range(200)},
+            "envelope x",
+            workflow,
+        )
+    assert "more diff lines" in str(raised.value), raised.value

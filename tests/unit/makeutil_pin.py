@@ -9,6 +9,8 @@ in `.github/workflows/ci.yml`, so that file is the single source the hint reads.
 
 from __future__ import annotations
 
+import difflib
+import json
 import pathlib
 import re
 import typing as typ
@@ -16,6 +18,12 @@ import typing as typ
 _CI_WORKFLOW: typ.Final = (
     pathlib.Path(__file__).resolve().parents[2] / ".github" / "workflows" / "ci.yml"
 )
+
+_MAX_DIFF_LINES: typ.Final = 40
+
+
+class PinUnavailableError(LookupError):
+    """The workflow cannot be read, or does not carry the `makeutil` pin."""
 
 
 class MakeutilPin(typ.NamedTuple):
@@ -36,13 +44,13 @@ def _variable(text: str, name: str, workflow: pathlib.Path) -> str:
 
     Raises
     ------
-    LookupError
+    PinUnavailableError
         If *workflow* does not set `name`.
     """
     match = re.search(rf'^\s*{name}:\s*"([^"]+)"', text, re.MULTILINE)
     if match is None:
         message = f"{workflow} carries no {name} pin"
-        raise LookupError(message)
+        raise PinUnavailableError(message)
     return match.group(1)
 
 
@@ -52,15 +60,25 @@ def pinned_release(workflow: pathlib.Path = _CI_WORKFLOW) -> MakeutilPin:
     Returns
     -------
     MakeutilPin
-        The version, asset name and SHA-256 the workflow pins. A missing
-        variable raises `LookupError` from the reader.
+        The version, asset name and SHA-256 the workflow pins.
+
+    Raises
+    ------
+    PinUnavailableError
+        If the workflow cannot be read or decoded, or lacks a pin variable.
+        Read and decode failures are normalized into this one exception so a
+        caller handles a single documented failure.
 
     Examples
     --------
     >>> len(pinned_release().sha256)
     64
     """
-    text = workflow.read_text(encoding="utf-8")
+    try:
+        text = workflow.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        message = f"cannot read {workflow}: {error}"
+        raise PinUnavailableError(message) from error
     return MakeutilPin(
         _variable(text, "MAKEUTIL_VERSION", workflow),
         _variable(text, "MAKEUTIL_ASSET", workflow),
@@ -96,7 +114,7 @@ def drift_hint(workflow: pathlib.Path = _CI_WORKFLOW) -> str:
     """
     try:
         pin = pinned_release(workflow)
-    except (OSError, UnicodeDecodeError, LookupError) as error:
+    except PinUnavailableError as error:
         return f"the pinned makeutil release could not be read ({error})"
     return (
         "before blaming the fixtures, check the local makeutil against the "
@@ -104,6 +122,30 @@ def drift_hint(workflow: pathlib.Path = _CI_WORKFLOW) -> str:
         "distinguish revisions, so compare the SHA-256 of the "
         f"{pin.asset} asset from the leynos/makeutil release with {pin.sha256}"
     )
+
+
+def _diff(recorded: object, regenerated: object) -> str:
+    """Return a bounded unified diff of two JSON-compatible values.
+
+    Returns
+    -------
+    str
+        The first `_MAX_DIFF_LINES` lines of the diff, with a note when cut,
+        so a large envelope does not bury the pin check above it.
+    """
+    lines = list(
+        difflib.unified_diff(
+            json.dumps(recorded, indent=2, sort_keys=True, default=str).splitlines(),
+            json.dumps(regenerated, indent=2, sort_keys=True, default=str).splitlines(),
+            "recorded",
+            "regenerated",
+            lineterm="",
+        )
+    )
+    shown = lines[:_MAX_DIFF_LINES]
+    if len(lines) > _MAX_DIFF_LINES:
+        shown.append(f"... {len(lines) - _MAX_DIFF_LINES} more diff lines")
+    return "\n".join(shown)
 
 
 def assert_matches_recorded(
@@ -135,5 +177,8 @@ def assert_matches_recorded(
     >>> assert_matches_recorded({"a": 1}, {"a": 1}, "envelope")
     """
     if recorded != regenerated:
-        message = f"{label} differs from regeneration: {drift_hint(workflow)}"
+        message = (
+            f"{label} differs from regeneration: {drift_hint(workflow)}\n"
+            f"{_diff(recorded, regenerated)}"
+        )
         raise AssertionError(message)
