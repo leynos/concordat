@@ -19,7 +19,7 @@ _CI_WORKFLOW: typ.Final = (
     pathlib.Path(__file__).resolve().parents[2] / ".github" / "workflows" / "ci.yml"
 )
 
-_MAX_DIFF_LINES: typ.Final = 40
+MAX_DIFF_LINES: typ.Final = 40
 
 
 class PinUnavailableError(LookupError):
@@ -130,7 +130,7 @@ def _diff(recorded: object, regenerated: object) -> str:
     Returns
     -------
     str
-        The first `_MAX_DIFF_LINES` lines of the diff, with a note when cut,
+        The first `MAX_DIFF_LINES` lines of the diff, with a note when cut,
         so a large envelope does not bury the pin check above it.
     """
     lines = list(
@@ -142,9 +142,9 @@ def _diff(recorded: object, regenerated: object) -> str:
             lineterm="",
         )
     )
-    shown = lines[:_MAX_DIFF_LINES]
-    if len(lines) > _MAX_DIFF_LINES:
-        shown.append(f"... {len(lines) - _MAX_DIFF_LINES} more diff lines")
+    shown = lines[:MAX_DIFF_LINES]
+    if len(lines) > MAX_DIFF_LINES:
+        shown.append(f"... {len(lines) - MAX_DIFF_LINES} more diff lines")
     return "\n".join(shown)
 
 

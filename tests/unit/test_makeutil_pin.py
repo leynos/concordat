@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import difflib
+import json
+import re
 import typing as typ
 
 import pytest
 
 from tests.unit.makeutil_pin import (
+    MAX_DIFF_LINES,
     PinUnavailableError,
     assert_matches_recorded,
     drift_hint,
@@ -150,13 +154,28 @@ def test_a_failing_comparison_shows_what_differs(tmp_path: pathlib.Path) -> None
 
 
 def test_a_huge_diff_is_cut_with_a_count(tmp_path: pathlib.Path) -> None:
-    """A large envelope must not bury the pin check above its diff."""
+    """A large envelope must not bury the pin check above its diff.
+
+    The diff part of the message is exactly the cap plus one notice line, and
+    the notice reports the lines that were left out, checked against an
+    independently computed full diff.
+    """
     workflow = _workflow(tmp_path, _WORKFLOW)
+    recorded = {str(i): 0 for i in range(200)}
+    regenerated = {str(i): 1 for i in range(200)}
     with pytest.raises(AssertionError) as raised:
-        assert_matches_recorded(
-            {str(i): 0 for i in range(200)},
-            {str(i): 1 for i in range(200)},
-            "envelope x",
-            workflow,
+        assert_matches_recorded(recorded, regenerated, "envelope x", workflow)
+    diff_part = str(raised.value).split("\n")[1:]
+    assert len(diff_part) == MAX_DIFF_LINES + 1, len(diff_part)
+    notice = re.fullmatch(r"\.\.\. (\d+) more diff lines", diff_part[-1])
+    assert notice is not None, diff_part[-1]
+    full = list(
+        difflib.unified_diff(
+            json.dumps(recorded, indent=2, sort_keys=True).splitlines(),
+            json.dumps(regenerated, indent=2, sort_keys=True).splitlines(),
+            "recorded",
+            "regenerated",
+            lineterm="",
         )
-    assert "more diff lines" in str(raised.value), raised.value
+    )
+    assert int(notice.group(1)) == len(full) - MAX_DIFF_LINES, (notice, len(full))
