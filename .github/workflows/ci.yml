@@ -54,7 +54,7 @@ jobs:
           go install github.com/open-policy-agent/conftest@v0.52.0
 
       - name: Install mdtablefix
-        uses: leynos/shared-actions/.github/actions/install-mdtablefix@c856f4c570e8d83d64318ee2768a4906d0d807f6
+        uses: leynos/shared-actions/.github/actions/install-mdtablefix@7d751eded578e48dacf43ab173d5820e6437c474
         with:
           version: ${{ env.MDTABLEFIX_VERSION }}
 
