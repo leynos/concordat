@@ -850,6 +850,43 @@ behind an opt-in Make target has no such file and fails on that alone. BD-007
 to BD-009 read the rest, because an assigned `RUSTFLAGS` replaces that default
 and a coverage build cannot use a Cranelift one. ADR-003 records the change.
 
+### The shared checkout readers in `markdown_envelope`
+
+The Markdown, spelling and build-defaults envelope builders read the same files
+through one guarded set of functions in `concordat/rules/markdown_envelope.py`.
+Import them by name; they are public because three builders share them, and a
+private-name import across modules is the pattern concordat#264 removes.
+
+- `resolved_root(checkout)` returns the checkout with every symbolic link in
+  its own path resolved. It raises `OperationalRuleError` (operation
+  `resolve-checkout`) if the path cannot be resolved. Resolve once, then pass
+  the result to the other functions.
+- `within_checkout(root, path, operation)` returns whether *path* exists and
+  resolves inside *root*. A missing path returns `False`; a path that resolves
+  outside the checkout raises `OperationalRuleError` naming *operation*. Every
+  policy input is read through it, because the readers follow symbolic links
+  and a checkout could otherwise carry another file's contents into an audit
+  that may be published.
+- `is_file(path, operation)` returns whether *path* is a regular file. Absence
+  is `False`; a probe that cannot answer (a permission error, say) raises,
+  because reading that as absence would report a broken checkout as compliant.
+- `load_workflows(checkout, root)` returns one fact per file under
+  `.github/workflows`, sorted by name, each decoded as YAML 1.2 or carrying its
+  decoding error. It returns an empty list when there is no workflows
+  directory, and raises `OperationalRuleError` if the directory or a file
+  resolves outside the checkout or the directory cannot be listed.
+
+### Observing `makeutil` runs
+
+`inspect_makefile` is a query: it reads no clock and writes no log. The
+envelope builders call `makefile_observed.inspect_makefile_observed`, which
+times the query with an injected `clock` and passes one `MakefileParseEvent`
+(operation, tool, outcome, elapsed seconds) to an injected `emit`. The default
+emitter writes a debug log record. The outcome is a fixed word (`complete`,
+`recovered`, `refused`, `timeout`, `launch-failure` or `error`), never the
+tool's output, which can quote Makefile content. Tests pass a fake clock and a
+list's `append` to assert events without touching the log.
+
 ### Absence is not a read failure
 
 `concordat/rules/fs_probe.py` exists because `Path.is_file()` answers "does not
@@ -1176,6 +1213,11 @@ so a dropped result cannot pass as a clean one. The helper is private to the
 runner and is for tests that judge many envelopes against one rule; production
 callers evaluate one checkout and use `_invoke_conftest`. Keep one
 single-envelope test on that path as a smoke test.
+
+The BD-008 properties and the BD-009 setup-ordering property
+(`test_build_defaults_workflow_properties.py`) go through the public
+`runner.run_rule` one example at a time, with a small `max_examples`, because
+each example needs a real envelope and one Conftest run.
 
 ### The bounded Rego reachability test
 

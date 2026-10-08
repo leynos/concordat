@@ -543,18 +543,24 @@ Three more clauses read the builds that replace those defaults:
   because coverage instrumentation is LLVM-only. So does a build without
   `--release` in a release- or tag-triggered workflow. Prefix the command with
   `CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm`, export it, or pass `--profile` for
-  a profile that selects `llvm`. A shared-actions `generate-coverage` step
-  needs nothing: it selects LLVM itself.
+  a profile that selects `llvm`. Where the test profile also selects Cranelift,
+  set `CARGO_PROFILE_TEST_CODEGEN_BACKEND=llvm` too, because the dev-profile
+  override leaves tests on Cranelift and coverage instrumentation then fails. A
+  shared-actions `generate-coverage` step needs nothing: it selects LLVM itself.
 - **BD-008** — a Makefile recipe reachable from `lint`, `test`, `typecheck` or
-  `build` that assigns `RUSTFLAGS` restates `-Zthreads=8` and the `mold` linker
-  flag. An assigned `RUSTFLAGS` replaces every `rustflags` source, so
+  `build` that assigns `RUSTFLAGS` restates `-Zthreads=8` (on a nightly
+  toolchain only) and the `mold` linker flag (where the build targets Linux).
+  An assigned `RUSTFLAGS` replaces every `rustflags` source, so
   `RUSTFLAGS="-D warnings"` alone turns the standard off for that gate.
   netsuke's `GATE_RUSTFLAGS` is the reference shape.
 - **BD-009** — a workflow step that runs `cargo build`, `check`, `clippy`,
   `doc`, `nextest` or `test` directly with `RUSTFLAGS` set carries the same
-  flags. shared-actions `setup-rust` sets it to `-D warnings` by default for
-  every later step; pass `rustflags: ''` to leave the configuration in charge,
-  or a value carrying the fast flags.
+  flags: `-Zthreads=8` unless the step runs a non-nightly toolchain, and the
+  `mold` linker flag only when the job runs on a literal Linux runner
+  (`ubuntu-*`, `ubicloud-*` or a `linux` label). shared-actions `setup-rust`
+  sets it to `-D warnings` by default for every later step; pass
+  `rustflags: ''` to leave the configuration in charge, or a value carrying the
+  fast flags.
 
 A Makefile `makeutil` cannot fully parse makes BD-007 and BD-008
 `indeterminate` rather than passed; the other clauses still report.
@@ -572,12 +578,14 @@ which 0.1.1 never opened.
   configuration alone would have passed.
 - Where Cranelift is the development default, add the LLVM selection to every
   `cargo llvm-cov` recipe or step and every non-`--release` build in a release-
-  or tag-triggered workflow (BD-007).
-- Restate `-Zthreads=8` and the `mold` linker flag in every gate recipe that
-  assigns `RUSTFLAGS`, or in the workflow step that sets it, or let the Cargo
-  configuration decide by leaving `RUSTFLAGS` unassigned (BD-008 and BD-009).
-  For a shared-actions `setup-rust` step, pass `rustflags: ''` or a value that
-  carries the flags.
+  or tag-triggered workflow (BD-007), and the test-profile override where the
+  test profile also selects Cranelift.
+- Restate `-Zthreads=8` (nightly toolchains only) and the `mold` linker flag
+  (Linux builds only; a literal Linux runner for BD-009) in every gate recipe
+  that assigns `RUSTFLAGS`, or in the workflow step that sets it, or let the
+  Cargo configuration decide by leaving `RUSTFLAGS` unassigned (BD-008 and
+  BD-009). For a shared-actions `setup-rust` step, pass `rustflags: ''` or a
+  value that carries the flags.
 - A Makefile `makeutil` refuses, or a gate that delegates through `-C`, `-f` or
   a computed target, is `indeterminate`, not compliant. Write the delegation
   literally, as `$(MAKE) target`, to have it followed.

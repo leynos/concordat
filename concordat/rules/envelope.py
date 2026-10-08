@@ -19,8 +19,8 @@ from .makefile_facts import (
     OPERATION_PARSE_MAKEFILE,
     MakefileRefusedError,
     MakeutilReport,
-    inspect_makefile,
 )
+from .makefile_observed import inspect_makefile_observed
 from .markdown_envelope import (
     is_file,
     load_workflows,
@@ -113,7 +113,7 @@ def build_envelope(checkout: pathlib.Path) -> PolicyEnvelope:
 
     makefile_report: MakeutilReport | None = None
     if regular_file_exists(makefile_path, operation=OPERATION_PARSE_MAKEFILE):
-        makefile_report = inspect_makefile(makefile_path).report
+        makefile_report = inspect_makefile_observed(makefile_path).report
 
     envelope: PolicyEnvelope = {
         "schema_version": ENVELOPE_SCHEMA_VERSION,
@@ -250,7 +250,7 @@ def _read_makefile(
     ):
         return None, None
     try:
-        return inspect_makefile(path).report, None
+        return inspect_makefile_observed(path).report, None
     except MakefileRefusedError as error:
         return None, str(error)
 

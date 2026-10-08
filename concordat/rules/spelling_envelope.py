@@ -22,7 +22,7 @@ import pathlib
 import tomllib
 import typing as typ
 
-from .makefile_facts import MakeutilReport, inspect_makefile
+from .makefile_observed import inspect_makefile_observed
 from .markdown_envelope import (
     OPERATION_PROBE_PATH,
     OPERATION_READ_MAKEFILE,
@@ -39,6 +39,8 @@ from .markdown_envelope import (
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+
+    from .makefile_facts import MakeutilReport
 
 ENVELOPE_SCHEMA_VERSION: typ.Final = 1
 ENVELOPE_KIND: typ.Final = "policy-input/spelling-config-baseline"
@@ -251,7 +253,7 @@ def build_spelling_envelope(
     makefile_path = checkout / "Makefile"
     makefile_report: MakeutilReport | None = None
     if _is_contained_file(root, makefile_path, OPERATION_READ_MAKEFILE):
-        makefile_report = inspect_makefile(makefile_path).report
+        makefile_report = inspect_makefile_observed(makefile_path).report
     typos_local = _load_typos_local(checkout, root)
     return {
         "schema_version": ENVELOPE_SCHEMA_VERSION,

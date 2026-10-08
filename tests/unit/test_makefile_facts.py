@@ -14,12 +14,17 @@ import contextlib
 import dataclasses
 import json
 import subprocess
+import time
 import typing as typ
 
 import pytest
 
 from concordat.errors import OperationalRuleError
 from concordat.rules.makefile_facts import MakefileRefusedError, inspect_makefile
+from concordat.rules.makefile_observed import (
+    MakefileParseEvent,
+    inspect_makefile_observed,
+)
 from tests.unit.rule_test_support import (
     MINIMAL_REPORT,
     SpawnFailureCase,
@@ -92,13 +97,18 @@ class ParseOutcomeCase(typ.NamedTuple):
     outcome: str
 
 
-def _parse_records(caplog: pytest.LogCaptureFixture) -> list[dict[str, typ.Any]]:
-    """Return the structured fields of each makeutil parse log record."""
-    return [
-        vars(record)
-        for record in caplog.records
-        if record.getMessage() == "makeutil parse finished"
-    ]
+class FakeClock:
+    """A clock that advances by a fixed step on every read."""
+
+    def __init__(self, step: float) -> None:
+        self._now = 0.0
+        self._step = step
+
+    def __call__(self) -> float:
+        """Return the current time, then advance it."""
+        reading = self._now
+        self._now += self._step
+        return reading
 
 
 class TestInspectMakefile:
@@ -133,6 +143,26 @@ class TestInspectMakefile:
         facts = inspect_makefile(tmp_path / "Makefile")
         assert facts.status == "recovered", facts.status
 
+    def test_the_query_itself_neither_reads_a_clock_nor_logs(
+        self,
+        tmp_path: pathlib.Path,
+        cmd_mox: CmdMox,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """`inspect_makefile` is a pure query; observation is the caller's job."""
+        _write_checkout(tmp_path, cargo=False, makefile=True)
+        cmd_mox.mock("makeutil").returns(stdout=json.dumps(MINIMAL_REPORT))
+        cmd_mox.replay()
+
+        def forbidden() -> float:
+            pytest.fail("inspect_makefile read a clock")
+
+        monkeypatch.setattr(time, "perf_counter", forbidden)
+        with caplog.at_level("DEBUG"):
+            inspect_makefile(tmp_path / "Makefile")
+        assert not caplog.records, caplog.records
+
     @pytest.mark.parametrize(
         "case",
         [
@@ -144,44 +174,60 @@ class TestInspectMakefile:
             pytest.param(ParseOutcomeCase(101, "", "error"), id="crash"),
         ],
     )
-    def test_the_parse_is_logged_with_a_fixed_outcome(
+    def test_the_observed_parse_emits_one_event_with_a_fixed_outcome(
         self,
         tmp_path: pathlib.Path,
         cmd_mox: CmdMox,
         caplog: pytest.LogCaptureFixture,
         case: ParseOutcomeCase,
     ) -> None:
-        """Each parse leaves one debug record naming the operation and outcome.
+        """Each observed parse emits one event naming the operation and outcome.
 
         The outcome is a fixed word, never the tool's stderr, which can quote
-        Makefile content.
+        Makefile content; the elapsed time comes from the injected clock.
         """
         _write_checkout(tmp_path, cargo=False, makefile=True)
         cmd_mox.mock("makeutil").returns(
             exit_code=case.exit_code, stdout=case.stdout, stderr="secret recipe text"
         )
         cmd_mox.replay()
-        with (
-            caplog.at_level("DEBUG", logger="concordat.rules.makefile_facts"),
-            contextlib.suppress(OperationalRuleError),
-        ):
-            inspect_makefile(tmp_path / "Makefile")
-        records = _parse_records(caplog)
-        assert len(records) == 1, caplog.records
-        fields = records[0]
+        events: list[MakefileParseEvent] = []
+        with contextlib.suppress(OperationalRuleError):
+            inspect_makefile_observed(
+                tmp_path / "Makefile", clock=FakeClock(0.25), emit=events.append
+            )
+        assert events == [
+            MakefileParseEvent("parse-makefile", "makeutil", case.outcome, 0.25)
+        ], events
+        assert "secret recipe text" not in repr(events), events
+
+    def test_the_default_emitter_logs_a_debug_record(
+        self,
+        tmp_path: pathlib.Path,
+        cmd_mox: CmdMox,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Without an injected emitter the event becomes one structured log record."""
+        _write_checkout(tmp_path, cargo=False, makefile=True)
+        cmd_mox.mock("makeutil").returns(stdout=json.dumps(MINIMAL_REPORT))
+        cmd_mox.replay()
+        with caplog.at_level("DEBUG", logger="concordat.rules.makefile_observed"):
+            inspect_makefile_observed(tmp_path / "Makefile")
+        (record,) = [
+            r for r in caplog.records if r.getMessage() == "makeutil parse finished"
+        ]
+        fields = vars(record)
         assert (fields["operation"], fields["tool"], fields["outcome"]) == (
             "parse-makefile",
             "makeutil",
-            case.outcome,
+            "complete",
         ), fields
         assert fields["elapsed_seconds"] >= 0, fields
-        assert "secret recipe text" not in caplog.text, caplog.text
 
-    def test_a_timeout_and_a_launch_failure_are_logged_as_such(
+    def test_a_timeout_and_a_launch_failure_are_observed_as_such(
         self,
         tmp_path: pathlib.Path,
         monkeypatch: pytest.MonkeyPatch,
-        caplog: pytest.LogCaptureFixture,
     ) -> None:
         """The outcome tells a hung `makeutil` from one that never started."""
         _write_checkout(tmp_path, cargo=False, makefile=True)
@@ -191,13 +237,10 @@ class TestInspectMakefile:
             PermissionError("makeutil"),
         ):
             monkeypatch.setattr(subprocess, "run", _raise_process_error(error))
-            caplog.clear()
-            with (
-                caplog.at_level("DEBUG", logger="concordat.rules.makefile_facts"),
-                pytest.raises(OperationalRuleError),
-            ):
-                inspect_makefile(tmp_path / "Makefile")
-            outcomes.append(_parse_records(caplog)[-1]["outcome"])
+            events: list[MakefileParseEvent] = []
+            with pytest.raises(OperationalRuleError):
+                inspect_makefile_observed(tmp_path / "Makefile", emit=events.append)
+            outcomes.append(events[-1].outcome)
         assert outcomes == ["timeout", "launch-failure"], outcomes
 
     def test_exit_status_two_is_a_refusal(

@@ -204,7 +204,7 @@ class TestBuildPathFacts:
                 message, operation="parse-makefile", resource=path
             )
 
-        monkeypatch.setattr(envelope_module, "inspect_makefile", refuse)
+        monkeypatch.setattr(envelope_module, "inspect_makefile_observed", refuse)
         envelope = build_build_defaults_envelope(tmp_path)
         assert envelope["makefile"] is None, "a refused Makefile has no report"
         assert envelope["makefile_error"] == (
@@ -231,7 +231,7 @@ class TestBuildPathFacts:
                 message, operation="parse-makefile", resource=path
             )
 
-        monkeypatch.setattr(envelope_module, "inspect_makefile", fail)
+        monkeypatch.setattr(envelope_module, "inspect_makefile_observed", fail)
         with pytest.raises(OperationalRuleError, match="timed out"):
             build_build_defaults_envelope(tmp_path)
 

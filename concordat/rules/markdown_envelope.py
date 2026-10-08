@@ -24,7 +24,10 @@ from concordat.errors import OperationalRuleError
 from . import fs_probe
 from .action_pins import PinResolution, PinResolver, resolve_pins
 from .jsonc import JsoncError, loads_jsonc
-from .makefile_facts import MakeutilReport, inspect_makefile
+from .makefile_observed import inspect_makefile_observed
+
+if typ.TYPE_CHECKING:
+    from .makefile_facts import MakeutilReport
 
 ENVELOPE_SCHEMA_VERSION: typ.Final = 1
 ENVELOPE_KIND: typ.Final = "policy-input/markdown-formatting-baseline"
@@ -475,7 +478,7 @@ def build_markdown_envelope(checkout: pathlib.Path) -> MarkdownEnvelope:
     if within_checkout(root, makefile_path, OPERATION_READ_MAKEFILE) and is_file(
         makefile_path, OPERATION_READ_MAKEFILE
     ):
-        makefile_report = inspect_makefile(makefile_path).report
+        makefile_report = inspect_makefile_observed(makefile_path).report
     markdownlint = _load_markdownlint_config(checkout, root)
     return {
         "schema_version": ENVELOPE_SCHEMA_VERSION,
