@@ -208,25 +208,25 @@ def _build_workflows(
 ) -> list[BuildWorkflowFile]:
     """Return the checkout's workflow facts, each tagged with its decode category.
 
-    An undecodable file is logged with its path and category, so the audit
-    leaves a trace of what it could not read as well as reporting it.
+    Pure: nothing is logged here. The builder reports undecodable files through
+    its injected reporter.
 
     Returns
     -------
     list[BuildWorkflowFile]
         One fact per workflow file, in the shared reader's order.
     """
-    facts: list[BuildWorkflowFile] = [
+    return [
         {**fact, "decode_category": _decode_category(fact["error"])}
         for fact in load_workflows(checkout, root)
     ]
-    for fact in facts:
-        if fact["decode_category"] is not None:
-            _logger.warning(
-                "workflow did not decode",
-                extra={"path": fact["path"], "category": fact["decode_category"]},
-            )
-    return facts
+
+
+def log_undecodable_workflow(path: str, category: str) -> None:
+    """Log that a workflow did not decode, by path and fixed category word."""
+    _logger.warning(
+        "workflow did not decode", extra={"path": path, "category": category}
+    )
 
 
 def _read_makefile(
@@ -274,6 +274,8 @@ def _exception_keyword(parameters: cabc.Mapping[str, object]) -> str:
 def build_build_defaults_envelope(
     checkout: pathlib.Path,
     parameters: cabc.Mapping[str, object] | None = None,
+    *,
+    report_undecodable: cabc.Callable[[str, str], None] = log_undecodable_workflow,
 ) -> BuildDefaultsEnvelope:
     """Assemble the build-defaults policy input for one local checkout.
 
@@ -285,6 +287,9 @@ def build_build_defaults_envelope(
         The rule manifest's parameter defaults. Only the exception-document
         list and keyword are read here; every other parameter is a policy
         decision and reaches Conftest through `data.parameters`.
+    report_undecodable:
+        Called with the path and decode category of each workflow that did not
+        decode. The default logs a warning; the fact gathering stays pure.
 
     Returns
     -------
@@ -305,6 +310,10 @@ def build_build_defaults_envelope(
     toolchain = inspect_toolchain(checkout)
     root = resolved_root(checkout)
     makefile, makefile_error = _read_makefile(checkout, root)
+    workflows = _build_workflows(checkout, root)
+    for workflow in workflows:
+        if workflow["decode_category"] is not None:
+            report_undecodable(workflow["path"], workflow["decode_category"])
     return {
         "schema_version": ENVELOPE_SCHEMA_VERSION,
         "kind": BUILD_DEFAULTS_ENVELOPE_KIND,
@@ -325,5 +334,5 @@ def build_build_defaults_envelope(
         ),
         "makefile": makefile,
         "makefile_error": makefile_error,
-        "workflows": _build_workflows(checkout, root),
+        "workflows": workflows,
     }

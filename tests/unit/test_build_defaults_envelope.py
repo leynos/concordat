@@ -405,3 +405,21 @@ def test_an_undecodable_workflow_is_logged_with_its_category(
     assert [(r["path"], r["category"]) for r in logged] == [
         (".github/workflows/ci.yml", "invalid YAML")
     ], logged
+
+
+def test_an_injected_reporter_receives_the_undecodable_workflows_and_nothing_logs(
+    tmp_path: pathlib.Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The envelope's fact gathering is pure; reporting goes where it is told."""
+    _write_manifest(tmp_path)
+    directory = tmp_path / ".github" / "workflows"
+    directory.mkdir(parents=True)
+    (directory / "ci.yml").write_text("on: [push\n", encoding="utf-8")
+    (directory / "ok.yml").write_text("on: push\njobs: {}\n", encoding="utf-8")
+    reported: list[tuple[str, str]] = []
+    with caplog.at_level("DEBUG"):
+        build_build_defaults_envelope(
+            tmp_path, report_undecodable=lambda *pair: reported.append(pair)
+        )
+    assert reported == [(".github/workflows/ci.yml", "invalid YAML")], reported
+    assert not caplog.records, caplog.records
