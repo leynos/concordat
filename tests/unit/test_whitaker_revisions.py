@@ -206,6 +206,16 @@ def test_an_unknown_root_is_an_operational_error(
         compliant_revisions(history.repository, roots, DIRECTORY, "main")
 
 
+def test_a_root_without_the_action_directory_is_an_operational_error(
+    history: History,
+) -> None:
+    """An approved root that never held the action cannot anchor the list."""
+    root = history.commit({"README.md": "a"}, "root without the action")
+
+    with pytest.raises(OperationalRuleError, match=r"has no \S+ directory"):
+        compliant_revisions(history.repository, [root], DIRECTORY, "main")
+
+
 def test_a_shallow_clone_is_an_operational_error(
     history: History, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -482,6 +492,29 @@ def test_sync_reports_a_manifest_that_is_not_utf8_as_a_controlled_error(
 
     assert _run_main(monkeypatch, clone, "sync") == 2
     assert "cannot read rule manifest" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("command", ["list", "check", "sync"])
+def test_a_manifest_with_no_approved_roots_exits_2_for_every_command(
+    rule_package: tuple[pathlib.Path, str, str],
+    history: History,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    command: str,
+) -> None:
+    """No approved root means nothing to derive from, so the commands refuse."""
+    package, _root, _later = rule_package
+    manifest = package / "rule.yaml"
+    text = manifest.read_text("utf-8")
+    emptied = re.sub(
+        r'(install_whitaker_roots:)\n(?:      - "[0-9a-f]{40}"\n)+', r"\1 []\n", text
+    )
+    assert emptied != text
+    manifest.write_text(emptied, "utf-8")
+    clone = pathlib.Path(history.repository.workdir)
+
+    assert _run_main(monkeypatch, clone, command) == 2
+    assert "declares no install_whitaker_roots" in capsys.readouterr().err
 
 
 SNAPSHOTS: typ.Final = pathlib.Path(__file__).parent / "snapshots"

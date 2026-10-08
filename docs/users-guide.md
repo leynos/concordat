@@ -483,8 +483,9 @@ uv run python scripts/whitaker_revisions.py list ../shared-actions
 ```
 
 `sync` rewrites the rule manifest's list, `check` exits 1 and names each
-missing or non-derivable revision when the manifest has drifted, and `list`
-prints what the clone derives, oldest first. Each accepts `--tip <ref>` (default
+missing or non-derivable revision when the manifest's membership has drifted
+(it does not compare order, so a reordered manifest passes), and `list` prints
+what the clone derives, oldest first. Each accepts `--tip <ref>` (default
 `origin/main`). A status of 2 means the clone or manifest could not be read.
 Whitaker itself is exempt as the producer, and a developer-environment script
 that CI never runs may be exempted by name, repository and reason in the rule's

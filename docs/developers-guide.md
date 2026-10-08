@@ -624,11 +624,13 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   `uv run python scripts/whitaker_revisions.py sync <shared-actions clone>`,
   then commit the regenerated `rule.yaml` and refresh its digest in the canon
   manifest. `check <clone>` exits 1 and names each missing or non-derivable
-  revision when the manifest has drifted (use it in review), and `list <clone>`
-  prints what the clone derives; each takes `--tip <ref>` and exits 2 when the
-  clone or manifest cannot be read. To approve a changed action, add the
-  reviewed commit to `install_whitaker_roots` first. Git read failures while
-  walking the history surface as `OperationalRuleError`, never a traceback.
+  revision when the manifest's membership has drifted (use it in review; it
+  compares which revisions are listed, not their order, so a reordered manifest
+  passes with status 0), and `list <clone>` prints what the clone derives; each
+  takes `--tip <ref>` and exits 2 when the clone or manifest cannot be read. To
+  approve a changed action, add the reviewed commit to `install_whitaker_roots`
+  first. Git read failures while walking the history surface as
+  `OperationalRuleError`, never a traceback.
 - `policy-input/markdown-formatting-baseline` —
   `markdown_envelope.build_markdown_envelope`. Alongside the same `makeutil`
   report for the root `Makefile`, it carries `.markdownlint-cli2.jsonc` decoded
