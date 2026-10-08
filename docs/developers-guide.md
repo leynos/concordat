@@ -902,7 +902,14 @@ Two external tools must be on `PATH`:
   garbage-collects it. That check was retired with the commit pin. A release
   asset is not garbage-collected like an orphaned commit, and the pinned digest
   now guarantees that the installed binary is the one released, so no commit
-  pin remains for the check to guard.
+  pin remains for the check to guard. A local `makeutil` built from another
+  revision also reports `0.1.0`, so `--version` cannot show that it is not the
+  release, yet its diagnostic locations differ and the checked-in fixture
+  envelopes then fail their regeneration comparison
+  (`tests/unit/test_markdown_fixture_generator.py`). That failure names the
+  pinned release, asset and digest, read from `ci.yml` by
+  `tests/unit/makeutil_pin.py`; install that asset and compare its SHA-256
+  instead of regenerating the envelopes.
 - **`conftest`** (`concordat/rules/runner.py`) — evaluates the envelope
   against the rule package's Rego policy, with a 60-second timeout
   (`CONFTEST_TIMEOUT`).
