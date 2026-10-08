@@ -26,6 +26,14 @@ Feature: Markdown formatting baseline rule run
     Then the Markdown rule exit status is 1
     And the output reports PD-005 as indeterminate
 
+  Scenario: markdownlint configuration does not honour gitignore
+    Given a Markdown checkout laid out from the "config_no_gitignore" fixture scenario
+    And makeutil reports the Markdown "config_no_gitignore" fixture facts
+    And conftest reports the missing gitignore failure
+    When I run the Markdown rule against the checkout
+    Then the Markdown rule exit status is 1
+    And the output reports PD-005 as noncompliant for gitignore
+
   Scenario: CI lints Markdown from a shell step
     Given a Markdown checkout laid out from the "workflow_shell_lint" fixture scenario
     And makeutil reports the Markdown "workflow_shell_lint" fixture facts

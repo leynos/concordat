@@ -703,6 +703,15 @@ above, then run `make fmt` and commit the reformatting on its own. The default
 list is the rule parameter `mdtablefix_rule_flags`, and an override replaces it
 for that package; `mdtablefix_select_flags` works the same way.
 
+Upgrading to rule 0.3.0: PD-005 now requires `.markdownlint-cli2.jsonc` to set
+the boolean `"gitignore": true`. A configuration without the key, or with
+`false`, was compliant under 0.2.0 and is noncompliant under 0.3.0, because
+`markdownlint-cli2 --fix` then rewrites Git-ignored Markdown that `mdtablefix`
+leaves alone. To comply, add `"gitignore": true` beside `config` and `ignores`,
+or copy the canonical
+`platform-standards/canon/lint/markdown/.markdownlint-cli2.jsonc`, then run
+`make fmt` and commit any reformatting on its own.
+
 Run the audit to confirm the result:
 
 ```shell

@@ -2261,12 +2261,14 @@ Markdown let unformatted prose reach `main`. These checks have shipped as the
   `--wrap --renumber --breaks --ellipsis --fences`, and `--fix` for
   markdownlint-cli2); a mention of `mdformat-all` on the `fmt` path is
   noncompliant. A configuration policy decodes `.markdownlint-cli2.jsonc` as
-  JSONC and requires the vendored baseline `config` entries verbatim and every
-  baseline `ignores` glob, permitting repository additions. A workflow policy
-  decodes every file under `.github/workflows`, requires the action pinned to a
-  full commit SHA with `globs: '**/*.md'` (resolved against the GitHub API so
-  an annotated tag object is refused and an unreachable API is indeterminate;
-  see [ADR-002](adr-002-resolve-action-pins-against-github.md)), and flags any
+  JSONC and requires the vendored baseline `config` entries verbatim, the
+  boolean `"gitignore": true` (so `markdownlint-cli2 --fix` leaves the
+  Git-ignored files `mdtablefix` skips alone), and every baseline `ignores`
+  glob, permitting repository additions. A workflow policy decodes every file
+  under `.github/workflows`, requires the action pinned to a full commit SHA
+  with `globs: '**/*.md'` (resolved against the GitHub API so an annotated tag
+  object is refused and an unreachable API is indeterminate; see
+  [ADR-002](adr-002-resolve-action-pins-against-github.md)), and flags any
   `run:` step that invokes `markdownlint-cli2` or drives `make markdownlint`; a
   step that only installs the linter is flagged unless a compliant action step
   lints Markdown in the same workflow. An unresolvable Make variable, a
