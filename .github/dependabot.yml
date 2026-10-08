@@ -4,6 +4,9 @@ updates:
   # composite actions under .github/actions, which pin their own `uses:`.
   - package-ecosystem: "github-actions"
     groups:
+      shared-actions:
+        patterns:
+          - 'leynos/shared-actions*'
       github-actions:
         patterns:
           - '*'
