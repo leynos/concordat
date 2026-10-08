@@ -284,6 +284,18 @@ test_drifted_config_names_each_divergence if {
 	}
 }
 
+test_config_without_gitignore_is_noncompliant if {
+	findings := policy.deny with input as data.fixtures.config_no_gitignore
+	profile(findings) == {["PD-005", "noncompliant"]}
+	messages(findings, "PD-005") == {".markdownlint-cli2.jsonc must set \"gitignore\" to true"}
+}
+
+test_config_with_gitignore_false_is_noncompliant if {
+	findings := policy.deny with input as data.fixtures.config_gitignore_false
+	profile(findings) == {["PD-005", "noncompliant"]}
+	messages(findings, "PD-005") == {".markdownlint-cli2.jsonc must set \"gitignore\" to true"}
+}
+
 test_malformed_config_is_indeterminate if {
 	findings := policy.deny with input as data.fixtures.config_malformed
 	profile(findings) == {["PD-005", "indeterminate"]}

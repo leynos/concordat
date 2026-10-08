@@ -5,10 +5,10 @@ description: >-
   Audits the Markdown formatting and linting wiring of one checkout: the
   root Makefile's fmt and check-fmt targets must call mdtablefix and
   markdownlint-cli2 directly over the Git-selected Markdown set (PD-002 to
-  PD-004), .markdownlint-cli2.jsonc must carry the estate baseline (PD-005),
+  PD-004), .markdownlint-cli2.jsonc must carry the estate baseline and honour .gitignore (PD-005),
   and CI must lint Markdown through the pinned markdownlint-cli2 action
   (PD-006). Audit-only: this rule declares no mutations.
-version: 0.2.0
+version: 0.3.0
 sensor:
   type: conftest
   input: policy-input/markdown-formatting-baseline

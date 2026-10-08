@@ -599,8 +599,9 @@ cache directories, and reports:
 - **PD-004** — a recipe reachable from `fmt` runs `markdownlint-cli2 --fix`
   directly, not through the `mdformat-all` wrapper.
 - **PD-005** — `.markdownlint-cli2.jsonc` exists and carries the baseline
-  `config` entries verbatim plus every baseline `ignores` glob. Further rules
-  and globs may be added; the canonical file to copy is
+  `config` entries verbatim, sets `gitignore` to `true` (so `--fix` leaves
+  Git-ignored Markdown alone), and lists every baseline `ignores` glob. Further
+  rules and globs may be added; the canonical file to copy is
   `platform-standards/canon/lint/markdown/.markdownlint-cli2.jsonc`.
 - **PD-006** — CI lints Markdown through `DavidAnson/markdownlint-cli2-action`
   pinned to a full commit SHA with `globs: '**/*.md'`. A workflow step that runs

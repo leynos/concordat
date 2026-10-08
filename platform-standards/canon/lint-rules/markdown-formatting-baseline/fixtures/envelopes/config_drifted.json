@@ -275,6 +275,7 @@
           "headings": false
         }
       },
+      "gitignore": true,
       "ignores": [
         "**/.venv/**",
         "**/node_modules/**",
