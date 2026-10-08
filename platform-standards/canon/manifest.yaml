@@ -167,7 +167,7 @@ artifacts:
     description: >
       QG-002 policy refusing every route to Whitaker other than the
       shared-actions install-whitaker action pinned to a listed revision.
-    sha256: 835f922c580d2d96696070af2bf7b2c5088b011ccc7553dc96031a5c906cc840
+    sha256: 89a8a26c63bf3510e45e1e7ed62887774d21ff5623aebdc3a17b8756eb4fa0db
   - id: lint-rule-whitaker-provisioning-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/whitaker-provisioning/rule.yaml

@@ -26,6 +26,9 @@ from concordat.rules.whitaker_revisions import (
 )
 from scripts import whitaker_revisions
 
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
 DIRECTORY: typ.Final = ".github/actions/install-whitaker"
 ACTION_V1: typ.Final = "name: install-whitaker\nversion: 1\n"
 ACTION_V2: typ.Final = "name: install-whitaker\nversion: 2\n"
@@ -213,6 +216,26 @@ def test_a_shallow_clone_is_an_operational_error(
     )
 
     with pytest.raises(OperationalRuleError, match="shallow"):
+        compliant_revisions(history.repository, [root], DIRECTORY, "main")
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [KeyError("tip"), pygit2.GitError("unreadable")],
+    ids=["unknown-ref", "git-error"],
+)
+def test_an_unresolvable_tip_is_an_operational_error(
+    history: History, monkeypatch: pytest.MonkeyPatch, failure: Exception
+) -> None:
+    """A tip Git cannot resolve is reported as a controlled error."""
+    root = history.commit(_files(ACTION_V1), "root")
+
+    def refuse(_self: object, _tip: str) -> typ.NoReturn:
+        raise failure
+
+    monkeypatch.setattr(type(history.repository), "revparse_single", refuse)
+
+    with pytest.raises(OperationalRuleError, match="readable commit"):
         compliant_revisions(history.repository, [root], DIRECTORY, "main")
 
 
@@ -474,21 +497,40 @@ def _redacted(text: str, *, root: str, later: str, manifest: pathlib.Path) -> st
     )
 
 
-@pytest.mark.parametrize(
-    ("command", "snapshot"),
-    [
-        pytest.param("list", "whitaker_revisions_list.txt", id="list"),
-        pytest.param("check", "whitaker_revisions_check_drift.txt", id="check-drift"),
-        pytest.param("sync", "whitaker_revisions_sync.txt", id="sync"),
-    ],
-)
-def test_the_command_output_matches_its_snapshot(
+@pytest.fixture
+def run_redacted(
     rule_package: tuple[pathlib.Path, str, str],
     history: History,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
-    command: str,
-    snapshot: str,
+) -> cabc.Callable[[str], str]:
+    """Return a runner that executes a command and yields its redacted output."""
+    package, root, later = rule_package
+    clone = pathlib.Path(history.repository.workdir)
+
+    def run(command: str) -> str:
+        _run_main(monkeypatch, clone, command)
+        return _redacted(
+            capsys.readouterr().out,
+            root=root,
+            later=later,
+            manifest=package / "rule.yaml",
+        )
+
+    return run
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        pytest.param(("list", "whitaker_revisions_list.txt"), id="list"),
+        pytest.param(("check", "whitaker_revisions_check_drift.txt"), id="check-drift"),
+        pytest.param(("sync", "whitaker_revisions_sync.txt"), id="sync"),
+    ],
+)
+def test_the_command_output_matches_its_snapshot(
+    run_redacted: cabc.Callable[[str], str],
+    case: tuple[str, str],
 ) -> None:
     """The text a maintainer reads from each command keeps a stable shape.
 
@@ -496,12 +538,6 @@ def test_the_command_output_matches_its_snapshot(
     temporary manifest path; semantic assertions for membership and status sit
     in the tests above, and the live derived list is not snapshotted.
     """
-    package, root, later = rule_package
-    clone = pathlib.Path(history.repository.workdir)
-    _run_main(monkeypatch, clone, command)
+    command, snapshot = case
 
-    output = _redacted(
-        capsys.readouterr().out, root=root, later=later, manifest=package / "rule.yaml"
-    )
-
-    assert output == (SNAPSHOTS / snapshot).read_text(encoding="utf-8")
+    assert run_redacted(command) == (SNAPSHOTS / snapshot).read_text(encoding="utf-8")

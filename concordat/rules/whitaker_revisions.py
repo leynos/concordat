@@ -111,6 +111,28 @@ def _carries_approved_action(
     )
 
 
+def _resolve_tip(repository: pygit2.Repository, tip: str) -> pygit2.Oid:
+    """Return the commit id that *tip* names in the clone.
+
+    Returns
+    -------
+    pygit2.Oid
+        The id of the commit at *tip*.
+
+    Raises
+    ------
+    OperationalRuleError
+        When *tip* does not resolve to a commit or Git cannot read it.
+    """
+    try:
+        return typ.cast("pygit2.Commit", repository.revparse_single(tip)).id
+    except (pygit2.GitError, KeyError, ValueError) as error:
+        message = f"{tip} does not name a readable commit in the shared-actions clone"
+        raise OperationalRuleError(
+            message, operation=OPERATION_DERIVE_REVISIONS
+        ) from error
+
+
 def compliant_revisions(
     repository: pygit2.Repository,
     roots: cabc.Sequence[str],
@@ -149,13 +171,7 @@ def compliant_revisions(
         raise OperationalRuleError(
             message, operation=OPERATION_DERIVE_REVISIONS
         ) from error
-    try:
-        tip_id = typ.cast("pygit2.Commit", repository.revparse_single(tip)).id
-    except (KeyError, ValueError) as error:
-        message = f"{tip} does not name a commit in the shared-actions clone"
-        raise OperationalRuleError(
-            message, operation=OPERATION_DERIVE_REVISIONS
-        ) from error
+    tip_id = _resolve_tip(repository, tip)
     try:
         return _walk_first_parent(repository, tip_id, directory, trees)
     except (pygit2.GitError, KeyError, ValueError) as error:
