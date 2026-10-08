@@ -279,6 +279,7 @@
         },
         "MD033": false
       },
+      "gitignore": true,
       "ignores": [
         "**/.venv/**",
         ".vtcode/**",

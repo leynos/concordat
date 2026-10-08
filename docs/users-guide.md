@@ -599,8 +599,9 @@ cache directories, and reports:
 - **PD-004** — a recipe reachable from `fmt` runs `markdownlint-cli2 --fix`
   directly, not through the `mdformat-all` wrapper.
 - **PD-005** — `.markdownlint-cli2.jsonc` exists and carries the baseline
-  `config` entries verbatim plus every baseline `ignores` glob. Further rules
-  and globs may be added; the canonical file to copy is
+  `config` entries verbatim, sets `gitignore` to `true` (so `--fix` leaves
+  Git-ignored Markdown alone), and lists every baseline `ignores` glob. Further
+  rules and globs may be added; the canonical file to copy is
   `platform-standards/canon/lint/markdown/.markdownlint-cli2.jsonc`.
 - **PD-006** — CI lints Markdown through `DavidAnson/markdownlint-cli2-action`
   pinned to a full commit SHA with `globs: '**/*.md'`. A workflow step that runs
@@ -701,6 +702,15 @@ change. To comply, pass `$(MDTABLEFIX_RULES)` in both targets as in the recipes
 above, then run `make fmt` and commit the reformatting on its own. The default
 list is the rule parameter `mdtablefix_rule_flags`, and an override replaces it
 for that package; `mdtablefix_select_flags` works the same way.
+
+Upgrading to rule 0.3.0: PD-005 now requires `.markdownlint-cli2.jsonc` to set
+the boolean `"gitignore": true`. A configuration without the key, or with
+`false`, was compliant under 0.2.0 and is noncompliant under 0.3.0, because
+`markdownlint-cli2 --fix` then rewrites Git-ignored Markdown that `mdtablefix`
+leaves alone. To comply, add `"gitignore": true` beside `config` and `ignores`,
+or copy the canonical
+`platform-standards/canon/lint/markdown/.markdownlint-cli2.jsonc`, then run
+`make fmt` and commit any reformatting on its own.
 
 Run the audit to confirm the result:
 

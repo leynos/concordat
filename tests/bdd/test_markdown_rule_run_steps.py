@@ -157,6 +157,18 @@ def given_conftest_malformed_config(cmd_mox: CmdMox) -> None:
     cmd_mox.mock("conftest").returns(exit_code=1, stdout=_conftest_result([failure]))
 
 
+@given("conftest reports the missing gitignore failure")
+def given_conftest_missing_gitignore(cmd_mox: CmdMox) -> None:
+    """Program the fake conftest with the PD-005 missing-gitignore failure."""
+    failure = _failure(
+        "PD-005",
+        "noncompliant",
+        (".markdownlint-cli2.jsonc", 0),
+        '.markdownlint-cli2.jsonc must set "gitignore" to true',
+    )
+    cmd_mox.mock("conftest").returns(exit_code=1, stdout=_conftest_result([failure]))
+
+
 @given("conftest reports the shell lint failure")
 def given_conftest_shell_lint(cmd_mox: CmdMox) -> None:
     """Program the fake conftest with the PD-006 shell-step failure."""
@@ -284,6 +296,16 @@ def then_pd005_indeterminate(cli_invocation: dict[str, RunResult]) -> None:
     assert "PD-005" in stdout, stdout
     assert "indeterminate" in stdout, stdout
     assert ".markdownlint-cli2.jsonc" in stdout, stdout
+
+
+@then("the output reports PD-005 as noncompliant for gitignore")
+def then_pd005_gitignore(cli_invocation: dict[str, RunResult]) -> None:
+    """Assert the noncompliant verdict names the configuration and the key."""
+    stdout = cli_invocation["result"].stdout
+    assert "PD-005" in stdout, stdout
+    assert "noncompliant" in stdout, stdout
+    assert ".markdownlint-cli2.jsonc" in stdout, stdout
+    assert "gitignore" in stdout, stdout
 
 
 @then("the output contains a PD-006 finding naming the CI workflow")

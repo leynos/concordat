@@ -194,6 +194,7 @@
           "style": "ordered"
         }
       },
+      "gitignore": true,
       "ignores": [
         "**/.venv/**",
         ".vtcode/**",

@@ -82,6 +82,8 @@ EXPECTED_PROFILES: typ.Final[dict[str, Profile]] = {
     "config_alternate": frozenset({("PD-005", "noncompliant")}),
     "config_drifted": frozenset({("PD-005", "noncompliant")}),
     "config_malformed": frozenset({("PD-005", "indeterminate")}),
+    "config_no_gitignore": frozenset({("PD-005", "noncompliant")}),
+    "config_gitignore_false": frozenset({("PD-005", "noncompliant")}),
     "workflow_shell_lint": frozenset({("PD-006", "noncompliant")}),
     "workflow_floating_tag": frozenset({("PD-006", "noncompliant")}),
     "workflow_narrow_globs": frozenset({("PD-006", "noncompliant")}),

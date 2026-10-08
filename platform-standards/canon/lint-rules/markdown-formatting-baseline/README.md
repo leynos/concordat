@@ -30,10 +30,12 @@ dependency graph so nothing is resolved from the registry at run time.
   `markdownlint-cli2 --fix` directly rather than through the `mdformat-all`
   wrapper, and its exit status must reach Make.
 - **PD-005** (error): `.markdownlint-cli2.jsonc` must exist and carry the
-  baseline `config` entries verbatim and every baseline `ignores` glob. Further
-  rules and globs may be added alongside them; an alternate configuration file
-  name (`.markdownlint.yaml`, say) does not satisfy the check and is named in
-  the finding.
+  baseline `config` entries verbatim, set `gitignore` to `true` (otherwise
+  `markdownlint-cli2 --fix` rewrites Git-ignored Markdown that `mdtablefix`
+  leaves alone), and list every baseline `ignores` glob. Further rules and
+  globs may be added alongside them; an alternate configuration file name
+  (`.markdownlint.yaml`, say) does not satisfy the check and is named in the
+  finding.
 - **PD-006** (error): CI must lint Markdown through
   `DavidAnson/markdownlint-cli2-action` pinned to a full commit SHA with
   `globs: '**/*.md'`. A `run:` step that invokes `markdownlint-cli2`, or drives

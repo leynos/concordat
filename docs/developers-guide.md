@@ -104,6 +104,13 @@ graph, so nothing resolves from the npm registry at run time and Dependabot
 owns the pin. Both the local gate and the action read the repository's
 `.markdownlint-cli2.jsonc`, so the two lint the same files under the same rules.
 
+That file must set `"gitignore": true` (PD-005, since rule 0.3.0).
+`markdownlint-cli2` lints every file its glob reaches unless told to honour
+`.gitignore`, so without the key `make fmt`'s `--fix` rewrites Git-ignored
+Markdown that `mdtablefix --git` selected out. The policy accepts only the
+boolean `true`; `fixtures/markdownlint/no_gitignore.jsonc` and
+`gitignore_false.jsonc` pin the absent and `false` cases.
+
 `tests/unit/test_repository_markdown_wiring.py` runs the shipped rule over this
 checkout, so a change to the `Makefile`, the markdownlint configuration, or the
 CI workflow that breaks the mandate fails in this repository's own test suite.

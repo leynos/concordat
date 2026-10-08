@@ -10,6 +10,7 @@
     },
     "MD029": { "style": "ordered" }
   },
+  "gitignore": true,
   "ignores": [
     "**/.venv/**",
     ".vtcode/**",

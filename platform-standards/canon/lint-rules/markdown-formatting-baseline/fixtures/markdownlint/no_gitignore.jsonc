@@ -1,5 +1,4 @@
 {
-  // Repository additions on top of the estate baseline are permitted.
   "config": {
     "MD004": { "style": "dash" },
     "MD010": { "code_blocks": false },
@@ -9,10 +8,8 @@
       "tables": false,
       "headings": false
     },
-    "MD029": { "style": "ordered" },
-    "MD033": false,
+    "MD029": { "style": "ordered" }
   },
-  "gitignore": true,
   "ignores": [
     "**/.venv/**",
     ".vtcode/**",
@@ -21,8 +18,6 @@
     ".terraform/**",
     ".uv-cache/**",
     "memories/**",
-    "CRUSH.md",
-    /* checked-in renderer output */
-    "tests/unit/snapshots/**",
-  ],
+    "CRUSH.md"
+  ]
 }

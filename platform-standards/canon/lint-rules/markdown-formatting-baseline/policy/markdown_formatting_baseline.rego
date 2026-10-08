@@ -751,6 +751,18 @@ deny contains f if {
 	)
 }
 
+# markdownlint-cli2 lints every file it is globbed over unless told to honour
+# .gitignore, so `make fmt`'s `--fix` would rewrite Git-ignored Markdown that
+# mdtablefix leaves alone. Only the boolean `true` turns that on.
+deny contains f if {
+	config_object
+	object.get(config_object, "gitignore", null) != true
+	f := finding(
+		"PD-005", "noncompliant", markdownlint_config_path, 0,
+		sprintf("%s must set \"gitignore\" to true", [markdownlint_config_path]),
+	)
+}
+
 # -- PD-006: CI lints Markdown through the pinned action ----------------------
 
 deny contains f if {

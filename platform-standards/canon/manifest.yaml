@@ -86,7 +86,7 @@ artifacts:
     description: >
       Canonical markdownlint-cli2 configuration that consumers copy verbatim;
       the markdown-formatting-baseline rule audits repositories against it.
-    sha256: 2bdaf102a8712ada9f4111c9aba82d0ebe9c36ff31cf98aad6140ef4ec2d118f
+    sha256: a3df962cf38465f421aeac6025db98849daff8ada75b25848907ec5365128822
   - id: lint-rule-markdown-formatting-baseline
     type: opa-policy
     path: platform-standards/canon/lint-rules/markdown-formatting-baseline/policy/markdown_formatting_baseline.rego
@@ -96,14 +96,14 @@ artifacts:
       check-fmt targets, PD-005 the baseline markdownlint configuration, and
       PD-006 the markdownlint-cli2 action in CI, pinned to a commit rather
       than an annotated tag object.
-    sha256: 3d6eac673107d3adf7282d3d7ebf69adc4419ccb4aa1fdfe6e03418bb3bce1dc
+    sha256: 918f9531aa51ca11def9f8135335d043668ee99359c4e126c39aa0513745976a
   - id: lint-rule-markdown-formatting-baseline-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/markdown-formatting-baseline/rule.yaml
     description: >
       Rule package manifest (sensor wiring, input kind, parameters, defaults)
       for markdown-formatting-baseline.
-    sha256: 7c4b110d486def5226b96507a09ee8c4a494fde7e19242af4675d1a4dd100180
+    sha256: 3dc0be19f98176554ea5dce88cd555061323443e6042f931246cc11da4902eb1
   - id: lint-rule-rust-build-defaults
     type: opa-policy
     path: platform-standards/canon/lint-rules/rust-build-defaults/policy/rust_build_defaults.rego

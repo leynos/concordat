@@ -147,6 +147,8 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     ),
     "config_drifted": Scenario(markdownlint="drifted"),
     "config_malformed": Scenario(markdownlint="malformed"),
+    "config_no_gitignore": Scenario(markdownlint="no_gitignore"),
+    "config_gitignore_false": Scenario(markdownlint="gitignore_false"),
     # -- workflow findings -------------------------------------------------
     "workflow_shell_lint": Scenario(workflows={"ci.yml": "shell-lint"}),
     "workflow_floating_tag": Scenario(workflows={"ci.yml": "floating-tag"}),
