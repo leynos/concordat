@@ -48,6 +48,34 @@ def directory_tree_id(
     return entry.id if repository[entry.id].type == pygit2.GIT_OBJECT_TREE else None
 
 
+def _root_tree(repository: pygit2.Repository, root: str, directory: str) -> pygit2.Oid:
+    """Return the action directory's tree id at one approved root.
+
+    Returns
+    -------
+    pygit2.Oid
+        The tree id of the action directory at *root*.
+
+    Raises
+    ------
+    OperationalRuleError
+        When *root* is not a readable commit in the clone or lacks the
+        directory.
+    """
+    try:
+        commit = typ.cast("pygit2.Commit", repository[root])
+        tree = directory_tree_id(repository, commit, directory)
+    except (pygit2.GitError, KeyError, ValueError) as error:
+        message = f"cannot read approved root {root} from the shared-actions clone"
+        raise OperationalRuleError(
+            message, operation=OPERATION_DERIVE_REVISIONS
+        ) from error
+    if tree is None:
+        message = f"approved root {root} has no {directory} directory"
+        raise OperationalRuleError(message, operation=OPERATION_DERIVE_REVISIONS)
+    return tree
+
+
 def _root_trees(
     repository: pygit2.Repository, roots: cabc.Sequence[str], directory: str
 ) -> dict[str, pygit2.Oid]:
@@ -56,30 +84,10 @@ def _root_trees(
     Returns
     -------
     dict[str, pygit2.Oid]
-        The tree id of the action directory at each root.
-
-    Raises
-    ------
-    OperationalRuleError
-        When a root is not a commit in the clone or lacks the directory.
+        The tree id of the action directory at each root; `_root_tree`'s
+        operational error propagates for a root it cannot read.
     """
-    trees: dict[str, pygit2.Oid] = {}
-    for root in roots:
-        try:
-            commit = repository[root]
-        except (KeyError, ValueError) as error:
-            message = f"approved root {root} is not in the shared-actions clone"
-            raise OperationalRuleError(
-                message, operation=OPERATION_DERIVE_REVISIONS
-            ) from error
-        tree = directory_tree_id(
-            repository, typ.cast("pygit2.Commit", commit), directory
-        )
-        if tree is None:
-            message = f"approved root {root} has no {directory} directory"
-            raise OperationalRuleError(message, operation=OPERATION_DERIVE_REVISIONS)
-        trees[root] = tree
-    return trees
+    return {root: _root_tree(repository, root, directory) for root in roots}
 
 
 def _is_root_or_descendant(
@@ -165,28 +173,56 @@ def compliant_revisions(
     if repository.is_shallow:
         message = "the shared-actions clone is shallow; run git fetch --unshallow"
         raise OperationalRuleError(message, operation=OPERATION_DERIVE_REVISIONS)
-    try:
-        trees = _root_trees(repository, roots, directory)
-    except (pygit2.GitError, KeyError, ValueError) as error:
-        message = f"cannot read the approved roots from the clone: {error}"
-        raise OperationalRuleError(
-            message, operation=OPERATION_DERIVE_REVISIONS
-        ) from error
+    trees = _root_trees(repository, roots, directory)
     tip_id = _resolve_tip(repository, tip)
+    found = _walk_or_refuse(repository, tip_id, directory, trees)
+    _require_every_root(found, roots, tip)
+    return found
+
+
+def _walk_or_refuse(
+    repository: pygit2.Repository,
+    tip_id: pygit2.Oid,
+    directory: str,
+    trees: cabc.Mapping[str, pygit2.Oid],
+) -> list[str]:
+    """Return the first-parent walk, translating Git read failures.
+
+    Returns
+    -------
+    list[str]
+        Full commit ids, oldest first.
+
+    Raises
+    ------
+    OperationalRuleError
+        When Git cannot read an object while walking the history.
+    """
     try:
-        found = _walk_first_parent(repository, tip_id, directory, trees)
+        return _walk_first_parent(repository, tip_id, directory, trees)
     except (pygit2.GitError, KeyError, ValueError) as error:
         message = f"cannot read the shared-actions history: {error}"
         raise OperationalRuleError(
             message, operation=OPERATION_DERIVE_REVISIONS
         ) from error
+
+
+def _require_every_root(
+    found: cabc.Sequence[str], roots: cabc.Sequence[str], tip: str
+) -> None:
+    """Refuse a derivation that leaves out an approved root.
+
+    Raises
+    ------
+    OperationalRuleError
+        When an approved root is not on the first-parent history of *tip*.
+    """
     absent = [root for root in roots if root not in found]
     if absent:
         message = (
             f"approved root {absent[0]} is not on the first-parent history of {tip}"
         )
         raise OperationalRuleError(message, operation=OPERATION_DERIVE_REVISIONS)
-    return found
 
 
 def _walk_first_parent(

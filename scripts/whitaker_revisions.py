@@ -33,6 +33,50 @@ ROOTS_KEY: typ.Final = "install_whitaker_roots"
 app = App(help=__doc__)
 
 
+def _string_value(parameters: dict[str, object], key: str, manifest: Path) -> str:
+    """Return a required string parameter of the rule manifest.
+
+    Returns
+    -------
+    str
+        The parameter's value.
+
+    Raises
+    ------
+    OperationalRuleError
+        When the parameter is missing or is not a non-empty string.
+    """
+    value = parameters.get(key)
+    if not isinstance(value, str) or not value:
+        message = f"the rule manifest {manifest} needs {key} to be a non-empty string"
+        raise OperationalRuleError(
+            message, operation="derive-whitaker-revisions", resource=manifest
+        )
+    return value
+
+
+def _string_list(parameters: dict[str, object], key: str, manifest: Path) -> list[str]:
+    """Return a required list-of-strings parameter of the rule manifest.
+
+    Returns
+    -------
+    list[str]
+        The parameter's items; empty when the parameter is an empty list.
+
+    Raises
+    ------
+    OperationalRuleError
+        When the parameter is missing or is not a list of strings.
+    """
+    value = parameters.get(key)
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        message = f"the rule manifest {manifest} needs {key} to be a list of strings"
+        raise OperationalRuleError(
+            message, operation="derive-whitaker-revisions", resource=manifest
+        )
+    return typ.cast("list[str]", value)
+
+
 def _derive(clone: Path, tip: str) -> tuple[list[str], Path]:
     """Return the derived revisions and the rule manifest path.
 
@@ -44,15 +88,19 @@ def _derive(clone: Path, tip: str) -> tuple[list[str], Path]:
     Raises
     ------
     OperationalRuleError
-        When the clone cannot be opened or the manifest names no roots.
+        When the clone cannot be opened or the manifest lacks a required
+        parameter or names no roots.
     """
     rule_dir = packages.rule_package_dir(RULE_ID)
+    manifest = rule_dir / "rule.yaml"
     parameters = packages.rule_parameters(rule_dir)
-    roots = typ.cast("list[str]", parameters.get(ROOTS_KEY) or [])
-    directory = typ.cast("str", parameters["action_directory"])
+    roots = _string_list(parameters, ROOTS_KEY, manifest)
     if not roots:
         message = f"the rule manifest declares no {ROOTS_KEY}"
-        raise OperationalRuleError(message, operation="derive-whitaker-revisions")
+        raise OperationalRuleError(
+            message, operation="derive-whitaker-revisions", resource=manifest
+        )
+    directory = _string_value(parameters, "action_directory", manifest)
     try:
         repository = pygit2.Repository(str(clone))
     except pygit2.GitError as error:
@@ -60,9 +108,7 @@ def _derive(clone: Path, tip: str) -> tuple[list[str], Path]:
         raise OperationalRuleError(
             message, operation="derive-whitaker-revisions", resource=clone
         ) from error
-    return compliant_revisions(
-        repository, roots, directory, tip
-    ), rule_dir / "rule.yaml"
+    return compliant_revisions(repository, roots, directory, tip), manifest
 
 
 @app.command(name="list")
@@ -93,10 +139,7 @@ def sync(clone: Path, tip: str = "origin/main") -> int:
 def check(clone: Path, tip: str = "origin/main") -> int:
     """Exit 1 when the manifest's list differs from the clone's derivation."""
     revisions, manifest = _derive(clone, tip)
-    listed = typ.cast(
-        "list[str]",
-        packages.rule_parameters(manifest.parent)[REFS_KEY],
-    )
+    listed = _string_list(packages.rule_parameters(manifest.parent), REFS_KEY, manifest)
     missing = [rev for rev in revisions if rev not in listed]
     extra = [rev for rev in listed if rev not in revisions]
     for rev in missing:

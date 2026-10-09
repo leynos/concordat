@@ -521,20 +521,70 @@ def rootless_package(
     return rule_package
 
 
+@pytest.fixture
+def cli(history: History, monkeypatch: pytest.MonkeyPatch) -> cabc.Callable[[str], int]:
+    """Return a runner that executes one command against the history's clone."""
+    clone = pathlib.Path(history.repository.workdir)
+    return lambda command: _run_main(monkeypatch, clone, command)
+
+
+@pytest.mark.usefixtures("rootless_package")
 @pytest.mark.parametrize("command", ["list", "check", "sync"])
 def test_a_manifest_with_no_approved_roots_exits_2_for_every_command(
-    rootless_package: tuple[pathlib.Path, str, str],
-    history: History,
-    monkeypatch: pytest.MonkeyPatch,
+    cli: cabc.Callable[[str], int],
     capsys: pytest.CaptureFixture[str],
     command: str,
 ) -> None:
     """No approved root means nothing to derive from, so the commands refuse."""
-    assert rootless_package
-    clone = pathlib.Path(history.repository.workdir)
-
-    assert _run_main(monkeypatch, clone, command) == 2
+    assert cli(command) == 2
     assert "declares no install_whitaker_roots" in capsys.readouterr().err
+
+
+def _without_key(manifest: pathlib.Path, key: str) -> None:
+    """Remove a default parameter, with any list items, from the manifest."""
+    text = manifest.read_text("utf-8")
+    stripped = re.sub(
+        rf"^    {key}:.*\n(?:      - .*\n)*", "", text, flags=re.MULTILINE
+    )
+    assert stripped != text
+    manifest.write_text(stripped, "utf-8")
+
+
+@pytest.mark.parametrize(
+    ("command", "key"),
+    [
+        pytest.param(command, key, id=f"{command}-without-{key}")
+        for command, keys in {
+            "list": ("install_whitaker_roots", "action_directory"),
+            "check": (
+                "install_whitaker_roots",
+                "action_directory",
+                "compliant_install_whitaker_refs",
+            ),
+            "sync": ("install_whitaker_roots", "action_directory"),
+        }.items()
+        for key in keys
+    ],
+)
+def test_a_manifest_missing_a_required_parameter_exits_2_naming_it(
+    rule_package: tuple[pathlib.Path, str, str],
+    cli: cabc.Callable[[str], int],
+    capsys: pytest.CaptureFixture[str],
+    command: str,
+    key: str,
+) -> None:
+    """Each command refuses a manifest without a parameter it indexes.
+
+    The diagnostic names the parameter and the manifest, and the command exits
+    2 rather than raising a bare `KeyError`.
+    """
+    manifest = rule_package[0] / "rule.yaml"
+    _without_key(manifest, key)
+
+    assert cli(command) == 2
+    error = capsys.readouterr().err
+    assert key in error
+    assert str(manifest) in error
 
 
 def test_check_accepts_a_reordered_manifest(
