@@ -24,7 +24,7 @@ from concordat.errors import OperationalRuleError
 from . import fs_probe
 from .action_pins import PinResolution, PinResolver, resolve_pins
 from .jsonc import JsoncError, loads_jsonc
-from .makefile_observed import inspect_makefile_observed
+from .makefile_facts import MakefileInspector, inspect_makefile
 
 if typ.TYPE_CHECKING:
     from .makefile_facts import MakeutilReport
@@ -448,7 +448,9 @@ def load_workflows(checkout: pathlib.Path, root: pathlib.Path) -> list[WorkflowF
     ]
 
 
-def build_markdown_envelope(checkout: pathlib.Path) -> MarkdownEnvelope:
+def build_markdown_envelope(
+    checkout: pathlib.Path, *, inspect: MakefileInspector = inspect_makefile
+) -> MarkdownEnvelope:
     """Assemble the Markdown formatting policy input for one local checkout.
 
     This is a query over the checkout: it reads files and runs `makeutil`, and
@@ -461,6 +463,9 @@ def build_markdown_envelope(checkout: pathlib.Path) -> MarkdownEnvelope:
     ----------
     checkout:
         Path to the checkout under audit.
+    inspect:
+        Reads the root Makefile's facts. The default is the pure query; the
+        command boundary injects an observing one.
 
     An `OperationalRuleError` propagates from the fact readers if the root
     `Makefile` cannot be parsed by `makeutil`, a fact file exists but cannot
@@ -478,7 +483,7 @@ def build_markdown_envelope(checkout: pathlib.Path) -> MarkdownEnvelope:
     if within_checkout(root, makefile_path, OPERATION_READ_MAKEFILE) and is_file(
         makefile_path, OPERATION_READ_MAKEFILE
     ):
-        makefile_report = inspect_makefile_observed(makefile_path).report
+        makefile_report = inspect(makefile_path).report
     markdownlint = _load_markdownlint_config(checkout, root)
     return {
         "schema_version": ENVELOPE_SCHEMA_VERSION,

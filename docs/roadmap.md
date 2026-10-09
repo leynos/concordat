@@ -629,7 +629,7 @@ the Section 2.1.2 format.
   and the mold linker as defaults, the `rustflags` sources held equal because
   Cargo replaces one with another rather than merging them, and the Cranelift
   codegen backend either configured for the development profile or refused by a
-  recorded exception naming the pinned toolchain channel. These clauses read
+  recorded exception naming the pinned toolchain channel. BD-001 to BD-006 read
   only the files Cargo and rustup auto-discover, because a repository whose
   flags live behind an opt-in Make target has no `.cargo/config.toml` and fails
   on that alone.

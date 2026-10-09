@@ -22,7 +22,7 @@ import pathlib
 import tomllib
 import typing as typ
 
-from .makefile_observed import inspect_makefile_observed
+from .makefile_facts import MakefileInspector, inspect_makefile
 from .markdown_envelope import (
     OPERATION_PROBE_PATH,
     OPERATION_READ_MAKEFILE,
@@ -230,6 +230,8 @@ def _vendored_paths(checkout: pathlib.Path, patterns: cabc.Sequence[str]) -> lis
 def build_spelling_envelope(
     checkout: pathlib.Path,
     vendored_patterns: cabc.Sequence[str] = DEFAULT_VENDORED_PATTERNS,
+    *,
+    inspect: MakefileInspector = inspect_makefile,
 ) -> SpellingEnvelope:
     """Assemble the spelling policy input for one local checkout.
 
@@ -239,6 +241,9 @@ def build_spelling_envelope(
         Path to the checkout under audit.
     vendored_patterns:
         Repository-relative globs naming legacy spelling machinery.
+    inspect:
+        Reads the root Makefile's facts. The default is the pure query; the
+        command boundary injects an observing one.
 
     An `OperationalRuleError` propagates from the fact readers if the root
     `Makefile` cannot be parsed by `makeutil`, a fact file exists but cannot
@@ -253,7 +258,7 @@ def build_spelling_envelope(
     makefile_path = checkout / "Makefile"
     makefile_report: MakeutilReport | None = None
     if _is_contained_file(root, makefile_path, OPERATION_READ_MAKEFILE):
-        makefile_report = inspect_makefile_observed(makefile_path).report
+        makefile_report = inspect(makefile_path).report
     typos_local = _load_typos_local(checkout, root)
     return {
         "schema_version": ENVELOPE_SCHEMA_VERSION,

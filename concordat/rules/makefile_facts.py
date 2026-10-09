@@ -15,6 +15,7 @@ import typing as typ
 from concordat.errors import OperationalRuleError
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import pathlib
 
 SCHEMA_VERSION: typ.Final = 1
@@ -124,6 +125,11 @@ class MakefileFacts:
 
     report: MakeutilReport
     status: str
+
+
+type MakefileInspector = cabc.Callable[[pathlib.Path], MakefileFacts]
+"""Reads one Makefile's facts. The default is the pure `inspect_makefile`;
+the command boundary may inject an observing wrapper."""
 
 
 class MakefileRefusedError(OperationalRuleError):

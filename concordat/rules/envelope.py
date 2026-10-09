@@ -17,10 +17,11 @@ from .exception_docs import DocumentScan, find_exception_sections
 from .fs_probe import regular_file_exists
 from .makefile_facts import (
     OPERATION_PARSE_MAKEFILE,
+    MakefileInspector,
     MakefileRefusedError,
     MakeutilReport,
+    inspect_makefile,
 )
-from .makefile_observed import inspect_makefile_observed
 from .markdown_envelope import (
     is_file,
     load_workflows,
@@ -85,12 +86,22 @@ class PolicyEnvelope(typ.TypedDict):
     makefile: MakeutilReport | None
 
 
-def build_envelope(checkout: pathlib.Path) -> PolicyEnvelope:
+def build_envelope(
+    checkout: pathlib.Path, *, inspect: MakefileInspector = inspect_makefile
+) -> PolicyEnvelope:
     """Assemble the policy input document for one local checkout.
 
     A `.concordat` `language.rust.surfaces` declaration is authoritative,
     including an empty list.  Repositories without that declaration retain
     the historic root-`Cargo.toml` compatibility fallback.
+
+    Parameters
+    ----------
+    checkout:
+        Path to the local checkout to audit.
+    inspect:
+        Reads the root Makefile's facts. The default is the pure query; the
+        command boundary injects an observing one.
 
     Returns
     -------
@@ -113,7 +124,7 @@ def build_envelope(checkout: pathlib.Path) -> PolicyEnvelope:
 
     makefile_report: MakeutilReport | None = None
     if regular_file_exists(makefile_path, operation=OPERATION_PARSE_MAKEFILE):
-        makefile_report = inspect_makefile_observed(makefile_path).report
+        makefile_report = inspect(makefile_path).report
 
     envelope: PolicyEnvelope = {
         "schema_version": ENVELOPE_SCHEMA_VERSION,
@@ -230,7 +241,7 @@ def log_undecodable_workflow(path: str, category: str) -> None:
 
 
 def _read_makefile(
-    checkout: pathlib.Path, root: pathlib.Path
+    checkout: pathlib.Path, root: pathlib.Path, inspect: MakefileInspector
 ) -> tuple[MakeutilReport | None, str | None]:
     """Return the root Makefile's `makeutil` report, or why there is none.
 
@@ -250,7 +261,7 @@ def _read_makefile(
     ):
         return None, None
     try:
-        return inspect_makefile_observed(path).report, None
+        return inspect(path).report, None
     except MakefileRefusedError as error:
         return None, str(error)
 
@@ -275,7 +286,8 @@ def build_build_defaults_envelope(
     checkout: pathlib.Path,
     parameters: cabc.Mapping[str, object] | None = None,
     *,
-    report_undecodable: cabc.Callable[[str, str], None] = log_undecodable_workflow,
+    inspect: MakefileInspector = inspect_makefile,
+    report_undecodable: cabc.Callable[[str, str], None] | None = None,
 ) -> BuildDefaultsEnvelope:
     """Assemble the build-defaults policy input for one local checkout.
 
@@ -287,9 +299,13 @@ def build_build_defaults_envelope(
         The rule manifest's parameter defaults. Only the exception-document
         list and keyword are read here; every other parameter is a policy
         decision and reaches Conftest through `data.parameters`.
+    inspect:
+        Reads the root Makefile's facts. The default is the pure query; the
+        command boundary injects an observing one.
     report_undecodable:
         Called with the path and decode category of each workflow that did not
-        decode. The default logs a warning; the fact gathering stays pure.
+        decode. The default reports nothing, so the builder stays a pure
+        query; the command boundary injects `log_undecodable_workflow`.
 
     Returns
     -------
@@ -309,10 +325,10 @@ def build_build_defaults_envelope(
     cargo_config = inspect_cargo_config(checkout)
     toolchain = inspect_toolchain(checkout)
     root = resolved_root(checkout)
-    makefile, makefile_error = _read_makefile(checkout, root)
+    makefile, makefile_error = _read_makefile(checkout, root, inspect)
     workflows = _build_workflows(checkout, root)
     for workflow in workflows:
-        if workflow["decode_category"] is not None:
+        if report_undecodable is not None and workflow["decode_category"] is not None:
             report_undecodable(workflow["path"], workflow["decode_category"])
     return {
         "schema_version": ENVELOPE_SCHEMA_VERSION,

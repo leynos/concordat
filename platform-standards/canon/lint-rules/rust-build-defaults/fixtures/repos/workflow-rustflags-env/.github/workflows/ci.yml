@@ -8,6 +8,9 @@ jobs:
           RUSTFLAGS: -D warnings
         run: cargo test
   matrix:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Test
