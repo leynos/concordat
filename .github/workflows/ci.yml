@@ -18,7 +18,7 @@ jobs:
       TOFU_VERSION: "1.10.7"
       # `make check-fmt` runs `mdtablefix --check --git`; 0.6.0 is the first
       # release with `--check` and `--git`.
-      MDTABLEFIX_VERSION: "0.6.0"
+      MDTABLEFIX_VERSION: "0.6.1"
       # makeutil v0.1.0's x86_64 musl release asset and its SHA-256 digest.
       # Bump the version and the digest together.
       MAKEUTIL_VERSION: "0.1.0"
