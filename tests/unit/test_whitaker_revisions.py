@@ -296,6 +296,26 @@ def test_replacing_refuses_a_short_revision() -> None:
         replace_refs(text, ["abc123"])
 
 
+@pytest.mark.parametrize(
+    "ref",
+    ["A" * 40, "g" * 40, "a" * 39, "a" * 41, f"{'a' * 39} ", ""],
+    ids=[
+        "uppercase",
+        "non-hex",
+        "short-by-one",
+        "long-by-one",
+        "trailing-space",
+        "empty",
+    ],
+)
+def test_replacing_refuses_a_malformed_revision_of_any_shape(ref: str) -> None:
+    """Only 40 lowercase hexadecimal digits enter the list the policy compares."""
+    text = f'    {REFS_KEY}:\n      - "{"a" * 40}"\n'
+
+    with pytest.raises(OperationalRuleError, match="full lowercase"):
+        replace_refs(text, [ref])
+
+
 def test_check_reports_revisions_the_clone_does_not_derive(
     history: History,
     monkeypatch: pytest.MonkeyPatch,
@@ -590,6 +610,75 @@ def test_a_manifest_missing_a_required_parameter_exits_2_naming_it(
     assert str(manifest) in error
 
 
+def _set_default(manifest: pathlib.Path, key: str, replacement: str) -> None:
+    """Replace a default parameter, with any list items, by *replacement* lines."""
+    text = manifest.read_text("utf-8")
+    changed = re.sub(
+        rf"^    {key}:.*\n(?:      - .*\n)*",
+        replacement,
+        text,
+        flags=re.MULTILINE,
+    )
+    assert changed != text
+    manifest.write_text(changed, "utf-8")
+
+
+@pytest.mark.parametrize(
+    ("key", "replacement"),
+    [
+        pytest.param("action_directory", "    action_directory: ''\n", id="empty-dir"),
+        pytest.param("action_directory", "    action_directory: 7\n", id="int-dir"),
+        pytest.param(
+            "install_whitaker_roots",
+            "    install_whitaker_roots: not-a-list\n",
+            id="roots-not-a-list",
+        ),
+        pytest.param(
+            "install_whitaker_roots",
+            "    install_whitaker_roots:\n      - 12\n",
+            id="root-not-a-string",
+        ),
+    ],
+)
+def test_a_malformed_required_parameter_exits_2_naming_it(
+    rule_package: tuple[pathlib.Path, str, str],
+    cli: cabc.Callable[[str], int],
+    capsys: pytest.CaptureFixture[str],
+    key: str,
+    replacement: str,
+) -> None:
+    """A required parameter of the wrong shape is refused, not misused."""
+    _set_default(rule_package[0] / "rule.yaml", key, replacement)
+
+    assert cli("list") == 2
+    assert key in capsys.readouterr().err
+
+
+def test_sync_reports_a_manifest_that_turns_invalid_between_reads(
+    rule_package: tuple[pathlib.Path, str, str],
+    history: History,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`sync` reads the manifest text again to rewrite it, and that read can fail.
+
+    The parameters read first succeeds; the text read then meets invalid UTF-8,
+    which exits 2 with an operational diagnostic and leaves the file as it was.
+    """
+    package, root, _later = rule_package
+    manifest = package / "rule.yaml"
+    manifest.write_bytes(manifest.read_bytes() + b"\xff\xfe")
+    before = manifest.read_bytes()
+    monkeypatch.setattr(
+        whitaker_revisions, "_derive", lambda _c, _t: ([root], manifest)
+    )
+    clone = pathlib.Path(history.repository.workdir)
+
+    assert _run_main(monkeypatch, clone, "sync") == 2
+    assert "cannot update" in capsys.readouterr().err
+    assert manifest.read_bytes() == before
+
+
 def test_check_accepts_a_reordered_manifest(
     rule_package: tuple[pathlib.Path, str, str],
     history: History,
@@ -608,20 +697,37 @@ def test_check_accepts_a_reordered_manifest(
     assert capsys.readouterr().out == ""
 
 
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        pytest.param("list", "{root}\n", id="list"),
+        pytest.param("check", "", id="check"),
+        pytest.param("sync", "{manifest}: 1 revisions\n", id="sync"),
+    ],
+)
 def test_the_commands_default_to_origin_main(
     rule_package: tuple[pathlib.Path, str, str],
     history: History,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    command: str,
+    expected: str,
 ) -> None:
-    """Without `--tip`, `list` walks `origin/main`, not the local `main`."""
-    _package, root, _later = rule_package
+    """Without `--tip`, every command walks `origin/main`, not the local `main`.
+
+    `origin/main` holds only the root while the local `main` also holds a later
+    commit, so a command that used the local branch would list, report or write
+    two revisions.
+    """
+    package, root, _later = rule_package
     history.repository.references.create("refs/remotes/origin/main", root)
     clone = pathlib.Path(history.repository.workdir)
-    monkeypatch.setattr(sys, "argv", ["whitaker_revisions", "list", str(clone)])
+    monkeypatch.setattr(sys, "argv", ["whitaker_revisions", command, str(clone)])
 
     assert whitaker_revisions.main() == 0
-    assert capsys.readouterr().out == f"{root}\n"
+    assert capsys.readouterr().out == expected.format(
+        root=root, manifest=package / "rule.yaml"
+    )
 
 
 def test_sync_reports_how_many_revisions_it_wrote(

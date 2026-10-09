@@ -135,7 +135,7 @@ def sync(clone: Path, tip: str = "origin/main") -> int:
     try:
         updated = replace_refs(manifest.read_text("utf-8"), revisions)
         manifest.write_text(updated, "utf-8")
-    except OSError as error:
+    except (OSError, UnicodeDecodeError) as error:
         message = f"cannot update {manifest}: {error}"
         raise OperationalRuleError(
             message, operation="write-whitaker-revisions", resource=manifest
