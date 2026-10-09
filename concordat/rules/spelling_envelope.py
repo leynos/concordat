@@ -22,23 +22,25 @@ import pathlib
 import tomllib
 import typing as typ
 
-from .makefile_facts import MakeutilReport, inspect_makefile
+from .makefile_facts import MakefileInspector, inspect_makefile
 from .markdown_envelope import (
     OPERATION_PROBE_PATH,
     OPERATION_READ_MAKEFILE,
     PRUNED_DIRECTORIES,
     Repository,
     WorkflowFile,
-    _is_file,
-    _load_workflows,
     _raise_walk_error,
     _read_text,
-    _resolved_root,
-    _within_checkout,
+    is_file,
+    load_workflows,
+    resolved_root,
+    within_checkout,
 )
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+
+    from .makefile_facts import MakeutilReport
 
 ENVELOPE_SCHEMA_VERSION: typ.Final = 1
 ENVELOPE_KIND: typ.Final = "policy-input/spelling-config-baseline"
@@ -120,7 +122,7 @@ def _is_contained_file(root: pathlib.Path, path: pathlib.Path, operation: str) -
     bool
         Whether the path exists, stays inside the checkout, and is a file.
     """
-    return _within_checkout(root, path, operation) and _is_file(path, operation)
+    return within_checkout(root, path, operation) and is_file(path, operation)
 
 
 def _read_input(
@@ -228,6 +230,8 @@ def _vendored_paths(checkout: pathlib.Path, patterns: cabc.Sequence[str]) -> lis
 def build_spelling_envelope(
     checkout: pathlib.Path,
     vendored_patterns: cabc.Sequence[str] = DEFAULT_VENDORED_PATTERNS,
+    *,
+    inspect: MakefileInspector = inspect_makefile,
 ) -> SpellingEnvelope:
     """Assemble the spelling policy input for one local checkout.
 
@@ -237,6 +241,9 @@ def build_spelling_envelope(
         Path to the checkout under audit.
     vendored_patterns:
         Repository-relative globs naming legacy spelling machinery.
+    inspect:
+        Reads the root Makefile's facts. The default is the pure query; the
+        command boundary injects an observing one.
 
     An `OperationalRuleError` propagates from the fact readers if the root
     `Makefile` cannot be parsed by `makeutil`, a fact file exists but cannot
@@ -247,11 +254,11 @@ def build_spelling_envelope(
     SpellingEnvelope
         The policy input document assembled from the checkout.
     """
-    root = _resolved_root(checkout)
+    root = resolved_root(checkout)
     makefile_path = checkout / "Makefile"
     makefile_report: MakeutilReport | None = None
     if _is_contained_file(root, makefile_path, OPERATION_READ_MAKEFILE):
-        makefile_report = inspect_makefile(makefile_path).report
+        makefile_report = inspect(makefile_path).report
     typos_local = _load_typos_local(checkout, root)
     return {
         "schema_version": ENVELOPE_SCHEMA_VERSION,
@@ -265,7 +272,7 @@ def build_spelling_envelope(
             "typos_local": typos_local is not None,
         },
         "makefile": makefile_report,
-        "workflows": _load_workflows(checkout, root),
+        "workflows": load_workflows(checkout, root),
         "typos_local": typos_local,
         "gitignore": _load_gitignore(checkout, root),
         "agents_md": _load_agents_md(checkout, root),

@@ -10,15 +10,21 @@ below have only this module as a consumer, so they stay here.
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import json
 import subprocess
+import time
 import typing as typ
 
 import pytest
 
 from concordat.errors import OperationalRuleError
-from concordat.rules.makefile_facts import inspect_makefile
+from concordat.rules.makefile_facts import MakefileRefusedError, inspect_makefile
+from concordat.rules.makefile_observed import (
+    MakefileParseEvent,
+    inspect_makefile_observed,
+)
 from tests.unit.rule_test_support import (
     MINIMAL_REPORT,
     SpawnFailureCase,
@@ -83,6 +89,28 @@ class MakeutilFailureCase:
     message: str
 
 
+class ParseOutcomeCase(typ.NamedTuple):
+    """A makeutil exit and the outcome word the parse log should carry."""
+
+    exit_code: int
+    stdout: str
+    outcome: str
+
+
+class FakeClock:
+    """A clock that advances by a fixed step on every read."""
+
+    def __init__(self, step: float) -> None:
+        self._now = 0.0
+        self._step = step
+
+    def __call__(self) -> float:
+        """Return the current time, then advance it."""
+        reading = self._now
+        self._now += self._step
+        return reading
+
+
 class TestInspectMakefile:
     """Behaviour of the makeutil subprocess boundary."""
 
@@ -114,6 +142,131 @@ class TestInspectMakefile:
         cmd_mox.replay()
         facts = inspect_makefile(tmp_path / "Makefile")
         assert facts.status == "recovered", facts.status
+
+    def test_the_query_itself_neither_reads_a_clock_nor_logs(
+        self,
+        tmp_path: pathlib.Path,
+        cmd_mox: CmdMox,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """`inspect_makefile` is a pure query; observation is the caller's job."""
+        _write_checkout(tmp_path, cargo=False, makefile=True)
+        cmd_mox.mock("makeutil").returns(stdout=json.dumps(MINIMAL_REPORT))
+        cmd_mox.replay()
+
+        def forbidden() -> float:
+            pytest.fail("inspect_makefile read a clock")
+
+        monkeypatch.setattr(time, "perf_counter", forbidden)
+        with caplog.at_level("DEBUG"):
+            inspect_makefile(tmp_path / "Makefile")
+        assert not caplog.records, caplog.records
+
+    @pytest.mark.parametrize(
+        "case",
+        [
+            pytest.param(
+                ParseOutcomeCase(0, json.dumps(MINIMAL_REPORT), "complete"),
+                id="complete",
+            ),
+            pytest.param(ParseOutcomeCase(2, "", "refused"), id="refused"),
+            pytest.param(ParseOutcomeCase(101, "", "error"), id="crash"),
+        ],
+    )
+    def test_the_observed_parse_emits_one_event_with_a_fixed_outcome(
+        self,
+        tmp_path: pathlib.Path,
+        cmd_mox: CmdMox,
+        caplog: pytest.LogCaptureFixture,
+        case: ParseOutcomeCase,
+    ) -> None:
+        """Each observed parse emits one event naming the operation and outcome.
+
+        The outcome is a fixed word, never the tool's stderr, which can quote
+        Makefile content; the elapsed time comes from the injected clock.
+        """
+        _write_checkout(tmp_path, cargo=False, makefile=True)
+        cmd_mox.mock("makeutil").returns(
+            exit_code=case.exit_code, stdout=case.stdout, stderr="secret recipe text"
+        )
+        cmd_mox.replay()
+        events: list[MakefileParseEvent] = []
+        with contextlib.suppress(OperationalRuleError):
+            inspect_makefile_observed(
+                tmp_path / "Makefile", clock=FakeClock(0.25), emit=events.append
+            )
+        assert events == [
+            MakefileParseEvent("parse-makefile", "makeutil", case.outcome, 0.25)
+        ], events
+        assert "secret recipe text" not in repr(events), events
+
+    def test_the_default_emitter_logs_a_debug_record(
+        self,
+        tmp_path: pathlib.Path,
+        cmd_mox: CmdMox,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Without an injected emitter the event becomes one structured log record."""
+        _write_checkout(tmp_path, cargo=False, makefile=True)
+        cmd_mox.mock("makeutil").returns(stdout=json.dumps(MINIMAL_REPORT))
+        cmd_mox.replay()
+        with caplog.at_level("DEBUG", logger="concordat.rules.makefile_observed"):
+            inspect_makefile_observed(tmp_path / "Makefile")
+        (record,) = [
+            r for r in caplog.records if r.getMessage() == "makeutil parse finished"
+        ]
+        fields = vars(record)
+        assert (fields["operation"], fields["tool"], fields["outcome"]) == (
+            "parse-makefile",
+            "makeutil",
+            "complete",
+        ), fields
+        assert fields["elapsed_seconds"] >= 0, fields
+
+    def test_a_timeout_and_a_launch_failure_are_observed_as_such(
+        self,
+        tmp_path: pathlib.Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The outcome tells a hung `makeutil` from one that never started."""
+        _write_checkout(tmp_path, cargo=False, makefile=True)
+        outcomes = []
+        for error in (
+            subprocess.TimeoutExpired(cmd="makeutil", timeout=10.0),
+            PermissionError("makeutil"),
+        ):
+            monkeypatch.setattr(subprocess, "run", _raise_process_error(error))
+            events: list[MakefileParseEvent] = []
+            with pytest.raises(OperationalRuleError):
+                inspect_makefile_observed(tmp_path / "Makefile", emit=events.append)
+            outcomes.append(events[-1].outcome)
+        assert outcomes == ["timeout", "launch-failure"], outcomes
+
+    def test_exit_status_two_is_a_refusal(
+        self,
+        tmp_path: pathlib.Path,
+        cmd_mox: CmdMox,
+    ) -> None:
+        """Only exit status 2 names a Makefile `makeutil` declined to parse."""
+        _write_checkout(tmp_path, cargo=False, makefile=True)
+        cmd_mox.mock("makeutil").returns(exit_code=2, stderr="unsupported syntax")
+        cmd_mox.replay()
+        with pytest.raises(MakefileRefusedError, match="unsupported syntax"):
+            inspect_makefile(tmp_path / "Makefile")
+
+    def test_another_fatal_exit_status_is_not_a_refusal(
+        self,
+        tmp_path: pathlib.Path,
+        cmd_mox: CmdMox,
+    ) -> None:
+        """A crash is an operational error, never a fact about the checkout."""
+        _write_checkout(tmp_path, cargo=False, makefile=True)
+        cmd_mox.mock("makeutil").returns(exit_code=101, stderr="panicked")
+        cmd_mox.replay()
+        with pytest.raises(OperationalRuleError, match="panicked") as exc_info:
+            inspect_makefile(tmp_path / "Makefile")
+        assert not isinstance(exc_info.value, MakefileRefusedError), exc_info.value
 
     @pytest.mark.parametrize(
         "case",

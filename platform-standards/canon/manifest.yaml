@@ -111,14 +111,32 @@ artifacts:
       Sensor policy for the rust-build-defaults rule package: the parallel
       frontend and linker defaults, the rustflags sources held equal, and the
       codegen backend configured or refused by a recorded exception.
-    sha256: 68c80ab8dbb2fc4f0e75007d90331fe2a6eceef47e6f2c93d979240398002307
+    sha256: 7cca2d9a1fd22cc3bc54326cabf38eaacbd46cd84e3128a388a5da646e7bb810
+  - id: lint-rule-rust-build-defaults-build-paths-make
+    type: opa-policy
+    path: >-
+      platform-standards/canon/lint-rules/rust-build-defaults/policy/build_paths_make.rego
+    description: >
+      Makefile half of rust-build-defaults BD-007 and BD-008: coverage
+      recipes select LLVM where Cranelift is the default, and gate recipes
+      that assign RUSTFLAGS restate the fast flags.
+    sha256: 7cd6a9c623b765319d94c937044fb389e16b576e3633ed987e05b7dfcac68ea4
+  - id: lint-rule-rust-build-defaults-build-paths-workflows
+    type: opa-policy
+    path: >-
+      platform-standards/canon/lint-rules/rust-build-defaults/policy/build_paths_workflows.rego
+    description: >
+      Workflow half of rust-build-defaults BD-007 and BD-009: coverage steps
+      and dev-profile release builds select LLVM, and direct cargo gate
+      steps whose RUSTFLAGS is set keep the fast flags.
+    sha256: 9a6d8214ebbee567d921914ab97a548b89e9771d0a2afad802a8bd909356dcf5
   - id: lint-rule-rust-build-defaults-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/rust-build-defaults/rule.yaml
     description: >
       Rule package manifest (sensor wiring, parameters, defaults) for
       rust-build-defaults.
-    sha256: 1fa3d07c7d666314ec23b8ba0381fab5bc082d7faf5ddcd7a030bf71cb55c551
+    sha256: 86be4d6efe1c28d045102557c9f0633c46353aea65ecaadd5bbc76e0381fb092
   - id: lint-rule-main-owned-codescene-coverage
     type: opa-policy
     path: >-

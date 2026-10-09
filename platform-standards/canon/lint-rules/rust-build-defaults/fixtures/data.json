@@ -72,7 +72,10 @@
           "read_error": null,
           "sections": []
         }
-      ]
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": []
     },
     "backend_without_gate": {
       "schema_version": 1,
@@ -158,7 +161,10 @@
           "read_error": null,
           "sections": []
         }
-      ]
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": []
     },
     "commented_flags": {
       "schema_version": 1,
@@ -243,7 +249,10 @@
             }
           ]
         }
-      ]
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": []
     },
     "compliant_cranelift": {
       "schema_version": 1,
@@ -329,7 +338,10 @@
           "read_error": null,
           "sections": []
         }
-      ]
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": []
     },
     "compliant_exception": {
       "schema_version": 1,
@@ -419,7 +431,10 @@
             }
           ]
         }
-      ]
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": []
     },
     "compliant_rustflags_backend": {
       "schema_version": 1,
@@ -513,7 +528,10 @@
           "read_error": null,
           "sections": []
         }
-      ]
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": []
     },
     "compliant_split_spelling": {
       "schema_version": 1,
@@ -603,7 +621,10 @@
             }
           ]
         }
-      ]
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": []
     },
     "compliant_stable_pin": {
       "schema_version": 1,
@@ -681,6 +702,2462 @@
             }
           ]
         }
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": []
+    },
+    "coverage_make_exception": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "coverage-make-exception",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [],
+        "unstable_codegen_backend": null,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": true,
+          "read_error": null,
+          "sections": [
+            {
+              "path": "docs/developers-guide.md",
+              "heading": "Why Cranelift is not part of the standard",
+              "line": 8,
+              "level": 3,
+              "channels_named": [
+                "nightly-2026-08-23"
+              ],
+              "body_lines": 10
+            }
+          ]
+        }
+      ],
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "5c1bb18130c63020e085f18845c398c504989824a808fc42602a5a262bc5cbfe",
+          "byte_length": 51
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 1,
+            "targets": [
+              "coverage"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "cargo llvm-cov --lcov",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 28,
+                  "end_byte": 51,
+                  "start_line": 4,
+                  "start_column": 1,
+                  "end_line": 5,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 18,
+              "end_byte": 51,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 5,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": [
+          {
+            "ordinal": 0,
+            "raw_path": "tools.mk",
+            "optional": false,
+            "dynamic": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 17,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          }
+        ]
+      },
+      "makefile_error": null,
+      "workflows": []
+    },
+    "coverage_make_export": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "coverage-make-export",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "bfa870f5e2d88d777d6ec5808215fdeabca050d6b8d4251f5fff02b92c250f60",
+          "byte_length": 83
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 1,
+            "targets": [
+              "coverage"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "cargo llvm-cov --lcov",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 60,
+                  "end_byte": 83,
+                  "start_line": 4,
+                  "start_column": 1,
+                  "end_line": 5,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 50,
+              "end_byte": 83,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 5,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "CARGO_PROFILE_DEV_CODEGEN_BACKEND",
+            "operator": ":=",
+            "raw_value": "llvm",
+            "exported": true,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 49,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      },
+      "makefile_error": null,
+      "workflows": []
+    },
+    "coverage_make_mention": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "coverage-make-mention",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "603426b09a736c8c791b08ebc0158383e86a921d5bdaf11c1b4f597dd3886a61",
+          "byte_length": 57
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              "help"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "@echo \"make coverage runs: cargo llvm-cov --lcov\"",
+                "silent": true,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 6,
+                  "end_byte": 57,
+                  "start_line": 2,
+                  "start_column": 1,
+                  "end_line": 3,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 57,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 3,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "makefile_error": null,
+      "workflows": []
+    },
+    "coverage_make_prefix": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "coverage-make-prefix",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "f1c9734728195ce0f4ba08163d301a297e78617e3e1517888e9b25d585e002cc",
+          "byte_length": 160
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 1,
+            "targets": [
+              "coverage"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm \\\n\tRUSTFLAGS=\"-C link-arg=-fuse-ld=lld\" \\\n\t$(CARGO) llvm-cov --lcov --output-path lcov.info",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 26,
+                  "end_byte": 160,
+                  "start_line": 4,
+                  "start_column": 1,
+                  "end_line": 7,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 16,
+              "end_byte": 160,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 7,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "CARGO",
+            "operator": "?=",
+            "raw_value": "cargo",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 15,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      },
+      "makefile_error": null,
+      "workflows": []
+    },
+    "coverage_make_profile": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "coverage-make-profile",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.coverage",
+            "scope": "profile",
+            "profile": "coverage",
+            "backend": "llvm"
+          },
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "88bce2a24f56caf06894eb28335ee404782d48beb41394078d61265e29d52529",
+          "byte_length": 105
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              "coverage"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "cargo llvm-cov --profile coverage --lcov",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 10,
+                  "end_byte": 52,
+                  "start_line": 2,
+                  "start_column": 1,
+                  "end_line": 3,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 53,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "targets": [
+              "wrong-profile"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "cargo llvm-cov --profile dev --lcov",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 68,
+                  "end_byte": 105,
+                  "start_line": 5,
+                  "start_column": 1,
+                  "end_line": 6,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 53,
+              "end_byte": 105,
+              "start_line": 4,
+              "start_column": 1,
+              "end_line": 6,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "makefile_error": null,
+      "workflows": []
+    },
+    "coverage_make_release": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "coverage-make-release",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "e0dd0a4a3dfadd6ca8371e851a5225b82c6a802a3bce8af5485d2b3868119b56",
+          "byte_length": 43
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              "coverage"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "cargo llvm-cov --release --lcov",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 10,
+                  "end_byte": 43,
+                  "start_line": 2,
+                  "start_column": 1,
+                  "end_line": 3,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 43,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 3,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "makefile_error": null,
+      "workflows": []
+    },
+    "coverage_make_rustflags": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "coverage-make-rustflags",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "470ddec72d3971a47c9451f934d29a6acd412f3d8f487a55ef7146378270e46e",
+          "byte_length": 68
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              "coverage"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "RUSTFLAGS=\"-Zcodegen-backend=llvm\" cargo llvm-cov --lcov",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 10,
+                  "end_byte": 68,
+                  "start_line": 2,
+                  "start_column": 1,
+                  "end_line": 3,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 68,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 3,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "makefile_error": null,
+      "workflows": []
+    },
+    "coverage_make_rustflags_route": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "coverage-make-rustflags-route",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Zcodegen-backend=cranelift"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Zcodegen-backend=cranelift",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "build",
+            "scope": "rustflags",
+            "profile": null,
+            "backend": "cranelift"
+          },
+          {
+            "source": "target.cfg(target_os = \"linux\")",
+            "scope": "rustflags",
+            "profile": null,
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": null,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "5bf8555640259003aa75f5ed6c9301ce153edf7efbcf8aeaec8d4b4cac488854",
+          "byte_length": 110
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              "coverage-replaced"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "RUSTFLAGS=\"-D warnings\" cargo llvm-cov --lcov",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 19,
+                  "end_byte": 66,
+                  "start_line": 2,
+                  "start_column": 1,
+                  "end_line": 3,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 67,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "targets": [
+              "coverage-inherited"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "cargo llvm-cov --lcov",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 87,
+                  "end_byte": 110,
+                  "start_line": 5,
+                  "start_column": 1,
+                  "end_line": 6,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 67,
+              "end_byte": 110,
+              "start_line": 4,
+              "start_column": 1,
+              "end_line": 6,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "makefile_error": null,
+      "workflows": []
+    },
+    "coverage_make_target_variable": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "coverage-make-target-variable",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "57dc41a9f6c63c55f712649d1586717b07cdf68cb3adaa5c26516cac1931b0c4",
+          "byte_length": 92
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              "coverage"
+            ],
+            "prerequisites": [
+              "export",
+              "CARGO_PROFILE_DEV_CODEGEN_BACKEND",
+              ":=",
+              "llvm"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 59,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "targets": [
+              "coverage"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "cargo llvm-cov --lcov",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 69,
+                  "end_byte": 92,
+                  "start_line": 3,
+                  "start_column": 1,
+                  "end_line": 4,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 59,
+              "end_byte": 92,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "makefile_error": null,
+      "workflows": []
+    },
+    "coverage_make_test_profile": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "coverage-make-test-profile",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "cranelift"
+          },
+          {
+            "source": "profile.test",
+            "scope": "profile",
+            "profile": "test",
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "cd395fa47215fca2f3039b9e61490dfb4b6a6253b6ca1377060613d1484e78f9",
+          "byte_length": 199
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              "coverage-dev-only"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm cargo llvm-cov --lcov",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 19,
+                  "end_byte": 81,
+                  "start_line": 2,
+                  "start_column": 1,
+                  "end_line": 3,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 82,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "targets": [
+              "coverage-both"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm CARGO_PROFILE_TEST_CODEGEN_BACKEND=llvm cargo llvm-cov --lcov",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 97,
+                  "end_byte": 199,
+                  "start_line": 5,
+                  "start_column": 1,
+                  "end_line": 6,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 82,
+              "end_byte": 199,
+              "start_line": 4,
+              "start_column": 1,
+              "end_line": 6,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "makefile_error": null,
+      "workflows": []
+    },
+    "coverage_make_unresolved": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "coverage-make-unresolved",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "a44c7d2dd56cd6c5670a9808aaeb8496f4df957601b19d37c3939375a298f986",
+          "byte_length": 192
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 2,
+            "targets": [
+              "coverage"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(COVERAGE_ENV) cargo llvm-cov --lcov",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 153,
+                  "end_byte": 192,
+                  "start_line": 8,
+                  "start_column": 1,
+                  "end_line": 9,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 143,
+              "end_byte": 192,
+              "start_line": 7,
+              "start_column": 1,
+              "end_line": 9,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "COVERAGE_ENV",
+            "operator": "=",
+            "raw_value": "CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [
+              {
+                "kind": "ifeq",
+                "expression": "($(CI),true)",
+                "branch": "if",
+                "location": {
+                  "start_byte": 0,
+                  "end_byte": 18,
+                  "start_line": 1,
+                  "start_column": 1,
+                  "end_line": 2,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 18,
+              "end_byte": 72,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 3,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "name": "COVERAGE_ENV",
+            "operator": "=",
+            "raw_value": "CARGO_PROFILE_DEV_CODEGEN_BACKEND=cranelift",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [
+              {
+                "kind": "ifeq",
+                "expression": "($(CI),true)",
+                "branch": "else",
+                "location": {
+                  "start_byte": 72,
+                  "end_byte": 76,
+                  "start_line": 3,
+                  "start_column": 1,
+                  "end_line": 3,
+                  "end_column": 5
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 77,
+              "end_byte": 136,
+              "start_line": 4,
+              "start_column": 1,
+              "end_line": 5,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      },
+      "makefile_error": null,
+      "workflows": []
+    },
+    "coverage_make_unselected": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "coverage-make-unselected",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "9f159f4e8072b2e1804c6ab328f17c03f27d532641227b3b06c830f6884237e4",
+          "byte_length": 76
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 1,
+            "targets": [
+              "coverage"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(CARGO) llvm-cov --lcov --output-path lcov.info",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 26,
+                  "end_byte": 76,
+                  "start_line": 4,
+                  "start_column": 1,
+                  "end_line": 5,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 16,
+              "end_byte": 76,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 5,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "CARGO",
+            "operator": "?=",
+            "raw_value": "cargo",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 15,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      },
+      "makefile_error": null,
+      "workflows": []
+    },
+    "coverage_make_variable": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "coverage-make-variable",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "c4835ff3a9a6879cad329a87e58e7b803bdc6605b7c83c069b6069096b304920",
+          "byte_length": 147
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 2,
+            "targets": [
+              "coverage"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "CARGO_PROFILE_DEV_CODEGEN_BACKEND=$(COVERAGE_CODEGEN_BACKEND) $(CARGO) llvm-cov --lcov",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 59,
+                  "end_byte": 147,
+                  "start_line": 5,
+                  "start_column": 1,
+                  "end_line": 6,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 49,
+              "end_byte": 147,
+              "start_line": 4,
+              "start_column": 1,
+              "end_line": 6,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "CARGO",
+            "operator": "?=",
+            "raw_value": "cargo",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 15,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "name": "COVERAGE_CODEGEN_BACKEND",
+            "operator": "?=",
+            "raw_value": "llvm",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 15,
+              "end_byte": 48,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 3,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      },
+      "makefile_error": null,
+      "workflows": []
+    },
+    "coverage_workflow_action": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "coverage-workflow-action",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "on": "pull_request",
+            "jobs": {
+              "coverage": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "leynos/shared-actions/.github/actions/generate-coverage@0123456789abcdef0123456789abcdef01234567",
+                    "env": {
+                      "RUSTFLAGS": ""
+                    },
+                    "with": {
+                      "output-path": "lcov.info",
+                      "format": "lcov"
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "error": null,
+          "decode_category": null
+        }
+      ]
+    },
+    "coverage_workflow_run": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "coverage-workflow-run",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "on": "pull_request",
+            "jobs": {
+              "unselected": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "name": "Coverage",
+                    "run": "cargo llvm-cov --lcov --output-path lcov.info"
+                  }
+                ]
+              },
+              "job-env": {
+                "runs-on": "ubuntu-latest",
+                "env": {
+                  "CARGO_PROFILE_DEV_CODEGEN_BACKEND": "llvm"
+                },
+                "steps": [
+                  {
+                    "name": "Coverage",
+                    "run": "cargo llvm-cov --lcov --output-path lcov.info"
+                  }
+                ]
+              },
+              "inline": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "name": "Coverage",
+                    "run": "CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm \\\n  cargo llvm-cov --lcov --output-path lcov.info\n"
+                  }
+                ]
+              },
+              "expression": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "name": "Coverage",
+                    "env": {
+                      "CARGO_PROFILE_DEV_CODEGEN_BACKEND": "${{ vars.COVERAGE_BACKEND }}"
+                    },
+                    "run": "cargo llvm-cov --lcov --output-path lcov.info"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null,
+          "decode_category": null
+        }
       ]
     },
     "exception_unreadable": {
@@ -748,7 +3225,10 @@
           "read_error": "[Errno 13] Permission denied",
           "sections": []
         }
-      ]
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": []
     },
     "exception_without_pin": {
       "schema_version": 1,
@@ -833,7 +3313,2438 @@
             }
           ]
         }
-      ]
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": []
+    },
+    "gate_delegated": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "gate-delegated",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "4d69fa1c7185e95dcb0a1c82828d6c20e7350f2feb3b04011b65a9218252a483",
+          "byte_length": 69
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              "lint"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(MAKE) clippy",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 6,
+                  "end_byte": 22,
+                  "start_line": 2,
+                  "start_column": 1,
+                  "end_line": 3,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 23,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "targets": [
+              "clippy"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "RUSTFLAGS=\"-D warnings\" cargo clippy",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 31,
+                  "end_byte": 69,
+                  "start_line": 5,
+                  "start_column": 1,
+                  "end_line": 6,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 23,
+              "end_byte": 69,
+              "start_line": 4,
+              "start_column": 1,
+              "end_line": 6,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "makefile_error": null,
+      "workflows": []
+    },
+    "gate_delegated_options": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "gate-delegated-options",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "54b8db107c9aafb5c6878518966099ec99f00919523da07d252cd5c61f6ab5d9",
+          "byte_length": 99
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              "lint"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(MAKE) --no-print-directory --jobs=2 clippy",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 6,
+                  "end_byte": 52,
+                  "start_line": 2,
+                  "start_column": 1,
+                  "end_line": 3,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 53,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "targets": [
+              "clippy"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "RUSTFLAGS=\"-D warnings\" cargo clippy",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 61,
+                  "end_byte": 99,
+                  "start_line": 5,
+                  "start_column": 1,
+                  "end_line": 6,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 53,
+              "end_byte": 99,
+              "start_line": 4,
+              "start_column": 1,
+              "end_line": 6,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "makefile_error": null,
+      "workflows": []
+    },
+    "gate_dynamic": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "gate-dynamic",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "9af523e23cbf118f2000b6efa7714b722c38b526564d018c636b89af9a7de82d",
+          "byte_length": 58
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 1,
+            "targets": [
+              "test"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(MAKE) $(SUITE)",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 21,
+                  "end_byte": 39,
+                  "start_line": 4,
+                  "start_column": 1,
+                  "end_line": 5,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 15,
+              "end_byte": 40,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 6,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 2,
+            "targets": [
+              "unit"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "cargo test",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 46,
+                  "end_byte": 58,
+                  "start_line": 7,
+                  "start_column": 1,
+                  "end_line": 8,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 40,
+              "end_byte": 58,
+              "start_line": 6,
+              "start_column": 1,
+              "end_line": 8,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "SUITE",
+            "operator": "?=",
+            "raw_value": "unit",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 14,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      },
+      "makefile_error": null,
+      "workflows": []
+    },
+    "gate_dynamic_file": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "gate-dynamic-file",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "64861b2dc2d061b97f93d0322906188e3809823c4abab1b7bfbc666002f7a56b",
+          "byte_length": 48
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              "test"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(MAKE) -f ci.mk unit",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 6,
+                  "end_byte": 29,
+                  "start_line": 2,
+                  "start_column": 1,
+                  "end_line": 3,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 30,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "targets": [
+              "unit"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "cargo test",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 36,
+                  "end_byte": 48,
+                  "start_line": 5,
+                  "start_column": 1,
+                  "end_line": 6,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 30,
+              "end_byte": 48,
+              "start_line": 4,
+              "start_column": 1,
+              "end_line": 6,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "makefile_error": null,
+      "workflows": []
+    },
+    "gate_exempt": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "gate-exempt",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "82a4aed7c27a2c9924b82a9aa77ee67f0e3fe2bd2064f2e89d91debb478a0f99",
+          "byte_length": 234
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              "build"
+            ],
+            "prerequisites": [
+              "target/release/app"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 27,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 3,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "targets": [
+              "target/release/app"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "RUSTFLAGS=\"\" cargo build --release",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 47,
+                  "end_byte": 83,
+                  "start_line": 4,
+                  "start_column": 1,
+                  "end_line": 5,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 27,
+              "end_byte": 84,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 6,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 2,
+            "targets": [
+              "test"
+            ],
+            "prerequisites": [
+              "coverage"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 84,
+              "end_byte": 100,
+              "start_line": 6,
+              "start_column": 1,
+              "end_line": 8,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 3,
+            "targets": [
+              "coverage"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm RUSTFLAGS=\"-D warnings\" cargo llvm-cov",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 110,
+                  "end_byte": 189,
+                  "start_line": 9,
+                  "start_column": 1,
+                  "end_line": 10,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 100,
+              "end_byte": 190,
+              "start_line": 8,
+              "start_column": 1,
+              "end_line": 11,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 4,
+            "targets": [
+              "bench"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "RUSTFLAGS=\"-D warnings\" cargo bench",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 197,
+                  "end_byte": 234,
+                  "start_line": 12,
+                  "start_column": 1,
+                  "end_line": 13,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 190,
+              "end_byte": 234,
+              "start_line": 11,
+              "start_column": 1,
+              "end_line": 13,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "makefile_error": null,
+      "workflows": []
+    },
+    "gate_global": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "gate-global",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "e962d46fbf51550a87f60ae55e55d707919327696af10826abbe155f410656cf",
+          "byte_length": 69
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 2,
+            "targets": [
+              "test"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "cargo test",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 57,
+                  "end_byte": 69,
+                  "start_line": 5,
+                  "start_column": 1,
+                  "end_line": 6,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 51,
+              "end_byte": 69,
+              "start_line": 4,
+              "start_column": 1,
+              "end_line": 6,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "RUSTFLAGS",
+            "operator": ":=",
+            "raw_value": "-D warnings",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 25,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "name": "RUSTFLAGS",
+            "operator": "+=",
+            "raw_value": "-Zthreads=8",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 25,
+              "end_byte": 50,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 3,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      },
+      "makefile_error": null,
+      "workflows": []
+    },
+    "gate_global_no_gate": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "gate-global-no-gate",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "e0b5a8af0a9d226c272e59e0ba22a28ba4d9644cc30e331d41c936838b41d05a",
+          "byte_length": 46
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 1,
+            "targets": [
+              "bench"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "cargo bench",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 33,
+                  "end_byte": 46,
+                  "start_line": 4,
+                  "start_column": 1,
+                  "end_line": 5,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 26,
+              "end_byte": 46,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 5,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "RUSTFLAGS",
+            "operator": ":=",
+            "raw_value": "-D warnings",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 25,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      },
+      "makefile_error": null,
+      "workflows": []
+    },
+    "gate_inline_linux": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "gate-inline-linux",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "6dcdd7764a4206df53d23df65fbff7f3e3ad0ef60506030b9326b2250b96c144",
+          "byte_length": 200
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 2,
+            "targets": [
+              "lint"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "RUSTFLAGS=\"$(DEV_RUST_FLAGS)\" cargo clippy",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 156,
+                  "end_byte": 200,
+                  "start_line": 5,
+                  "start_column": 1,
+                  "end_line": 6,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 150,
+              "end_byte": 200,
+              "start_line": 4,
+              "start_column": 1,
+              "end_line": 6,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "DEV_LINKER_FLAGS",
+            "operator": "?=",
+            "raw_value": "$(if $(filter Linux,$(shell uname -s)),-C link-arg=-fuse-ld=mold)",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 86,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "name": "DEV_RUST_FLAGS",
+            "operator": "?=",
+            "raw_value": "-D warnings -Z threads=8 $(DEV_LINKER_FLAGS)",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 86,
+              "end_byte": 149,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 3,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      },
+      "makefile_error": null,
+      "workflows": []
+    },
+    "gate_netsuke": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "gate-netsuke",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "abc300ef4609340403459b2ad0f6134752dacc0fb2c4707240ba6497456b7a0e",
+          "byte_length": 708
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 7,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "build",
+              "lint",
+              "test",
+              "typecheck"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 411,
+              "end_byte": 445,
+              "start_line": 9,
+              "start_column": 1,
+              "end_line": 10,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 8,
+            "targets": [
+              "build"
+            ],
+            "prerequisites": [
+              "target/debug/app"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 445,
+              "end_byte": 470,
+              "start_line": 10,
+              "start_column": 1,
+              "end_line": 12,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 9,
+            "targets": [
+              "target/debug/app"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(DEBUG_RUSTFLAGS) $(CARGO) build --bin app",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 488,
+                  "end_byte": 533,
+                  "start_line": 13,
+                  "start_column": 1,
+                  "end_line": 14,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 470,
+              "end_byte": 534,
+              "start_line": 12,
+              "start_column": 1,
+              "end_line": 15,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 10,
+            "targets": [
+              "lint"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(GATE_RUSTFLAGS) $(CARGO) clippy --all-targets",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 540,
+                  "end_byte": 589,
+                  "start_line": 16,
+                  "start_column": 1,
+                  "end_line": 17,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 534,
+              "end_byte": 590,
+              "start_line": 15,
+              "start_column": 1,
+              "end_line": 18,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 11,
+            "targets": [
+              "test"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(GATE_RUSTFLAGS) $(CARGO) nextest run --workspace",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 596,
+                  "end_byte": 648,
+                  "start_line": 19,
+                  "start_column": 1,
+                  "end_line": 20,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 590,
+              "end_byte": 649,
+              "start_line": 18,
+              "start_column": 1,
+              "end_line": 21,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 12,
+            "targets": [
+              "typecheck"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(GATE_RUSTFLAGS) $(CARGO) check --all-targets",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 660,
+                  "end_byte": 708,
+                  "start_line": 22,
+                  "start_column": 1,
+                  "end_line": 23,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 649,
+              "end_byte": 708,
+              "start_line": 21,
+              "start_column": 1,
+              "end_line": 23,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "CARGO",
+            "operator": "?=",
+            "raw_value": "cargo",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 15,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "name": "STANDARD_THREADS_FLAG",
+            "operator": "?=",
+            "raw_value": "-Zthreads=8",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 15,
+              "end_byte": 52,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 3,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 2,
+            "name": "STANDARD_MOLD_FLAG",
+            "operator": "?=",
+            "raw_value": "-Clink-arg=-fuse-ld=mold",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 52,
+              "end_byte": 99,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 3,
+            "name": "BUILD_HOST_OS",
+            "operator": ":=",
+            "raw_value": "$(shell uname -s)",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 99,
+              "end_byte": 134,
+              "start_line": 4,
+              "start_column": 1,
+              "end_line": 5,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 4,
+            "name": "STANDARD_RUSTFLAGS",
+            "operator": "=",
+            "raw_value": "$(STANDARD_THREADS_FLAG)$(if $(filter Linux,$(BUILD_HOST_OS)), $(STANDARD_MOLD_FLAG))",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 134,
+              "end_byte": 241,
+              "start_line": 5,
+              "start_column": 1,
+              "end_line": 6,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 5,
+            "name": "GATE_RUSTFLAGS",
+            "operator": "=",
+            "raw_value": "RUSTFLAGS=\"$${RUSTFLAGS:+$$RUSTFLAGS }-D warnings $(STANDARD_RUSTFLAGS)\"",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 241,
+              "end_byte": 331,
+              "start_line": 6,
+              "start_column": 1,
+              "end_line": 7,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 6,
+            "name": "DEBUG_RUSTFLAGS",
+            "operator": "=",
+            "raw_value": "RUSTFLAGS=\"$${RUSTFLAGS:+$$RUSTFLAGS }$(STANDARD_RUSTFLAGS)\"",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 331,
+              "end_byte": 410,
+              "start_line": 7,
+              "start_column": 1,
+              "end_line": 8,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      },
+      "makefile_error": null,
+      "workflows": []
+    },
+    "gate_stable": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "gate-stable",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "1.93.1",
+        "channel_kind": "version",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [],
+        "unstable_codegen_backend": null,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": true,
+          "read_error": null,
+          "sections": [
+            {
+              "path": "docs/developers-guide.md",
+              "heading": "Why Cranelift is not part of the standard",
+              "line": 8,
+              "level": 3,
+              "channels_named": [
+                "1.93.1"
+              ],
+              "body_lines": 10
+            }
+          ]
+        }
+      ],
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "ba780757ab279a5551bb4d6ffb32a28ba38c2608a38871a208fb9c2c30ab3daa",
+          "byte_length": 42
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              "test"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "RUSTFLAGS=\"-D warnings\" cargo test",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 6,
+                  "end_byte": 42,
+                  "start_line": 2,
+                  "start_column": 1,
+                  "end_line": 3,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 42,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 3,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "makefile_error": null,
+      "workflows": []
+    },
+    "gate_target_variable": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "gate-target-variable",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "519cda8f6d57d5ddca4cc33423e6d34f036971acf3ccf9fbdca6063fd00202a7",
+          "byte_length": 68
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              "test"
+            ],
+            "prerequisites": [
+              "export",
+              "RUSTFLAGS",
+              ":=",
+              "-D",
+              "warnings",
+              "-Zthreads=8"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 50,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "targets": [
+              "test"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "cargo test",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 56,
+                  "end_byte": 68,
+                  "start_line": 3,
+                  "start_column": 1,
+                  "end_line": 4,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 50,
+              "end_byte": 68,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "makefile_error": null,
+      "workflows": []
+    },
+    "gate_template": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "gate-template",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "8f8067f7f91345afdd73baa5b6c32641f2464d87d8ce8f8ba1ad0e07d038b8d7",
+          "byte_length": 129
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 3,
+            "targets": [
+              "test"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "RUSTFLAGS=\"$(RUST_FLAGS)\" $(CARGO) test --workspace",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 76,
+                  "end_byte": 129,
+                  "start_line": 6,
+                  "start_column": 1,
+                  "end_line": 7,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 70,
+              "end_byte": 129,
+              "start_line": 5,
+              "start_column": 1,
+              "end_line": 7,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "CARGO",
+            "operator": "?=",
+            "raw_value": "cargo",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 15,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "name": "RUST_FLAGS",
+            "operator": "?=",
+            "raw_value": "",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 15,
+              "end_byte": 29,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 3,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 2,
+            "name": "RUST_FLAGS",
+            "operator": ":=",
+            "raw_value": "-D warnings $(RUST_FLAGS)",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 29,
+              "end_byte": 69,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      },
+      "makefile_error": null,
+      "workflows": []
     },
     "invalid_cargo": {
       "schema_version": 1,
@@ -854,7 +5765,10 @@
       },
       "toolchain": null,
       "cargo_config": null,
-      "exceptions": []
+      "exceptions": [],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": []
     },
     "linker_beyond_linux": {
       "schema_version": 1,
@@ -944,7 +5858,10 @@
             }
           ]
         }
-      ]
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": []
     },
     "linker_unconditional": {
       "schema_version": 1,
@@ -1034,7 +5951,535 @@
             }
           ]
         }
-      ]
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": []
+    },
+    "llvm_dev_profile": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "llvm-dev-profile",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.coverage",
+            "scope": "profile",
+            "profile": "coverage",
+            "backend": "llvm"
+          },
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "llvm"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": []
+    },
+    "makefile_include": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "makefile-include",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "5c1bb18130c63020e085f18845c398c504989824a808fc42602a5a262bc5cbfe",
+          "byte_length": 51
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 1,
+            "targets": [
+              "coverage"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "cargo llvm-cov --lcov",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 28,
+                  "end_byte": 51,
+                  "start_line": 4,
+                  "start_column": 1,
+                  "end_line": 5,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 18,
+              "end_byte": 51,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 5,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": [
+          {
+            "ordinal": 0,
+            "raw_path": "tools.mk",
+            "optional": false,
+            "dynamic": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 17,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          }
+        ]
+      },
+      "makefile_error": null,
+      "workflows": []
+    },
+    "makefile_recovered": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "makefile-recovered",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "452db098c472177167f794527c8a7f76c8aec636f9bf9f6569f4608bc930e361",
+          "byte_length": 41
+        },
+        "parse": {
+          "status": "recovered",
+          "diagnostics": [
+            {
+              "message": "export directive names could not be determined",
+              "code": null,
+              "location": {
+                "start_byte": 0,
+                "end_byte": 7,
+                "start_line": 1,
+                "start_column": 1,
+                "end_line": 2,
+                "end_column": 1
+              }
+            },
+            {
+              "message": "expected variable name",
+              "code": null,
+              "location": {
+                "start_byte": 19,
+                "end_byte": 40,
+                "start_line": 4,
+                "start_column": 2,
+                "end_line": 4,
+                "end_column": 23
+              }
+            },
+            {
+              "message": "expected variable name",
+              "code": null,
+              "location": {
+                "start_byte": 41,
+                "end_byte": 41,
+                "start_line": 5,
+                "start_column": 1,
+                "end_line": 5,
+                "end_column": 1
+              }
+            }
+          ]
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              "coverage"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "cargo llvm-cov --lcov",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 18,
+                  "end_byte": 41,
+                  "start_line": 4,
+                  "start_column": 1,
+                  "end_line": 5,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 8,
+              "end_byte": 41,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 5,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "makefile_error": null,
+      "workflows": []
+    },
+    "makefile_refused": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "makefile-refused",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": null,
+      "makefile_error": "makeutil exited with status 2 for Makefile",
+      "workflows": []
     },
     "negated_linux_cfg": {
       "schema_version": 1,
@@ -1135,7 +6580,10 @@
             }
           ]
         }
-      ]
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": []
     },
     "no_backend_no_exception": {
       "schema_version": 1,
@@ -1214,7 +6662,10 @@
           "read_error": null,
           "sections": []
         }
-      ]
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": []
     },
     "no_config": {
       "schema_version": 1,
@@ -1263,7 +6714,10 @@
           "read_error": null,
           "sections": []
         }
-      ]
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": []
     },
     "no_linux_table": {
       "schema_version": 1,
@@ -1341,7 +6795,10 @@
             }
           ]
         }
-      ]
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": []
     },
     "non_string_rustflags": {
       "schema_version": 1,
@@ -1396,7 +6853,10 @@
           "read_error": null,
           "sections": []
         }
-      ]
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": []
     },
     "not_rust": {
       "schema_version": 1,
@@ -1424,7 +6884,10 @@
           "read_error": null,
           "sections": []
         }
-      ]
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": []
     },
     "other_backend": {
       "schema_version": 1,
@@ -1510,7 +6973,10 @@
           "read_error": null,
           "sections": []
         }
-      ]
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": []
     },
     "package_override_backend": {
       "schema_version": 1,
@@ -1595,6 +7061,358 @@
           "present": false,
           "read_error": null,
           "sections": []
+        }
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": []
+    },
+    "printed_cargo": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "printed-cargo",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "d3142f5f10d3958171a9ac3500f812ac5e39fc00e680085ecc7ae1a9afce9682",
+          "byte_length": 64
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              "test"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "echo \"run; RUSTFLAGS=-D warnings cargo test\"",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 6,
+                  "end_byte": 52,
+                  "start_line": 2,
+                  "start_column": 1,
+                  "end_line": 3,
+                  "end_column": 1
+                }
+              },
+              {
+                "ordinal": 1,
+                "text": "cargo test",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 52,
+                  "end_byte": 64,
+                  "start_line": 3,
+                  "start_column": 1,
+                  "end_line": 4,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 64,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "makefile_error": null,
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "on": "pull_request",
+            "jobs": {
+              "printed": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "name": "Say",
+                    "env": {
+                      "RUSTFLAGS": "-D warnings"
+                    },
+                    "run": "echo \"next: cargo test; cargo build\"\n"
+                  }
+                ]
+              },
+              "real": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "name": "Test",
+                    "env": {
+                      "RUSTFLAGS": "-D warnings"
+                    },
+                    "run": "echo \"start; done\" && cargo test\n"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null,
+          "decode_category": null
+        }
+      ]
+    },
+    "release_workflow": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "release-workflow",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "on": "pull_request",
+            "jobs": {
+              "build": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "name": "Not a release",
+                    "run": "cargo build"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null,
+          "decode_category": null
+        },
+        {
+          "path": ".github/workflows/release.yml",
+          "parsed": {
+            "on": {
+              "push": {
+                "tags": [
+                  "v*"
+                ]
+              }
+            },
+            "jobs": {
+              "build": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "name": "Dev-profile build",
+                    "run": "cargo build --target x86_64-unknown-linux-gnu"
+                  },
+                  {
+                    "name": "Release build",
+                    "env": {
+                      "RUSTFLAGS": ""
+                    },
+                    "run": "cross +stable build --release --target x86_64-unknown-linux-gnu"
+                  },
+                  {
+                    "name": "Distribution-profile build",
+                    "run": "cargo build --profile dist"
+                  },
+                  {
+                    "name": "Cross distribution-profile build",
+                    "run": "cross build --profile dist --target aarch64-unknown-linux-gnu"
+                  },
+                  {
+                    "uses": "leynos/shared-actions/.github/actions/rust-build-release@0123456789abcdef0123456789abcdef01234567",
+                    "with": {
+                      "target": "x86_64-unknown-linux-gnu"
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "error": null,
+          "decode_category": null
         }
       ]
     },
@@ -1686,7 +7504,10 @@
             }
           ]
         }
-      ]
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": []
     },
     "threads_missing_from_build": {
       "schema_version": 1,
@@ -1774,7 +7595,10 @@
             }
           ]
         }
-      ]
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": []
     },
     "threads_missing_from_linux": {
       "schema_version": 1,
@@ -1863,7 +7687,10 @@
             }
           ]
         }
-      ]
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": []
     },
     "unclassified_only": {
       "schema_version": 1,
@@ -1952,7 +7779,10 @@
             }
           ]
         }
-      ]
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": []
     },
     "unclassified_target": {
       "schema_version": 1,
@@ -2053,7 +7883,10 @@
             }
           ]
         }
-      ]
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": []
     },
     "unknown_schema": {
       "schema_version": 2,
@@ -2074,7 +7907,10 @@
       },
       "toolchain": null,
       "cargo_config": null,
-      "exceptions": []
+      "exceptions": [],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": []
     },
     "unreadable_config": {
       "schema_version": 1,
@@ -2128,6 +7964,418 @@
           "present": false,
           "read_error": null,
           "sections": []
+        }
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": []
+    },
+    "workflow_rustflags_env": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "workflow-rustflags-env",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "on": "pull_request",
+            "jobs": {
+              "macos": {
+                "runs-on": "macos-latest",
+                "steps": [
+                  {
+                    "name": "Test",
+                    "env": {
+                      "RUSTFLAGS": "-D warnings"
+                    },
+                    "run": "cargo test"
+                  }
+                ]
+              },
+              "matrix": {
+                "strategy": {
+                  "matrix": {
+                    "os": [
+                      "ubuntu-latest",
+                      "macos-latest"
+                    ]
+                  }
+                },
+                "runs-on": "${{ matrix.os }}",
+                "steps": [
+                  {
+                    "name": "Test",
+                    "env": {
+                      "RUSTFLAGS": "-D warnings -Zthreads=8"
+                    },
+                    "run": "cargo test"
+                  }
+                ]
+              },
+              "stable": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "leynos/shared-actions/.github/actions/setup-rust@0123456789abcdef0123456789abcdef01234567",
+                    "with": {
+                      "toolchain": "stable"
+                    }
+                  },
+                  {
+                    "name": "Test",
+                    "run": "cargo test"
+                  }
+                ]
+              },
+              "expression": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "name": "Test",
+                    "env": {
+                      "RUSTFLAGS": "${{ env.EXTRA_FLAGS }}"
+                    },
+                    "run": "cargo test"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null,
+          "decode_category": null
+        }
+      ]
+    },
+    "workflow_setup_rust": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "workflow-setup-rust",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "on": "pull_request",
+            "jobs": {
+              "default-input": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "leynos/shared-actions/.github/actions/setup-rust@0123456789abcdef0123456789abcdef01234567"
+                  },
+                  {
+                    "name": "Test",
+                    "run": "cargo nextest run --workspace"
+                  }
+                ]
+              },
+              "empty-input": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "leynos/shared-actions/.github/actions/setup-rust@0123456789abcdef0123456789abcdef01234567",
+                    "with": {
+                      "rustflags": ""
+                    }
+                  },
+                  {
+                    "name": "Test",
+                    "run": "cargo nextest run --workspace"
+                  }
+                ]
+              },
+              "fast-input": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "leynos/shared-actions/.github/actions/setup-rust@0123456789abcdef0123456789abcdef01234567",
+                    "with": {
+                      "rustflags": "-D warnings -Zthreads=8 -C link-arg=-fuse-ld=mold"
+                    }
+                  },
+                  {
+                    "name": "Test",
+                    "run": "cargo nextest run --workspace"
+                  }
+                ]
+              },
+              "through-make": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "uses": "leynos/shared-actions/.github/actions/setup-rust@0123456789abcdef0123456789abcdef01234567"
+                  },
+                  {
+                    "name": "Test",
+                    "run": "make test"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null,
+          "decode_category": null
+        }
+      ]
+    },
+    "workflow_undecodable": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "workflow-undecodable",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [
+          {
+            "source": "profile.dev",
+            "scope": "profile",
+            "profile": "dev",
+            "backend": "cranelift"
+          }
+        ],
+        "unstable_codegen_backend": true,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": false,
+          "read_error": null,
+          "sections": []
+        }
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": null,
+          "error": "invalid YAML: while parsing a flow sequence\n  in \"<unicode string>\", line 1, column 5:\n    on: [push\n        ^ (line: 1)\nexpected ',' or ']', but got ':'\n  in \"<unicode string>\", line 2, column 5:\n    jobs:\n        ^ (line: 2)",
+          "decode_category": "invalid YAML"
         }
       ]
     }

@@ -41,8 +41,10 @@ from .envelope import (
     PolicyEnvelope,
     build_build_defaults_envelope,
     build_envelope,
+    log_undecodable_workflow,
 )
 from .fs_probe import probe_file
+from .makefile_observed import inspect_makefile_observed
 from .markdown_envelope import (
     DEFAULT_MARKDOWNLINT_ACTION,
     MarkdownEnvelope,
@@ -277,7 +279,29 @@ def _makefile_envelope(
     PolicyEnvelope
         The `policy-input/rust-makefile-baseline` document for *checkout*.
     """
-    return build_envelope(checkout)
+    return build_envelope(checkout, inspect=inspect_makefile_observed)
+
+
+def _build_defaults_envelope(
+    checkout: pathlib.Path,
+    parameters: cabc.Mapping[str, object] | None = None,
+) -> BuildDefaultsEnvelope:
+    """Build the build-defaults envelope with observation wired in.
+
+    The builder is a pure query; this is the command boundary that injects the
+    timed `makeutil` run and the undecodable-workflow log.
+
+    Returns
+    -------
+    BuildDefaultsEnvelope
+        The `policy-input/rust-build-defaults` document for *checkout*.
+    """
+    return build_build_defaults_envelope(
+        checkout,
+        parameters,
+        inspect=inspect_makefile_observed,
+        report_undecodable=log_undecodable_workflow,
+    )
 
 
 def _markdown_envelope(
@@ -296,7 +320,7 @@ def _markdown_envelope(
         The `policy-input/markdown-formatting-baseline` document for
         *checkout*.
     """
-    return build_markdown_envelope(checkout)
+    return build_markdown_envelope(checkout, inspect=inspect_makefile_observed)
 
 
 def _coverage_envelope(
@@ -356,7 +380,9 @@ def _spelling_envelope(
         if isinstance(declared, list)
         else DEFAULT_VENDORED_PATTERNS
     )
-    return build_spelling_envelope(checkout, patterns)
+    return build_spelling_envelope(
+        checkout, patterns, inspect=inspect_makefile_observed
+    )
 
 
 def _provisioning_envelope(
@@ -388,7 +414,7 @@ def _provisioning_envelope(
 # a caller may reach in and change.
 PACKAGE_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     "rust-makefile-baseline": _makefile_envelope,
-    "rust-build-defaults": build_build_defaults_envelope,
+    "rust-build-defaults": _build_defaults_envelope,
     "main-owned-codescene-coverage": _coverage_envelope,
     "dependabot-update-shape": _dependabot_envelope,
     "spelling-config-baseline": _spelling_envelope,
@@ -400,7 +426,7 @@ PACKAGE_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
 # `rule.yaml` rather than needing an edit here.
 INPUT_KIND_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     ENVELOPE_KIND: _makefile_envelope,
-    BUILD_DEFAULTS_ENVELOPE_KIND: build_build_defaults_envelope,
+    BUILD_DEFAULTS_ENVELOPE_KIND: _build_defaults_envelope,
     MARKDOWN_ENVELOPE_KIND: _markdown_envelope,
     COVERAGE_ENVELOPE_KIND: _coverage_envelope,
     DEPENDABOT_ENVELOPE_KIND: _dependabot_envelope,

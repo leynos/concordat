@@ -493,8 +493,9 @@ The `rust-build-defaults` package audits the estate's build standard:
 concordat artefact rule run rust-build-defaults --repo /path/to/checkout
 ```
 
-It reads the files Cargo and rustup auto-discover, so it needs `conftest` on
-`PATH` but not `makeutil`. Four clauses:
+It reads the files Cargo and rustup auto-discover, and the Makefile and
+workflows whose builds replace them, so it needs `conftest` and `makeutil` on
+`PATH`. Four clauses read the configuration:
 
 - the parallel `rustc` frontend is carried by every `rustflags` source, where
   `rust-toolchain.toml` pins a nightly channel;
@@ -534,6 +535,62 @@ Both the document list and the heading keyword are rule parameters, so a
 repository that records the exception elsewhere can be accommodated without
 changing the policy. So are the two flags, the backend name, and the platform
 list that makes the linker clause applicable.
+
+Three more clauses read the builds that replace those defaults:
+
+- **BD-007** — where Cranelift is the development default, every
+  `cargo llvm-cov` run, in a Makefile recipe or a workflow step, selects LLVM,
+  because coverage instrumentation is LLVM-only. So does a build without
+  `--release` in a release- or tag-triggered workflow. Prefix the command with
+  `CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm`, export it, or pass `--profile` for
+  a profile that selects `llvm`. Where the test profile also selects Cranelift,
+  set `CARGO_PROFILE_TEST_CODEGEN_BACKEND=llvm` too, because the dev-profile
+  override leaves tests on Cranelift and coverage instrumentation then fails. A
+  shared-actions `generate-coverage` step needs nothing: it selects LLVM itself.
+- **BD-008** — a Makefile recipe reachable from `lint`, `test`, `typecheck` or
+  `build` that assigns `RUSTFLAGS` restates `-Zthreads=8` (on a nightly
+  toolchain only) and the `mold` linker flag (where the build targets Linux).
+  An assigned `RUSTFLAGS` replaces every `rustflags` source, so
+  `RUSTFLAGS="-D warnings"` alone turns the standard off for that gate.
+  netsuke's `GATE_RUSTFLAGS` is the reference shape.
+- **BD-009** — a workflow step that runs `cargo build`, `check`, `clippy`,
+  `doc`, `nextest` or `test` directly with `RUSTFLAGS` set carries the same
+  flags: `-Zthreads=8` unless the step runs a non-nightly toolchain, and the
+  `mold` linker flag only when the job runs on a literal Linux runner
+  (`ubuntu-*`, `ubicloud-*` or a `linux` label). shared-actions `setup-rust`
+  sets it to `-D warnings` by default for every later step; pass
+  `rustflags: ''` to leave the configuration in charge, or a value carrying the
+  fast flags.
+
+A Makefile `makeutil` cannot fully parse makes BD-007 and BD-008
+`indeterminate` rather than passed; the other clauses still report.
+
+A workflow file that does not decode (invalid YAML, not UTF-8 text, or not a
+mapping) is reported as `indeterminate` under BD-009, naming the file and that
+category; the file is never skipped silently.
+
+Upgrading to rule 0.2.0: a repository that passed 0.1.1 can now fail or report
+`indeterminate`, because BD-007 to BD-009 read the Makefile and the workflows,
+which 0.1.1 never opened.
+
+- Install the pinned `makeutil` on `PATH` beside `conftest`; the command now
+  needs it for any checkout that has a root `Makefile`, even one whose
+  configuration alone would have passed.
+- Where Cranelift is the development default, add the LLVM selection to every
+  `cargo llvm-cov` recipe or step and every non-`--release` build in a release-
+  or tag-triggered workflow (BD-007), and the test-profile override where the
+  test profile also selects Cranelift.
+- Restate `-Zthreads=8` (nightly toolchains only) and the `mold` linker flag
+  (Linux builds only; a literal Linux runner for BD-009) in every gate recipe
+  that assigns `RUSTFLAGS`, or in the workflow step that sets it, or let the
+  Cargo configuration decide by leaving `RUSTFLAGS` unassigned (BD-008 and
+  BD-009). For a shared-actions `setup-rust` step, pass `rustflags: ''` or a
+  value that carries the flags.
+- A Makefile `makeutil` refuses, or a gate that delegates through `-C`, `-f` or
+  a computed target, is `indeterminate`, not compliant. Write the delegation
+  literally, as `$(MAKE) target`, to have it followed.
+- Clauses BD-001 to BD-006 read the same files as before, so their verdicts do
+  not change.
 
 ### Auditing the spelling gate
 

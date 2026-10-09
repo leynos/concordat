@@ -1,0 +1,11 @@
+on: pull_request
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: leynos/shared-actions/.github/actions/generate-coverage@0123456789abcdef0123456789abcdef01234567
+        env:
+          RUSTFLAGS: ""
+        with:
+          output-path: lcov.info
+          format: lcov

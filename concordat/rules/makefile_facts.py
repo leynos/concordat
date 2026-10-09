@@ -15,6 +15,7 @@ import typing as typ
 from concordat.errors import OperationalRuleError
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import pathlib
 
 SCHEMA_VERSION: typ.Final = 1
@@ -25,6 +26,10 @@ TOOL_MAKEUTIL: typ.Final = "makeutil"
 
 # `makeutil parse` contract: exit 0 is a complete parse, 1 a recovered one.
 EXPECTED_STATUS_FOR_EXIT_CODE: typ.Final = {0: "complete", 1: "recovered"}
+
+# `makeutil` exits 2 when it refuses a Makefile outright, as opposed to
+# failing to run or emitting an unusable report.
+EXIT_CODE_REFUSED: typ.Final = 2
 
 ERROR_MAKEUTIL_MISSING = (
     "makeutil is required but was not found on PATH; install the pinned "
@@ -122,6 +127,20 @@ class MakefileFacts:
     status: str
 
 
+type MakefileInspector = cabc.Callable[[pathlib.Path], MakefileFacts]
+"""Reads one Makefile's facts. The default is the pure `inspect_makefile`;
+the command boundary may inject an observing wrapper."""
+
+
+class MakefileRefusedError(OperationalRuleError):
+    """`makeutil` declined to parse a Makefile.
+
+    Distinct from every other `makeutil` failure so that a caller may treat
+    the refusal as a fact about the checkout while launch, timeout, report
+    and schema failures still stop the run.
+    """
+
+
 def _makeutil_error(message: str, path: pathlib.Path) -> OperationalRuleError:
     """Build a `makeutil`-parse operational error carrying the Makefile path."""
     return OperationalRuleError(
@@ -178,6 +197,13 @@ def _validate_exit_code(
     if completed.returncode not in EXPECTED_STATUS_FOR_EXIT_CODE:
         detail = (completed.stderr or "").strip() or "no diagnostic output"
         message = f"makeutil failed on {path}: {detail}"
+        if completed.returncode == EXIT_CODE_REFUSED:
+            raise MakefileRefusedError(
+                message,
+                operation=OPERATION_PARSE_MAKEFILE,
+                tool=TOOL_MAKEUTIL,
+                resource=path,
+            )
         raise _makeutil_error(message, path)
 
 

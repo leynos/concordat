@@ -19,12 +19,18 @@ from concordat.errors import OperationalRuleError
 from concordat.rules import packages
 from concordat.rules.envelope import (
     BUILD_DEFAULTS_ENVELOPE_KIND,
+    _decode_category,
     build_build_defaults_envelope,
 )
+from concordat.rules.makefile_facts import MakefileFacts, MakefileRefusedError
+from tests.unit.rule_test_support import MINIMAL_REPORT
 
 if typ.TYPE_CHECKING:
     import os
     import types
+
+    from concordat.rules.envelope import BuildDefaultsEnvelope
+    from concordat.rules.makefile_facts import MakeutilReport
 
 RULE_DIR: typ.Final = (
     pathlib.Path(__file__).resolve().parents[2]
@@ -56,6 +62,13 @@ def _load_generator() -> types.ModuleType:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _write_manifest(checkout: pathlib.Path) -> None:
+    """Write a minimal root `Cargo.toml` so the checkout is a Rust surface."""
+    (checkout / "Cargo.toml").write_text(
+        '[package]\nname = "x"\nversion = "0.1.0"\n', encoding="utf-8"
+    )
 
 
 class TestEnvelopeContents:
@@ -144,22 +157,120 @@ class TestEnvelopeContents:
             "the declared keyword must be the one matched"
         )
 
-    def test_no_makefile_facts_are_carried(self, tmp_path: pathlib.Path) -> None:
-        """The clauses read files Cargo discovers, so a Makefile is irrelevant.
+    def test_no_makefile_and_no_workflows_are_absences(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A checkout with neither carries empty facts, not errors."""
+        _write_manifest(tmp_path)
+        envelope = build_build_defaults_envelope(tmp_path)
+        assert envelope["makefile"] is None, "no Makefile was written"
+        assert envelope["makefile_error"] is None, "nothing was refused"
+        assert envelope["workflows"] == [], "no workflow was written"
 
-        Deliberate rather than incidental: reading it would make the rule
-        unrunnable against any checkout the pinned Makefile parser rejects,
-        and would add no fact this policy decides anything from.
-        """
-        (tmp_path / "Cargo.toml").write_text(
-            '[package]\nname = "x"\nversion = "0.1.0"\n', encoding="utf-8"
-        )
+
+class TestBuildPathFacts:
+    """The Makefile and workflows BD-007 to BD-009 read.
+
+    An assigned `RUSTFLAGS` replaces what Cargo auto-discovers, and a coverage
+    build cannot use a Cranelift default, so the envelope carries the files
+    that make those builds as well as the ones Cargo reads.
+    """
+
+    def test_the_makefile_report_is_carried(self, tmp_path: pathlib.Path) -> None:
+        """The pinned `makeutil` report is the Makefile fact, unaltered."""
+        _write_manifest(tmp_path)
         (tmp_path / "Makefile").write_text(
-            "export NOT_AN_ASSIGNMENT\n", encoding="utf-8"
+            "coverage:\n\tcargo llvm-cov --lcov\n", encoding="utf-8"
         )
         envelope = build_build_defaults_envelope(tmp_path)
-        assert "makefile" not in envelope, (
-            "the build-defaults envelope carries no Makefile facts"
+        report = envelope["makefile"]
+        assert report is not None, "the Makefile must be parsed"
+        assert [rule["targets"] for rule in report["rules"]] == [["coverage"]], report[
+            "rules"
+        ]
+        assert envelope["makefile_error"] is None, "makeutil accepted the file"
+
+    def test_a_refused_makefile_is_carried_as_its_reason(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A refusal decides only the clauses that read the Makefile.
+
+        BD-001 to BD-006 never read it, so raising would make them unrunnable
+        against a checkout whose Makefile `makeutil` cannot parse.
+        """
+        _write_manifest(tmp_path)
+        (tmp_path / "Makefile").write_text("all:\n", encoding="utf-8")
+
+        def refuse(path: pathlib.Path) -> typ.NoReturn:
+            message = f"makeutil exited with status 2 for {path.name}"
+            raise MakefileRefusedError(
+                message, operation="parse-makefile", resource=path
+            )
+
+        envelope = build_build_defaults_envelope(tmp_path, inspect=refuse)
+        assert envelope["makefile"] is None, "a refused Makefile has no report"
+        assert envelope["makefile_error"] == (
+            "makeutil exited with status 2 for Makefile"
+        ), envelope["makefile_error"]
+        assert envelope["kind"] == BUILD_DEFAULTS_ENVELOPE_KIND, (
+            "the rest of the envelope is still built"
+        )
+
+    def test_a_makeutil_failure_that_is_not_a_refusal_still_raises(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A missing or timed-out `makeutil` is not a fact about the checkout.
+
+        Only an explicit refusal is carried as a reason; anything else would
+        turn a broken toolchain into a quiet `indeterminate` verdict.
+        """
+        _write_manifest(tmp_path)
+        (tmp_path / "Makefile").write_text("all:\n", encoding="utf-8")
+
+        def fail(path: pathlib.Path) -> typ.NoReturn:
+            message = f"makeutil timed out after 30s on {path}"
+            raise OperationalRuleError(
+                message, operation="parse-makefile", resource=path
+            )
+
+        with pytest.raises(OperationalRuleError, match="timed out"):
+            build_build_defaults_envelope(tmp_path, inspect=fail)
+
+    def test_a_makefile_linked_outside_the_checkout_is_refused(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """A link could carry another tree's Makefile into the audit."""
+        outside = tmp_path / "outside" / "Makefile"
+        outside.parent.mkdir()
+        outside.write_text("all:\n", encoding="utf-8")
+        checkout = tmp_path / "checkout"
+        checkout.mkdir()
+        _write_manifest(checkout)
+        (checkout / "Makefile").symlink_to(outside)
+        with pytest.raises(OperationalRuleError, match="outside the checkout"):
+            build_build_defaults_envelope(checkout)
+
+    def test_workflows_are_carried_decoded(self, tmp_path: pathlib.Path) -> None:
+        """Each workflow is decoded YAML, or its error, never raw text."""
+        _write_manifest(tmp_path)
+        workflows = tmp_path / ".github" / "workflows"
+        workflows.mkdir(parents=True)
+        (workflows / "ci.yml").write_text(
+            "on: pull_request\njobs:\n  test:\n    runs-on: ubuntu-latest\n",
+            encoding="utf-8",
+        )
+        (workflows / "broken.yml").write_text("jobs: [\n", encoding="utf-8")
+        facts = {
+            workflow["path"]: workflow
+            for workflow in build_build_defaults_envelope(tmp_path)["workflows"]
+        }
+        ci = facts[".github/workflows/ci.yml"]
+        assert ci["error"] is None, ci
+        assert isinstance(ci["parsed"], dict), ci
+        parsed = typ.cast("dict[str, object]", ci["parsed"])
+        assert parsed["on"] == "pull_request", "YAML 1.2 keeps `on` a string"
+        assert facts[".github/workflows/broken.yml"]["error"] is not None, (
+            "an undecodable workflow keeps its reason"
         )
 
 
@@ -225,7 +336,8 @@ def generated() -> dict[str, dict[str, object]]:
         The envelopes the generator produces from the checked-in fixtures.
     """
     generator = _load_generator()
-    return generator.build_envelopes() | generator.synthetic_envelopes()
+    built = generator.build_envelopes()
+    return built | generator.synthetic_envelopes(built)
 
 
 class TestCheckedInFixtures:
@@ -256,3 +368,97 @@ class TestCheckedInFixtures:
         assert _comparable(on_disk) == _comparable(generated), (
             "the per-fixture files and the bundle must be regenerated together"
         )
+
+
+@pytest.mark.parametrize(
+    ("error", "category"),
+    [
+        pytest.param(None, None, id="decoded"),
+        pytest.param(
+            "invalid YAML: mapping values are not allowed", "invalid YAML", id="yaml"
+        ),
+        pytest.param("not UTF-8 text: 'utf-8' codec", "not UTF-8 text", id="encoding"),
+        pytest.param(
+            "workflow document is not a mapping", "not a mapping", id="scalar"
+        ),
+        pytest.param("something new", "unreadable", id="unknown"),
+    ],
+)
+def test_a_decode_error_becomes_a_fixed_category(
+    error: str | None, category: str | None
+) -> None:
+    """The policy sees a fixed word, whatever the shared reader's text says."""
+    assert _decode_category(error) == category, (error, category)
+
+
+def test_an_undecodable_workflow_is_logged_with_its_category(
+    tmp_path: pathlib.Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The audit leaves a trace of a workflow it could not read."""
+    _write_manifest(tmp_path)
+    directory = tmp_path / ".github" / "workflows"
+    directory.mkdir(parents=True)
+    (directory / "ci.yml").write_text("on: [push\n", encoding="utf-8")
+    with caplog.at_level("WARNING", logger="concordat.rules.envelope"):
+        envelope = typ.cast(
+            "BuildDefaultsEnvelope",
+            packages.PACKAGE_ENVELOPE_BUILDERS["rust-build-defaults"](tmp_path),
+        )
+    assert envelope["workflows"][0]["decode_category"] == "invalid YAML", envelope
+    logged = [vars(record) for record in caplog.records]
+    assert [(r["path"], r["category"]) for r in logged] == [
+        (".github/workflows/ci.yml", "invalid YAML")
+    ], logged
+
+
+def test_the_builder_alone_reports_and_logs_nothing_unless_a_reporter_is_injected(
+    tmp_path: pathlib.Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The envelope's fact gathering is pure; reporting goes where it is told."""
+    _write_manifest(tmp_path)
+    directory = tmp_path / ".github" / "workflows"
+    directory.mkdir(parents=True)
+    (directory / "ci.yml").write_text("on: [push\n", encoding="utf-8")
+    (directory / "ok.yml").write_text("on: push\njobs: {}\n", encoding="utf-8")
+    with caplog.at_level("DEBUG"):
+        build_build_defaults_envelope(tmp_path)
+    assert not caplog.records, caplog.records
+    reported: list[tuple[str, str]] = []
+    build_build_defaults_envelope(
+        tmp_path, report_undecodable=lambda *pair: reported.append(pair)
+    )
+    assert reported == [(".github/workflows/ci.yml", "invalid YAML")], reported
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "rust-makefile-baseline",
+        "rust-build-defaults",
+        "spelling-config-baseline",
+        "markdown-formatting-baseline",
+    ],
+)
+def test_the_command_boundary_hands_every_builder_the_observed_inspector(
+    key: str, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Builders stay pure queries; `packages` is where observation is wired in."""
+    _write_manifest(tmp_path)
+    (tmp_path / "Makefile").write_text("all:\n", encoding="utf-8")
+    seen: list[pathlib.Path] = []
+
+    def observed(path: pathlib.Path) -> MakefileFacts:
+        seen.append(path)
+        return MakefileFacts(
+            report=typ.cast("MakeutilReport", MINIMAL_REPORT), status="complete"
+        )
+
+    monkeypatch.setattr(packages, "inspect_makefile_observed", observed)
+    builder = {
+        **packages.PACKAGE_ENVELOPE_BUILDERS,
+        "markdown-formatting-baseline": packages.INPUT_KIND_ENVELOPE_BUILDERS[
+            packages.MARKDOWN_ENVELOPE_KIND
+        ],
+    }[key]
+    builder(tmp_path)
+    assert seen == [tmp_path / "Makefile"], seen

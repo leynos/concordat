@@ -774,10 +774,11 @@ unregistered package to `build_envelope`, on the reasoning that existing
 packages should be left untouched. That is a fail-open default inside a
 fail-closed audit: a package whose policy expects one envelope, handed another,
 does not degrade — it answers confidently about a document it was never written
-for. `rust-build-defaults` reads no Makefile at all, so a registration mistake
-would have turned into an `EN-001` finding about the wrong input rather than a
-failure to audit. Refusing costs one line in a mapping or one line in a
-manifest; the alternative costs a verdict nobody can trust.
+for. `rust-build-defaults` expects a different document from
+`rust-makefile-baseline`, so a registration mistake would have turned into an
+`EN-001` finding about the wrong input rather than a failure to audit. Refusing
+costs one line in a mapping or one line in a manifest; the alternative costs a
+verdict nobody can trust.
 
 `main-owned-codescene-coverage` takes its own too.
 `build_codescene_coverage_envelope` (in `codescene_coverage_envelope.py`)
@@ -818,7 +819,7 @@ the rule at once.
 
 `rust-build-defaults` is the first package to take its own. Its envelope
 (`build_build_defaults_envelope`) carries the facts Cargo and rustup
-auto-discover and no Makefile facts at all:
+auto-discover, and the Makefile and workflows whose builds replace them:
 
 - `cargo_config` — the `rustflags` sources Cargo would consult, each with its
   normalized flags and whether it applies on Linux, only on Linux, or could not
@@ -831,13 +832,77 @@ auto-discover and no Makefile facts at all:
 - `exceptions` — one scan per document declared by the rule's
   `exception_documents` parameter, listing the sections whose heading names the
   backend and the channel spellings each section's body contains.
+- `makefile` — the root Makefile's `makeutil` report, read through
+  `markdown_envelope`'s containment guard, or `None` when there is none.
+- `makefile_error` — why `makeutil` refused the Makefile, or `None`. A refusal
+  is carried rather than raised, because only BD-007 and BD-008 read the
+  Makefile; raising would make BD-001 to BD-006 unrunnable against that
+  checkout too. A Makefile that resolves outside the checkout still raises.
+- `workflows` — every `.github/workflows` file decoded as YAML 1.2, or its
+  decoding error, from `markdown_envelope`'s public `load_workflows`. Each fact
+  also carries `decode_category`, a fixed word for why it did not decode
+  (`invalid YAML`, `not UTF-8 text`, `not a mapping` or `unreadable`), set by
+  the envelope builder so the policy never depends on the reader's wording.
 
-The reason it carries no Makefile facts is worth stating, because it looks like
-an omission: the standard is a default precisely because Cargo auto-discovers
-`.cargo/config.toml`, so a repository whose flags live behind an opt-in Make
-target has no such file and fails on that alone. Reading the Makefile would add
-no fact the policy decides anything from, and would make the rule unrunnable
-against any checkout the pinned `makeutil` cannot parse.
+BD-001 to BD-006 read only the first three. The standard is a default because
+Cargo auto-discovers `.cargo/config.toml`, so a repository whose flags live
+behind an opt-in Make target has no such file and fails on that alone. BD-007
+to BD-009 read the rest, because an assigned `RUSTFLAGS` replaces that default
+and a coverage build cannot use a Cranelift one. ADR-003 records the change.
+
+### The shared checkout readers in `markdown_envelope`
+
+The Markdown, spelling and build-defaults envelope builders read the same files
+through one guarded set of functions in `concordat/rules/markdown_envelope.py`.
+Import them by name; they are public because three builders share them, and a
+private-name import across modules is the pattern concordat#264 removes.
+
+- `resolved_root(checkout)` returns the checkout with every symbolic link in
+  its own path resolved. It raises `OperationalRuleError` (operation
+  `resolve-checkout`) if the path cannot be resolved. Resolve once, then pass
+  the result to the other functions.
+- `within_checkout(root, path, operation)` returns whether *path* exists and
+  resolves inside *root*. A missing path returns `False`; a path that resolves
+  outside the checkout raises `OperationalRuleError` naming *operation*. Every
+  policy input is read through it, because the readers follow symbolic links
+  and a checkout could otherwise carry another file's contents into an audit
+  that may be published.
+- `is_file(path, operation)` returns whether *path* is a regular file. Absence
+  is `False`; a probe that cannot answer (a permission error, say) raises,
+  because reading that as absence would report a broken checkout as compliant.
+- `load_workflows(checkout, root)` returns one fact per file under
+  `.github/workflows`, sorted by name, each decoded as YAML 1.2 or carrying its
+  decoding error. It returns an empty list when there is no workflows
+  directory, and raises `OperationalRuleError` if the directory or a file
+  resolves outside the checkout or the directory cannot be listed.
+
+### Observing `makeutil` runs and undecodable workflows
+
+The envelope builders are pure queries. `inspect_makefile` reads no clock and
+writes no log, and `_build_workflows` only reads and tags workflow facts. Each
+builder (`build_envelope`, `build_markdown_envelope`, `build_spelling_envelope`
+and `build_build_defaults_envelope`) takes a keyword `inspect` of type
+`MakefileInspector`, defaulting to the pure `inspect_makefile`.
+`build_build_defaults_envelope` also takes
+`report_undecodable(path, category)`, which defaults to `None` and so reports
+nothing.
+
+Observation is wired in at the command boundary, `rules/packages.py`, which
+passes `makefile_observed.inspect_makefile_observed` as `inspect` and
+`envelope.log_undecodable_workflow` as `report_undecodable`.
+`inspect_makefile_observed` times the query with an injected `clock` and passes
+one `MakefileParseEvent` (operation, tool, outcome, elapsed seconds) to an
+injected `emit`; the default emitter writes a debug log record. The outcome is
+a fixed word (`complete`, `recovered`, `refused`, `timeout`, `launch-failure` or
+`error`), never the tool's output, which can quote Makefile content.
+
+`MakefileRefusedError` (an `OperationalRuleError`) is raised for `makeutil`
+exit status 2. `build_build_defaults_envelope` carries it as `makefile_error`
+rather than raising; every other `makeutil` failure still raises (ADR-003).
+
+Tests call a builder directly to prove it is pure, pass a stub `inspect` or a
+list's `append` as `report_undecodable` to observe it, and use a fake clock with
+`inspect_makefile_observed`.
 
 ### Absence is not a read failure
 
@@ -1165,6 +1230,11 @@ so a dropped result cannot pass as a clean one. The helper is private to the
 runner and is for tests that judge many envelopes against one rule; production
 callers evaluate one checkout and use `_invoke_conftest`. Keep one
 single-envelope test on that path as a smoke test.
+
+The BD-008 properties and the BD-009 setup-ordering property
+(`test_build_defaults_workflow_properties.py`) go through the public
+`runner.run_rule` one example at a time, with a small `max_examples`, because
+each example needs a real envelope and one Conftest run.
 
 ### The bounded Rego reachability test
 
