@@ -550,19 +550,22 @@ def _without_key(manifest: pathlib.Path, key: str) -> None:
     manifest.write_text(stripped, "utf-8")
 
 
+REQUIRED_KEYS: typ.Final = {
+    "list": ("install_whitaker_roots", "action_directory"),
+    "check": (
+        "install_whitaker_roots",
+        "action_directory",
+        "compliant_install_whitaker_refs",
+    ),
+    "sync": ("install_whitaker_roots", "action_directory"),
+}
+
+
 @pytest.mark.parametrize(
-    ("command", "key"),
+    "case",
     [
-        pytest.param(command, key, id=f"{command}-without-{key}")
-        for command, keys in {
-            "list": ("install_whitaker_roots", "action_directory"),
-            "check": (
-                "install_whitaker_roots",
-                "action_directory",
-                "compliant_install_whitaker_refs",
-            ),
-            "sync": ("install_whitaker_roots", "action_directory"),
-        }.items()
+        pytest.param((command, key), id=f"{command}-without-{key}")
+        for command, keys in REQUIRED_KEYS.items()
         for key in keys
     ],
 )
@@ -570,14 +573,14 @@ def test_a_manifest_missing_a_required_parameter_exits_2_naming_it(
     rule_package: tuple[pathlib.Path, str, str],
     cli: cabc.Callable[[str], int],
     capsys: pytest.CaptureFixture[str],
-    command: str,
-    key: str,
+    case: tuple[str, str],
 ) -> None:
     """Each command refuses a manifest without a parameter it indexes.
 
     The diagnostic names the parameter and the manifest, and the command exits
     2 rather than raising a bare `KeyError`.
     """
+    command, key = case
     manifest = rule_package[0] / "rule.yaml"
     _without_key(manifest, key)
 

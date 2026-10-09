@@ -33,48 +33,57 @@ ROOTS_KEY: typ.Final = "install_whitaker_roots"
 app = App(help=__doc__)
 
 
-def _string_value(parameters: dict[str, object], key: str, manifest: Path) -> str:
-    """Return a required string parameter of the rule manifest.
+def _has_shape(value: object, kind: type) -> bool:
+    """Report whether *value* is a non-empty string, or a list of strings."""
+    if kind is list:
+        return isinstance(value, list) and all(isinstance(item, str) for item in value)
+    return isinstance(value, str) and bool(value)
+
+
+def _parameter(
+    parameters: dict[str, object],
+    key: str,
+    manifest: Path,
+    expected: tuple[type, str],
+) -> object:
+    """Return a required parameter of the rule manifest.
+
+    *expected* is the parameter's type and the phrase that names it in the
+    diagnostic. A list must hold only strings, and a string must not be empty.
 
     Returns
     -------
-    str
-        The parameter's value.
+    object
+        The parameter's value, of the expected type.
 
     Raises
     ------
     OperationalRuleError
-        When the parameter is missing or is not a non-empty string.
+        When the parameter is missing or is not of the expected shape.
     """
+    kind, phrase = expected
     value = parameters.get(key)
-    if not isinstance(value, str) or not value:
-        message = f"the rule manifest {manifest} needs {key} to be a non-empty string"
+    if not _has_shape(value, kind):
+        message = f"the rule manifest {manifest} needs {key} to be {phrase}"
         raise OperationalRuleError(
             message, operation="derive-whitaker-revisions", resource=manifest
         )
     return value
 
 
+def _string_value(parameters: dict[str, object], key: str, manifest: Path) -> str:
+    """Return a required non-empty string parameter."""
+    return typ.cast(
+        "str", _parameter(parameters, key, manifest, (str, "a non-empty string"))
+    )
+
+
 def _string_list(parameters: dict[str, object], key: str, manifest: Path) -> list[str]:
-    """Return a required list-of-strings parameter of the rule manifest.
-
-    Returns
-    -------
-    list[str]
-        The parameter's items; empty when the parameter is an empty list.
-
-    Raises
-    ------
-    OperationalRuleError
-        When the parameter is missing or is not a list of strings.
-    """
-    value = parameters.get(key)
-    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
-        message = f"the rule manifest {manifest} needs {key} to be a list of strings"
-        raise OperationalRuleError(
-            message, operation="derive-whitaker-revisions", resource=manifest
-        )
-    return typ.cast("list[str]", value)
+    """Return a required list-of-strings parameter."""
+    return typ.cast(
+        "list[str]",
+        _parameter(parameters, key, manifest, (list, "a list of strings")),
+    )
 
 
 def _derive(clone: Path, tip: str) -> tuple[list[str], Path]:
