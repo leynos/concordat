@@ -159,7 +159,8 @@ def compliant_revisions(
     ------
     OperationalRuleError
         When the clone is shallow, a root or *tip* cannot be resolved in it,
-        or Git cannot read an object while walking the history.
+        an approved root is not on the first-parent history of *tip*, or Git
+        cannot read an object while walking the history.
     """
     if repository.is_shallow:
         message = "the shared-actions clone is shallow; run git fetch --unshallow"
@@ -173,12 +174,19 @@ def compliant_revisions(
         ) from error
     tip_id = _resolve_tip(repository, tip)
     try:
-        return _walk_first_parent(repository, tip_id, directory, trees)
+        found = _walk_first_parent(repository, tip_id, directory, trees)
     except (pygit2.GitError, KeyError, ValueError) as error:
         message = f"cannot read the shared-actions history: {error}"
         raise OperationalRuleError(
             message, operation=OPERATION_DERIVE_REVISIONS
         ) from error
+    absent = [root for root in roots if root not in found]
+    if absent:
+        message = (
+            f"approved root {absent[0]} is not on the first-parent history of {tip}"
+        )
+        raise OperationalRuleError(message, operation=OPERATION_DERIVE_REVISIONS)
+    return found
 
 
 def _walk_first_parent(

@@ -216,6 +216,18 @@ def test_a_root_without_the_action_directory_is_an_operational_error(
         compliant_revisions(history.repository, [root], DIRECTORY, "main")
 
 
+def test_a_root_off_the_first_parent_line_is_an_operational_error(
+    history: History,
+) -> None:
+    """A root the walk never reaches would silently vanish from the list."""
+    base = history.commit(_files(ACTION_V1), "base")
+    side = history.branch(_files(ACTION_V1, "side"), "side branch", base)
+    history.commit(_files(ACTION_V1, "b"), "next on main")
+
+    with pytest.raises(OperationalRuleError, match="first-parent history"):
+        compliant_revisions(history.repository, [side], DIRECTORY, "main")
+
+
 def test_a_shallow_clone_is_an_operational_error(
     history: History, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -494,40 +506,96 @@ def test_sync_reports_a_manifest_that_is_not_utf8_as_a_controlled_error(
     assert "cannot read rule manifest" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("command", ["list", "check", "sync"])
-def test_a_manifest_with_no_approved_roots_exits_2_for_every_command(
+@pytest.fixture
+def rootless_package(
     rule_package: tuple[pathlib.Path, str, str],
-    history: History,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-    command: str,
-) -> None:
-    """No approved root means nothing to derive from, so the commands refuse."""
-    package, _root, _later = rule_package
-    manifest = package / "rule.yaml"
+) -> tuple[pathlib.Path, str, str]:
+    """Return *rule_package* with its manifest declaring no approved roots."""
+    manifest = rule_package[0] / "rule.yaml"
     text = manifest.read_text("utf-8")
     emptied = re.sub(
         r'(install_whitaker_roots:)\n(?:      - "[0-9a-f]{40}"\n)+', r"\1 []\n", text
     )
     assert emptied != text
     manifest.write_text(emptied, "utf-8")
+    return rule_package
+
+
+@pytest.mark.parametrize("command", ["list", "check", "sync"])
+def test_a_manifest_with_no_approved_roots_exits_2_for_every_command(
+    rootless_package: tuple[pathlib.Path, str, str],
+    history: History,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    command: str,
+) -> None:
+    """No approved root means nothing to derive from, so the commands refuse."""
+    assert rootless_package
     clone = pathlib.Path(history.repository.workdir)
 
     assert _run_main(monkeypatch, clone, command) == 2
     assert "declares no install_whitaker_roots" in capsys.readouterr().err
 
 
+def test_check_accepts_a_reordered_manifest(
+    rule_package: tuple[pathlib.Path, str, str],
+    history: History,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`check` compares membership, so the same revisions in another order pass."""
+    package, root, later = rule_package
+    clone = pathlib.Path(history.repository.workdir)
+    manifest = package / "rule.yaml"
+    manifest.write_text(
+        replace_refs(manifest.read_text("utf-8"), [later, root]), "utf-8"
+    )
+    assert packages.rule_parameters(package)[REFS_KEY] == [later, root]
+
+    assert whitaker_revisions.check(clone, "main") == 0
+    assert capsys.readouterr().out == ""
+
+
+def test_the_commands_default_to_origin_main(
+    rule_package: tuple[pathlib.Path, str, str],
+    history: History,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Without `--tip`, `list` walks `origin/main`, not the local `main`."""
+    _package, root, _later = rule_package
+    history.repository.references.create("refs/remotes/origin/main", root)
+    clone = pathlib.Path(history.repository.workdir)
+    monkeypatch.setattr(sys, "argv", ["whitaker_revisions", "list", str(clone)])
+
+    assert whitaker_revisions.main() == 0
+    assert capsys.readouterr().out == f"{root}\n"
+
+
+def test_sync_reports_how_many_revisions_it_wrote(
+    rule_package: tuple[pathlib.Path, str, str],
+    history: History,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The count the snapshot redacts is asserted here against the live output."""
+    package, _root, _later = rule_package
+    clone = pathlib.Path(history.repository.workdir)
+
+    assert whitaker_revisions.sync(clone, "main") == 0
+    assert capsys.readouterr().out == f"{package / 'rule.yaml'}: 2 revisions\n"
+
+
 SNAPSHOTS: typ.Final = pathlib.Path(__file__).parent / "snapshots"
 
 
 def _redacted(text: str, *, root: str, later: str, manifest: pathlib.Path) -> str:
-    """Replace the run-specific ids and paths with stable placeholders."""
-    return (
+    """Replace the run-specific ids, paths and counts with stable placeholders."""
+    redacted = (
         text
         .replace(root, "<root>")
         .replace(later, "<later>")
         .replace(str(manifest), "<manifest>")
     )
+    return re.sub(r": \d+ revisions", ": <count> revisions", redacted)
 
 
 @pytest.fixture

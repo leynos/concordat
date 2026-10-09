@@ -1,1 +1,1 @@
-<manifest>: 2 revisions
+<manifest>: <count> revisions
