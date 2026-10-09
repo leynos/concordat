@@ -32,8 +32,10 @@ CI_WORKFLOW: typ.Final = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 USERS_GUIDE: typ.Final = REPO_ROOT / "docs" / "users-guide.md"
 
 # `mdtablefix --check` and `--git` first appear in 0.6.0; an older build
-# fails both recipes at once, so the floor is part of the wiring.
+# fails both recipes at once, so the floor is part of the wiring. CI pins 0.6.1,
+# which fixes the 0.6.0 bugs that changed Markdown content.
 MDTABLEFIX_FLOOR: typ.Final = "0.6.0"
+MDTABLEFIX_PIN: typ.Final = "0.6.1"
 MARKDOWNLINT_ACTION: typ.Final = "DavidAnson/markdownlint-cli2-action"
 # The v24.2.0 commit, as `git/commits/{sha}` answers for it. The annotated tag
 # object `4580e161…` peels to it; PD-006 refuses that object as a pin.
@@ -160,17 +162,17 @@ def test_the_lint_job_token_is_read_only(lint_test_job: dict[str, object]) -> No
     assert lint_test_job["permissions"] == {"contents": "read"}, lint_test_job
 
 
-def test_the_workflow_pins_the_mdtablefix_version_floor(
+def test_the_workflow_pins_the_mdtablefix_version(
     lint_test_job: dict[str, object],
 ) -> None:
-    """CI installs the first release carrying `--check` and `--git`.
+    """CI installs the pinned release, which is at or above the floor.
 
     The value is asserted, not the presence of the variable: an empty or
     absent version installs whatever the action defaults to, and the two
-    Markdown recipes fail against anything older.
+    Markdown recipes fail against anything older than the floor.
     """
     env = typ.cast("dict[str, object]", lint_test_job["env"])
-    assert env["MDTABLEFIX_VERSION"] == MDTABLEFIX_FLOOR, env
+    assert env["MDTABLEFIX_VERSION"] == MDTABLEFIX_PIN, env
 
 
 def test_the_installing_step_receives_that_version(
