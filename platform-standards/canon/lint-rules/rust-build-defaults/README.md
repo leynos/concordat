@@ -81,12 +81,12 @@ makes only those clauses indeterminate; the others still run. See
   in a workflow triggered by `release` or a tag push. A repository with no such
   path is not applicable.
 - **BD-008** (error): a Makefile gate recipe that assigns `RUSTFLAGS` restates
-  `-Zthreads=8` (on a nightly pin) and the `mold` linker flag. A gate recipe is
-  one in the static closure of `lint`, `test`, `typecheck` or `build` (the
-  `gate_targets` parameter). The assignment may be a prefix on the recipe, a
-  target-specific assignment, or a Makefile-wide one. Coverage recipes and
-  release-profile builds are BD-007's and exempt. A Makefile with no such
-  assignment is not applicable.
+  `-Zthreads=8` (on a nightly pin) and the `mold` linker flag (where the build
+  targets Linux). A gate recipe is one in the static closure of `lint`, `test`,
+  `typecheck` or `build` (the `gate_targets` parameter). The assignment may be
+  a prefix on the recipe, a target-specific assignment, or a Makefile-wide one.
+  Coverage recipes and release-profile builds are BD-007's and exempt. A
+  Makefile with no such assignment is not applicable.
 - **BD-009** (error): a workflow step that runs a cargo gate build directly
   (`build`, `check`, `clippy`, `doc`, `nextest` or `test`, the
   `gate_cargo_subcommands` parameter) with `RUSTFLAGS` set carries the same
