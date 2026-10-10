@@ -114,17 +114,6 @@ def run_main(
     return whitaker_revisions.main()
 
 
-def without_key(manifest: pathlib.Path, key: str) -> None:
-    """Remove a default parameter, with any list items, from the manifest."""
-    text = manifest.read_text("utf-8")
-    stripped = re.sub(
-        rf"^    {key}:.*\n(?:      - .*\n)*", "", text, flags=re.MULTILINE
-    )
-    if stripped == text:
-        pytest.fail(f"{key} is not a default parameter of the manifest")
-    manifest.write_text(stripped, "utf-8")
-
-
 def set_default(manifest: pathlib.Path, key: str, replacement: str) -> None:
     """Replace a default parameter, with any list items, by *replacement* lines."""
     text = manifest.read_text("utf-8")
@@ -137,3 +126,8 @@ def set_default(manifest: pathlib.Path, key: str, replacement: str) -> None:
     if changed == text:
         pytest.fail(f"{key} is not a default parameter of the manifest")
     manifest.write_text(changed, "utf-8")
+
+
+def without_key(manifest: pathlib.Path, key: str) -> None:
+    """Remove a default parameter, with any list items, from the manifest."""
+    set_default(manifest, key, "")
