@@ -34,6 +34,9 @@ from concordat.rules.markdown_envelope import (
 from concordat.rules.spelling_envelope import (
     ENVELOPE_KIND as SPELLING_ENVELOPE_KIND,
 )
+from concordat.rules.uv_gate_envelope import (
+    ENVELOPE_KIND as UV_GATE_ENVELOPE_KIND,
+)
 from concordat.rules.whitaker_provisioning_envelope import (
     ENVELOPE_KIND as PROVISIONING_ENVELOPE_KIND,
 )
@@ -117,6 +120,11 @@ class TestRegisteredPackages:
                 "spelling-config-baseline",
                 SPELLING_ENVELOPE_KIND,
                 id="spelling-config-baseline",
+            ),
+            pytest.param(
+                "uv-gate-baseline",
+                UV_GATE_ENVELOPE_KIND,
+                id="uv-gate-baseline",
             ),
             pytest.param(
                 "whitaker-provisioning",
@@ -348,6 +356,7 @@ class TestDeclaredInputKind:
             ("main-owned-codescene-coverage", COVERAGE_ENVELOPE_KIND),
             ("dependabot-update-shape", DEPENDABOT_ENVELOPE_KIND),
             ("spelling-config-baseline", SPELLING_ENVELOPE_KIND),
+            ("uv-gate-baseline", UV_GATE_ENVELOPE_KIND),
         ):
             rule_dir = packages.rule_package_dir(rule_id)
             declared = packages._declared_input_kind(rule_dir)

@@ -1,0 +1,173 @@
+{
+  "schema_version": 1,
+  "kind": "policy-input/uv-gate-baseline",
+  "repository": {
+    "path": ".",
+    "name": null
+  },
+  "applicability": {
+    "root_makefile": true,
+    "pyproject": true,
+    "uv_lock": true,
+    "gate_file": true
+  },
+  "makefile": {
+    "schema_version": 1,
+    "tool": {
+      "name": "makeutil",
+      "version": "0.1.0",
+      "parser": "makefile-lossless",
+      "parser_version": "0.3.40"
+    },
+    "source": {
+      "path": "Makefile",
+      "sha256": "102371e35ec3868420c5d9b4bb791d2782915116fb79552b143fd536dca2fac6",
+      "byte_length": 219
+    },
+    "parse": {
+      "status": "complete",
+      "diagnostics": []
+    },
+    "rules": [
+      {
+        "ordinal": 3,
+        "targets": [
+          "t0"
+        ],
+        "prerequisites": [],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "$(UV_GATE) tool --from '$(LINTS)' -- ambrleaks",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 171,
+              "end_byte": 219,
+              "start_line": 6,
+              "start_column": 1,
+              "end_line": 7,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 167,
+          "end_byte": 219,
+          "start_line": 5,
+          "start_column": 1,
+          "end_line": 7,
+          "end_column": 1
+        }
+      }
+    ],
+    "variables": [
+      {
+        "ordinal": 0,
+        "name": "UV_GATE",
+        "operator": "?=",
+        "raw_value": "python3 scripts/uv_gate.py",
+        "exported": false,
+        "overridden": false,
+        "define_block": false,
+        "conditions": [],
+        "location": {
+          "start_byte": 0,
+          "end_byte": 38,
+          "start_line": 1,
+          "start_column": 1,
+          "end_line": 2,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "LINTS_REF",
+        "operator": ":=",
+        "raw_value": "0123456789abcdef0123456789abcdef01234567",
+        "exported": false,
+        "overridden": false,
+        "define_block": false,
+        "conditions": [],
+        "location": {
+          "start_byte": 38,
+          "end_byte": 92,
+          "start_line": 2,
+          "start_column": 1,
+          "end_line": 3,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "LINTS",
+        "operator": ":=",
+        "raw_value": "git+https://github.com/leynos/df12-python-lints.git@$(LINTS_REF)",
+        "exported": false,
+        "overridden": false,
+        "define_block": false,
+        "conditions": [],
+        "location": {
+          "start_byte": 92,
+          "end_byte": 166,
+          "start_line": 3,
+          "start_column": 1,
+          "end_line": 4,
+          "end_column": 1
+        }
+      }
+    ],
+    "includes": []
+  },
+  "workflows": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "parsed": {
+        "name": "ci",
+        "on": "push",
+        "jobs": {
+          "gate": {
+            "runs-on": "ubuntu-latest",
+            "steps": [
+              {
+                "run": "make lint test"
+              }
+            ]
+          }
+        }
+      },
+      "error": null
+    }
+  ],
+  "actions": [],
+  "gate": {
+    "path": "scripts/uv_gate.py",
+    "sha256": "217e22401cefed105cadeb0a51f6f152500b5a5812d7a5f4443e3c694c3a9358",
+    "error": null
+  },
+  "pyproject": {
+    "path": "pyproject.toml",
+    "parsed": {
+      "project": {
+        "name": "demo",
+        "version": "0.1.0"
+      },
+      "dependency-groups": {
+        "dev": [
+          "pytest>=8"
+        ]
+      }
+    },
+    "error": null
+  },
+  "requirements": [
+    {
+      "origin": "dependency-groups.dev",
+      "spec": "pytest>=8"
+    }
+  ],
+  "git_sources": []
+}

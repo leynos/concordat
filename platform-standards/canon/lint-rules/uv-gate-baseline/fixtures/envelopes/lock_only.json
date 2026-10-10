@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "kind": "policy-input/uv-gate-baseline",
+  "repository": {
+    "path": ".",
+    "name": null
+  },
+  "applicability": {
+    "root_makefile": true,
+    "pyproject": false,
+    "uv_lock": true,
+    "gate_file": false
+  },
+  "makefile": {
+    "schema_version": 1,
+    "tool": {
+      "name": "makeutil",
+      "version": "0.1.0",
+      "parser": "makefile-lossless",
+      "parser_version": "0.3.40"
+    },
+    "source": {
+      "path": "Makefile",
+      "sha256": "c1a47bd23d41456d2a9ec7b621a903e154b9b118bcf41a577a5b24dec14e6533",
+      "byte_length": 20
+    },
+    "parse": {
+      "status": "complete",
+      "diagnostics": []
+    },
+    "rules": [
+      {
+        "ordinal": 0,
+        "targets": [
+          "build"
+        ],
+        "prerequisites": [],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "cc -o x x.c",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 7,
+              "end_byte": 20,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 3,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 0,
+          "end_byte": 20,
+          "start_line": 1,
+          "start_column": 1,
+          "end_line": 3,
+          "end_column": 1
+        }
+      }
+    ],
+    "variables": [],
+    "includes": []
+  },
+  "workflows": [],
+  "actions": [],
+  "gate": null,
+  "pyproject": null,
+  "requirements": [],
+  "git_sources": []
+}

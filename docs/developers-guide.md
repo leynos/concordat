@@ -655,6 +655,21 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   leaves it empty; the rule-run command fills it in a separate step
   ([ADR-002](adr-002-resolve-action-pins-against-github.md)).
 
+- `policy-input/uv-gate-baseline` — `uv_gate_envelope.build_uv_gate_envelope`.
+  It reuses `markdown_envelope`'s containment guard and readers: the same
+  `makeutil` report for the root `Makefile` and the same decoded workflows,
+  plus the decoded composite actions under `.github/actions`, the SHA-256 of
+  `scripts/uv_gate.py`, `pyproject.toml` decoded with `tomllib` (with its
+  requirement strings and Git sources lifted out so the policy never parses
+  TOML), and whether `uv.lock` exists. The package is registered by identifier
+  and declares its kind. The canonical helper's digests reach the policy as the
+  `gate_digests` manifest parameter; the fixture generator replaces them in
+  `data.json` with the digest of the stand-in helper its scenarios vendor, and
+  `tests/fixtures/uv_gate/uv_gate.py.canon` is a copy of the canonical helper
+  that the behavioural tests vendor, checked against the manifest's digests.
+  Adding a helper version means adding a digest to the manifest and, if the
+  tests should exercise it, refreshing that copy.
+
 - `policy-input/spelling-config-baseline` —
   `spelling_envelope.build_spelling_envelope`. It reuses `markdown_envelope`'s
   containment guard and readers: the same `makeutil` report for the root

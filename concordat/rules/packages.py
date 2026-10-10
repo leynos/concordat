@@ -58,6 +58,13 @@ from .spelling_envelope import (
     build_spelling_envelope,
 )
 from .spelling_envelope import ENVELOPE_KIND as SPELLING_ENVELOPE_KIND
+from .uv_gate_envelope import (
+    ENVELOPE_KIND as UV_GATE_ENVELOPE_KIND,
+)
+from .uv_gate_envelope import (
+    UvGateEnvelope,
+    build_uv_gate_envelope,
+)
 from .whitaker_provisioning_envelope import (
     ENVELOPE_KIND as PROVISIONING_ENVELOPE_KIND,
 )
@@ -385,6 +392,24 @@ def _spelling_envelope(
     )
 
 
+def _uv_gate_envelope(
+    checkout: pathlib.Path,
+    _parameters: cabc.Mapping[str, object] | None = None,
+) -> UvGateEnvelope:
+    """Build the uv gate envelope, ignoring the manifest parameters.
+
+    `uv-gate-baseline` reads its accepted digests, recipe patterns and
+    release-tag tools through `data.parameters` in the policy, so the second
+    argument exists only to give every builder one callable type.
+
+    Returns
+    -------
+    UvGateEnvelope
+        The `policy-input/uv-gate-baseline` document for *checkout*.
+    """
+    return build_uv_gate_envelope(checkout, inspect=inspect_makefile_observed)
+
+
 def _provisioning_envelope(
     checkout: pathlib.Path,
     _parameters: cabc.Mapping[str, object] | None = None,
@@ -418,6 +443,7 @@ PACKAGE_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     "main-owned-codescene-coverage": _coverage_envelope,
     "dependabot-update-shape": _dependabot_envelope,
     "spelling-config-baseline": _spelling_envelope,
+    "uv-gate-baseline": _uv_gate_envelope,
     "whitaker-provisioning": _provisioning_envelope,
 })
 
@@ -431,6 +457,7 @@ INPUT_KIND_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     COVERAGE_ENVELOPE_KIND: _coverage_envelope,
     DEPENDABOT_ENVELOPE_KIND: _dependabot_envelope,
     SPELLING_ENVELOPE_KIND: _spelling_envelope,
+    UV_GATE_ENVELOPE_KIND: _uv_gate_envelope,
     PROVISIONING_ENVELOPE_KIND: _provisioning_envelope,
 })
 

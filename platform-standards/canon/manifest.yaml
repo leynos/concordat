@@ -179,6 +179,21 @@ artifacts:
     description: >
       Rule package manifest for the spelling configuration baseline policy.
     sha256: 905b08a399dc8ce651aa49c996a4bb62b48b77ebaf2506aa7ffab6fc90844cb3
+  - id: lint-rule-uv-gate-baseline
+    type: opa-policy
+    path: >-
+      platform-standards/canon/lint-rules/uv-gate-baseline/policy/uv_gate_baseline.rego
+    description: >
+      Audit-only UV-001 to UV-007 policy holding a checkout to reaching uv
+      through the vendored uv_gate helper, with no cache override, bypassing
+      recipe, unpinned tool, or unpinned Git dependency.
+    sha256: 3e56f09e12774583493fdc375d0df9f56d4305f26aa7e085a75a051ef7f94654
+  - id: lint-rule-uv-gate-baseline-manifest
+    type: lint-config
+    path: platform-standards/canon/lint-rules/uv-gate-baseline/rule.yaml
+    description: >
+      Rule package manifest for the uv gate baseline policy.
+    sha256: 5f47b459b80726fdaf0da663c5deed5ced73341ce84481f527b6590706d2cc0e
   - id: lint-rule-whitaker-provisioning
     type: opa-policy
     path: platform-standards/canon/lint-rules/whitaker-provisioning/policy/whitaker_provisioning.rego
