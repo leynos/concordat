@@ -336,8 +336,9 @@ deny contains f if {
 deny contains f if {
 	applicable
 	some line in recipe_lines
-	regex.match(bypass_pattern, line.text)
-	not direct_release_tag_invocation(line.text)
+	some command in commands(line.text)
+	regex.match(bypass_pattern, command)
+	not direct_release_tag_invocation(command)
 	f := finding(
 		"UV-003", "noncompliant", makefile_path, line.line,
 		sprintf("the recipe reaches uv directly; run it through $(%s)", [gate_variable]),
@@ -490,6 +491,10 @@ release_tag_accepted(spec, text) if {
 	release_tag_pinned(spec)
 	not gated(text)
 }
+
+# A recipe line may chain commands, and each is judged on its own: an exempt
+# command must not hide a bare `uv sync` beside it.
+commands(text) := regex.split(`&&|\|\||[;|&]`, text)
 
 # A direct `uvx --from <listed repository>@vX.Y.Z` is the shape
 # spelling-config-baseline (PD-007) requires, so UV-003 does not call it a

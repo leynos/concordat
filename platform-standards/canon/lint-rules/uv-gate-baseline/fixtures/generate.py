@@ -380,6 +380,32 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "tool_other_tag_direct": Scenario({
         "Makefile": makefile(f'uvx --from "{OTHER_TOOL}@v1.2.3" tool')
     }),
+    "bypass_beside_release_tag": Scenario({
+        "Makefile": makefile(
+            f'uv sync --locked && uvx --from "{BUILDER}@v0.1.3" typos-config-builder gate'
+        )
+    }),
+    "bypass_beside_release_tag_semicolon": Scenario({
+        "Makefile": makefile(
+            f'uvx --from "{BUILDER}@v0.1.3" typos-config-builder gate ; uv run pytest'
+        )
+    }),
+    "bypass_beside_release_tag_or": Scenario({
+        "Makefile": makefile(
+            f'uvx --from "{BUILDER}@v0.1.3" typos-config-builder gate || uv run pytest'
+        )
+    }),
+    "bypass_beside_release_tag_pipe": Scenario({
+        "Makefile": makefile(
+            f'uvx --from "{BUILDER}@v0.1.3" typos-config-builder gate | uv run pytest'
+        )
+    }),
+    "release_tag_beside_release_tag": Scenario({
+        "Makefile": makefile(
+            f'uvx --from "{BUILDER}@v0.1.3" typos-config-builder gate'
+            f' && uvx --from "{BUILDER}@v0.1.3" typos-config-builder gate'
+        )
+    }),
     "tool_mixed_tags_one_line": Scenario({
         "Makefile": makefile(
             f'uvx --from "{BUILDER}@v0.1.3" typos-config-builder gate'

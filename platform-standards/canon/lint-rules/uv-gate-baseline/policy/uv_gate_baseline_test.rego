@@ -191,6 +191,18 @@ test_tool_typos_builder_tag_via_gate if reported(data.fixtures.tool_typos_builde
 # directly, fails both checks, even beside a listed one on the same line.
 test_tool_mixed_tags_one_line if reported(data.fixtures.tool_mixed_tags_one_line) == {"UV-003/noncompliant", "UV-006/noncompliant"}
 
+# Each command on a chained recipe line is judged on its own, so an exempt
+# release-tag command cannot hide a bare uv beside it.
+test_bypass_beside_release_tag if reported(data.fixtures.bypass_beside_release_tag) == {"UV-003/noncompliant"}
+
+test_bypass_beside_release_tag_semicolon if reported(data.fixtures.bypass_beside_release_tag_semicolon) == {"UV-003/noncompliant"}
+
+test_bypass_beside_release_tag_or if reported(data.fixtures.bypass_beside_release_tag_or) == {"UV-003/noncompliant"}
+
+test_bypass_beside_release_tag_pipe if reported(data.fixtures.bypass_beside_release_tag_pipe) == {"UV-003/noncompliant"}
+
+test_release_tag_beside_release_tag if reported(data.fixtures.release_tag_beside_release_tag) == set()
+
 # Lines and messages that make a finding usable.
 
 test_bypass_names_the_recipe_line if {
