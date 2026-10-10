@@ -618,6 +618,15 @@ the Section 2.1.2 format.
   fixtures for every check, each clause mutation-proved in both directions, and
   live runs over `leynos/cuprum` (compliant), a `v0.1.1` repository, and a
   pre-release drift-check repository.
+- [x] Ship the uv gate rule package (UV-001 to UV-007), from the uv hardening
+  programme: the vendored `uv_gate.py` is a canonical copy; nothing overrides
+  its cache; recipes reach uv only through it; `uv.lock` is committed; no
+  recipe refreshes, upgrades, locks, purges, or retries outside a maintenance
+  target; tool specs and Git dependencies are pinned, with a release tag
+  accepted for typos-config-builder as the spelling baseline requires.
+  Acceptance: compliant and noncompliant generated fixtures for every check,
+  each clause mutation-proved, and the behavioural tests running the real
+  policy over a checkout that vendors the canonical helper.
 - [ ] Ship the Rust formatting and linting rule packages (RT-001 to RT-005):
   rustfmt wiring and template-matched configuration, clippy presence with
   `[lints]` entries at the template level or stricter, and Whitaker presence

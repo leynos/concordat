@@ -648,6 +648,35 @@ that mentions Typos), and reports:
 builder release is pinned, but the shared dictionary it reads is live, so an
 edit to it reaches every repository on its next run.
 
+### Auditing the uv gate
+
+The `uv-gate-baseline` package audits how a checkout reaches uv, against the
+vendored `uv_gate.py` helper (see the shared-actions users' guide for the
+helper itself):
+
+```shell
+concordat artefact rule run uv-gate-baseline --repo /path/to/checkout
+```
+
+It applies when the checkout uses uv (a recipe, workflow or action that runs
+it, a `uv.lock`, or the helper) and reports:
+
+- **UV-001**: `scripts/uv_gate.py` exists and matches a canonical digest.
+- **UV-002**: nothing assigns `UV_CACHE_DIR` or `UV_TOOL_DIR`, in the Makefile,
+  workflows, or composite actions.
+- **UV-003**: no recipe runs `uv run`, `uv sync`, `uv tool run` or `uvx` except
+  through `$(UV_GATE)`, and `UV_GATE` is `python3 scripts/uv_gate.py`.
+- **UV-004**: `uv.lock` exists beside `pyproject.toml`.
+- **UV-005**: no recipe refreshes, upgrades, locks, purges the cache or retries
+  around uv; a `lock` target may lock and upgrade.
+- **UV-006**: every tool spec is `name==VERSION`, `name@VERSION` or
+  `git+URL@<full commit SHA>`. typos-config-builder is also accepted at a
+  release tag, because the spelling baseline requires that form.
+- **UV-007**: Git dependencies in `pyproject.toml` are pinned to a full commit.
+
+An `include`, an unresolvable variable, or a file that cannot be decoded makes
+the affected check indeterminate rather than passing it.
+
 ### Auditing Markdown formatting wiring
 
 The `markdown-formatting-baseline` package audits how a checkout formats and

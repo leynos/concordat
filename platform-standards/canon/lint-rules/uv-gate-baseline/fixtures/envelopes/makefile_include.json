@@ -1,0 +1,282 @@
+{
+  "schema_version": 1,
+  "kind": "policy-input/uv-gate-baseline",
+  "repository": {
+    "path": ".",
+    "name": null
+  },
+  "applicability": {
+    "root_makefile": true,
+    "pyproject": true,
+    "uv_lock": true,
+    "gate_file": true
+  },
+  "makefile": {
+    "schema_version": 1,
+    "tool": {
+      "name": "makeutil",
+      "version": "0.1.0",
+      "parser": "makefile-lossless",
+      "parser_version": "0.3.40"
+    },
+    "source": {
+      "path": "Makefile",
+      "sha256": "8189e6833fc1b81c52e81488d19da3f064fd2d933efa8214f306be83ab4dad1d",
+      "byte_length": 373
+    },
+    "parse": {
+      "status": "complete",
+      "diagnostics": []
+    },
+    "rules": [
+      {
+        "ordinal": 2,
+        "targets": [
+          ".PHONY"
+        ],
+        "prerequisites": [
+          "prepare",
+          "lint",
+          "test",
+          "spelling"
+        ],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [],
+        "location": {
+          "start_byte": 54,
+          "end_byte": 89,
+          "start_line": 5,
+          "start_column": 1,
+          "end_line": 6,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 3,
+        "targets": [
+          "prepare"
+        ],
+        "prerequisites": [],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "$(UV_GATE) prepare --group dev",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 98,
+              "end_byte": 130,
+              "start_line": 7,
+              "start_column": 1,
+              "end_line": 8,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 89,
+          "end_byte": 131,
+          "start_line": 6,
+          "start_column": 1,
+          "end_line": 9,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 4,
+        "targets": [
+          "lint"
+        ],
+        "prerequisites": [
+          "prepare"
+        ],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "$(UV_GATE) run --group dev -- ruff check .",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 145,
+              "end_byte": 189,
+              "start_line": 10,
+              "start_column": 1,
+              "end_line": 11,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 131,
+          "end_byte": 190,
+          "start_line": 9,
+          "start_column": 1,
+          "end_line": 12,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 5,
+        "targets": [
+          "test"
+        ],
+        "prerequisites": [
+          "prepare"
+        ],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "$(UV_GATE) run --group dev -- pytest -q",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 204,
+              "end_byte": 245,
+              "start_line": 13,
+              "start_column": 1,
+              "end_line": 14,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 190,
+          "end_byte": 246,
+          "start_line": 12,
+          "start_column": 1,
+          "end_line": 15,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 6,
+        "targets": [
+          "spelling"
+        ],
+        "prerequisites": [],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "$(UV_GATE) tool --from 'git+https://github.com/leynos/typos-config-builder.git@v0.1.3' -- typos-config-builder gate",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 256,
+              "end_byte": 373,
+              "start_line": 16,
+              "start_column": 1,
+              "end_line": 17,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 246,
+          "end_byte": 373,
+          "start_line": 15,
+          "start_column": 1,
+          "end_line": 17,
+          "end_column": 1
+        }
+      }
+    ],
+    "variables": [
+      {
+        "ordinal": 1,
+        "name": "UV_GATE",
+        "operator": "?=",
+        "raw_value": "python3 scripts/uv_gate.py",
+        "exported": false,
+        "overridden": false,
+        "define_block": false,
+        "conditions": [],
+        "location": {
+          "start_byte": 15,
+          "end_byte": 53,
+          "start_line": 3,
+          "start_column": 1,
+          "end_line": 4,
+          "end_column": 1
+        }
+      }
+    ],
+    "includes": [
+      {
+        "ordinal": 0,
+        "raw_path": "uv.mk",
+        "optional": false,
+        "dynamic": false,
+        "conditions": [],
+        "location": {
+          "start_byte": 0,
+          "end_byte": 14,
+          "start_line": 1,
+          "start_column": 1,
+          "end_line": 2,
+          "end_column": 1
+        }
+      }
+    ]
+  },
+  "workflows": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "parsed": {
+        "name": "ci",
+        "on": "push",
+        "jobs": {
+          "gate": {
+            "runs-on": "ubuntu-latest",
+            "steps": [
+              {
+                "run": "make lint test"
+              }
+            ]
+          }
+        }
+      },
+      "error": null
+    }
+  ],
+  "actions": [],
+  "gate": {
+    "path": "scripts/uv_gate.py",
+    "sha256": "217e22401cefed105cadeb0a51f6f152500b5a5812d7a5f4443e3c694c3a9358",
+    "error": null
+  },
+  "pyproject": {
+    "path": "pyproject.toml",
+    "parsed": {
+      "project": {
+        "name": "demo",
+        "version": "0.1.0"
+      },
+      "dependency-groups": {
+        "dev": [
+          "pytest>=8"
+        ]
+      }
+    },
+    "error": null
+  },
+  "requirements": [
+    {
+      "origin": "dependency-groups.dev",
+      "spec": "pytest>=8"
+    }
+  ],
+  "git_sources": []
+}

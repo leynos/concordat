@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "kind": "policy-input/uv-gate-baseline",
+  "repository": {
+    "path": ".",
+    "name": null
+  },
+  "applicability": {
+    "root_makefile": false,
+    "pyproject": false,
+    "uv_lock": false,
+    "gate_file": false
+  },
+  "makefile": null,
+  "workflows": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "parsed": {
+        "name": "ci",
+        "on": "push",
+        "jobs": {
+          "gate": {
+            "runs-on": "ubuntu-latest",
+            "steps": [
+              {
+                "run": "uvx ruff==0.16.4 check ."
+              }
+            ]
+          }
+        }
+      },
+      "error": null
+    }
+  ],
+  "actions": [],
+  "gate": null,
+  "pyproject": null,
+  "requirements": [],
+  "git_sources": []
+}

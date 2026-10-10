@@ -1,0 +1,82 @@
+schema_version: 1
+id: uv-gate-baseline
+name: uv gate baseline
+description: >-
+  Audits a checkout's use of uv against the vendored uv_gate helper: the
+  helper at scripts/uv_gate.py is a canonical copy (UV-001); nothing assigns
+  UV_CACHE_DIR or UV_TOOL_DIR in the Makefile, workflows or composite actions
+  (UV-002); no recipe runs uv run, uv sync, uv tool run or uvx except through
+  the helper (UV-003); uv.lock exists beside pyproject.toml (UV-004); no
+  recipe refreshes, upgrades, locks, purges the cache or retries around uv
+  outside a maintenance target (UV-005); every tool spec is pinned to an exact
+  version or a full commit, or to a release tag for a tool whose own rule
+  requires one (UV-006); and Git dependencies are pinned to a full commit
+  (UV-007). A repository that does not use uv is out of scope.
+  Audit-only: this rule declares no mutations.
+version: 0.1.0
+sensor:
+  type: conftest
+  input: policy-input/uv-gate-baseline
+  policy: policy/
+  tests:
+    - policy/
+  data:
+    - fixtures/data.json
+parameters:
+  schema:
+    type: object
+    additionalProperties: false
+    properties:
+      gate_variable:
+        type: string
+        description: The Make variable that holds the helper's command.
+      gate_command:
+        type: string
+        description: The command the gate variable must hold.
+      gate_path:
+        type: string
+        description: Where the vendored helper lives in a checkout.
+      gate_digests:
+        type: object
+        additionalProperties:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        description: >-
+          The SHA-256 of each canonical uv_gate.py, keyed by the version of
+          the helper it belongs to. A copy matching any of them passes.
+      forbidden_variables:
+        type: array
+        items:
+          type: string
+        description: Variables the helper owns, which nothing else may assign.
+      release_tag_tools:
+        type: array
+        items:
+          type: string
+        description: >-
+          Git repositories (host/owner/name) whose tool pin may be a release
+          tag, because another rule owns the form of that pin.
+      maintenance_targets:
+        type: array
+        items:
+          type: string
+        description: Targets that may run uv lock and upgrade dependencies.
+  defaults:
+    gate_variable: UV_GATE
+    gate_command: python3 scripts/uv_gate.py
+    gate_path: scripts/uv_gate.py
+    # leynos/shared-actions uv_gate/uv_gate.py at d93ba238 (pull request 586).
+    # Add a key for each later release; keep the older ones while consumers
+    # still vendor them.
+    gate_digests:
+      "0.1.0": cc8dc5dfba51efcca4e3c117e55e2fcbb463455929f5988efbf9c4532988f163
+    forbidden_variables:
+      - UV_CACHE_DIR
+      - UV_TOOL_DIR
+    # spelling-config-baseline (PD-007) requires typos-config-builder at a
+    # release tag and rejects the commit form, so this rule accepts the tag
+    # and leaves the floor to that rule.
+    release_tag_tools:
+      - github.com/leynos/typos-config-builder
+    maintenance_targets:
+      - lock

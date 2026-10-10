@@ -1,0 +1,251 @@
+{
+  "schema_version": 1,
+  "kind": "policy-input/uv-gate-baseline",
+  "repository": {
+    "path": ".",
+    "name": null
+  },
+  "applicability": {
+    "root_makefile": true,
+    "pyproject": true,
+    "uv_lock": true,
+    "gate_file": true
+  },
+  "makefile": {
+    "schema_version": 1,
+    "tool": {
+      "name": "makeutil",
+      "version": "0.1.0",
+      "parser": "makefile-lossless",
+      "parser_version": "0.3.40"
+    },
+    "source": {
+      "path": "Makefile",
+      "sha256": "e202b8cb781e21601cfc13331f86aa4c2b6569ade97e50b2543840d72647b76f",
+      "byte_length": 358
+    },
+    "parse": {
+      "status": "complete",
+      "diagnostics": []
+    },
+    "rules": [
+      {
+        "ordinal": 1,
+        "targets": [
+          ".PHONY"
+        ],
+        "prerequisites": [
+          "prepare",
+          "lint",
+          "test",
+          "spelling"
+        ],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [],
+        "location": {
+          "start_byte": 39,
+          "end_byte": 74,
+          "start_line": 3,
+          "start_column": 1,
+          "end_line": 4,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 2,
+        "targets": [
+          "prepare"
+        ],
+        "prerequisites": [],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "$(UV_GATE) prepare --group dev",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 83,
+              "end_byte": 115,
+              "start_line": 5,
+              "start_column": 1,
+              "end_line": 6,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 74,
+          "end_byte": 116,
+          "start_line": 4,
+          "start_column": 1,
+          "end_line": 7,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 3,
+        "targets": [
+          "lint"
+        ],
+        "prerequisites": [
+          "prepare"
+        ],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "$(UV_GATE) run --group dev -- ruff check .",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 130,
+              "end_byte": 174,
+              "start_line": 8,
+              "start_column": 1,
+              "end_line": 9,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 116,
+          "end_byte": 175,
+          "start_line": 7,
+          "start_column": 1,
+          "end_line": 10,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 4,
+        "targets": [
+          "test"
+        ],
+        "prerequisites": [
+          "prepare"
+        ],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "$(UV_GATE) run --group dev -- pytest -q",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 189,
+              "end_byte": 230,
+              "start_line": 11,
+              "start_column": 1,
+              "end_line": 12,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 175,
+          "end_byte": 231,
+          "start_line": 10,
+          "start_column": 1,
+          "end_line": 13,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 5,
+        "targets": [
+          "spelling"
+        ],
+        "prerequisites": [],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "$(UV_GATE) tool --from 'git+https://github.com/leynos/typos-config-builder.git@v0.1.3' -- typos-config-builder gate",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 241,
+              "end_byte": 358,
+              "start_line": 14,
+              "start_column": 1,
+              "end_line": 15,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 231,
+          "end_byte": 358,
+          "start_line": 13,
+          "start_column": 1,
+          "end_line": 15,
+          "end_column": 1
+        }
+      }
+    ],
+    "variables": [
+      {
+        "ordinal": 0,
+        "name": "UV_GATE",
+        "operator": "?=",
+        "raw_value": "python3 scripts/uv_gate.py",
+        "exported": false,
+        "overridden": false,
+        "define_block": false,
+        "conditions": [],
+        "location": {
+          "start_byte": 0,
+          "end_byte": 38,
+          "start_line": 1,
+          "start_column": 1,
+          "end_line": 2,
+          "end_column": 1
+        }
+      }
+    ],
+    "includes": []
+  },
+  "workflows": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "parsed": {
+        "name": "ci",
+        "on": "push",
+        "jobs": {
+          "gate": {
+            "runs-on": "ubuntu-latest",
+            "steps": [
+              {
+                "run": "make lint test"
+              }
+            ]
+          }
+        }
+      },
+      "error": null
+    }
+  ],
+  "actions": [],
+  "gate": {
+    "path": "scripts/uv_gate.py",
+    "sha256": "217e22401cefed105cadeb0a51f6f152500b5a5812d7a5f4443e3c694c3a9358",
+    "error": null
+  },
+  "pyproject": {
+    "path": "pyproject.toml",
+    "parsed": null,
+    "error": "invalid TOML: Expected ']' at the end of a table declaration (at line 1, column 9)"
+  },
+  "requirements": [],
+  "git_sources": []
+}
