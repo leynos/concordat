@@ -371,6 +371,16 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     }),
     # The compliant base already runs the builder directly at a release tag, the
     # shape spelling-config-baseline (PD-007) requires.
+    "tool_git_sha_make_escaped_fragment": Scenario({
+        "Makefile": makefile(
+            gated_tool(f"{OTHER_TOOL}@{SHA}\\#subdirectory=packages/x", "x")
+        )
+    }),
+    "tool_git_branch_make_escaped_fragment": Scenario({
+        "Makefile": makefile(
+            gated_tool(f"{OTHER_TOOL}@main\\#subdirectory=packages/x", "x")
+        )
+    }),
     "tool_typos_builder_tag": Scenario(),
     "tool_typos_builder_tag_via_gate": Scenario({
         "Makefile": makefile(

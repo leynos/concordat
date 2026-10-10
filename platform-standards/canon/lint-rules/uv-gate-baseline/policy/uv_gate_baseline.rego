@@ -473,7 +473,9 @@ tool_specs(text) := specs_in(text) | positional_in(text)
 
 exact_pin := `^[A-Za-z0-9][A-Za-z0-9._-]*(\[[^\]]+\])?(==|@)[A-Za-z0-9][A-Za-z0-9._+!-]*$`
 
-git_commit_pin := `^git\+[^@[:space:]]+@[0-9a-f]{40}(#[^[:space:]]*)?$`
+# Make needs `\#` for a literal `#` in a recipe, and the recipe text keeps the
+# backslash, so `@<sha>\#subdirectory=...` is the same pin as `@<sha>#...`.
+git_commit_pin := `^git\+[^@[:space:]]+@[0-9a-f]{40}(\\?#[^[:space:]]*)?$`
 
 pinned(spec) if {
 	regex.match(exact_pin, spec)
