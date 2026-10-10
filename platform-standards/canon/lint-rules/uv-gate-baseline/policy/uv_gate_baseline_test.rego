@@ -206,6 +206,12 @@ test_release_tag_beside_release_tag if reported(data.fixtures.release_tag_beside
 # A Make-escaped fragment (`\#subdirectory=`) does not change what is pinned.
 test_tool_git_sha_make_escaped_fragment if reported(data.fixtures.tool_git_sha_make_escaped_fragment) == set()
 
+test_tool_git_sha_bare_fragment if reported(data.fixtures.tool_git_sha_bare_fragment) == set()
+
+test_tool_git_short_sha_make_escaped_fragment if reported(data.fixtures.tool_git_short_sha_make_escaped_fragment) == {"UV-006/noncompliant"}
+
+test_tool_git_sha_with_suffix if reported(data.fixtures.tool_git_sha_with_suffix) == {"UV-006/noncompliant"}
+
 test_tool_git_branch_make_escaped_fragment if reported(data.fixtures.tool_git_branch_make_escaped_fragment) == {"UV-006/noncompliant"}
 
 # Lines and messages that make a finding usable.

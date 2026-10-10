@@ -376,6 +376,19 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
             gated_tool(f"{OTHER_TOOL}@{SHA}\\#subdirectory=packages/x", "x")
         )
     }),
+    "tool_git_sha_bare_fragment": Scenario({
+        "Makefile": makefile(
+            gated_tool(f"{OTHER_TOOL}@{SHA}#subdirectory=packages/x", "x")
+        )
+    }),
+    "tool_git_short_sha_make_escaped_fragment": Scenario({
+        "Makefile": makefile(
+            gated_tool(f"{OTHER_TOOL}@{SHA[:12]}\\#subdirectory=packages/x", "x")
+        )
+    }),
+    "tool_git_sha_with_suffix": Scenario({
+        "Makefile": makefile(gated_tool(f"{OTHER_TOOL}@{SHA}zz", "x"))
+    }),
     "tool_git_branch_make_escaped_fragment": Scenario({
         "Makefile": makefile(
             gated_tool(f"{OTHER_TOOL}@main\\#subdirectory=packages/x", "x")
