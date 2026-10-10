@@ -61,13 +61,15 @@ below.
 - **UV-006** (error): every tool spec the repository runs is pinned: a name
   with `==` or `@` and an exact version (not `latest`), or `git+URL@` with a
   full 40-digit commit, optionally followed by a fragment such as
-  `#subdirectory=packages/x` (written `\#` in a Make recipe, which counts as
-  the same pin). A release tag (`@vMAJOR.MINOR.PATCH`) is also accepted for the
-  Git repositories in `release_tag_tools`, but only when the tool is run
-  directly (`uvx`, `uv tool run`): a tag routed through the helper is refused,
-  because the helper itself rejects it. A Git requirement may carry an
-  environment marker after the commit (`; python_version < '3.13'`). A spec
-  that names a variable the policy cannot resolve to one value is indeterminate.
+  `#subdirectory=packages/x`. Written `\#` in a Make variable's value, the
+  fragment counts as the same pin, because Make turns `\#` there into `#`; in a
+  recipe line the backslash reaches the shell, so `\#` there is not a pin. A
+  release tag (`@vMAJOR.MINOR.PATCH`) is also accepted for the Git repositories
+  in `release_tag_tools`, but only when the tool is run directly (`uvx`,
+  `uv tool run`): a tag routed through the helper is refused, because the
+  helper itself rejects it. A Git requirement may carry an environment marker
+  after the commit (`; python_version < '3.13'`). A spec that names a variable
+  the policy cannot resolve to one value is indeterminate.
 - **UV-007** (error): a Git dependency in `pyproject.toml` (a requirement with
   `git+`, or a `[tool.uv.sources]` Git entry) is pinned to a full commit. A tag
   or a branch can move. A published wheel (any non-Git requirement) needs no

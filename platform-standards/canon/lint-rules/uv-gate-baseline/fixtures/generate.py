@@ -63,6 +63,21 @@ def gated_tool(spec: str, command: str = "tool") -> str:
     return f"$(UV_GATE) tool --from '{spec}' -- {command}"
 
 
+def continued_tool(spec: str) -> dict[str, str]:
+    r"""Return a Makefile that defines the tool command over continuation lines.
+
+    This is the shape cmd-mox uses: `makeutil` keeps a `\#` on a continuation
+    line, whereas on the first line it would read the `#` as a comment.
+
+    Returns
+    -------
+    dict[str, str]
+        The scenario's files: a Makefile that runs ``$(X_CMD)``.
+    """
+    command = f"$(UV_GATE) tool \\\n\t--from '{spec}' \\\n\t-- x"
+    return {"Makefile": makefile("$(X_CMD)", extra=f"X_CMD = {command}\n")}
+
+
 def uv_source(**selectors: str) -> str:
     """Return a ``[tool.uv.sources]`` table with one Git source."""
     pairs = ", ".join(f'{key} = "{value}"' for key, value in selectors.items())
@@ -371,7 +386,17 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     }),
     # The compliant base already runs the builder directly at a release tag, the
     # shape spelling-config-baseline (PD-007) requires.
-    "tool_git_sha_make_escaped_fragment": Scenario({
+    # Make unescapes `\\#` in a variable's value, not in a recipe line.
+    "tool_git_sha_variable_escaped_fragment": Scenario(
+        continued_tool(f"{OTHER_TOOL}@{SHA}\\#subdirectory=packages/x")
+    ),
+    "tool_git_short_sha_variable_escaped_fragment": Scenario(
+        continued_tool(f"{OTHER_TOOL}@{SHA[:7]}\\#subdirectory=packages/x")
+    ),
+    "tool_git_branch_variable_escaped_fragment": Scenario(
+        continued_tool(f"{OTHER_TOOL}@main\\#subdirectory=packages/x")
+    ),
+    "tool_git_sha_recipe_escaped_fragment": Scenario({
         "Makefile": makefile(
             gated_tool(f"{OTHER_TOOL}@{SHA}\\#subdirectory=packages/x", "x")
         )
@@ -381,18 +406,8 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
             gated_tool(f"{OTHER_TOOL}@{SHA}#subdirectory=packages/x", "x")
         )
     }),
-    "tool_git_short_sha_make_escaped_fragment": Scenario({
-        "Makefile": makefile(
-            gated_tool(f"{OTHER_TOOL}@{SHA[:12]}\\#subdirectory=packages/x", "x")
-        )
-    }),
     "tool_git_sha_with_suffix": Scenario({
         "Makefile": makefile(gated_tool(f"{OTHER_TOOL}@{SHA}zz", "x"))
-    }),
-    "tool_git_branch_make_escaped_fragment": Scenario({
-        "Makefile": makefile(
-            gated_tool(f"{OTHER_TOOL}@main\\#subdirectory=packages/x", "x")
-        )
     }),
     "tool_typos_builder_tag": Scenario(),
     "tool_typos_builder_tag_via_gate": Scenario({

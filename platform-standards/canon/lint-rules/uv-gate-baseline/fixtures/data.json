@@ -10535,7 +10535,472 @@
       ],
       "git_sources": []
     },
-    "tool_git_sha_make_escaped_fragment": {
+    "tool_git_sha_variable_escaped_fragment": {
+      "schema_version": 1,
+      "kind": "policy-input/uv-gate-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "pyproject": true,
+        "uv_lock": true,
+        "gate_file": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "fa0fc96a0bec07ca994a88961fca0cac0106a5da345b839cf67bcd8ea18abd6e",
+          "byte_length": 203
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 2,
+            "targets": [
+              "t0"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(X_CMD)",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 193,
+                  "end_byte": 203,
+                  "start_line": 7,
+                  "start_column": 1,
+                  "end_line": 8,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 189,
+              "end_byte": 203,
+              "start_line": 6,
+              "start_column": 1,
+              "end_line": 8,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "UV_GATE",
+            "operator": "?=",
+            "raw_value": "python3 scripts/uv_gate.py",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 38,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "name": "X_CMD",
+            "operator": "=",
+            "raw_value": "$(UV_GATE) tool \\\n\t--from 'git+https://github.com/example/tool.git@0123456789abcdef0123456789abcdef01234567\\#subdirectory=packages/x' \\\n\t-- x",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 38,
+              "end_byte": 188,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 5,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "ci",
+            "on": "push",
+            "jobs": {
+              "gate": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "run": "make lint test"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "actions": [],
+      "gate": {
+        "path": "scripts/uv_gate.py",
+        "sha256": "217e22401cefed105cadeb0a51f6f152500b5a5812d7a5f4443e3c694c3a9358",
+        "error": null
+      },
+      "pyproject": {
+        "path": "pyproject.toml",
+        "parsed": {
+          "project": {
+            "name": "demo",
+            "version": "0.1.0"
+          },
+          "dependency-groups": {
+            "dev": [
+              "pytest>=8"
+            ]
+          }
+        },
+        "error": null
+      },
+      "requirements": [
+        {
+          "origin": "dependency-groups.dev",
+          "spec": "pytest>=8"
+        }
+      ],
+      "git_sources": []
+    },
+    "tool_git_short_sha_variable_escaped_fragment": {
+      "schema_version": 1,
+      "kind": "policy-input/uv-gate-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "pyproject": true,
+        "uv_lock": true,
+        "gate_file": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "db52878062f5d89548a64e29fbbb60fbc61846fb002062df07ec50ec633d0374",
+          "byte_length": 170
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 2,
+            "targets": [
+              "t0"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(X_CMD)",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 160,
+                  "end_byte": 170,
+                  "start_line": 7,
+                  "start_column": 1,
+                  "end_line": 8,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 156,
+              "end_byte": 170,
+              "start_line": 6,
+              "start_column": 1,
+              "end_line": 8,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "UV_GATE",
+            "operator": "?=",
+            "raw_value": "python3 scripts/uv_gate.py",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 38,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "name": "X_CMD",
+            "operator": "=",
+            "raw_value": "$(UV_GATE) tool \\\n\t--from 'git+https://github.com/example/tool.git@0123456\\#subdirectory=packages/x' \\\n\t-- x",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 38,
+              "end_byte": 155,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 5,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "ci",
+            "on": "push",
+            "jobs": {
+              "gate": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "run": "make lint test"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "actions": [],
+      "gate": {
+        "path": "scripts/uv_gate.py",
+        "sha256": "217e22401cefed105cadeb0a51f6f152500b5a5812d7a5f4443e3c694c3a9358",
+        "error": null
+      },
+      "pyproject": {
+        "path": "pyproject.toml",
+        "parsed": {
+          "project": {
+            "name": "demo",
+            "version": "0.1.0"
+          },
+          "dependency-groups": {
+            "dev": [
+              "pytest>=8"
+            ]
+          }
+        },
+        "error": null
+      },
+      "requirements": [
+        {
+          "origin": "dependency-groups.dev",
+          "spec": "pytest>=8"
+        }
+      ],
+      "git_sources": []
+    },
+    "tool_git_branch_variable_escaped_fragment": {
+      "schema_version": 1,
+      "kind": "policy-input/uv-gate-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "pyproject": true,
+        "uv_lock": true,
+        "gate_file": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "a66a4d45cfc7f9fc0112f7813ed1f1e1a2c1e2a6dadd7d062e04372c3e2ce939",
+          "byte_length": 167
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 2,
+            "targets": [
+              "t0"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(X_CMD)",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 157,
+                  "end_byte": 167,
+                  "start_line": 7,
+                  "start_column": 1,
+                  "end_line": 8,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 153,
+              "end_byte": 167,
+              "start_line": 6,
+              "start_column": 1,
+              "end_line": 8,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "UV_GATE",
+            "operator": "?=",
+            "raw_value": "python3 scripts/uv_gate.py",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 38,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "name": "X_CMD",
+            "operator": "=",
+            "raw_value": "$(UV_GATE) tool \\\n\t--from 'git+https://github.com/example/tool.git@main\\#subdirectory=packages/x' \\\n\t-- x",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 38,
+              "end_byte": 152,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 5,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "ci",
+            "on": "push",
+            "jobs": {
+              "gate": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "run": "make lint test"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "actions": [],
+      "gate": {
+        "path": "scripts/uv_gate.py",
+        "sha256": "217e22401cefed105cadeb0a51f6f152500b5a5812d7a5f4443e3c694c3a9358",
+        "error": null
+      },
+      "pyproject": {
+        "path": "pyproject.toml",
+        "parsed": {
+          "project": {
+            "name": "demo",
+            "version": "0.1.0"
+          },
+          "dependency-groups": {
+            "dev": [
+              "pytest>=8"
+            ]
+          }
+        },
+        "error": null
+      },
+      "requirements": [
+        {
+          "origin": "dependency-groups.dev",
+          "spec": "pytest>=8"
+        }
+      ],
+      "git_sources": []
+    },
+    "tool_git_sha_recipe_escaped_fragment": {
       "schema_version": 1,
       "kind": "policy-input/uv-gate-baseline",
       "repository": {
@@ -10809,143 +11274,6 @@
       ],
       "git_sources": []
     },
-    "tool_git_short_sha_make_escaped_fragment": {
-      "schema_version": 1,
-      "kind": "policy-input/uv-gate-baseline",
-      "repository": {
-        "path": ".",
-        "name": null
-      },
-      "applicability": {
-        "root_makefile": true,
-        "pyproject": true,
-        "uv_lock": true,
-        "gate_file": true
-      },
-      "makefile": {
-        "schema_version": 1,
-        "tool": {
-          "name": "makeutil",
-          "version": "0.1.0",
-          "parser": "makefile-lossless",
-          "parser_version": "0.3.40"
-        },
-        "source": {
-          "path": "Makefile",
-          "sha256": "6d68b4f1a7a6448bcb209081fc71d5607d967cf02d51b022afacb53e600a9468",
-          "byte_length": 152
-        },
-        "parse": {
-          "status": "complete",
-          "diagnostics": []
-        },
-        "rules": [
-          {
-            "ordinal": 1,
-            "targets": [
-              "t0"
-            ],
-            "prerequisites": [],
-            "double_colon": false,
-            "conditions": [],
-            "recipes": [
-              {
-                "ordinal": 0,
-                "text": "$(UV_GATE) tool --from 'git+https://github.com/example/tool.git@0123456789ab\\#subdirectory=packages/x' -- x",
-                "silent": false,
-                "ignore_errors": false,
-                "always_execute": false,
-                "location": {
-                  "start_byte": 43,
-                  "end_byte": 152,
-                  "start_line": 4,
-                  "start_column": 1,
-                  "end_line": 5,
-                  "end_column": 1
-                }
-              }
-            ],
-            "location": {
-              "start_byte": 39,
-              "end_byte": 152,
-              "start_line": 3,
-              "start_column": 1,
-              "end_line": 5,
-              "end_column": 1
-            }
-          }
-        ],
-        "variables": [
-          {
-            "ordinal": 0,
-            "name": "UV_GATE",
-            "operator": "?=",
-            "raw_value": "python3 scripts/uv_gate.py",
-            "exported": false,
-            "overridden": false,
-            "define_block": false,
-            "conditions": [],
-            "location": {
-              "start_byte": 0,
-              "end_byte": 38,
-              "start_line": 1,
-              "start_column": 1,
-              "end_line": 2,
-              "end_column": 1
-            }
-          }
-        ],
-        "includes": []
-      },
-      "workflows": [
-        {
-          "path": ".github/workflows/ci.yml",
-          "parsed": {
-            "name": "ci",
-            "on": "push",
-            "jobs": {
-              "gate": {
-                "runs-on": "ubuntu-latest",
-                "steps": [
-                  {
-                    "run": "make lint test"
-                  }
-                ]
-              }
-            }
-          },
-          "error": null
-        }
-      ],
-      "actions": [],
-      "gate": {
-        "path": "scripts/uv_gate.py",
-        "sha256": "217e22401cefed105cadeb0a51f6f152500b5a5812d7a5f4443e3c694c3a9358",
-        "error": null
-      },
-      "pyproject": {
-        "path": "pyproject.toml",
-        "parsed": {
-          "project": {
-            "name": "demo",
-            "version": "0.1.0"
-          },
-          "dependency-groups": {
-            "dev": [
-              "pytest>=8"
-            ]
-          }
-        },
-        "error": null
-      },
-      "requirements": [
-        {
-          "origin": "dependency-groups.dev",
-          "spec": "pytest>=8"
-        }
-      ],
-      "git_sources": []
-    },
     "tool_git_sha_with_suffix": {
       "schema_version": 1,
       "kind": "policy-input/uv-gate-baseline",
@@ -11005,143 +11333,6 @@
             "location": {
               "start_byte": 39,
               "end_byte": 157,
-              "start_line": 3,
-              "start_column": 1,
-              "end_line": 5,
-              "end_column": 1
-            }
-          }
-        ],
-        "variables": [
-          {
-            "ordinal": 0,
-            "name": "UV_GATE",
-            "operator": "?=",
-            "raw_value": "python3 scripts/uv_gate.py",
-            "exported": false,
-            "overridden": false,
-            "define_block": false,
-            "conditions": [],
-            "location": {
-              "start_byte": 0,
-              "end_byte": 38,
-              "start_line": 1,
-              "start_column": 1,
-              "end_line": 2,
-              "end_column": 1
-            }
-          }
-        ],
-        "includes": []
-      },
-      "workflows": [
-        {
-          "path": ".github/workflows/ci.yml",
-          "parsed": {
-            "name": "ci",
-            "on": "push",
-            "jobs": {
-              "gate": {
-                "runs-on": "ubuntu-latest",
-                "steps": [
-                  {
-                    "run": "make lint test"
-                  }
-                ]
-              }
-            }
-          },
-          "error": null
-        }
-      ],
-      "actions": [],
-      "gate": {
-        "path": "scripts/uv_gate.py",
-        "sha256": "217e22401cefed105cadeb0a51f6f152500b5a5812d7a5f4443e3c694c3a9358",
-        "error": null
-      },
-      "pyproject": {
-        "path": "pyproject.toml",
-        "parsed": {
-          "project": {
-            "name": "demo",
-            "version": "0.1.0"
-          },
-          "dependency-groups": {
-            "dev": [
-              "pytest>=8"
-            ]
-          }
-        },
-        "error": null
-      },
-      "requirements": [
-        {
-          "origin": "dependency-groups.dev",
-          "spec": "pytest>=8"
-        }
-      ],
-      "git_sources": []
-    },
-    "tool_git_branch_make_escaped_fragment": {
-      "schema_version": 1,
-      "kind": "policy-input/uv-gate-baseline",
-      "repository": {
-        "path": ".",
-        "name": null
-      },
-      "applicability": {
-        "root_makefile": true,
-        "pyproject": true,
-        "uv_lock": true,
-        "gate_file": true
-      },
-      "makefile": {
-        "schema_version": 1,
-        "tool": {
-          "name": "makeutil",
-          "version": "0.1.0",
-          "parser": "makefile-lossless",
-          "parser_version": "0.3.40"
-        },
-        "source": {
-          "path": "Makefile",
-          "sha256": "1f6a7f4ad74d4ed2db55835fcc3a4d5375fceaf0733717a20f3e2a708fae6609",
-          "byte_length": 144
-        },
-        "parse": {
-          "status": "complete",
-          "diagnostics": []
-        },
-        "rules": [
-          {
-            "ordinal": 1,
-            "targets": [
-              "t0"
-            ],
-            "prerequisites": [],
-            "double_colon": false,
-            "conditions": [],
-            "recipes": [
-              {
-                "ordinal": 0,
-                "text": "$(UV_GATE) tool --from 'git+https://github.com/example/tool.git@main\\#subdirectory=packages/x' -- x",
-                "silent": false,
-                "ignore_errors": false,
-                "always_execute": false,
-                "location": {
-                  "start_byte": 43,
-                  "end_byte": 144,
-                  "start_line": 4,
-                  "start_column": 1,
-                  "end_line": 5,
-                  "end_column": 1
-                }
-              }
-            ],
-            "location": {
-              "start_byte": 39,
-              "end_byte": 144,
               "start_line": 3,
               "start_column": 1,
               "end_line": 5,
