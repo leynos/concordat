@@ -467,14 +467,31 @@ does not re-check installer flags. It reports:
 - an `install-whitaker` pin that is not listed, a fork of the action, or a
   local copy of it.
 
-A revision joins the list only once
-`git merge-base --is-ancestor <first entry> <revision>` succeeds in a
-shared-actions clone. Whitaker itself is exempt as the producer, and a
-developer-environment script that CI never runs may be exempted by name,
-repository and reason in the rule's parameters. Exemptions match the repository
-slug read from the `origin` remote. See
-`platform-standards/canon/lint-rules/whitaker-provisioning/README.md` for what
-the policy recognizes and what it declines to judge.
+The list holds only first-parent commits on shared-actions `main`: a commit on
+a side branch that was merged in never qualifies, even when its tree matches. A
+first-parent commit qualifies when it is an approved root, or descends from one
+and leaves the `install-whitaker` directory content-identical to it; a commit
+that changes the directory is refused until a reviewer adds it as an approved
+root (`install_whitaker_roots` in the rule's parameters). After shared-actions
+gains commits, regenerate the list from a full (not shallow) clone and verify
+it:
+
+```sh
+uv run python scripts/whitaker_revisions.py sync ../shared-actions
+uv run python scripts/whitaker_revisions.py check ../shared-actions
+uv run python scripts/whitaker_revisions.py list ../shared-actions
+```
+
+`sync` rewrites the rule manifest's list, `check` exits 1 and names each
+missing or non-derivable revision when the manifest's membership has drifted
+(it does not compare order, so a reordered manifest passes), and `list` prints
+what the clone derives, oldest first. Each accepts `--tip <ref>` (default
+`origin/main`). A status of 2 means the clone or manifest could not be read.
+Whitaker itself is exempt as the producer, and a developer-environment script
+that CI never runs may be exempted by name, repository and reason in the rule's
+parameters. Exemptions match the repository slug read from the `origin` remote.
+See `platform-standards/canon/lint-rules/whitaker-provisioning/README.md` for
+what the policy recognizes and what it declines to judge.
 
 One temporary exemption ships in the defaults: `leynos/weaver`
 `.github/workflows/ci.yml`. Weaver pins the Whitaker lint suite to source

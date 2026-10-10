@@ -621,7 +621,23 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   that cannot be read is carried with its `error` for an indeterminate finding.
   The repository slug comes from the `origin` remote through
   `parse_github_slug`, so the policy's producer and exemption parameters can
-  match it. The package is registered by identifier and declares the kind.
+  match it. The package is registered by identifier and declares the kind. The
+  list of accepted `install-whitaker` revisions is derived by
+  `concordat.rules.whitaker_revisions` (owner: the whitaker-provisioning
+  package; callers: `scripts/whitaker_revisions.py` and its tests only). It
+  walks shared-actions main first-parent and keeps each commit that is an
+  approved root, or descends from one with the action directory's Git tree id
+  equal to that root's. After shared-actions gains commits, run
+  `uv run python scripts/whitaker_revisions.py sync <shared-actions clone>`,
+  then commit the regenerated `rule.yaml` and refresh its digest in the canon
+  manifest. `check <clone>` exits 1 and names each missing or non-derivable
+  revision when the manifest's membership has drifted (use it in review; it
+  compares which revisions are listed, not their order, so a reordered manifest
+  passes with status 0), and `list <clone>` prints what the clone derives; each
+  takes `--tip <ref>` and exits 2 when the clone or manifest cannot be read. To
+  approve a changed action, add the reviewed commit to `install_whitaker_roots`
+  first. Git read failures while walking the history surface as
+  `OperationalRuleError`, never a traceback.
 - `policy-input/markdown-formatting-baseline` —
   `markdown_envelope.build_markdown_envelope`. Alongside the same `makeutil`
   report for the root `Makefile`, it carries `.markdownlint-cli2.jsonc` decoded

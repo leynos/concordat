@@ -75,12 +75,19 @@ rather than a script and is not read.
 ## Parameters
 
 - `compliant_install_whitaker_refs` — the shared-actions revisions a pin may
-  name. The first entry is the merge of shared-actions #522, the change that
-  made the action carry the install rules. **A revision joins the list only once
-  `git merge-base --is-ancestor <first entry> <revision>` succeeds in a
-  shared-actions clone**, so every entry descends from it. The check cannot be
-  made at audit time: the audited checkout does not hold shared-actions'
-  history.
+  name. It is derived, never edited by hand: **every first-parent commit on
+  shared-actions main that is an approved root, or descends from one and leaves
+  the `install-whitaker` directory's Git tree id equal to that root's**. A tree
+  id hashes the directory's contents, so the action a consumer runs is the
+  approved one whatever else changed in shared-actions. The derivation cannot
+  run at audit time, because the audited checkout does not hold shared-actions'
+  history; `scripts/whitaker_revisions.py sync --clone <shared-actions clone>`
+  regenerates the list, and `check` fails when it has drifted. A commit that
+  changes the directory is refused until a reviewer adds it to
+  `install_whitaker_roots`.
+- `install_whitaker_roots` — the reviewed shared-actions commits the list is
+  derived from. The first is the merge of shared-actions #522, the change that
+  made the action carry the install rules.
 - `producer_repositories` — repositories that build and publish Whitaker and
   are not audited. Default: `leynos/whitaker`.
 - `action_repository` and `action_directory` — where the action lives. The
