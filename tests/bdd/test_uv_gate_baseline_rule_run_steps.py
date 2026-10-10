@@ -152,14 +152,15 @@ def given_both_rules(uv_checkout: pathlib.Path) -> None:
 
 
 def _audit(
-    checkout: pathlib.Path,
-    cli_invocation: dict[str, RunResult],
-    capsys: pytest.CaptureFixture[str],
-    *,
-    rule_id: str = RULE_ID,
-    key: str = "result",
-) -> None:
-    """Invoke the command on *checkout* and record its output and exit status."""
+    checkout: pathlib.Path, rule_id: str, capsys: pytest.CaptureFixture[str]
+) -> RunResult:
+    """Invoke the command on *checkout* and return its output and exit status.
+
+    Returns
+    -------
+    RunResult
+        What the command wrote and the status it returned.
+    """
     try:
         returncode = cli.main(
             ["artefact", "rule", "run", rule_id, "--repo", str(checkout)],
@@ -167,7 +168,7 @@ def _audit(
     except SystemExit as exc:
         returncode = int(exc.code or 0)
     captured = capsys.readouterr()
-    cli_invocation[key] = RunResult(
+    return RunResult(
         stdout=captured.out,
         stderr=captured.err,
         returncode=returncode,
@@ -181,13 +182,7 @@ def when_audit_spelling(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Audit the scenario's checkout against the spelling baseline too."""
-    _audit(
-        uv_checkout,
-        cli_invocation,
-        capsys,
-        rule_id=SPELLING_RULE_ID,
-        key="spelling",
-    )
+    cli_invocation["spelling"] = _audit(uv_checkout, SPELLING_RULE_ID, capsys)
 
 
 @then(parsers.cfparse("the uv gate audit exit status is {code:d}"))
@@ -211,7 +206,7 @@ def when_audit_checkout(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Audit the scenario's checkout."""
-    _audit(uv_checkout, cli_invocation, capsys)
+    cli_invocation["result"] = _audit(uv_checkout, RULE_ID, capsys)
 
 
 @then(parsers.cfparse("the audit exit status is {code:d}"))
