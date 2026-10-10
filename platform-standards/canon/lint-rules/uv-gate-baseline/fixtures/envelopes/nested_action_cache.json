@@ -21,8 +21,8 @@
     },
     "source": {
       "path": "Makefile",
-      "sha256": "c4f581cd484efbba9c29947fdbc0711ba7b2045cf379fc65e21fe2f05f4d8501",
-      "byte_length": 370
+      "sha256": "2d99b42843cd2bc8062266a11b24685615ce8caad1b5dab9bd20f21b23eb7b73",
+      "byte_length": 343
     },
     "parse": {
       "status": "complete",
@@ -185,44 +185,10 @@
         ],
         "location": {
           "start_byte": 231,
-          "end_byte": 344,
+          "end_byte": 343,
           "start_line": 13,
           "start_column": 1,
-          "end_line": 16,
-          "end_column": 1
-        }
-      },
-      {
-        "ordinal": 6,
-        "targets": [
-          "flaky"
-        ],
-        "prerequisites": [],
-        "double_colon": false,
-        "conditions": [],
-        "recipes": [
-          {
-            "ordinal": 0,
-            "text": "retry 3 make test",
-            "silent": false,
-            "ignore_errors": false,
-            "always_execute": false,
-            "location": {
-              "start_byte": 351,
-              "end_byte": 370,
-              "start_line": 17,
-              "start_column": 1,
-              "end_line": 18,
-              "end_column": 1
-            }
-          }
-        ],
-        "location": {
-          "start_byte": 344,
-          "end_byte": 370,
-          "start_line": 16,
-          "start_column": 1,
-          "end_line": 18,
+          "end_line": 15,
           "end_column": 1
         }
       }
@@ -269,7 +235,27 @@
       "error": null
     }
   ],
-  "actions": [],
+  "actions": [
+    {
+      "path": ".github/actions/setup/python/action.yml",
+      "parsed": {
+        "name": "setup",
+        "runs": {
+          "using": "composite",
+          "steps": [
+            {
+              "shell": "bash",
+              "run": "make prepare",
+              "env": {
+                "UV_TOOL_DIR": ".uv-tools"
+              }
+            }
+          ]
+        }
+      },
+      "error": null
+    }
+  ],
   "gate": {
     "path": "scripts/uv_gate.py",
     "sha256": "217e22401cefed105cadeb0a51f6f152500b5a5812d7a5f4443e3c694c3a9358",

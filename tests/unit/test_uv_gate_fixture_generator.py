@@ -63,8 +63,12 @@ def test_the_default_scenario_installs_the_compliant_base(
     """With nothing overlaid, the checkout is the fully compliant one."""
     generate.lay_out(generate.Scenario(), tmp_path)
 
-    assert (tmp_path / "Makefile").read_text() == generate.COMPLIANT_MAKEFILE
-    assert (tmp_path / "scripts" / "uv_gate.py").read_text() == generate.GATE
+    assert (tmp_path / "Makefile").read_text(
+        encoding="utf-8"
+    ) == generate.COMPLIANT_MAKEFILE
+    assert (tmp_path / "scripts" / "uv_gate.py").read_text(
+        encoding="utf-8"
+    ) == generate.GATE
     assert (tmp_path / "uv.lock").is_file()
     assert (tmp_path / ".github" / "workflows" / "ci.yml").is_file()
 
@@ -85,7 +89,7 @@ def test_an_overlay_replaces_a_base_file(
     """A scenario's text wins over the base's."""
     generate.lay_out(generate.Scenario({"Makefile": "x:\n"}), tmp_path)
 
-    assert (tmp_path / "Makefile").read_text() == "x:\n"
+    assert (tmp_path / "Makefile").read_text(encoding="utf-8") == "x:\n"
 
 
 def test_the_stand_in_helper_digest_is_the_one_the_bundle_accepts(
@@ -138,7 +142,9 @@ def test_checked_in_envelopes_match_regeneration(generate: types.ModuleType) -> 
 
 def test_the_vendored_test_copy_is_the_canonical_helper() -> None:
     """The copy the behavioural tests vendor must be the digest the rule accepts."""
-    manifest = YAML(typ="safe").load((_PACKAGE_DIR / "rule.yaml").read_text())
+    manifest = YAML(typ="safe").load(
+        (_PACKAGE_DIR / "rule.yaml").read_text(encoding="utf-8")
+    )
     accepted = set(manifest["parameters"]["defaults"]["gate_digests"].values())
     copy = (
         _PACKAGE_DIR.parents[3] / "tests" / "fixtures" / "uv_gate" / "uv_gate.py.canon"

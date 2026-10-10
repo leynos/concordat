@@ -25,8 +25,13 @@ lint: prepare
 	$(UV_GATE) run --group dev -- ruff check .
 
 spelling:
-	$(UV_GATE) tool --from 'git+https://github.com/leynos/typos-config-builder.git@v0.1.3' -- typos-config-builder gate
+	uvx --from "git+https://github.com/leynos/typos-config-builder.git@v0.1.3" typos-config-builder gate
 ```
+
+The `spelling` recipe runs the builder directly, at a release tag, because
+`spelling-config-baseline` (PD-007) requires exactly that shape and the helper
+refuses a Git spec that is not a full commit. See "The release-tag exception"
+below.
 
 ## Checks
 
@@ -41,9 +46,12 @@ spelling:
 - **UV-003** (error): no recipe runs `uv run`, `uv sync`, `uv tool run` or
   `uvx` (also as `$(UV)`) except through the helper. `UV_GATE`, when assigned,
   holds exactly `python3 scripts/uv_gate.py` (the `gate_command` parameter);
-  assigning it twice is indeterminate. A Makefile with an `include`, a parse
-  that was only recovered, or a workflow that cannot be decoded is
-  indeterminate, because recipes may be hidden.
+  assigning it twice, or once conditionally or in a `define`, is indeterminate.
+  A uv named by path (`/usr/bin/uv run`) counts as uv. A Makefile with an
+  `include`, or a parse that was only recovered, is indeterminate whether or
+  not other evidence shows that the repository uses uv, because `makeutil` does
+  not follow includes and so cannot prove that none of the recipes reaches uv.
+  A workflow that cannot be decoded is indeterminate too.
 - **UV-004** (error): `uv.lock` exists whenever `pyproject.toml` does.
 - **UV-005** (error): no recipe that reaches uv passes `--refresh`,
   `--upgrade` or `-U`, runs `uv lock`, runs `uv cache clean` or `prune`, or
@@ -53,8 +61,11 @@ spelling:
 - **UV-006** (error): every tool spec the repository runs is pinned: a name
   with `==` or `@` and an exact version (not `latest`), or `git+URL@` with a
   full 40-digit commit. A release tag (`@vMAJOR.MINOR.PATCH`) is also accepted
-  for the Git repositories in `release_tag_tools`. A spec that names a variable
-  the policy cannot resolve to one value is indeterminate.
+  for the Git repositories in `release_tag_tools`, but only when the tool is
+  run directly (`uvx`, `uv tool run`): a tag routed through the helper is
+  refused, because the helper itself rejects it. A Git requirement may carry an
+  environment marker after the commit (`; python_version < '3.13'`). A spec
+  that names a variable the policy cannot resolve to one value is indeterminate.
 - **UV-007** (error): a Git dependency in `pyproject.toml` (a requirement with
   `git+`, or a `[tool.uv.sources]` Git entry) is pinned to a full commit. A tag
   or a branch can move. A published wheel (any non-Git requirement) needs no
@@ -87,9 +98,21 @@ commit cannot be compared with the floor and the AGENTS.md block moves with the
 release. A rule here that demanded a commit SHA for every Git tool would
 contradict it. So `release_tag_tools` lists
 `github.com/leynos/typos-config-builder`, and a tag is accepted for that
-repository only; the floor is that rule's. Every other Git tool, including
-df12-python-lints, needs a full commit. No rule requires a tag for
-df12-python-lints, and concordat itself pins it by commit.
+repository only; the floor is that rule's.
+
+The canonical helper, though, refuses any Git spec that is not a full commit
+(`validate_request` rejects it before uv is looked up). So the exception is
+narrow on both sides: UV-006 accepts the tag only for a direct invocation,
+UV-003 does not call a direct invocation of a listed tool at a release tag a
+bypass, and a tag routed through `$(UV_GATE) tool` is refused by UV-006, since
+it could never run. PD-007 needs no change: it already recognizes the direct
+`uvx` recipe, and the same checkout passes both packages (a behavioural test
+audits it with both). The exception names typos-config-builder alone (the
+`release_tag_tools` parameter), because that is the one tool PD-007 governs:
+any other tool run directly with `uvx` or `uv tool run`, tag-pinned or not, is
+still a UV-003 bypass, and any other tag pin is still a UV-006 failure. Every
+other Git tool, including df12-python-lints, needs a full commit; no rule
+requires a tag for df12-python-lints, and concordat itself pins it by commit.
 
 ## What the checks cannot see
 

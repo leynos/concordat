@@ -665,10 +665,10 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   and declares its kind. The canonical helper's digests reach the policy as the
   `gate_digests` manifest parameter; the fixture generator replaces them in
   `data.json` with the digest of the stand-in helper its scenarios vendor, and
-  `tests/fixtures/uv_gate/uv_gate.py` is a copy of the canonical helper that
-  the behavioural tests vendor, checked against the manifest's digests. Adding
-  a helper version means adding a digest to the manifest and, if the tests
-  should exercise it, refreshing that copy.
+  `tests/fixtures/uv_gate/uv_gate.py.canon` is a copy of the canonical helper
+  that the behavioural tests vendor, checked against the manifest's digests.
+  Adding a helper version means adding a digest to the manifest and, if the
+  tests should exercise it, refreshing that copy.
 
 - `policy-input/spelling-config-baseline` —
   `spelling_envelope.build_spelling_envelope`. It reuses `markdown_envelope`'s

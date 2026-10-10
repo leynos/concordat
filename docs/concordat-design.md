@@ -2363,8 +2363,11 @@ the `uv-gate-baseline` rule package.
 - **Pins and the spelling baseline:** UV-006 accepts a release tag for the
   repositories in `release_tag_tools`, which lists typos-config-builder, because
   `spelling-config-baseline` (PD-007) requires a release tag there and rejects
-  the commit form. The floor stays with that rule. Every other Git tool, such
-  as df12-python-lints, needs a full commit; no rule requires a tag for it.
+  the commit form. The floor stays with that rule. The tag is accepted only for
+  a direct `uvx` or `uv tool run`, which UV-003 does not call a bypass, because
+  the helper refuses any Git spec that is not a full commit. Every other Git
+  tool, such as df12-python-lints, needs a full commit; no rule requires a tag
+  for it.
 - **Actuators:** none yet; the package ships audit-only, and each migration
   pull request uses it as its proof of compliance.
 

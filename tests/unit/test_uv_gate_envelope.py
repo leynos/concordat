@@ -220,6 +220,24 @@ def test_workflows_and_composite_actions_are_both_decoded(
     ]
 
 
+def test_actions_nested_below_other_directories_are_found(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A composite action may sit at any depth under `.github/actions`."""
+    _write(tmp_path, ".github/actions/top/action.yml", "name: top\n")
+    _write(tmp_path, ".github/actions/setup/python/action.yml", "name: nested\n")
+    _write(tmp_path, ".github/actions/setup/python/deep/action.yaml", "name: deep\n")
+    _write(tmp_path, ".github/actions/setup/notes.md", "no manifest\n")
+
+    envelope = build_uv_gate_envelope(tmp_path)
+
+    assert [item["path"] for item in envelope["actions"]] == [
+        ".github/actions/setup/python/action.yml",
+        ".github/actions/setup/python/deep/action.yaml",
+        ".github/actions/top/action.yml",
+    ]
+
+
 def test_an_undecodable_action_keeps_its_error(tmp_path: pathlib.Path) -> None:
     """An action that cannot be decoded is carried, not dropped."""
     _write(tmp_path, ".github/actions/a/action.yml", "runs: [unterminated\n")

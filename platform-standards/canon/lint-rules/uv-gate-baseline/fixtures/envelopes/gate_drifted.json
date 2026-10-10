@@ -21,8 +21,8 @@
     },
     "source": {
       "path": "Makefile",
-      "sha256": "e202b8cb781e21601cfc13331f86aa4c2b6569ade97e50b2543840d72647b76f",
-      "byte_length": 358
+      "sha256": "2d99b42843cd2bc8062266a11b24685615ce8caad1b5dab9bd20f21b23eb7b73",
+      "byte_length": 343
     },
     "parse": {
       "status": "complete",
@@ -169,13 +169,13 @@
         "recipes": [
           {
             "ordinal": 0,
-            "text": "$(UV_GATE) tool --from 'git+https://github.com/leynos/typos-config-builder.git@v0.1.3' -- typos-config-builder gate",
+            "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
             "silent": false,
             "ignore_errors": false,
             "always_execute": false,
             "location": {
               "start_byte": 241,
-              "end_byte": 358,
+              "end_byte": 343,
               "start_line": 14,
               "start_column": 1,
               "end_line": 15,
@@ -185,7 +185,7 @@
         ],
         "location": {
           "start_byte": 231,
-          "end_byte": 358,
+          "end_byte": 343,
           "start_line": 13,
           "start_column": 1,
           "end_line": 15,

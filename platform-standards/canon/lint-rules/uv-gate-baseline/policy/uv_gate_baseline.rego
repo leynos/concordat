@@ -145,10 +145,10 @@ workflow_strings := [{"text": value, "path": file.path} |
 ]
 
 # `uv`, `uvx`, or an unresolved `$(UV)`, as a command word.
-uv_word := `(^|[^A-Za-z0-9_./$-])(uvx?|\$[({]UVX?[)}])([[:space:]]|$)`
+uv_word := `(^|[^A-Za-z0-9_.$-])(uvx?|\$[({]UVX?[)}])([[:space:]]|$)`
 
 # What a gate must route: `uv run`, `uv sync`, `uv tool run`, and `uvx`.
-bypass_pattern := `(^|[^A-Za-z0-9_./$-])(uvx([[:space:]]|$)|\$[({]UVX[)}]|(uv|\$[({]UV[)}])[[:space:]]([^;&|]*[[:space:]])?(run|sync)([[:space:]]|$))`
+bypass_pattern := `(^|[^A-Za-z0-9_.$-])(uvx([[:space:]]|$)|\$[({]UVX[)}]|(uv|\$[({]UV[)}])[[:space:]]([^;&|]*[[:space:]])?(run|sync)([[:space:]]|$))`
 
 uses_uv_in_recipes if {
 	some line in recipe_lines
@@ -216,18 +216,21 @@ deny contains f if {
 	)
 }
 
+# makeutil does not follow includes and a recovered parse may drop recipes, so
+# neither can prove that a Makefile never reaches uv. They are indeterminate
+# whether or not other evidence shows that the repository uses uv.
 deny contains f if {
-	applicable
+	envelope_ok
 	has_makefile
 	count(input.makefile.includes) > 0
 	f := finding(
 		"UV-003", "indeterminate", makefile_path, input.makefile.includes[0].location.start_line,
-		"the Makefile includes another file, so the recipes that reach uv cannot all be seen",
+		"the Makefile includes another file, so whether the recipes reach uv cannot be seen",
 	)
 }
 
 deny contains f if {
-	applicable
+	envelope_ok
 	has_makefile
 	input.makefile.parse.status != "complete"
 	f := finding(
@@ -334,6 +337,7 @@ deny contains f if {
 	applicable
 	some line in recipe_lines
 	regex.match(bypass_pattern, line.text)
+	not direct_release_tag_invocation(line.text)
 	f := finding(
 		"UV-003", "noncompliant", makefile_path, line.line,
 		sprintf("the recipe reaches uv directly; run it through $(%s)", [gate_variable]),
@@ -349,6 +353,17 @@ deny contains f if {
 	f := finding(
 		"UV-003", "indeterminate", makefile_path, gate_assignments[0].location.start_line,
 		sprintf("%s is assigned more than once, so the command recipes run cannot be proven", [gate_variable]),
+	)
+}
+
+deny contains f if {
+	applicable
+	has_makefile
+	count(gate_assignments) == 1
+	not single_valued(gate_variable)
+	f := finding(
+		"UV-003", "indeterminate", makefile_path, gate_assignments[0].location.start_line,
+		sprintf("%s is assigned conditionally or in a define block, so the command recipes run cannot be proven", [gate_variable]),
 	)
 }
 
@@ -390,8 +405,8 @@ gate_line(line) if contains(line.text, "uv_gate.py")
 unsafe_checks := {
 	"refresh": {"pattern": `(^|[[:space:]])--refresh`, "exempt": true, "what": "refreshes the cache"},
 	"upgrade": {"pattern": `(^|[[:space:]])(--upgrade|-U)([[:space:]=]|$)`, "exempt": true, "what": "upgrades dependencies"},
-	"lock": {"pattern": `(^|[^A-Za-z0-9_./$-])(uv|\$[({]UV[)}])[[:space:]]+lock([[:space:]]|$)`, "exempt": true, "what": "rewrites the lock"},
-	"purge": {"pattern": `(^|[^A-Za-z0-9_./$-])(uv|\$[({]UV[)}])[[:space:]]+cache[[:space:]]+(clean|prune)`, "exempt": false, "what": "purges the uv cache"},
+	"lock": {"pattern": `(^|[^A-Za-z0-9_.$-])(uv|\$[({]UV[)}])[[:space:]]+lock([[:space:]]|$)`, "exempt": true, "what": "rewrites the lock"},
+	"purge": {"pattern": `(^|[^A-Za-z0-9_.$-])(uv|\$[({]UV[)}])[[:space:]]+cache[[:space:]]+(clean|prune)`, "exempt": false, "what": "purges the uv cache"},
 	"retry": {"pattern": `(^|[^A-Za-z0-9_])(retry|retries|until)([^A-Za-z0-9_]|$)`, "exempt": false, "what": "retries around uv"},
 }
 
@@ -428,13 +443,13 @@ deny contains f if {
 # word after `uvx` or the helper's `tool` command when there is no `--from`.
 from_pattern := `--from[ =]["']?([^"'[:space:]]+)`
 
-uvx_positional := `(^|[^A-Za-z0-9_./$-])uvx[[:space:]]+((--python[ =][^[:space:]]+|-[^[:space:]]+)[[:space:]]+)*([^-[:space:]]["']?[^"'[:space:]]*)`
+uvx_positional := `(^|[^A-Za-z0-9_.$-])uvx[[:space:]]+((--python[ =][^[:space:]]+|-[^[:space:]]+)[[:space:]]+)*([^-[:space:]]["']?[^"'[:space:]]*)`
 
-tool_run_positional := `(^|[^A-Za-z0-9_./$-])uv[[:space:]]+tool[[:space:]]+run[[:space:]]+((--python[ =][^[:space:]]+|-[^[:space:]]+)[[:space:]]+)*([^-[:space:]]["']?[^"'[:space:]]*)`
+tool_run_positional := `(^|[^A-Za-z0-9_.$-])uv[[:space:]]+tool[[:space:]]+run[[:space:]]+((--python[ =][^[:space:]]+|-[^[:space:]]+)[[:space:]]+)*([^-[:space:]]["']?[^"'[:space:]]*)`
 
 gate_positional := `uv_gate\.py[[:space:]]+tool[[:space:]]+((-[^[:space:]]+)[[:space:]]+)*([^-[:space:]]["']?[^"'[:space:]]*)`
 
-tool_context(text) if regex.match(`(^|[^A-Za-z0-9_./$-])uvx([[:space:]]|$)`, text)
+tool_context(text) if regex.match(`(^|[^A-Za-z0-9_.$-])uvx([[:space:]]|$)`, text)
 
 tool_context(text) if regex.match(`uv[[:space:]]+tool[[:space:]]+run`, text)
 
@@ -466,6 +481,27 @@ pinned(spec) if {
 
 pinned(spec) if regex.match(git_commit_pin, spec)
 
+# A release tag is accepted only for a direct invocation: the helper itself
+# refuses a Git spec that is not a full commit, so a tag routed through it could
+# never run.
+gated(text) if contains(text, "uv_gate.py")
+
+release_tag_accepted(spec, text) if {
+	release_tag_pinned(spec)
+	not gated(text)
+}
+
+# A direct `uvx --from <listed repository>@vX.Y.Z` is the shape
+# spelling-config-baseline (PD-007) requires, so UV-003 does not call it a
+# bypass; UV-006 still judges the pin.
+direct_release_tag_invocation(text) if {
+	specs := tool_specs(text)
+	count(specs) > 0
+	every spec in specs {
+		release_tag_pinned(spec)
+	}
+}
+
 release_tag_pinned(spec) if {
 	some repository in release_tag_tools
 	pattern := sprintf(`^git\+https://%s(\.git)?@v[0-9]+\.[0-9]+\.[0-9]+$`, [regex.replace(repository, `[.]`, `\.`)])
@@ -496,7 +532,7 @@ deny contains f if {
 	some spec in tool_specs(source.text)
 	not unresolved(spec)
 	not pinned(spec)
-	not release_tag_pinned(spec)
+	not release_tag_accepted(spec, source.text)
 	f := finding(
 		"UV-006", "noncompliant", source.path, source.line,
 		sprintf("the tool spec %q is not pinned; use name==VERSION, name@VERSION, git+URL@<full commit SHA>, or a release tag for a listed tool", [spec]),
@@ -519,7 +555,7 @@ deny contains f if {
 	applicable
 	some requirement in input.requirements
 	contains(requirement.spec, "git+")
-	not regex.match(`@[0-9a-f]{40}(#[^[:space:]]*)?$`, requirement.spec)
+	not regex.match(`@[0-9a-f]{40}(#[^[:space:];]*)?([[:space:]]*;.*)?$`, requirement.spec)
 	f := finding(
 		"UV-007", "noncompliant", "pyproject.toml", 0,
 		sprintf("%s requires %q, a Git dependency that is not pinned to a full commit SHA", [requirement.origin, requirement.spec]),

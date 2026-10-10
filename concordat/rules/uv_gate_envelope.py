@@ -17,6 +17,7 @@ containment guard: no policy input is read from outside the checkout.
 from __future__ import annotations
 
 import hashlib
+import os
 import pathlib
 import tomllib
 import typing as typ
@@ -31,6 +32,7 @@ from .markdown_envelope import (
     WorkflowFile,
     _is_dir,
     _load_workflow,
+    _raise_walk_error,
     _read_text,
     is_file,
     load_workflows,
@@ -39,6 +41,8 @@ from .markdown_envelope import (
 )
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
     from .makefile_facts import MakeutilReport
 
 ENVELOPE_SCHEMA_VERSION: typ.Final = 1
@@ -243,6 +247,22 @@ def _optional_string(table: dict[str, object], key: str) -> str | None:
     return value if isinstance(value, str) else None
 
 
+def _source_tables(
+    sources: dict[str, object],
+) -> cabc.Iterator[tuple[str, dict[str, object]]]:
+    """Yield each source table, expanding a list selected by marker.
+
+    Yields
+    ------
+    tuple[str, dict[str, object]]
+        The package name and one source table per entry.
+
+    """
+    for name, entry in sources.items():
+        for candidate in entry if isinstance(entry, list) else [entry]:
+            yield name, _table(candidate)
+
+
 def _git_sources(parsed: object) -> list[GitSource]:
     """Return every `[tool.uv.sources]` entry that names a Git repository.
 
@@ -254,58 +274,63 @@ def _git_sources(parsed: object) -> list[GitSource]:
         One fact per Git source, with the revision selectors it declares.
     """
     uv_table = _table(_table(_table(parsed).get("tool")).get("uv"))
-    found: list[GitSource] = []
-    for name, entry in _table(uv_table.get("sources")).items():
-        entries = entry if isinstance(entry, list) else [entry]
-        for candidate in entries:
-            source = _table(candidate)
-            git = _optional_string(source, "git")
-            if git is None:
-                continue
-            found.append({
-                "name": name,
-                "git": git,
-                "rev": _optional_string(source, "rev"),
-                "tag": _optional_string(source, "tag"),
-                "branch": _optional_string(source, "branch"),
-            })
-    return found
+    return [
+        {
+            "name": name,
+            "git": git,
+            "rev": _optional_string(source, "rev"),
+            "tag": _optional_string(source, "tag"),
+            "branch": _optional_string(source, "branch"),
+        }
+        for name, source in _source_tables(_table(uv_table.get("sources")))
+        if (git := _optional_string(source, "git")) is not None
+    ]
+
+
+def _action_manifests(directory: pathlib.Path) -> list[pathlib.PurePosixPath]:
+    """Return every `action.yml` or `action.yaml` anywhere below *directory*.
+
+    The walk never follows symbolic links and raises when a directory cannot be
+    listed, rather than treating it as holding no action.
+
+    Returns
+    -------
+    list[pathlib.PurePosixPath]
+        The manifests' paths relative to the checkout, sorted.
+    """
+    found: list[pathlib.PurePosixPath] = []
+    for current, directories, files in os.walk(directory, onerror=_raise_walk_error):
+        directories.sort()
+        base = pathlib.Path(current).relative_to(directory)
+        found.extend(
+            ACTIONS_DIRECTORY / base.as_posix() / name
+            for name in sorted(files)
+            if name in ACTION_FILENAMES
+        )
+    return sorted(found)
 
 
 def load_actions(checkout: pathlib.Path, root: pathlib.Path) -> list[WorkflowFile]:
     """Return every composite action file under `.github/actions`, sorted.
 
-    Only the `action.yml` or `action.yaml` directly inside each action's
-    directory counts. An `OperationalRuleError` propagates from the containment
-    guard, or when the directory exists but cannot be listed.
+    An action may sit at any depth, such as `.github/actions/setup/python`.
+    An `OperationalRuleError` propagates from the containment guard, or when
+    the directory tree cannot be listed.
 
     Returns
     -------
     list[WorkflowFile]
-        One fact per action file, ordered by directory name.
-
-    Raises
-    ------
-    OperationalRuleError
-        If the actions directory exists but cannot be listed.
+        One fact per action file, ordered by path.
     """
     directory = checkout / ACTIONS_DIRECTORY
     if not within_checkout(root, directory, OPERATION_LIST_ACTIONS):
         return []
     if not _is_dir(directory, OPERATION_LIST_ACTIONS):
         return []
-    try:
-        entries = sorted(directory.iterdir(), key=lambda entry: entry.name)
-    except OSError as error:
-        message = f"cannot list {directory}: {error}"
-        raise OperationalRuleError(
-            message, operation=OPERATION_LIST_ACTIONS, resource=directory
-        ) from error
     return [
-        _load_workflow(checkout, root, ACTIONS_DIRECTORY / entry.name / name)
-        for entry in entries
-        for name in ACTION_FILENAMES
-        if is_file(entry / name, OPERATION_LIST_ACTIONS)
+        _load_workflow(checkout, root, relative)
+        for relative in _action_manifests(directory)
+        if is_file(checkout / relative, OPERATION_LIST_ACTIONS)
     ]
 
 

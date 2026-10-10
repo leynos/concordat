@@ -74,8 +74,8 @@ parameters:
       - UV_CACHE_DIR
       - UV_TOOL_DIR
     # spelling-config-baseline (PD-007) requires typos-config-builder at a
-    # release tag and rejects the commit form, so this rule accepts the tag
-    # and leaves the floor to that rule.
+    # release tag and rejects the commit form, so this rule accepts the tag,
+    # for a direct invocation only, and leaves the floor to that rule.
     release_tag_tools:
       - github.com/leynos/typos-config-builder
     maintenance_targets:

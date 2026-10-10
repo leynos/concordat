@@ -671,11 +671,13 @@ it, a `uv.lock`, or the helper) and reports:
   around uv; a `lock` target may lock and upgrade.
 - **UV-006**: every tool spec is `name==VERSION`, `name@VERSION` or
   `git+URL@<full commit SHA>`. typos-config-builder is also accepted at a
-  release tag, because the spelling baseline requires that form.
+  release tag when it is run directly with `uvx`, because the spelling baseline
+  requires that form and the helper refuses a Git spec that is not a commit.
 - **UV-007**: Git dependencies in `pyproject.toml` are pinned to a full commit.
 
-An `include`, an unresolvable variable, or a file that cannot be decoded makes
-the affected check indeterminate rather than passing it.
+An `include`, a recovered Makefile parse, an unresolvable variable, or a file
+that cannot be decoded makes the affected check indeterminate rather than
+passing it, even when the checkout shows no other sign of using uv.
 
 ### Auditing Markdown formatting wiring
 

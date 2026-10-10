@@ -88,7 +88,7 @@ test: prepare
 \t$(UV_GATE) run --group dev -- pytest -q
 
 spelling:
-\t{gated_tool(BUILDER + "@v0.1.3", "typos-config-builder gate")}
+\tuvx --from "{BUILDER}@v0.1.3" typos-config-builder gate
 """
 
 
@@ -212,6 +212,45 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
         "Makefile": makefile("uvx --from=ruff==0.16.4 ruff check .")
     }),
     "uvx_unpinned_positional": Scenario({"Makefile": makefile("uvx ruff check .")}),
+    # Fail closed where the Makefile may hide uv, and where uv is named by path.
+    "include_without_uv": Scenario({
+        "Makefile": "include uv.mk\n",
+        "scripts/uv_gate.py": None,
+        "pyproject.toml": None,
+        "uv.lock": None,
+        ".github/workflows/ci.yml": None,
+    }),
+    "recovered_without_uv": Scenario({
+        "Makefile": "this is not make\n",
+        "scripts/uv_gate.py": None,
+        "pyproject.toml": None,
+        "uv.lock": None,
+        ".github/workflows/ci.yml": None,
+    }),
+    "path_qualified_uv": Scenario({"Makefile": makefile("/usr/bin/uv run pytest")}),
+    "path_qualified_uv_only": Scenario({
+        "Makefile": "lint:\n\t/opt/uv/bin/uv sync\n",
+        "scripts/uv_gate.py": None,
+        "pyproject.toml": None,
+        "uv.lock": None,
+        ".github/workflows/ci.yml": None,
+    }),
+    "gate_variable_conditional": Scenario({
+        "Makefile": "ifeq ($(A),1)\nUV_GATE := uv\nendif\n"
+        + COMPLIANT_MAKEFILE.replace("UV_GATE ?= python3 scripts/uv_gate.py\n", "", 1)
+    }),
+    "nested_action_cache": Scenario({
+        ".github/actions/setup/python/action.yml": (
+            "name: setup\nruns:\n  using: composite\n  steps:\n"
+            "    - shell: bash\n      run: make prepare\n"
+            "      env:\n        UV_TOOL_DIR: .uv-tools\n"
+        )
+    }),
+    "git_dep_marker": Scenario({
+        "pyproject.toml": with_dependency(
+            f"{CMD_MOX_REQUIREMENT}@{SHA} ; python_version < '3.13'"
+        )
+    }),
     # UV-001
     "gate_missing": Scenario({"scripts/uv_gate.py": None}),
     "gate_older_canon": Scenario({"scripts/uv_gate.py": OLDER_GATE}),
@@ -330,7 +369,26 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "tool_git_sha": Scenario({
         "Makefile": makefile(gated_tool(f"{OTHER_TOOL}@{SHA}", "tool"))
     }),
+    # The compliant base already runs the builder directly at a release tag, the
+    # shape spelling-config-baseline (PD-007) requires.
     "tool_typos_builder_tag": Scenario(),
+    "tool_typos_builder_tag_via_gate": Scenario({
+        "Makefile": makefile(
+            gated_tool(BUILDER + "@v0.1.3", "typos-config-builder gate")
+        )
+    }),
+    "tool_other_tag_direct": Scenario({
+        "Makefile": makefile(f'uvx --from "{OTHER_TOOL}@v1.2.3" tool')
+    }),
+    "tool_mixed_tags_one_line": Scenario({
+        "Makefile": makefile(
+            f'uvx --from "{BUILDER}@v0.1.3" typos-config-builder gate'
+            f' && uvx --from "{OTHER_TOOL}@v1.2.3" tool'
+        )
+    }),
+    "tool_typos_builder_branch_direct": Scenario({
+        "Makefile": makefile(f'uvx --from "{BUILDER}@main" typos-config-builder gate')
+    }),
     "tool_typos_builder_sha": Scenario({
         "Makefile": makefile(
             gated_tool(f"{BUILDER}@{SHA}", "typos-config-builder gate")

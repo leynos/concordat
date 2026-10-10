@@ -165,6 +165,32 @@ test_gate_older_canon_fails_once_dropped if {
 	reported(data.fixtures.gate_older_canon) == {"UV-001/noncompliant"} with data.parameters.gate_digests as current_only
 }
 
+# Fail closed where uv may be hidden or named by path, and the release-tag
+# exception applies to direct invocations only.
+test_gate_variable_conditional if reported(data.fixtures.gate_variable_conditional) == {"UV-003/indeterminate"}
+
+test_git_dep_marker if reported(data.fixtures.git_dep_marker) == set()
+
+test_include_without_uv if reported(data.fixtures.include_without_uv) == {"UV-003/indeterminate"}
+
+test_nested_action_cache if reported(data.fixtures.nested_action_cache) == {"UV-002/noncompliant"}
+
+test_path_qualified_uv if reported(data.fixtures.path_qualified_uv) == {"UV-003/noncompliant"}
+
+test_path_qualified_uv_only if reported(data.fixtures.path_qualified_uv_only) == {"UV-001/noncompliant", "UV-003/noncompliant"}
+
+test_recovered_without_uv if reported(data.fixtures.recovered_without_uv) == {"UV-003/indeterminate"}
+
+test_tool_other_tag_direct if reported(data.fixtures.tool_other_tag_direct) == {"UV-003/noncompliant", "UV-006/noncompliant"}
+
+test_tool_typos_builder_branch_direct if reported(data.fixtures.tool_typos_builder_branch_direct) == {"UV-003/noncompliant", "UV-006/noncompliant"}
+
+test_tool_typos_builder_tag_via_gate if reported(data.fixtures.tool_typos_builder_tag_via_gate) == {"UV-006/noncompliant"}
+
+# The exception names typos-config-builder alone: another tool at a tag, run
+# directly, fails both checks, even beside a listed one on the same line.
+test_tool_mixed_tags_one_line if reported(data.fixtures.tool_mixed_tags_one_line) == {"UV-003/noncompliant", "UV-006/noncompliant"}
+
 # Lines and messages that make a finding usable.
 
 test_bypass_names_the_recipe_line if {
@@ -190,7 +216,13 @@ test_a_tag_is_not_accepted_for_a_tool_that_is_not_listed if {
 }
 
 test_release_tag_tools_param_widens_the_tag_exception if {
-	count(findings(data.fixtures.tool_git_tag_other_repo)) == 0 with data.parameters.release_tag_tools as ["github.com/example/tool"]
+	widened := ["github.com/example/tool"]
+	count(findings(data.fixtures.tool_other_tag_direct)) == 0 with data.parameters.release_tag_tools as widened
+}
+
+test_a_gated_tag_stays_refused_even_for_a_listed_tool if {
+	widened := ["github.com/example/tool"]
+	reported(data.fixtures.tool_git_tag_other_repo) == {"UV-006/noncompliant"} with data.parameters.release_tag_tools as widened
 }
 
 test_no_canonical_digest_is_indeterminate_not_clean if {

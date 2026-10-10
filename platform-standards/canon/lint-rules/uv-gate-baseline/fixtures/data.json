@@ -23,8 +23,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "e202b8cb781e21601cfc13331f86aa4c2b6569ade97e50b2543840d72647b76f",
-          "byte_length": 358
+          "sha256": "2d99b42843cd2bc8062266a11b24685615ce8caad1b5dab9bd20f21b23eb7b73",
+          "byte_length": 343
         },
         "parse": {
           "status": "complete",
@@ -171,13 +171,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "$(UV_GATE) tool --from 'git+https://github.com/leynos/typos-config-builder.git@v0.1.3' -- typos-config-builder gate",
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 241,
-                  "end_byte": 358,
+                  "end_byte": 343,
                   "start_line": 14,
                   "start_column": 1,
                   "end_line": 15,
@@ -187,7 +187,7 @@
             ],
             "location": {
               "start_byte": 231,
-              "end_byte": 358,
+              "end_byte": 343,
               "start_line": 13,
               "start_column": 1,
               "end_line": 15,
@@ -787,8 +787,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "e202b8cb781e21601cfc13331f86aa4c2b6569ade97e50b2543840d72647b76f",
-          "byte_length": 358
+          "sha256": "2d99b42843cd2bc8062266a11b24685615ce8caad1b5dab9bd20f21b23eb7b73",
+          "byte_length": 343
         },
         "parse": {
           "status": "complete",
@@ -935,13 +935,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "$(UV_GATE) tool --from 'git+https://github.com/leynos/typos-config-builder.git@v0.1.3' -- typos-config-builder gate",
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 241,
-                  "end_byte": 358,
+                  "end_byte": 343,
                   "start_line": 14,
                   "start_column": 1,
                   "end_line": 15,
@@ -951,7 +951,7 @@
             ],
             "location": {
               "start_byte": 231,
-              "end_byte": 358,
+              "end_byte": 343,
               "start_line": 13,
               "start_column": 1,
               "end_line": 15,
@@ -1040,8 +1040,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "cad580e4c957546ecf73e6a3b35d33fa4a451c89a88ece05576d610feac8c7d3",
-          "byte_length": 376
+          "sha256": "bc4eb065360a8b5bf8a904ba48bd411dffdda71d5417fc05a5d27f55fe084e67",
+          "byte_length": 361
         },
         "parse": {
           "status": "recovered",
@@ -1062,8 +1062,8 @@
               "message": "expected ':'",
               "code": null,
               "location": {
-                "start_byte": 376,
-                "end_byte": 376,
+                "start_byte": 361,
+                "end_byte": 361,
                 "start_line": 17,
                 "start_column": 1,
                 "end_line": 17,
@@ -1213,13 +1213,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "$(UV_GATE) tool --from 'git+https://github.com/leynos/typos-config-builder.git@v0.1.3' -- typos-config-builder gate",
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 241,
-                  "end_byte": 358,
+                  "end_byte": 343,
                   "start_line": 14,
                   "start_column": 1,
                   "end_line": 15,
@@ -1229,7 +1229,7 @@
             ],
             "location": {
               "start_byte": 231,
-              "end_byte": 359,
+              "end_byte": 344,
               "start_line": 13,
               "start_column": 1,
               "end_line": 16,
@@ -1249,8 +1249,8 @@
             "conditions": [],
             "recipes": [],
             "location": {
-              "start_byte": 359,
-              "end_byte": 376,
+              "start_byte": 344,
+              "end_byte": 361,
               "start_line": 16,
               "start_column": 1,
               "end_line": 17,
@@ -1553,8 +1553,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "1c325bf01c47ba56574ab18aa9c12f5fabd537205dd7be8cc8b69b4774d7df1a",
-          "byte_length": 356
+          "sha256": "2cdfde9e5d69992e8ffb5dde592415511c775e87420ff28217a19c4500237a5a",
+          "byte_length": 341
         },
         "parse": {
           "status": "complete",
@@ -1701,13 +1701,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "$(UV_GATE) tool --from 'git+https://github.com/leynos/typos-config-builder.git@v0.1.3' -- typos-config-builder gate",
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 239,
-                  "end_byte": 356,
+                  "end_byte": 341,
                   "start_line": 14,
                   "start_column": 1,
                   "end_line": 15,
@@ -1717,7 +1717,7 @@
             ],
             "location": {
               "start_byte": 229,
-              "end_byte": 356,
+              "end_byte": 341,
               "start_line": 13,
               "start_column": 1,
               "end_line": 15,
@@ -1956,8 +1956,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "ee8cf1ee9d8ae80dc012897d8a90e1500ec54284bd04708142ab1e09bbc1169b",
-          "byte_length": 385
+          "sha256": "c4f581cd484efbba9c29947fdbc0711ba7b2045cf379fc65e21fe2f05f4d8501",
+          "byte_length": 370
         },
         "parse": {
           "status": "complete",
@@ -2104,13 +2104,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "$(UV_GATE) tool --from 'git+https://github.com/leynos/typos-config-builder.git@v0.1.3' -- typos-config-builder gate",
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 241,
-                  "end_byte": 358,
+                  "end_byte": 343,
                   "start_line": 14,
                   "start_column": 1,
                   "end_line": 15,
@@ -2120,7 +2120,7 @@
             ],
             "location": {
               "start_byte": 231,
-              "end_byte": 359,
+              "end_byte": 344,
               "start_line": 13,
               "start_column": 1,
               "end_line": 16,
@@ -2143,8 +2143,8 @@
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
-                  "start_byte": 366,
-                  "end_byte": 385,
+                  "start_byte": 351,
+                  "end_byte": 370,
                   "start_line": 17,
                   "start_column": 1,
                   "end_line": 18,
@@ -2153,8 +2153,8 @@
               }
             ],
             "location": {
-              "start_byte": 359,
-              "end_byte": 385,
+              "start_byte": 344,
+              "end_byte": 370,
               "start_line": 16,
               "start_column": 1,
               "end_line": 18,
@@ -2918,7 +2918,7 @@
       ],
       "git_sources": []
     },
-    "gate_missing": {
+    "include_without_uv": {
       "schema_version": 1,
       "kind": "policy-input/uv-gate-baseline",
       "repository": {
@@ -2927,8 +2927,8 @@
       },
       "applicability": {
         "root_makefile": true,
-        "pyproject": true,
-        "uv_lock": true,
+        "pyproject": false,
+        "uv_lock": false,
         "gate_file": false
       },
       "makefile": {
@@ -2941,8 +2941,646 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "e202b8cb781e21601cfc13331f86aa4c2b6569ade97e50b2543840d72647b76f",
-          "byte_length": 358
+          "sha256": "b9a9e83c6d5cacdf15ff32178c11a3761e86b868319329fee8ade5fe3ed9d1ba",
+          "byte_length": 14
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [],
+        "variables": [],
+        "includes": [
+          {
+            "ordinal": 0,
+            "raw_path": "uv.mk",
+            "optional": false,
+            "dynamic": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 14,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          }
+        ]
+      },
+      "workflows": [],
+      "actions": [],
+      "gate": null,
+      "pyproject": null,
+      "requirements": [],
+      "git_sources": []
+    },
+    "recovered_without_uv": {
+      "schema_version": 1,
+      "kind": "policy-input/uv-gate-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "pyproject": false,
+        "uv_lock": false,
+        "gate_file": false
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "83812ddccaf0eb80f20e8290109d1f48ee7926d70e0934b84424d6e2ffee7b1b",
+          "byte_length": 17
+        },
+        "parse": {
+          "status": "recovered",
+          "diagnostics": [
+            {
+              "message": "expected ':'",
+              "code": null,
+              "location": {
+                "start_byte": 0,
+                "end_byte": 4,
+                "start_line": 1,
+                "start_column": 1,
+                "end_line": 1,
+                "end_column": 5
+              }
+            },
+            {
+              "message": "expected ':'",
+              "code": null,
+              "location": {
+                "start_byte": 17,
+                "end_byte": 17,
+                "start_line": 2,
+                "start_column": 1,
+                "end_line": 2,
+                "end_column": 1
+              }
+            }
+          ]
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              "this",
+              "is",
+              "not",
+              "make"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 17,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "workflows": [],
+      "actions": [],
+      "gate": null,
+      "pyproject": null,
+      "requirements": [],
+      "git_sources": []
+    },
+    "path_qualified_uv": {
+      "schema_version": 1,
+      "kind": "policy-input/uv-gate-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "pyproject": true,
+        "uv_lock": true,
+        "gate_file": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "ee8ac8a00c4df1b2510a468bd33af0a7fefac03bd37bd116ff7ef118cddca8f3",
+          "byte_length": 67
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 1,
+            "targets": [
+              "t0"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "/usr/bin/uv run pytest",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 43,
+                  "end_byte": 67,
+                  "start_line": 4,
+                  "start_column": 1,
+                  "end_line": 5,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 39,
+              "end_byte": 67,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 5,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "UV_GATE",
+            "operator": "?=",
+            "raw_value": "python3 scripts/uv_gate.py",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 38,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "ci",
+            "on": "push",
+            "jobs": {
+              "gate": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "run": "make lint test"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "actions": [],
+      "gate": {
+        "path": "scripts/uv_gate.py",
+        "sha256": "217e22401cefed105cadeb0a51f6f152500b5a5812d7a5f4443e3c694c3a9358",
+        "error": null
+      },
+      "pyproject": {
+        "path": "pyproject.toml",
+        "parsed": {
+          "project": {
+            "name": "demo",
+            "version": "0.1.0"
+          },
+          "dependency-groups": {
+            "dev": [
+              "pytest>=8"
+            ]
+          }
+        },
+        "error": null
+      },
+      "requirements": [
+        {
+          "origin": "dependency-groups.dev",
+          "spec": "pytest>=8"
+        }
+      ],
+      "git_sources": []
+    },
+    "path_qualified_uv_only": {
+      "schema_version": 1,
+      "kind": "policy-input/uv-gate-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "pyproject": false,
+        "uv_lock": false,
+        "gate_file": false
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "a8d765290371d5f3d33f97dde02fc7a766cd5e198c09dc4eb789efbfad6ecdb1",
+          "byte_length": 27
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 0,
+            "targets": [
+              "lint"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "/opt/uv/bin/uv sync",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 6,
+                  "end_byte": 27,
+                  "start_line": 2,
+                  "start_column": 1,
+                  "end_line": 3,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 27,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 3,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [],
+        "includes": []
+      },
+      "workflows": [],
+      "actions": [],
+      "gate": null,
+      "pyproject": null,
+      "requirements": [],
+      "git_sources": []
+    },
+    "gate_variable_conditional": {
+      "schema_version": 1,
+      "kind": "policy-input/uv-gate-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "pyproject": true,
+        "uv_lock": true,
+        "gate_file": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "0d868e6eeb50540ba441f7bef9a7d026e60d2937760efab83389d9d0007ae521",
+          "byte_length": 339
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 1,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "prepare",
+              "lint",
+              "test",
+              "spelling"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 35,
+              "end_byte": 70,
+              "start_line": 5,
+              "start_column": 1,
+              "end_line": 6,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 2,
+            "targets": [
+              "prepare"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(UV_GATE) prepare --group dev",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 79,
+                  "end_byte": 111,
+                  "start_line": 7,
+                  "start_column": 1,
+                  "end_line": 8,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 70,
+              "end_byte": 112,
+              "start_line": 6,
+              "start_column": 1,
+              "end_line": 9,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 3,
+            "targets": [
+              "lint"
+            ],
+            "prerequisites": [
+              "prepare"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(UV_GATE) run --group dev -- ruff check .",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 126,
+                  "end_byte": 170,
+                  "start_line": 10,
+                  "start_column": 1,
+                  "end_line": 11,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 112,
+              "end_byte": 171,
+              "start_line": 9,
+              "start_column": 1,
+              "end_line": 12,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 4,
+            "targets": [
+              "test"
+            ],
+            "prerequisites": [
+              "prepare"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(UV_GATE) run --group dev -- pytest -q",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 185,
+                  "end_byte": 226,
+                  "start_line": 13,
+                  "start_column": 1,
+                  "end_line": 14,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 171,
+              "end_byte": 227,
+              "start_line": 12,
+              "start_column": 1,
+              "end_line": 15,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 5,
+            "targets": [
+              "spelling"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 237,
+                  "end_byte": 339,
+                  "start_line": 16,
+                  "start_column": 1,
+                  "end_line": 17,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 227,
+              "end_byte": 339,
+              "start_line": 15,
+              "start_column": 1,
+              "end_line": 17,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "UV_GATE",
+            "operator": ":=",
+            "raw_value": "uv",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [
+              {
+                "kind": "ifeq",
+                "expression": "($(A),1)",
+                "branch": "if",
+                "location": {
+                  "start_byte": 0,
+                  "end_byte": 14,
+                  "start_line": 1,
+                  "start_column": 1,
+                  "end_line": 2,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 14,
+              "end_byte": 28,
+              "start_line": 2,
+              "start_column": 1,
+              "end_line": 3,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "ci",
+            "on": "push",
+            "jobs": {
+              "gate": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "run": "make lint test"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "actions": [],
+      "gate": {
+        "path": "scripts/uv_gate.py",
+        "sha256": "217e22401cefed105cadeb0a51f6f152500b5a5812d7a5f4443e3c694c3a9358",
+        "error": null
+      },
+      "pyproject": {
+        "path": "pyproject.toml",
+        "parsed": {
+          "project": {
+            "name": "demo",
+            "version": "0.1.0"
+          },
+          "dependency-groups": {
+            "dev": [
+              "pytest>=8"
+            ]
+          }
+        },
+        "error": null
+      },
+      "requirements": [
+        {
+          "origin": "dependency-groups.dev",
+          "spec": "pytest>=8"
+        }
+      ],
+      "git_sources": []
+    },
+    "nested_action_cache": {
+      "schema_version": 1,
+      "kind": "policy-input/uv-gate-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "pyproject": true,
+        "uv_lock": true,
+        "gate_file": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "2d99b42843cd2bc8062266a11b24685615ce8caad1b5dab9bd20f21b23eb7b73",
+          "byte_length": 343
         },
         "parse": {
           "status": "complete",
@@ -3089,13 +3727,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "$(UV_GATE) tool --from 'git+https://github.com/leynos/typos-config-builder.git@v0.1.3' -- typos-config-builder gate",
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 241,
-                  "end_byte": 358,
+                  "end_byte": 343,
                   "start_line": 14,
                   "start_column": 1,
                   "end_line": 15,
@@ -3105,7 +3743,564 @@
             ],
             "location": {
               "start_byte": 231,
-              "end_byte": 358,
+              "end_byte": 343,
+              "start_line": 13,
+              "start_column": 1,
+              "end_line": 15,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "UV_GATE",
+            "operator": "?=",
+            "raw_value": "python3 scripts/uv_gate.py",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 38,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "ci",
+            "on": "push",
+            "jobs": {
+              "gate": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "run": "make lint test"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "actions": [
+        {
+          "path": ".github/actions/setup/python/action.yml",
+          "parsed": {
+            "name": "setup",
+            "runs": {
+              "using": "composite",
+              "steps": [
+                {
+                  "shell": "bash",
+                  "run": "make prepare",
+                  "env": {
+                    "UV_TOOL_DIR": ".uv-tools"
+                  }
+                }
+              ]
+            }
+          },
+          "error": null
+        }
+      ],
+      "gate": {
+        "path": "scripts/uv_gate.py",
+        "sha256": "217e22401cefed105cadeb0a51f6f152500b5a5812d7a5f4443e3c694c3a9358",
+        "error": null
+      },
+      "pyproject": {
+        "path": "pyproject.toml",
+        "parsed": {
+          "project": {
+            "name": "demo",
+            "version": "0.1.0"
+          },
+          "dependency-groups": {
+            "dev": [
+              "pytest>=8"
+            ]
+          }
+        },
+        "error": null
+      },
+      "requirements": [
+        {
+          "origin": "dependency-groups.dev",
+          "spec": "pytest>=8"
+        }
+      ],
+      "git_sources": []
+    },
+    "git_dep_marker": {
+      "schema_version": 1,
+      "kind": "policy-input/uv-gate-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "pyproject": true,
+        "uv_lock": true,
+        "gate_file": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "2d99b42843cd2bc8062266a11b24685615ce8caad1b5dab9bd20f21b23eb7b73",
+          "byte_length": 343
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 1,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "prepare",
+              "lint",
+              "test",
+              "spelling"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 39,
+              "end_byte": 74,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 2,
+            "targets": [
+              "prepare"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(UV_GATE) prepare --group dev",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 83,
+                  "end_byte": 115,
+                  "start_line": 5,
+                  "start_column": 1,
+                  "end_line": 6,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 74,
+              "end_byte": 116,
+              "start_line": 4,
+              "start_column": 1,
+              "end_line": 7,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 3,
+            "targets": [
+              "lint"
+            ],
+            "prerequisites": [
+              "prepare"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(UV_GATE) run --group dev -- ruff check .",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 130,
+                  "end_byte": 174,
+                  "start_line": 8,
+                  "start_column": 1,
+                  "end_line": 9,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 116,
+              "end_byte": 175,
+              "start_line": 7,
+              "start_column": 1,
+              "end_line": 10,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 4,
+            "targets": [
+              "test"
+            ],
+            "prerequisites": [
+              "prepare"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(UV_GATE) run --group dev -- pytest -q",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 189,
+                  "end_byte": 230,
+                  "start_line": 11,
+                  "start_column": 1,
+                  "end_line": 12,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 175,
+              "end_byte": 231,
+              "start_line": 10,
+              "start_column": 1,
+              "end_line": 13,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 5,
+            "targets": [
+              "spelling"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 241,
+                  "end_byte": 343,
+                  "start_line": 14,
+                  "start_column": 1,
+                  "end_line": 15,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 231,
+              "end_byte": 343,
+              "start_line": 13,
+              "start_column": 1,
+              "end_line": 15,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "UV_GATE",
+            "operator": "?=",
+            "raw_value": "python3 scripts/uv_gate.py",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 38,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "ci",
+            "on": "push",
+            "jobs": {
+              "gate": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "run": "make lint test"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "actions": [],
+      "gate": {
+        "path": "scripts/uv_gate.py",
+        "sha256": "217e22401cefed105cadeb0a51f6f152500b5a5812d7a5f4443e3c694c3a9358",
+        "error": null
+      },
+      "pyproject": {
+        "path": "pyproject.toml",
+        "parsed": {
+          "project": {
+            "name": "demo",
+            "version": "0.1.0"
+          },
+          "dependency-groups": {
+            "dev": [
+              "pytest>=8",
+              "cmd-mox @ git+https://github.com/leynos/cmd-mox.git@0123456789abcdef0123456789abcdef01234567 ; python_version < '3.13'"
+            ]
+          }
+        },
+        "error": null
+      },
+      "requirements": [
+        {
+          "origin": "dependency-groups.dev",
+          "spec": "pytest>=8"
+        },
+        {
+          "origin": "dependency-groups.dev",
+          "spec": "cmd-mox @ git+https://github.com/leynos/cmd-mox.git@0123456789abcdef0123456789abcdef01234567 ; python_version < '3.13'"
+        }
+      ],
+      "git_sources": []
+    },
+    "gate_missing": {
+      "schema_version": 1,
+      "kind": "policy-input/uv-gate-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "pyproject": true,
+        "uv_lock": true,
+        "gate_file": false
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "2d99b42843cd2bc8062266a11b24685615ce8caad1b5dab9bd20f21b23eb7b73",
+          "byte_length": 343
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 1,
+            "targets": [
+              ".PHONY"
+            ],
+            "prerequisites": [
+              "prepare",
+              "lint",
+              "test",
+              "spelling"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [],
+            "location": {
+              "start_byte": 39,
+              "end_byte": 74,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 4,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 2,
+            "targets": [
+              "prepare"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(UV_GATE) prepare --group dev",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 83,
+                  "end_byte": 115,
+                  "start_line": 5,
+                  "start_column": 1,
+                  "end_line": 6,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 74,
+              "end_byte": 116,
+              "start_line": 4,
+              "start_column": 1,
+              "end_line": 7,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 3,
+            "targets": [
+              "lint"
+            ],
+            "prerequisites": [
+              "prepare"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(UV_GATE) run --group dev -- ruff check .",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 130,
+                  "end_byte": 174,
+                  "start_line": 8,
+                  "start_column": 1,
+                  "end_line": 9,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 116,
+              "end_byte": 175,
+              "start_line": 7,
+              "start_column": 1,
+              "end_line": 10,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 4,
+            "targets": [
+              "test"
+            ],
+            "prerequisites": [
+              "prepare"
+            ],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(UV_GATE) run --group dev -- pytest -q",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 189,
+                  "end_byte": 230,
+                  "start_line": 11,
+                  "start_column": 1,
+                  "end_line": 12,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 175,
+              "end_byte": 231,
+              "start_line": 10,
+              "start_column": 1,
+              "end_line": 13,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 5,
+            "targets": [
+              "spelling"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 241,
+                  "end_byte": 343,
+                  "start_line": 14,
+                  "start_column": 1,
+                  "end_line": 15,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 231,
+              "end_byte": 343,
               "start_line": 13,
               "start_column": 1,
               "end_line": 15,
@@ -3203,8 +4398,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "e202b8cb781e21601cfc13331f86aa4c2b6569ade97e50b2543840d72647b76f",
-          "byte_length": 358
+          "sha256": "2d99b42843cd2bc8062266a11b24685615ce8caad1b5dab9bd20f21b23eb7b73",
+          "byte_length": 343
         },
         "parse": {
           "status": "complete",
@@ -3351,13 +4546,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "$(UV_GATE) tool --from 'git+https://github.com/leynos/typos-config-builder.git@v0.1.3' -- typos-config-builder gate",
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 241,
-                  "end_byte": 358,
+                  "end_byte": 343,
                   "start_line": 14,
                   "start_column": 1,
                   "end_line": 15,
@@ -3367,7 +4562,7 @@
             ],
             "location": {
               "start_byte": 231,
-              "end_byte": 358,
+              "end_byte": 343,
               "start_line": 13,
               "start_column": 1,
               "end_line": 15,
@@ -3469,8 +4664,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "e202b8cb781e21601cfc13331f86aa4c2b6569ade97e50b2543840d72647b76f",
-          "byte_length": 358
+          "sha256": "2d99b42843cd2bc8062266a11b24685615ce8caad1b5dab9bd20f21b23eb7b73",
+          "byte_length": 343
         },
         "parse": {
           "status": "complete",
@@ -3617,13 +4812,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "$(UV_GATE) tool --from 'git+https://github.com/leynos/typos-config-builder.git@v0.1.3' -- typos-config-builder gate",
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 241,
-                  "end_byte": 358,
+                  "end_byte": 343,
                   "start_line": 14,
                   "start_column": 1,
                   "end_line": 15,
@@ -3633,7 +4828,7 @@
             ],
             "location": {
               "start_byte": 231,
-              "end_byte": 358,
+              "end_byte": 343,
               "start_line": 13,
               "start_column": 1,
               "end_line": 15,
@@ -4222,8 +5417,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "e202b8cb781e21601cfc13331f86aa4c2b6569ade97e50b2543840d72647b76f",
-          "byte_length": 358
+          "sha256": "2d99b42843cd2bc8062266a11b24685615ce8caad1b5dab9bd20f21b23eb7b73",
+          "byte_length": 343
         },
         "parse": {
           "status": "complete",
@@ -4370,13 +5565,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "$(UV_GATE) tool --from 'git+https://github.com/leynos/typos-config-builder.git@v0.1.3' -- typos-config-builder gate",
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 241,
-                  "end_byte": 358,
+                  "end_byte": 343,
                   "start_line": 14,
                   "start_column": 1,
                   "end_line": 15,
@@ -4386,7 +5581,7 @@
             ],
             "location": {
               "start_byte": 231,
-              "end_byte": 358,
+              "end_byte": 343,
               "start_line": 13,
               "start_column": 1,
               "end_line": 15,
@@ -4491,8 +5686,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "e202b8cb781e21601cfc13331f86aa4c2b6569ade97e50b2543840d72647b76f",
-          "byte_length": 358
+          "sha256": "2d99b42843cd2bc8062266a11b24685615ce8caad1b5dab9bd20f21b23eb7b73",
+          "byte_length": 343
         },
         "parse": {
           "status": "complete",
@@ -4639,13 +5834,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "$(UV_GATE) tool --from 'git+https://github.com/leynos/typos-config-builder.git@v0.1.3' -- typos-config-builder gate",
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 241,
-                  "end_byte": 358,
+                  "end_byte": 343,
                   "start_line": 14,
                   "start_column": 1,
                   "end_line": 15,
@@ -4655,7 +5850,7 @@
             ],
             "location": {
               "start_byte": 231,
-              "end_byte": 358,
+              "end_byte": 343,
               "start_line": 13,
               "start_column": 1,
               "end_line": 15,
@@ -4757,8 +5952,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "e202b8cb781e21601cfc13331f86aa4c2b6569ade97e50b2543840d72647b76f",
-          "byte_length": 358
+          "sha256": "2d99b42843cd2bc8062266a11b24685615ce8caad1b5dab9bd20f21b23eb7b73",
+          "byte_length": 343
         },
         "parse": {
           "status": "complete",
@@ -4905,13 +6100,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "$(UV_GATE) tool --from 'git+https://github.com/leynos/typos-config-builder.git@v0.1.3' -- typos-config-builder gate",
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 241,
-                  "end_byte": 358,
+                  "end_byte": 343,
                   "start_line": 14,
                   "start_column": 1,
                   "end_line": 15,
@@ -4921,7 +6116,7 @@
             ],
             "location": {
               "start_byte": 231,
-              "end_byte": 358,
+              "end_byte": 343,
               "start_line": 13,
               "start_column": 1,
               "end_line": 15,
@@ -5965,8 +7160,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "929cc8545ae13378d93085344aea4502a3cb6bfc4e944a3d02015b0432fa837e",
-          "byte_length": 357
+          "sha256": "ea6b915bcab1a68138c274663c2f644c14b5e4669911f083cf50c87ac2215719",
+          "byte_length": 342
         },
         "parse": {
           "status": "complete",
@@ -6113,13 +7308,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "$(UV_GATE) tool --from 'git+https://github.com/leynos/typos-config-builder.git@v0.1.3' -- typos-config-builder gate",
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 240,
-                  "end_byte": 357,
+                  "end_byte": 342,
                   "start_line": 14,
                   "start_column": 1,
                   "end_line": 15,
@@ -6129,7 +7324,7 @@
             ],
             "location": {
               "start_byte": 230,
-              "end_byte": 357,
+              "end_byte": 342,
               "start_line": 13,
               "start_column": 1,
               "end_line": 15,
@@ -6231,8 +7426,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "38e14f3f468352c134a3c65de215bdec9df939540d572571d6d59e8da84202f3",
-          "byte_length": 385
+          "sha256": "54d9179177fc4c199d847a42f28c632be46b8b1c7675ca62ee884a748e012ed9",
+          "byte_length": 370
         },
         "parse": {
           "status": "complete",
@@ -6379,13 +7574,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "$(UV_GATE) tool --from 'git+https://github.com/leynos/typos-config-builder.git@v0.1.3' -- typos-config-builder gate",
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 241,
-                  "end_byte": 358,
+                  "end_byte": 343,
                   "start_line": 14,
                   "start_column": 1,
                   "end_line": 15,
@@ -6395,7 +7590,7 @@
             ],
             "location": {
               "start_byte": 231,
-              "end_byte": 358,
+              "end_byte": 343,
               "start_line": 13,
               "start_column": 1,
               "end_line": 15,
@@ -6432,8 +7627,8 @@
             "define_block": false,
             "conditions": [],
             "location": {
-              "start_byte": 358,
-              "end_byte": 385,
+              "start_byte": 343,
+              "end_byte": 370,
               "start_line": 15,
               "start_column": 1,
               "end_line": 16,
@@ -6515,8 +7710,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "8189e6833fc1b81c52e81488d19da3f064fd2d933efa8214f306be83ab4dad1d",
-          "byte_length": 373
+          "sha256": "f4fa9f02381d61ca211393bf37e2846a3e9f688b830a5ac18480766dd8fb5ba2",
+          "byte_length": 358
         },
         "parse": {
           "status": "complete",
@@ -6663,13 +7858,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "$(UV_GATE) tool --from 'git+https://github.com/leynos/typos-config-builder.git@v0.1.3' -- typos-config-builder gate",
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 256,
-                  "end_byte": 373,
+                  "end_byte": 358,
                   "start_line": 16,
                   "start_column": 1,
                   "end_line": 17,
@@ -6679,7 +7874,7 @@
             ],
             "location": {
               "start_byte": 246,
-              "end_byte": 373,
+              "end_byte": 358,
               "start_line": 15,
               "start_column": 1,
               "end_line": 17,
@@ -6879,8 +8074,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "e202b8cb781e21601cfc13331f86aa4c2b6569ade97e50b2543840d72647b76f",
-          "byte_length": 358
+          "sha256": "2d99b42843cd2bc8062266a11b24685615ce8caad1b5dab9bd20f21b23eb7b73",
+          "byte_length": 343
         },
         "parse": {
           "status": "complete",
@@ -7027,13 +8222,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "$(UV_GATE) tool --from 'git+https://github.com/leynos/typos-config-builder.git@v0.1.3' -- typos-config-builder gate",
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 241,
-                  "end_byte": 358,
+                  "end_byte": 343,
                   "start_line": 14,
                   "start_column": 1,
                   "end_line": 15,
@@ -7043,7 +8238,7 @@
             ],
             "location": {
               "start_byte": 231,
-              "end_byte": 358,
+              "end_byte": 343,
               "start_line": 13,
               "start_column": 1,
               "end_line": 15,
@@ -8104,8 +9299,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "ef145584d7d037ae2d8acef78543bd0e28f1cd8829418a049a77b6ddd3fddf7f",
-          "byte_length": 384
+          "sha256": "5fe5b9b6d2c124ff503f52f2ce81c2b23f1a08d5bbbe5b47ec0ba9963d9066c3",
+          "byte_length": 369
         },
         "parse": {
           "status": "complete",
@@ -8252,13 +9447,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "$(UV_GATE) tool --from 'git+https://github.com/leynos/typos-config-builder.git@v0.1.3' -- typos-config-builder gate",
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 241,
-                  "end_byte": 358,
+                  "end_byte": 343,
                   "start_line": 14,
                   "start_column": 1,
                   "end_line": 15,
@@ -8268,7 +9463,7 @@
             ],
             "location": {
               "start_byte": 231,
-              "end_byte": 359,
+              "end_byte": 344,
               "start_line": 13,
               "start_column": 1,
               "end_line": 16,
@@ -8291,8 +9486,8 @@
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
-                  "start_byte": 365,
-                  "end_byte": 384,
+                  "start_byte": 350,
+                  "end_byte": 369,
                   "start_line": 17,
                   "start_column": 1,
                   "end_line": 18,
@@ -8301,8 +9496,8 @@
               }
             ],
             "location": {
-              "start_byte": 359,
-              "end_byte": 384,
+              "start_byte": 344,
+              "end_byte": 369,
               "start_line": 16,
               "start_column": 1,
               "end_line": 18,
@@ -9363,8 +10558,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "e202b8cb781e21601cfc13331f86aa4c2b6569ade97e50b2543840d72647b76f",
-          "byte_length": 358
+          "sha256": "2d99b42843cd2bc8062266a11b24685615ce8caad1b5dab9bd20f21b23eb7b73",
+          "byte_length": 343
         },
         "parse": {
           "status": "complete",
@@ -9511,13 +10706,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "$(UV_GATE) tool --from 'git+https://github.com/leynos/typos-config-builder.git@v0.1.3' -- typos-config-builder gate",
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 241,
-                  "end_byte": 358,
+                  "end_byte": 343,
                   "start_line": 14,
                   "start_column": 1,
                   "end_line": 15,
@@ -9527,10 +10722,558 @@
             ],
             "location": {
               "start_byte": 231,
-              "end_byte": 358,
+              "end_byte": 343,
               "start_line": 13,
               "start_column": 1,
               "end_line": 15,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "UV_GATE",
+            "operator": "?=",
+            "raw_value": "python3 scripts/uv_gate.py",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 38,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "ci",
+            "on": "push",
+            "jobs": {
+              "gate": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "run": "make lint test"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "actions": [],
+      "gate": {
+        "path": "scripts/uv_gate.py",
+        "sha256": "217e22401cefed105cadeb0a51f6f152500b5a5812d7a5f4443e3c694c3a9358",
+        "error": null
+      },
+      "pyproject": {
+        "path": "pyproject.toml",
+        "parsed": {
+          "project": {
+            "name": "demo",
+            "version": "0.1.0"
+          },
+          "dependency-groups": {
+            "dev": [
+              "pytest>=8"
+            ]
+          }
+        },
+        "error": null
+      },
+      "requirements": [
+        {
+          "origin": "dependency-groups.dev",
+          "spec": "pytest>=8"
+        }
+      ],
+      "git_sources": []
+    },
+    "tool_typos_builder_tag_via_gate": {
+      "schema_version": 1,
+      "kind": "policy-input/uv-gate-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "pyproject": true,
+        "uv_lock": true,
+        "gate_file": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "9901ecfe6a1734b82b88db7c883c315e82b1df9a60eea9de1ea3b844eb04567c",
+          "byte_length": 160
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 1,
+            "targets": [
+              "t0"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "$(UV_GATE) tool --from 'git+https://github.com/leynos/typos-config-builder.git@v0.1.3' -- typos-config-builder gate",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 43,
+                  "end_byte": 160,
+                  "start_line": 4,
+                  "start_column": 1,
+                  "end_line": 5,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 39,
+              "end_byte": 160,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 5,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "UV_GATE",
+            "operator": "?=",
+            "raw_value": "python3 scripts/uv_gate.py",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 38,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "ci",
+            "on": "push",
+            "jobs": {
+              "gate": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "run": "make lint test"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "actions": [],
+      "gate": {
+        "path": "scripts/uv_gate.py",
+        "sha256": "217e22401cefed105cadeb0a51f6f152500b5a5812d7a5f4443e3c694c3a9358",
+        "error": null
+      },
+      "pyproject": {
+        "path": "pyproject.toml",
+        "parsed": {
+          "project": {
+            "name": "demo",
+            "version": "0.1.0"
+          },
+          "dependency-groups": {
+            "dev": [
+              "pytest>=8"
+            ]
+          }
+        },
+        "error": null
+      },
+      "requirements": [
+        {
+          "origin": "dependency-groups.dev",
+          "spec": "pytest>=8"
+        }
+      ],
+      "git_sources": []
+    },
+    "tool_other_tag_direct": {
+      "schema_version": 1,
+      "kind": "policy-input/uv-gate-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "pyproject": true,
+        "uv_lock": true,
+        "gate_file": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "8318585d2bc53b24ad03158753e68791a02c3927f40fff2e66fdcae201056cdf",
+          "byte_length": 109
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 1,
+            "targets": [
+              "t0"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "uvx --from \"git+https://github.com/example/tool.git@v1.2.3\" tool",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 43,
+                  "end_byte": 109,
+                  "start_line": 4,
+                  "start_column": 1,
+                  "end_line": 5,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 39,
+              "end_byte": 109,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 5,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "UV_GATE",
+            "operator": "?=",
+            "raw_value": "python3 scripts/uv_gate.py",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 38,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "ci",
+            "on": "push",
+            "jobs": {
+              "gate": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "run": "make lint test"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "actions": [],
+      "gate": {
+        "path": "scripts/uv_gate.py",
+        "sha256": "217e22401cefed105cadeb0a51f6f152500b5a5812d7a5f4443e3c694c3a9358",
+        "error": null
+      },
+      "pyproject": {
+        "path": "pyproject.toml",
+        "parsed": {
+          "project": {
+            "name": "demo",
+            "version": "0.1.0"
+          },
+          "dependency-groups": {
+            "dev": [
+              "pytest>=8"
+            ]
+          }
+        },
+        "error": null
+      },
+      "requirements": [
+        {
+          "origin": "dependency-groups.dev",
+          "spec": "pytest>=8"
+        }
+      ],
+      "git_sources": []
+    },
+    "tool_mixed_tags_one_line": {
+      "schema_version": 1,
+      "kind": "policy-input/uv-gate-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "pyproject": true,
+        "uv_lock": true,
+        "gate_file": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "2ddf851efa7865849f074175b245710945a0285cbe473d1a286ce5bdb76f4275",
+          "byte_length": 213
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 1,
+            "targets": [
+              "t0"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate && uvx --from \"git+https://github.com/example/tool.git@v1.2.3\" tool",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 43,
+                  "end_byte": 213,
+                  "start_line": 4,
+                  "start_column": 1,
+                  "end_line": 5,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 39,
+              "end_byte": 213,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 5,
+              "end_column": 1
+            }
+          }
+        ],
+        "variables": [
+          {
+            "ordinal": 0,
+            "name": "UV_GATE",
+            "operator": "?=",
+            "raw_value": "python3 scripts/uv_gate.py",
+            "exported": false,
+            "overridden": false,
+            "define_block": false,
+            "conditions": [],
+            "location": {
+              "start_byte": 0,
+              "end_byte": 38,
+              "start_line": 1,
+              "start_column": 1,
+              "end_line": 2,
+              "end_column": 1
+            }
+          }
+        ],
+        "includes": []
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "parsed": {
+            "name": "ci",
+            "on": "push",
+            "jobs": {
+              "gate": {
+                "runs-on": "ubuntu-latest",
+                "steps": [
+                  {
+                    "run": "make lint test"
+                  }
+                ]
+              }
+            }
+          },
+          "error": null
+        }
+      ],
+      "actions": [],
+      "gate": {
+        "path": "scripts/uv_gate.py",
+        "sha256": "217e22401cefed105cadeb0a51f6f152500b5a5812d7a5f4443e3c694c3a9358",
+        "error": null
+      },
+      "pyproject": {
+        "path": "pyproject.toml",
+        "parsed": {
+          "project": {
+            "name": "demo",
+            "version": "0.1.0"
+          },
+          "dependency-groups": {
+            "dev": [
+              "pytest>=8"
+            ]
+          }
+        },
+        "error": null
+      },
+      "requirements": [
+        {
+          "origin": "dependency-groups.dev",
+          "spec": "pytest>=8"
+        }
+      ],
+      "git_sources": []
+    },
+    "tool_typos_builder_branch_direct": {
+      "schema_version": 1,
+      "kind": "policy-input/uv-gate-baseline",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "pyproject": true,
+        "uv_lock": true,
+        "gate_file": true
+      },
+      "makefile": {
+        "schema_version": 1,
+        "tool": {
+          "name": "makeutil",
+          "version": "0.1.0",
+          "parser": "makefile-lossless",
+          "parser_version": "0.3.40"
+        },
+        "source": {
+          "path": "Makefile",
+          "sha256": "ee80b68481e1910c5cbbb19c6b56d8d38608bb57b05247bae81a3c8ead9f9d5d",
+          "byte_length": 143
+        },
+        "parse": {
+          "status": "complete",
+          "diagnostics": []
+        },
+        "rules": [
+          {
+            "ordinal": 1,
+            "targets": [
+              "t0"
+            ],
+            "prerequisites": [],
+            "double_colon": false,
+            "conditions": [],
+            "recipes": [
+              {
+                "ordinal": 0,
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@main\" typos-config-builder gate",
+                "silent": false,
+                "ignore_errors": false,
+                "always_execute": false,
+                "location": {
+                  "start_byte": 43,
+                  "end_byte": 143,
+                  "start_line": 4,
+                  "start_column": 1,
+                  "end_line": 5,
+                  "end_column": 1
+                }
+              }
+            ],
+            "location": {
+              "start_byte": 39,
+              "end_byte": 143,
+              "start_line": 3,
+              "start_column": 1,
+              "end_line": 5,
               "end_column": 1
             }
           }
@@ -10861,8 +12604,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "e202b8cb781e21601cfc13331f86aa4c2b6569ade97e50b2543840d72647b76f",
-          "byte_length": 358
+          "sha256": "2d99b42843cd2bc8062266a11b24685615ce8caad1b5dab9bd20f21b23eb7b73",
+          "byte_length": 343
         },
         "parse": {
           "status": "complete",
@@ -11009,13 +12752,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "$(UV_GATE) tool --from 'git+https://github.com/leynos/typos-config-builder.git@v0.1.3' -- typos-config-builder gate",
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 241,
-                  "end_byte": 358,
+                  "end_byte": 343,
                   "start_line": 14,
                   "start_column": 1,
                   "end_line": 15,
@@ -11025,7 +12768,7 @@
             ],
             "location": {
               "start_byte": 231,
-              "end_byte": 358,
+              "end_byte": 343,
               "start_line": 13,
               "start_column": 1,
               "end_line": 15,
@@ -11264,8 +13007,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "e202b8cb781e21601cfc13331f86aa4c2b6569ade97e50b2543840d72647b76f",
-          "byte_length": 358
+          "sha256": "2d99b42843cd2bc8062266a11b24685615ce8caad1b5dab9bd20f21b23eb7b73",
+          "byte_length": 343
         },
         "parse": {
           "status": "complete",
@@ -11412,13 +13155,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "$(UV_GATE) tool --from 'git+https://github.com/leynos/typos-config-builder.git@v0.1.3' -- typos-config-builder gate",
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 241,
-                  "end_byte": 358,
+                  "end_byte": 343,
                   "start_line": 14,
                   "start_column": 1,
                   "end_line": 15,
@@ -11428,7 +13171,7 @@
             ],
             "location": {
               "start_byte": 231,
-              "end_byte": 358,
+              "end_byte": 343,
               "start_line": 13,
               "start_column": 1,
               "end_line": 15,
@@ -11535,8 +13278,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "e202b8cb781e21601cfc13331f86aa4c2b6569ade97e50b2543840d72647b76f",
-          "byte_length": 358
+          "sha256": "2d99b42843cd2bc8062266a11b24685615ce8caad1b5dab9bd20f21b23eb7b73",
+          "byte_length": 343
         },
         "parse": {
           "status": "complete",
@@ -11683,13 +13426,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "$(UV_GATE) tool --from 'git+https://github.com/leynos/typos-config-builder.git@v0.1.3' -- typos-config-builder gate",
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 241,
-                  "end_byte": 358,
+                  "end_byte": 343,
                   "start_line": 14,
                   "start_column": 1,
                   "end_line": 15,
@@ -11699,7 +13442,7 @@
             ],
             "location": {
               "start_byte": 231,
-              "end_byte": 358,
+              "end_byte": 343,
               "start_line": 13,
               "start_column": 1,
               "end_line": 15,
@@ -11806,8 +13549,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "e202b8cb781e21601cfc13331f86aa4c2b6569ade97e50b2543840d72647b76f",
-          "byte_length": 358
+          "sha256": "2d99b42843cd2bc8062266a11b24685615ce8caad1b5dab9bd20f21b23eb7b73",
+          "byte_length": 343
         },
         "parse": {
           "status": "complete",
@@ -11954,13 +13697,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "$(UV_GATE) tool --from 'git+https://github.com/leynos/typos-config-builder.git@v0.1.3' -- typos-config-builder gate",
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 241,
-                  "end_byte": 358,
+                  "end_byte": 343,
                   "start_line": 14,
                   "start_column": 1,
                   "end_line": 15,
@@ -11970,7 +13713,7 @@
             ],
             "location": {
               "start_byte": 231,
-              "end_byte": 358,
+              "end_byte": 343,
               "start_line": 13,
               "start_column": 1,
               "end_line": 15,
@@ -12077,8 +13820,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "e202b8cb781e21601cfc13331f86aa4c2b6569ade97e50b2543840d72647b76f",
-          "byte_length": 358
+          "sha256": "2d99b42843cd2bc8062266a11b24685615ce8caad1b5dab9bd20f21b23eb7b73",
+          "byte_length": 343
         },
         "parse": {
           "status": "complete",
@@ -12225,13 +13968,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "$(UV_GATE) tool --from 'git+https://github.com/leynos/typos-config-builder.git@v0.1.3' -- typos-config-builder gate",
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 241,
-                  "end_byte": 358,
+                  "end_byte": 343,
                   "start_line": 14,
                   "start_column": 1,
                   "end_line": 15,
@@ -12241,7 +13984,7 @@
             ],
             "location": {
               "start_byte": 231,
-              "end_byte": 358,
+              "end_byte": 343,
               "start_line": 13,
               "start_column": 1,
               "end_line": 15,
@@ -12361,8 +14104,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "e202b8cb781e21601cfc13331f86aa4c2b6569ade97e50b2543840d72647b76f",
-          "byte_length": 358
+          "sha256": "2d99b42843cd2bc8062266a11b24685615ce8caad1b5dab9bd20f21b23eb7b73",
+          "byte_length": 343
         },
         "parse": {
           "status": "complete",
@@ -12509,13 +14252,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "$(UV_GATE) tool --from 'git+https://github.com/leynos/typos-config-builder.git@v0.1.3' -- typos-config-builder gate",
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 241,
-                  "end_byte": 358,
+                  "end_byte": 343,
                   "start_line": 14,
                   "start_column": 1,
                   "end_line": 15,
@@ -12525,7 +14268,7 @@
             ],
             "location": {
               "start_byte": 231,
-              "end_byte": 358,
+              "end_byte": 343,
               "start_line": 13,
               "start_column": 1,
               "end_line": 15,
@@ -12645,8 +14388,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "e202b8cb781e21601cfc13331f86aa4c2b6569ade97e50b2543840d72647b76f",
-          "byte_length": 358
+          "sha256": "2d99b42843cd2bc8062266a11b24685615ce8caad1b5dab9bd20f21b23eb7b73",
+          "byte_length": 343
         },
         "parse": {
           "status": "complete",
@@ -12793,13 +14536,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "$(UV_GATE) tool --from 'git+https://github.com/leynos/typos-config-builder.git@v0.1.3' -- typos-config-builder gate",
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 241,
-                  "end_byte": 358,
+                  "end_byte": 343,
                   "start_line": 14,
                   "start_column": 1,
                   "end_line": 15,
@@ -12809,7 +14552,7 @@
             ],
             "location": {
               "start_byte": 231,
-              "end_byte": 358,
+              "end_byte": 343,
               "start_line": 13,
               "start_column": 1,
               "end_line": 15,
@@ -12929,8 +14672,8 @@
         },
         "source": {
           "path": "Makefile",
-          "sha256": "e202b8cb781e21601cfc13331f86aa4c2b6569ade97e50b2543840d72647b76f",
-          "byte_length": 358
+          "sha256": "2d99b42843cd2bc8062266a11b24685615ce8caad1b5dab9bd20f21b23eb7b73",
+          "byte_length": 343
         },
         "parse": {
           "status": "complete",
@@ -13077,13 +14820,13 @@
             "recipes": [
               {
                 "ordinal": 0,
-                "text": "$(UV_GATE) tool --from 'git+https://github.com/leynos/typos-config-builder.git@v0.1.3' -- typos-config-builder gate",
+                "text": "uvx --from \"git+https://github.com/leynos/typos-config-builder.git@v0.1.3\" typos-config-builder gate",
                 "silent": false,
                 "ignore_errors": false,
                 "always_execute": false,
                 "location": {
                   "start_byte": 241,
-                  "end_byte": 358,
+                  "end_byte": 343,
                   "start_line": 14,
                   "start_column": 1,
                   "end_line": 15,
@@ -13093,7 +14836,7 @@
             ],
             "location": {
               "start_byte": 231,
-              "end_byte": 358,
+              "end_byte": 343,
               "start_line": 13,
               "start_column": 1,
               "end_line": 15,

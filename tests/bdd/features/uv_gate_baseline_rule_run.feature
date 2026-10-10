@@ -35,3 +35,10 @@ Feature: uv gate baseline rule run
     Then the audit exit status is 1
     And the audit output reports "UV-004" "uv.lock does not"
     And the audit output reports "UV-006" "not pinned"
+
+  Scenario: a checkout can satisfy the spelling baseline and the uv gate baseline together
+    Given a checkout with the canonical helper and the pinned spelling gate
+    When I audit the checkout for its uv gate
+    And I audit the same checkout for its spelling gate
+    Then the uv gate audit exit status is 0
+    And the spelling audit exit status is 0
