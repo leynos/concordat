@@ -382,7 +382,8 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     }),
     "bypass_beside_release_tag": Scenario({
         "Makefile": makefile(
-            f'uv sync --locked && uvx --from "{BUILDER}@v0.1.3" typos-config-builder gate'
+            "uv sync --locked && "
+            f'uvx --from "{BUILDER}@v0.1.3" typos-config-builder gate'
         )
     }),
     "bypass_beside_release_tag_semicolon": Scenario({
