@@ -681,3 +681,40 @@ def test_both_rust_version_spellings_credit_a_selecting_step(
     ci = _build(tmp_path)["ci"]
 
     assert ci["reads_manifest_msrv"] is True, ci
+
+
+@pytest.mark.parametrize(
+    ("uses", "expected"),
+    [
+        pytest.param(
+            "leynos/shared-actions/.github/actions/msrv-check@" + "a" * 40,
+            True,
+            id="shared-action",
+        ),
+        pytest.param(
+            "leynos/shared-actions/.github/actions/msrv-check@v1",
+            True,
+            id="shared-action-tag",
+        ),
+        pytest.param(
+            "leynos/shared-actions/.github/actions/setup-rust@" + "a" * 40,
+            False,
+            id="another-shared-action",
+        ),
+        pytest.param("someone/else/msrv-check-lookalike@v1", False, id="lookalike"),
+    ],
+)
+def test_the_shared_msrv_check_action_makes_an_msrv_job(
+    tmp_path: pathlib.Path, uses: str, *, expected: bool
+) -> None:
+    """A step calling the shared action exercises the MSRV; other actions do not."""
+    _write(tmp_path, "Cargo.toml", _MANIFEST)
+    _write(
+        tmp_path,
+        ".github/workflows/ci.yml",
+        f"jobs:\n  check:\n    steps:\n      - uses: {uses}\n",
+    )
+
+    ci = _build(tmp_path)["ci"]
+
+    assert ci["msrv_job"] is expected, ci
