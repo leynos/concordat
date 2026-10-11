@@ -164,9 +164,8 @@ def _as_list(value: object) -> list[object]:
 
 def _resolve(value: object, scope: _Scope) -> list[str]:
     """Resolve a toolchain value through one `env` or `matrix` reference."""
-    if not isinstance(value, str):
-        return []
-    text = value.strip()
+    # An unquoted `toolchain: 1.85` decodes as a float, so stringify scalars.
+    text = (_stringify(value) or "").strip()
     reference = _REFERENCE.match(text)
     if reference is None:
         return [text] if text else []

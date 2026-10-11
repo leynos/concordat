@@ -69,6 +69,10 @@ class CrateFacts(typ.TypedDict):
     has_lib:
         True when the package builds a library: a `[lib]` table or a
         `src/lib.rs` beside the manifest.
+    lib_read_error:
+        Why `src/lib.rs` could not be examined (an occupied path, a dangling
+        link, a refusal), or None. Never read as the library's absence: the
+        policy reports the crate as indeterminate instead.
     rust_version:
         The package's own `rust-version`, or None.
     inherits_workspace:
@@ -79,6 +83,7 @@ class CrateFacts(typ.TypedDict):
     name: str | None
     is_publishable: bool
     has_lib: bool
+    lib_read_error: str | None
     rust_version: str | None
     inherits_workspace: bool
 
@@ -196,13 +201,16 @@ def _crate_facts(
     typed = typ.cast("dict[str, object]", package)
     rust_version, inherits = _rust_version(typed)
     manifest_dir = (checkout / surface["path"]).parent
-    has_lib = "lib" in parsed or probe_file(manifest_dir / "src" / "lib.rs").present
+    lib_probe = probe_file(manifest_dir / "src" / "lib.rs")
+    has_lib = "lib" in parsed or lib_probe.present
+    lib_read_error = None if "lib" in parsed else lib_probe.read_error
     name = typed.get("name")
     return {
         "path": surface["path"],
         "name": name if isinstance(name, str) else None,
         "is_publishable": _is_package_publishable(typed, workspace_publish),
         "has_lib": has_lib,
+        "lib_read_error": lib_read_error,
         "rust_version": rust_version,
         "inherits_workspace": inherits,
     }

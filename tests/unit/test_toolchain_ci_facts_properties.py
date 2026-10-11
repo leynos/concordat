@@ -200,8 +200,12 @@ def test_numeric_versions_reduce_to_their_major_and_minor(
     major: int, minor: int, patch: int
 ) -> None:
     """`M.m` and `M.m.p` both reduce to `M.m`."""
-    assert minor_of(f"{major}.{minor}") == f"{major}.{minor}"
-    assert minor_of(f"{major}.{minor}.{patch}") == f"{major}.{minor}"
+    assert minor_of(f"{major}.{minor}") == f"{major}.{minor}", (major, minor)
+    assert minor_of(f"{major}.{minor}.{patch}") == f"{major}.{minor}", (
+        major,
+        minor,
+        patch,
+    )
 
 
 @settings(max_examples=120, deadline=None)

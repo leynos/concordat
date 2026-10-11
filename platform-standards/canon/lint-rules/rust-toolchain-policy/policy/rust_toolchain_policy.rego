@@ -157,6 +157,15 @@ declares_msrv(crate) if {
   is_string(input.workspace_rust_version)
 }
 
+deny contains finding("RT-025", "warning", "indeterminate", crate.path, msg) if {
+  applies
+  not exempt
+  some crate in input.crates
+  reason := object.get(crate, "lib_read_error", null)
+  reason != null
+  msg := sprintf("src/lib.rs of %v could not be examined, so its library status is unknown: %s", [object.get(crate, "name", crate.path), reason])
+}
+
 deny contains finding("RT-025", "warning", "noncompliant", crate.path, msg) if {
   applies
   not exempt

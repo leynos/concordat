@@ -279,7 +279,7 @@ A Makefile that 0.3.1 reported as noncompliant or indeterminate only because of
 one of these shapes can now be compliant. Nothing needs migrating.
 
 `rust-toolchain-policy` audits the Rust toolchain a repository builds with
-(RT-022 to RT-027):
+(RT-022 to RT-027; see [Migrating to 0.2](migrating-to-0.2.md) for adopting it):
 
 ```shell
 concordat artefact rule run rust-toolchain-policy --repo /path/to/checkout

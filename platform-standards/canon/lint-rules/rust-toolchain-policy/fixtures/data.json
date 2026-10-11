@@ -728,6 +728,57 @@
       },
       "workspace_rust_version": null
     },
+    "lib_unreadable": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [
+          "nightly-2026-09-20"
+        ],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": false,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "lib_read_error": "not a regular file",
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": null
+        }
+      ],
+      "dependabot": {
+        "entries": [
+          {
+            "directories": [
+              "/"
+            ],
+            "interval": "daily"
+          }
+        ],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "nightly-2026-09-20",
+        "channel_kind": "nightly-dated",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
     "lib_without_msrv": {
       "applicable": true,
       "ci": {

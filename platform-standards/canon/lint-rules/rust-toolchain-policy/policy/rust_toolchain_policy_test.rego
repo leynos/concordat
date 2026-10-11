@@ -154,6 +154,14 @@ test_a_publishable_library_needs_an_msrv if {
   ]}
 }
 
+# A path that cannot be examined is never read as "no library".
+test_an_unreadable_lib_is_indeterminate if {
+  audit(data.fixtures.lib_unreadable) == {[
+    "RT-025", "warning", "indeterminate", "Cargo.toml",
+    "src/lib.rs of demo could not be examined, so its library status is unknown: not a regular file",
+  ]}
+}
+
 test_an_application_needs_no_msrv if {
   count(audit(data.fixtures.app_without_msrv)) == 0
 }

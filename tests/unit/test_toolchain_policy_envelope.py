@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import os
 import typing as typ
 
 import pytest
@@ -84,6 +85,7 @@ def test_the_pin_and_the_manifest_are_read(tmp_path: pathlib.Path) -> None:
             "name": "demo",
             "is_publishable": True,
             "has_lib": True,
+            "lib_read_error": None,
             "rust_version": "1.85",
             "inherits_workspace": False,
         }
@@ -484,13 +486,189 @@ def test_the_default_exception_keyword_ignores_other_headings(
     assert exceptions[0]["sections"] == [], exceptions
 
 
-def test_the_command_boundary_supplies_the_utc_date(tmp_path: pathlib.Path) -> None:
-    """The packaged builder dates the envelope with today's UTC date."""
+def test_the_registered_resolver_dates_the_envelope_with_the_utc_clock(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The registry's resolver reads the UTC date; midnight cannot split the check."""
+    before = dt.datetime.now(dt.UTC).date().isoformat()
+    envelope = typ.cast(
+        "dict[str, typ.Any]",
+        packages.default_envelope_builder("rust-toolchain-policy", tmp_path),
+    )
+    after = dt.datetime.now(dt.UTC).date().isoformat()
+
+    assert envelope["evaluated_on"] in {before, after}, envelope
+
+
+def test_the_resolver_uses_the_clock_it_is_given(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The package path is deterministic once a fixed date provider is injected."""
+    monkeypatch.setattr(packages, "today_provider", lambda: dt.date(2031, 3, 4))
+
     envelope = typ.cast(
         "dict[str, typ.Any]",
         packages.default_envelope_builder("rust-toolchain-policy", tmp_path),
     )
 
-    assert envelope["evaluated_on"] == dt.datetime.now(dt.UTC).date().isoformat(), (
-        envelope
+    assert envelope["evaluated_on"] == "2031-03-04", envelope
+
+
+def test_the_resolver_passes_the_exception_parameters_through(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The configured exception document and keyword reach the envelope."""
+    _write(tmp_path, "Cargo.toml", _MANIFEST)
+    _write(
+        tmp_path,
+        "docs/toolchain.md",
+        _EXCEPTION_TEXT.format(heading="Pinned on purpose"),
     )
+    monkeypatch.setattr(packages, "today_provider", lambda: TODAY)
+    resolve = packages.PACKAGE_ENVELOPE_BUILDERS["rust-toolchain-policy"]
+
+    envelope = typ.cast("dict[str, typ.Any]", resolve(tmp_path, _CUSTOM_PARAMETERS))
+
+    sections = envelope["exceptions"][0]["sections"]
+    assert envelope["exceptions"][0]["path"] == "docs/toolchain.md", envelope
+    assert sections[0]["heading"] == "Pinned on purpose", envelope
+
+
+def test_an_occupied_lib_path_is_not_read_as_no_library(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A directory where `src/lib.rs` should be carries its reason."""
+    _write(tmp_path, "Cargo.toml", _MANIFEST)
+    (tmp_path / "src" / "lib.rs").mkdir(parents=True)
+
+    crate = _build(tmp_path)["crates"][0]
+
+    assert crate["has_lib"] is False, crate
+    assert crate["lib_read_error"] is not None, crate
+
+
+def test_a_dangling_lib_link_is_not_read_as_no_library(tmp_path: pathlib.Path) -> None:
+    """A broken symbolic link at `src/lib.rs` carries its reason."""
+    _write(tmp_path, "Cargo.toml", _MANIFEST)
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "lib.rs").symlink_to(tmp_path / "missing.rs")
+
+    crate = _build(tmp_path)["crates"][0]
+
+    assert crate["lib_read_error"] is not None, crate
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores directory permissions")
+def test_a_refused_lib_probe_is_not_read_as_no_library(tmp_path: pathlib.Path) -> None:
+    """A source directory the filesystem refuses to describe carries its reason."""
+    _write(tmp_path, "Cargo.toml", _MANIFEST)
+    _write(tmp_path, "src/lib.rs", "")
+    (tmp_path / "src").chmod(0o000)
+    try:
+        crate = _build(tmp_path)["crates"][0]
+    finally:
+        (tmp_path / "src").chmod(0o755)
+
+    assert crate["has_lib"] is False, crate
+    assert crate["lib_read_error"] is not None, crate
+
+
+def test_an_explicit_lib_table_needs_no_probe(tmp_path: pathlib.Path) -> None:
+    """A `[lib]` table settles the question without touching `src/lib.rs`."""
+    _write(tmp_path, "Cargo.toml", f'{_MANIFEST}[lib]\npath = "core.rs"\n')
+
+    crate = _build(tmp_path)["crates"][0]
+
+    assert crate["lib_read_error"] is None, crate
+
+
+@pytest.mark.parametrize(
+    "step",
+    [
+        pytest.param(
+            "uses: actions-rust-lang/setup-rust-toolchain@v1\n"
+            "        with:\n          toolchain: 1.85",
+            id="setup-rust-toolchain-input",
+        ),
+        pytest.param(
+            "uses: leynos/shared-actions/.github/actions/setup-rust@v1\n"
+            "        with:\n          toolchain: '1.85.0'",
+            id="shared-actions-setup-rust-input",
+        ),
+        pytest.param("uses: dtolnay/rust-toolchain@1.85", id="dtolnay-ref"),
+        pytest.param(
+            "uses: actions-rust-lang/setup-rust-toolchain@1.85",
+            id="setup-rust-toolchain-ref",
+        ),
+    ],
+)
+def test_each_supported_toolchain_action_is_read(
+    tmp_path: pathlib.Path, step: str
+) -> None:
+    """Every action the extractor claims to support yields its toolchain."""
+    _write(tmp_path, "Cargo.toml", _MANIFEST)
+    _write(
+        tmp_path,
+        ".github/workflows/ci.yml",
+        f"jobs:\n  b:\n    steps:\n      - {step}\n",
+    )
+
+    ci = _build(tmp_path)["ci"]
+
+    assert ci["numeric_minors"] == ["1.85"], ci
+
+
+def test_an_unlisted_action_names_no_toolchain(tmp_path: pathlib.Path) -> None:
+    """An action outside the supported list is not guessed at."""
+    _write(tmp_path, "Cargo.toml", _MANIFEST)
+    _write(
+        tmp_path,
+        ".github/workflows/ci.yml",
+        "jobs:\n  b:\n    steps:\n"
+        "      - uses: someone/else@v1\n        with:\n          toolchain: 1.85\n",
+    )
+
+    assert _build(tmp_path)["ci"]["numeric_minors"] == [], tmp_path
+
+
+@pytest.mark.parametrize(
+    "command",
+    ["cargo msrv verify", "cargo-msrv find", "cargo install cargo-msrv"],
+)
+def test_a_cargo_msrv_command_makes_an_msrv_job(
+    tmp_path: pathlib.Path, command: str
+) -> None:
+    """Running cargo-msrv exercises the MSRV."""
+    _write(tmp_path, "Cargo.toml", _MANIFEST)
+    _write(
+        tmp_path,
+        ".github/workflows/ci.yml",
+        f"jobs:\n  b:\n    steps:\n      - run: {command}\n",
+    )
+
+    ci = _build(tmp_path)["ci"]
+
+    assert ci["msrv_job"] is True, ci
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "rustup toolchain install $(sed -n 's/^rust-version = //p' Cargo.toml)",
+        'rustup default "$(jq -r .rust_version meta.json)"',
+    ],
+)
+def test_both_rust_version_spellings_credit_a_selecting_step(
+    tmp_path: pathlib.Path, command: str
+) -> None:
+    """The manifest's hyphenated field and cargo metadata's underscored one count."""
+    _write(tmp_path, "Cargo.toml", _MANIFEST)
+    _write(
+        tmp_path,
+        ".github/workflows/ci.yml",
+        f"jobs:\n  b:\n    steps:\n      - run: |\n          {command}\n",
+    )
+
+    ci = _build(tmp_path)["ci"]
+
+    assert ci["reads_manifest_msrv"] is True, ci

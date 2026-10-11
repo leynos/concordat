@@ -404,25 +404,39 @@ def _dependency_family_envelope(
         The `policy-input/dependency-family-contracts` document for *checkout*.
     """
     return build_dependency_family_envelope(checkout)
+def utc_today() -> dt.date:
+    """Return the current UTC date: the audit's only clock read.
+
+    Returns
+    -------
+    dt.date
+        Today's date in UTC.
+    """
+    return dt.datetime.now(dt.UTC).date()
+
+
+# The date provider the toolchain-policy resolver reads. It is the one clock the
+# audit has; a test replaces it to make the package path deterministic.
+today_provider: cabc.Callable[[], dt.date] = utc_today
+
+
 def _toolchain_policy_envelope(
     checkout: pathlib.Path,
     parameters: cabc.Mapping[str, object] | None = None,
 ) -> ToolchainPolicyEnvelope:
-    """Build the toolchain-policy envelope, dated by the audit's own clock.
+    """Build the toolchain-policy envelope, dated by `today_provider`.
 
-    The nightly-age clause needs a "today". The builder never reads a clock,
-    so this command boundary supplies the current UTC date. The window and the
-    accepted Dependabot intervals are policy decisions and reach Conftest
-    through `data.parameters`.
+    The nightly-age clause needs a "today". The builder never reads a clock, so
+    this command boundary supplies one. The window and the accepted Dependabot
+    intervals are policy decisions and reach Conftest through
+    `data.parameters`; the exception parameters reach the builder.
 
     Returns
     -------
     ToolchainPolicyEnvelope
         The `policy-input/rust-toolchain-policy` document for *checkout*.
     """
-    return build_toolchain_policy_envelope(
-        checkout, parameters, today=dt.datetime.now(dt.UTC).date()
-    )
+    return build_toolchain_policy_envelope(checkout, parameters, today=today_provider())
 
 
 def _spelling_envelope(

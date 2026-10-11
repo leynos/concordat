@@ -32,7 +32,9 @@ Every crate that is publishable (`publish` is not `false` or an empty list) and
 builds a library (a `[lib]` table or `src/lib.rs`) declares `rust-version`,
 directly or by `rust-version.workspace = true` with a workspace value. A
 warning: an MSRV is a promise to downstream users, and an unpublished or
-binary-only crate makes none.
+binary-only crate makes none. `publish.workspace = true` takes the workspace's
+value. A `src/lib.rs` the audit cannot examine (an occupied path, a dangling
+link, a refusal) makes the crate indeterminate rather than library-free.
 
 ## RT-026
 
@@ -40,9 +42,11 @@ Each declared MSRV is exercised by CI. It is when any of these holds: a
 workflow names a numeric toolchain with the same `major.minor`; the pin is that
 version; a job id, a job name or a step command is about the MSRV (`msrv`,
 `cargo-msrv`); or a step that selects a toolchain reads `rust-version`. A
-workflow that cannot be decoded makes the clause indeterminate. The estate's
-cost rule for the MSRV job is `cargo check --all-targets` on the MSRV
-toolchain, never a second test run.
+`${{ matrix.KEY }}` reference counts every value the job's matrix gives that
+key, `include` legs too; quote a version in YAML (`"1.80"`), because an unquoted
+`1.80` decodes as the number 1.8. A workflow that cannot be decoded makes the
+clause indeterminate. The estate's cost rule for the MSRV job is
+`cargo check --all-targets` on the MSRV toolchain, never a second test run.
 
 ## RT-027
 
