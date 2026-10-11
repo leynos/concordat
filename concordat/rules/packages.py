@@ -13,6 +13,7 @@ There is therefore no default, only the two routes below and a refusal.
 
 from __future__ import annotations
 
+import datetime as dt
 import functools
 import importlib.resources
 import pathlib
@@ -403,6 +404,25 @@ def _dependency_family_envelope(
         The `policy-input/dependency-family-contracts` document for *checkout*.
     """
     return build_dependency_family_envelope(checkout)
+def _toolchain_policy_envelope(
+    checkout: pathlib.Path,
+    parameters: cabc.Mapping[str, object] | None = None,
+) -> ToolchainPolicyEnvelope:
+    """Build the toolchain-policy envelope, dated by the audit's own clock.
+
+    The nightly-age clause needs a "today". The builder never reads a clock,
+    so this command boundary supplies the current UTC date. The window and the
+    accepted Dependabot intervals are policy decisions and reach Conftest
+    through `data.parameters`.
+
+    Returns
+    -------
+    ToolchainPolicyEnvelope
+        The `policy-input/rust-toolchain-policy` document for *checkout*.
+    """
+    return build_toolchain_policy_envelope(
+        checkout, parameters, today=dt.datetime.now(dt.UTC).date()
+    )
 
 
 def _spelling_envelope(
@@ -501,6 +521,7 @@ PACKAGE_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     "dependabot-update-shape": _dependabot_envelope,
     "dependency-family-contracts": _dependency_family_envelope,
     "rust-toolchain-policy": build_toolchain_policy_envelope,
+    "rust-toolchain-policy": _toolchain_policy_envelope,
     "spelling-config-baseline": _spelling_envelope,
     "uv-gate-baseline": _uv_gate_envelope,
     "documentation-presence": _documentation_envelope,
@@ -518,6 +539,7 @@ INPUT_KIND_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     DEPENDABOT_ENVELOPE_KIND: _dependabot_envelope,
     FAMILY_ENVELOPE_KIND: _dependency_family_envelope,
     TOOLCHAIN_POLICY_ENVELOPE_KIND: build_toolchain_policy_envelope,
+    TOOLCHAIN_POLICY_ENVELOPE_KIND: _toolchain_policy_envelope,
     SPELLING_ENVELOPE_KIND: _spelling_envelope,
     UV_GATE_ENVELOPE_KIND: _uv_gate_envelope,
     DOCUMENTATION_ENVELOPE_KIND: _documentation_envelope,

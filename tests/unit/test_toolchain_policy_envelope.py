@@ -7,6 +7,7 @@ import typing as typ
 
 import pytest
 
+from concordat.rules import packages
 from concordat.rules.toolchain_policy_envelope import (
     ENVELOPE_KIND,
     ENVELOPE_SCHEMA_VERSION,
@@ -56,13 +57,13 @@ def test_a_checkout_without_rust_is_not_applicable(tmp_path: pathlib.Path) -> No
     assert envelope["evaluated_on"] == "2026-10-11", envelope
 
 
-def test_the_date_defaults_to_the_current_utc_day(tmp_path: pathlib.Path) -> None:
-    """The command boundary's clock is the UTC date."""
-    envelope = build_toolchain_policy_envelope(tmp_path)
+def test_the_builder_dates_the_envelope_with_the_date_it_is_given(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The builder reads no clock: `evaluated_on` is the caller's date."""
+    envelope = build_toolchain_policy_envelope(tmp_path, today=dt.date(2030, 1, 2))
 
-    assert envelope["evaluated_on"] == dt.datetime.now(dt.UTC).date().isoformat(), (
-        envelope
-    )
+    assert envelope["evaluated_on"] == "2030-01-02", envelope
 
 
 def test_the_pin_and_the_manifest_are_read(tmp_path: pathlib.Path) -> None:
@@ -431,3 +432,65 @@ def test_publish_is_inherited_from_the_workspace(
     crate = _build(tmp_path)["crates"][0]
 
     assert crate["is_publishable"] is expected, crate
+
+
+_CUSTOM_PARAMETERS: typ.Final = {
+    "exception_documents": ["docs/toolchain.md"],
+    "exception_keyword": "Pinned on purpose",
+}
+_EXCEPTION_TEXT: typ.Final = "# Doc\n\n## {heading}\n\nNames nightly-2026-09-20.\n"
+
+
+def test_the_exception_location_and_keyword_are_parameters(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A custom document and heading keyword find the exception; defaults do not."""
+    _write(tmp_path, "Cargo.toml", _MANIFEST)
+    _write(
+        tmp_path,
+        "docs/toolchain.md",
+        _EXCEPTION_TEXT.format(heading="Pinned on purpose"),
+    )
+    _write(
+        tmp_path,
+        "docs/developers-guide.md",
+        _EXCEPTION_TEXT.format(heading="Toolchain policy exception"),
+    )
+
+    custom = build_toolchain_policy_envelope(tmp_path, _CUSTOM_PARAMETERS, today=TODAY)[
+        "exceptions"
+    ]
+    default = build_toolchain_policy_envelope(tmp_path, today=TODAY)["exceptions"]
+
+    assert [d["path"] for d in custom] == ["docs/toolchain.md"], custom
+    assert custom[0]["sections"][0]["heading"] == "Pinned on purpose", custom
+    assert [d["path"] for d in default] == ["docs/developers-guide.md"], default
+    assert default[0]["sections"][0]["heading"] == "Toolchain policy exception", default
+
+
+def test_the_default_exception_keyword_ignores_other_headings(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A section whose heading lacks the keyword is not an exception record."""
+    _write(tmp_path, "Cargo.toml", _MANIFEST)
+    _write(
+        tmp_path,
+        "docs/developers-guide.md",
+        _EXCEPTION_TEXT.format(heading="Pinned on purpose"),
+    )
+
+    exceptions = build_toolchain_policy_envelope(tmp_path, today=TODAY)["exceptions"]
+
+    assert exceptions[0]["sections"] == [], exceptions
+
+
+def test_the_command_boundary_supplies_the_utc_date(tmp_path: pathlib.Path) -> None:
+    """The packaged builder dates the envelope with today's UTC date."""
+    envelope = typ.cast(
+        "dict[str, typ.Any]",
+        packages.default_envelope_builder("rust-toolchain-policy", tmp_path),
+    )
+
+    assert envelope["evaluated_on"] == dt.datetime.now(dt.UTC).date().isoformat(), (
+        envelope
+    )

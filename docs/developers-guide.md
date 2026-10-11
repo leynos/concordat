@@ -846,8 +846,9 @@ a `policy-input/rust-toolchain-policy` document from the pin (read by
 resolver), the `rust-toolchain` entries of the Dependabot configuration (read
 through `build_dependabot_envelope`), the toolchains the workflows name, and
 any recorded exception (read by `find_exception_sections`). The builder takes
-"today" as an argument, defaulting to the current UTC date, and records it as
-`evaluated_on`, so the policy never reads a clock. The workflow facts
+"today" as a required argument and records it as `evaluated_on`, so neither it
+nor the policy reads a clock; the adapter in `packages.py` is the command
+boundary that supplies the current UTC date. The workflow facts
 (`toolchain_ci_facts.py`) are extracted from decoded YAML, not by searching
 text: a step's `uses` ref, its `with.toolchain` input (following one
 `${{ env.NAME }}` reference), and `rustup` or `cargo +toolchain` commands in its

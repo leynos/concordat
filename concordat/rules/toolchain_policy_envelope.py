@@ -12,7 +12,7 @@ good way to make them:
 
 * "today" is an input. The nightly-age clause needs a clock, and a policy that
   reads the clock cannot be tested. The caller supplies the date; the command
-  boundary supplies the UTC date.
+  boundary (`packages.py`) supplies the UTC date.
 * workflow files are walked as data, not searched as text. A toolchain named
   in a comment or a step's display name must not count as CI using it.
 * the governed packages come from the shared Rust surface resolver, so a
@@ -26,7 +26,6 @@ reports it as indeterminate rather than as a clean absence.
 
 from __future__ import annotations
 
-import datetime as dt
 import typing as typ
 
 from .dependabot_envelope import build_dependabot_envelope
@@ -43,6 +42,7 @@ from .toolchain_ci_facts import CiFacts, ci_facts, minor_of
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+    import datetime as dt
     import pathlib
 
     from .codescene_coverage_envelope import Repository
@@ -282,7 +282,7 @@ def build_toolchain_policy_envelope(
     checkout: pathlib.Path,
     parameters: cabc.Mapping[str, object] | None = None,
     *,
-    today: dt.date | None = None,
+    today: dt.date,
 ) -> ToolchainPolicyEnvelope:
     """Assemble the toolchain-policy input for one local checkout.
 
@@ -295,9 +295,9 @@ def build_toolchain_policy_envelope(
         list and keyword are read here; `window_days` and the other tunables
         are policy decisions and reach Conftest through `data.parameters`.
     today:
-        The date the nightly-age clause measures against. The default is the
-        current UTC date, which is the command boundary's choice; tests pass a
-        fixed one.
+        The date the nightly-age clause measures against. Required: the
+        builder never reads a clock, so the command boundary supplies the
+        current UTC date and tests pass a fixed one.
 
     Returns
     -------
@@ -322,7 +322,7 @@ def build_toolchain_policy_envelope(
         "kind": ENVELOPE_KIND,
         "repository": {"path": str(checkout), "name": None},
         "applicable": bool(resolution.surfaces),
-        "evaluated_on": (today or dt.datetime.now(dt.UTC).date()).isoformat(),
+        "evaluated_on": today.isoformat(),
         "toolchain": toolchain,
         "pin_minor": minor_of(channel) if is_version and channel is not None else None,
         "workspace_rust_version": _workspace_rust_version(resolution.surfaces),

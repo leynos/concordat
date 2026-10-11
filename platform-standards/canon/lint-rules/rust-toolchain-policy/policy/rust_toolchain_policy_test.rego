@@ -132,6 +132,19 @@ test_an_entry_for_another_directory_does_not_move_the_root_pin if {
   rules(data.fixtures.dependabot_wrong_directory) == {"RT-024"}
 }
 
+test_the_accepted_intervals_are_a_parameter if {
+  findings := policy.deny with input as data.fixtures.dependabot_monthly
+    with data.parameters as object.union(params, {"dependabot_intervals": ["monthly"]})
+  count({f | some f in findings; f.rule_id == "RT-024"}) == 0
+}
+
+test_the_accepted_intervals_can_exclude_daily if {
+  findings := policy.deny with input as data.fixtures.compliant
+    with data.parameters as object.union(params, {"dependabot_intervals": ["weekly"]})
+  some finding in findings
+  finding.rule_id == "RT-024"
+}
+
 # -- RT-025 ---------------------------------------------------------------------
 
 test_a_publishable_library_needs_an_msrv if {
