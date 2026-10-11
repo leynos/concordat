@@ -296,6 +296,17 @@ SCENARIOS: dict[str, dict[str, str]] = {
         "Cargo.lock": 'version = 4\n[[package]]\nname = "serde"\nversion = "1.0.200"\n',
         ".github/dependabot.yml": dependabot(CATCH_ALL),
     },
+    # An undeclared manifest that names no related package cannot hide a
+    # relationship, so it draws no finding.
+    "undeclared_unrelated_manifest": {
+        "tools/Cargo.toml": SERDE_A,
+        ".github/dependabot.yml": dependabot(CATCH_ALL),
+    },
+    # An undeclared manifest that cannot be decoded may hide one: fail closed.
+    "undeclared_unparsable_manifest": {
+        "tools/Cargo.toml": "[package\nname = ",
+        ".github/dependabot.yml": dependabot(CATCH_ALL),
+    },
     # A Cargo manifest no declared surface governs is not read, and says so.
     "undeclared_manifest": {
         "rust/Cargo.toml": CARGO,

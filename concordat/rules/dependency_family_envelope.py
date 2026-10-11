@@ -24,7 +24,6 @@ cannot be read at all raises an operational error.
 
 from __future__ import annotations
 
-import os
 import pathlib
 import re
 import tomllib
@@ -44,6 +43,12 @@ from .dependency_family_coverage import (
     normalise,
     sequence,
 )
+from .dependency_family_discovery import (
+    cargo_tables,
+    nested_files,
+    published_name,
+    ungoverned_problems,
+)
 from .fs_probe import probe_file
 from .rust_surfaces import resolve_rust_surfaces
 
@@ -58,7 +63,6 @@ ENVELOPE_KIND: typ.Final = "policy-input/dependency-family-contracts"
 RULE_ID: typ.Final = "dependency-family-contracts"
 DATA_FILENAME: typ.Final = "dependency-families.yaml"
 
-_CARGO_SECTIONS: typ.Final = ("dependencies", "dev-dependencies", "build-dependencies")
 _REQUIREMENT_NAME: typ.Final = re.compile(
     r"^\s*(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)\s*(?:\[[^\]]*\])?\s*"
     r"(?P<spec>[^;]*?)\s*(?:;.*)?$"
@@ -305,26 +309,8 @@ def _workspace_requirements(
     return inherited
 
 
-def _section_tables(
-    body: dict[str, object], target: str | None
-) -> list[tuple[str, str | None, dict[str, object]]]:
-    """Return the dependency tables of one manifest body or target body."""
-    found = ((section, mapping(body.get(section))) for section in _CARGO_SECTIONS)
-    return [(section, target, table) for section, table in found if table is not None]
-
-
-def _cargo_tables(
-    parsed: dict[str, object],
-) -> list[tuple[str, str | None, dict[str, object]]]:
-    """Return each dependency table with its section and target."""
-    tables = _section_tables(parsed, None)
-    for target, raw in (mapping(parsed.get("target")) or {}).items():
-        tables.extend(_section_tables(mapping(raw) or {}, str(target)))
-    return tables
-
-
 def _cargo_surfaces(
-    checkout: pathlib.Path, problems: list[str]
+    checkout: pathlib.Path, problems: list[str], members: cabc.Collection[str]
 ) -> list[dict[str, object]]:
     """Return the governed Cargo surfaces, or none with the reason recorded."""
     try:
@@ -336,11 +322,15 @@ def _cargo_surfaces(
     surfaces = [dict(surface) for surface in resolution.surfaces]
     if not resolution.declared:
         governed = {str(surface["path"]) for surface in surfaces}
+        ungoverned = [
+            nested
+            for nested in nested_files(checkout, "Cargo.toml", problems)
+            if nested.relative_to(checkout).as_posix() not in governed
+        ]
         problems.extend(
-            f"{relative} is a Cargo manifest outside the governed Rust surfaces; "
-            "declare language.rust.surfaces in .concordat to read it"
-            for nested in _nested_files(checkout, "Cargo.toml", problems)
-            if (relative := nested.relative_to(checkout).as_posix()) not in governed
+            ungoverned_problems(
+                checkout, ungoverned, members, _workspace_requirements(surfaces)
+            )
         )
     return surfaces
 
@@ -349,9 +339,10 @@ def _cargo_declarations(
     checkout: pathlib.Path,
     config: ConfigFile | None,
     problems: list[str],
+    members: cabc.Collection[str],
 ) -> list[Declaration]:
     """Return every dependency edge of the governed Cargo surfaces."""
-    surfaces = _cargo_surfaces(checkout, problems)
+    surfaces = _cargo_surfaces(checkout, problems, members)
     inherited = _workspace_requirements(surfaces)
     parsed = [(str(s["path"]), mapping(s.get("parsed"))) for s in surfaces]
     problems.extend(
@@ -375,9 +366,9 @@ def _surface_declarations(
     """Return every dependency edge of one parsed Cargo manifest."""
     checkout, manifest, parsed = surface
     lock = _cargo_lock(checkout, manifest)
-    table_rows = _cargo_tables(parsed)
+    table_rows = cargo_tables(parsed)
     names = {
-        _published(key, value, inherited)
+        published_name(key, value, inherited)
         for _, _, table in table_rows
         for key, value in table.items()
     }
@@ -392,16 +383,6 @@ def _surface_declarations(
     ]
 
 
-def _published(key: str, value: object, inherited: dict[str, object]) -> str:
-    """Return the published package name behind a Cargo dependency key."""
-    table = mapping(value)
-    if table is not None and table.get("workspace") is True:
-        table = mapping(inherited.get(key)) or table
-    if table is not None and isinstance(table.get("package"), str):
-        return str(table["package"])
-    return key
-
-
 def _cargo_declaration(
     where: tuple[str, str, str | None],
     entry: tuple[str, object, dict[str, object]],
@@ -414,7 +395,7 @@ def _cargo_declaration(
     requirement, workspace = _cargo_requirement(value)
     if workspace and isinstance(inherited.get(key), (str, dict)):
         requirement, _ = _cargo_requirement(inherited[key])
-    package = _published(key, value, inherited)
+    package = published_name(key, value, inherited)
     kind, bounded = _classify(requirement)
     optional = (mapping(value) or {}).get("optional") is True
     return {
@@ -460,49 +441,6 @@ def _python_requirements(
     return found
 
 
-_SKIPPED_DIRECTORIES = frozenset({
-    "node_modules",
-    "target",
-    "venv",
-    "build",
-    "dist",
-    "vendor",
-})
-
-
-def _nested_files(
-    checkout: pathlib.Path, name: str, problems: list[str]
-) -> list[pathlib.Path]:
-    """Return every file called *name* below the root, at any depth.
-
-    Hidden directories and vendored or generated trees are not projects and are
-    not entered. A directory the walk cannot list is a problem fact, never a
-    silently shorter list.
-
-    Returns
-    -------
-    list[pathlib.Path]
-        The nested files, in path order.
-    """
-
-    def unreadable(error: OSError) -> None:
-        where = pathlib.Path(error.filename or ".").relative_to(checkout).as_posix()
-        message = f"cannot scan {where} for {name}: {error.strerror}"
-        if message not in problems:
-            problems.append(message)
-
-    found: list[pathlib.Path] = []
-    for directory, subdirectories, files in os.walk(checkout, onerror=unreadable):
-        subdirectories[:] = [
-            entry
-            for entry in subdirectories
-            if not entry.startswith(".") and entry not in _SKIPPED_DIRECTORIES
-        ]
-        if name in files and pathlib.Path(directory) != checkout:
-            found.append(pathlib.Path(directory) / name)
-    return sorted(found)
-
-
 def _read_pyproject(
     checkout: pathlib.Path, problems: list[str]
 ) -> dict[str, object] | None:
@@ -519,7 +457,7 @@ def _read_pyproject(
     problems.extend(
         f"{nested.relative_to(checkout).as_posix()} is not read: only the root "
         "pyproject.toml is"
-        for nested in _nested_files(checkout, "pyproject.toml", problems)
+        for nested in nested_files(checkout, "pyproject.toml", problems)
     )
     path = checkout / "pyproject.toml"
     probe = probe_file(path)
@@ -686,9 +624,14 @@ def build_dependency_family_envelope(
     """
     problems: list[str] = []
     config = build_dependabot_envelope(checkout)["config"]
-    declarations = _cargo_declarations(checkout, config, problems)
-    declarations += _python_declarations(checkout, config, problems)
     version, relationships = _load_relationships(problems)
+    members = {
+        str(member)
+        for relationship in relationships
+        for member in sequence(relationship.get("members")) or []
+    }
+    declarations = _cargo_declarations(checkout, config, problems, members)
+    declarations += _python_declarations(checkout, config, problems)
     return {
         "schema_version": ENVELOPE_SCHEMA_VERSION,
         "kind": ENVELOPE_KIND,

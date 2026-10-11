@@ -142,6 +142,18 @@ test_undeclared_manifest if {
   profile(findings) == {["DF-006", "indeterminate"]}
 }
 
+# An undeclared manifest naming no related package draws no finding.
+test_undeclared_unrelated_manifest if {
+  findings := policy.deny with input as data.fixtures.undeclared_unrelated_manifest
+  count(findings) == 0
+}
+
+# An undeclared manifest that cannot be decoded is indeterminate.
+test_undeclared_unparsable_manifest if {
+  findings := policy.deny with input as data.fixtures.undeclared_unparsable_manifest
+  profile(findings) == {["DF-006", "indeterminate"]}
+}
+
 # A Python project outside the root is reported, not passed over.
 test_nested_pyproject if {
   findings := policy.deny with input as data.fixtures.nested_pyproject
