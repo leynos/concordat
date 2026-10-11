@@ -9,6 +9,7 @@ outside the root each stay a fact with a reason.
 
 from __future__ import annotations
 
+import os
 import typing as typ
 
 import pytest
@@ -279,6 +280,25 @@ def test_an_undeclared_nested_cargo_manifest_is_a_problem(
             "surfaces; declare language.rust.surfaces in .concordat to read it"
         )
     ]
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can list any directory")
+def test_a_directory_the_scan_cannot_list_is_a_problem(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A shorter result is never silent: the unreadable directory is named."""
+    _write(tmp_path, "rust/locked/Cargo.toml", _MEMBER)
+    locked = tmp_path / "rust" / "locked"
+    locked.chmod(0)
+    try:
+        problems = build_dependency_family_envelope(tmp_path)["problems"]
+    finally:
+        locked.chmod(0o755)
+
+    assert any(
+        problem.startswith("cannot scan rust/locked for Cargo.toml")
+        for problem in problems
+    )
 
 
 def test_a_declared_surface_list_is_authoritative(layout: pathlib.Path) -> None:

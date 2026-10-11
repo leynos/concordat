@@ -9,12 +9,17 @@ with the builder's `fnmatch` and regular-expression handling.
 
 from __future__ import annotations
 
+import pathlib
+import tempfile
 import typing as typ
 
 from hypothesis import given
 from hypothesis import strategies as st
 
 from concordat.rules.dependency_family_coverage import coverage, is_ignored
+from concordat.rules.dependency_family_envelope import (
+    build_dependency_family_envelope,
+)
 
 if typ.TYPE_CHECKING:
     from concordat.rules.dependabot_envelope import ConfigFile
@@ -143,3 +148,46 @@ def test_python_ignore_names_are_compared_normalised(spelling: str) -> None:
     assert not is_ignored(entry, "typing-extensions", python=False) or (
         spelling == "typing-extensions"
     )
+
+
+_COMPONENTS: typ.Final = ("a", "b", "rust", "target", ".hidden", "vendor", "venv")
+_SKIPPED: typ.Final = frozenset({"target", "vendor", "venv"})
+_MANIFEST: typ.Final = '[package]\nname = "x"\nversion = "0.1.0"\n'
+_layouts = st.lists(
+    st.lists(st.sampled_from(_COMPONENTS), max_size=3).map(tuple),
+    max_size=6,
+    unique=True,
+)
+
+
+@given(directories=_layouts, declared=st.booleans())
+def test_every_ungoverned_cargo_manifest_is_named_exactly_once(
+    directories: list[tuple[str, ...]], *, declared: bool
+) -> None:
+    """Without declared surfaces each eligible nested manifest is a problem."""
+    with tempfile.TemporaryDirectory() as raw:
+        checkout = pathlib.Path(raw)
+        for parts in directories:
+            manifest = checkout.joinpath(*parts, "Cargo.toml")
+            manifest.parent.mkdir(parents=True, exist_ok=True)
+            manifest.write_text(_MANIFEST, encoding="utf-8")
+        if declared:
+            (checkout / ".concordat").write_text(
+                "language:\n  rust:\n    surfaces: []\n", encoding="utf-8"
+            )
+        expected = sorted(
+            "/".join((*parts, "Cargo.toml"))
+            for parts in directories
+            if parts
+            and not any(p.startswith(".") or p in _SKIPPED for p in parts)
+            and not declared
+        )
+
+        problems = build_dependency_family_envelope(checkout)["problems"]
+
+    named = sorted(
+        problem.split(" is a Cargo manifest", 1)[0]
+        for problem in problems
+        if " is a Cargo manifest outside" in problem
+    )
+    assert named == expected
