@@ -229,7 +229,7 @@ script_problem(script) := "does not run clippy as a cargo subcommand" if {
 	not script.runs_clippy
 }
 
-script_problem(script) := "is not named by any recipe that `make lint` reaches" if {
+script_problem(script) := "is not run by any command in a recipe that `make lint` reaches" if {
 	script.exists
 	script.runs_clippy
 	not script.reached

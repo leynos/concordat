@@ -92,7 +92,7 @@ def _command_start(words: list[str]) -> int:
     return index
 
 
-def _is_cargo_clippy(words: list[str]) -> bool:
+def is_cargo_clippy(words: list[str]) -> bool:
     """Return whether one simple command is `cargo [flags] clippy ...`."""
     start = _command_start(words)
     if start >= len(words) or words[start].lstrip("@-+").rsplit("/", 1)[-1] != "cargo":
@@ -109,7 +109,7 @@ def _is_cargo_clippy(words: list[str]) -> bool:
 def _run_on_line(target: str, line: int, expanded: str) -> ClippyRun | None:
     """Return the clippy run an expanded recipe line holds, if it holds one."""
     segments = lex_segments(_blank_references(expanded))
-    is_run = any(_is_cargo_clippy(words) for words in segments or [])
+    is_run = any(is_cargo_clippy(words) for words in segments or [])
     is_unresolved = _UNRESOLVED_CLIPPY.search(shown(expanded)) is not None or (
         segments is None and "clippy" in expanded
     )
@@ -121,6 +121,88 @@ def _run_on_line(target: str, line: int, expanded: str) -> ClippyRun | None:
         "command": " ".join(shown(expanded).split()),
         "resolved": is_run,
     }
+
+
+# Commands that name a path without running it.
+_NON_EXECUTING: typ.Final = frozenset({
+    "echo",
+    "printf",
+    "cat",
+    "ls",
+    "test",
+    "[",
+    "grep",
+    "head",
+    "tail",
+    "wc",
+    "stat",
+    "file",
+    "rm",
+    "cp",
+    "mv",
+    "touch",
+    "chmod",
+    "ln",
+    "diff",
+    "cmp",
+})
+# Commands that run a script handed to them as an argument.
+_INTERPRETERS: typ.Final = frozenset({
+    "sh",
+    "bash",
+    "zsh",
+    "dash",
+    "ksh",
+    "python",
+    "python3",
+    "pypy",
+    "pypy3",
+    "uv",
+    "uvx",
+    "node",
+    "bun",
+    "deno",
+    "ruby",
+    "perl",
+    "env",
+    "exec",
+    "xargs",
+    "nice",
+    "time",
+    "pipx",
+    "poetry",
+    "npx",
+    "pnpm",
+    "npm",
+})
+
+
+def invokes_script(line: str, script: str) -> bool:
+    """Return whether one expanded recipe line runs *script*.
+
+    The script has to be the command, or an argument of an interpreter or
+    launcher (`sh scripts/x.sh`, `uv run --script scripts/x.py`). Naming it in
+    `echo`, `cat`, `test -x` and the like does not run it.
+
+    Returns
+    -------
+    bool
+        Whether a simple command on the line runs the script.
+    """
+    spellings = {script, f"./{script}"}
+    for words in lex_segments(_blank_references(line)) or []:
+        start = _command_start(words)
+        if start >= len(words):
+            continue
+        command = words[start].lstrip("@-+")
+        name = command.rsplit("/", 1)[-1]
+        if name in _NON_EXECUTING:
+            continue
+        if command in spellings:
+            return True
+        if name in _INTERPRETERS and spellings & set(words[start + 1 :]):
+            return True
+    return False
 
 
 def reachable_lines(
@@ -136,11 +218,12 @@ def reachable_lines(
     Returns
     -------
     list[str]
-        The expanded recipe lines, Make references that could not be settled
-        left as text.
+        The expanded recipe lines. Make references that could not be settled
+        and shell dollars stay as the expansion's placeholders, so a line can
+        still be lexed.
     """
     return [
-        shown(expand(text, values).text)
+        expand(text, values).text
         for target in reachable
         for rule in index[target]
         for _line, text in rule.recipes

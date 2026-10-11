@@ -6,6 +6,7 @@ import typing as typ
 
 import pytest
 
+from concordat.errors import OperationalRuleError
 from concordat.rules.clippy_exception import (
     EXCEPTION_KEYWORD,
     _candidate_paths,
@@ -13,6 +14,7 @@ from concordat.rules.clippy_exception import (
 )
 from concordat.rules.documentation_envelope import build_documentation_envelope
 from concordat.rules.exception_docs import section_bodies
+from concordat.rules.rust_clippy import invokes_script
 
 if typ.TYPE_CHECKING:
     import pathlib
@@ -105,8 +107,10 @@ def test_the_exception_facts_record_existence_clippy_and_reach(
 @pytest.mark.parametrize(
     "source",
     [
-        'ARGV = ["clippy", "--workspace"]\n',
+        'CARGO = "cargo"\nARGV = ["clippy", "--workspace"]\n',
         "subprocess.run(['cargo', 'clippy'])\n",
+        "cargo --locked clippy --all\n",
+        "RUSTFLAGS=-Dwarnings cargo clippy\n",
         "cargo clippy --all\n",
         "cargo +nightly clippy\n",
     ],
@@ -159,3 +163,53 @@ def test_no_section_means_no_exception(tmp_path: pathlib.Path) -> None:
     _write(tmp_path, GUIDE, "# Guide\n\n## Linting\n\nNothing special.\n")
 
     assert clippy_exceptions(tmp_path, tmp_path.resolve(), []) == []
+
+
+@pytest.mark.parametrize(
+    ("line", "expected"),
+    [
+        ("\tsh scripts/lanes.sh\n", True),
+        ("\t./scripts/lanes.sh --all\n", True),
+        ("\tscripts/lanes.sh\n", True),
+        ("\tbash -e scripts/lanes.sh\n", True),
+        ("\tuv run --script scripts/lanes.sh\n", True),
+        ("\tFOO=1 sh scripts/lanes.sh && echo done\n", True),
+        ("\techo scripts/lanes.sh\n", False),
+        ("\tcat scripts/lanes.sh\n", False),
+        ("\ttest -x scripts/lanes.sh\n", False),
+        ("\tsh scripts/other.sh\n", False),
+        ("\tmake scripts/lanes.sh\n", False),
+    ],
+)
+def test_a_script_is_reached_only_when_a_command_runs_it(
+    line: str, *, expected: bool
+) -> None:
+    """Naming the script in `echo` or `cat` is not running it."""
+    assert invokes_script(line.strip(), "scripts/lanes.sh") is expected
+
+
+def test_a_mentioned_but_not_run_script_is_not_reached(tmp_path: pathlib.Path) -> None:
+    """The exception cannot be satisfied by a recipe that only prints the path."""
+    _write(tmp_path, "Makefile", ".PHONY: lint\nlint:\n\techo scripts/lanes.sh\n")
+    _write(tmp_path, "scripts/lanes.sh", "cargo clippy\n")
+    _write(tmp_path, GUIDE, "## Clippy gate\n\n`scripts/lanes.sh`\n")
+
+    (exception,) = _exceptions(tmp_path)
+
+    assert exception["scripts"][0]["reached"] is False
+
+
+def test_a_guide_that_is_a_link_to_a_file_outside_the_checkout_is_refused(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The exception record cannot be imported from outside the checkout."""
+    outside = tmp_path / "outside.md"
+    outside.write_text("## Clippy gate\n\n`scripts/lanes.sh`\n", encoding="utf-8")
+    checkout = tmp_path / "repo"
+    _write(checkout, "Makefile", LINT_MAKEFILE)
+    _write(checkout, "scripts/lanes.sh", "cargo clippy\n")
+    (checkout / "docs").mkdir()
+    (checkout / GUIDE).symlink_to(outside)
+
+    with pytest.raises(OperationalRuleError, match="outside the checkout"):
+        _exceptions(checkout)

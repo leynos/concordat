@@ -577,6 +577,10 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
         "Clippy runs through `scripts/lint_lanes.sh` for the PyO3 lanes.",
         makefile=".PHONY: lint\nlint:\n\tcargo fmt --check\n",
     ),
+    "rust_exception_script_only_echoed": exception_scenario(
+        "Clippy runs through `scripts/lint_lanes.sh` for the PyO3 lanes.",
+        makefile=".PHONY: lint\nlint:\n\techo scripts/lint_lanes.sh\n",
+    ),
     "rust_exception_names_no_script": exception_scenario(
         "Clippy runs through a wrapper because of the PyO3 lanes.",
     ),

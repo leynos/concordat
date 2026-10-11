@@ -21,7 +21,9 @@ import typing as typ
 
 from .exception_docs import section_bodies
 from .fs_probe import probe_file
+from .interrogate_invocation import lex_segments
 from .markdown_envelope import read_text, within_checkout
+from .rust_clippy import invokes_script, is_cargo_clippy
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -42,9 +44,11 @@ _SCRIPT_SUFFIXES: typ.Final = (
     ".rb",
     ".pl",
 )
-# `cargo clippy` written out, or clippy handed to cargo as an argument: a script
-# builds the command from a list (`["cargo", "clippy"]` or `argv = ["clippy"]`).
-_RUNS_CLIPPY: typ.Final = re.compile(r"cargo(?:\s+\+\S+)?\s+clippy\b|[\"']clippy[\"']")
+# A script that is not shell builds the cargo command from a list
+# (`["cargo", "clippy"]`, or `argv = ["clippy", ...]` run as `cargo *argv`), so it
+# has to name both cargo and clippy as string literals.
+_CARGO_LITERAL: typ.Final = re.compile(r"""["']cargo["']|\bCARGO\b""")
+_CLIPPY_LITERAL: typ.Final = re.compile(r"""["']clippy["']""")
 
 
 class ExceptionScript(typ.TypedDict):
@@ -79,6 +83,27 @@ def _candidate_paths(body: str) -> list[str]:
     )
 
 
+def _runs_clippy(source: str) -> bool:
+    """Return whether a script's text runs `cargo clippy`.
+
+    A shell line is lexed and read as a command; any other script has to name
+    cargo and clippy as string literals. A mention of clippy alone (a `print`)
+    is not a run.
+
+    Returns
+    -------
+    bool
+        Whether the script appears to run clippy through cargo.
+    """
+    if any(
+        is_cargo_clippy(words)
+        for line in source.splitlines()
+        for words in lex_segments(line) or []
+    ):
+        return True
+    return bool(_CARGO_LITERAL.search(source) and _CLIPPY_LITERAL.search(source))
+
+
 def _script_fact(
     checkout: pathlib.Path,
     root: pathlib.Path,
@@ -94,16 +119,14 @@ def _script_fact(
     runs_clippy = False
     if exists:
         try:
-            runs_clippy = (
-                _RUNS_CLIPPY.search(read_text(path, OPERATION_READ_SCRIPT)) is not None
-            )
+            runs_clippy = _runs_clippy(read_text(path, OPERATION_READ_SCRIPT))
         except UnicodeDecodeError:
             runs_clippy = False
     return {
         "path": relative,
         "exists": exists,
         "runs_clippy": runs_clippy,
-        "reached": exists and any(relative in line for line in lines),
+        "reached": exists and any(invokes_script(line, relative) for line in lines),
     }
 
 
@@ -133,5 +156,6 @@ def clippy_exceptions(
             ],
         }
         for document in EXCEPTION_DOCUMENTS
+        if within_checkout(root, checkout / document, OPERATION_READ_SCRIPT)
         for heading, line, body in section_bodies(checkout, document, EXCEPTION_KEYWORD)
     ]

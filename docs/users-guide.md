@@ -811,8 +811,8 @@ For a checkout that owns Rust library crates the same package also reports:
 - **DG-004**: a clippy run is reachable from `make lint`, or a recorded
   clippy-gate exception names a wrapper script that is. Record the exception in
   a `docs/developers-guide.md` section whose heading contains "Clippy gate" and
-  whose body names the script in backticks; the script must exist, mention
-  clippy as a cargo subcommand, and be named by a recipe `make lint` reaches.
+  whose body names the script in backticks; the script must exist, run clippy
+  through cargo, and be run by a command in a recipe `make lint` reaches.
 
 A variable the audit cannot resolve to one value, a configuration file that is
 missing or not TOML, or a `lint` target it cannot follow makes the affected

@@ -122,6 +122,8 @@ test_rust_exception_script_without_clippy if rust_reported(data.fixtures.rust_ex
 
 test_rust_exception_script_not_reached if rust_reported(data.fixtures.rust_exception_script_not_reached) == {"DG-004/noncompliant"}
 
+test_rust_exception_script_only_echoed if rust_reported(data.fixtures.rust_exception_script_only_echoed) == {"DG-004/noncompliant"}
+
 test_rust_exception_names_no_script if rust_reported(data.fixtures.rust_exception_names_no_script) == {"DG-004/noncompliant"}
 
 test_rust_exception_path_escape if rust_reported(data.fixtures.rust_exception_path_escape) == {"DG-004/noncompliant"}
@@ -143,7 +145,7 @@ test_rust_exception_script_without_clippy_says_why if {
 
 test_rust_exception_script_not_reached_says_why if {
 	some f in rust_findings(data.fixtures.rust_exception_script_not_reached)
-	contains(f.msg, "not named by any recipe")
+	contains(f.msg, "not run by any command")
 }
 
 test_rust_exception_names_no_script_says_so if {

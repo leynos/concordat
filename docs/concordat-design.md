@@ -2563,10 +2563,13 @@ required, so `clippy::missing_docs_in_private_items` is not used.
   toolchain-policy record): a section of `docs/developers-guide.md` whose
   heading contains "Clippy gate" and whose body names the script in backticks.
   The builder records, for each named script, whether it exists inside the
-  checkout, whether it names clippy as a cargo subcommand, and whether a recipe
-  `lint` reaches mentions its path; the policy accepts the record only while
-  one script passes all three. This verifies that the record is true of the
-  repository, not what the script does with clippy.
+  checkout, whether it runs clippy through cargo (a lexed `cargo ... clippy`
+  command in a shell script, or cargo and clippy as string literals in any
+  other script), and whether a command in a recipe `lint` reaches runs it (as
+  the command, or as an argument of an interpreter, not merely naming it); the
+  policy accepts the record only while one script passes all three. This
+  verifies that the record is true of the repository, not what the script does
+  with clippy.
 - **Reachability (DG-004):** the lint fails builds only where a gate compiles
   the crate, so the rule requires a clippy run reachable from `lint`; a plain
   `cargo check` in `lint` would also compile it but the estate's gates are

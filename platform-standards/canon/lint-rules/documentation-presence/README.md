@@ -151,12 +151,17 @@ a toolchain that a plain `cargo clippy` recipe line cannot select.
 ```
 
 DG-004 accepts the record only while a named script exists inside the checkout,
-mentions clippy as a cargo subcommand (`cargo clippy`, or `"clippy"` handed to
-cargo as an argument), and is named by a recipe that `make lint` reaches. A
-record whose scripts fail any of these is noncompliant and the finding says
-which; a section that names no script is noncompliant. The audit checks no more
-than that: it does not read what the script does with clippy. A recipe that
-already runs `cargo clippy` needs no record, and a stale one is ignored.
+runs clippy through cargo, and is run by a command in a recipe that `make lint`
+reaches. A shell script must contain a `cargo ... clippy` command; any other
+script must name both cargo and clippy as string literals, so a lone
+`print("clippy")` does not count. The script is run when it is the command or
+an argument of an interpreter (`sh scripts/x.sh`, `./scripts/x.sh`,
+`uv run --script scripts/x.py`); naming it in `echo`, `cat` or `test -x` does
+not run it. The guide must lie inside the checkout. A record whose scripts fail
+any of these is noncompliant and the finding says which; a section that names
+no script is noncompliant. The audit checks no more than that: it does not read
+what the script does with clippy. A recipe that already runs `cargo clippy`
+needs no record, and a stale one is ignored.
 
 The Rust rules apply when the checkout owns at least one library crate (or a
 Cargo manifest the audit cannot read).
