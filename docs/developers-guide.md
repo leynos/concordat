@@ -854,6 +854,25 @@ resolves outside the checkout raises `OperationalRuleError` with
 package is registered by identifier and declares its kind, and DB-005 declares
 no tunables.
 
+`dependency-family-contracts` collects its own facts in
+`dependency_family_envelope.py`. `build_dependency_family_envelope` assembles a
+`policy-input/dependency-family-contracts` document: every dependency edge of
+the governed Cargo surfaces (through `resolve_rust_surfaces`, so nested and
+workspace-inherited manifests are seen) and of the root `pyproject.toml`, each
+carrying the published package name behind a `package =` rename, its
+requirement and whether that is an exact pin or an explicit upper bound, its
+locked versions from `Cargo.lock` or `uv.lock`, and Dependabot's treatment of
+it (covering entry, first matching group in document order, narrow groups that
+match, `ignore` rule). The estate's relationship data is read from
+`platform-standards/canon/data/dependency-families.yaml` and the repository's
+exceptions from `.concordat`. A manifest the surface resolver rejects, a Python
+project outside the root, an unreadable lock and a missing configuration become
+`problems` or per-declaration reasons, which the policy turns into DF-006
+indeterminate findings. To make a newly discovered family a checked contract,
+add one relationship (id, kind, members by published name, relation, owner and
+provenance) to the data file and a fixture scenario to `fixtures/generate.py`;
+no Python or Rego edit is needed.
+
 Workflow discovery in that builder is explicitly fallible. An absent
 `.github/workflows` directory is a repository with no workflows and yields an
 empty list. A path that is not a directory, a directory that cannot be

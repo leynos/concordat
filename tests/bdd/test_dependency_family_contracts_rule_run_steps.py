@@ -1,0 +1,166 @@
+"""Behavioural tests for `concordat artefact rule run` on DF-001 to DF-006.
+
+These scenarios run the real policy over a real manifest, lock and Dependabot
+configuration through `cli.main`, so they cover the whole boundary an operator
+meets: a checkout on disk, the envelope built from it, Conftest's verdict, the
+process exit status and the rendered table. The Rego suite proves the clauses;
+this proves the command delivers them.
+"""
+
+from __future__ import annotations
+
+import re
+import typing as typ
+
+import pytest
+from pytest_bdd import given, parsers, scenarios, then, when
+
+from concordat import cli
+
+from .conftest import RunResult
+
+if typ.TYPE_CHECKING:
+    import pathlib
+
+scenarios("features/dependency_family_contracts_rule_run.feature")
+
+RULE_ID: typ.Final = "dependency-family-contracts"
+
+_CARGO: typ.Final = """\
+[package]
+name = "demo"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+pyo3 = "0.28.3"
+pyo3-build-config = "0.28.3"
+"""
+_LOCK: typ.Final = """\
+version = 4
+
+[[package]]
+name = "pyo3"
+version = "0.28.3"
+
+[[package]]
+name = "pyo3-build-config"
+version = "0.28.3"
+"""
+_CONFIG: typ.Final = """\
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: daily
+    groups:
+{narrow}      minor-and-patch:
+        patterns: ['*']
+        update-types: [minor, patch]
+"""
+_NARROW: typ.Final = "      pyo3:\n        patterns: ['pyo3', 'pyo3-build-config']\n"
+_EXCEPTION: typ.Final = """\
+dependencies:
+  family_exceptions:
+    - relationship: pyo3-build-config-family
+      rationale: the extension stays on the 0.28 generation
+      review_trigger: review when PyO3 0.30 ships
+"""
+
+
+@pytest.fixture
+def family_checkout(tmp_path: pathlib.Path) -> pathlib.Path:
+    """Provide the checkout directory one scenario audits."""
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    return checkout
+
+
+def _write_pyo3(checkout: pathlib.Path, *, narrow: str, concordat: str = "") -> None:
+    """Write a PyO3 crate, its lock and a Dependabot configuration."""
+    (checkout / "Cargo.toml").write_text(_CARGO, encoding="utf-8")
+    (checkout / "Cargo.lock").write_text(_LOCK, encoding="utf-8")
+    github = checkout / ".github"
+    github.mkdir()
+    (github / "dependabot.yml").write_text(
+        _CONFIG.format(narrow=narrow), encoding="utf-8"
+    )
+    if concordat:
+        (checkout / ".concordat").write_text(concordat, encoding="utf-8")
+
+
+@given("a checkout that declares no related packages")
+def given_nothing_related(family_checkout: pathlib.Path) -> None:
+    """Leave the checkout empty: no relationship applies."""
+
+
+@given("a checkout whose PyO3 packages share a narrow Dependabot group")
+def given_grouped(family_checkout: pathlib.Path) -> None:
+    """Write the compliant shape: one narrow group ahead of the catch-all."""
+    _write_pyo3(family_checkout, narrow=_NARROW)
+
+
+@given("a checkout whose PyO3 packages fall to the catch-all group")
+def given_catch_all(family_checkout: pathlib.Path) -> None:
+    """Write the split shape: no narrow group."""
+    _write_pyo3(family_checkout, narrow="")
+
+
+@given(
+    "a checkout whose PyO3 packages fall to the catch-all group "
+    "with a reviewed exception"
+)
+def given_exception(family_checkout: pathlib.Path) -> None:
+    """Write the split shape with an exception that names its review trigger."""
+    _write_pyo3(family_checkout, narrow="", concordat=_EXCEPTION)
+
+
+@given("a checkout that declares PyO3 but has no Dependabot configuration")
+def given_no_dependabot(family_checkout: pathlib.Path) -> None:
+    """Write the crate and lock without `.github/dependabot.yml`."""
+    (family_checkout / "Cargo.toml").write_text(_CARGO, encoding="utf-8")
+    (family_checkout / "Cargo.lock").write_text(_LOCK, encoding="utf-8")
+
+
+@when("I audit the checkout for its dependency families")
+def when_audit_checkout(
+    family_checkout: pathlib.Path,
+    cli_invocation: dict[str, RunResult],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Invoke the command and record its output and exit status."""
+    try:
+        returncode = cli.main(
+            ["artefact", "rule", "run", RULE_ID, "--repo", str(family_checkout)],
+        )
+    except SystemExit as exc:
+        returncode = int(exc.code or 0)
+    captured = capsys.readouterr()
+    cli_invocation["result"] = RunResult(
+        stdout=captured.out,
+        stderr=captured.err,
+        returncode=returncode,
+    )
+
+
+@then(parsers.cfparse("the audit exit status is {code:d}"))
+def then_audit_exit_status(cli_invocation: dict[str, RunResult], code: int) -> None:
+    """Assert the recorded exit status."""
+    result = cli_invocation["result"]
+    assert result.returncode == code, result.stderr or result.stdout
+
+
+@then("the audit table reports zero findings")
+def then_audit_clean(cli_invocation: dict[str, RunResult]) -> None:
+    """Assert the table names the compliant verdict and no findings."""
+    stdout = cli_invocation["result"].stdout
+    assert re.search(r"\bcompliant\b", stdout), stdout
+    assert "DF-0" not in stdout, stdout
+
+
+@then(parsers.cfparse('the audit output reports "{message}"'))
+def then_audit_reports(cli_invocation: dict[str, RunResult], message: str) -> None:
+    """Assert the rendered output carries the named rule or message."""
+    stdout = cli_invocation["result"].stdout
+    assert message in stdout, stdout

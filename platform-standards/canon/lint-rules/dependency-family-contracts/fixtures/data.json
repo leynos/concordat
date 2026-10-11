@@ -1,0 +1,4770 @@
+{
+  "fixtures": {
+    "compliant_family": {
+      "schema_version": 1,
+      "kind": "policy-input/dependency-family-contracts",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "relationships_version": 1,
+      "relationships": [
+        {
+          "id": "pyo3-build-config-family",
+          "kind": "family",
+          "members": [
+            "pyo3",
+            "pyo3-build-config"
+          ],
+          "relation": "same-group",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml declares pyo3 and pyo3-build-config at one version",
+            "leynos/tei-rapporteur#185 (the 0.29.2 update failed on a source deprecation, not on the family)"
+          ]
+        },
+        {
+          "id": "pyo3-serde-bridge",
+          "kind": "tuple",
+          "members": [
+            "pyo3",
+            "serde-pyobject"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+          ]
+        },
+        {
+          "id": "maturin-pyo3",
+          "kind": "tuple",
+          "members": [
+            "maturin",
+            "pyo3"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins maturin and rust/cuprum-rust builds PyO3 (leynos/cuprum#589)",
+            "femtologging pyproject.toml pins maturin[patchelf] and rust_extension/Cargo.toml declares PyO3 0.29.0"
+          ]
+        },
+        {
+          "id": "ortho-config-fluent-bundle",
+          "kind": "type-identity",
+          "members": [
+            "ortho_config",
+            "fluent-bundle"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml constrains fluent-bundle to the version ortho_config resolves, or the FluentValue types would differ"
+          ]
+        },
+        {
+          "id": "rustcrypto-digest-family",
+          "kind": "family",
+          "members": [
+            "digest",
+            "sha2",
+            "sha1",
+            "md-5"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml declares digest, sha2, sha1 and md-5 at 0.11 (leynos/netsuke#477, closed)"
+          ]
+        },
+        {
+          "id": "pylint-astroid",
+          "kind": "tuple",
+          "members": [
+            "pylint",
+            "astroid"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+          ]
+        },
+        {
+          "id": "pytest-pytest-bdd",
+          "kind": "tuple",
+          "members": [
+            "pytest",
+            "pytest-bdd"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml constrains pytest below 9.1 until pytest-bdd supports its node-based fixtures (leynos/cuprum#384)"
+          ]
+        }
+      ],
+      "declarations": [
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "pyo3",
+          "package": "pyo3",
+          "requirement": "0.28.3",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.28.3"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "pyo3",
+            "catch_all": false,
+            "matching": [
+              "pyo3",
+              "minor-and-patch"
+            ],
+            "matching_narrow": [
+              "pyo3"
+            ],
+            "ignored": false,
+            "reason": null
+          }
+        },
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "pyo3-build-config",
+          "package": "pyo3-build-config",
+          "requirement": "0.28.3",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.28.3"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "pyo3",
+            "catch_all": false,
+            "matching": [
+              "pyo3",
+              "minor-and-patch"
+            ],
+            "matching_narrow": [
+              "pyo3"
+            ],
+            "ignored": false,
+            "reason": null
+          }
+        }
+      ],
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "pyo3": {
+                  "patterns": [
+                    "pyo3",
+                    "pyo3-build-config"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "pyo3",
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "exceptions": [],
+      "problems": []
+    },
+    "split_family": {
+      "schema_version": 1,
+      "kind": "policy-input/dependency-family-contracts",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "relationships_version": 1,
+      "relationships": [
+        {
+          "id": "pyo3-build-config-family",
+          "kind": "family",
+          "members": [
+            "pyo3",
+            "pyo3-build-config"
+          ],
+          "relation": "same-group",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml declares pyo3 and pyo3-build-config at one version",
+            "leynos/tei-rapporteur#185 (the 0.29.2 update failed on a source deprecation, not on the family)"
+          ]
+        },
+        {
+          "id": "pyo3-serde-bridge",
+          "kind": "tuple",
+          "members": [
+            "pyo3",
+            "serde-pyobject"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+          ]
+        },
+        {
+          "id": "maturin-pyo3",
+          "kind": "tuple",
+          "members": [
+            "maturin",
+            "pyo3"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins maturin and rust/cuprum-rust builds PyO3 (leynos/cuprum#589)",
+            "femtologging pyproject.toml pins maturin[patchelf] and rust_extension/Cargo.toml declares PyO3 0.29.0"
+          ]
+        },
+        {
+          "id": "ortho-config-fluent-bundle",
+          "kind": "type-identity",
+          "members": [
+            "ortho_config",
+            "fluent-bundle"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml constrains fluent-bundle to the version ortho_config resolves, or the FluentValue types would differ"
+          ]
+        },
+        {
+          "id": "rustcrypto-digest-family",
+          "kind": "family",
+          "members": [
+            "digest",
+            "sha2",
+            "sha1",
+            "md-5"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml declares digest, sha2, sha1 and md-5 at 0.11 (leynos/netsuke#477, closed)"
+          ]
+        },
+        {
+          "id": "pylint-astroid",
+          "kind": "tuple",
+          "members": [
+            "pylint",
+            "astroid"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+          ]
+        },
+        {
+          "id": "pytest-pytest-bdd",
+          "kind": "tuple",
+          "members": [
+            "pytest",
+            "pytest-bdd"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml constrains pytest below 9.1 until pytest-bdd supports its node-based fixtures (leynos/cuprum#384)"
+          ]
+        }
+      ],
+      "declarations": [
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "pyo3",
+          "package": "pyo3",
+          "requirement": "0.28.3",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.28.3"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "minor-and-patch",
+            "catch_all": true,
+            "matching": [
+              "minor-and-patch"
+            ],
+            "matching_narrow": [],
+            "ignored": false,
+            "reason": null
+          }
+        },
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "pyo3-build-config",
+          "package": "pyo3-build-config",
+          "requirement": "0.28.3",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.28.3"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "minor-and-patch",
+            "catch_all": true,
+            "matching": [
+              "minor-and-patch"
+            ],
+            "matching_narrow": [],
+            "ignored": false,
+            "reason": null
+          }
+        }
+      ],
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "exceptions": [],
+      "problems": []
+    },
+    "shadowed_family": {
+      "schema_version": 1,
+      "kind": "policy-input/dependency-family-contracts",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "relationships_version": 1,
+      "relationships": [
+        {
+          "id": "pyo3-build-config-family",
+          "kind": "family",
+          "members": [
+            "pyo3",
+            "pyo3-build-config"
+          ],
+          "relation": "same-group",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml declares pyo3 and pyo3-build-config at one version",
+            "leynos/tei-rapporteur#185 (the 0.29.2 update failed on a source deprecation, not on the family)"
+          ]
+        },
+        {
+          "id": "pyo3-serde-bridge",
+          "kind": "tuple",
+          "members": [
+            "pyo3",
+            "serde-pyobject"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+          ]
+        },
+        {
+          "id": "maturin-pyo3",
+          "kind": "tuple",
+          "members": [
+            "maturin",
+            "pyo3"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins maturin and rust/cuprum-rust builds PyO3 (leynos/cuprum#589)",
+            "femtologging pyproject.toml pins maturin[patchelf] and rust_extension/Cargo.toml declares PyO3 0.29.0"
+          ]
+        },
+        {
+          "id": "ortho-config-fluent-bundle",
+          "kind": "type-identity",
+          "members": [
+            "ortho_config",
+            "fluent-bundle"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml constrains fluent-bundle to the version ortho_config resolves, or the FluentValue types would differ"
+          ]
+        },
+        {
+          "id": "rustcrypto-digest-family",
+          "kind": "family",
+          "members": [
+            "digest",
+            "sha2",
+            "sha1",
+            "md-5"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml declares digest, sha2, sha1 and md-5 at 0.11 (leynos/netsuke#477, closed)"
+          ]
+        },
+        {
+          "id": "pylint-astroid",
+          "kind": "tuple",
+          "members": [
+            "pylint",
+            "astroid"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+          ]
+        },
+        {
+          "id": "pytest-pytest-bdd",
+          "kind": "tuple",
+          "members": [
+            "pytest",
+            "pytest-bdd"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml constrains pytest below 9.1 until pytest-bdd supports its node-based fixtures (leynos/cuprum#384)"
+          ]
+        }
+      ],
+      "declarations": [
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "pyo3",
+          "package": "pyo3",
+          "requirement": "0.28.3",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.28.3"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "pyo3-only",
+            "catch_all": false,
+            "matching": [
+              "pyo3-only",
+              "family",
+              "minor-and-patch"
+            ],
+            "matching_narrow": [
+              "pyo3-only",
+              "family"
+            ],
+            "ignored": false,
+            "reason": null
+          }
+        },
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "pyo3-build-config",
+          "package": "pyo3-build-config",
+          "requirement": "0.28.3",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.28.3"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "family",
+            "catch_all": false,
+            "matching": [
+              "family",
+              "minor-and-patch"
+            ],
+            "matching_narrow": [
+              "family"
+            ],
+            "ignored": false,
+            "reason": null
+          }
+        }
+      ],
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "pyo3-only": {
+                  "patterns": [
+                    "pyo3"
+                  ]
+                },
+                "family": {
+                  "patterns": [
+                    "pyo3",
+                    "pyo3-build-config"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "pyo3-only",
+            "family",
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "exceptions": [],
+      "problems": []
+    },
+    "optional_member": {
+      "schema_version": 1,
+      "kind": "policy-input/dependency-family-contracts",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "relationships_version": 1,
+      "relationships": [
+        {
+          "id": "pyo3-build-config-family",
+          "kind": "family",
+          "members": [
+            "pyo3",
+            "pyo3-build-config"
+          ],
+          "relation": "same-group",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml declares pyo3 and pyo3-build-config at one version",
+            "leynos/tei-rapporteur#185 (the 0.29.2 update failed on a source deprecation, not on the family)"
+          ]
+        },
+        {
+          "id": "pyo3-serde-bridge",
+          "kind": "tuple",
+          "members": [
+            "pyo3",
+            "serde-pyobject"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+          ]
+        },
+        {
+          "id": "maturin-pyo3",
+          "kind": "tuple",
+          "members": [
+            "maturin",
+            "pyo3"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins maturin and rust/cuprum-rust builds PyO3 (leynos/cuprum#589)",
+            "femtologging pyproject.toml pins maturin[patchelf] and rust_extension/Cargo.toml declares PyO3 0.29.0"
+          ]
+        },
+        {
+          "id": "ortho-config-fluent-bundle",
+          "kind": "type-identity",
+          "members": [
+            "ortho_config",
+            "fluent-bundle"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml constrains fluent-bundle to the version ortho_config resolves, or the FluentValue types would differ"
+          ]
+        },
+        {
+          "id": "rustcrypto-digest-family",
+          "kind": "family",
+          "members": [
+            "digest",
+            "sha2",
+            "sha1",
+            "md-5"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml declares digest, sha2, sha1 and md-5 at 0.11 (leynos/netsuke#477, closed)"
+          ]
+        },
+        {
+          "id": "pylint-astroid",
+          "kind": "tuple",
+          "members": [
+            "pylint",
+            "astroid"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+          ]
+        },
+        {
+          "id": "pytest-pytest-bdd",
+          "kind": "tuple",
+          "members": [
+            "pytest",
+            "pytest-bdd"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml constrains pytest below 9.1 until pytest-bdd supports its node-based fixtures (leynos/cuprum#384)"
+          ]
+        }
+      ],
+      "declarations": [
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "pyo3",
+          "package": "pyo3",
+          "requirement": "0.28.3",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.28.3"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "minor-and-patch",
+            "catch_all": true,
+            "matching": [
+              "minor-and-patch"
+            ],
+            "matching_narrow": [],
+            "ignored": false,
+            "reason": null
+          }
+        },
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": true,
+          "workspace_inherited": false,
+          "declared_name": "pyo3-build-config",
+          "package": "pyo3-build-config",
+          "requirement": "0.28.3",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.28.3"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "minor-and-patch",
+            "catch_all": true,
+            "matching": [
+              "minor-and-patch"
+            ],
+            "matching_narrow": [],
+            "ignored": false,
+            "reason": null
+          }
+        }
+      ],
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "exceptions": [],
+      "problems": []
+    },
+    "nested_manifest_split": {
+      "schema_version": 1,
+      "kind": "policy-input/dependency-family-contracts",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "relationships_version": 1,
+      "relationships": [
+        {
+          "id": "pyo3-build-config-family",
+          "kind": "family",
+          "members": [
+            "pyo3",
+            "pyo3-build-config"
+          ],
+          "relation": "same-group",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml declares pyo3 and pyo3-build-config at one version",
+            "leynos/tei-rapporteur#185 (the 0.29.2 update failed on a source deprecation, not on the family)"
+          ]
+        },
+        {
+          "id": "pyo3-serde-bridge",
+          "kind": "tuple",
+          "members": [
+            "pyo3",
+            "serde-pyobject"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+          ]
+        },
+        {
+          "id": "maturin-pyo3",
+          "kind": "tuple",
+          "members": [
+            "maturin",
+            "pyo3"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins maturin and rust/cuprum-rust builds PyO3 (leynos/cuprum#589)",
+            "femtologging pyproject.toml pins maturin[patchelf] and rust_extension/Cargo.toml declares PyO3 0.29.0"
+          ]
+        },
+        {
+          "id": "ortho-config-fluent-bundle",
+          "kind": "type-identity",
+          "members": [
+            "ortho_config",
+            "fluent-bundle"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml constrains fluent-bundle to the version ortho_config resolves, or the FluentValue types would differ"
+          ]
+        },
+        {
+          "id": "rustcrypto-digest-family",
+          "kind": "family",
+          "members": [
+            "digest",
+            "sha2",
+            "sha1",
+            "md-5"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml declares digest, sha2, sha1 and md-5 at 0.11 (leynos/netsuke#477, closed)"
+          ]
+        },
+        {
+          "id": "pylint-astroid",
+          "kind": "tuple",
+          "members": [
+            "pylint",
+            "astroid"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+          ]
+        },
+        {
+          "id": "pytest-pytest-bdd",
+          "kind": "tuple",
+          "members": [
+            "pytest",
+            "pytest-bdd"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml constrains pytest below 9.1 until pytest-bdd supports its node-based fixtures (leynos/cuprum#384)"
+          ]
+        }
+      ],
+      "declarations": [
+        {
+          "manifest": "rust/native/Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": true,
+          "declared_name": "pyo3",
+          "package": "pyo3",
+          "requirement": "0.28.3",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.28.3"
+            ],
+            "lock": "rust/Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "minor-and-patch",
+            "catch_all": true,
+            "matching": [
+              "minor-and-patch"
+            ],
+            "matching_narrow": [],
+            "ignored": false,
+            "reason": null
+          }
+        },
+        {
+          "manifest": "rust/native/Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "build-dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": true,
+          "declared_name": "pyo3-build-config",
+          "package": "pyo3-build-config",
+          "requirement": "0.28.3",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.28.3"
+            ],
+            "lock": "rust/Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "minor-and-patch",
+            "catch_all": true,
+            "matching": [
+              "minor-and-patch"
+            ],
+            "matching_narrow": [],
+            "ignored": false,
+            "reason": null
+          }
+        }
+      ],
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/rust",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "exceptions": [],
+      "problems": []
+    },
+    "nested_manifest_grouped": {
+      "schema_version": 1,
+      "kind": "policy-input/dependency-family-contracts",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "relationships_version": 1,
+      "relationships": [
+        {
+          "id": "pyo3-build-config-family",
+          "kind": "family",
+          "members": [
+            "pyo3",
+            "pyo3-build-config"
+          ],
+          "relation": "same-group",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml declares pyo3 and pyo3-build-config at one version",
+            "leynos/tei-rapporteur#185 (the 0.29.2 update failed on a source deprecation, not on the family)"
+          ]
+        },
+        {
+          "id": "pyo3-serde-bridge",
+          "kind": "tuple",
+          "members": [
+            "pyo3",
+            "serde-pyobject"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+          ]
+        },
+        {
+          "id": "maturin-pyo3",
+          "kind": "tuple",
+          "members": [
+            "maturin",
+            "pyo3"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins maturin and rust/cuprum-rust builds PyO3 (leynos/cuprum#589)",
+            "femtologging pyproject.toml pins maturin[patchelf] and rust_extension/Cargo.toml declares PyO3 0.29.0"
+          ]
+        },
+        {
+          "id": "ortho-config-fluent-bundle",
+          "kind": "type-identity",
+          "members": [
+            "ortho_config",
+            "fluent-bundle"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml constrains fluent-bundle to the version ortho_config resolves, or the FluentValue types would differ"
+          ]
+        },
+        {
+          "id": "rustcrypto-digest-family",
+          "kind": "family",
+          "members": [
+            "digest",
+            "sha2",
+            "sha1",
+            "md-5"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml declares digest, sha2, sha1 and md-5 at 0.11 (leynos/netsuke#477, closed)"
+          ]
+        },
+        {
+          "id": "pylint-astroid",
+          "kind": "tuple",
+          "members": [
+            "pylint",
+            "astroid"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+          ]
+        },
+        {
+          "id": "pytest-pytest-bdd",
+          "kind": "tuple",
+          "members": [
+            "pytest",
+            "pytest-bdd"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml constrains pytest below 9.1 until pytest-bdd supports its node-based fixtures (leynos/cuprum#384)"
+          ]
+        }
+      ],
+      "declarations": [
+        {
+          "manifest": "rust/native/Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": true,
+          "declared_name": "pyo3",
+          "package": "pyo3",
+          "requirement": "0.28.3",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.28.3"
+            ],
+            "lock": "rust/Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "pyo3",
+            "catch_all": false,
+            "matching": [
+              "pyo3",
+              "minor-and-patch"
+            ],
+            "matching_narrow": [
+              "pyo3"
+            ],
+            "ignored": false,
+            "reason": null
+          }
+        },
+        {
+          "manifest": "rust/native/Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "build-dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": true,
+          "declared_name": "pyo3-build-config",
+          "package": "pyo3-build-config",
+          "requirement": "0.28.3",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.28.3"
+            ],
+            "lock": "rust/Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "pyo3",
+            "catch_all": false,
+            "matching": [
+              "pyo3",
+              "minor-and-patch"
+            ],
+            "matching_narrow": [
+              "pyo3"
+            ],
+            "ignored": false,
+            "reason": null
+          }
+        }
+      ],
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/rust",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "pyo3": {
+                  "patterns": [
+                    "pyo3",
+                    "pyo3-build-config"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "pyo3",
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "exceptions": [],
+      "problems": []
+    },
+    "renamed_bridge_unprotected": {
+      "schema_version": 1,
+      "kind": "policy-input/dependency-family-contracts",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "relationships_version": 1,
+      "relationships": [
+        {
+          "id": "pyo3-build-config-family",
+          "kind": "family",
+          "members": [
+            "pyo3",
+            "pyo3-build-config"
+          ],
+          "relation": "same-group",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml declares pyo3 and pyo3-build-config at one version",
+            "leynos/tei-rapporteur#185 (the 0.29.2 update failed on a source deprecation, not on the family)"
+          ]
+        },
+        {
+          "id": "pyo3-serde-bridge",
+          "kind": "tuple",
+          "members": [
+            "pyo3",
+            "serde-pyobject"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+          ]
+        },
+        {
+          "id": "maturin-pyo3",
+          "kind": "tuple",
+          "members": [
+            "maturin",
+            "pyo3"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins maturin and rust/cuprum-rust builds PyO3 (leynos/cuprum#589)",
+            "femtologging pyproject.toml pins maturin[patchelf] and rust_extension/Cargo.toml declares PyO3 0.29.0"
+          ]
+        },
+        {
+          "id": "ortho-config-fluent-bundle",
+          "kind": "type-identity",
+          "members": [
+            "ortho_config",
+            "fluent-bundle"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml constrains fluent-bundle to the version ortho_config resolves, or the FluentValue types would differ"
+          ]
+        },
+        {
+          "id": "rustcrypto-digest-family",
+          "kind": "family",
+          "members": [
+            "digest",
+            "sha2",
+            "sha1",
+            "md-5"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml declares digest, sha2, sha1 and md-5 at 0.11 (leynos/netsuke#477, closed)"
+          ]
+        },
+        {
+          "id": "pylint-astroid",
+          "kind": "tuple",
+          "members": [
+            "pylint",
+            "astroid"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+          ]
+        },
+        {
+          "id": "pytest-pytest-bdd",
+          "kind": "tuple",
+          "members": [
+            "pytest",
+            "pytest-bdd"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml constrains pytest below 9.1 until pytest-bdd supports its node-based fixtures (leynos/cuprum#384)"
+          ]
+        }
+      ],
+      "declarations": [
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "pyo3",
+          "package": "pyo3",
+          "requirement": "0.28.3",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.28.3"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "pyo3",
+            "catch_all": false,
+            "matching": [
+              "pyo3",
+              "minor-and-patch"
+            ],
+            "matching_narrow": [
+              "pyo3"
+            ],
+            "ignored": false,
+            "reason": null
+          }
+        },
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "pyo3-build-config",
+          "package": "pyo3-build-config",
+          "requirement": "0.28.3",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.28.3"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "pyo3",
+            "catch_all": false,
+            "matching": [
+              "pyo3",
+              "minor-and-patch"
+            ],
+            "matching_narrow": [
+              "pyo3"
+            ],
+            "ignored": false,
+            "reason": null
+          }
+        },
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "pyo3-serde",
+          "package": "serde-pyobject",
+          "requirement": "0.8.0",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [],
+            "lock": "Cargo.lock",
+            "reason": "serde-pyobject is not in Cargo.lock"
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "minor-and-patch",
+            "catch_all": true,
+            "matching": [
+              "minor-and-patch"
+            ],
+            "matching_narrow": [],
+            "ignored": false,
+            "reason": null
+          }
+        }
+      ],
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "pyo3": {
+                  "patterns": [
+                    "pyo3",
+                    "pyo3-build-config"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "pyo3",
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "exceptions": [],
+      "problems": []
+    },
+    "renamed_bridge_ignored_by_published_name": {
+      "schema_version": 1,
+      "kind": "policy-input/dependency-family-contracts",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "relationships_version": 1,
+      "relationships": [
+        {
+          "id": "pyo3-build-config-family",
+          "kind": "family",
+          "members": [
+            "pyo3",
+            "pyo3-build-config"
+          ],
+          "relation": "same-group",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml declares pyo3 and pyo3-build-config at one version",
+            "leynos/tei-rapporteur#185 (the 0.29.2 update failed on a source deprecation, not on the family)"
+          ]
+        },
+        {
+          "id": "pyo3-serde-bridge",
+          "kind": "tuple",
+          "members": [
+            "pyo3",
+            "serde-pyobject"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+          ]
+        },
+        {
+          "id": "maturin-pyo3",
+          "kind": "tuple",
+          "members": [
+            "maturin",
+            "pyo3"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins maturin and rust/cuprum-rust builds PyO3 (leynos/cuprum#589)",
+            "femtologging pyproject.toml pins maturin[patchelf] and rust_extension/Cargo.toml declares PyO3 0.29.0"
+          ]
+        },
+        {
+          "id": "ortho-config-fluent-bundle",
+          "kind": "type-identity",
+          "members": [
+            "ortho_config",
+            "fluent-bundle"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml constrains fluent-bundle to the version ortho_config resolves, or the FluentValue types would differ"
+          ]
+        },
+        {
+          "id": "rustcrypto-digest-family",
+          "kind": "family",
+          "members": [
+            "digest",
+            "sha2",
+            "sha1",
+            "md-5"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml declares digest, sha2, sha1 and md-5 at 0.11 (leynos/netsuke#477, closed)"
+          ]
+        },
+        {
+          "id": "pylint-astroid",
+          "kind": "tuple",
+          "members": [
+            "pylint",
+            "astroid"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+          ]
+        },
+        {
+          "id": "pytest-pytest-bdd",
+          "kind": "tuple",
+          "members": [
+            "pytest",
+            "pytest-bdd"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml constrains pytest below 9.1 until pytest-bdd supports its node-based fixtures (leynos/cuprum#384)"
+          ]
+        }
+      ],
+      "declarations": [
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "pyo3",
+          "package": "pyo3",
+          "requirement": "0.28.3",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.28.3"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "pyo3",
+            "catch_all": false,
+            "matching": [
+              "pyo3",
+              "minor-and-patch"
+            ],
+            "matching_narrow": [
+              "pyo3"
+            ],
+            "ignored": false,
+            "reason": null
+          }
+        },
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "pyo3-build-config",
+          "package": "pyo3-build-config",
+          "requirement": "0.28.3",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.28.3"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "pyo3",
+            "catch_all": false,
+            "matching": [
+              "pyo3",
+              "minor-and-patch"
+            ],
+            "matching_narrow": [
+              "pyo3"
+            ],
+            "ignored": false,
+            "reason": null
+          }
+        },
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "pyo3-serde",
+          "package": "serde-pyobject",
+          "requirement": "0.8.0",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [],
+            "lock": "Cargo.lock",
+            "reason": "serde-pyobject is not in Cargo.lock"
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "minor-and-patch",
+            "catch_all": true,
+            "matching": [
+              "minor-and-patch"
+            ],
+            "matching_narrow": [],
+            "ignored": true,
+            "reason": null
+          }
+        }
+      ],
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "pyo3": {
+                  "patterns": [
+                    "pyo3",
+                    "pyo3-build-config"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "ignore": [
+                {
+                  "dependency-name": "serde-pyobject",
+                  "versions": [
+                    ">=0.9"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "pyo3",
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "exceptions": [],
+      "problems": []
+    },
+    "renamed_bridge_ignored_by_alias": {
+      "schema_version": 1,
+      "kind": "policy-input/dependency-family-contracts",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "relationships_version": 1,
+      "relationships": [
+        {
+          "id": "pyo3-build-config-family",
+          "kind": "family",
+          "members": [
+            "pyo3",
+            "pyo3-build-config"
+          ],
+          "relation": "same-group",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml declares pyo3 and pyo3-build-config at one version",
+            "leynos/tei-rapporteur#185 (the 0.29.2 update failed on a source deprecation, not on the family)"
+          ]
+        },
+        {
+          "id": "pyo3-serde-bridge",
+          "kind": "tuple",
+          "members": [
+            "pyo3",
+            "serde-pyobject"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+          ]
+        },
+        {
+          "id": "maturin-pyo3",
+          "kind": "tuple",
+          "members": [
+            "maturin",
+            "pyo3"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins maturin and rust/cuprum-rust builds PyO3 (leynos/cuprum#589)",
+            "femtologging pyproject.toml pins maturin[patchelf] and rust_extension/Cargo.toml declares PyO3 0.29.0"
+          ]
+        },
+        {
+          "id": "ortho-config-fluent-bundle",
+          "kind": "type-identity",
+          "members": [
+            "ortho_config",
+            "fluent-bundle"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml constrains fluent-bundle to the version ortho_config resolves, or the FluentValue types would differ"
+          ]
+        },
+        {
+          "id": "rustcrypto-digest-family",
+          "kind": "family",
+          "members": [
+            "digest",
+            "sha2",
+            "sha1",
+            "md-5"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml declares digest, sha2, sha1 and md-5 at 0.11 (leynos/netsuke#477, closed)"
+          ]
+        },
+        {
+          "id": "pylint-astroid",
+          "kind": "tuple",
+          "members": [
+            "pylint",
+            "astroid"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+          ]
+        },
+        {
+          "id": "pytest-pytest-bdd",
+          "kind": "tuple",
+          "members": [
+            "pytest",
+            "pytest-bdd"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml constrains pytest below 9.1 until pytest-bdd supports its node-based fixtures (leynos/cuprum#384)"
+          ]
+        }
+      ],
+      "declarations": [
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "pyo3",
+          "package": "pyo3",
+          "requirement": "0.28.3",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.28.3"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "pyo3",
+            "catch_all": false,
+            "matching": [
+              "pyo3",
+              "minor-and-patch"
+            ],
+            "matching_narrow": [
+              "pyo3"
+            ],
+            "ignored": false,
+            "reason": null
+          }
+        },
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "pyo3-build-config",
+          "package": "pyo3-build-config",
+          "requirement": "0.28.3",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.28.3"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "pyo3",
+            "catch_all": false,
+            "matching": [
+              "pyo3",
+              "minor-and-patch"
+            ],
+            "matching_narrow": [
+              "pyo3"
+            ],
+            "ignored": false,
+            "reason": null
+          }
+        },
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "pyo3-serde",
+          "package": "serde-pyobject",
+          "requirement": "0.8.0",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [],
+            "lock": "Cargo.lock",
+            "reason": "serde-pyobject is not in Cargo.lock"
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "minor-and-patch",
+            "catch_all": true,
+            "matching": [
+              "minor-and-patch"
+            ],
+            "matching_narrow": [],
+            "ignored": false,
+            "reason": null
+          }
+        }
+      ],
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "pyo3": {
+                  "patterns": [
+                    "pyo3",
+                    "pyo3-build-config"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "ignore": [
+                {
+                  "dependency-name": "pyo3-serde",
+                  "versions": [
+                    ">=0.9"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "pyo3",
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "exceptions": [],
+      "problems": []
+    },
+    "maturin_exact_pin": {
+      "schema_version": 1,
+      "kind": "policy-input/dependency-family-contracts",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "relationships_version": 1,
+      "relationships": [
+        {
+          "id": "pyo3-build-config-family",
+          "kind": "family",
+          "members": [
+            "pyo3",
+            "pyo3-build-config"
+          ],
+          "relation": "same-group",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml declares pyo3 and pyo3-build-config at one version",
+            "leynos/tei-rapporteur#185 (the 0.29.2 update failed on a source deprecation, not on the family)"
+          ]
+        },
+        {
+          "id": "pyo3-serde-bridge",
+          "kind": "tuple",
+          "members": [
+            "pyo3",
+            "serde-pyobject"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+          ]
+        },
+        {
+          "id": "maturin-pyo3",
+          "kind": "tuple",
+          "members": [
+            "maturin",
+            "pyo3"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins maturin and rust/cuprum-rust builds PyO3 (leynos/cuprum#589)",
+            "femtologging pyproject.toml pins maturin[patchelf] and rust_extension/Cargo.toml declares PyO3 0.29.0"
+          ]
+        },
+        {
+          "id": "ortho-config-fluent-bundle",
+          "kind": "type-identity",
+          "members": [
+            "ortho_config",
+            "fluent-bundle"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml constrains fluent-bundle to the version ortho_config resolves, or the FluentValue types would differ"
+          ]
+        },
+        {
+          "id": "rustcrypto-digest-family",
+          "kind": "family",
+          "members": [
+            "digest",
+            "sha2",
+            "sha1",
+            "md-5"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml declares digest, sha2, sha1 and md-5 at 0.11 (leynos/netsuke#477, closed)"
+          ]
+        },
+        {
+          "id": "pylint-astroid",
+          "kind": "tuple",
+          "members": [
+            "pylint",
+            "astroid"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+          ]
+        },
+        {
+          "id": "pytest-pytest-bdd",
+          "kind": "tuple",
+          "members": [
+            "pytest",
+            "pytest-bdd"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml constrains pytest below 9.1 until pytest-bdd supports its node-based fixtures (leynos/cuprum#384)"
+          ]
+        }
+      ],
+      "declarations": [
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "pyo3",
+          "package": "pyo3",
+          "requirement": "0.28.3",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.28.3"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "pyo3",
+            "catch_all": false,
+            "matching": [
+              "pyo3",
+              "minor-and-patch"
+            ],
+            "matching_narrow": [
+              "pyo3"
+            ],
+            "ignored": false,
+            "reason": null
+          }
+        },
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "pyo3-build-config",
+          "package": "pyo3-build-config",
+          "requirement": "0.28.3",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.28.3"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "pyo3",
+            "catch_all": false,
+            "matching": [
+              "pyo3",
+              "minor-and-patch"
+            ],
+            "matching_narrow": [
+              "pyo3"
+            ],
+            "ignored": false,
+            "reason": null
+          }
+        },
+        {
+          "manifest": "pyproject.toml",
+          "ecosystem": "pip",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "maturin",
+          "package": "maturin",
+          "requirement": "==1.13.3",
+          "requirement_kind": "exact",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [],
+            "lock": null,
+            "reason": "uv.lock is absent"
+          },
+          "coverage": {
+            "entry": 1,
+            "group": "minor-and-patch",
+            "catch_all": true,
+            "matching": [
+              "minor-and-patch"
+            ],
+            "matching_narrow": [],
+            "ignored": false,
+            "reason": null
+          }
+        }
+      ],
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "pyo3": {
+                  "patterns": [
+                    "pyo3",
+                    "pyo3-build-config"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "pip",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "pyo3",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "exceptions": [],
+      "problems": []
+    },
+    "maturin_bounded": {
+      "schema_version": 1,
+      "kind": "policy-input/dependency-family-contracts",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "relationships_version": 1,
+      "relationships": [
+        {
+          "id": "pyo3-build-config-family",
+          "kind": "family",
+          "members": [
+            "pyo3",
+            "pyo3-build-config"
+          ],
+          "relation": "same-group",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml declares pyo3 and pyo3-build-config at one version",
+            "leynos/tei-rapporteur#185 (the 0.29.2 update failed on a source deprecation, not on the family)"
+          ]
+        },
+        {
+          "id": "pyo3-serde-bridge",
+          "kind": "tuple",
+          "members": [
+            "pyo3",
+            "serde-pyobject"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+          ]
+        },
+        {
+          "id": "maturin-pyo3",
+          "kind": "tuple",
+          "members": [
+            "maturin",
+            "pyo3"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins maturin and rust/cuprum-rust builds PyO3 (leynos/cuprum#589)",
+            "femtologging pyproject.toml pins maturin[patchelf] and rust_extension/Cargo.toml declares PyO3 0.29.0"
+          ]
+        },
+        {
+          "id": "ortho-config-fluent-bundle",
+          "kind": "type-identity",
+          "members": [
+            "ortho_config",
+            "fluent-bundle"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml constrains fluent-bundle to the version ortho_config resolves, or the FluentValue types would differ"
+          ]
+        },
+        {
+          "id": "rustcrypto-digest-family",
+          "kind": "family",
+          "members": [
+            "digest",
+            "sha2",
+            "sha1",
+            "md-5"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml declares digest, sha2, sha1 and md-5 at 0.11 (leynos/netsuke#477, closed)"
+          ]
+        },
+        {
+          "id": "pylint-astroid",
+          "kind": "tuple",
+          "members": [
+            "pylint",
+            "astroid"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+          ]
+        },
+        {
+          "id": "pytest-pytest-bdd",
+          "kind": "tuple",
+          "members": [
+            "pytest",
+            "pytest-bdd"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml constrains pytest below 9.1 until pytest-bdd supports its node-based fixtures (leynos/cuprum#384)"
+          ]
+        }
+      ],
+      "declarations": [
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "pyo3",
+          "package": "pyo3",
+          "requirement": "0.28.3",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.28.3"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "pyo3",
+            "catch_all": false,
+            "matching": [
+              "pyo3",
+              "minor-and-patch"
+            ],
+            "matching_narrow": [
+              "pyo3"
+            ],
+            "ignored": false,
+            "reason": null
+          }
+        },
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "pyo3-build-config",
+          "package": "pyo3-build-config",
+          "requirement": "0.28.3",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.28.3"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "pyo3",
+            "catch_all": false,
+            "matching": [
+              "pyo3",
+              "minor-and-patch"
+            ],
+            "matching_narrow": [
+              "pyo3"
+            ],
+            "ignored": false,
+            "reason": null
+          }
+        },
+        {
+          "manifest": "pyproject.toml",
+          "ecosystem": "pip",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "maturin",
+          "package": "maturin",
+          "requirement": ">=1.13.3,<2.0.0",
+          "requirement_kind": "bounded",
+          "upper_bounded": true,
+          "resolved": {
+            "versions": [],
+            "lock": null,
+            "reason": "uv.lock is absent"
+          },
+          "coverage": {
+            "entry": 1,
+            "group": "minor-and-patch",
+            "catch_all": true,
+            "matching": [
+              "minor-and-patch"
+            ],
+            "matching_narrow": [],
+            "ignored": false,
+            "reason": null
+          }
+        }
+      ],
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "pyo3": {
+                  "patterns": [
+                    "pyo3",
+                    "pyo3-build-config"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            },
+            {
+              "package-ecosystem": "pip",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "pyo3",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "exceptions": [],
+      "problems": []
+    },
+    "pure_python_template": {
+      "schema_version": 1,
+      "kind": "policy-input/dependency-family-contracts",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "relationships_version": 1,
+      "relationships": [
+        {
+          "id": "pyo3-build-config-family",
+          "kind": "family",
+          "members": [
+            "pyo3",
+            "pyo3-build-config"
+          ],
+          "relation": "same-group",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml declares pyo3 and pyo3-build-config at one version",
+            "leynos/tei-rapporteur#185 (the 0.29.2 update failed on a source deprecation, not on the family)"
+          ]
+        },
+        {
+          "id": "pyo3-serde-bridge",
+          "kind": "tuple",
+          "members": [
+            "pyo3",
+            "serde-pyobject"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+          ]
+        },
+        {
+          "id": "maturin-pyo3",
+          "kind": "tuple",
+          "members": [
+            "maturin",
+            "pyo3"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins maturin and rust/cuprum-rust builds PyO3 (leynos/cuprum#589)",
+            "femtologging pyproject.toml pins maturin[patchelf] and rust_extension/Cargo.toml declares PyO3 0.29.0"
+          ]
+        },
+        {
+          "id": "ortho-config-fluent-bundle",
+          "kind": "type-identity",
+          "members": [
+            "ortho_config",
+            "fluent-bundle"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml constrains fluent-bundle to the version ortho_config resolves, or the FluentValue types would differ"
+          ]
+        },
+        {
+          "id": "rustcrypto-digest-family",
+          "kind": "family",
+          "members": [
+            "digest",
+            "sha2",
+            "sha1",
+            "md-5"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml declares digest, sha2, sha1 and md-5 at 0.11 (leynos/netsuke#477, closed)"
+          ]
+        },
+        {
+          "id": "pylint-astroid",
+          "kind": "tuple",
+          "members": [
+            "pylint",
+            "astroid"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+          ]
+        },
+        {
+          "id": "pytest-pytest-bdd",
+          "kind": "tuple",
+          "members": [
+            "pytest",
+            "pytest-bdd"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml constrains pytest below 9.1 until pytest-bdd supports its node-based fixtures (leynos/cuprum#384)"
+          ]
+        }
+      ],
+      "declarations": [
+        {
+          "manifest": "pyproject.toml",
+          "ecosystem": "pip",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "maturin",
+          "package": "maturin",
+          "requirement": "==1.13.3",
+          "requirement_kind": "exact",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [],
+            "lock": null,
+            "reason": "uv.lock is absent"
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "minor-and-patch",
+            "catch_all": true,
+            "matching": [
+              "minor-and-patch"
+            ],
+            "matching_narrow": [],
+            "ignored": false,
+            "reason": null
+          }
+        }
+      ],
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "pip",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "exceptions": [],
+      "problems": []
+    },
+    "fluent_grouped": {
+      "schema_version": 1,
+      "kind": "policy-input/dependency-family-contracts",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "relationships_version": 1,
+      "relationships": [
+        {
+          "id": "pyo3-build-config-family",
+          "kind": "family",
+          "members": [
+            "pyo3",
+            "pyo3-build-config"
+          ],
+          "relation": "same-group",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml declares pyo3 and pyo3-build-config at one version",
+            "leynos/tei-rapporteur#185 (the 0.29.2 update failed on a source deprecation, not on the family)"
+          ]
+        },
+        {
+          "id": "pyo3-serde-bridge",
+          "kind": "tuple",
+          "members": [
+            "pyo3",
+            "serde-pyobject"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+          ]
+        },
+        {
+          "id": "maturin-pyo3",
+          "kind": "tuple",
+          "members": [
+            "maturin",
+            "pyo3"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins maturin and rust/cuprum-rust builds PyO3 (leynos/cuprum#589)",
+            "femtologging pyproject.toml pins maturin[patchelf] and rust_extension/Cargo.toml declares PyO3 0.29.0"
+          ]
+        },
+        {
+          "id": "ortho-config-fluent-bundle",
+          "kind": "type-identity",
+          "members": [
+            "ortho_config",
+            "fluent-bundle"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml constrains fluent-bundle to the version ortho_config resolves, or the FluentValue types would differ"
+          ]
+        },
+        {
+          "id": "rustcrypto-digest-family",
+          "kind": "family",
+          "members": [
+            "digest",
+            "sha2",
+            "sha1",
+            "md-5"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml declares digest, sha2, sha1 and md-5 at 0.11 (leynos/netsuke#477, closed)"
+          ]
+        },
+        {
+          "id": "pylint-astroid",
+          "kind": "tuple",
+          "members": [
+            "pylint",
+            "astroid"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+          ]
+        },
+        {
+          "id": "pytest-pytest-bdd",
+          "kind": "tuple",
+          "members": [
+            "pytest",
+            "pytest-bdd"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml constrains pytest below 9.1 until pytest-bdd supports its node-based fixtures (leynos/cuprum#384)"
+          ]
+        }
+      ],
+      "declarations": [
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "ortho_config",
+          "package": "ortho_config",
+          "requirement": "0.9.0",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.9.0"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "fluent",
+            "catch_all": false,
+            "matching": [
+              "fluent",
+              "minor-and-patch"
+            ],
+            "matching_narrow": [
+              "fluent"
+            ],
+            "ignored": false,
+            "reason": null
+          }
+        },
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dev-dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "fluent-bundle",
+          "package": "fluent-bundle",
+          "requirement": "0.16.0",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.16.0"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "fluent",
+            "catch_all": false,
+            "matching": [
+              "fluent",
+              "minor-and-patch"
+            ],
+            "matching_narrow": [
+              "fluent"
+            ],
+            "ignored": false,
+            "reason": null
+          }
+        }
+      ],
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "fluent": {
+                  "patterns": [
+                    "ortho_config",
+                    "fluent-bundle"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "fluent",
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "exceptions": [],
+      "problems": []
+    },
+    "fluent_split": {
+      "schema_version": 1,
+      "kind": "policy-input/dependency-family-contracts",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "relationships_version": 1,
+      "relationships": [
+        {
+          "id": "pyo3-build-config-family",
+          "kind": "family",
+          "members": [
+            "pyo3",
+            "pyo3-build-config"
+          ],
+          "relation": "same-group",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml declares pyo3 and pyo3-build-config at one version",
+            "leynos/tei-rapporteur#185 (the 0.29.2 update failed on a source deprecation, not on the family)"
+          ]
+        },
+        {
+          "id": "pyo3-serde-bridge",
+          "kind": "tuple",
+          "members": [
+            "pyo3",
+            "serde-pyobject"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+          ]
+        },
+        {
+          "id": "maturin-pyo3",
+          "kind": "tuple",
+          "members": [
+            "maturin",
+            "pyo3"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins maturin and rust/cuprum-rust builds PyO3 (leynos/cuprum#589)",
+            "femtologging pyproject.toml pins maturin[patchelf] and rust_extension/Cargo.toml declares PyO3 0.29.0"
+          ]
+        },
+        {
+          "id": "ortho-config-fluent-bundle",
+          "kind": "type-identity",
+          "members": [
+            "ortho_config",
+            "fluent-bundle"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml constrains fluent-bundle to the version ortho_config resolves, or the FluentValue types would differ"
+          ]
+        },
+        {
+          "id": "rustcrypto-digest-family",
+          "kind": "family",
+          "members": [
+            "digest",
+            "sha2",
+            "sha1",
+            "md-5"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml declares digest, sha2, sha1 and md-5 at 0.11 (leynos/netsuke#477, closed)"
+          ]
+        },
+        {
+          "id": "pylint-astroid",
+          "kind": "tuple",
+          "members": [
+            "pylint",
+            "astroid"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+          ]
+        },
+        {
+          "id": "pytest-pytest-bdd",
+          "kind": "tuple",
+          "members": [
+            "pytest",
+            "pytest-bdd"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml constrains pytest below 9.1 until pytest-bdd supports its node-based fixtures (leynos/cuprum#384)"
+          ]
+        }
+      ],
+      "declarations": [
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "ortho_config",
+          "package": "ortho_config",
+          "requirement": "0.9.0",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.9.0"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "minor-and-patch",
+            "catch_all": true,
+            "matching": [
+              "minor-and-patch"
+            ],
+            "matching_narrow": [],
+            "ignored": false,
+            "reason": null
+          }
+        },
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dev-dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "fluent-bundle",
+          "package": "fluent-bundle",
+          "requirement": "0.16.0",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.16.0"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "minor-and-patch",
+            "catch_all": true,
+            "matching": [
+              "minor-and-patch"
+            ],
+            "matching_narrow": [],
+            "ignored": false,
+            "reason": null
+          }
+        }
+      ],
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "exceptions": [],
+      "problems": []
+    },
+    "fluent_without_lock": {
+      "schema_version": 1,
+      "kind": "policy-input/dependency-family-contracts",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "relationships_version": 1,
+      "relationships": [
+        {
+          "id": "pyo3-build-config-family",
+          "kind": "family",
+          "members": [
+            "pyo3",
+            "pyo3-build-config"
+          ],
+          "relation": "same-group",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml declares pyo3 and pyo3-build-config at one version",
+            "leynos/tei-rapporteur#185 (the 0.29.2 update failed on a source deprecation, not on the family)"
+          ]
+        },
+        {
+          "id": "pyo3-serde-bridge",
+          "kind": "tuple",
+          "members": [
+            "pyo3",
+            "serde-pyobject"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+          ]
+        },
+        {
+          "id": "maturin-pyo3",
+          "kind": "tuple",
+          "members": [
+            "maturin",
+            "pyo3"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins maturin and rust/cuprum-rust builds PyO3 (leynos/cuprum#589)",
+            "femtologging pyproject.toml pins maturin[patchelf] and rust_extension/Cargo.toml declares PyO3 0.29.0"
+          ]
+        },
+        {
+          "id": "ortho-config-fluent-bundle",
+          "kind": "type-identity",
+          "members": [
+            "ortho_config",
+            "fluent-bundle"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml constrains fluent-bundle to the version ortho_config resolves, or the FluentValue types would differ"
+          ]
+        },
+        {
+          "id": "rustcrypto-digest-family",
+          "kind": "family",
+          "members": [
+            "digest",
+            "sha2",
+            "sha1",
+            "md-5"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml declares digest, sha2, sha1 and md-5 at 0.11 (leynos/netsuke#477, closed)"
+          ]
+        },
+        {
+          "id": "pylint-astroid",
+          "kind": "tuple",
+          "members": [
+            "pylint",
+            "astroid"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+          ]
+        },
+        {
+          "id": "pytest-pytest-bdd",
+          "kind": "tuple",
+          "members": [
+            "pytest",
+            "pytest-bdd"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml constrains pytest below 9.1 until pytest-bdd supports its node-based fixtures (leynos/cuprum#384)"
+          ]
+        }
+      ],
+      "declarations": [
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "ortho_config",
+          "package": "ortho_config",
+          "requirement": "0.9.0",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [],
+            "lock": null,
+            "reason": "Cargo.lock is absent"
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "fluent",
+            "catch_all": false,
+            "matching": [
+              "fluent",
+              "minor-and-patch"
+            ],
+            "matching_narrow": [
+              "fluent"
+            ],
+            "ignored": false,
+            "reason": null
+          }
+        },
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dev-dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "fluent-bundle",
+          "package": "fluent-bundle",
+          "requirement": "0.16.0",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [],
+            "lock": null,
+            "reason": "Cargo.lock is absent"
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "fluent",
+            "catch_all": false,
+            "matching": [
+              "fluent",
+              "minor-and-patch"
+            ],
+            "matching_narrow": [
+              "fluent"
+            ],
+            "ignored": false,
+            "reason": null
+          }
+        }
+      ],
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "fluent": {
+                  "patterns": [
+                    "ortho_config",
+                    "fluent-bundle"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "fluent",
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "exceptions": [],
+      "problems": []
+    },
+    "unrelated_duplicates": {
+      "schema_version": 1,
+      "kind": "policy-input/dependency-family-contracts",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "relationships_version": 1,
+      "relationships": [
+        {
+          "id": "pyo3-build-config-family",
+          "kind": "family",
+          "members": [
+            "pyo3",
+            "pyo3-build-config"
+          ],
+          "relation": "same-group",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml declares pyo3 and pyo3-build-config at one version",
+            "leynos/tei-rapporteur#185 (the 0.29.2 update failed on a source deprecation, not on the family)"
+          ]
+        },
+        {
+          "id": "pyo3-serde-bridge",
+          "kind": "tuple",
+          "members": [
+            "pyo3",
+            "serde-pyobject"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+          ]
+        },
+        {
+          "id": "maturin-pyo3",
+          "kind": "tuple",
+          "members": [
+            "maturin",
+            "pyo3"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins maturin and rust/cuprum-rust builds PyO3 (leynos/cuprum#589)",
+            "femtologging pyproject.toml pins maturin[patchelf] and rust_extension/Cargo.toml declares PyO3 0.29.0"
+          ]
+        },
+        {
+          "id": "ortho-config-fluent-bundle",
+          "kind": "type-identity",
+          "members": [
+            "ortho_config",
+            "fluent-bundle"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml constrains fluent-bundle to the version ortho_config resolves, or the FluentValue types would differ"
+          ]
+        },
+        {
+          "id": "rustcrypto-digest-family",
+          "kind": "family",
+          "members": [
+            "digest",
+            "sha2",
+            "sha1",
+            "md-5"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml declares digest, sha2, sha1 and md-5 at 0.11 (leynos/netsuke#477, closed)"
+          ]
+        },
+        {
+          "id": "pylint-astroid",
+          "kind": "tuple",
+          "members": [
+            "pylint",
+            "astroid"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+          ]
+        },
+        {
+          "id": "pytest-pytest-bdd",
+          "kind": "tuple",
+          "members": [
+            "pytest",
+            "pytest-bdd"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml constrains pytest below 9.1 until pytest-bdd supports its node-based fixtures (leynos/cuprum#384)"
+          ]
+        }
+      ],
+      "declarations": [
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "serde",
+          "package": "serde",
+          "requirement": "1.0.100",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "1.0.200"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "minor-and-patch",
+            "catch_all": true,
+            "matching": [
+              "minor-and-patch"
+            ],
+            "matching_narrow": [],
+            "ignored": false,
+            "reason": null
+          }
+        }
+      ],
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "exceptions": [],
+      "problems": []
+    },
+    "split_with_exception": {
+      "schema_version": 1,
+      "kind": "policy-input/dependency-family-contracts",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "relationships_version": 1,
+      "relationships": [
+        {
+          "id": "pyo3-build-config-family",
+          "kind": "family",
+          "members": [
+            "pyo3",
+            "pyo3-build-config"
+          ],
+          "relation": "same-group",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml declares pyo3 and pyo3-build-config at one version",
+            "leynos/tei-rapporteur#185 (the 0.29.2 update failed on a source deprecation, not on the family)"
+          ]
+        },
+        {
+          "id": "pyo3-serde-bridge",
+          "kind": "tuple",
+          "members": [
+            "pyo3",
+            "serde-pyobject"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+          ]
+        },
+        {
+          "id": "maturin-pyo3",
+          "kind": "tuple",
+          "members": [
+            "maturin",
+            "pyo3"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins maturin and rust/cuprum-rust builds PyO3 (leynos/cuprum#589)",
+            "femtologging pyproject.toml pins maturin[patchelf] and rust_extension/Cargo.toml declares PyO3 0.29.0"
+          ]
+        },
+        {
+          "id": "ortho-config-fluent-bundle",
+          "kind": "type-identity",
+          "members": [
+            "ortho_config",
+            "fluent-bundle"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml constrains fluent-bundle to the version ortho_config resolves, or the FluentValue types would differ"
+          ]
+        },
+        {
+          "id": "rustcrypto-digest-family",
+          "kind": "family",
+          "members": [
+            "digest",
+            "sha2",
+            "sha1",
+            "md-5"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml declares digest, sha2, sha1 and md-5 at 0.11 (leynos/netsuke#477, closed)"
+          ]
+        },
+        {
+          "id": "pylint-astroid",
+          "kind": "tuple",
+          "members": [
+            "pylint",
+            "astroid"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+          ]
+        },
+        {
+          "id": "pytest-pytest-bdd",
+          "kind": "tuple",
+          "members": [
+            "pytest",
+            "pytest-bdd"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml constrains pytest below 9.1 until pytest-bdd supports its node-based fixtures (leynos/cuprum#384)"
+          ]
+        }
+      ],
+      "declarations": [
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "pyo3",
+          "package": "pyo3",
+          "requirement": "0.28.3",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.28.3"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "minor-and-patch",
+            "catch_all": true,
+            "matching": [
+              "minor-and-patch"
+            ],
+            "matching_narrow": [],
+            "ignored": false,
+            "reason": null
+          }
+        },
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "pyo3-build-config",
+          "package": "pyo3-build-config",
+          "requirement": "0.28.3",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.28.3"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "minor-and-patch",
+            "catch_all": true,
+            "matching": [
+              "minor-and-patch"
+            ],
+            "matching_narrow": [],
+            "ignored": false,
+            "reason": null
+          }
+        }
+      ],
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "exceptions": [
+        {
+          "relationship": "pyo3-build-config-family",
+          "rationale": "the extension stays on the 0.28 generation",
+          "review_trigger": "review when PyO3 0.30 ships"
+        }
+      ],
+      "problems": []
+    },
+    "split_with_incomplete_exception": {
+      "schema_version": 1,
+      "kind": "policy-input/dependency-family-contracts",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "relationships_version": 1,
+      "relationships": [
+        {
+          "id": "pyo3-build-config-family",
+          "kind": "family",
+          "members": [
+            "pyo3",
+            "pyo3-build-config"
+          ],
+          "relation": "same-group",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml declares pyo3 and pyo3-build-config at one version",
+            "leynos/tei-rapporteur#185 (the 0.29.2 update failed on a source deprecation, not on the family)"
+          ]
+        },
+        {
+          "id": "pyo3-serde-bridge",
+          "kind": "tuple",
+          "members": [
+            "pyo3",
+            "serde-pyobject"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+          ]
+        },
+        {
+          "id": "maturin-pyo3",
+          "kind": "tuple",
+          "members": [
+            "maturin",
+            "pyo3"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins maturin and rust/cuprum-rust builds PyO3 (leynos/cuprum#589)",
+            "femtologging pyproject.toml pins maturin[patchelf] and rust_extension/Cargo.toml declares PyO3 0.29.0"
+          ]
+        },
+        {
+          "id": "ortho-config-fluent-bundle",
+          "kind": "type-identity",
+          "members": [
+            "ortho_config",
+            "fluent-bundle"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml constrains fluent-bundle to the version ortho_config resolves, or the FluentValue types would differ"
+          ]
+        },
+        {
+          "id": "rustcrypto-digest-family",
+          "kind": "family",
+          "members": [
+            "digest",
+            "sha2",
+            "sha1",
+            "md-5"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml declares digest, sha2, sha1 and md-5 at 0.11 (leynos/netsuke#477, closed)"
+          ]
+        },
+        {
+          "id": "pylint-astroid",
+          "kind": "tuple",
+          "members": [
+            "pylint",
+            "astroid"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+          ]
+        },
+        {
+          "id": "pytest-pytest-bdd",
+          "kind": "tuple",
+          "members": [
+            "pytest",
+            "pytest-bdd"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml constrains pytest below 9.1 until pytest-bdd supports its node-based fixtures (leynos/cuprum#384)"
+          ]
+        }
+      ],
+      "declarations": [
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "pyo3",
+          "package": "pyo3",
+          "requirement": "0.28.3",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.28.3"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "minor-and-patch",
+            "catch_all": true,
+            "matching": [
+              "minor-and-patch"
+            ],
+            "matching_narrow": [],
+            "ignored": false,
+            "reason": null
+          }
+        },
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "pyo3-build-config",
+          "package": "pyo3-build-config",
+          "requirement": "0.28.3",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.28.3"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "minor-and-patch",
+            "catch_all": true,
+            "matching": [
+              "minor-and-patch"
+            ],
+            "matching_narrow": [],
+            "ignored": false,
+            "reason": null
+          }
+        }
+      ],
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "exceptions": [],
+      "problems": [
+        "a dependencies.family_exceptions entry in .concordat needs a relationship, a rationale and a review_trigger"
+      ]
+    },
+    "no_dependabot": {
+      "schema_version": 1,
+      "kind": "policy-input/dependency-family-contracts",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "relationships_version": 1,
+      "relationships": [
+        {
+          "id": "pyo3-build-config-family",
+          "kind": "family",
+          "members": [
+            "pyo3",
+            "pyo3-build-config"
+          ],
+          "relation": "same-group",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml declares pyo3 and pyo3-build-config at one version",
+            "leynos/tei-rapporteur#185 (the 0.29.2 update failed on a source deprecation, not on the family)"
+          ]
+        },
+        {
+          "id": "pyo3-serde-bridge",
+          "kind": "tuple",
+          "members": [
+            "pyo3",
+            "serde-pyobject"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+          ]
+        },
+        {
+          "id": "maturin-pyo3",
+          "kind": "tuple",
+          "members": [
+            "maturin",
+            "pyo3"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins maturin and rust/cuprum-rust builds PyO3 (leynos/cuprum#589)",
+            "femtologging pyproject.toml pins maturin[patchelf] and rust_extension/Cargo.toml declares PyO3 0.29.0"
+          ]
+        },
+        {
+          "id": "ortho-config-fluent-bundle",
+          "kind": "type-identity",
+          "members": [
+            "ortho_config",
+            "fluent-bundle"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml constrains fluent-bundle to the version ortho_config resolves, or the FluentValue types would differ"
+          ]
+        },
+        {
+          "id": "rustcrypto-digest-family",
+          "kind": "family",
+          "members": [
+            "digest",
+            "sha2",
+            "sha1",
+            "md-5"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml declares digest, sha2, sha1 and md-5 at 0.11 (leynos/netsuke#477, closed)"
+          ]
+        },
+        {
+          "id": "pylint-astroid",
+          "kind": "tuple",
+          "members": [
+            "pylint",
+            "astroid"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+          ]
+        },
+        {
+          "id": "pytest-pytest-bdd",
+          "kind": "tuple",
+          "members": [
+            "pytest",
+            "pytest-bdd"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml constrains pytest below 9.1 until pytest-bdd supports its node-based fixtures (leynos/cuprum#384)"
+          ]
+        }
+      ],
+      "declarations": [
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "pyo3",
+          "package": "pyo3",
+          "requirement": "0.28.3",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.28.3"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": null,
+            "group": null,
+            "catch_all": false,
+            "matching": [],
+            "matching_narrow": [],
+            "ignored": false,
+            "reason": "no decodable Dependabot configuration"
+          }
+        },
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "pyo3-build-config",
+          "package": "pyo3-build-config",
+          "requirement": "0.28.3",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.28.3"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": null,
+            "group": null,
+            "catch_all": false,
+            "matching": [],
+            "matching_narrow": [],
+            "ignored": false,
+            "reason": "no decodable Dependabot configuration"
+          }
+        }
+      ],
+      "config": null,
+      "exceptions": [],
+      "problems": []
+    },
+    "unparsable_manifest": {
+      "schema_version": 1,
+      "kind": "policy-input/dependency-family-contracts",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "relationships_version": 1,
+      "relationships": [
+        {
+          "id": "pyo3-build-config-family",
+          "kind": "family",
+          "members": [
+            "pyo3",
+            "pyo3-build-config"
+          ],
+          "relation": "same-group",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml declares pyo3 and pyo3-build-config at one version",
+            "leynos/tei-rapporteur#185 (the 0.29.2 update failed on a source deprecation, not on the family)"
+          ]
+        },
+        {
+          "id": "pyo3-serde-bridge",
+          "kind": "tuple",
+          "members": [
+            "pyo3",
+            "serde-pyobject"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+          ]
+        },
+        {
+          "id": "maturin-pyo3",
+          "kind": "tuple",
+          "members": [
+            "maturin",
+            "pyo3"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins maturin and rust/cuprum-rust builds PyO3 (leynos/cuprum#589)",
+            "femtologging pyproject.toml pins maturin[patchelf] and rust_extension/Cargo.toml declares PyO3 0.29.0"
+          ]
+        },
+        {
+          "id": "ortho-config-fluent-bundle",
+          "kind": "type-identity",
+          "members": [
+            "ortho_config",
+            "fluent-bundle"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml constrains fluent-bundle to the version ortho_config resolves, or the FluentValue types would differ"
+          ]
+        },
+        {
+          "id": "rustcrypto-digest-family",
+          "kind": "family",
+          "members": [
+            "digest",
+            "sha2",
+            "sha1",
+            "md-5"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml declares digest, sha2, sha1 and md-5 at 0.11 (leynos/netsuke#477, closed)"
+          ]
+        },
+        {
+          "id": "pylint-astroid",
+          "kind": "tuple",
+          "members": [
+            "pylint",
+            "astroid"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+          ]
+        },
+        {
+          "id": "pytest-pytest-bdd",
+          "kind": "tuple",
+          "members": [
+            "pytest",
+            "pytest-bdd"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml constrains pytest below 9.1 until pytest-bdd supports its node-based fixtures (leynos/cuprum#384)"
+          ]
+        }
+      ],
+      "declarations": [],
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "exceptions": [],
+      "problems": [
+        "the Rust surfaces could not be resolved: Cargo.toml in . cannot parse: Expected ']' at the end of a table declaration (at line 1, column 9)"
+      ]
+    },
+    "nested_pyproject": {
+      "schema_version": 1,
+      "kind": "policy-input/dependency-family-contracts",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "relationships_version": 1,
+      "relationships": [
+        {
+          "id": "pyo3-build-config-family",
+          "kind": "family",
+          "members": [
+            "pyo3",
+            "pyo3-build-config"
+          ],
+          "relation": "same-group",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml declares pyo3 and pyo3-build-config at one version",
+            "leynos/tei-rapporteur#185 (the 0.29.2 update failed on a source deprecation, not on the family)"
+          ]
+        },
+        {
+          "id": "pyo3-serde-bridge",
+          "kind": "tuple",
+          "members": [
+            "pyo3",
+            "serde-pyobject"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+          ]
+        },
+        {
+          "id": "maturin-pyo3",
+          "kind": "tuple",
+          "members": [
+            "maturin",
+            "pyo3"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins maturin and rust/cuprum-rust builds PyO3 (leynos/cuprum#589)",
+            "femtologging pyproject.toml pins maturin[patchelf] and rust_extension/Cargo.toml declares PyO3 0.29.0"
+          ]
+        },
+        {
+          "id": "ortho-config-fluent-bundle",
+          "kind": "type-identity",
+          "members": [
+            "ortho_config",
+            "fluent-bundle"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml constrains fluent-bundle to the version ortho_config resolves, or the FluentValue types would differ"
+          ]
+        },
+        {
+          "id": "rustcrypto-digest-family",
+          "kind": "family",
+          "members": [
+            "digest",
+            "sha2",
+            "sha1",
+            "md-5"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml declares digest, sha2, sha1 and md-5 at 0.11 (leynos/netsuke#477, closed)"
+          ]
+        },
+        {
+          "id": "pylint-astroid",
+          "kind": "tuple",
+          "members": [
+            "pylint",
+            "astroid"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+          ]
+        },
+        {
+          "id": "pytest-pytest-bdd",
+          "kind": "tuple",
+          "members": [
+            "pytest",
+            "pytest-bdd"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml constrains pytest below 9.1 until pytest-bdd supports its node-based fixtures (leynos/cuprum#384)"
+          ]
+        }
+      ],
+      "declarations": [],
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "pip",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "exceptions": [],
+      "problems": [
+        "sub/pyproject.toml is not read: only the root pyproject.toml is"
+      ]
+    },
+    "no_declarations": {
+      "schema_version": 1,
+      "kind": "policy-input/dependency-family-contracts",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "relationships_version": 1,
+      "relationships": [
+        {
+          "id": "pyo3-build-config-family",
+          "kind": "family",
+          "members": [
+            "pyo3",
+            "pyo3-build-config"
+          ],
+          "relation": "same-group",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml declares pyo3 and pyo3-build-config at one version",
+            "leynos/tei-rapporteur#185 (the 0.29.2 update failed on a source deprecation, not on the family)"
+          ]
+        },
+        {
+          "id": "pyo3-serde-bridge",
+          "kind": "tuple",
+          "members": [
+            "pyo3",
+            "serde-pyobject"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+          ]
+        },
+        {
+          "id": "maturin-pyo3",
+          "kind": "tuple",
+          "members": [
+            "maturin",
+            "pyo3"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins maturin and rust/cuprum-rust builds PyO3 (leynos/cuprum#589)",
+            "femtologging pyproject.toml pins maturin[patchelf] and rust_extension/Cargo.toml declares PyO3 0.29.0"
+          ]
+        },
+        {
+          "id": "ortho-config-fluent-bundle",
+          "kind": "type-identity",
+          "members": [
+            "ortho_config",
+            "fluent-bundle"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml constrains fluent-bundle to the version ortho_config resolves, or the FluentValue types would differ"
+          ]
+        },
+        {
+          "id": "rustcrypto-digest-family",
+          "kind": "family",
+          "members": [
+            "digest",
+            "sha2",
+            "sha1",
+            "md-5"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml declares digest, sha2, sha1 and md-5 at 0.11 (leynos/netsuke#477, closed)"
+          ]
+        },
+        {
+          "id": "pylint-astroid",
+          "kind": "tuple",
+          "members": [
+            "pylint",
+            "astroid"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+          ]
+        },
+        {
+          "id": "pytest-pytest-bdd",
+          "kind": "tuple",
+          "members": [
+            "pytest",
+            "pytest-bdd"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml constrains pytest below 9.1 until pytest-bdd supports its node-based fixtures (leynos/cuprum#384)"
+          ]
+        }
+      ],
+      "declarations": [],
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "exceptions": [],
+      "problems": []
+    },
+    "wrong_kind": {
+      "schema_version": 1,
+      "kind": "policy-input/other",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "relationships_version": 1,
+      "relationships": [
+        {
+          "id": "pyo3-build-config-family",
+          "kind": "family",
+          "members": [
+            "pyo3",
+            "pyo3-build-config"
+          ],
+          "relation": "same-group",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml declares pyo3 and pyo3-build-config at one version",
+            "leynos/tei-rapporteur#185 (the 0.29.2 update failed on a source deprecation, not on the family)"
+          ]
+        },
+        {
+          "id": "pyo3-serde-bridge",
+          "kind": "tuple",
+          "members": [
+            "pyo3",
+            "serde-pyobject"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+          ]
+        },
+        {
+          "id": "maturin-pyo3",
+          "kind": "tuple",
+          "members": [
+            "maturin",
+            "pyo3"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins maturin and rust/cuprum-rust builds PyO3 (leynos/cuprum#589)",
+            "femtologging pyproject.toml pins maturin[patchelf] and rust_extension/Cargo.toml declares PyO3 0.29.0"
+          ]
+        },
+        {
+          "id": "ortho-config-fluent-bundle",
+          "kind": "type-identity",
+          "members": [
+            "ortho_config",
+            "fluent-bundle"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml constrains fluent-bundle to the version ortho_config resolves, or the FluentValue types would differ"
+          ]
+        },
+        {
+          "id": "rustcrypto-digest-family",
+          "kind": "family",
+          "members": [
+            "digest",
+            "sha2",
+            "sha1",
+            "md-5"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml declares digest, sha2, sha1 and md-5 at 0.11 (leynos/netsuke#477, closed)"
+          ]
+        },
+        {
+          "id": "pylint-astroid",
+          "kind": "tuple",
+          "members": [
+            "pylint",
+            "astroid"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+          ]
+        },
+        {
+          "id": "pytest-pytest-bdd",
+          "kind": "tuple",
+          "members": [
+            "pytest",
+            "pytest-bdd"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml constrains pytest below 9.1 until pytest-bdd supports its node-based fixtures (leynos/cuprum#384)"
+          ]
+        }
+      ],
+      "declarations": [
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "pyo3",
+          "package": "pyo3",
+          "requirement": "0.28.3",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.28.3"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "pyo3",
+            "catch_all": false,
+            "matching": [
+              "pyo3",
+              "minor-and-patch"
+            ],
+            "matching_narrow": [
+              "pyo3"
+            ],
+            "ignored": false,
+            "reason": null
+          }
+        },
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "pyo3-build-config",
+          "package": "pyo3-build-config",
+          "requirement": "0.28.3",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.28.3"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "pyo3",
+            "catch_all": false,
+            "matching": [
+              "pyo3",
+              "minor-and-patch"
+            ],
+            "matching_narrow": [
+              "pyo3"
+            ],
+            "ignored": false,
+            "reason": null
+          }
+        }
+      ],
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "pyo3": {
+                  "patterns": [
+                    "pyo3",
+                    "pyo3-build-config"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "pyo3",
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "exceptions": [],
+      "problems": []
+    }
+  }
+}

@@ -24,6 +24,9 @@ from concordat.rules.codescene_coverage_envelope import (
 from concordat.rules.dependabot_envelope import (
     ENVELOPE_KIND as DEPENDABOT_ENVELOPE_KIND,
 )
+from concordat.rules.dependency_family_envelope import (
+    ENVELOPE_KIND as FAMILY_ENVELOPE_KIND,
+)
 from concordat.rules.documentation_envelope import (
     ENVELOPE_KIND as DOCUMENTATION_ENVELOPE_KIND,
 )
@@ -118,6 +121,11 @@ class TestRegisteredPackages:
                 "dependabot-update-shape",
                 DEPENDABOT_ENVELOPE_KIND,
                 id="dependabot-update-shape",
+            ),
+            pytest.param(
+                "dependency-family-contracts",
+                FAMILY_ENVELOPE_KIND,
+                id="dependency-family-contracts",
             ),
             pytest.param(
                 "spelling-config-baseline",
@@ -363,6 +371,7 @@ class TestDeclaredInputKind:
             ("markdown-formatting-baseline", MARKDOWN_ENVELOPE_KIND),
             ("main-owned-codescene-coverage", COVERAGE_ENVELOPE_KIND),
             ("dependabot-update-shape", DEPENDABOT_ENVELOPE_KIND),
+            ("dependency-family-contracts", FAMILY_ENVELOPE_KIND),
             ("spelling-config-baseline", SPELLING_ENVELOPE_KIND),
             ("uv-gate-baseline", UV_GATE_ENVELOPE_KIND),
             ("documentation-presence", DOCUMENTATION_ENVELOPE_KIND),
