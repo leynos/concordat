@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "kind": "policy-input/documentation-presence",
+  "repository": {
+    "path": ".",
+    "name": null
+  },
+  "applicability": {
+    "root_makefile": true,
+    "python_files": true,
+    "pyproject": true,
+    "rust_library": true
+  },
+  "makefile_path": "Makefile",
+  "lint_target": true,
+  "reachable_targets": [
+    "lint",
+    "interrogate"
+  ],
+  "reachability_resolved": true,
+  "interrogate_elsewhere": [],
+  "runs": [
+    {
+      "target": "interrogate",
+      "line": 10,
+      "command": "interrogate -vv --fail-under 100 pkg scripts tests .github/scripts",
+      "resolved": true,
+      "paths": [
+        "pkg",
+        "scripts",
+        "tests",
+        ".github/scripts"
+      ],
+      "fail_under": "100",
+      "verbose": 2,
+      "config": null,
+      "excludes": [],
+      "ignores": [],
+      "guarded": true
+    }
+  ],
+  "configs": [
+    {
+      "path": "pyproject.toml",
+      "table": {},
+      "error": null
+    }
+  ],
+  "python_files": [
+    ".github/scripts/helper.py",
+    "pkg/__init__.py",
+    "pkg/core.py",
+    "scripts/tool.py",
+    "tests/test_core.py"
+  ],
+  "clippy_runs": [
+    {
+      "target": "lint",
+      "line": 7,
+      "command": "cargo clippy -- -D warnings",
+      "resolved": true
+    }
+  ],
+  "rust": {
+    "crates": [
+      {
+        "manifest": "Cargo.toml",
+        "name": "demo",
+        "root": "src/lib.rs",
+        "root_error": null,
+        "manifest_level": "deny",
+        "inherits_workspace": false,
+        "workspace_level": null,
+        "attributes": []
+      }
+    ],
+    "errors": []
+  }
+}

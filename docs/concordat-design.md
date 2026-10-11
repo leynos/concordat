@@ -1826,6 +1826,8 @@ the dependency-pin actionability checks.
 | UV-007       | Git dependencies in `pyproject.toml` are pinned to a full commit.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Quality-Gate Integrity          | Conftest (`uv-gate-baseline`)                                       | error                | 2                        |
 | DG-001       | A command `make lint` reaches runs interrogate at a threshold of at least 100 over every Python file the repository owns (package, tests, scripts, benchmarks, GitHub Actions code), with no relaxing flag and no exclusion beyond test data and vendored trees.                                                                                                                                                                                                                                                                                                                                                                    | Quality-Gate Integrity          | Conftest (`documentation-presence`)                                 | error                | 2                        |
 | DG-002       | The interrogate run is exact: verbose level 2 and a recipe that fails on any `MISSED` row, because interrogate rounds its percentage to one decimal.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Quality-Gate Integrity          | Conftest (`documentation-presence`)                                 | error                | 2                        |
+| DG-003       | Every library crate the repository owns ends with `missing_docs` at `deny` or `forbid`: by `[lints.rust]` in its manifest, by the workspace table it opts in to with `[lints] workspace = true`, or by a crate-root attribute (which wins). A reasoned crate-root `#![expect(missing_docs)]` is the one accepted exception, for generated items.                                                                                                                                                                                                                                                                                    | Quality-Gate Integrity          | Conftest (`documentation-presence`)                                 | error                | 2                        |
+| DG-004       | A clippy invocation is reachable from `make lint`, so the gate compiles the crates under the `missing_docs` level.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Quality-Gate Integrity          | Conftest (`documentation-presence`)                                 | error                | 2                        |
 | CV-001       | Superseded by CV-005, which states this requirement and the publisher clauses it depends on as one rule. Retained for the identifier's history; audit CV-005 instead.                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Quality-Gate Integrity          | OPA/Conftest                                                        | error                | 4                        |
 | CV-002       | A workflow with a push trigger restricted to main (optionally alongside `workflow_dispatch`) uploads coverage to CodeScene (`mode: upload`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Quality-Gate Integrity          | OPA/Conftest + file presence                                        | error                | 4                        |
 | CV-003       | Every secret referenced by a guarded workflow step exists in BOTH the Actions and Dependabot secret stores (guards silently skip when the secret is absent).                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Quality-Gate Integrity          | Python/GitHub API                                                   | error                | 4                        |
@@ -2391,7 +2393,8 @@ standard, as the DF12-104 roll-out proceeds.
 
 - **Identifiers:** the package has its own `DG-` prefix, for "documentation
   gate". `DP-` is taken by the dependency-pin actionability checks (DP-001,
-  DP-002). The Rust `missing_docs` rules join the package from DG-003.
+  DP-002). The Rust `missing_docs` rules are DG-003 and DG-004, in the same
+  package.
 - **Sensors:** one Conftest policy over `makeutil` facts, `pyproject.toml`, and
   the tree's Python files. The envelope builder, not the policy, expands the
   Makefile's single-valued variables (and the `dir`, `notdir`, `lastword`,
@@ -2413,6 +2416,35 @@ standard, as the DF12-104 roll-out proceeds.
   overload stub.
 - **Actuators:** none; the package ships audit-only, and each roll-out pull
   request uses it as its proof of compliance.
+
+##### Rust documentation presence (DG-003, DG-004)
+
+The same package holds Rust repositories to the equivalent standard, as the
+DF12-103 roll-out proceeds: every library crate denies `missing_docs`, and the
+`make lint` gate compiles it. Item documentation for private items is not
+required, so `clippy::missing_docs_in_private_items` is not used.
+
+- **Sensors:** the Conftest policy reads a `rust` section of the same envelope.
+  The builder reads each owned `Cargo.toml` with `tomllib`, resolves
+  `[lints] workspace = true` against the nearest enclosing `[workspace]`, and
+  reads the crate root's leading inner attributes (comments skipped, a
+  `cfg_attr` unwrapped with its condition). Precedence follows rustc: a
+  crate-root attribute beats the manifest level, and the last attribute wins.
+  The policy decides; the builder only records.
+- **Scope:** library crates only (a `src/lib.rs` or a `[lib]` table), skipping
+  `fixtures`, `examples`, `templates`, `vendor`, `third_party`, `patches` and
+  `target` trees. Binary-only packages are out of scope.
+- **Exception:** a crate-root `#![expect(missing_docs, reason = "...")]` is
+  accepted, for items a derive macro generates (mxd's `cli-defs` is the
+  precedent). The reason is mandatory. Vendored upstream code that deliberately
+  allows the lint is exempted by repository, not by the rule.
+- **Limit:** item-level `#[allow(missing_docs)]` or `#[expect]` is not audited;
+  the rule checks the crate-level contract. The roll-out's survey measures the
+  residue with `--force-warn missing_docs`.
+- **Reachability (DG-004):** the lint fails builds only where a gate compiles
+  the crate, so the rule requires a clippy run reachable from `lint`; a plain
+  `cargo check` in `lint` would also compile it but the estate's gates are
+  clippy-based.
 
 ##### Rust formatting and linting (RT-001 to RT-005)
 

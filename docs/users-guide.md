@@ -682,7 +682,7 @@ An `include`, a recovered Makefile parse, an unresolvable variable, or a file
 that cannot be decoded makes the affected check indeterminate rather than
 passing it, even when the checkout shows no other sign of using uv.
 
-### Auditing Python docstring coverage
+### Auditing documentation presence (Python and Rust)
 
 The `documentation-presence` package audits the interrogate gate that keeps
 every Python definition documented:
@@ -704,6 +704,16 @@ and cached trees) and reports:
   `verbose = 2` in the configuration) and its recipe fails on any `MISSED` row,
   because interrogate rounds its percentage to one decimal and so passes a lone
   gap in a large repository.
+
+For a checkout that owns Rust library crates the same package also reports:
+
+- **DG-003**: every library crate denies `missing_docs`, through its own
+  `[lints.rust]`, through a workspace `[workspace.lints.rust]` table that the
+  crate inherits with `[lints] workspace = true`, or through a crate-root
+  `#![deny(missing_docs)]` (which beats the manifest). `warn` and `allow` fail;
+  a crate-root `#![expect(missing_docs, reason = "...")]` is accepted for
+  generated items, and an `expect` without a reason fails.
+- **DG-004**: a clippy run is reachable from `make lint`.
 
 A variable the audit cannot resolve to one value, a configuration file that is
 missing or not TOML, or a `lint` target it cannot follow makes the affected

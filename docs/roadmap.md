@@ -631,10 +631,16 @@ the Section 2.1.2 format.
   interrogate roll-out (DF12-104): a command `make lint` reaches runs
   interrogate at 100 over every owned Python file, with no relaxing flag or
   exclusion beyond test data and vendored trees, and the run is exact (verbose
-  level 2 and a failure on any `MISSED` row). Rust `missing_docs` rules join
-  the package from DG-003. Acceptance: compliant and noncompliant generated
-  fixtures for every check, and behavioural tests running the real policy over
-  generated checkouts.
+  level 2 and a failure on any `MISSED` row). Acceptance: compliant and
+  noncompliant generated fixtures for every check, and behavioural tests
+  running the real policy over generated checkouts.
+- [x] Extend the documentation-presence package to Rust (DG-003, DG-004), from
+  the `missing_docs` roll-out (DF12-103): every owned library crate denies
+  `missing_docs` (own table, inherited workspace table or crate-root attribute,
+  with a reasoned crate-root `expect` accepted for generated items), and a
+  clippy run is reachable from `make lint`. Acceptance: compliant and
+  noncompliant generated fixtures for every check, and unit tests for the Rust
+  facts the envelope records.
 - [ ] Ship the Rust formatting and linting rule packages (RT-001 to RT-005):
   rustfmt wiring and template-matched configuration, clippy presence with
   `[lints]` entries at the template level or stricter, and Whitaker presence

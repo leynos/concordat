@@ -8,8 +8,10 @@ description: >-
   data and vendored trees (DG-001); and that run is exact, because interrogate
   rounds its percentage to one decimal and so passes a lone gap in a large
   repository: it prints every definition (verbose level 2) and the recipe
-  fails on any MISSED row (DG-002). A repository that owns no Python is out of
-  scope. Audit-only: this rule declares no mutations.
+  fails on any MISSED row (DG-002). For Rust, every library crate denies
+  `missing_docs` (DG-003) and `make lint` reaches clippy so the lint is compiled
+  by the gate (DG-004). A repository that owns no Python or Rust library is out
+  of scope. Audit-only: this rule declares no mutations.
 version: 0.1.0
 sensor:
   type: conftest

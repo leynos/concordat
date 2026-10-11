@@ -33,6 +33,7 @@ import re
 import tomllib
 import typing as typ
 
+from .documentation_rust import ClippyRun, RustFacts, build_rust_facts, clippy_runs
 from .interrogate_invocation import (
     InterrogateRun,
     RecipeLine,
@@ -102,6 +103,7 @@ class DocumentationApplicability(typ.TypedDict):
     root_makefile: bool
     python_files: bool
     pyproject: bool
+    rust_library: bool
 
 
 class DocumentationEnvelope(typ.TypedDict):
@@ -119,6 +121,8 @@ class DocumentationEnvelope(typ.TypedDict):
     runs: list[InterrogateRun]
     configs: list[InterrogateConfig]
     python_files: list[str]
+    clippy_runs: list[ClippyRun]
+    rust: RustFacts
 
 
 class Rule(typ.NamedTuple):
@@ -141,6 +145,7 @@ class MakefileAnalysis:
     is_resolved: bool = True
     elsewhere: list[str] = dataclasses.field(default_factory=list)
     runs: list[InterrogateRun] = dataclasses.field(default_factory=list)
+    clippy: list[ClippyRun] = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -335,6 +340,7 @@ def _analyse_makefile(
         is_resolved=walk.is_resolved,
         elsewhere=_elsewhere(index, walk.names),
         runs=_interrogate_runs(index, walk.names, values),
+        clippy=clippy_runs(index, walk.names, values),
     )
 
 
@@ -472,6 +478,7 @@ def build_documentation_envelope(
     )
     configs = _load_configs(checkout, root, analysis.runs)
     python_files = _python_files(checkout)
+    rust = build_rust_facts(checkout, root)
     return {
         "schema_version": ENVELOPE_SCHEMA_VERSION,
         "kind": ENVELOPE_KIND,
@@ -480,6 +487,7 @@ def build_documentation_envelope(
             "root_makefile": has_makefile,
             "python_files": bool(python_files),
             "pyproject": any(c["path"] == PYPROJECT_FILENAME for c in configs),
+            "rust_library": bool(rust["crates"]),
         },
         "makefile_path": analysis.path,
         "lint_target": analysis.has_lint_target,
@@ -489,4 +497,6 @@ def build_documentation_envelope(
         "runs": analysis.runs,
         "configs": configs,
         "python_files": python_files,
+        "clippy_runs": analysis.clippy,
+        "rust": rust,
     }

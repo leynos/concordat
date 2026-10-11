@@ -1,4 +1,4 @@
-"""Behavioural tests for `concordat artefact rule run` on DG-001 and DG-002.
+"""Behavioural tests for `concordat artefact rule run` on DG-001 to DG-004.
 
 These scenarios run the real policy over a real Makefile (parsed by the pinned
 `makeutil`), a real Python tree and a real `pyproject.toml` through `cli.main`,
@@ -119,6 +119,57 @@ def given_rounded_gate(python_checkout: pathlib.Path) -> None:
     """Rely on the percentage alone, at the default verbosity."""
     _write_python(python_checkout)
     _write_makefile(python_checkout, flags="--fail-under 100", recipe=_UNGUARDED)
+
+
+_CLIPPY_LINT: typ.Final = (
+    ".PHONY: lint\nlint:\n\tcargo clippy --workspace -- -D warnings\n"
+)
+
+
+def _write_rust(
+    checkout: pathlib.Path, *, manifest: str, lint: str = _CLIPPY_LINT
+) -> None:
+    """Write a one-crate Rust checkout with *manifest* and a `lint` recipe."""
+    (checkout / "src").mkdir()
+    (checkout / "src" / "lib.rs").write_text("//! Docs.\n", encoding="utf-8")
+    (checkout / "Cargo.toml").write_text(manifest, encoding="utf-8")
+    (checkout / "Makefile").write_text(lint, encoding="utf-8")
+
+
+_PACKAGE: typ.Final = '[package]\nname = "demo"\nversion = "0.1.0"\nedition = "2024"\n'
+
+
+@given("a Rust workspace whose members inherit a missing_docs deny")
+def given_rust_workspace(python_checkout: pathlib.Path) -> None:
+    """Write a workspace table at deny and a member that opts in."""
+    member = python_checkout / "crates" / "core"
+    (member / "src").mkdir(parents=True)
+    (member / "src" / "lib.rs").write_text("//! Docs.\n", encoding="utf-8")
+    (member / "Cargo.toml").write_text(
+        _PACKAGE + "\n[lints]\nworkspace = true\n", encoding="utf-8"
+    )
+    (python_checkout / "Cargo.toml").write_text(
+        '[workspace]\nmembers = ["crates/core"]\nresolver = "3"\n\n'
+        '[workspace.lints.rust]\nmissing_docs = "deny"\n',
+        encoding="utf-8",
+    )
+    (python_checkout / "Makefile").write_text(_CLIPPY_LINT, encoding="utf-8")
+
+
+@given("a Rust crate with no missing_docs level")
+def given_rust_unset(python_checkout: pathlib.Path) -> None:
+    """Write a library crate that sets no lint level."""
+    _write_rust(python_checkout, manifest=_PACKAGE)
+
+
+@given("a Rust crate that denies missing_docs but whose lint never runs clippy")
+def given_rust_no_clippy(python_checkout: pathlib.Path) -> None:
+    """Deny the lint, but lint with rustfmt alone."""
+    _write_rust(
+        python_checkout,
+        manifest=_PACKAGE + '\n[lints.rust]\nmissing_docs = "deny"\n',
+        lint=".PHONY: lint\nlint:\n\tcargo fmt --check\n",
+    )
 
 
 @when("I audit the checkout for its documentation gate")

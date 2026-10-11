@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "kind": "policy-input/documentation-presence",
+  "repository": {
+    "path": ".",
+    "name": null
+  },
+  "applicability": {
+    "root_makefile": false,
+    "python_files": false,
+    "pyproject": false,
+    "rust_library": true
+  },
+  "makefile_path": null,
+  "lint_target": false,
+  "reachable_targets": [],
+  "reachability_resolved": true,
+  "interrogate_elsewhere": [],
+  "runs": [],
+  "configs": [],
+  "python_files": [],
+  "clippy_runs": [],
+  "rust": {
+    "crates": [
+      {
+        "manifest": "Cargo.toml",
+        "name": "demo",
+        "root": "src/lib.rs",
+        "root_error": null,
+        "manifest_level": "deny",
+        "inherits_workspace": false,
+        "workspace_level": null,
+        "attributes": []
+      }
+    ],
+    "errors": []
+  }
+}

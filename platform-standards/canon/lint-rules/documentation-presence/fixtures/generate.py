@@ -131,6 +131,51 @@ BASE: typ.Final = {
 
 NO_PYTHON: typ.Final = dict.fromkeys(PYTHON_FILES)
 
+# Rust scenarios own the checkout outright: no Python, and a Makefile whose
+# `lint` runs clippy, so a scenario changes only the `missing_docs` facts.
+CLIPPY_MAKEFILE: typ.Final = (
+    "CARGO ?= cargo\n.PHONY: lint\n"
+    "lint:\n\t$(CARGO) clippy --workspace --all-targets -- -D warnings\n"
+)
+WORKSPACE_MANIFEST: typ.Final = (
+    '[workspace]\nmembers = ["crates/core"]\nresolver = "3"\n\n'
+    '[workspace.lints.rust]\nmissing_docs = "deny"\n'
+)
+MEMBER_MANIFEST: typ.Final = (
+    '[package]\nname = "core"\nversion = "0.1.0"\nedition = "2024"\n\n'
+    "[lints]\nworkspace = true\n"
+)
+LIB_ROOT: typ.Final = "//! The core crate.\n"
+
+
+def crate_manifest(lints: str = "") -> str:
+    """Return a single-crate manifest with an optional lint table.
+
+    Returns
+    -------
+    str
+        The Cargo.toml text.
+    """
+    package = '[package]\nname = "demo"\nversion = "0.1.0"\nedition = "2024"\n'
+    return f"{package}\n{lints}" if lints else package
+
+
+def rust_scenario(files: cabc.Mapping[str, str | None]) -> Scenario:
+    """Return a Rust-only scenario laid over the clippy Makefile.
+
+    Returns
+    -------
+    Scenario
+        A scenario that removes the Python base and adds *files*.
+    """
+    return Scenario({
+        **NO_PYTHON,
+        "pyproject.toml": None,
+        "Makefile": CLIPPY_MAKEFILE,
+        **files,
+    })
+
+
 SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "compliant": Scenario(),
     "not_applicable": Scenario({
@@ -305,6 +350,129 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
             flags="--fail-under 100",
             recipe="\t$(INTERROGATE) $(FLAGS) $(INTERROGATE_TARGETS)\n",
         )
+    }),
+    # DG-003: every library crate denies `missing_docs`.
+    "rust_compliant_workspace": rust_scenario({
+        "Cargo.toml": WORKSPACE_MANIFEST,
+        "crates/core/Cargo.toml": MEMBER_MANIFEST,
+        "crates/core/src/lib.rs": LIB_ROOT,
+    }),
+    "rust_compliant_own_table": rust_scenario({
+        "Cargo.toml": crate_manifest('[lints.rust]\nmissing_docs = "deny"\n'),
+        "src/lib.rs": LIB_ROOT,
+    }),
+    "rust_compliant_root_attribute": rust_scenario({
+        "Cargo.toml": crate_manifest(),
+        "src/lib.rs": "//! Docs.\n#![deny(missing_docs)]\n",
+    }),
+    "rust_compliant_cfg_attr_not_test": rust_scenario({
+        "Cargo.toml": crate_manifest(),
+        "src/lib.rs": "#![cfg_attr(not(test), deny(missing_docs))]\n",
+    }),
+    "rust_compliant_expect_with_reason": rust_scenario({
+        "Cargo.toml": crate_manifest(),
+        "src/lib.rs": (
+            "#![expect(\n"
+            "    missing_docs,\n"
+            '    reason = "derive macros emit undocumentable items"\n'
+            ")]\n"
+        ),
+    }),
+    "rust_binary_only": rust_scenario({
+        "Cargo.toml": crate_manifest(),
+        "src/main.rs": "fn main() {}\n",
+    }),
+    "rust_fixture_crate_ignored": rust_scenario({
+        "Cargo.toml": crate_manifest('[lints.rust]\nmissing_docs = "deny"\n'),
+        "src/lib.rs": LIB_ROOT,
+        "tests/fixtures/undocumented/Cargo.toml": crate_manifest(),
+        "tests/fixtures/undocumented/src/lib.rs": "pub fn f() {}\n",
+    }),
+    "rust_manifest_unset": rust_scenario({
+        "Cargo.toml": crate_manifest(),
+        "src/lib.rs": LIB_ROOT,
+    }),
+    "rust_workspace_not_inherited": rust_scenario({
+        "Cargo.toml": WORKSPACE_MANIFEST,
+        "crates/core/Cargo.toml": crate_manifest(),
+        "crates/core/src/lib.rs": LIB_ROOT,
+    }),
+    "rust_one_member_unset": rust_scenario({
+        "Cargo.toml": WORKSPACE_MANIFEST.replace(
+            '["crates/core"]', '["crates/core", "crates/extra"]'
+        ),
+        "crates/core/Cargo.toml": MEMBER_MANIFEST,
+        "crates/core/src/lib.rs": LIB_ROOT,
+        "crates/extra/Cargo.toml": crate_manifest(),
+        "crates/extra/src/lib.rs": LIB_ROOT,
+    }),
+    "rust_level_warn": rust_scenario({
+        "Cargo.toml": crate_manifest('[lints.rust]\nmissing_docs = "warn"\n'),
+        "src/lib.rs": LIB_ROOT,
+    }),
+    "rust_root_allow_beats_manifest": rust_scenario({
+        "Cargo.toml": crate_manifest('[lints.rust]\nmissing_docs = "deny"\n'),
+        "src/lib.rs": "#![allow(missing_docs)]\n",
+    }),
+    "rust_root_attribute_beats_manifest": rust_scenario({
+        "Cargo.toml": crate_manifest('[lints.rust]\nmissing_docs = "warn"\n'),
+        "src/lib.rs": "#![deny(missing_docs)]\n",
+    }),
+    "rust_expect_without_reason": rust_scenario({
+        "Cargo.toml": crate_manifest(),
+        "src/lib.rs": "#![expect(missing_docs)]\n",
+    }),
+    "rust_cfg_attr_other_condition": rust_scenario({
+        "Cargo.toml": crate_manifest(),
+        "src/lib.rs": '#![cfg_attr(feature = "docs", deny(missing_docs))]\n',
+    }),
+    "rust_manifest_invalid": rust_scenario({
+        "Cargo.toml": "[package\n",
+    }),
+    "rust_root_missing": rust_scenario({
+        "Cargo.toml": crate_manifest('[lib]\npath = "lib/mod.rs"\n'),
+    }),
+    # DG-004: `make lint` reaches clippy.
+    "rust_no_makefile": rust_scenario({
+        "Cargo.toml": crate_manifest('[lints.rust]\nmissing_docs = "deny"\n'),
+        "src/lib.rs": LIB_ROOT,
+        "Makefile": None,
+    }),
+    "rust_no_lint_target": rust_scenario({
+        "Cargo.toml": crate_manifest('[lints.rust]\nmissing_docs = "deny"\n'),
+        "src/lib.rs": LIB_ROOT,
+        "Makefile": "build:\n\tcargo build\n",
+    }),
+    "rust_lint_without_clippy": rust_scenario({
+        "Cargo.toml": crate_manifest('[lints.rust]\nmissing_docs = "deny"\n'),
+        "src/lib.rs": LIB_ROOT,
+        "Makefile": ".PHONY: lint\nlint:\n\tcargo fmt --check\n",
+    }),
+    "rust_clippy_through_prerequisite": rust_scenario({
+        "Cargo.toml": crate_manifest('[lints.rust]\nmissing_docs = "deny"\n'),
+        "src/lib.rs": LIB_ROOT,
+        "Makefile": (
+            ".PHONY: lint clippy\nlint: clippy\n\tcargo fmt --check\n"
+            "clippy:\n\tcargo clippy -- -D warnings\n"
+        ),
+    }),
+    "rust_clippy_unresolved": rust_scenario({
+        "Cargo.toml": crate_manifest('[lints.rust]\nmissing_docs = "deny"\n'),
+        "src/lib.rs": LIB_ROOT,
+        "Makefile": ".PHONY: lint\nlint:\n\t$(CLIPPY_CMD) --workspace\n",
+    }),
+    "rust_clippy_with_unresolved_flags": rust_scenario({
+        "Cargo.toml": crate_manifest('[lints.rust]\nmissing_docs = "deny"\n'),
+        "src/lib.rs": LIB_ROOT,
+        "Makefile": (
+            ".PHONY: lint\nlint:\n"
+            '\tRUSTFLAGS="-D warnings$(if $(X),-Zthreads=8)" cargo clippy\n'
+        ),
+    }),
+    "rust_and_python_compliant": Scenario({
+        "Makefile": makefile(lint="lint: interrogate\n\tcargo clippy -- -D warnings\n"),
+        "Cargo.toml": crate_manifest('[lints.rust]\nmissing_docs = "deny"\n'),
+        "src/lib.rs": LIB_ROOT,
     }),
 }
 

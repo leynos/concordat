@@ -1,0 +1,235 @@
+# documentation-presence: DG-003 and DG-004 (Rust).
+#
+# Input is the same policy-input/documentation-presence envelope the Python
+# rules read; its `rust` section lists every library crate the checkout owns
+# with the places that can set `missing_docs` (crate-root inner attributes, the
+# crate's `[lints.rust]` table, the workspace table it opted in to) and its
+# `clippy_runs` lists the clippy invocations `make lint` reaches. The envelope
+# builder reads the files; the policy only decides what the facts mean, and
+# anything it cannot prove is `indeterminate` (fail closed).
+#
+# DG-003: every library crate denies (or forbids) `missing_docs`. A crate-root
+# attribute beats the manifest, as it does in rustc, so the last
+# `missing_docs` attribute at the root decides when there is one. A crate-root
+# `#![expect(missing_docs, reason = "...")]` is the one accepted exception, for
+# items a derive macro generates and a crate cannot document.
+# DG-004: `make lint` reaches clippy, because the lint only fails the build
+# where a gate compiles the crate: `-D warnings` then makes a regression block.
+package canon.lint_rules.documentation_presence
+
+import rego.v1
+
+accepted_levels := {"deny", "forbid"}
+
+# `cfg_attr(not(test), deny(missing_docs))` is the idiom for a lint that must not
+# fail the test build; any other condition leaves a configuration unchecked.
+accepted_conditions := {null, "not(test)"}
+
+rust_crates := object.get(object.get(input, "rust", {}), "crates", [])
+
+rust_errors := object.get(object.get(input, "rust", {}), "errors", [])
+
+rust_in_scope if {
+	envelope_ok
+	count(rust_crates) > 0
+}
+
+rust_in_scope if {
+	envelope_ok
+	count(rust_errors) > 0
+}
+
+crate_finding(rule_id, verdict, path, msg) := {
+	"rule_id": rule_id,
+	"severity": "error",
+	"verdict": verdict,
+	"path": path,
+	"line": 0,
+	"msg": msg,
+}
+
+crate_label(crate) := sprintf("crate `%s`", [crate.name]) if crate.name != null
+
+crate_label(crate) := sprintf("the crate at `%s`", [crate.manifest]) if crate.name == null
+
+# -- the level a crate ends with ------------------------------------------------------
+
+has_attribute(crate) if count(crate.attributes) > 0
+
+last_attribute(crate) := crate.attributes[count(crate.attributes) - 1]
+
+# The manifest level: the crate's own table, else the workspace's it opted in to.
+manifest_level(crate) := crate.manifest_level if crate.manifest_level != null
+
+manifest_level(crate) := crate.workspace_level if {
+	crate.manifest_level == null
+	crate.workspace_level != null
+}
+
+default manifest_level(_) := "unset"
+
+# A crate-root `expect` with a reason is accepted for generated items.
+is_accepted_exception(crate) if {
+	has_attribute(crate)
+	attribute := last_attribute(crate)
+	attribute.kind == "expect"
+	attribute.has_reason
+}
+
+is_denied(crate) if {
+	has_attribute(crate)
+	last_attribute(crate).kind in accepted_levels
+}
+
+is_denied(crate) if {
+	not has_attribute(crate)
+	manifest_level(crate) in accepted_levels
+}
+
+is_denied(crate) if is_accepted_exception(crate)
+
+is_readable(crate) if crate.root_error == null
+
+has_unchecked_condition(crate) if {
+	some attribute in crate.attributes
+	not attribute.condition in accepted_conditions
+}
+
+# -- DG-003 --------------------------------------------------------------------------
+
+deny contains f if {
+	rust_in_scope
+	some error in rust_errors
+	f := crate_finding(
+		"DG-003", "indeterminate", "Cargo.toml",
+		sprintf("a Cargo manifest could not be read, so the crates it describes cannot be checked: %s", [error]),
+	)
+}
+
+deny contains f if {
+	rust_in_scope
+	some crate in rust_crates
+	not is_readable(crate)
+	f := crate_finding(
+		"DG-003", "indeterminate", crate.manifest,
+		sprintf("%s has a library root that cannot be read (%s)", [crate_label(crate), crate.root_error]),
+	)
+}
+
+deny contains f if {
+	rust_in_scope
+	some crate in rust_crates
+	is_readable(crate)
+	has_unchecked_condition(crate)
+	f := crate_finding(
+		"DG-003", "indeterminate", crate.root,
+		sprintf("%s sets `missing_docs` under a `cfg_attr` condition other than `not(test)`, so some configurations are unchecked", [crate_label(crate)]),
+	)
+}
+
+deny contains f if {
+	rust_in_scope
+	some crate in rust_crates
+	is_readable(crate)
+	not has_unchecked_condition(crate)
+	has_attribute(crate)
+	attribute := last_attribute(crate)
+	attribute.kind == "expect"
+	not attribute.has_reason
+	f := crate_finding(
+		"DG-003", "noncompliant", crate.root,
+		sprintf("%s has `#![expect(missing_docs)]` without a `reason`; an exception for generated items must say why", [crate_label(crate)]),
+	)
+}
+
+deny contains f if {
+	rust_in_scope
+	some crate in rust_crates
+	is_readable(crate)
+	not has_unchecked_condition(crate)
+	has_attribute(crate)
+	attribute := last_attribute(crate)
+	attribute.kind in {"allow", "warn"}
+	f := crate_finding(
+		"DG-003", "noncompliant", crate.root,
+		sprintf("%s sets `missing_docs` to `%s` at its crate root; it must be `deny` or `forbid`", [crate_label(crate), attribute.kind]),
+	)
+}
+
+deny contains f if {
+	rust_in_scope
+	some crate in rust_crates
+	is_readable(crate)
+	not has_unchecked_condition(crate)
+	not has_attribute(crate)
+	not is_denied(crate)
+	f := crate_finding(
+		"DG-003", "noncompliant", crate.manifest,
+		sprintf("%s does not deny `missing_docs` (level: %s); set `missing_docs = \"deny\"` in `[workspace.lints.rust]` and `[lints] workspace = true` in the crate, or in its own `[lints.rust]`", [crate_label(crate), manifest_level(crate)]),
+	)
+}
+
+# -- DG-004 --------------------------------------------------------------------------
+
+clippy_resolved := [run | some run in object.get(input, "clippy_runs", []); run.resolved]
+
+clippy_unresolved := [run | some run in object.get(input, "clippy_runs", []); not run.resolved]
+
+deny contains f if {
+	rust_in_scope
+	count(rust_crates) > 0
+	not input.applicability.root_makefile
+	f := finding(
+		"DG-004", "noncompliant", 0,
+		"the repository owns Rust libraries but has no root Makefile, so `make lint` cannot run clippy",
+	)
+}
+
+deny contains f if {
+	rust_in_scope
+	count(rust_crates) > 0
+	input.applicability.root_makefile
+	not input.lint_target
+	f := finding(
+		"DG-004", "noncompliant", 0,
+		"the root Makefile has no `lint` target, so no clippy run is reachable from `make lint`",
+	)
+}
+
+deny contains f if {
+	rust_in_scope
+	count(rust_crates) > 0
+	input.lint_target
+	count(clippy_resolved) == 0
+	count(clippy_unresolved) > 0
+	f := finding(
+		"DG-004", "indeterminate", clippy_unresolved[0].line,
+		sprintf("target %s runs clippy through text this policy cannot resolve (`%s`)", [clippy_unresolved[0].target, clippy_unresolved[0].command]),
+	)
+}
+
+deny contains f if {
+	rust_in_scope
+	count(rust_crates) > 0
+	input.lint_target
+	count(clippy_resolved) == 0
+	count(clippy_unresolved) == 0
+	not input.reachability_resolved
+	f := finding(
+		"DG-004", "indeterminate", 0,
+		"`make lint` names a prerequisite or sub-make this policy cannot resolve, so it cannot prove that no clippy run is reachable",
+	)
+}
+
+deny contains f if {
+	rust_in_scope
+	count(rust_crates) > 0
+	input.lint_target
+	count(clippy_resolved) == 0
+	count(clippy_unresolved) == 0
+	input.reachability_resolved
+	f := finding(
+		"DG-004", "noncompliant", 0,
+		"`make lint` reaches no clippy run, so a `missing_docs` lint at deny is not compiled by the gate",
+	)
+}

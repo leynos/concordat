@@ -128,3 +128,15 @@ def test_checked_in_envelopes_match_regeneration(generate: types.ModuleType) -> 
         "fixtures": expected,
         "parameters": generate.manifest_parameters(),
     }
+
+
+def test_a_rust_scenario_removes_the_python_base(
+    generate: types.ModuleType, tmp_path: pathlib.Path
+) -> None:
+    """Rust scenarios change only the `missing_docs` facts, never Python's."""
+    generate.lay_out(generate.rust_scenario({"Cargo.toml": "[package]\n"}), tmp_path)
+
+    assert not list(tmp_path.rglob("*.py"))
+    assert not (tmp_path / "pyproject.toml").exists()
+    assert "clippy" in (tmp_path / "Makefile").read_text(encoding="utf-8")
+    assert (tmp_path / "Cargo.toml").exists()
