@@ -16,7 +16,7 @@ from concordat.rules.clippy_exception import (
 )
 from concordat.rules.documentation_envelope import build_documentation_envelope
 from concordat.rules.exception_docs import sections_in_text
-from concordat.rules.rust_clippy import invokes_script
+from concordat.rules.make_commands import invokes_script
 
 if typ.TYPE_CHECKING:
     import pathlib

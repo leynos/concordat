@@ -22,8 +22,9 @@ import typing as typ
 from .exception_docs import sections_in_text
 from .fs_probe import probe_file
 from .interrogate_invocation import lex_segments
+from .make_commands import invokes_script
 from .markdown_envelope import read_text, within_checkout
-from .rust_clippy import invokes_script, is_cargo_clippy
+from .rust_clippy import is_cargo_clippy
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
