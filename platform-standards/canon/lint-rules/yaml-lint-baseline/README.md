@@ -39,12 +39,15 @@ repository root, as the Makefile's recipes do.
 ## Checks
 
 - **YL-001** (error): a recipe reachable from `lint` runs `yamllint --strict`
-  (or `-s`) over a `git ls-files` list that names every pathspec in
-  `yaml_pathspecs` (`*.yml` and `*.yaml` by default), and its exit status
-  reaches Make. `xargs` with short options is read through, because yamllint
-  has no Git mode. `-d`/`--config-data` and `--no-warnings` are refused,
-  because they replace the estate configuration or hide what `--strict` fails
-  on. A flag behind a Make variable the policy cannot resolve is indeterminate.
+  (or `-s`) over a `git ls-files` list piped to it through `xargs`, with every
+  pathspec in `yaml_pathspecs` (`*.yml` and `*.yaml` by default), and its exit
+  status reaches Make. `xargs` with short options is read through, because
+  yamllint has no Git mode; a `git ls-files` whose output is discarded does not
+  count. `-d`/`--config-data` (in every spelling), `-c`/`--config-file` naming
+  any file but `.yamllint.yml`, and `--no-warnings` are refused, because they
+  replace the estate configuration or hide what `--strict` fails on, and so is
+  a recipe that only prints `--version` or `--help`. A flag behind a Make
+  variable the policy cannot resolve is indeterminate.
 - **YL-002** (error): a recipe reachable from `lint` runs actionlint with a
   binding exit status and without an empty `-shellcheck` value (`-shellcheck=`,
   `-shellcheck ""`), which would switch off the script analysis that makes

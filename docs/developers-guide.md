@@ -713,7 +713,19 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   `base_sha256s`, and the canonical files ship under `canon/lint/yaml/`: editing
   `.yamllint-estate.yml` changes its digest, so add the new digest to the
   manifest defaults (keep the old one while consumers catch up) and regenerate
-  the fixtures.
+  the fixtures. YL-005 requires
+  `leynos/shared-actions/.github/actions/install-yaml-lint`, which comes from
+  the shared-actions change that added it (leynos/shared-actions#618, merged);
+  a repository cannot satisfy YL-005 without it. The envelope does not inspect
+  composite actions for hand-rolled lint-tool installations.
+
+  Regenerating the fixtures needs the pinned `makeutil` on `PATH`, installed as
+  the Markdown package's instructions below describe, and then:
+
+  ```bash
+  uv run python \
+    platform-standards/canon/lint-rules/yaml-lint-baseline/fixtures/generate.py
+  ```
 
 The Markdown package's `fixtures/generate.py` lays each scenario out as a
 temporary checkout and records what `build_markdown_envelope` produces, so the
