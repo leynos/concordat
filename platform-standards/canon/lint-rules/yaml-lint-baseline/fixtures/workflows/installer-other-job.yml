@@ -1,0 +1,11 @@
+name: CI
+on: [push]
+jobs:
+  tools:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: leynos/shared-actions/.github/actions/install-yaml-lint@0123456789abcdef0123456789abcdef01234567
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - run: make lint

@@ -703,6 +703,41 @@ that mentions Typos), and reports:
 builder release is pinned, but the shared dictionary it reads is live, so an
 edit to it reaches every repository on its next run.
 
+### Auditing the YAML lint gate
+
+The `yaml-lint-baseline` package audits how a checkout lints its YAML and
+GitHub Actions workflows:
+
+```shell
+concordat artefact rule run yaml-lint-baseline --repo /path/to/checkout
+```
+
+It applies when the checkout has any YAML file, and reports:
+
+- **YL-001**: a recipe reachable from `lint` runs `yamllint --strict` over a
+  `git ls-files` list that names `*.yml` and `*.yaml`, and its exit status
+  reaches Make. Write it as
+  `git ls-files -z '*.yml' '*.yaml' | xargs -0 -r $(YAMLLINT) --strict --`.
+  `-d`, `--config-data` and `--no-warnings` are reported.
+- **YL-002**: a recipe reachable from `lint` runs actionlint with a binding
+  exit status, and does not switch off its shellcheck integration with an empty
+  `-shellcheck=`.
+- **YL-003**: `.yamllint-estate.yml` is the canonical estate base, copied
+  verbatim from `canon/lint/yaml/`. `.yamllint.yml` extends it and sets only
+  `extends` and `ignore`; a local `ignore` replaces the base's, so a repository
+  restates any base pattern it still needs. `.yamllint` and `.yamllint.yaml`
+  are reported, because yamllint reads them before `.yamllint.yml`.
+- **YL-004**: `.github/actionlint.yaml` lists `ubicloud-*` under
+  `self-hosted-runner.labels`.
+- **YL-005**: every CI job that runs `make lint` first uses
+  `leynos/shared-actions/.github/actions/install-yaml-lint`, pinned to a full
+  commit SHA, and no step installs yamllint, actionlint or shellcheck by hand
+  or lints through a third-party action. A job that calls a reusable workflow
+  makes the absence of a lint job indeterminate.
+
+yamllint must run from the repository root, because it resolves `extends:`
+against the current directory.
+
 ### Auditing the uv gate
 
 The `uv-gate-baseline` package audits how a checkout reaches uv, against the

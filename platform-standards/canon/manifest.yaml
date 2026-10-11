@@ -194,6 +194,41 @@ artifacts:
     description: >
       Rule package manifest for the spelling configuration baseline policy.
     sha256: 905b08a399dc8ce651aa49c996a4bb62b48b77ebaf2506aa7ffab6fc90844cb3
+  - id: lint-rule-yaml-lint-baseline
+    type: opa-policy
+    path: >-
+      platform-standards/canon/lint-rules/yaml-lint-baseline/policy/yaml_lint_baseline.rego
+    description: >
+      Audit-only YL-001 to YL-005 policy holding the lint gate to strict yamllint over tracked YAML and actionlint, the estate base and thin local yamllint configuration, the actionlint runner labels, and the pinned CI installer.
+    sha256: c751420c6199bff459210e8943434d38642546461061780165e40b78814f69f8
+  - id: lint-rule-yaml-lint-baseline-manifest
+    type: lint-config
+    path: >-
+      platform-standards/canon/lint-rules/yaml-lint-baseline/rule.yaml
+    description: >
+      Rule package manifest for the YAML lint baseline policy.
+    sha256: f1038b09562e6eae2b0ae1bb00c5c7ac3182dfe717915dba4a842b0ad3cc4680
+  - id: yamllint-estate-config
+    type: lint-config
+    path: >-
+      platform-standards/canon/lint/yaml/.yamllint-estate.yml
+    description: >
+      Canonical estate yamllint base, copied verbatim into consumers as .yamllint-estate.yml.
+    sha256: da747ab7bfd5d335efff5ec5a3c9b963060ca960785bf7ba423f45b9571dd112
+  - id: yamllint-local-config
+    type: lint-config
+    path: >-
+      platform-standards/canon/lint/yaml/.yamllint.yml
+    description: >
+      Thin local yamllint configuration consumers start from; it extends the estate base.
+    sha256: 6050781cd3ea090de807b87226d1da077d8177bd6fc02fea508c581a8226815e
+  - id: actionlint-config
+    type: lint-config
+    path: >-
+      platform-standards/canon/lint/yaml/actionlint.yaml
+    description: >
+      Canonical actionlint configuration declaring the estate's self-hosted runner labels, copied to .github/actionlint.yaml.
+    sha256: 5ae6fd1d7dbf58bb2dd5f779fbb6fa0dff37cb5b21e69bef8255a29696793765
   - id: lint-rule-uv-gate-baseline
     type: opa-policy
     path: >-

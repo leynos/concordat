@@ -437,6 +437,7 @@ def test_the_builder_alone_reports_and_logs_nothing_unless_a_reporter_is_injecte
         "rust-build-defaults",
         "spelling-config-baseline",
         "markdown-formatting-baseline",
+        "yaml-lint-baseline",
     ],
 )
 def test_the_command_boundary_hands_every_builder_the_observed_inspector(

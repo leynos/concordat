@@ -29,10 +29,10 @@ from .markdown_envelope import (
     PRUNED_DIRECTORIES,
     Repository,
     WorkflowFile,
-    _raise_walk_error,
-    _read_text,
     is_file,
     load_workflows,
+    raise_walk_error,
+    read_text,
     resolved_root,
     within_checkout,
 )
@@ -143,7 +143,7 @@ def _read_input(
     if not _is_contained_file(root, path, operation):
         return None
     try:
-        return _read_text(path, operation), None
+        return read_text(path, operation), None
     except UnicodeDecodeError as error:
         return None, f"not UTF-8 text: {error}"
 
@@ -215,7 +215,7 @@ def _vendored_paths(checkout: pathlib.Path, patterns: cabc.Sequence[str]) -> lis
         The matching POSIX paths, sorted.
     """
     found: list[str] = []
-    for current, directories, files in os.walk(checkout, onerror=_raise_walk_error):
+    for current, directories, files in os.walk(checkout, onerror=raise_walk_error):
         directories[:] = sorted(
             name for name in directories if name not in PRUNED_DIRECTORIES
         )

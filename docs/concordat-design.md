@@ -1809,6 +1809,11 @@ the dependency-pin actionability checks.
 | PD-011       | `.gitignore` ignores `.typos-oxendict-base.json` and `.typos-oxendict-base.toml`, the builder's untracked cache.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Prose and Documentation Quality | Conftest (`spelling-config-baseline`)                               | error                | 2                        |
 | PD-012       | `typos.local.toml` exists and declares `schema = 1`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Prose and Documentation Quality | Conftest (`spelling-config-baseline`)                               | error                | 2                        |
 | PD-013       | `AGENTS.md` carries exactly one spelling block between the typos-config-builder markers, matching the builder's published `docs/agents-md-spelling.md` for the pinned release with whitespace normalized, and no duplicate spelling guidance outside it.                                                                                                                                                                                                                                                                                                                                                                            | Prose and Documentation Quality | Conftest (`spelling-config-baseline`)                               | error                | 2                        |
+| YL-001       | A recipe reachable from `lint` runs `yamllint --strict` over a `git ls-files` list naming `*.yml` and `*.yaml`, bindingly, with no `-d`, `--config-data`, or `--no-warnings`.                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Quality-Gate Integrity          | Conftest (`yaml-lint-baseline`)                                     | error                | 2                        |
+| YL-002       | A recipe reachable from `lint` runs actionlint bindingly, without an empty `-shellcheck=` that switches off the script analysis.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Quality-Gate Integrity          | Conftest (`yaml-lint-baseline`)                                     | error                | 2                        |
+| YL-003       | `.yamllint-estate.yml` is the canonical estate base (by digest), `.yamllint.yml` extends it and sets only `extends` and `ignore`, and neither `.yamllint` nor `.yamllint.yaml` shadows it.                                                                                                                                                                                                                                                                                                                                                                                                                                          | Quality-Gate Integrity          | Conftest (`yaml-lint-baseline`)                                     | error                | 2                        |
+| YL-004       | `.github/actionlint.yaml` (or `.yml`) declares the estate runner labels (`ubicloud-*`) under `self-hosted-runner.labels`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Quality-Gate Integrity          | Conftest (`yaml-lint-baseline`)                                     | error                | 2                        |
+| YL-005       | Every CI job that runs `make lint` first uses the pinned `install-yaml-lint` action (full commit SHA), some job does, and no step provisions yamllint, actionlint, or shellcheck by hand or lints through a third-party action.                                                                                                                                                                                                                                                                                                                                                                                                     | Quality-Gate Integrity          | Conftest (`yaml-lint-baseline`)                                     | error                | 2                        |
 | SP-001       | The Open Source Security Foundation Scorecard must achieve a minimum score of 7.0.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Security Posture                | Open Source Security Foundation Scorecard                           | warning              | 1                        |
 | LG-001       | The `docs/library-users-guide.md` file must match the canonical version from the consumed library tag.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | File and Content Presence       | Python/Content Check                                                | error                | 4                        |
 | QG-002       | Whitaker is provisioned only through `leynos/shared-actions/.github/actions/install-whitaker`, pinned to a revision listed in the rule as descending from the change that made the action carry the install rules. No workflow, composite action, Makefile or script installs, downloads or runs `whitaker-installer`, `cargo-dylint` or `dylint-link` by another route. Whitaker itself is exempt as the producer, and `leynos/weaver` `.github/workflows/ci.yml` is exempt until leynos/whitaker#311 is fixed.                                                                                                                    | Quality-Gate Integrity          | OPA/Conftest (`whitaker-provisioning`)                              | error                | 4                        |
@@ -2410,6 +2415,45 @@ wiring.
   spelling evidence leaves its scope indeterminate rather than out of scope.
 - **Actuators:** none yet; the package ships audit-only, and each migration
   pull request uses it as its proof of compliance.
+
+##### YAML and workflow lint (YL-001 to YL-005)
+
+Only five repositories carried a yamllint configuration, four of them
+installing the tools by hand in CI, and 494 findings stood across 55 of 147
+repositories under the shared configuration below. yamllint and actionlint
+shared a gap: neither ran in the binding `lint` gate of most repositories, so
+CI's lint lane enforced neither. These checks hold a repository to one shared
+configuration, one pinned installer and one gate shape, and ship as the
+`yaml-lint-baseline` rule package.
+
+- **Shared configuration:** the estate base
+  (`canon/lint/yaml/.yamllint-estate.yml`) is copied verbatim into each
+  repository; the repository's own `.yamllint.yml` extends it and may set only
+  `ignore`. The base keeps yamllint's defaults, except that `document-start` is
+  off (1,469 warnings in 140 repositories for no value), comment spacing is one
+  space, sequence indentation is consistent, `on:` is a valid truthy key, and
+  line length is 120 everywhere except under `.github/workflows` and
+  `.github/actions`, where `run:` scripts and URLs make a limit noise (143
+  findings in 44 repositories). yamllint resolves `extends:` against the
+  current directory rather than the configuration file, and a local `ignore`
+  replaces the base's, so the Makefile runs yamllint from the root and a
+  repository restates the Helm template glob if it needs it.
+- **actionlint:** `.github/actionlint.yaml` declares `ubicloud-*` as a
+  self-hosted runner label (the glob is supported), so actionlint accepts the
+  estate's runners. Its shellcheck integration stays on.
+- **Installer:** `leynos/shared-actions/.github/actions/install-yaml-lint`
+  pins yamllint (through `uv`, exact `==`), actionlint and shellcheck
+  (digest-verified release archives) together, and is itself pinned by commit
+  SHA in each repository, so Dependabot moves the tool versions in one place.
+- **Sensors:** a Makefile policy over `makeutil` facts follows the static
+  closure from `lint` with the same machinery as the Markdown rule, reading
+  `xargs` as a transparent wrapper because yamllint has no Git mode. The base's
+  file digest, the decoded local and actionlint configurations, and the decoded
+  workflows cover the rest. An unresolvable variable, a conditional or
+  `include` in the closure, or an undecodable file is indeterminate. Composite
+  actions are not inspected.
+- **Actuators:** none yet; the package ships audit-only, and each rollout pull
+  request uses it as its proof of compliance.
 
 ##### uv robust execution (UV-001 to UV-007)
 

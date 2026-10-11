@@ -1,0 +1,5 @@
+name: CI
+on: [push]
+jobs:
+  lint:
+    uses: leynos/shared-actions/.github/workflows/lint.yml@0123456789abcdef0123456789abcdef01234567

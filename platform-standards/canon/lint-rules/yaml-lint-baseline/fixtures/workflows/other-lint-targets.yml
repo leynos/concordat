@@ -1,0 +1,8 @@
+name: CI
+on: [push]
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - run: make markdownlint
+      - run: make lint-whitaker

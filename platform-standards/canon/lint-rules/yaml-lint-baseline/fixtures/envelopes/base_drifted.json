@@ -1,0 +1,235 @@
+{
+  "schema_version": 1,
+  "kind": "policy-input/yaml-lint-baseline",
+  "repository": {
+    "path": ".",
+    "name": null
+  },
+  "applicability": {
+    "yaml_files": true,
+    "workflows": true,
+    "root_makefile": true
+  },
+  "makefile": {
+    "schema_version": 1,
+    "tool": {
+      "name": "makeutil",
+      "version": "0.1.0",
+      "parser": "makefile-lossless",
+      "parser_version": "0.3.40"
+    },
+    "source": {
+      "path": "Makefile",
+      "sha256": "69ac22fc76a84fb0d19fb7c239a90143f989c033c536d2768761f37aeb031863",
+      "byte_length": 217
+    },
+    "parse": {
+      "status": "complete",
+      "diagnostics": []
+    },
+    "rules": [
+      {
+        "ordinal": 2,
+        "targets": [
+          ".PHONY"
+        ],
+        "prerequisites": [
+          "lint",
+          "yamllint",
+          "actionlint"
+        ],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [],
+        "location": {
+          "start_byte": 46,
+          "end_byte": 80,
+          "start_line": 3,
+          "start_column": 1,
+          "end_line": 5,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 3,
+        "targets": [
+          "lint"
+        ],
+        "prerequisites": [
+          "yamllint",
+          "actionlint"
+        ],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [],
+        "location": {
+          "start_byte": 80,
+          "end_byte": 107,
+          "start_line": 5,
+          "start_column": 1,
+          "end_line": 7,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 4,
+        "targets": [
+          "yamllint"
+        ],
+        "prerequisites": [],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "git ls-files -z '*.yml' '*.yaml' | xargs -0 -r $(YAMLLINT) --strict --",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 117,
+              "end_byte": 189,
+              "start_line": 8,
+              "start_column": 1,
+              "end_line": 9,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 107,
+          "end_byte": 190,
+          "start_line": 7,
+          "start_column": 1,
+          "end_line": 10,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 5,
+        "targets": [
+          "actionlint"
+        ],
+        "prerequisites": [],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "$(ACTIONLINT)",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 202,
+              "end_byte": 217,
+              "start_line": 11,
+              "start_column": 1,
+              "end_line": 12,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 190,
+          "end_byte": 217,
+          "start_line": 10,
+          "start_column": 1,
+          "end_line": 12,
+          "end_column": 1
+        }
+      }
+    ],
+    "variables": [
+      {
+        "ordinal": 0,
+        "name": "YAMLLINT",
+        "operator": "?=",
+        "raw_value": "yamllint",
+        "exported": false,
+        "overridden": false,
+        "define_block": false,
+        "conditions": [],
+        "location": {
+          "start_byte": 0,
+          "end_byte": 21,
+          "start_line": 1,
+          "start_column": 1,
+          "end_line": 2,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "ACTIONLINT",
+        "operator": "?=",
+        "raw_value": "actionlint",
+        "exported": false,
+        "overridden": false,
+        "define_block": false,
+        "conditions": [],
+        "location": {
+          "start_byte": 21,
+          "end_byte": 46,
+          "start_line": 2,
+          "start_column": 1,
+          "end_line": 3,
+          "end_column": 1
+        }
+      }
+    ],
+    "includes": []
+  },
+  "yamllint_base": {
+    "path": ".yamllint-estate.yml",
+    "sha256": "e621dec62dcc616f21624c51096b1ea1e84ce8f95a9a7cdef5fcc8721bf2e2ed",
+    "error": null
+  },
+  "yamllint_local": {
+    "path": ".yamllint.yml",
+    "parsed": {
+      "extends": ".yamllint-estate.yml"
+    },
+    "error": null
+  },
+  "alternate_yamllint_configs": [],
+  "actionlint_config": {
+    "path": ".github/actionlint.yaml",
+    "parsed": {
+      "self-hosted-runner": {
+        "labels": [
+          "ubicloud-*"
+        ]
+      }
+    },
+    "error": null
+  },
+  "workflows": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "parsed": {
+        "name": "CI",
+        "on": [
+          "push"
+        ],
+        "jobs": {
+          "lint": {
+            "runs-on": "ubuntu-latest",
+            "steps": [
+              {
+                "uses": "actions/checkout@0000000000000000000000000000000000000000"
+              },
+              {
+                "uses": "leynos/shared-actions/.github/actions/install-yaml-lint@0123456789abcdef0123456789abcdef01234567"
+              },
+              {
+                "run": "make lint"
+              }
+            ]
+          }
+        }
+      },
+      "error": null
+    }
+  ]
+}

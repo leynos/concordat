@@ -700,6 +700,33 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   manifest parameter; the fixture generator copies them into `data.json`'s
   `parameters`, so the Rego suite compares against the runner's text.
 
+- `policy-input/yaml-lint-baseline` —
+  `yaml_lint_envelope.build_yaml_lint_envelope`. It reuses
+  `markdown_envelope`'s containment guard and readers: the same `makeutil`
+  report for the root `Makefile` and the same decoded workflows, plus the
+  SHA-256 of `.yamllint-estate.yml` (the baseline wants the canonical bytes, so
+  no decoding), `.yamllint.yml` and the actionlint configuration decoded as
+  YAML, and the alternate yamllint configuration names present. Applicability
+  is whether any YAML file exists outside the pruned directories. The package
+  is registered by identifier and declares its kind; every other input reaches
+  the policy as manifest parameters. The accepted base digests are
+  `base_sha256s`, and the canonical files ship under `canon/lint/yaml/`: editing
+  `.yamllint-estate.yml` changes its digest, so add the new digest to the
+  manifest defaults (keep the old one while consumers catch up) and regenerate
+  the fixtures. YL-005 requires
+  `leynos/shared-actions/.github/actions/install-yaml-lint`, which comes from
+  the shared-actions change that added it (leynos/shared-actions#618, merged);
+  a repository cannot satisfy YL-005 without it. The envelope does not inspect
+  composite actions for hand-rolled lint-tool installations.
+
+  Regenerating the fixtures needs the pinned `makeutil` on `PATH`, installed as
+  the Markdown package's instructions below describe, and then:
+
+  ```bash
+  uv run python \
+    platform-standards/canon/lint-rules/yaml-lint-baseline/fixtures/generate.py
+  ```
+
 The Markdown package's `fixtures/generate.py` lays each scenario out as a
 temporary checkout and records what `build_markdown_envelope` produces, so the
 checked-in envelopes are exactly the production builder's output;
@@ -940,10 +967,11 @@ and a coverage build cannot use a Cranelift one. ADR-003 records the change.
 
 ### The shared checkout readers in `markdown_envelope`
 
-The Markdown, spelling and build-defaults envelope builders read the same files
-through one guarded set of functions in `concordat/rules/markdown_envelope.py`.
-Import them by name; they are public because three builders share them, and a
-private-name import across modules is the pattern concordat#264 removes.
+The Markdown, spelling, uv gate, YAML lint and build-defaults envelope builders
+read the same files through one guarded set of functions in
+`concordat/rules/markdown_envelope.py`. Import them by name; they are public
+because five builders share them, and a private-name import across modules is
+the pattern concordat#264 removes.
 
 - `resolved_root(checkout)` returns the checkout with every symbolic link in
   its own path resolved. It raises `OperationalRuleError` (operation
@@ -958,6 +986,16 @@ private-name import across modules is the pattern concordat#264 removes.
 - `is_file(path, operation)` returns whether *path* is a regular file. Absence
   is `False`; a probe that cannot answer (a permission error, say) raises,
   because reading that as absence would report a broken checkout as compliant.
+- `read_text(path, operation)` returns the file's text. A file that cannot be
+  opened raises `OperationalRuleError`; undecodable bytes raise
+  `UnicodeDecodeError`, which the caller records as a fact.
+- `is_symlink(path, operation)` returns whether *path* is itself a symbolic
+  link, reading the link rather than its target. A refused probe raises.
+- `raise_walk_error(error)` is the `os.walk` error callback that turns a
+  directory it cannot list into an `OperationalRuleError`, so an unreadable
+  tree does not read as an empty one.
+- `json_safe(value)` returns *value* with any non-JSON scalar, such as a YAML
+  timestamp, stringified.
 - `load_workflows(checkout, root)` returns one fact per file under
   `.github/workflows`, sorted by name, each decoded as YAML 1.2 or carrying its
   decoding error. It returns an empty list when there is no workflows
@@ -968,21 +1006,22 @@ private-name import across modules is the pattern concordat#264 removes.
 
 The envelope builders are pure queries. `inspect_makefile` reads no clock and
 writes no log, and `_build_workflows` only reads and tags workflow facts. Each
-builder (`build_envelope`, `build_markdown_envelope`, `build_spelling_envelope`
-and `build_build_defaults_envelope`) takes a keyword `inspect` of type
-`MakefileInspector`, defaulting to the pure `inspect_makefile`.
-`build_build_defaults_envelope` also takes
+builder (`build_envelope`, `build_markdown_envelope`, `build_spelling_envelope`,
+`build_yaml_lint_envelope` and `build_build_defaults_envelope`) takes a keyword
+`inspect` of type `MakefileInspector`, defaulting to the pure
+`inspect_makefile`. `build_build_defaults_envelope` also takes
 `report_undecodable(path, category)`, which defaults to `None` and so reports
 nothing.
 
 Observation is wired in at the command boundary, `rules/packages.py`, which
-passes `makefile_observed.inspect_makefile_observed` as `inspect` and
-`envelope.log_undecodable_workflow` as `report_undecodable`.
-`inspect_makefile_observed` times the query with an injected `clock` and passes
-one `MakefileParseEvent` (operation, tool, outcome, elapsed seconds) to an
-injected `emit`; the default emitter writes a debug log record. The outcome is
-a fixed word (`complete`, `recovered`, `refused`, `timeout`, `launch-failure` or
-`error`), never the tool's output, which can quote Makefile content.
+passes `makefile_observed.inspect_makefile_observed` as `inspect` (the YAML
+lint package's builder included) and `envelope.log_undecodable_workflow` as
+`report_undecodable`. `inspect_makefile_observed` times the query with an
+injected `clock` and passes one `MakefileParseEvent` (operation, tool, outcome,
+elapsed seconds) to an injected `emit`; the default emitter writes a debug log
+record. The outcome is a fixed word (`complete`, `recovered`, `refused`,
+`timeout`, `launch-failure` or `error`), never the tool's output, which can
+quote Makefile content.
 
 `MakefileRefusedError` (an `OperationalRuleError`) is raised for `makeutil`
 exit status 2. `build_build_defaults_envelope` carries it as `makefile_error`
