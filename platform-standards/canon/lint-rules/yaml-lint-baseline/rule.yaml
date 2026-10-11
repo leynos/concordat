@@ -1,0 +1,104 @@
+schema_version: 1
+id: yaml-lint-baseline
+name: YAML lint baseline
+description: >-
+  Audits a checkout's YAML and GitHub Actions workflow linting: the lint gate
+  runs `yamllint --strict` over the Git-tracked YAML and actionlint with a
+  binding exit status (YL-001, YL-002); the estate yamllint base file is
+  present verbatim and the repository's own yamllint configuration only
+  extends it and sets `ignore` (YL-003); `.github/actionlint.yaml` declares
+  the estate's self-hosted runner labels (YL-004); and every CI job that runs
+  the lint gate first installs the tools through the pinned shared installer,
+  with no hand-rolled install or third-party lint action beside it (YL-005).
+  A repository with no YAML file is out of scope.
+  Audit-only: this rule declares no mutations.
+version: 0.1.0
+sensor:
+  type: conftest
+  input: policy-input/yaml-lint-baseline
+  policy: policy/
+  tests:
+    - policy/
+  data:
+    - fixtures/data.json
+parameters:
+  schema:
+    type: object
+    additionalProperties: false
+    properties:
+      lint_target:
+        type: string
+        description: The Make target whose closure must run both tools.
+      yaml_pathspecs:
+        type: array
+        items:
+          type: string
+        description: >-
+          Pathspecs the yamllint recipe must pass to `git ls-files`, so every
+          tracked YAML file is linted.
+      base_filename:
+        type: string
+        description: Where the canonical estate yamllint base is copied.
+      base_sha256s:
+        type: array
+        items:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        description: >-
+          SHA-256 digests the base file may have: the canonical file's, plus
+          any earlier revision still accepted while consumers catch up.
+      local_filename:
+        type: string
+        description: The repository's own yamllint configuration.
+      local_allowed_keys:
+        type: array
+        items:
+          type: string
+        description: Top-level keys the local yamllint configuration may set.
+      runner_labels:
+        type: array
+        items:
+          type: string
+        description: Labels `.github/actionlint.yaml` must declare.
+      installer_action:
+        type: string
+        description: >-
+          The shared action every lint job must use, pinned to a full commit
+          SHA, before running the lint gate.
+      hand_rolled_patterns:
+        type: array
+        items:
+          type: string
+        description: >-
+          RE2 patterns matched against a `run:` script that provision a lint
+          tool outside the installer.
+      lint_actions:
+        type: array
+        items:
+          type: string
+        description: Third-party lint actions that bypass the Make gate.
+  defaults:
+    lint_target: lint
+    yaml_pathspecs:
+      - '*.yml'
+      - '*.yaml'
+    base_filename: .yamllint-estate.yml
+    base_sha256s:
+      - da747ab7bfd5d335efff5ec5a3c9b963060ca960785bf7ba423f45b9571dd112
+    local_filename: .yamllint.yml
+    local_allowed_keys:
+      - extends
+      - ignore
+    runner_labels:
+      - ubicloud-*
+    installer_action: leynos/shared-actions/.github/actions/install-yaml-lint
+    hand_rolled_patterns:
+      - '(?m)(uvx|uv[[:space:]]+tool|pip3?|pipx)[[:space:]][^\n]*yamllint'
+      - '(?m)releases/download[^\n]*actionlint|download-actionlint'
+      - '(?m)(apt-get|apt|brew|snap)[[:space:]]+install[^\n]*(shellcheck|actionlint|yamllint)'
+      - '(?m)go[[:space:]]+install[^\n]*actionlint'
+    lint_actions:
+      - raven-actions/actionlint
+      - reviewdog/action-actionlint
+      - ibiqlik/action-yamllint
+      - karancode/yamllint-github-action

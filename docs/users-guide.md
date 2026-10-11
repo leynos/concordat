@@ -278,6 +278,34 @@ runs them, so correct Makefiles no longer draw false findings:
 A Makefile that 0.3.1 reported as noncompliant or indeterminate only because of
 one of these shapes can now be compliant. Nothing needs migrating.
 
+`rust-toolchain-policy` audits the Rust toolchain a repository builds with
+(RT-022 to RT-027; see [Migrating to 0.2](migrating-to-0.2.md) for adopting it):
+
+```shell
+concordat artefact rule run rust-toolchain-policy --repo /path/to/checkout
+```
+
+It requires that:
+
+- `rust-toolchain.toml` pins the channel exactly, as a release such as `1.93.1`
+  or a dated nightly such as `nightly-2026-09-20`, never `stable` or `nightly`
+  (RT-022);
+- a pinned nightly is at most `window_days` old, 56 by default (RT-023);
+- `.github/dependabot.yml` has a `rust-toolchain` entry on the pin's directory
+  with a daily or weekly interval (RT-024);
+- every publishable library crate declares `rust-version` (RT-025, a warning);
+- every declared MSRV is exercised by CI: a workflow installs that toolchain,
+  a job or step runs cargo-msrv or is named for the MSRV, a step selects its
+  toolchain from `rust-version`, or the pin is that version (RT-026);
+- no workflow names a dated nightly other than the pinned one (RT-027).
+
+A repository whose nightly cannot move records that in
+`docs/developers-guide.md` under a heading containing "Toolchain policy",
+naming the pinned channel in the section. That exempts RT-023, RT-024 and
+RT-025 while the section names the current pin. A repository with no Cargo
+manifest is outside the rule. Workspace members are judged where `.concordat`
+declares them as Rust surfaces.
+
 `dependabot-update-shape` audits `.github/dependabot.yml` against the estate's
 update shape (DB-005):
 
@@ -304,6 +332,33 @@ for example with `directories: ["/", "/.github/actions/*"]`. `*` matches one
 path segment and `**` any number, as in Dependabot. A repository without a
 Dependabot configuration passes, and a configuration that cannot be decoded is
 reported as indeterminate.
+
+`dependency-family-contracts` reports whether the dependency relationships the
+estate has recorded are protected by the Dependabot configuration (report-only):
+
+```shell
+concordat artefact rule run dependency-family-contracts --repo /path/to/checkout
+```
+
+A relationship applies only where the repository declares every member:
+
+- a family or type-identity pair (for example `pyo3` with `pyo3-build-config`)
+  needs one narrow group taking both ahead of the catch-all (DF-001), and not
+  shadowed by an earlier group (DF-003);
+- independently versioned packages (for example maturin with PyO3) need an upper
+  bound or an `ignore` rule on a member (DF-002); an exact pin is not one;
+- a missing configuration, an unreadable manifest or lock, or a Python project
+  outside the root is reported as indeterminate (DF-006).
+
+To keep an older generation deliberately, record an exception in `.concordat`:
+
+```yaml
+dependencies:
+  family_exceptions:
+    - relationship: pyo3-build-config-family
+      rationale: the extension stays on the 0.28 generation
+      review_trigger: review when PyO3 0.30 ships
+```
 
 `main-owned-codescene-coverage` audits the coverage topology (CV-005):
 
@@ -648,6 +703,41 @@ that mentions Typos), and reports:
 builder release is pinned, but the shared dictionary it reads is live, so an
 edit to it reaches every repository on its next run.
 
+### Auditing the YAML lint gate
+
+The `yaml-lint-baseline` package audits how a checkout lints its YAML and
+GitHub Actions workflows:
+
+```shell
+concordat artefact rule run yaml-lint-baseline --repo /path/to/checkout
+```
+
+It applies when the checkout has any YAML file, and reports:
+
+- **YL-001**: a recipe reachable from `lint` runs `yamllint --strict` over a
+  `git ls-files` list that names `*.yml` and `*.yaml`, and its exit status
+  reaches Make. Write it as
+  `git ls-files -z '*.yml' '*.yaml' | xargs -0 -r $(YAMLLINT) --strict --`.
+  `-d`, `--config-data` and `--no-warnings` are reported.
+- **YL-002**: a recipe reachable from `lint` runs actionlint with a binding
+  exit status, and does not switch off its shellcheck integration with an empty
+  `-shellcheck=`.
+- **YL-003**: `.yamllint-estate.yml` is the canonical estate base, copied
+  verbatim from `canon/lint/yaml/`. `.yamllint.yml` extends it and sets only
+  `extends` and `ignore`; a local `ignore` replaces the base's, so a repository
+  restates any base pattern it still needs. `.yamllint` and `.yamllint.yaml`
+  are reported, because yamllint reads them before `.yamllint.yml`.
+- **YL-004**: `.github/actionlint.yaml` lists `ubicloud-*` under
+  `self-hosted-runner.labels`.
+- **YL-005**: every CI job that runs `make lint` first uses
+  `leynos/shared-actions/.github/actions/install-yaml-lint`, pinned to a full
+  commit SHA, and no step installs yamllint, actionlint or shellcheck by hand
+  or lints through a third-party action. A job that calls a reusable workflow
+  makes the absence of a lint job indeterminate.
+
+yamllint must run from the repository root, because it resolves `extends:`
+against the current directory.
+
 ### Auditing the uv gate
 
 The `uv-gate-baseline` package audits how a checkout reaches uv, against the
@@ -669,13 +759,16 @@ it, a `uv.lock`, or the helper) and reports:
 - **UV-004**: `uv.lock` exists beside `pyproject.toml`.
 - **UV-005**: no recipe refreshes, upgrades, locks, purges the cache or retries
   around uv; a `lock` target may lock and upgrade.
-- **UV-006**: every tool spec is `name==VERSION`, `name@VERSION` or
-  `git+URL@<full commit SHA>`, optionally followed by a fragment such as
-  `#subdirectory=x` (written `\#` in a Make variable's value, which Make turns
-  into `#`). A short SHA, a branch, a suffix after the SHA, or a `\#` in a
-  recipe line is not a pin. typos-config-builder is also accepted at a release
-  tag when it is run directly with `uvx`, because the spelling baseline
-  requires that form and the helper refuses a Git spec that is not a commit.
+- **UV-006**: every tool spec is `name==VERSION`, `name@VERSION`,
+  `git+URL@<full commit SHA>` or `name[extra] @ git+URL@<full commit SHA>`,
+  optionally followed by a fragment such as `#subdirectory=x` (written `\#` in
+  a Make variable's value, which Make turns into `#`). A short SHA, a branch, a
+  suffix after the SHA, or a `\#` in a recipe line is not a pin. A variable in
+  a workflow step is resolved from the `env:` of the workflow, job and step
+  (innermost wins); one it cannot resolve to a literal is indeterminate.
+  typos-config-builder is also accepted at a release tag when it is run
+  directly with `uvx`, because the spelling baseline requires that form and the
+  helper refuses a Git spec that is not a commit.
 - **UV-007**: Git dependencies in `pyproject.toml` are pinned to a full commit.
 
 An `include`, a recovered Makefile parse, an unresolvable variable, or a file

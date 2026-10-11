@@ -65,11 +65,14 @@ parameters:
     gate_variable: UV_GATE
     gate_command: python3 scripts/uv_gate.py
     gate_path: scripts/uv_gate.py
-    # leynos/shared-actions uv_gate/uv_gate.py at d93ba238 (pull request 586).
-    # Add a key for each later release; keep the older ones while consumers
-    # still vendor them.
+    # leynos/shared-actions uv_gate/uv_gate.py: 0.1.0 at d93ba238 (pull request
+    # 586), 0.2.0 from pull request 617 (the missing-python class), 0.2.1 from pull request
+    # 620 (the missing-git-source class and the name[extra] @ git+URL@sha pin). Add a key for
+    # each later release; keep the older ones while consumers still vendor them.
     gate_digests:
       "0.1.0": cc8dc5dfba51efcca4e3c117e55e2fcbb463455929f5988efbf9c4532988f163
+      "0.2.0": 1aee16702de67cc7dd5dfe15e434f589dfaecf3ca813c85fbff5320c5fe584fe
+      "0.2.1": fe7671d8663ec89ce1076ebb857847802e46c8d6607ab1e012daa443e335e66e
     forbidden_variables:
       - UV_CACHE_DIR
       - UV_TOOL_DIR

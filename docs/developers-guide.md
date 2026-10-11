@@ -711,6 +711,33 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   manifest parameter; the fixture generator copies them into `data.json`'s
   `parameters`, so the Rego suite compares against the runner's text.
 
+- `policy-input/yaml-lint-baseline` —
+  `yaml_lint_envelope.build_yaml_lint_envelope`. It reuses
+  `markdown_envelope`'s containment guard and readers: the same `makeutil`
+  report for the root `Makefile` and the same decoded workflows, plus the
+  SHA-256 of `.yamllint-estate.yml` (the baseline wants the canonical bytes, so
+  no decoding), `.yamllint.yml` and the actionlint configuration decoded as
+  YAML, and the alternate yamllint configuration names present. Applicability
+  is whether any YAML file exists outside the pruned directories. The package
+  is registered by identifier and declares its kind; every other input reaches
+  the policy as manifest parameters. The accepted base digests are
+  `base_sha256s`, and the canonical files ship under `canon/lint/yaml/`: editing
+  `.yamllint-estate.yml` changes its digest, so add the new digest to the
+  manifest defaults (keep the old one while consumers catch up) and regenerate
+  the fixtures. YL-005 requires
+  `leynos/shared-actions/.github/actions/install-yaml-lint`, which comes from
+  the shared-actions change that added it (leynos/shared-actions#618, merged);
+  a repository cannot satisfy YL-005 without it. The envelope does not inspect
+  composite actions for hand-rolled lint-tool installations.
+
+  Regenerating the fixtures needs the pinned `makeutil` on `PATH`, installed as
+  the Markdown package's instructions below describe, and then:
+
+  ```bash
+  uv run python \
+    platform-standards/canon/lint-rules/yaml-lint-baseline/fixtures/generate.py
+  ```
+
 The Markdown package's `fixtures/generate.py` lays each scenario out as a
 temporary checkout and records what `build_markdown_envelope` produces, so the
 checked-in envelopes are exactly the production builder's output;
@@ -850,6 +877,28 @@ accepts the manifest parameters and ignores them: CV-005 declares no tunables,
 because every clause it states is a property of the estate's topology rather
 than something a repository may configure.
 
+`rust-toolchain-policy` builds its own as well.
+`build_toolchain_policy_envelope` (in `toolchain_policy_envelope.py`) assembles
+a `policy-input/rust-toolchain-policy` document from the pin (read by
+`inspect_toolchain`), the governed Cargo packages (from the shared surface
+resolver), the `rust-toolchain` entries of the Dependabot configuration (read
+through `build_dependabot_envelope`), the toolchains the workflows name, and
+any recorded exception (read by `find_exception_sections`). The builder takes
+"today" as a required argument and records it as `evaluated_on`, so neither it
+nor the policy reads a clock. The command boundary injects one: the registered
+resolver in `packages.py` reads `packages.today_provider` (by default
+`utc_today`), and a test replaces that provider to fix the date. The workflow
+facts (`toolchain_ci_facts.py`) are extracted from decoded YAML, not by
+searching text: a step's `uses` ref, its `with.toolchain` input (following a
+`${{ env.NAME }}` or `${{ matrix.NAME }}` reference, matrix `include` legs
+too), and `rustup` (`install`, `run`, `default`, `override set`) or
+`cargo +toolchain` commands in its `run`. A `src/lib.rs` that cannot be
+examined (an occupied path, a dangling link, a refusal) is carried as
+`lib_read_error` and makes RT-025 indeterminate for that crate; it is never
+read as the library's absence. A workflow that does not decode is recorded with
+its reason, which makes RT-026 and RT-027 indeterminate. The window and the
+accepted Dependabot intervals reach Conftest as `data.parameters`.
+
 `dependabot-update-shape` takes its own as well. `build_dependabot_envelope` (in
 `dependabot_envelope.py`) assembles a `policy-input/dependabot-update-shape`
 document holding the decoded `.github/dependabot.yml` (or `.yaml`), each
@@ -864,6 +913,25 @@ resolves outside the checkout raises `OperationalRuleError` with
 `operation="read-local-actions"`; the walk does not follow symbolic links. The
 package is registered by identifier and declares its kind, and DB-005 declares
 no tunables.
+
+`dependency-family-contracts` collects its own facts in
+`dependency_family_envelope.py`. `build_dependency_family_envelope` assembles a
+`policy-input/dependency-family-contracts` document: every dependency edge of
+the governed Cargo surfaces (through `resolve_rust_surfaces`, so nested and
+workspace-inherited manifests are seen) and of the root `pyproject.toml`, each
+carrying the published package name behind a `package =` rename, its
+requirement and whether that is an exact pin or an explicit upper bound, its
+locked versions from `Cargo.lock` or `uv.lock`, and Dependabot's treatment of
+it (covering entry, first matching group in document order, narrow groups that
+match, `ignore` rule). The estate's relationship data is read from
+`platform-standards/canon/data/dependency-families.yaml` and the repository's
+exceptions from `.concordat`. A manifest the surface resolver rejects, a Python
+project outside the root, an unreadable lock and a missing configuration become
+`problems` or per-declaration reasons, which the policy turns into DF-006
+indeterminate findings. To make a newly discovered family a checked contract,
+add one relationship (id, kind, members by published name, relation, owner and
+provenance) to the data file and a fixture scenario to `fixtures/generate.py`;
+no Python or Rego edit is needed.
 
 Workflow discovery in that builder is explicitly fallible. An absent
 `.github/workflows` directory is a repository with no workflows and yields an
@@ -910,10 +978,11 @@ and a coverage build cannot use a Cranelift one. ADR-003 records the change.
 
 ### The shared checkout readers in `markdown_envelope`
 
-The Markdown, spelling and build-defaults envelope builders read the same files
-through one guarded set of functions in `concordat/rules/markdown_envelope.py`.
-Import them by name; they are public because three builders share them, and a
-private-name import across modules is the pattern concordat#264 removes.
+The Markdown, spelling, uv gate, YAML lint and build-defaults envelope builders
+read the same files through one guarded set of functions in
+`concordat/rules/markdown_envelope.py`. Import them by name; they are public
+because five builders share them, and a private-name import across modules is
+the pattern concordat#264 removes.
 
 - `resolved_root(checkout)` returns the checkout with every symbolic link in
   its own path resolved. It raises `OperationalRuleError` (operation
@@ -928,6 +997,16 @@ private-name import across modules is the pattern concordat#264 removes.
 - `is_file(path, operation)` returns whether *path* is a regular file. Absence
   is `False`; a probe that cannot answer (a permission error, say) raises,
   because reading that as absence would report a broken checkout as compliant.
+- `read_text(path, operation)` returns the file's text. A file that cannot be
+  opened raises `OperationalRuleError`; undecodable bytes raise
+  `UnicodeDecodeError`, which the caller records as a fact.
+- `is_symlink(path, operation)` returns whether *path* is itself a symbolic
+  link, reading the link rather than its target. A refused probe raises.
+- `raise_walk_error(error)` is the `os.walk` error callback that turns a
+  directory it cannot list into an `OperationalRuleError`, so an unreadable
+  tree does not read as an empty one.
+- `json_safe(value)` returns *value* with any non-JSON scalar, such as a YAML
+  timestamp, stringified.
 - `load_workflows(checkout, root)` returns one fact per file under
   `.github/workflows`, sorted by name, each decoded as YAML 1.2 or carrying its
   decoding error. It returns an empty list when there is no workflows
@@ -938,21 +1017,22 @@ private-name import across modules is the pattern concordat#264 removes.
 
 The envelope builders are pure queries. `inspect_makefile` reads no clock and
 writes no log, and `_build_workflows` only reads and tags workflow facts. Each
-builder (`build_envelope`, `build_markdown_envelope`, `build_spelling_envelope`
-and `build_build_defaults_envelope`) takes a keyword `inspect` of type
-`MakefileInspector`, defaulting to the pure `inspect_makefile`.
-`build_build_defaults_envelope` also takes
+builder (`build_envelope`, `build_markdown_envelope`, `build_spelling_envelope`,
+`build_yaml_lint_envelope` and `build_build_defaults_envelope`) takes a keyword
+`inspect` of type `MakefileInspector`, defaulting to the pure
+`inspect_makefile`. `build_build_defaults_envelope` also takes
 `report_undecodable(path, category)`, which defaults to `None` and so reports
 nothing.
 
 Observation is wired in at the command boundary, `rules/packages.py`, which
-passes `makefile_observed.inspect_makefile_observed` as `inspect` and
-`envelope.log_undecodable_workflow` as `report_undecodable`.
-`inspect_makefile_observed` times the query with an injected `clock` and passes
-one `MakefileParseEvent` (operation, tool, outcome, elapsed seconds) to an
-injected `emit`; the default emitter writes a debug log record. The outcome is
-a fixed word (`complete`, `recovered`, `refused`, `timeout`, `launch-failure` or
-`error`), never the tool's output, which can quote Makefile content.
+passes `makefile_observed.inspect_makefile_observed` as `inspect` (the YAML
+lint package's builder included) and `envelope.log_undecodable_workflow` as
+`report_undecodable`. `inspect_makefile_observed` times the query with an
+injected `clock` and passes one `MakefileParseEvent` (operation, tool, outcome,
+elapsed seconds) to an injected `emit`; the default emitter writes a debug log
+record. The outcome is a fixed word (`complete`, `recovered`, `refused`,
+`timeout`, `launch-failure` or `error`), never the tool's output, which can
+quote Makefile content.
 
 `MakefileRefusedError` (an `OperationalRuleError`) is raised for `makeutil`
 exit status 2. `build_build_defaults_envelope` carries it as `makefile_error`

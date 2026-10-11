@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "kind": "policy-input/yaml-lint-baseline",
+  "repository": {
+    "path": ".",
+    "name": null
+  },
+  "applicability": {
+    "yaml_files": true,
+    "workflows": true,
+    "root_makefile": true
+  },
+  "makefile": {
+    "schema_version": 1,
+    "tool": {
+      "name": "makeutil",
+      "version": "0.1.0",
+      "parser": "makefile-lossless",
+      "parser_version": "0.3.40"
+    },
+    "source": {
+      "path": "Makefile",
+      "sha256": "f8bb7c66db66f7f5cbdf0fbeb742f818a387e3bceaf62166e381596382fe1c5b",
+      "byte_length": 103
+    },
+    "parse": {
+      "status": "complete",
+      "diagnostics": []
+    },
+    "rules": [
+      {
+        "ordinal": 0,
+        "targets": [
+          ".PHONY"
+        ],
+        "prerequisites": [
+          "lint"
+        ],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [],
+        "location": {
+          "start_byte": 2,
+          "end_byte": 16,
+          "start_line": 3,
+          "start_column": 1,
+          "end_line": 5,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 1,
+        "targets": [
+          "lint"
+        ],
+        "prerequisites": [],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [
+          {
+            "ordinal": 0,
+            "text": "git ls-files -z '*.yml' '*.yaml' | xargs -0 -r yamllint --strict --",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 22,
+              "end_byte": 91,
+              "start_line": 6,
+              "start_column": 1,
+              "end_line": 7,
+              "end_column": 1
+            }
+          },
+          {
+            "ordinal": 1,
+            "text": "actionlint",
+            "silent": false,
+            "ignore_errors": false,
+            "always_execute": false,
+            "location": {
+              "start_byte": 91,
+              "end_byte": 103,
+              "start_line": 7,
+              "start_column": 1,
+              "end_line": 8,
+              "end_column": 1
+            }
+          }
+        ],
+        "location": {
+          "start_byte": 16,
+          "end_byte": 103,
+          "start_line": 5,
+          "start_column": 1,
+          "end_line": 8,
+          "end_column": 1
+        }
+      }
+    ],
+    "variables": [],
+    "includes": []
+  },
+  "yamllint_base": {
+    "path": ".yamllint-estate.yml",
+    "sha256": "da747ab7bfd5d335efff5ec5a3c9b963060ca960785bf7ba423f45b9571dd112",
+    "error": null
+  },
+  "yamllint_local": {
+    "path": ".yamllint.yml",
+    "parsed": {
+      "extends": ".yamllint-estate.yml"
+    },
+    "error": null
+  },
+  "alternate_yamllint_configs": [],
+  "actionlint_config": {
+    "path": ".github/actionlint.yaml",
+    "parsed": {
+      "self-hosted-runner": {
+        "labels": [
+          "ubicloud-*"
+        ]
+      }
+    },
+    "error": null
+  },
+  "workflows": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "parsed": {
+        "name": "CI",
+        "on": [
+          "push"
+        ],
+        "jobs": {
+          "lint": {
+            "runs-on": "ubuntu-latest",
+            "steps": [
+              {
+                "uses": "actions/checkout@0000000000000000000000000000000000000000"
+              },
+              {
+                "uses": "leynos/shared-actions/.github/actions/install-yaml-lint@0123456789abcdef0123456789abcdef01234567"
+              },
+              {
+                "run": "make lint"
+              }
+            ]
+          }
+        }
+      },
+      "error": null
+    }
+  ]
+}

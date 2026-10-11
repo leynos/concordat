@@ -32,10 +32,10 @@ import typing as typ
 from .markdown_envelope import (
     PRUNED_DIRECTORIES,
     _is_dir,
-    _is_symlink,
-    _raise_walk_error,
-    _read_text,
     is_file,
+    is_symlink,
+    raise_walk_error,
+    read_text,
     within_checkout,
 )
 from .rust_source import (
@@ -132,7 +132,7 @@ def _manifest_paths(checkout: pathlib.Path) -> list[str]:
         Paths relative to the checkout, sorted.
     """
     found: list[str] = []
-    for current, directories, files in os.walk(checkout, onerror=_raise_walk_error):
+    for current, directories, files in os.walk(checkout, onerror=raise_walk_error):
         directories[:] = sorted(
             name for name in directories if name not in RUST_PRUNED_DIRECTORIES
         )
@@ -141,7 +141,7 @@ def _manifest_paths(checkout: pathlib.Path) -> list[str]:
             (base / name).relative_to(checkout).as_posix()
             for name in files
             if name == CARGO_MANIFEST
-            and not _is_symlink(base / name, OPERATION_SCAN_CARGO)
+            and not is_symlink(base / name, OPERATION_SCAN_CARGO)
         )
     return sorted(found)
 
@@ -190,9 +190,7 @@ def _read_manifest(
         errors.append(f"{relative}: resolves outside the checkout")
         return None
     try:
-        return _Manifest(
-            relative, tomllib.loads(_read_text(path, OPERATION_READ_CARGO))
-        )
+        return _Manifest(relative, tomllib.loads(read_text(path, OPERATION_READ_CARGO)))
     except UnicodeDecodeError as error:
         errors.append(f"{relative}: not UTF-8 text: {error}")
     except tomllib.TOMLDecodeError as error:
@@ -231,13 +229,13 @@ def _rust_files(
         base, OPERATION_SCAN_RUST
     ):
         return
-    for current, directories, files in os.walk(base, onerror=_raise_walk_error):
+    for current, directories, files in os.walk(base, onerror=raise_walk_error):
         directories[:] = sorted(
             name for name in directories if name not in RUST_SOURCE_PRUNED_DIRECTORIES
         )
         for name in sorted(files):
             path = pathlib.Path(current) / name
-            if name.endswith(".rs") and not _is_symlink(path, OPERATION_SCAN_RUST):
+            if name.endswith(".rs") and not is_symlink(path, OPERATION_SCAN_RUST):
                 yield path
 
 
@@ -260,7 +258,7 @@ def _scan_sources(
     for path in _rust_files(checkout, root, root_relative):
         relative = path.relative_to(checkout).as_posix()
         try:
-            text = _read_text(path, OPERATION_SCAN_RUST)
+            text = read_text(path, OPERATION_SCAN_RUST)
         except UnicodeDecodeError:
             unreadable.append(relative)
             continue
@@ -295,7 +293,7 @@ def _crate_facts(
     if has_root:
         try:
             attributes, skip_before = leading_attributes(
-                _read_text(root_path, OPERATION_READ_CRATE_ROOT)
+                read_text(root_path, OPERATION_READ_CRATE_ROOT)
             )
         except UnicodeDecodeError as error:
             root_error = f"not UTF-8 text: {error}"

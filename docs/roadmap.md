@@ -525,6 +525,16 @@ actuators that remediate them. Each check ships as a lint rule package under
   compares the real policy with independent expectations; and an estate run
   over every repository's default branch agrees with the rollout's own
   validator on the clauses they share.
+- [x] Ship the report-only dependency-family rule (DF-001 to DF-003 and DF-006,
+  leynos/concordat#270): relationships the estate has recorded, such as PyO3
+  and its build config, maturin and PyO3, and ortho_config with fluent-bundle,
+  are checked against the Dependabot configuration from facts collected outside
+  policy evaluation. Acceptance: fixtures for a split family, a shadowed group,
+  a renamed bridge, nested and optional manifests, an exact-pin tuple, a
+  reviewed exception and missing evidence (all indeterminate); negative
+  fixtures for unrelated duplicate versions and a pure-Python template; and a
+  pilot over cuprum, femtologging, tei-rapporteur and netsuke. Derived-input
+  equality (DF-004) and bound relaxation (DF-005) are follow-on work.
 - [ ] Ship the Dependabot governance rule packages (DB-001 to DB-004):
   manifest-scan sensor diffing package roots against `dependabot.yml` entries,
   cooldown policy checks (tiered for semver ecosystems, `default-days` for
@@ -641,6 +651,15 @@ the Section 2.1.2 format.
   clippy run is reachable from `make lint`. Acceptance: compliant and
   noncompliant generated fixtures for every check, and unit tests for the Rust
   facts the envelope records.
+- [x] Ship the YAML lint rule package (YL-001 to YL-005), from DF12-101: the
+  `lint` gate runs `yamllint --strict` over the Git-tracked YAML and actionlint
+  bindingly; the estate yamllint base is present verbatim and the local
+  configuration only extends it; `.github/actionlint.yaml` declares the estate
+  runner labels; and CI installs the tools through the pinned
+  `install-yaml-lint` action with no hand-rolled install. Acceptance: compliant
+  and noncompliant generated fixtures for every check, and the estate survey
+  recorded with the rollout. Progress: shipped audit-only as
+  `yaml-lint-baseline`; mutations remain open.
 - [ ] Ship the Rust formatting and linting rule packages (RT-001 to RT-005):
   rustfmt wiring and template-matched configuration, clippy presence with
   `[lints]` entries at the template level or stricter, and Whitaker presence
@@ -662,6 +681,11 @@ the Section 2.1.2 format.
   and direct cargo workflow steps that assign `RUSTFLAGS` restate the fast
   flags. The envelope now carries the `makeutil` report and decoded workflows
   (ADR-003).
+- [x] Ship the Rust toolchain policy rule (RT-022 to RT-027, DF12-102): the
+  `rust-toolchain-policy` package pins the channel exactly, keeps a nightly
+  within a 56-day window, requires a Dependabot `rust-toolchain` entry, and
+  requires a declared MSRV to be exercised by CI. RT-006 stays until RT-023 is
+  live estate-wide, then a separate change retires it.
 - [ ] Ship the remaining Rust toolchain and acceleration rule packages (RT-006,
   RT-007, RT-010, RT-011): nightly pins no older than one year, required
   toolchain components, Polonius-next for application-only repositories, and

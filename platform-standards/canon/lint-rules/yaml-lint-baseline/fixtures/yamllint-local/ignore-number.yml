@@ -1,0 +1,3 @@
+---
+extends: .yamllint-estate.yml
+ignore: 3

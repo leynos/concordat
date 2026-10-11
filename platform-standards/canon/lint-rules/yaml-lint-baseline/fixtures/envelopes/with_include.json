@@ -1,0 +1,183 @@
+{
+  "schema_version": 1,
+  "kind": "policy-input/yaml-lint-baseline",
+  "repository": {
+    "path": ".",
+    "name": null
+  },
+  "applicability": {
+    "yaml_files": true,
+    "workflows": true,
+    "root_makefile": true
+  },
+  "makefile": {
+    "schema_version": 1,
+    "tool": {
+      "name": "makeutil",
+      "version": "0.1.0",
+      "parser": "makefile-lossless",
+      "parser_version": "0.3.40"
+    },
+    "source": {
+      "path": "Makefile",
+      "sha256": "dab4382ff60b6b1e4b24e1f51755430352abf524f8d4475018b84249a1942776",
+      "byte_length": 122
+    },
+    "parse": {
+      "status": "complete",
+      "diagnostics": []
+    },
+    "rules": [
+      {
+        "ordinal": 3,
+        "targets": [
+          ".PHONY"
+        ],
+        "prerequisites": [
+          "lint",
+          "yamllint",
+          "actionlint"
+        ],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [],
+        "location": {
+          "start_byte": 62,
+          "end_byte": 96,
+          "start_line": 4,
+          "start_column": 1,
+          "end_line": 6,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 4,
+        "targets": [
+          "lint"
+        ],
+        "prerequisites": [
+          "yamllint",
+          "actionlint"
+        ],
+        "double_colon": false,
+        "conditions": [],
+        "recipes": [],
+        "location": {
+          "start_byte": 96,
+          "end_byte": 122,
+          "start_line": 6,
+          "start_column": 1,
+          "end_line": 7,
+          "end_column": 1
+        }
+      }
+    ],
+    "variables": [
+      {
+        "ordinal": 1,
+        "name": "YAMLLINT",
+        "operator": "?=",
+        "raw_value": "yamllint",
+        "exported": false,
+        "overridden": false,
+        "define_block": false,
+        "conditions": [],
+        "location": {
+          "start_byte": 16,
+          "end_byte": 37,
+          "start_line": 2,
+          "start_column": 1,
+          "end_line": 3,
+          "end_column": 1
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "ACTIONLINT",
+        "operator": "?=",
+        "raw_value": "actionlint",
+        "exported": false,
+        "overridden": false,
+        "define_block": false,
+        "conditions": [],
+        "location": {
+          "start_byte": 37,
+          "end_byte": 62,
+          "start_line": 3,
+          "start_column": 1,
+          "end_line": 4,
+          "end_column": 1
+        }
+      }
+    ],
+    "includes": [
+      {
+        "ordinal": 0,
+        "raw_path": "lint.mk",
+        "optional": false,
+        "dynamic": false,
+        "conditions": [],
+        "location": {
+          "start_byte": 0,
+          "end_byte": 16,
+          "start_line": 1,
+          "start_column": 1,
+          "end_line": 2,
+          "end_column": 1
+        }
+      }
+    ]
+  },
+  "yamllint_base": {
+    "path": ".yamllint-estate.yml",
+    "sha256": "da747ab7bfd5d335efff5ec5a3c9b963060ca960785bf7ba423f45b9571dd112",
+    "error": null
+  },
+  "yamllint_local": {
+    "path": ".yamllint.yml",
+    "parsed": {
+      "extends": ".yamllint-estate.yml"
+    },
+    "error": null
+  },
+  "alternate_yamllint_configs": [],
+  "actionlint_config": {
+    "path": ".github/actionlint.yaml",
+    "parsed": {
+      "self-hosted-runner": {
+        "labels": [
+          "ubicloud-*"
+        ]
+      }
+    },
+    "error": null
+  },
+  "workflows": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "parsed": {
+        "name": "CI",
+        "on": [
+          "push"
+        ],
+        "jobs": {
+          "lint": {
+            "runs-on": "ubuntu-latest",
+            "steps": [
+              {
+                "uses": "actions/checkout@0000000000000000000000000000000000000000"
+              },
+              {
+                "uses": "leynos/shared-actions/.github/actions/install-yaml-lint@0123456789abcdef0123456789abcdef01234567"
+              },
+              {
+                "run": "make lint"
+              }
+            ]
+          }
+        }
+      },
+      "error": null
+    }
+  ]
+}

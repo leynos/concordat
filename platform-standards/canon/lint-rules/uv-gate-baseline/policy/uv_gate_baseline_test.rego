@@ -217,6 +217,57 @@ test_tool_git_sha_bare_fragment if reported(data.fixtures.tool_git_sha_bare_frag
 
 test_tool_git_sha_with_suffix if reported(data.fixtures.tool_git_sha_with_suffix) == {"UV-006/noncompliant"}
 
+# A tool spec named through a workflow `env:` variable resolves as GitHub does,
+# innermost first, and anything that is not a single literal is indeterminate.
+test_wf_env_job_pinned if reported(data.fixtures.wf_env_job_pinned) == set()
+
+test_wf_env_workflow_level_branch if reported(data.fixtures.wf_env_workflow_level_branch) == {"UV-006/noncompliant"}
+
+test_wf_env_step_overrides_job_bad if reported(data.fixtures.wf_env_step_overrides_job_bad) == {"UV-006/noncompliant"}
+
+test_wf_env_step_overrides_job_good if reported(data.fixtures.wf_env_step_overrides_job_good) == set()
+
+test_wf_env_job_overrides_workflow_good if reported(data.fixtures.wf_env_job_overrides_workflow_good) == set()
+
+test_wf_env_bare_dollar if reported(data.fixtures.wf_env_bare_dollar) == set()
+
+test_wf_env_bare_dollar_at_the_end if reported(data.fixtures.wf_env_bare_dollar_at_the_end) == set()
+
+test_wf_env_name_is_a_prefix if reported(data.fixtures.wf_env_name_is_a_prefix) == {"UV-006/indeterminate"}
+
+test_wf_env_expression_value if reported(data.fixtures.wf_env_expression_value) == {"UV-006/indeterminate"}
+
+test_wf_env_undefined if reported(data.fixtures.wf_env_undefined) == {"UV-006/indeterminate"}
+
+test_wf_env_prefix_collision if reported(data.fixtures.wf_env_prefix_collision) == {"UV-006/indeterminate"}
+
+test_wf_env_nested_value if reported(data.fixtures.wf_env_nested_value) == {"UV-006/indeterminate"}
+
+test_wf_env_nested_after_whitespace if reported(data.fixtures.wf_env_nested_after_whitespace) == {"UV-006/indeterminate"}
+
+test_wf_env_non_string if reported(data.fixtures.wf_env_non_string) == {"UV-006/indeterminate"}
+
+test_action_step_env_pinned if reported(data.fixtures.action_step_env_pinned) == set()
+
+test_action_step_env_branch if reported(data.fixtures.action_step_env_branch) == {"UV-006/noncompliant"}
+
+# `name[extra] @ git+URL@<sha>` is a pin when, and only when, the URL is a full commit.
+test_tool_extras_direct_reference_sha if reported(data.fixtures.tool_extras_direct_reference_sha) == set()
+
+test_tool_extras_direct_reference_fragment if reported(data.fixtures.tool_extras_direct_reference_fragment) == set()
+
+test_tool_extras_direct_reference_double_quoted if reported(data.fixtures.tool_extras_direct_reference_double_quoted) == set()
+
+test_tool_extras_direct_reference_branch if reported(data.fixtures.tool_extras_direct_reference_branch) == {"UV-006/noncompliant"}
+
+test_tool_extras_direct_reference_tag if reported(data.fixtures.tool_extras_direct_reference_tag) == {"UV-006/noncompliant"}
+
+test_tool_extras_direct_reference_short_sha if reported(data.fixtures.tool_extras_direct_reference_short_sha) == {"UV-006/noncompliant"}
+
+test_tool_extras_direct_reference_not_git if reported(data.fixtures.tool_extras_direct_reference_not_git) == {"UV-006/noncompliant"}
+
+test_tool_extras_direct_reference_suffix if reported(data.fixtures.tool_extras_direct_reference_suffix) == {"UV-006/noncompliant"}
+
 # Lines and messages that make a finding usable.
 
 test_bypass_names_the_recipe_line if {
