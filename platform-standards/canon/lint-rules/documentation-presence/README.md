@@ -132,7 +132,21 @@ A single crate sets `[lints.rust] missing_docs = "deny"` itself.
   `$(if ...)` or `$(shell ...)` as the estate's Makefiles have, do not change
   which tool runs. A command reached only through a variable named for clippy
   (`$(CLIPPY_CMD)`), or a line the lexer rejects, is indeterminate. A recorded
-  clippy-gate exception (below) stands in for the recipe line.
+  clippy-gate exception (below) stands in for the recipe line. A recipe command
+  `netsuke build <target>` is followed into the repository's `Netsukefile`, as
+  described next.
+
+  *Netsuke manifests.* The Netsukefile (the root file, or the one named with
+  `-f`, under `-C` when given) is parsed as YAML. The named targets (the
+  manifest's `defaults` when none are named) and everything they reach through
+  `deps` are read, `actions` and `targets` alike, and every entry sharing a
+  name is read, so a `when:`-guarded variant counts. Each `command:` is lexed
+  like a recipe line, including inside `sh -c '<script>'`; `$${CARGO:-cargo}`
+  reads as cargo. A `cargo ... clippy` command found there is a clippy run. A
+  manifest that is missing, outside the checkout or not parseable YAML (a
+  `{% %}` block at top level, for instance), a target it does not define, or a
+  command it cannot lex that mentions clippy makes DG-004 indeterminate.
+  Template tags are not evaluated: `{{ }}` expressions read as single words.
 
 ### The clippy-gate exception
 

@@ -20,13 +20,22 @@ _ASSIGNMENT: typ.Final = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
 _WRAPPERS: typ.Final = frozenset({"env", "time", "nice", "command", "exec"})
 
 
+def _tool_word(reference: str) -> str:
+    """Return the word a Make reference stands for: a known tool or the mark."""
+    lowered = reference.lower()
+    for tool in ("netsuke", "cargo"):
+        if tool in lowered:
+            return f" {tool} "
+    return UNRESOLVED_MARK
+
+
 def blank_references(text: str) -> str:
     """Replace each balanced `$(...)` or `${...}` Make reference with one word.
 
     A reference that names cargo (`$(CARGO)`, or the
     `$(or $(shell command -v cargo), ...)` it expands to when the variable is
-    conditional) stands for the tool and becomes the word `cargo`; any other
-    becomes the unresolved mark.
+    conditional) stands for the tool and becomes the word `cargo`; one that
+    names netsuke becomes `netsuke`; any other becomes the unresolved mark.
 
     Returns
     -------
@@ -45,7 +54,7 @@ def blank_references(text: str) -> str:
             out.append(text[index])
             index += 1
             continue
-        out.append(" cargo " if "cargo" in text[index:end].lower() else UNRESOLVED_MARK)
+        out.append(_tool_word(text[index:end]))
         index = end
     return "".join(out)
 
@@ -54,7 +63,7 @@ def command_start(words: list[str]) -> int:
     """Return the index of the command word after assignments and wrappers."""
     index = 0
     while index < len(words):
-        word = words[index].lstrip("@-+")
+        word = words[index].strip().lstrip("@-+")
         if _ASSIGNMENT.match(word) or word in _WRAPPERS:
             index += 1
         elif word == "rustup" and words[index + 1 : index + 2] == ["run"]:
@@ -143,4 +152,32 @@ def invokes_script(line: str, script: str) -> bool:
             return True
         if name in _INTERPRETERS and spellings & set(words[start + 1 :]):
             return True
+    return False
+
+
+# `cargo` flags that take a value as the next word, so that word is not the subcommand.
+_CARGO_VALUE_FLAGS: typ.Final = frozenset({
+    "-Z",
+    "-C",
+    "--config",
+    "--color",
+    "--manifest-path",
+    "--target-dir",
+})
+
+
+def is_cargo_clippy(words: list[str]) -> bool:
+    """Return whether one simple command is `cargo [flags] clippy ...`."""
+    start = command_start(words)
+    if (
+        start >= len(words)
+        or words[start].strip().lstrip("@-+").rsplit("/", 1)[-1] != "cargo"
+    ):
+        return False
+    arguments = iter(words[start + 1 :])
+    for argument in arguments:
+        if argument in _CARGO_VALUE_FLAGS:
+            next(arguments, None)
+        elif not argument.startswith(("-", "+")):
+            return argument == "clippy"
     return False

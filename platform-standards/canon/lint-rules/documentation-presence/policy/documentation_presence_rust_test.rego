@@ -157,3 +157,29 @@ test_rust_exception_names_no_script_says_so if {
 	some f in rust_findings(data.fixtures.rust_exception_names_no_script)
 	contains(f.msg, "names no script")
 }
+
+# -- DG-004 through Netsuke -----------------------------------------------------------
+
+test_rust_netsuke_clippy if rust_reported(data.fixtures.rust_netsuke_clippy) == set()
+
+test_rust_netsuke_default_target if rust_reported(data.fixtures.rust_netsuke_default_target) == set()
+
+test_rust_netsuke_variant_with_clippy if rust_reported(data.fixtures.rust_netsuke_variant_with_clippy) == set()
+
+test_rust_netsuke_dependency_chain if rust_reported(data.fixtures.rust_netsuke_dependency_chain) == set()
+
+test_rust_netsuke_target_without_clippy if rust_reported(data.fixtures.rust_netsuke_target_without_clippy) == {"DG-004/noncompliant"}
+
+test_rust_netsuke_clippy_only_echoed if rust_reported(data.fixtures.rust_netsuke_clippy_only_echoed) == {"DG-004/noncompliant"}
+
+# A manifest the audit cannot read, or a target it cannot find, is indeterminate.
+test_rust_netsuke_manifest_missing if rust_reported(data.fixtures.rust_netsuke_manifest_missing) == {"DG-004/indeterminate"}
+
+test_rust_netsuke_manifest_unparsable if rust_reported(data.fixtures.rust_netsuke_manifest_unparsable) == {"DG-004/indeterminate"}
+
+test_rust_netsuke_target_undefined if rust_reported(data.fixtures.rust_netsuke_target_undefined) == {"DG-004/indeterminate"}
+
+test_rust_netsuke_problem_is_named if {
+	some f in rust_findings(data.fixtures.rust_netsuke_manifest_unparsable)
+	contains(f.msg, "Netsukefile cannot be parsed")
+}

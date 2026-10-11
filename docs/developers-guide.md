@@ -698,14 +698,17 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   `[lints] workspace = true` resolved against the nearest `[workspace]`, and
   the library root's leading inner attributes and every module-level or
   item-level suppression read by `rust_source` (comments and literals masked
-  first, so attribute-like text is never an attribute). `make_commands` reduces
-  Make references to words and finds command words; `rust_clippy.clippy_runs`
-  lexes the recipe lines in the targets `lint` reaches and records each
-  `cargo ... clippy` command, and `clippy_exception.clippy_exceptions` reads
-  the recorded clippy-gate exception (sections found by `exception_docs`, the
-  scripts they name, and whether each exists, runs clippy and is reached).
-  Rules DG-003 and DG-004 live in `documentation_presence_rust.rego`, beside
-  the Python rules in the same package.
+  first, so attribute-like text is never an attribute).
+  `netsuke_manifest.ManifestReader` follows `netsuke build <target>` into the
+  Netsukefile and reads its commands with the same lexer. `make_commands`
+  reduces Make references to words and finds command words;
+  `rust_clippy.clippy_runs` lexes the recipe lines in the targets `lint`
+  reaches and records each `cargo ... clippy` command, and
+  `clippy_exception.clippy_exceptions` reads the recorded clippy-gate exception
+  (sections found by `exception_docs`, the scripts they name, and whether each
+  exists, runs clippy and is reached). Rules DG-003 and DG-004 live in
+  `documentation_presence_rust.rego`, beside the Python rules in the same
+  package.
 
 - `policy-input/spelling-config-baseline` —
   `spelling_envelope.build_spelling_envelope`. It reuses `markdown_envelope`'s
