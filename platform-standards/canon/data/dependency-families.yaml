@@ -1,0 +1,65 @@
+# Dependency relationships the `dependency-family-contracts` rule checks.
+#
+# Each entry records a relationship that a repository in the estate has
+# declared or documented, not a guess from package names. A relationship
+# applies to a repository only when the repository declares every member. No
+# entry prescribes a version number: `same-group` asks Dependabot to move the
+# members together, and `upper-bound-or-ignore` asks that one member carries a
+# documented ceiling or an `ignore` rule, because a group cannot select
+# mutually compatible latest versions of independently versioned packages.
+# A repository may deliberately stay on an older generation: record an
+# exception in `.concordat` under `dependencies.family_exceptions`, with a
+# rationale and a review trigger.
+schema_version: 1
+relationships:
+  - id: pyo3-build-config-family
+    kind: family
+    members: [pyo3, pyo3-build-config]
+    relation: same-group
+    owner: tei-rapporteur
+    provenance:
+      - tei-rapporteur tei-py/Cargo.toml declares pyo3 and pyo3-build-config at one version
+      - leynos/tei-rapporteur#185 (the 0.29.2 update failed on a source deprecation, not on the family)
+  - id: pyo3-serde-bridge
+    kind: tuple
+    members: [pyo3, serde-pyobject]
+    relation: upper-bound-or-ignore
+    owner: tei-rapporteur
+    provenance:
+      - tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name
+  - id: maturin-pyo3
+    kind: tuple
+    members: [maturin, pyo3]
+    relation: upper-bound-or-ignore
+    owner: cuprum
+    provenance:
+      - cuprum pyproject.toml pins maturin and rust/cuprum-rust builds PyO3 (leynos/cuprum#589)
+      - femtologging pyproject.toml pins maturin[patchelf] and rust_extension/Cargo.toml declares PyO3 0.29.0
+  - id: ortho-config-fluent-bundle
+    kind: type-identity
+    members: [ortho_config, fluent-bundle]
+    relation: same-group
+    owner: netsuke
+    provenance:
+      - netsuke Cargo.toml constrains fluent-bundle to the version ortho_config resolves, or the FluentValue types would differ
+  - id: rustcrypto-digest-family
+    kind: family
+    members: [digest, sha2, sha1, md-5]
+    relation: same-group
+    owner: netsuke
+    provenance:
+      - netsuke Cargo.toml declares digest, sha2, sha1 and md-5 at 0.11 (leynos/netsuke#477, closed)
+  - id: pylint-astroid
+    kind: tuple
+    members: [pylint, astroid]
+    relation: upper-bound-or-ignore
+    owner: cuprum
+    provenance:
+      - cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair
+  - id: pytest-pytest-bdd
+    kind: tuple
+    members: [pytest, pytest-bdd]
+    relation: upper-bound-or-ignore
+    owner: cuprum
+    provenance:
+      - cuprum pyproject.toml constrains pytest below 9.1 until pytest-bdd supports its node-based fixtures (leynos/cuprum#384)

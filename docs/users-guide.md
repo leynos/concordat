@@ -305,6 +305,33 @@ path segment and `**` any number, as in Dependabot. A repository without a
 Dependabot configuration passes, and a configuration that cannot be decoded is
 reported as indeterminate.
 
+`dependency-family-contracts` reports whether the dependency relationships the
+estate has recorded are protected by the Dependabot configuration (report-only):
+
+```shell
+concordat artefact rule run dependency-family-contracts --repo /path/to/checkout
+```
+
+A relationship applies only where the repository declares every member:
+
+- a family or type-identity pair (for example `pyo3` with `pyo3-build-config`)
+  needs one narrow group taking both ahead of the catch-all (DF-001), and not
+  shadowed by an earlier group (DF-003);
+- independently versioned packages (for example maturin with PyO3) need an upper
+  bound or an `ignore` rule on a member (DF-002); an exact pin is not one;
+- a missing configuration, an unreadable manifest or lock, or a Python project
+  outside the root is reported as indeterminate (DF-006).
+
+To keep an older generation deliberately, record an exception in `.concordat`:
+
+```yaml
+dependencies:
+  family_exceptions:
+    - relationship: pyo3-build-config-family
+      rationale: the extension stays on the 0.28 generation
+      review_trigger: review when PyO3 0.30 ships
+```
+
 `main-owned-codescene-coverage` audits the coverage topology (CV-005):
 
 ```shell

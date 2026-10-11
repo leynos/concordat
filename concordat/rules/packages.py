@@ -34,6 +34,11 @@ from .codescene_coverage_envelope import (
 )
 from .dependabot_envelope import ENVELOPE_KIND as DEPENDABOT_ENVELOPE_KIND
 from .dependabot_envelope import DependabotEnvelope, build_dependabot_envelope
+from .dependency_family_envelope import ENVELOPE_KIND as FAMILY_ENVELOPE_KIND
+from .dependency_family_envelope import (
+    DependencyFamilyEnvelope,
+    build_dependency_family_envelope,
+)
 from .documentation_envelope import (
     ENVELOPE_KIND as DOCUMENTATION_ENVELOPE_KIND,
 )
@@ -91,6 +96,7 @@ type RuleEnvelope = (
     | MarkdownEnvelope
     | CoverageEnvelope
     | DependabotEnvelope
+    | DependencyFamilyEnvelope
     | SpellingEnvelope
     | ProvisioningEnvelope
     | DocumentationEnvelope
@@ -374,6 +380,23 @@ def _dependabot_envelope(
     return build_dependabot_envelope(checkout)
 
 
+def _dependency_family_envelope(
+    checkout: pathlib.Path,
+    _parameters: cabc.Mapping[str, object] | None = None,
+) -> DependencyFamilyEnvelope:
+    """Build the dependency-family envelope, ignoring the manifest parameters.
+
+    The relationships come from the estate's versioned data and the exceptions
+    from the repository's `.concordat`, so the rule has no tunables.
+
+    Returns
+    -------
+    DependencyFamilyEnvelope
+        The `policy-input/dependency-family-contracts` document for *checkout*.
+    """
+    return build_dependency_family_envelope(checkout)
+
+
 def _spelling_envelope(
     checkout: pathlib.Path,
     parameters: cabc.Mapping[str, object] | None = None,
@@ -468,6 +491,7 @@ PACKAGE_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     "rust-build-defaults": _build_defaults_envelope,
     "main-owned-codescene-coverage": _coverage_envelope,
     "dependabot-update-shape": _dependabot_envelope,
+    "dependency-family-contracts": _dependency_family_envelope,
     "spelling-config-baseline": _spelling_envelope,
     "uv-gate-baseline": _uv_gate_envelope,
     "documentation-presence": _documentation_envelope,
@@ -483,6 +507,7 @@ INPUT_KIND_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     MARKDOWN_ENVELOPE_KIND: _markdown_envelope,
     COVERAGE_ENVELOPE_KIND: _coverage_envelope,
     DEPENDABOT_ENVELOPE_KIND: _dependabot_envelope,
+    FAMILY_ENVELOPE_KIND: _dependency_family_envelope,
     SPELLING_ENVELOPE_KIND: _spelling_envelope,
     UV_GATE_ENVELOPE_KIND: _uv_gate_envelope,
     DOCUMENTATION_ENVELOPE_KIND: _documentation_envelope,

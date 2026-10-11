@@ -222,3 +222,24 @@ artifacts:
     description: >
       Rule package manifest for the Whitaker provisioning policy.
     sha256: 4dc7fdf2ed2c8c28b3d53bc782f0a0c4b701b11d77aee3fba78501f6c6dd7e97
+  - id: lint-rule-dependency-family-contracts
+    type: opa-policy
+    path: >-
+      platform-standards/canon/lint-rules/dependency-family-contracts/policy/dependency_family_contracts.rego
+    description: >
+      Report-only DF-001 to DF-003 and DF-006 policy checking recorded dependency relationships against Dependabot grouping.
+    sha256: 57cedee4c2c7b03f41735bc2f141b8f852f854cb2f60070c1e512e4b8bb99cf2
+  - id: lint-rule-dependency-family-contracts-manifest
+    type: lint-config
+    path: >-
+      platform-standards/canon/lint-rules/dependency-family-contracts/rule.yaml
+    description: >
+      Rule package manifest for the dependency-family contracts policy.
+    sha256: 45b258c0f47415f3d2ec6dbac478c137025f51e894a2bf04a2ea947c17752432
+  - id: dependency-families-data
+    type: lint-config
+    path: >-
+      platform-standards/canon/data/dependency-families.yaml
+    description: >
+      Versioned relationships between dependencies, with owner and provenance, read by the dependency-family contracts rule.
+    sha256: 2883a7b2a389d58a0736f3ce8f76191ae678b1880134443cb014f4313f81c3f7

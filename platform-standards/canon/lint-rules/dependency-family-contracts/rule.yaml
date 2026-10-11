@@ -1,0 +1,23 @@
+schema_version: 1
+id: dependency-family-contracts
+name: Dependency family contracts
+description: >-
+  Checks that the dependency relationships the estate has recorded
+  (platform-standards/canon/data/dependency-families.yaml) are protected by the
+  repository's Dependabot configuration (DF-001 to DF-003), and that the
+  facts needed to judge them could be established (DF-006). A relationship
+  applies only where the repository declares every member. Family and type
+  identity relationships need one narrow group taking all members ahead of the
+  catch-all; independently versioned tuples need an upper bound or an ignore
+  rule on a member, and an exact pin is not one. A repository may record a
+  reviewed exception in `.concordat`. Report-only: this rule declares no
+  mutations and writes no configuration.
+version: 0.1.0
+sensor:
+  type: conftest
+  input: policy-input/dependency-family-contracts
+  policy: policy/
+  tests:
+    - policy/
+  data:
+    - fixtures/data.json

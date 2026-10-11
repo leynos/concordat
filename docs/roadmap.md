@@ -525,6 +525,16 @@ actuators that remediate them. Each check ships as a lint rule package under
   compares the real policy with independent expectations; and an estate run
   over every repository's default branch agrees with the rollout's own
   validator on the clauses they share.
+- [x] Ship the report-only dependency-family rule (DF-001 to DF-003 and DF-006,
+  leynos/concordat#270): relationships the estate has recorded, such as PyO3
+  and its build config, maturin and PyO3, and ortho_config with fluent-bundle,
+  are checked against the Dependabot configuration from facts collected outside
+  policy evaluation. Acceptance: fixtures for a split family, a shadowed group,
+  a renamed bridge, nested and optional manifests, an exact-pin tuple, a
+  reviewed exception and missing evidence (all indeterminate); negative
+  fixtures for unrelated duplicate versions and a pure-Python template; and a
+  pilot over cuprum, femtologging, tei-rapporteur and netsuke. Derived-input
+  equality (DF-004) and bound relaxation (DF-005) are follow-on work.
 - [ ] Ship the Dependabot governance rule packages (DB-001 to DB-004):
   manifest-scan sensor diffing package roots against `dependabot.yml` entries,
   cooldown policy checks (tiered for semver ecosystems, `default-days` for
