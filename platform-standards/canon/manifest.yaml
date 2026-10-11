@@ -202,7 +202,7 @@ artifacts:
       Audit-only DG-001 and DG-002 policy holding a Python checkout to an exact
       interrogate docstring-coverage gate that `make lint` reaches, at a
       threshold of 100, over every file the repository owns.
-    sha256: c399df4e2149c618eaffb1f77f357947ce2caeddb6b258fdcd60ebdf59620d86
+    sha256: 529692d088f9227437dfbc2ac281280643b7bba2515e035f208ae097d1bf9297
   - id: lint-rule-documentation-presence-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/documentation-presence/rule.yaml

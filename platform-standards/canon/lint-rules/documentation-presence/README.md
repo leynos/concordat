@@ -13,7 +13,7 @@ The sensor is a Conftest/Rego policy evaluated over a
 `policy-input/documentation-presence` envelope built by
 `concordat artefact rule run`. Makefile facts come from the pinned
 `makeutil parse` command; the envelope builder expands the Makefile's
-variables, follows `lint` through its prerequisites and `$(MAKE)` calls, and
+variables, follows `lint` through its prerequisites and `make` commands, and
 records each `interrogate` invocation it finds (paths, threshold, verbose
 level, relaxing flags, whether its recipe guards against `MISSED` rows).
 `pyproject.toml` (or a TOML file named by `--config`) supplies the
@@ -42,7 +42,7 @@ interrogate:
 - **DG-001** (error): a command that `make lint` reaches runs interrogate over
   every Python file the repository owns. Specifically:
   - the root `Makefile` has a `lint` target, and a recipe reachable from it
-    (through prerequisites or `$(MAKE) target`) runs interrogate;
+    (through prerequisites or a `make target` command) runs interrogate;
   - the threshold is at least `required_threshold` (100), from `--fail-under`
     or `fail-under` in the configuration; no threshold is a failure, because
     interrogate's default is 80;
@@ -59,8 +59,12 @@ interrogate:
   decimal, so `--fail-under 100` passes a lone gap in a repository with
   thousands of definitions (cuprum passed with three). The run must print every
   definition (verbose level 2: `-vv`, `-v -v`, or `verbose = 2` in the
-  configuration) and the recipe must fail on any `MISSED` row (a `grep` for
-  `MISSED` in the same target's recipe).
+  configuration) and the recipe must fail on any `MISSED` row. The audit
+  accepts a check that turns a match into a failing status: a negated pipeline
+  (`! ... | grep -q MISSED`),
+  `if ... grep ... MISSED ...; then ...; exit 1; fi`, or
+  `grep ... MISSED ... && exit 1`, in the same target's recipe. A `grep` whose
+  result is ignored (`|| true`, or a bare `grep`) is not a guard.
 - **EN-001** (error, indeterminate): the envelope is not a
   `policy-input/documentation-presence` document at schema version 1.
 

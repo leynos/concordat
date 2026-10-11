@@ -96,6 +96,16 @@ test_verbose_one if reported(data.fixtures.verbose_one) == {"DG-002/noncompliant
 
 test_verbose_split if reported(data.fixtures.verbose_split) == set()
 
+test_gate_named_only_in_echo if reported(data.fixtures.gate_named_only_in_echo) == {"DG-001/noncompliant"}
+
+test_guard_and_exit if reported(data.fixtures.guard_and_exit) == set()
+
+test_guard_negated if reported(data.fixtures.guard_negated) == set()
+
+test_guard_result_ignored if reported(data.fixtures.guard_result_ignored) == {"DG-002/noncompliant"}
+
+test_ignore_config_and_regex if reported(data.fixtures.ignore_config_and_regex) == {"DG-001/noncompliant"}
+
 # A partial scope names each directory it misses, once, with a file to look at.
 test_scope_partial_names_every_directory if {
 	messages := {f.msg | some f in findings(data.fixtures.scope_partial)}
@@ -125,4 +135,11 @@ test_wrong_envelope_is_indeterminate if {
 # The required threshold is a parameter: a lower bar accepts a run at 95.
 test_parameter_lowers_the_bar if {
 	reported(data.fixtures.threshold_low) == set() with data.parameters.required_threshold as 90
+}
+
+# A configuration with a switch and a pattern reports both, in one finding.
+test_ignore_config_and_regex_names_both if {
+	some f in findings(data.fixtures.ignore_config_and_regex)
+	contains(f.msg, "ignore-magic")
+	contains(f.msg, "ignore-regex")
 }

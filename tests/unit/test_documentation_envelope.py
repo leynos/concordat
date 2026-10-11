@@ -227,6 +227,67 @@ def test_a_missed_guard_is_recorded_for_the_whole_recipe(
     assert runs[0]["paths"] == ["pkg"]
 
 
+@pytest.mark.parametrize(
+    ("recipe", "expected"),
+    [
+        ("interrogate -vv -f 100 pkg > r.txt\n\t! grep -q MISSED r.txt\n", True),
+        (
+            "interrogate -vv -f 100 pkg > r.txt\n\tgrep -q MISSED r.txt && exit 1\n",
+            True,
+        ),
+        (
+            (
+                "interrogate -vv -f 100 pkg > r.txt\n"
+                "\tif grep -q '| *MISSED |' r.txt; then echo bad >&2; exit 2; fi\n"
+            ),
+            True,
+        ),
+        ("interrogate -vv -f 100 pkg > r.txt\n\tgrep -q MISSED r.txt || true\n", False),
+        ("interrogate -vv -f 100 pkg > r.txt\n\tgrep -q MISSED r.txt\n", False),
+        (
+            (
+                "interrogate -vv -f 100 pkg > r.txt\n"
+                "\tif grep -q MISSED r.txt; then echo bad; fi\n"
+            ),
+            False,
+        ),
+    ],
+)
+def test_only_a_check_that_fails_on_a_match_is_a_guard(
+    tmp_path: pathlib.Path, recipe: str, *, expected: bool
+) -> None:
+    """A grep whose result is ignored does not make the run exact."""
+    runs = _runs(tmp_path, f"lint:\n\t{recipe}")
+
+    assert runs[0]["guarded"] is expected
+
+
+def test_a_redirection_destination_is_not_a_scanned_path(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`> report.txt` names a file the shell opens, not a path to measure."""
+    runs = _runs(tmp_path, "lint:\n\tinterrogate -f 100 pkg > report.txt 2>&1\n")
+
+    assert runs[0]["paths"] == ["pkg"]
+
+
+def test_a_make_command_in_text_is_not_followed(tmp_path: pathlib.Path) -> None:
+    """Only a `make` in command position reaches its target."""
+    _write(
+        tmp_path,
+        "Makefile",
+        (
+            'lint:\n\t@echo "run make interrogate"\n'
+            "interrogate:\n\tinterrogate -f 100 pkg\n"
+        ),
+    )
+
+    envelope = build_documentation_envelope(tmp_path)
+
+    assert envelope["runs"] == []
+    assert envelope["interrogate_elsewhere"] == ["interrogate"]
+
+
 def test_an_unguarded_run_is_recorded_as_such(tmp_path: pathlib.Path) -> None:
     """A recipe with no grep for MISSED is not exact."""
     runs = _runs(tmp_path, "lint:\n\tinterrogate -vv -f 100 pkg\n")

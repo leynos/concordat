@@ -130,16 +130,17 @@ verbosity(run) := max([run.verbose, configured]) if {
 
 # Relaxing options from the configuration file: any `ignore-*` switch set true
 # or a non-empty `ignore-regex`. Ignoring overloaded stubs is not a relaxation
-# (Ruff forbids a docstring on them), so it is not reported.
+# (Ruff forbids a docstring on them), so it is not reported. One set comprehension
+# covers both, so a file that has both reports both rather than conflicting.
+is_relaxing(_, true)
+
+is_relaxing("ignore-regex", value) if count(value) > 0
+
 config_ignores(run) := {key |
 	some key, value in config_table(run)
 	startswith(key, "ignore-")
 	key != "ignore-overloaded-functions"
-	value == true
-}
-
-config_ignores(run) := {"ignore-regex"} if {
-	count(object.get(config_table(run), "ignore-regex", [])) > 0
+	is_relaxing(key, value)
 }
 
 all_ignores(run) := {flag | some flag in run.ignores} | config_ignores(run)

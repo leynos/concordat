@@ -22,7 +22,7 @@
     {
       "target": "interrogate",
       "line": 11,
-      "command": "@report=\"$$($(INTERROGATE) $(FLAGS) $(INTERROGATE_TARGETS))\";  status=$$?;  printf '%s\\n' \"$$report\";  test \"$$status\" -eq 0 || exit \"$$status\";  if printf '%s\\n' \"$$report\" | grep -q '| *MISSED |'; then exit 1; fi",
+      "command": "@report=\"$$($(INTERROGATE) $(FLAGS) $(INTERROGATE_TARGETS))\"; \\\n  status=$$?; \\\n  printf '%s\\n' \"$$report\"; \\\n  test \"$$status\" -eq 0 || exit \"$$status\"; \\\n  if printf '%s\\n' \"$$report\" | grep -q '| *MISSED |'; then exit 1; fi",
       "resolved": false,
       "paths": [
         "."

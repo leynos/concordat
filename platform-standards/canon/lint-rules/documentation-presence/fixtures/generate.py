@@ -59,30 +59,48 @@ GUARDED_RECIPE: typ.Final = (
 )
 
 
-def makefile(
-    *,
-    flags: str = "-vv --fail-under 100",
-    targets: str = "pkg scripts tests .github/scripts",
-    recipe: str = GUARDED_RECIPE,
-    extra: str = "",
-    lint: str = "lint: interrogate\n\truff check .\n",
-) -> str:
-    """Return a Makefile whose `lint` reaches a guarded interrogate target.
+DEFAULT_LINT: typ.Final = "lint: interrogate\n\truff check .\n"
+
+
+@dataclasses.dataclass(frozen=True)
+class Wiring:
+    """The knobs of the reference Makefile a scenario turns."""
+
+    flags: str = "-vv --fail-under 100"
+    targets: str = "pkg scripts tests .github/scripts"
+    recipe: str = GUARDED_RECIPE
+    extra: str = ""
+    lint: str = DEFAULT_LINT
+
+    def render(self) -> str:
+        """Return the Makefile text: variables, `lint`, then the gate target.
+
+        Returns
+        -------
+        str
+            A Makefile whose `lint` reaches a guarded interrogate target unless
+            the scenario changed that.
+        """
+        return (
+            "INTERROGATE ?= uv tool run --from 'interrogate==1.7.0' interrogate\n"
+            f"INTERROGATE_TARGETS ?= {self.targets}\n"
+            f"FLAGS = {self.flags}\n"
+            f"{self.extra}\n"
+            ".PHONY: lint interrogate\n"
+            f"{self.lint}\n"
+            f"interrogate:\n{self.recipe}"
+        )
+
+
+def makefile(**changes: str) -> str:
+    """Return the reference Makefile with *changes* to its `Wiring` applied.
 
     Returns
     -------
     str
         The Makefile text.
     """
-    return (
-        "INTERROGATE ?= uv tool run --from 'interrogate==1.7.0' interrogate\n"
-        f"INTERROGATE_TARGETS ?= {targets}\n"
-        f"FLAGS = {flags}\n"
-        f"{extra}\n"
-        ".PHONY: lint interrogate\n"
-        f"{lint}\n"
-        f"interrogate:\n{recipe}"
-    )
+    return dataclasses.replace(Wiring(), **changes).render()
 
 
 def pyproject(table: str = "") -> str:
@@ -149,6 +167,11 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "gate_unresolved": Scenario({
         "Makefile": makefile(extra="INTERROGATE = $(shell find-interrogate)\n")
     }),
+    "gate_named_only_in_echo": Scenario({
+        "Makefile": makefile(
+            lint='lint:\n\t@echo "run make interrogate"\n\truff check .\n'
+        )
+    }),
     "gate_variable_twice": Scenario({
         "Makefile": makefile(extra="FLAGS = -vv --fail-under 100\n")
     }),
@@ -178,6 +201,9 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
         "Makefile": makefile(flags="-vv --fail-under 100 --ignore-regex '^main$$'")
     }),
     "ignore_config": Scenario({"pyproject.toml": pyproject("ignore-magic = true\n")}),
+    "ignore_config_and_regex": Scenario({
+        "pyproject.toml": pyproject('ignore-magic = true\nignore-regex = ["^main$"]\n')
+    }),
     "ignore_config_false": Scenario({
         "pyproject.toml": pyproject("ignore-magic = false\nignore-regex = []\n")
     }),
@@ -245,6 +271,30 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     }),
     "verbose_one": Scenario({"Makefile": makefile(flags="-v --fail-under 100")}),
     "verbose_split": Scenario({"Makefile": makefile(flags="-v -v --fail-under 100")}),
+    "guard_result_ignored": Scenario({
+        "Makefile": makefile(
+            recipe=(
+                "\t$(INTERROGATE) $(FLAGS) $(INTERROGATE_TARGETS) > report.txt\n"
+                "\tgrep -q MISSED report.txt || true\n"
+            )
+        )
+    }),
+    "guard_negated": Scenario({
+        "Makefile": makefile(
+            recipe=(
+                "\t$(INTERROGATE) $(FLAGS) $(INTERROGATE_TARGETS) > report.txt\n"
+                "\t! grep -q MISSED report.txt\n"
+            )
+        )
+    }),
+    "guard_and_exit": Scenario({
+        "Makefile": makefile(
+            recipe=(
+                "\t$(INTERROGATE) $(FLAGS) $(INTERROGATE_TARGETS) > report.txt\n"
+                "\tgrep -q MISSED report.txt && exit 1; true\n"
+            )
+        )
+    }),
     "unguarded": Scenario({
         "Makefile": makefile(
             recipe="\t$(INTERROGATE) $(FLAGS) $(INTERROGATE_TARGETS)\n"
