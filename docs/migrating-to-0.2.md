@@ -13,7 +13,10 @@ findings to zero:
 - **RT-022**: pin `rust-toolchain.toml` to a release (`1.93.1`) or a dated
   nightly (`nightly-2026-09-20`), not `stable` or `nightly`.
 - **RT-023**: keep a pinned nightly within 56 days. Let Dependabot move it
-  rather than bumping by hand.
+  rather than bumping by hand. The window is the rule's `window_days` parameter
+  (56 by default); a repository that needs another value sets it in the rule's
+  manifest parameters, together with the accepted Dependabot intervals
+  (`dependabot_intervals`, `daily` and `weekly` by default).
 - **RT-024**: add a `rust-toolchain` entry to `.github/dependabot.yml`, daily
   or weekly, in the same minor-and-patch group shape as the cargo entry.
 - **RT-025**: declare `rust-version` on each publishable library crate, or mark

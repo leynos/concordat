@@ -525,9 +525,14 @@ def test_the_resolver_passes_the_exception_parameters_through(
         _EXCEPTION_TEXT.format(heading="Pinned on purpose"),
     )
     monkeypatch.setattr(packages, "today_provider", lambda: TODAY)
-    resolve = packages.PACKAGE_ENVELOPE_BUILDERS["rust-toolchain-policy"]
+    monkeypatch.setattr(
+        packages, "rule_parameters", lambda _rule_dir: _CUSTOM_PARAMETERS
+    )
 
-    envelope = typ.cast("dict[str, typ.Any]", resolve(tmp_path, _CUSTOM_PARAMETERS))
+    envelope = typ.cast(
+        "dict[str, typ.Any]",
+        packages.default_envelope_builder("rust-toolchain-policy", tmp_path),
+    )
 
     sections = envelope["exceptions"][0]["sections"]
     assert envelope["exceptions"][0]["path"] == "docs/toolchain.md", envelope
@@ -596,6 +601,10 @@ def test_an_explicit_lib_table_needs_no_probe(tmp_path: pathlib.Path) -> None:
             id="shared-actions-setup-rust-input",
         ),
         pytest.param("uses: dtolnay/rust-toolchain@1.85", id="dtolnay-ref"),
+        pytest.param(
+            "uses: leynos/shared-actions/.github/actions/setup-rust@1.85",
+            id="shared-actions-setup-rust-ref",
+        ),
         pytest.param(
             "uses: actions-rust-lang/setup-rust-toolchain@1.85",
             id="setup-rust-toolchain-ref",
