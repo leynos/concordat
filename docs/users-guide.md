@@ -808,12 +808,22 @@ For a checkout that owns Rust library crates the same package also reports:
   generated items, and an `expect` without a reason fails. Any module-level or
   item-level `allow` or `expect` of `missing_docs` in the library's sources
   also needs a reason.
-- **DG-004**: a clippy run is reachable from `make lint`.
+- **DG-004**: a clippy run is reachable from `make lint`, or a recorded
+  clippy-gate exception names a wrapper script that is. Record the exception in
+  a `docs/developers-guide.md` section whose heading contains "Clippy gate" and
+  whose body names the script in backticks; the script must exist, mention
+  clippy as a cargo subcommand, and be named by a recipe `make lint` reaches.
 
 A variable the audit cannot resolve to one value, a configuration file that is
 missing or not TOML, or a `lint` target it cannot follow makes the affected
 check indeterminate rather than passing it. The package README carries the
 reference Makefile wiring.
+
+#### Upgrading to rule 0.3.0
+
+Version 0.3.0 adds the clippy-gate exception: a repository whose `make lint`
+reaches clippy only through a wrapper script can record why, and name the
+script, to satisfy DG-004. Nothing changes for a repository without the record.
 
 #### Upgrading to rule 0.2.0
 

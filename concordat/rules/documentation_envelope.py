@@ -40,6 +40,7 @@ import re
 import tomllib
 import typing as typ
 
+from .clippy_exception import ClippyException, clippy_exceptions
 from .documentation_rust import RustFacts, build_rust_facts
 from .interrogate_invocation import (
     InterrogateRun,
@@ -62,7 +63,7 @@ from .markdown_envelope import (
     resolved_root,
     within_checkout,
 )
-from .rust_clippy import ClippyRun, clippy_runs
+from .rust_clippy import ClippyRun, clippy_runs, reachable_lines
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -130,6 +131,7 @@ class DocumentationEnvelope(typ.TypedDict):
     configs: list[InterrogateConfig]
     python_files: list[str]
     clippy_runs: list[ClippyRun]
+    clippy_exceptions: list[ClippyException]
     rust: RustFacts
 
 
@@ -154,6 +156,7 @@ class MakefileAnalysis:
     elsewhere: list[str] = dataclasses.field(default_factory=list)
     runs: list[InterrogateRun] = dataclasses.field(default_factory=list)
     clippy: list[ClippyRun] = dataclasses.field(default_factory=list)
+    lint_lines: list[str] = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -349,6 +352,7 @@ def _analyse_makefile(
         elsewhere=_elsewhere(index, walk.names),
         runs=_interrogate_runs(index, walk.names, values),
         clippy=clippy_runs(index, walk.names, values),
+        lint_lines=reachable_lines(index, walk.names, values),
     )
 
 
@@ -506,5 +510,6 @@ def build_documentation_envelope(
         "configs": configs,
         "python_files": python_files,
         "clippy_runs": analysis.clippy,
+        "clippy_exceptions": clippy_exceptions(checkout, root, analysis.lint_lines),
         "rust": rust,
     }

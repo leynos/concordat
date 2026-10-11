@@ -123,6 +123,30 @@ def _run_on_line(target: str, line: int, expanded: str) -> ClippyRun | None:
     }
 
 
+def reachable_lines(
+    index: cabc.Mapping[str, cabc.Sequence[typ.Any]],
+    reachable: list[str],
+    values: cabc.Mapping[str, str],
+) -> list[str]:
+    """Return the expanded text of every recipe line in a reachable target.
+
+    The exception record uses these to prove that a script it names is really
+    run by `make lint`: the script's path has to appear in one of them.
+
+    Returns
+    -------
+    list[str]
+        The expanded recipe lines, Make references that could not be settled
+        left as text.
+    """
+    return [
+        shown(expand(text, values).text)
+        for target in reachable
+        for rule in index[target]
+        for _line, text in rule.recipes
+    ]
+
+
 def clippy_runs(
     index: cabc.Mapping[str, cabc.Sequence[typ.Any]],
     reachable: list[str],

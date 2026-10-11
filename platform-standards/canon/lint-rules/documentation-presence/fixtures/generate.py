@@ -176,6 +176,48 @@ def rust_scenario(files: cabc.Mapping[str, str | None]) -> Scenario:
     })
 
 
+EXCEPTION_MAKEFILE: typ.Final = (
+    ".PHONY: lint\nLANES ?= scripts/lint_lanes.sh\nlint:\n\tsh $(LANES)\n"
+)
+LANES_SCRIPT: typ.Final = (
+    "#!/bin/sh\n# Run clippy once per feature lane.\n"
+    "cargo clippy --workspace --features lane-a -- -D warnings\n"
+)
+
+
+def exception_guide(body: str) -> str:
+    """Return a developers' guide holding a clippy-gate exception section.
+
+    Returns
+    -------
+    str
+        The Markdown text.
+    """
+    return f"# Developers' guide\n\n## Clippy gate exception\n\n{body}\n"
+
+
+def exception_scenario(
+    guide_body: str,
+    *,
+    script: str | None = LANES_SCRIPT,
+    makefile: str = EXCEPTION_MAKEFILE,
+) -> Scenario:
+    """Return a Rust scenario whose lint reaches clippy only through a script.
+
+    Returns
+    -------
+    Scenario
+        A deny-compliant crate, *makefile*, an optional lane script and a guide.
+    """
+    return rust_scenario({
+        "Cargo.toml": crate_manifest('[lints.rust]\nmissing_docs = "deny"\n'),
+        "src/lib.rs": LIB_ROOT,
+        "Makefile": makefile,
+        "scripts/lint_lanes.sh": script,
+        "docs/developers-guide.md": exception_guide(guide_body),
+    })
+
+
 SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "compliant": Scenario(),
     "not_applicable": Scenario({
@@ -517,6 +559,36 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
         "Makefile": (
             ".PHONY: lint\nlint:\n"
             '\tRUSTFLAGS="-D warnings$(if $(X),-Zthreads=8)" cargo clippy\n'
+        ),
+    }),
+    # DG-004 exception: a recorded wrapper script stands in for a clippy recipe line.
+    "rust_exception_valid": exception_scenario(
+        "Clippy runs through `scripts/lint_lanes.sh`: the PyO3 lanes need a "
+        "toolchain that `cargo clippy` in a recipe cannot select."
+    ),
+    "rust_exception_script_missing": exception_scenario(
+        "Clippy runs through `scripts/other_lanes.sh` for the PyO3 lanes.",
+    ),
+    "rust_exception_script_without_clippy": exception_scenario(
+        "Clippy runs through `scripts/lint_lanes.sh` for the PyO3 lanes.",
+        script="#!/bin/sh\ncargo fmt --check\n",
+    ),
+    "rust_exception_script_not_reached": exception_scenario(
+        "Clippy runs through `scripts/lint_lanes.sh` for the PyO3 lanes.",
+        makefile=".PHONY: lint\nlint:\n\tcargo fmt --check\n",
+    ),
+    "rust_exception_names_no_script": exception_scenario(
+        "Clippy runs through a wrapper because of the PyO3 lanes.",
+    ),
+    "rust_exception_path_escape": exception_scenario(
+        "Clippy runs through `../lint_lanes.sh` for the PyO3 lanes.",
+    ),
+    "rust_exception_unneeded": rust_scenario({
+        "Cargo.toml": crate_manifest('[lints.rust]\nmissing_docs = "deny"\n'),
+        "src/lib.rs": LIB_ROOT,
+        "Makefile": CLIPPY_MAKEFILE,
+        "docs/developers-guide.md": exception_guide(
+            "Clippy runs through `scripts/gone.py`."
         ),
     }),
     "rust_and_python_compliant": Scenario({

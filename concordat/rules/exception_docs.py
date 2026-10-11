@@ -90,6 +90,38 @@ def find_exception_sections(
     return [_scan_document(checkout, relative, keyword) for relative in documents]
 
 
+def section_bodies(
+    checkout: pathlib.Path,
+    relative: str,
+    keyword: str,
+) -> list[tuple[str, int, str]]:
+    """Return `(heading, line, body text)` for each section naming *keyword*.
+
+    A document that is absent or unreadable yields no sections; a caller that
+    must tell absence from a refusal reads :func:`find_exception_sections`.
+
+    Returns
+    -------
+    list[tuple[str, int, str]]
+        The heading text, its one-based line and the section's body.
+    """
+    path = checkout / relative
+    probe = probe_file(path)
+    if probe.read_error is not None or not probe.present:
+        return []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError):
+        return []
+    headings = list(extract_headings(lines))
+    folded = keyword.casefold()
+    return [
+        (heading.text, heading.line, "\n".join(_section_body(lines, headings, index)))
+        for index, heading in enumerate(headings)
+        if folded in heading.text.casefold()
+    ]
+
+
 def _scan_document(
     checkout: pathlib.Path,
     relative: str,

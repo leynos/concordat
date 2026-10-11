@@ -61,6 +61,7 @@
       "resolved": true
     }
   ],
+  "clippy_exceptions": [],
   "rust": {
     "crates": [
       {

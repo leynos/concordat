@@ -20,6 +20,7 @@
   "configs": [],
   "python_files": [],
   "clippy_runs": [],
+  "clippy_exceptions": [],
   "rust": {
     "crates": [
       {

@@ -2558,6 +2558,15 @@ required, so `clippy::missing_docs_in_private_items` is not used.
   (reason check inverted, suppression finding disabled, `allow` no longer
   flagged, the `cfg_attr` condition ignored, the clippy requirement dropped)
   and each mutation fails at least one fixture test.
+- **Exception (DG-004):** a wrapper script that runs clippy is text the audit
+  cannot read, so the rule follows the estate's exception idiom (the
+  toolchain-policy record): a section of `docs/developers-guide.md` whose
+  heading contains "Clippy gate" and whose body names the script in backticks.
+  The builder records, for each named script, whether it exists inside the
+  checkout, whether it names clippy as a cargo subcommand, and whether a recipe
+  `lint` reaches mentions its path; the policy accepts the record only while
+  one script passes all three. This verifies that the record is true of the
+  repository, not what the script does with clippy.
 - **Reachability (DG-004):** the lint fails builds only where a gate compiles
   the crate, so the rule requires a clippy run reachable from `lint`; a plain
   `cargo check` in `lint` would also compile it but the estate's gates are
