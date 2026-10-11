@@ -561,7 +561,8 @@
       "applicability": {
         "root_makefile": true,
         "python_files": true,
-        "pyproject": true
+        "pyproject": true,
+        "rust_library": false
       },
       "makefile_path": "Makefile",
       "lint_target": true,
@@ -604,7 +605,12 @@
         "pkg/core.py",
         "scripts/tool.py",
         "tests/test_core.py"
-      ]
+      ],
+      "clippy_runs": [],
+      "rust": {
+        "crates": [],
+        "errors": []
+      }
     },
     "gate_variable_twice": {
       "schema_version": 1,
