@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import pathlib
+import re
+import tempfile
 import typing as typ
 
 import pytest
@@ -17,9 +20,6 @@ from concordat.rules.rust_source import (
     mask_literals,
     suppressions_in,
 )
-
-if typ.TYPE_CHECKING:
-    import pathlib
 
 LIB_MANIFEST: typ.Final = '[package]\nname = "demo"\nversion = "0.1.0"\n'
 
@@ -401,3 +401,82 @@ def test_code_after_a_raw_string_is_still_scanned() -> None:
     source = 'const S: &str = r#"x"#;\n#[allow(missing_docs)]\nmod m;\n'
 
     assert suppressions_in(source) == [(2, "allow", False)]
+
+
+_REAL_SUPPRESSIONS: typ.Final = {
+    "#[allow(missing_docs)]\n": ("allow", False),
+    "#![allow(missing_docs)]\n": ("allow", False),
+    "#[expect(missing_docs)]\n": ("expect", False),
+    '#[expect(missing_docs, reason = "generated")]\n': ("expect", True),
+    "#[cfg_attr(test, allow(missing_docs))]\n": ("allow", False),
+}
+_DECOYS: typ.Final = (
+    "// #[allow(missing_docs)]\n",
+    "/* #[allow(missing_docs)] */\n",
+    'const S: &str = "#[allow(missing_docs)]";\n',
+    'const R: &str = r#"#[allow(missing_docs)]"#;\n',
+    "/// #[expect(missing_docs)]\n",
+    "fn f<'a>(x: &'a str) {}\n",
+    "let c = '#';\n",
+    "#[allow(dead_code)]\n",
+)
+
+
+@given(
+    st.lists(
+        st.one_of(
+            st.sampled_from(sorted(_REAL_SUPPRESSIONS)),
+            st.sampled_from(_DECOYS),
+        ),
+        max_size=12,
+    )
+)
+def test_suppressions_are_exactly_the_real_attributes(lines: list[str]) -> None:
+    """Whatever surrounds them, only real attributes are reported, on their lines."""
+    expected = [
+        (number, *_REAL_SUPPRESSIONS[line])
+        for number, line in enumerate(lines, start=1)
+        if line in _REAL_SUPPRESSIONS
+    ]
+
+    assert suppressions_in("".join(lines)) == expected
+
+
+_CARGO_PREFIXES: typ.Final = (
+    "cargo",
+    "$(CARGO)",
+    "RUSTFLAGS=-Dwarnings cargo",
+    "env FOO=1 cargo",
+    "rustup run nightly cargo",
+    "cargo +nightly",
+)
+_CLIPPY_REAL: typ.Final = st.builds(
+    lambda prefix, flags: f"{prefix} {flags} clippy --workspace".replace("  ", " "),
+    st.sampled_from(_CARGO_PREFIXES),
+    st.sampled_from(["", "--locked", "-Z unstable-options"]),
+)
+_CLIPPY_DECOY: typ.Final = st.sampled_from([
+    "echo cargo clippy",
+    "rustup component add clippy",
+    "touch clippy",
+    "cargo build --features clippy",
+    "cargo fmt --check",
+    'test -x "$$(command -v cargo-clippy)"',
+    "make clippy",
+])
+
+
+@given(st.lists(st.one_of(_CLIPPY_REAL, _CLIPPY_DECOY), min_size=1, max_size=6))
+def test_clippy_runs_are_exactly_the_cargo_clippy_commands(commands: list[str]) -> None:
+    """Each recipe line is a run if and only if it is a real `cargo clippy`."""
+    expected = [
+        bool(re.search(r"(^| )clippy --workspace$", command)) for command in commands
+    ]
+    makefile = "CARGO ?= cargo\n.PHONY: lint\nlint:\n" + "".join(
+        f"\t{command}\n" for command in commands
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        _write(pathlib.Path(tmp), "Makefile", makefile)
+        runs = build_documentation_envelope(pathlib.Path(tmp))["clippy_runs"]
+
+    assert [run["resolved"] for run in runs] == [flag for flag in expected if flag]
