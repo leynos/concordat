@@ -268,6 +268,7 @@ def test_an_undeclared_nested_cargo_manifest_is_a_problem(
     _write(tmp_path, "rust/Cargo.toml", _MEMBER)
     _write(tmp_path, "target/debug/Cargo.toml", _MEMBER)
     _write(tmp_path, ".cargo/Cargo.toml", _MEMBER)
+    _write(tmp_path, "vendor/serde/Cargo.toml", _MEMBER)
 
     envelope = build_dependency_family_envelope(tmp_path)
 

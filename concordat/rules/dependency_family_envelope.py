@@ -459,7 +459,14 @@ def _python_requirements(
     return found
 
 
-_SKIPPED_DIRECTORIES = frozenset({"node_modules", "target", "venv", "build", "dist"})
+_SKIPPED_DIRECTORIES = frozenset({
+    "node_modules",
+    "target",
+    "venv",
+    "build",
+    "dist",
+    "vendor",
+})
 
 
 def _nested_files(checkout: pathlib.Path, name: str) -> list[pathlib.Path]:
