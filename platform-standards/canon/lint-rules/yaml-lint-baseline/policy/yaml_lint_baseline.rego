@@ -964,7 +964,7 @@ without_quoted_text(script) := regex.replace(
 without_comments(script) := regex.replace(script, `(?m)(^|[[:space:]])#.*$`, "${1}")
 
 lint_command_pattern := sprintf(
-	`(?m)(^|[;&(])[[:space:]]*(%s)*make(([[:space:]]+[^[:space:];|&()\n]+)*)[[:space:]]+lint(([[:space:]]+([^[:space:];|&()\n]+|[0-9]*>&[0-9]+))*)[[:space:]]*(&&|$)`,
+	`(?m)(^|[;&(])[[:space:]]*(%s)*([^[:space:];|&()\n]*/)?make(([[:space:]]+[^[:space:];|&()\n]+)*)[[:space:]]+lint(([[:space:]]+([^[:space:];|&()\n]+|[0-9]*>&[0-9]+))*)[[:space:]]*(&&|$)`,
 	[env_assignment_prefix],
 )
 

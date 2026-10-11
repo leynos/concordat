@@ -60,6 +60,7 @@ _STRICT_SPELLINGS: typ.Final = ("--strict", "-s", "")
 _INVOCATIONS: typ.Final = (
     # (shell prefix of the make command, runs the gate)
     ("make lint", True),
+    ("/usr/bin/make lint", True),
     ("make -j4 check-fmt lint", True),
     ("CI=1 make lint", True),
     ("make -n lint", False),

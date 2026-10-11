@@ -60,10 +60,10 @@ repository root, as the Makefile's recipes do.
   every label in `runner_labels` (`ubicloud-*` by default) under
   `self-hosted-runner.labels`. Applies when the checkout has workflows.
 - **YL-005** (error): every enabled CI step that runs `make lint` (in command
-  position, not quoted text or a comment, not a dry run, and without
-  `continue-on-error` or a trailing `|| true`) has an earlier enabled step in
-  the same job using `installer_action`, pinned to a full commit SHA; some job
-  runs `make lint` at all; no enabled `run:` step matches a
+  position, path-qualified or not, not quoted text or a comment, not a dry run,
+  and without `continue-on-error` or a trailing `|| true`) has an earlier
+  enabled step in the same job using `installer_action`, pinned to a full
+  commit SHA; some job runs `make lint` at all; no enabled `run:` step matches a
   `hand_rolled_patterns` entry (a `uv tool install yamllint`, an actionlint
   download, an `apt install shellcheck`); and no step uses a `lint_actions`
   entry. A job that calls a reusable workflow leaves the absence of a lint job

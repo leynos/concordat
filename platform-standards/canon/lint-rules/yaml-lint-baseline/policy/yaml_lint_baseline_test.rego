@@ -233,6 +233,12 @@ test_ci_lint_disabled if {
   }
 }
 
+# A path-qualified make is still make.
+test_ci_make_path if {
+  findings := policy.deny with input as data.fixtures.ci_make_path
+  count(findings) == 0
+}
+
 # A workflow that cannot be decoded is indeterminate beside a clean one.
 test_ci_malformed if {
   findings := policy.deny with input as data.fixtures.ci_malformed

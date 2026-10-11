@@ -117,6 +117,7 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "version_probe": Scenario(workflows={"ci.yml": "version-probe"}),
     "config_file_local": Scenario(makefile="config-file-local"),
     "ci_env_prefix": Scenario(workflows={"ci.yml": "env-prefix"}),
+    "ci_make_path": Scenario(workflows={"ci.yml": "make-path"}),
     "ci_chained": Scenario(workflows={"ci.yml": "chained"}),
     "ci_multi_line": Scenario(workflows={"ci.yml": "multi-line"}),
     "ci_redirected": Scenario(workflows={"ci.yml": "redirected"}),
