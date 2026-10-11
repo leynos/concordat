@@ -151,3 +151,15 @@ def test_the_vendored_test_copy_is_the_canonical_helper() -> None:
     )
 
     assert hashlib.sha256(copy.read_bytes()).hexdigest() in accepted
+
+
+def test_every_released_canon_digest_stays_listed() -> None:
+    """Dropping a version would fail every repository that still vendors it."""
+    manifest = YAML(typ="safe").load(
+        (_PACKAGE_DIR / "rule.yaml").read_text(encoding="utf-8")
+    )
+    digests = manifest["parameters"]["defaults"]["gate_digests"]
+
+    assert set(digests) >= {"0.1.0", "0.2.0"}
+    assert digests["0.1.0"].startswith("cc8dc5df")
+    assert digests["0.2.0"].startswith("1aee1670")
