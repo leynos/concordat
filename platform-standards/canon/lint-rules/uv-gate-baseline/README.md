@@ -69,13 +69,13 @@ below.
   `uv tool run`): a tag routed through the helper is refused, because the
   helper itself rejects it. A Git requirement may carry an environment marker
   after the commit (`; python_version < '3.13'`). A spec that names a variable
-  the policy cannot resolve to one value is indeterminate.
-  In a workflow or composite action, `${NAME}` and `$NAME` in a step's `run`
-  text resolve from the `env:` of the workflow, the job and the step, innermost
-  winning, as GitHub resolves them. Only a literal string value counts: an
-  expression (`${{ ... }}`), a value that is not a string, a name defined
-  nowhere (a variable set through `$GITHUB_ENV`, say) and a value that itself
-  names another variable all stay unresolved, hence indeterminate.
+  the policy cannot resolve to one value is indeterminate. In a workflow or
+  composite action, `${NAME}` and `$NAME` in a step's `run` text resolve from
+  the `env:` of the workflow, the job and the step, innermost winning, as
+  GitHub resolves them. Only a literal string value counts: an expression
+  (`${{ ... }}`), a value that is not a string, a name defined nowhere (a
+  variable set through `$GITHUB_ENV`, say) and a value that itself names
+  another variable all stay unresolved, hence indeterminate.
 - **UV-007** (error): a Git dependency in `pyproject.toml` (a requirement with
   `git+`, or a `[tool.uv.sources]` Git entry) is pinned to a full commit. A tag
   or a branch can move. A published wheel (any non-Git requirement) needs no

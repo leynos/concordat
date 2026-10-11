@@ -673,10 +673,10 @@ it, a `uv.lock`, or the helper) and reports:
   `git+URL@<full commit SHA>`, optionally followed by a fragment such as
   `#subdirectory=x` (written `\#` in a Make variable's value, which Make turns
   into `#`). A short SHA, a branch, a suffix after the SHA, or a `\#` in a
-  recipe line is not a pin. A variable in a workflow step is resolved from the `env:` of the
-  workflow, job and step (innermost wins); one it cannot resolve to a literal is
-  indeterminate. typos-config-builder is also accepted at a release
-  tag when it is run directly with `uvx`, because the spelling baseline
+  recipe line is not a pin. A variable in a workflow step is resolved from the
+  `env:` of the workflow, job and step (innermost wins); one it cannot resolve
+  to a literal is indeterminate. typos-config-builder is also accepted at a
+  release tag when it is run directly with `uvx`, because the spelling baseline
   requires that form and the helper refuses a Git spec that is not a commit.
 - **UV-007**: Git dependencies in `pyproject.toml` are pinned to a full commit.
 
