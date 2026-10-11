@@ -279,6 +279,12 @@ def test_a_redirection_destination_is_not_a_scanned_path(
         ("uvx --from interrogate==1.7.0 interrogate -f 100 pkg", 1),
         ("uv run --with interrogate --python 3.14 interrogate -f 100 pkg", 1),
         ("python3 -m interrogate -f 100 pkg", 1),
+        (
+            "UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools uv tool run --from i interrogate pkg",
+            1,
+        ),
+        ("env X=1 uv run interrogate -f 100 pkg", 1),
+        ("X=1 true interrogate -f 100 pkg", 0),
         ("true interrogate -f 100 pkg", 0),
         ("echo interrogate -f 100 pkg", 0),
         ("uv run true interrogate -f 100 pkg", 0),
@@ -398,3 +404,18 @@ def test_the_package_registers_its_builder() -> None:
     """The rule id and the envelope kind both resolve to this builder."""
     assert RULE_ID in packages.PACKAGE_ENVELOPE_BUILDERS
     assert ENVELOPE_KIND in packages.INPUT_KIND_ENVELOPE_BUILDERS
+
+
+def test_a_make_command_behind_an_environment_prefix_is_followed(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`X=1 make target` reaches the target like a bare `make target`."""
+    _write(
+        tmp_path,
+        "Makefile",
+        "lint:\n\tX=1 $(MAKE) interrogate\ninterrogate:\n\tinterrogate -f 100 pkg\n",
+    )
+
+    envelope = build_documentation_envelope(tmp_path)
+
+    assert [run["target"] for run in envelope["runs"]] == ["interrogate"]

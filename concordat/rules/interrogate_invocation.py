@@ -80,6 +80,7 @@ LAUNCHER_VALUE_FLAGS: typ.Final = frozenset({
     "--directory",
 })
 
+_ASSIGNMENT: typ.Final = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
 _NAMES_TOOL: typ.Final = re.compile(r"(?<![\w-])interrogate(?![\w-])")
 _UNRESOLVED_TOOL: typ.Final = re.compile(
     r"\$[({][^)}\s]*interrogate[^)}\s]*[)}]", re.IGNORECASE
@@ -321,9 +322,29 @@ def unresolved_run(line: RecipeLine, text: str) -> InterrogateRun:
     }
 
 
-def _run_in_segment(line: RecipeLine, words: list[str]) -> InterrogateRun | None:
+def command_words(words: list[str]) -> list[str]:
+    """Return a simple command's words without its leading environment prefix.
+
+    `UV_CACHE_DIR=.uv-cache uv tool run ...` and `env X=1 uv run ...` run the
+    command after the assignments, so those words do not decide what it is.
+
+    Returns
+    -------
+    list[str]
+        The words from the command itself, or an empty list when none remain.
+    """
+    start = 0
+    while start < len(words) and (
+        _ASSIGNMENT.match(words[start].lstrip("@-+")) or words[start] == "env"
+    ):
+        start += 1
+    return words[start:]
+
+
+def _run_in_segment(line: RecipeLine, raw_words: list[str]) -> InterrogateRun | None:
     """Return the run a simple command makes, or ``None`` if it runs no tool."""
-    if words[0].lstrip("@-+") in NON_EXECUTING:
+    words = command_words(raw_words)
+    if not words or words[0].lstrip("@-+") in NON_EXECUTING:
         return None
     for index in range(len(words)):
         if _is_tool_word(words, index):

@@ -71,6 +71,7 @@ class Wiring:
     recipe: str = GUARDED_RECIPE
     extra: str = ""
     lint: str = DEFAULT_LINT
+    tool: str = "uv tool run --from 'interrogate==1.7.0' interrogate"
 
     def render(self) -> str:
         """Return the Makefile text: variables, `lint`, then the gate target.
@@ -82,7 +83,7 @@ class Wiring:
             the scenario changed that.
         """
         return (
-            "INTERROGATE ?= uv tool run --from 'interrogate==1.7.0' interrogate\n"
+            f"INTERROGATE ?= {self.tool}\n"
             f"INTERROGATE_TARGETS ?= {self.targets}\n"
             f"FLAGS = {self.flags}\n"
             f"{self.extra}\n"
@@ -170,6 +171,14 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "gate_named_only_in_echo": Scenario({
         "Makefile": makefile(
             lint='lint:\n\t@echo "run make interrogate"\n\truff check .\n'
+        )
+    }),
+    "gate_behind_environment_prefix": Scenario({
+        "Makefile": makefile(
+            tool=(
+                "UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools "
+                "uv tool run --from 'interrogate==1.7.0' interrogate"
+            )
         )
     }),
     "gate_variable_twice": Scenario({

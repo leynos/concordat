@@ -36,6 +36,7 @@ import typing as typ
 from .interrogate_invocation import (
     InterrogateRun,
     RecipeLine,
+    command_words,
     has_missed_guard,
     lex_segments,
     runs_in,
@@ -195,7 +196,11 @@ def _make_goals(text: str) -> Successors:
     segments = lex_segments(text)
     if segments is None:
         return Successors([], is_resolved=not re.search(r"\bmake\b", text))
-    commands = [words for words in segments if words[0].lstrip("@-+") == "make"]
+    commands = [
+        words
+        for words in map(command_words, segments)
+        if words and words[0].lstrip("@-+") == "make"
+    ]
     goals = [goal for words in commands for goal in _goals(words[1:])]
     named = [goal for goal in goals if UNRESOLVED_MARK not in goal]
     # `make -C dir target` runs another Makefile, whose `interrogate` is not
