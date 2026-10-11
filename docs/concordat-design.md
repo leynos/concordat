@@ -2567,9 +2567,10 @@ required, so `clippy::missing_docs_in_private_items` is not used.
   command in a shell script, or cargo and clippy as string literals in any
   other script), and whether a command in a recipe `lint` reaches runs it (as
   the command, or as an argument of an interpreter, not merely naming it); the
-  policy accepts the record only while one script passes all three. This
-  verifies that the record is true of the repository, not what the script does
-  with clippy.
+  policy accepts the record only while one script passes all three. A guide the
+  audit cannot read is carried as an error and makes DG-004 indeterminate; an
+  absent guide records nothing. This verifies that the record is true of the
+  repository, not what the script does with clippy.
 - **Reachability (DG-004):** the lint fails builds only where a gate compiles
   the crate, so the rule requires a clippy run reachable from `lint`; a plain
   `cargo check` in `lint` would also compile it but the estate's gates are

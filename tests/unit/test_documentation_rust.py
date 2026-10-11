@@ -397,7 +397,8 @@ def test_masking_never_adds_attributes(source: str) -> None:
     """
     masked = mask_literals(source)
 
-    assert masked.count("#[allow") <= source.count("#[allow")
+    assert masked.count("#[") <= source.count("#[")
+    assert masked.count("#![") <= source.count("#![")
 
 
 def test_code_after_a_raw_string_is_still_scanned() -> None:

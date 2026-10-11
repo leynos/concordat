@@ -40,7 +40,7 @@ import re
 import tomllib
 import typing as typ
 
-from .clippy_exception import ClippyException, clippy_exceptions
+from .clippy_exception import ClippyExceptions, clippy_exceptions
 from .documentation_rust import RustFacts, build_rust_facts
 from .interrogate_invocation import (
     InterrogateRun,
@@ -131,7 +131,7 @@ class DocumentationEnvelope(typ.TypedDict):
     configs: list[InterrogateConfig]
     python_files: list[str]
     clippy_runs: list[ClippyRun]
-    clippy_exceptions: list[ClippyException]
+    clippy_exceptions: ClippyExceptions
     rust: RustFacts
 
 

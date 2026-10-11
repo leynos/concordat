@@ -210,7 +210,9 @@ clippy_unresolved := [run | some run in object.get(input, "clippy_runs", []); no
 # while a named script exists in the checkout, mentions clippy as a cargo
 # subcommand, and is reached from a recipe `lint` reaches. The audit cannot see
 # inside the script, so it checks no more than that.
-exceptions := object.get(input, "clippy_exceptions", [])
+exceptions := object.get(object.get(input, "clippy_exceptions", {}), "records", [])
+
+exception_errors := object.get(object.get(input, "clippy_exceptions", {}), "errors", [])
 
 valid_exception_scripts := [script |
 	some exception in exceptions
@@ -233,6 +235,18 @@ script_problem(script) := "is not run by any command in a recipe that `make lint
 	script.exists
 	script.runs_clippy
 	not script.reached
+}
+
+deny contains f if {
+	rust_in_scope
+	count(rust_crates) > 0
+	count(clippy_resolved) == 0
+	not has_valid_exception
+	some error in exception_errors
+	f := crate_finding(
+		"DG-004", "indeterminate", "docs/developers-guide.md",
+		sprintf("the document that would record a clippy-gate exception cannot be read, so the audit cannot tell whether one exists: %s", [error]),
+	)
 }
 
 deny contains f if {

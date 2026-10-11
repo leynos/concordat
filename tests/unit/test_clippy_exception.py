@@ -5,6 +5,8 @@ from __future__ import annotations
 import typing as typ
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
 from concordat.errors import OperationalRuleError
 from concordat.rules.clippy_exception import (
@@ -13,7 +15,7 @@ from concordat.rules.clippy_exception import (
     clippy_exceptions,
 )
 from concordat.rules.documentation_envelope import build_documentation_envelope
-from concordat.rules.exception_docs import section_bodies
+from concordat.rules.exception_docs import sections_in_text
 from concordat.rules.rust_clippy import invokes_script
 
 if typ.TYPE_CHECKING:
@@ -32,7 +34,7 @@ def _write(root: pathlib.Path, relative: str, text: str) -> None:
 def _exceptions(root: pathlib.Path) -> list[dict[str, typ.Any]]:
     return typ.cast(
         "list[dict[str, typ.Any]]",
-        build_documentation_envelope(root)["clippy_exceptions"],
+        build_documentation_envelope(root)["clippy_exceptions"]["records"],
     )
 
 
@@ -53,27 +55,21 @@ def test_script_candidates_are_the_backticked_paths(
     assert _candidate_paths(body) == expected
 
 
-def test_a_section_is_found_by_a_case_insensitive_heading_keyword(
-    tmp_path: pathlib.Path,
-) -> None:
+def test_a_section_is_found_by_a_case_insensitive_heading_keyword() -> None:
     """The keyword matches anywhere in a heading, ignoring case."""
-    _write(
-        tmp_path, GUIDE, "# Guide\n\n### The clippy GATE exception\n\nBody `a.sh`.\n"
-    )
+    text = "# Guide\n\n### The clippy GATE exception\n\nBody `a.sh`.\n"
 
-    (section,) = section_bodies(tmp_path, GUIDE, EXCEPTION_KEYWORD)
+    (section,) = sections_in_text(text, EXCEPTION_KEYWORD)
 
     assert section[0] == "The clippy GATE exception"
     assert "`a.sh`" in section[2]
 
 
-def test_a_heading_inside_a_fenced_block_is_not_a_section(
-    tmp_path: pathlib.Path,
-) -> None:
+def test_a_heading_inside_a_fenced_block_is_not_a_section() -> None:
     """A fenced example of a heading does not record an exception."""
-    _write(tmp_path, GUIDE, "# Guide\n\n```md\n## Clippy gate\n```\n")
+    text = "# Guide\n\n```md\n## Clippy gate\n```\n"
 
-    assert section_bodies(tmp_path, GUIDE, EXCEPTION_KEYWORD) == []
+    assert sections_in_text(text, EXCEPTION_KEYWORD) == []
 
 
 def test_the_exception_facts_record_existence_clippy_and_reach(
@@ -162,7 +158,10 @@ def test_no_section_means_no_exception(tmp_path: pathlib.Path) -> None:
     """A guide without the heading records nothing."""
     _write(tmp_path, GUIDE, "# Guide\n\n## Linting\n\nNothing special.\n")
 
-    assert clippy_exceptions(tmp_path, tmp_path.resolve(), []) == []
+    assert clippy_exceptions(tmp_path, tmp_path.resolve(), []) == {
+        "records": [],
+        "errors": [],
+    }
 
 
 @pytest.mark.parametrize(
@@ -213,3 +212,49 @@ def test_a_guide_that_is_a_link_to_a_file_outside_the_checkout_is_refused(
 
     with pytest.raises(OperationalRuleError, match="outside the checkout"):
         _exceptions(checkout)
+
+
+def test_a_guide_that_is_not_utf8_is_an_error_not_an_absence(
+    tmp_path: pathlib.Path,
+) -> None:
+    """An unreadable guide must not read as "no exception recorded"."""
+    (tmp_path / "docs").mkdir()
+    (tmp_path / GUIDE).write_bytes(b"\xff\xfe## Clippy gate")
+
+    result = build_documentation_envelope(tmp_path)["clippy_exceptions"]
+
+    assert result["records"] == []
+    assert len(result["errors"]) == 1
+    assert result["errors"][0].startswith(f"{GUIDE}: not UTF-8 text")
+
+
+def test_an_absent_guide_is_neither_a_record_nor_an_error(
+    tmp_path: pathlib.Path,
+) -> None:
+    """No guide means no exception was recorded, which is an answer."""
+    assert build_documentation_envelope(tmp_path)["clippy_exceptions"] == {
+        "records": [],
+        "errors": [],
+    }
+
+
+_HEADINGS: typ.Final = st.sampled_from([
+    "## Clippy gate exception\n",
+    "### the CLIPPY GATE\n",
+    "## Linting\n",
+    "# Guide\n",
+    "Some prose.\n",
+])
+
+
+@given(st.lists(st.tuples(_HEADINGS, st.booleans()), max_size=10))
+def test_only_matching_headings_outside_fences_are_sections(
+    pieces: list[tuple[str, bool]],
+) -> None:
+    """A heading counts when it names the keyword and sits outside a fence."""
+    text = "".join(f"```\n{h}```\n" if fenced else h for h, fenced in pieces)
+    expected = sum(
+        1 for h, fenced in pieces if not fenced and "clippy gate" in h.casefold()
+    )
+
+    assert len(sections_in_text(text, EXCEPTION_KEYWORD)) == expected

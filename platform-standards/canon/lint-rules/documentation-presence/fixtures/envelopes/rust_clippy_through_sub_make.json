@@ -30,7 +30,10 @@
       "resolved": true
     }
   ],
-  "clippy_exceptions": [],
+  "clippy_exceptions": {
+    "records": [],
+    "errors": []
+  },
   "rust": {
     "crates": [
       {

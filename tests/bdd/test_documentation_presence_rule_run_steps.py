@@ -172,6 +172,53 @@ def given_rust_no_clippy(python_checkout: pathlib.Path) -> None:
     )
 
 
+_WRAPPER_MAKEFILE: typ.Final = ".PHONY: lint\nlint:\n\tsh scripts/lanes.sh\n"
+_RECORD: typ.Final = (
+    "# Guide\n\n## Clippy gate exception\n\n"
+    "Clippy runs through `scripts/lanes.sh` because of the PyO3 lanes.\n"
+)
+
+
+def _write_wrapper_crate(
+    checkout: pathlib.Path, *, makefile: str, record: str | None
+) -> None:
+    """Write a denying crate whose clippy runs only through a wrapper script."""
+    _write_rust(
+        checkout,
+        manifest=_PACKAGE + '\n[lints.rust]\nmissing_docs = "deny"\n',
+        lint=makefile,
+    )
+    (checkout / "scripts").mkdir()
+    (checkout / "scripts" / "lanes.sh").write_text(
+        "#!/bin/sh\ncargo clippy --workspace -- -D warnings\n", encoding="utf-8"
+    )
+    if record is not None:
+        (checkout / "docs").mkdir()
+        (checkout / "docs" / "developers-guide.md").write_text(record, encoding="utf-8")
+
+
+@given("a Rust crate whose lint runs clippy only through a recorded wrapper script")
+def given_recorded_wrapper(python_checkout: pathlib.Path) -> None:
+    """Record the wrapper in the guide and run it from lint."""
+    _write_wrapper_crate(python_checkout, makefile=_WRAPPER_MAKEFILE, record=_RECORD)
+
+
+@given("a Rust crate whose recorded wrapper script is never run by lint")
+def given_unreached_wrapper(python_checkout: pathlib.Path) -> None:
+    """Record the wrapper, but let lint merely print its path."""
+    _write_wrapper_crate(
+        python_checkout,
+        makefile=".PHONY: lint\nlint:\n\techo scripts/lanes.sh\n",
+        record=_RECORD,
+    )
+
+
+@given("a Rust crate whose lint runs a wrapper script with no recorded exception")
+def given_unrecorded_wrapper(python_checkout: pathlib.Path) -> None:
+    """Run the wrapper from lint, with no record explaining it."""
+    _write_wrapper_crate(python_checkout, makefile=_WRAPPER_MAKEFILE, record=None)
+
+
 @when("I audit the checkout for its documentation gate")
 def when_audit_checkout(
     python_checkout: pathlib.Path,

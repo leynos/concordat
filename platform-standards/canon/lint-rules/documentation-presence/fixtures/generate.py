@@ -120,7 +120,9 @@ class Scenario:
         these over it; a value of ``None`` removes the file.
     """
 
-    files: cabc.Mapping[str, str | None] = dataclasses.field(default_factory=dict)
+    files: cabc.Mapping[str, str | bytes | None] = dataclasses.field(
+        default_factory=dict
+    )
 
 
 BASE: typ.Final = {
@@ -160,7 +162,7 @@ def crate_manifest(lints: str = "") -> str:
     return f"{package}\n{lints}" if lints else package
 
 
-def rust_scenario(files: cabc.Mapping[str, str | None]) -> Scenario:
+def rust_scenario(files: cabc.Mapping[str, str | bytes | None]) -> Scenario:
     """Return a Rust-only scenario laid over the clippy Makefile.
 
     Returns
@@ -581,6 +583,12 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
         "Clippy runs through `scripts/lint_lanes.sh` for the PyO3 lanes.",
         makefile=".PHONY: lint\nlint:\n\techo scripts/lint_lanes.sh\n",
     ),
+    "rust_exception_guide_unreadable": rust_scenario({
+        "Cargo.toml": crate_manifest('[lints.rust]\nmissing_docs = "deny"\n'),
+        "src/lib.rs": LIB_ROOT,
+        "Makefile": ".PHONY: lint\nlint:\n\tcargo fmt --check\n",
+        "docs/developers-guide.md": b"\xff\xfe## Clippy gate",
+    }),
     "rust_exception_names_no_script": exception_scenario(
         "Clippy runs through a wrapper because of the PyO3 lanes.",
     ),
@@ -619,7 +627,10 @@ def lay_out(scenario: Scenario, checkout: Path) -> None:
             continue
         path = checkout / relative
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
+        if isinstance(text, bytes):
+            path.write_bytes(text)
+        else:
+            path.write_text(text, encoding="utf-8")
 
 
 def build_fixture_envelope(scenario: Scenario) -> DocumentationEnvelope:

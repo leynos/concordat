@@ -22,21 +22,24 @@
   "configs": [],
   "python_files": [],
   "clippy_runs": [],
-  "clippy_exceptions": [
-    {
-      "path": "docs/developers-guide.md",
-      "heading": "Clippy gate exception",
-      "line": 3,
-      "scripts": [
-        {
-          "path": "scripts/lint_lanes.sh",
-          "exists": true,
-          "runs_clippy": true,
-          "reached": true
-        }
-      ]
-    }
-  ],
+  "clippy_exceptions": {
+    "records": [
+      {
+        "path": "docs/developers-guide.md",
+        "heading": "Clippy gate exception",
+        "line": 3,
+        "scripts": [
+          {
+            "path": "scripts/lint_lanes.sh",
+            "exists": true,
+            "runs_clippy": true,
+            "reached": true
+          }
+        ]
+      }
+    ],
+    "errors": []
+  },
   "rust": {
     "crates": [
       {

@@ -54,3 +54,21 @@ Feature: documentation presence rule run
     When I audit the checkout for its documentation gate
     Then the audit exit status is 1
     And the audit output reports "DG-004" "reaches no clippy run"
+
+  Scenario: a clippy gate run through a recorded wrapper script is clean
+    Given a Rust crate whose lint runs clippy only through a recorded wrapper script
+    When I audit the checkout for its documentation gate
+    Then the audit exit status is 0
+    And the audit table reports zero findings
+
+  Scenario: a recorded wrapper script that no recipe runs is reported
+    Given a Rust crate whose recorded wrapper script is never run by lint
+    When I audit the checkout for its documentation gate
+    Then the audit exit status is 1
+    And the audit output reports "DG-004" "not run by any command"
+
+  Scenario: a clippy gate wrapper without a record is reported
+    Given a Rust crate whose lint runs a wrapper script with no recorded exception
+    When I audit the checkout for its documentation gate
+    Then the audit exit status is 1
+    And the audit output reports "DG-004" "no recorded clippy-gate exception"

@@ -124,6 +124,9 @@ test_rust_exception_script_not_reached if rust_reported(data.fixtures.rust_excep
 
 test_rust_exception_script_only_echoed if rust_reported(data.fixtures.rust_exception_script_only_echoed) == {"DG-004/noncompliant"}
 
+# A guide the audit cannot read is indeterminate, never "no exception recorded".
+test_rust_exception_guide_unreadable if rust_reported(data.fixtures.rust_exception_guide_unreadable) == {"DG-004/indeterminate", "DG-004/noncompliant"}
+
 test_rust_exception_names_no_script if rust_reported(data.fixtures.rust_exception_names_no_script) == {"DG-004/noncompliant"}
 
 test_rust_exception_path_escape if rust_reported(data.fixtures.rust_exception_path_escape) == {"DG-004/noncompliant"}

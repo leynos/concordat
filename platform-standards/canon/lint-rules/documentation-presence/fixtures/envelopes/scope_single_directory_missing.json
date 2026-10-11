@@ -53,7 +53,10 @@
     "tests/test_core.py"
   ],
   "clippy_runs": [],
-  "clippy_exceptions": [],
+  "clippy_exceptions": {
+    "records": [],
+    "errors": []
+  },
   "rust": {
     "crates": [],
     "errors": []

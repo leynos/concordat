@@ -54,7 +54,7 @@ def test_an_empty_checkout_carries_no_facts(tmp_path: pathlib.Path) -> None:
     }
     assert envelope["rust"] == {"crates": [], "errors": []}
     assert envelope["clippy_runs"] == []
-    assert envelope["clippy_exceptions"] == []
+    assert envelope["clippy_exceptions"] == {"records": [], "errors": []}
 
 
 def test_python_files_are_listed_outside_the_pruned_trees(

@@ -19,7 +19,7 @@ from __future__ import annotations
 import re
 import typing as typ
 
-from .exception_docs import section_bodies
+from .exception_docs import sections_in_text
 from .fs_probe import probe_file
 from .interrogate_invocation import lex_segments
 from .markdown_envelope import read_text, within_checkout
@@ -58,6 +58,13 @@ class ExceptionScript(typ.TypedDict):
     exists: bool
     runs_clippy: bool
     reached: bool
+
+
+class ClippyExceptions(typ.TypedDict):
+    """The recorded exceptions, and the documents the audit could not read."""
+
+    records: list[ClippyException]
+    errors: list[str]
 
 
 class ClippyException(typ.TypedDict):
@@ -130,32 +137,64 @@ def _script_fact(
     }
 
 
+def _read_document(
+    checkout: pathlib.Path, root: pathlib.Path, document: str
+) -> tuple[str | None, str | None]:
+    """Return the guide's text, or an error string when it cannot be read.
+
+    An absent guide is neither: it simply records no exception. A guide the
+    filesystem refuses to describe, or that is not UTF-8, is an error, so the
+    policy reports it instead of reading it as "no exception recorded".
+
+    Returns
+    -------
+    tuple[str | None, str | None]
+        The text (``None`` when there is none to read) and the error, if any.
+    """
+    path = checkout / document
+    within_checkout(root, path, OPERATION_READ_SCRIPT)
+    probe = probe_file(path)
+    if probe.read_error is not None:
+        return None, f"{document}: {probe.read_error}"
+    if not probe.present:
+        return None, None
+    try:
+        return read_text(path, OPERATION_READ_SCRIPT), None
+    except UnicodeDecodeError as error:
+        return None, f"{document}: not UTF-8 text: {error}"
+
+
 def clippy_exceptions(
     checkout: pathlib.Path,
     root: pathlib.Path,
     lint_lines: cabc.Sequence[str],
-) -> list[ClippyException]:
+) -> ClippyExceptions:
     """Return the recorded clippy-gate exceptions with their scripts' facts.
 
     *lint_lines* are the expanded recipe lines of the targets `lint` reaches; a
-    script counts as reached when its path appears in one of them.
+    script counts as reached when a command on one of them runs it. A guide that
+    resolves outside the checkout is refused by the containment guard; one that
+    cannot be read is carried in ``errors``.
 
     Returns
     -------
-    list[ClippyException]
-        One entry per exception section, in document order.
+    ClippyExceptions
+        One record per exception section, in document order, and the read errors.
     """
-    return [
-        {
-            "path": document,
-            "heading": heading,
-            "line": line,
-            "scripts": [
-                _script_fact(checkout, root, relative, lint_lines)
-                for relative in _candidate_paths(body)
-            ],
-        }
-        for document in EXCEPTION_DOCUMENTS
-        if within_checkout(root, checkout / document, OPERATION_READ_SCRIPT)
-        for heading, line, body in section_bodies(checkout, document, EXCEPTION_KEYWORD)
-    ]
+    records: list[ClippyException] = []
+    errors: list[str] = []
+    for document in EXCEPTION_DOCUMENTS:
+        text, error = _read_document(checkout, root, document)
+        if error is not None:
+            errors.append(error)
+        for heading, line, body in sections_in_text(text or "", EXCEPTION_KEYWORD):
+            records.append({
+                "path": document,
+                "heading": heading,
+                "line": line,
+                "scripts": [
+                    _script_fact(checkout, root, relative, lint_lines)
+                    for relative in _candidate_paths(body)
+                ],
+            })
+    return {"records": records, "errors": errors}

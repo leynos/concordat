@@ -29,7 +29,10 @@
       "resolved": false
     }
   ],
-  "clippy_exceptions": [],
+  "clippy_exceptions": {
+    "records": [],
+    "errors": []
+  },
   "rust": {
     "crates": [
       {
