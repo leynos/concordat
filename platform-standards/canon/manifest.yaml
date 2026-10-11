@@ -301,4 +301,4 @@ artifacts:
       platform-standards/canon/data/dependency-families.yaml
     description: >
       Versioned relationships between dependencies, with owner and provenance, read by the dependency-family contracts rule.
-    sha256: ec68e8326073f1dec9c51d5917e844398a41e60f94e5171d2774538aad4887d0
+    sha256: 09efa4573629a18bb4be7e74ed36b8f47c145c983b8259d208accb223eba7cc0

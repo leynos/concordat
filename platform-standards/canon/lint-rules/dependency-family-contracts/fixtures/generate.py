@@ -56,6 +56,14 @@ NARROW_FAMILY = """\
       pyo3:
         patterns: ['pyo3', 'pyo3-build-config']
 """
+BRIDGE_PUBLISHED = """\
+      pyo3:
+        patterns: ['pyo3', 'pyo3-build-config', 'serde-pyobject']
+"""
+BRIDGE_ALIAS = """\
+      pyo3:
+        patterns: ['pyo3', 'pyo3-build-config', 'pyo3-serde']
+"""
 CATCH_ALL = """\
       minor-and-patch:
         patterns: ['*']
@@ -75,12 +83,12 @@ def dependabot(
 
 
 def base(
-    groups: str = NARROW_FAMILY + CATCH_ALL, *, cargo: str = CARGO
+    groups: str = NARROW_FAMILY + CATCH_ALL, *, cargo: str = CARGO, lock: str = LOCK
 ) -> dict[str, str]:
     """Return a Rust checkout whose PyO3 family is covered by *groups*."""
     return {
         "Cargo.toml": cargo,
-        "Cargo.lock": LOCK,
+        "Cargo.lock": lock,
         ".github/dependabot.yml": dependabot(groups),
     }
 
@@ -97,6 +105,7 @@ def with_files(files: dict[str, str], **overrides: str | None) -> dict[str, str]
     return merged
 
 
+SERDE_LOCK = LOCK + '\n[[package]]\nname = "serde-pyobject"\nversion = "0.8.0"\n'
 SERDE_CARGO = CARGO + 'pyo3-serde = { package = "serde-pyobject", version = "0.8.0" }\n'
 MATURIN_PYPROJECT = """\
 [project]
@@ -221,26 +230,30 @@ SCENARIOS: dict[str, dict[str, str]] = {
         ),
     },
     # A renamed bridge: Dependabot matches the published name, not the alias.
-    "renamed_bridge_unprotected": base(NARROW_FAMILY + CATCH_ALL, cargo=SERDE_CARGO),
-    "renamed_bridge_ignored_by_published_name": {
-        **base(NARROW_FAMILY + CATCH_ALL, cargo=SERDE_CARGO),
-        ".github/dependabot.yml": dependabot(
-            NARROW_FAMILY + CATCH_ALL,
-            extra=SERDE_IGNORE.format(name="serde-pyobject"),
-        ),
-    },
-    "renamed_bridge_ignored_by_alias": {
-        **base(NARROW_FAMILY + CATCH_ALL, cargo=SERDE_CARGO),
-        ".github/dependabot.yml": dependabot(
-            NARROW_FAMILY + CATCH_ALL,
-            extra=SERDE_IGNORE.format(name="pyo3-serde"),
-        ),
-    },
+    "renamed_bridge_unprotected": base(
+        NARROW_FAMILY + CATCH_ALL, cargo=SERDE_CARGO, lock=SERDE_LOCK
+    ),
+    "renamed_bridge_grouped_by_published_name": base(
+        BRIDGE_PUBLISHED + CATCH_ALL, cargo=SERDE_CARGO, lock=SERDE_LOCK
+    ),
+    "renamed_bridge_grouped_by_alias": base(
+        BRIDGE_ALIAS + CATCH_ALL, cargo=SERDE_CARGO, lock=SERDE_LOCK
+    ),
     # maturin (Python) and PyO3 (Rust): an exact pin is not protection.
     "maturin_exact_pin": {
         **base(),
         "pyproject.toml": MATURIN_PYPROJECT.format(spec="==1.13.3"),
         ".github/dependabot.yml": dependabot(NARROW_FAMILY + CATCH_ALL)
+        + PIP_ENTRY
+        + CATCH_ALL,
+    },
+    # An ignore rule on a member of an independently versioned tuple protects it.
+    "maturin_pyo3_ignored": {
+        **base(),
+        "pyproject.toml": MATURIN_PYPROJECT.format(spec="==1.13.3"),
+        ".github/dependabot.yml": dependabot(
+            NARROW_FAMILY + CATCH_ALL, extra=SERDE_IGNORE.format(name="pyo3")
+        )
         + PIP_ENTRY
         + CATCH_ALL,
     },

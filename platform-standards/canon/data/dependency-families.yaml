@@ -21,12 +21,13 @@ relationships:
       - tei-rapporteur tei-py/Cargo.toml declares pyo3 and pyo3-build-config at one version
       - leynos/tei-rapporteur#185 (the 0.29.2 update failed on a source deprecation, not on the family)
   - id: pyo3-serde-bridge
-    kind: tuple
+    kind: type-identity
     members: [pyo3, serde-pyobject]
-    relation: upper-bound-or-ignore
+    relation: same-group
     owner: tei-rapporteur
     provenance:
       - tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name
+      - serde-pyobject converts to and from pyo3 types, so an ignore rule would freeze the bridge and let a PyO3 bump arrive alone; the two move together
   - id: maturin-pyo3
     kind: tuple
     members: [maturin, pyo3]
