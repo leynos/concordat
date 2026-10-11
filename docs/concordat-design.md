@@ -1809,6 +1809,11 @@ the dependency-pin actionability checks.
 | PD-011       | `.gitignore` ignores `.typos-oxendict-base.json` and `.typos-oxendict-base.toml`, the builder's untracked cache.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Prose and Documentation Quality | Conftest (`spelling-config-baseline`)                               | error                | 2                        |
 | PD-012       | `typos.local.toml` exists and declares `schema = 1`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Prose and Documentation Quality | Conftest (`spelling-config-baseline`)                               | error                | 2                        |
 | PD-013       | `AGENTS.md` carries exactly one spelling block between the typos-config-builder markers, matching the builder's published `docs/agents-md-spelling.md` for the pinned release with whitespace normalized, and no duplicate spelling guidance outside it.                                                                                                                                                                                                                                                                                                                                                                            | Prose and Documentation Quality | Conftest (`spelling-config-baseline`)                               | error                | 2                        |
+| YL-001       | A recipe reachable from `lint` runs `yamllint --strict` over a `git ls-files` list naming `*.yml` and `*.yaml`, bindingly, with no `-d`, `--config-data`, or `--no-warnings`.                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Quality-Gate Integrity          | Conftest (`yaml-lint-baseline`)                                     | error                | 2                        |
+| YL-002       | A recipe reachable from `lint` runs actionlint bindingly, without an empty `-shellcheck=` that switches off the script analysis.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Quality-Gate Integrity          | Conftest (`yaml-lint-baseline`)                                     | error                | 2                        |
+| YL-003       | `.yamllint-estate.yml` is the canonical estate base (by digest), `.yamllint.yml` extends it and sets only `extends` and `ignore`, and neither `.yamllint` nor `.yamllint.yaml` shadows it.                                                                                                                                                                                                                                                                                                                                                                                                                                          | Quality-Gate Integrity          | Conftest (`yaml-lint-baseline`)                                     | error                | 2                        |
+| YL-004       | `.github/actionlint.yaml` (or `.yml`) declares the estate runner labels (`ubicloud-*`) under `self-hosted-runner.labels`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Quality-Gate Integrity          | Conftest (`yaml-lint-baseline`)                                     | error                | 2                        |
+| YL-005       | Every CI job that runs `make lint` first uses the pinned `install-yaml-lint` action (full commit SHA), some job does, and no step provisions yamllint, actionlint, or shellcheck by hand or lints through a third-party action.                                                                                                                                                                                                                                                                                                                                                                                                     | Quality-Gate Integrity          | Conftest (`yaml-lint-baseline`)                                     | error                | 2                        |
 | SP-001       | The Open Source Security Foundation Scorecard must achieve a minimum score of 7.0.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Security Posture                | Open Source Security Foundation Scorecard                           | warning              | 1                        |
 | LG-001       | The `docs/library-users-guide.md` file must match the canonical version from the consumed library tag.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | File and Content Presence       | Python/Content Check                                                | error                | 4                        |
 | QG-002       | Whitaker is provisioned only through `leynos/shared-actions/.github/actions/install-whitaker`, pinned to a revision listed in the rule as descending from the change that made the action carry the install rules. No workflow, composite action, Makefile or script installs, downloads or runs `whitaker-installer`, `cargo-dylint` or `dylint-link` by another route. Whitaker itself is exempt as the producer, and `leynos/weaver` `.github/workflows/ci.yml` is exempt until leynos/whitaker#311 is fixed.                                                                                                                    | Quality-Gate Integrity          | OPA/Conftest (`whitaker-provisioning`)                              | error                | 4                        |
@@ -1826,6 +1831,8 @@ the dependency-pin actionability checks.
 | UV-007       | Git dependencies in `pyproject.toml` are pinned to a full commit.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Quality-Gate Integrity          | Conftest (`uv-gate-baseline`)                                       | error                | 2                        |
 | DG-001       | A command `make lint` reaches runs interrogate at a threshold of at least 100 over every Python file the repository owns (package, tests, scripts, benchmarks, GitHub Actions code), with no relaxing flag and no exclusion beyond test data and vendored trees.                                                                                                                                                                                                                                                                                                                                                                    | Quality-Gate Integrity          | Conftest (`documentation-presence`)                                 | error                | 2                        |
 | DG-002       | The interrogate run is exact: verbose level 2 and a recipe that fails on any `MISSED` row, because interrogate rounds its percentage to one decimal.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Quality-Gate Integrity          | Conftest (`documentation-presence`)                                 | error                | 2                        |
+| DG-003       | Every library crate the repository owns ends with `missing_docs` at `deny` or `forbid`: by `[lints.rust]` in its manifest, by the workspace table it opts in to with `[lints] workspace = true`, or by a crate-root attribute (which wins). A reasoned crate-root `#![expect(missing_docs)]` is the one accepted exception, for generated items.                                                                                                                                                                                                                                                                                    | Quality-Gate Integrity          | Conftest (`documentation-presence`)                                 | error                | 2                        |
+| DG-004       | A clippy invocation is reachable from `make lint`, so the gate compiles the crates under the `missing_docs` level.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Quality-Gate Integrity          | Conftest (`documentation-presence`)                                 | error                | 2                        |
 | CV-001       | Superseded by CV-005, which states this requirement and the publisher clauses it depends on as one rule. Retained for the identifier's history; audit CV-005 instead.                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Quality-Gate Integrity          | OPA/Conftest                                                        | error                | 4                        |
 | CV-002       | A workflow with a push trigger restricted to main (optionally alongside `workflow_dispatch`) uploads coverage to CodeScene (`mode: upload`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Quality-Gate Integrity          | OPA/Conftest + file presence                                        | error                | 4                        |
 | CV-003       | Every secret referenced by a guarded workflow step exists in BOTH the Actions and Dependabot secret stores (guards silently skip when the secret is absent).                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Quality-Gate Integrity          | Python/GitHub API                                                   | error                | 4                        |
@@ -1879,6 +1886,12 @@ the dependency-pin actionability checks.
 | RT-019       | Where Cranelift is the development-profile default, every coverage path (a Makefile recipe or workflow step running `cargo llvm-cov`) and every dev-profile build in a release- or tag-triggered workflow selects LLVM, because `-Cinstrument-coverage` is LLVM-only. A shared-actions `generate-coverage` step selects it itself.                                                                                                                                                                                                                                                                                                  | Toolchain Baseline              | OPA/Conftest + makeutil + workflow envelope (`rust-build-defaults`) | error                | 4                        |
 | RT-020       | A Makefile recipe reachable from a gate target (`lint`, `test`, `typecheck`, `build`) that assigns `RUSTFLAGS` restates `-Zthreads=8` (on a nightly pin) and the mold linker flag, because an assigned `RUSTFLAGS` replaces every `rustflags` source. Coverage and release-profile recipes are exempt.                                                                                                                                                                                                                                                                                                                              | Toolchain Baseline              | makeutil + OPA/Conftest (`rust-build-defaults`)                     | error                | 4                        |
 | RT-021       | A workflow step that runs a cargo gate build directly with `RUSTFLAGS` set, including by the toolchain action's `-D warnings` default, carries the same fast flags.                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Toolchain Baseline              | OPA/Conftest + workflow envelope (`rust-build-defaults`)            | error                | 4                        |
+| RT-022       | The Rust toolchain is pinned exactly: `rust-toolchain.toml` names a release (`1.93.1`) or a dated nightly, never a floating channel, because rustup resolves a floating channel at install time and Dependabot cannot move it.                                                                                                                                                                                                                                                                                                                                                                                                      | Toolchain Baseline              | OPA/Conftest + TOML parse (`rust-toolchain-policy`)                 | error                | 4                        |
+| RT-023       | A pinned dated nightly is no older than the freshness window (56 days by default, the `window_days` parameter) unless a recorded toolchain-policy exception names the pinned channel. Supersedes the one-year comparator of RT-006, which stays until this rule is live estate-wide.                                                                                                                                                                                                                                                                                                                                                | Toolchain Baseline              | OPA/Conftest + TOML parse (`rust-toolchain-policy`)                 | error                | 4                        |
+| RT-024       | Dependabot can move the pin: `.github/dependabot.yml` has a `rust-toolchain` update entry on the pin's directory with a daily or weekly interval, unless a recorded exception names the pinned channel.                                                                                                                                                                                                                                                                                                                                                                                                                             | Toolchain Baseline              | OPA/Conftest + YAML parse (`rust-toolchain-policy`)                 | error                | 4                        |
+| RT-025       | Every publishable library crate declares `rust-version`, directly or by inheriting a workspace value, unless a recorded exception names the pinned channel.                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Toolchain Baseline              | OPA/Conftest + TOML parse (`rust-toolchain-policy`)                 | warning              | 4                        |
+| RT-026       | Every declared MSRV is exercised by CI: a workflow installs that toolchain, a job or step runs cargo-msrv or is named for the MSRV, a step selects the toolchain from `rust-version`, or the pin is that version.                                                                                                                                                                                                                                                                                                                                                                                                                   | Toolchain Baseline              | OPA/Conftest + workflow parse (`rust-toolchain-policy`)             | error                | 4                        |
+| RT-027       | CI names no dated nightly other than the one `rust-toolchain.toml` pins, so the file and the workflows cannot disagree about the toolchain.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Toolchain Baseline              | OPA/Conftest + workflow parse (`rust-toolchain-policy`)             | error                | 4                        |
 | TA-001       | No continuous integration job builds a tool it merely consumes from source; the repository's own crate under test and a build that is the workflow's product are exempt.                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Toolchain Baseline              | OPA/Conftest + workflow envelope                                    | error                | 4                        |
 | TA-002       | A release archive is verified by a digest computed from the downloaded bytes and compared with the publisher's sidecar before those bytes are executed or extracted.                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Toolchain Baseline              | OPA/Conftest + workflow envelope                                    | error                | 4                        |
 | TA-003       | Every tool pin is a full commit SHA or an exact version, never a branch, a bare tag, or an unpinned Git acquisition.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Toolchain Baseline              | OPA/Conftest + workflow envelope + canon pin data                   | error                | 4                        |
@@ -2158,12 +2171,43 @@ surface resolver) and the root `pyproject.toml`, each with its section, target,
 optionality, published package identity (a renamed dependency resolves to the
 name Dependabot matches), requirement, locked versions, and the covering
 `updates` entry, first-matching group and `ignore` rule. A relationship applies
-only where the repository declares every member, so unrelated duplicate crate
-versions and a copied wheel template in a pure-Python repository draw no
-finding. A repository may stay on an older generation by recording an exception
-in `.concordat` under `dependencies.family_exceptions`, naming the
-relationship, a rationale and a review trigger. Missing facts are DF-006
-indeterminate findings, never passes.
+only where the repository declares every member, and a Cargo manifest that no
+declared surface governs is a problem fact rather than an unread pass (a
+repository without `language.rust.surfaces` is read at its root only), so
+unrelated duplicate crate versions and a copied wheel template in a pure-Python
+repository draw no finding. A repository may stay on an older generation by
+recording an exception in `.concordat` under `dependencies.family_exceptions`,
+naming the relationship, a rationale and a review trigger. Missing facts are
+DF-006 indeterminate findings, never passes.
+
+##### Rust toolchain policy (RT-022 through RT-027)
+
+The estate audit of 2026-10-11 (DF12-102) found 53 of 72 Rust repositories
+pinned to a dated nightly, only 5 of them within eight weeks of it, and 65
+whose pin nothing moved, although Dependabot's `rust-toolchain` ecosystem moves
+both dated nightlies and numeric pins. Of 59 repositories with a publishable
+library, 46 declared no `rust-version`, and 16 declared an MSRV that no
+workflow exercised. RT-006 (a nightly within a year) passed every repository,
+so it could not tell any of this apart.
+
+The audit-only `rust-toolchain-policy` package reads five facts: the pin, the
+Cargo packages, the Dependabot `rust-toolchain` entries, the toolchains the
+workflows name, and any recorded exception. The envelope carries "today" as
+`evaluated_on`, so the nightly-age clause is a pure comparison and the Rego
+tests can pin the window's edge. Workflows are walked as data (steps, `with`
+inputs, `env` references and `rustup` or `cargo +toolchain` commands), so a
+toolchain named in a comment is not CI using it. A numeric toolchain in CI is
+not compared with the pin: such literals are usually a host tool's toolchain
+(`cargo +1.95.0 install merman-cli`), so RT-027 judges dated nightlies only.
+
+The window and the accepted Dependabot intervals are manifest parameters. An
+exception is a section of the developers' guide whose heading contains
+"Toolchain policy" and which names the pinned channel. It exempts RT-023,
+RT-024 and RT-025 (a nightly coupled to compiler internals has no stable MSRV
+to declare) only while it names the current pin, so every move of the pin
+re-justifies it. whitaker is the standing case: its nightly is coupled to
+`ra_ap_syntax` and a vendored `clippy_utils`, and is never moved to satisfy the
+window.
 
 ##### Mutation-testing coverage (MT-001)
 
@@ -2376,6 +2420,45 @@ wiring.
 - **Actuators:** none yet; the package ships audit-only, and each migration
   pull request uses it as its proof of compliance.
 
+##### YAML and workflow lint (YL-001 to YL-005)
+
+Only five repositories carried a yamllint configuration, four of them
+installing the tools by hand in CI, and 494 findings stood across 55 of 147
+repositories under the shared configuration below. yamllint and actionlint
+shared a gap: neither ran in the binding `lint` gate of most repositories, so
+CI's lint lane enforced neither. These checks hold a repository to one shared
+configuration, one pinned installer and one gate shape, and ship as the
+`yaml-lint-baseline` rule package.
+
+- **Shared configuration:** the estate base
+  (`canon/lint/yaml/.yamllint-estate.yml`) is copied verbatim into each
+  repository; the repository's own `.yamllint.yml` extends it and may set only
+  `ignore`. The base keeps yamllint's defaults, except that `document-start` is
+  off (1,469 warnings in 140 repositories for no value), comment spacing is one
+  space, sequence indentation is consistent, `on:` is a valid truthy key, and
+  line length is 120 everywhere except under `.github/workflows` and
+  `.github/actions`, where `run:` scripts and URLs make a limit noise (143
+  findings in 44 repositories). yamllint resolves `extends:` against the
+  current directory rather than the configuration file, and a local `ignore`
+  replaces the base's, so the Makefile runs yamllint from the root and a
+  repository restates the Helm template glob if it needs it.
+- **actionlint:** `.github/actionlint.yaml` declares `ubicloud-*` as a
+  self-hosted runner label (the glob is supported), so actionlint accepts the
+  estate's runners. Its shellcheck integration stays on.
+- **Installer:** `leynos/shared-actions/.github/actions/install-yaml-lint`
+  pins yamllint (through `uv`, exact `==`), actionlint and shellcheck
+  (digest-verified release archives) together, and is itself pinned by commit
+  SHA in each repository, so Dependabot moves the tool versions in one place.
+- **Sensors:** a Makefile policy over `makeutil` facts follows the static
+  closure from `lint` with the same machinery as the Markdown rule, reading
+  `xargs` as a transparent wrapper because yamllint has no Git mode. The base's
+  file digest, the decoded local and actionlint configurations, and the decoded
+  workflows cover the rest. An unresolvable variable, a conditional or
+  `include` in the closure, or an undecodable file is indeterminate. Composite
+  actions are not inspected.
+- **Actuators:** none yet; the package ships audit-only, and each rollout pull
+  request uses it as its proof of compliance.
+
 ##### uv robust execution (UV-001 to UV-007)
 
 A survey of 174 repositories found 127 callers of uv, most hardcoding
@@ -2419,7 +2502,8 @@ standard, as the DF12-104 roll-out proceeds.
 
 - **Identifiers:** the package has its own `DG-` prefix, for "documentation
   gate". `DP-` is taken by the dependency-pin actionability checks (DP-001,
-  DP-002). The Rust `missing_docs` rules join the package from DG-003.
+  DP-002). The Rust `missing_docs` rules are DG-003 and DG-004, in the same
+  package.
 - **Sensors:** one Conftest policy over `makeutil` facts, `pyproject.toml`, and
   the tree's Python files. The envelope builder, not the policy, expands the
   Makefile's single-valued variables (and the `dir`, `notdir`, `lastword`,
@@ -2441,6 +2525,47 @@ standard, as the DF12-104 roll-out proceeds.
   overload stub.
 - **Actuators:** none; the package ships audit-only, and each roll-out pull
   request uses it as its proof of compliance.
+
+##### Rust documentation presence (DG-003, DG-004)
+
+The same package holds Rust repositories to the equivalent standard, as the
+DF12-103 roll-out proceeds: every library crate denies `missing_docs`, and the
+`make lint` gate compiles it. Item documentation for private items is not
+required, so `clippy::missing_docs_in_private_items` is not used.
+
+- **Sensors:** the Conftest policy reads a `rust` section of the same envelope.
+  The builder reads each owned `Cargo.toml` with `tomllib`, resolves
+  `[lints] workspace = true` against the nearest enclosing `[workspace]`, and
+  reads the crate root's leading inner attributes (comments skipped, a
+  `cfg_attr` unwrapped with its condition). Suppression scanning masks comments
+  and string, raw-string and character literals first, so attribute text in a
+  doc example or a string is not a suppression. Precedence follows rustc: a
+  crate-root attribute beats the manifest level, and the last attribute wins.
+  The policy decides; the builder only records.
+- **Scope:** library crates only (a `src/lib.rs` or a `[lib]` table), skipping
+  `fixtures`, `examples`, `templates`, `vendor`, `third_party`, `patches` and
+  `target` trees. Binary-only packages are out of scope.
+- **Exception:** a crate-root `#![expect(missing_docs, reason = "...")]` is
+  accepted, for items a derive macro generates (mxd's `cli-defs` is the
+  precedent). The reason is mandatory. Vendored upstream code that deliberately
+  allows the lint is exempted by repository, not by the rule.
+- **Suppressions:** the builder also scans the library's source tree for
+  module-level and item-level `allow` or `expect` of `missing_docs`, because
+  each hides items from a crate whose root denies the lint (mxd's survey found
+  78 such items). Each needs a `reason`; whether the code is generated is for
+  the reviewer. Tests, benches and examples are separate crates and are not
+  scanned. The roll-out's survey measures the residue with
+  `--force-warn missing_docs`.
+- **Mutation proof:** each DG-003 and DG-004 clause was mutated in the policy
+  (reason check inverted, suppression finding disabled, `allow` no longer
+  flagged, the `cfg_attr` condition ignored, the clippy requirement dropped)
+  and each mutation fails at least one fixture test.
+- **Reachability (DG-004):** the lint fails builds only where a gate compiles
+  the crate, so the rule requires a clippy run reachable from `lint`; a plain
+  `cargo check` in `lint` would also compile it but the estate's gates are
+  clippy-based. A run is a `cargo` simple command with `clippy` as its
+  subcommand, found by lexing the expanded recipe line; a mention of the word
+  is not a run.
 
 ##### Rust formatting and linting (RT-001 to RT-005)
 

@@ -50,7 +50,10 @@ def test_an_empty_checkout_carries_no_facts(tmp_path: pathlib.Path) -> None:
         "root_makefile": False,
         "python_files": False,
         "pyproject": False,
+        "rust_library": False,
     }
+    assert envelope["rust"] == {"crates": [], "errors": []}
+    assert envelope["clippy_runs"] == []
 
 
 def test_python_files_are_listed_outside_the_pruned_trees(

@@ -641,10 +641,25 @@ the Section 2.1.2 format.
   interrogate roll-out (DF12-104): a command `make lint` reaches runs
   interrogate at 100 over every owned Python file, with no relaxing flag or
   exclusion beyond test data and vendored trees, and the run is exact (verbose
-  level 2 and a failure on any `MISSED` row). Rust `missing_docs` rules join
-  the package from DG-003. Acceptance: compliant and noncompliant generated
-  fixtures for every check, and behavioural tests running the real policy over
-  generated checkouts.
+  level 2 and a failure on any `MISSED` row). Acceptance: compliant and
+  noncompliant generated fixtures for every check, and behavioural tests
+  running the real policy over generated checkouts.
+- [x] Extend the documentation-presence package to Rust (DG-003, DG-004), from
+  the `missing_docs` roll-out (DF12-103): every owned library crate denies
+  `missing_docs` (own table, inherited workspace table or crate-root attribute,
+  with a reasoned crate-root `expect` accepted for generated items), and a
+  clippy run is reachable from `make lint`. Acceptance: compliant and
+  noncompliant generated fixtures for every check, and unit tests for the Rust
+  facts the envelope records.
+- [x] Ship the YAML lint rule package (YL-001 to YL-005), from DF12-101: the
+  `lint` gate runs `yamllint --strict` over the Git-tracked YAML and actionlint
+  bindingly; the estate yamllint base is present verbatim and the local
+  configuration only extends it; `.github/actionlint.yaml` declares the estate
+  runner labels; and CI installs the tools through the pinned
+  `install-yaml-lint` action with no hand-rolled install. Acceptance: compliant
+  and noncompliant generated fixtures for every check, and the estate survey
+  recorded with the rollout. Progress: shipped audit-only as
+  `yaml-lint-baseline`; mutations remain open.
 - [ ] Ship the Rust formatting and linting rule packages (RT-001 to RT-005):
   rustfmt wiring and template-matched configuration, clippy presence with
   `[lints]` entries at the template level or stricter, and Whitaker presence
@@ -666,6 +681,11 @@ the Section 2.1.2 format.
   and direct cargo workflow steps that assign `RUSTFLAGS` restate the fast
   flags. The envelope now carries the `makeutil` report and decoded workflows
   (ADR-003).
+- [x] Ship the Rust toolchain policy rule (RT-022 to RT-027, DF12-102): the
+  `rust-toolchain-policy` package pins the channel exactly, keeps a nightly
+  within a 56-day window, requires a Dependabot `rust-toolchain` entry, and
+  requires a declared MSRV to be exercised by CI. RT-006 stays until RT-023 is
+  live estate-wide, then a separate change retires it.
 - [ ] Ship the remaining Rust toolchain and acceleration rule packages (RT-006,
   RT-007, RT-010, RT-011): nightly pins no older than one year, required
   toolchain components, Polonius-next for application-only repositories, and

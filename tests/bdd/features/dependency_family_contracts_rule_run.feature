@@ -49,3 +49,10 @@ Feature: Dependency-family contracts rule run
     Then the audit exit status is 1
     And the audit output reports "DF-001"
     And the audit output reports "pylint-astroid"
+
+  Scenario: a nested crate that no declaration governs is indeterminate
+    Given a checkout whose PyO3 crate sits in an undeclared subdirectory
+    When I audit the checkout for its dependency families
+    Then the audit exit status is 1
+    And the audit output reports "DF-006"
+    And the audit output reports "outside the governed Rust surfaces"

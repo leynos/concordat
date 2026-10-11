@@ -448,7 +448,9 @@ deny contains f if {
 
 # The specs a tool recipe names: every `--from SPEC`, and the first positional
 # word after `uvx` or the helper's `tool` command when there is no `--from`.
-from_pattern := `--from[ =]["']?([^"'[:space:]]+)`
+# A quoted value may hold spaces (`--from 'pkg[extra] @ git+URL@sha'`), so the
+# quotes, not the whitespace, end it; exactly one of the three groups is set.
+from_pattern := `--from[ =](?:"([^"]*)"|'([^']*)'|([^"'[:space:]]+))`
 
 uvx_positional := `(^|[^A-Za-z0-9_.$-])uvx[[:space:]]+((--python[ =][^[:space:]]+|-[^[:space:]]+)[[:space:]]+)*([^-[:space:]]["']?[^"'[:space:]]*)`
 
@@ -464,7 +466,7 @@ tool_context(text) if regex.match(`uv_gate\.py[[:space:]]+tool`, text)
 
 strip_quotes(spec) := trim(spec, `"'`)
 
-specs_in(text) := {strip_quotes(match[1]) |
+specs_in(text) := {strip_quotes(concat("", [match[1], match[2], match[3]])) |
 	tool_context(text)
 	some match in regex.find_all_string_submatch_n(from_pattern, text, -1)
 }
@@ -487,6 +489,15 @@ pinned(spec) if {
 }
 
 pinned(spec) if regex.match(git_commit_pin, spec)
+
+# PEP 508 direct reference: `name[extra] @ git+URL@<40-hex>`. The URL part must be
+# a full-commit pin; a branch, tag, short SHA or non-Git URL is not.
+direct_reference := `^[A-Za-z0-9][A-Za-z0-9._-]*(\[[^\]]+\])?[[:space:]]*@[[:space:]]*(git\+[^[:space:]]+)$`
+
+pinned(spec) if {
+	some match in regex.find_all_string_submatch_n(direct_reference, spec, 1)
+	regex.match(git_commit_pin, match[2])
+}
 
 # A release tag is accepted only for a direct invocation: the helper itself
 # refuses a Git spec that is not a full commit, so a tag routed through it could

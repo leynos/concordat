@@ -8,7 +8,8 @@
   "applicability": {
     "root_makefile": true,
     "python_files": false,
-    "pyproject": true
+    "pyproject": true,
+    "rust_library": false
   },
   "makefile_path": "Makefile",
   "lint_target": false,
@@ -23,5 +24,10 @@
       "error": null
     }
   ],
-  "python_files": []
+  "python_files": [],
+  "clippy_runs": [],
+  "rust": {
+    "crates": [],
+    "errors": []
+  }
 }

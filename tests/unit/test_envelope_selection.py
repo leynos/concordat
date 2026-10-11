@@ -40,11 +40,17 @@ from concordat.rules.markdown_envelope import (
 from concordat.rules.spelling_envelope import (
     ENVELOPE_KIND as SPELLING_ENVELOPE_KIND,
 )
+from concordat.rules.toolchain_policy_envelope import (
+    ENVELOPE_KIND as TOOLCHAIN_POLICY_ENVELOPE_KIND,
+)
 from concordat.rules.uv_gate_envelope import (
     ENVELOPE_KIND as UV_GATE_ENVELOPE_KIND,
 )
 from concordat.rules.whitaker_provisioning_envelope import (
     ENVELOPE_KIND as PROVISIONING_ENVELOPE_KIND,
+)
+from concordat.rules.yaml_lint_envelope import (
+    ENVELOPE_KIND as YAML_LINT_ENVELOPE_KIND,
 )
 
 if typ.TYPE_CHECKING:
@@ -128,6 +134,11 @@ class TestRegisteredPackages:
                 id="dependency-family-contracts",
             ),
             pytest.param(
+                "rust-toolchain-policy",
+                TOOLCHAIN_POLICY_ENVELOPE_KIND,
+                id="rust-toolchain-policy",
+            ),
+            pytest.param(
                 "spelling-config-baseline",
                 SPELLING_ENVELOPE_KIND,
                 id="spelling-config-baseline",
@@ -141,6 +152,11 @@ class TestRegisteredPackages:
                 "documentation-presence",
                 DOCUMENTATION_ENVELOPE_KIND,
                 id="documentation-presence",
+            ),
+            pytest.param(
+                "yaml-lint-baseline",
+                YAML_LINT_ENVELOPE_KIND,
+                id="yaml-lint-baseline",
             ),
             pytest.param(
                 "whitaker-provisioning",
@@ -372,9 +388,11 @@ class TestDeclaredInputKind:
             ("main-owned-codescene-coverage", COVERAGE_ENVELOPE_KIND),
             ("dependabot-update-shape", DEPENDABOT_ENVELOPE_KIND),
             ("dependency-family-contracts", FAMILY_ENVELOPE_KIND),
+            ("rust-toolchain-policy", TOOLCHAIN_POLICY_ENVELOPE_KIND),
             ("spelling-config-baseline", SPELLING_ENVELOPE_KIND),
             ("uv-gate-baseline", UV_GATE_ENVELOPE_KIND),
             ("documentation-presence", DOCUMENTATION_ENVELOPE_KIND),
+            ("yaml-lint-baseline", YAML_LINT_ENVELOPE_KIND),
         ):
             rule_dir = packages.rule_package_dir(rule_id)
             declared = packages._declared_input_kind(rule_dir)

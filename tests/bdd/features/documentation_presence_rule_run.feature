@@ -36,3 +36,21 @@ Feature: documentation presence rule run
     Then the audit exit status is 1
     And the audit output reports "DG-002" "verbose level 0"
     And the audit output reports "DG-002" "does not fail on a MISSED row"
+
+  Scenario: a Rust workspace that denies missing_docs under a clippy gate is clean
+    Given a Rust workspace whose members inherit a missing_docs deny
+    When I audit the checkout for its documentation gate
+    Then the audit exit status is 0
+    And the audit table reports zero findings
+
+  Scenario: a Rust crate that does not deny missing_docs is reported
+    Given a Rust crate with no missing_docs level
+    When I audit the checkout for its documentation gate
+    Then the audit exit status is 1
+    And the audit output reports "DG-003" "does not deny `missing_docs`"
+
+  Scenario: a Rust crate whose lint never runs clippy is reported
+    Given a Rust crate that denies missing_docs but whose lint never runs clippy
+    When I audit the checkout for its documentation gate
+    Then the audit exit status is 1
+    And the audit output reports "DG-004" "reaches no clippy run"

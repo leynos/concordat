@@ -234,12 +234,30 @@ def _is_dir(path: pathlib.Path, operation: str) -> bool:
     return _require(fs_probe.probe_dir(path), path, operation)
 
 
-def _is_symlink(path: pathlib.Path, operation: str) -> bool:
-    """Return whether the path is itself a symbolic link, raising on a refusal."""
+def is_symlink(path: pathlib.Path, operation: str) -> bool:
+    """Return whether the path is itself a symbolic link, raising on a refusal.
+
+    The probe reads the link rather than its target, so a dangling link is
+    still a link.
+
+    Parameters
+    ----------
+    path:
+        The path to examine.
+    operation:
+        The operation name an `OperationalRuleError` reports if the filesystem
+        refuses to answer.
+
+    Returns
+    -------
+    bool
+        Whether *path* is itself a symbolic link. Absence is ``False``; a
+        refused probe raises an `OperationalRuleError` naming *operation*.
+    """
     return _require(fs_probe.probe_symlink(path), path, operation)
 
 
-def _raise_walk_error(error: OSError) -> typ.NoReturn:
+def raise_walk_error(error: OSError) -> typ.NoReturn:
     """Re-raise a directory-scan failure as an operational audit failure.
 
     `os.walk` swallows every `OSError` by default. A directory the audit
@@ -273,7 +291,7 @@ def _has_markdown_files(checkout: pathlib.Path) -> bool:
     bool
         Whether a governed Markdown file was found.
     """
-    for root, directories, files in os.walk(checkout, onerror=_raise_walk_error):
+    for root, directories, files in os.walk(checkout, onerror=raise_walk_error):
         directories[:] = sorted(
             name for name in directories if name not in PRUNED_DIRECTORIES
         )
@@ -285,7 +303,7 @@ def _has_markdown_files(checkout: pathlib.Path) -> bool:
             # target, so a dangling Markdown link is skipped here as any
             # other link is. A policy input that dangles is a refusal, but
             # this walk is over whatever the tree happens to hold.
-            if _is_symlink(candidate, OPERATION_SCAN_MARKDOWN):
+            if is_symlink(candidate, OPERATION_SCAN_MARKDOWN):
                 continue
             if not is_file(candidate, OPERATION_SCAN_MARKDOWN):
                 continue
@@ -293,7 +311,7 @@ def _has_markdown_files(checkout: pathlib.Path) -> bool:
     return False
 
 
-def _read_text(path: pathlib.Path, operation: str) -> str:
+def read_text(path: pathlib.Path, operation: str) -> str:
     """Return the file's text, or raise an operational error if unreadable.
 
     A text-decoding failure (`UnicodeDecodeError`) is deliberately left to
@@ -344,7 +362,7 @@ def _load_markdownlint_config(
         "error": None,
     }
     try:
-        text = _read_text(path, OPERATION_READ_MARKDOWNLINT_CONFIG)
+        text = read_text(path, OPERATION_READ_MARKDOWNLINT_CONFIG)
     except UnicodeDecodeError as error:
         fact["error"] = f"not UTF-8 text: {error}"
         return fact
@@ -374,8 +392,22 @@ def _alternate_configs(checkout: pathlib.Path) -> list[str]:
     return present
 
 
-def _json_safe(value: object) -> object:
-    """Return *value* with any non-JSON scalar (a YAML timestamp) stringified."""
+def json_safe(value: object) -> object:
+    """Return *value* with any non-JSON scalar (a YAML timestamp) stringified.
+
+    Parameters
+    ----------
+    value:
+        A decoded document: mappings, sequences and scalars.
+
+    Returns
+    -------
+    object
+        The same document after a JSON round trip, with every scalar JSON
+        cannot represent replaced by its string form. A mapping key JSON
+        cannot carry, such as a YAML date, raises `TypeError`, which the caller
+        is expected to record as a decoding error.
+    """
     return typ.cast("object", json.loads(json.dumps(value, default=str)))
 
 
@@ -396,7 +428,7 @@ def _load_workflow(
     path = checkout / relative
     within_checkout(root, path, OPERATION_READ_WORKFLOW)
     try:
-        text = _read_text(path, OPERATION_READ_WORKFLOW)
+        text = read_text(path, OPERATION_READ_WORKFLOW)
     except UnicodeDecodeError as error:
         fact["error"] = f"not UTF-8 text: {error}"
         return fact
@@ -408,7 +440,7 @@ def _load_workflow(
     if not isinstance(parsed, dict):
         fact["error"] = "workflow document is not a mapping"
         return fact
-    fact["parsed"] = _json_safe(parsed)
+    fact["parsed"] = json_safe(parsed)
     return fact
 
 

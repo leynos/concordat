@@ -23,9 +23,9 @@ from concordat.rules.markdown_envelope import (
     _exists,
     _has_markdown_files,
     _is_dir,
-    _is_symlink,
     build_markdown_envelope,
     is_file,
+    is_symlink,
     load_workflows,
     resolved_root,
     within_checkout,
@@ -492,7 +492,7 @@ class TestPathProbes:
             pytest.param(_exists, id="exists"),
             pytest.param(is_file, id="is_file"),
             pytest.param(_is_dir, id="is_dir"),
-            pytest.param(_is_symlink, id="is_symlink"),
+            pytest.param(is_symlink, id="is_symlink"),
         ],
     )
     def test_an_unreadable_parent_raises(
@@ -518,7 +518,7 @@ class TestPathProbes:
         [
             pytest.param(_exists, True, id="exists-file"),
             pytest.param(is_file, True, id="is-a-file"),
-            pytest.param(_is_symlink, False, id="not-a-link"),
+            pytest.param(is_symlink, False, id="not-a-link"),
         ],
     )
     def test_a_readable_file_answers_normally(
@@ -540,7 +540,7 @@ class TestPathProbes:
     ) -> None:
         """An occupied path is a state to report, not an absent directory.
 
-        `_is_symlink` is a question about what kind of entry is there, so a
+        `is_symlink` is a question about what kind of entry is there, so a
         regular file answers it. `_is_dir` expects a directory: a file in its
         place would otherwise read as a repository with no workflows.
         """
@@ -555,7 +555,7 @@ class TestPathProbes:
             pytest.param(_exists, id="exists"),
             pytest.param(is_file, id="is_file"),
             pytest.param(_is_dir, id="is_dir"),
-            pytest.param(_is_symlink, id="is_symlink"),
+            pytest.param(is_symlink, id="is_symlink"),
         ],
     )
     def test_a_missing_path_is_false_not_an_error(
@@ -594,10 +594,10 @@ class TestPathProbes:
             probe(link, "probe-path")
 
     def test_a_dangling_link_is_still_a_link(self, tmp_path: pathlib.Path) -> None:
-        """`_is_symlink` reads the link, so a missing target does not hide it."""
+        """`is_symlink` reads the link, so a missing target does not hide it."""
         link = tmp_path / "dangling.md"
         link.symlink_to(tmp_path / "never-existed.md")
-        assert _is_symlink(link, "probe-path") is True, (
+        assert is_symlink(link, "probe-path") is True, (
             "a link with no target is still a link"
         )
 
@@ -622,16 +622,16 @@ class TestPathProbes:
     def test_a_symlink_is_judged_without_following_it(
         self, tmp_path: pathlib.Path
     ) -> None:
-        """`_is_symlink` reads the link itself, `is_file` its target."""
+        """`is_symlink` reads the link itself, `is_file` its target."""
         target = tmp_path / "real.md"
         target.write_text("# Hi\n", encoding="utf-8")
         link = tmp_path / "link.md"
         link.symlink_to(target)
-        assert _is_symlink(link, "probe-path") is True, "the link is a link"
+        assert is_symlink(link, "probe-path") is True, "the link is a link"
         assert is_file(link, "probe-path") is True, (
             "the link resolves to a regular file"
         )
-        assert _is_symlink(target, "probe-path") is False, (
+        assert is_symlink(target, "probe-path") is False, (
             "the target is not itself a link"
         )
 

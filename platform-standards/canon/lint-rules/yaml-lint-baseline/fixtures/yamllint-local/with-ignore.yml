@@ -1,0 +1,5 @@
+---
+extends: .yamllint-estate.yml
+ignore: |
+  **/charts/**/templates/
+  tests/data/

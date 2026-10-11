@@ -24,6 +24,7 @@ cannot be read at all raises an operational error.
 
 from __future__ import annotations
 
+import os
 import pathlib
 import re
 import tomllib
@@ -332,7 +333,16 @@ def _cargo_surfaces(
         detail = str(error).replace(str(checkout), ".")
         problems.append(f"the Rust surfaces could not be resolved: {detail}")
         return []
-    return [dict(surface) for surface in resolution.surfaces]
+    surfaces = [dict(surface) for surface in resolution.surfaces]
+    if not resolution.declared:
+        governed = {str(surface["path"]) for surface in surfaces}
+        problems.extend(
+            f"{relative} is a Cargo manifest outside the governed Rust surfaces; "
+            "declare language.rust.surfaces in .concordat to read it"
+            for nested in _nested_files(checkout, "Cargo.toml", problems)
+            if (relative := nested.relative_to(checkout).as_posix()) not in governed
+        )
+    return surfaces
 
 
 def _cargo_declarations(
@@ -450,28 +460,47 @@ def _python_requirements(
     return found
 
 
-_SKIPPED_DIRECTORIES = frozenset({"node_modules", "target", "venv", "build", "dist"})
+_SKIPPED_DIRECTORIES = frozenset({
+    "node_modules",
+    "target",
+    "venv",
+    "build",
+    "dist",
+    "vendor",
+})
 
 
-def _nested_pyprojects(checkout: pathlib.Path) -> list[pathlib.Path]:
-    """Return every `pyproject.toml` below the root, at any depth.
+def _nested_files(
+    checkout: pathlib.Path, name: str, problems: list[str]
+) -> list[pathlib.Path]:
+    """Return every file called *name* below the root, at any depth.
 
-    Hidden directories and vendored or generated trees are not projects.
+    Hidden directories and vendored or generated trees are not projects and are
+    not entered. A directory the walk cannot list is a problem fact, never a
+    silently shorter list.
 
     Returns
     -------
     list[pathlib.Path]
-        The nested project files, in path order.
+        The nested files, in path order.
     """
-    return sorted(
-        path
-        for path in checkout.glob("**/pyproject.toml")
-        if path.parent != checkout
-        and not any(
-            part.startswith(".") or part in _SKIPPED_DIRECTORIES
-            for part in path.relative_to(checkout).parts[:-1]
-        )
-    )
+
+    def unreadable(error: OSError) -> None:
+        where = pathlib.Path(error.filename or ".").relative_to(checkout).as_posix()
+        message = f"cannot scan {where} for {name}: {error.strerror}"
+        if message not in problems:
+            problems.append(message)
+
+    found: list[pathlib.Path] = []
+    for directory, subdirectories, files in os.walk(checkout, onerror=unreadable):
+        subdirectories[:] = [
+            entry
+            for entry in subdirectories
+            if not entry.startswith(".") and entry not in _SKIPPED_DIRECTORIES
+        ]
+        if name in files and pathlib.Path(directory) != checkout:
+            found.append(pathlib.Path(directory) / name)
+    return sorted(found)
 
 
 def _read_pyproject(
@@ -490,7 +519,7 @@ def _read_pyproject(
     problems.extend(
         f"{nested.relative_to(checkout).as_posix()} is not read: only the root "
         "pyproject.toml is"
-        for nested in _nested_pyprojects(checkout)
+        for nested in _nested_files(checkout, "pyproject.toml", problems)
     )
     path = checkout / "pyproject.toml"
     probe = probe_file(path)

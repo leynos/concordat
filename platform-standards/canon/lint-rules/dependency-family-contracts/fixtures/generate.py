@@ -276,8 +276,18 @@ SCENARIOS: dict[str, dict[str, str]] = {
     "unrelated_duplicates": {
         "Cargo.toml": SERDE_A,
         "native/Cargo.toml": SERDE_B,
+        ".concordat": (
+            "language:\n  rust:\n    surfaces:\n"
+            "      - path: Cargo.toml\n      - path: native/Cargo.toml\n"
+        ),
         "Cargo.lock": 'version = 4\n[[package]]\nname = "serde"\nversion = "1.0.200"\n',
         ".github/dependabot.yml": dependabot(CATCH_ALL),
+    },
+    # A Cargo manifest no declared surface governs is not read, and says so.
+    "undeclared_manifest": {
+        "rust/Cargo.toml": CARGO,
+        "rust/Cargo.lock": LOCK,
+        ".github/dependabot.yml": dependabot(NARROW_FAMILY + CATCH_ALL),
     },
     # An intentionally older generation recorded as a reviewed exception.
     "split_with_exception": {

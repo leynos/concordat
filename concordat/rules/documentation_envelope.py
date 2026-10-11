@@ -1,16 +1,23 @@
 """Build the `policy-input/documentation-presence` envelope.
 
-The documentation-presence rule package holds a checkout to one standard: every
-Python file it owns is covered by an `interrogate` run that `make lint` reaches,
-at a threshold of 100, with no relaxing ignore flag, and with a guard that
-fails on any `MISSED` row. The policy cannot decide that from raw Makefile
+The documentation-presence rule package holds a checkout to two standards. For
+Python (DG-001, DG-002), every file it owns is covered by an `interrogate` run
+that `make lint` reaches, at a threshold of 100, with no relaxing ignore flag,
+and with a guard that fails on any `MISSED` row. For Rust (DG-003, DG-004),
+every library crate denies `missing_docs`, without unreasoned suppressions, and
+`make lint` reaches `cargo clippy`. The policy cannot decide the Python half
+from raw Makefile
 text, because the run is usually spelled through variables
 (`$(INTERROGATE) $(INTERROGATE_TARGETS)`) and sits in a target the `lint`
 target reaches only through prerequisites. This module therefore does the
 mechanical part: it expands the Make variables the Makefile defines
 (`makefile_expansion`), follows `lint` through its prerequisites and `make`
 commands, and records every `interrogate` invocation it finds as a structured
-fact (`interrogate_invocation`). The policy decides what the facts mean.
+fact (`interrogate_invocation`). The Rust half is collected by
+`documentation_rust` (crates, lint levels, crate-root attributes and
+suppressions, via `rust_source`) and `rust_clippy` (the `cargo clippy` commands
+`lint` reaches); this module combines those facts with the Python and Makefile
+ones into one envelope. The policy decides what the facts mean.
 
 Each fact is recorded as it was found. A recipe the expansion could not fully
 resolve (a Make function, an unset variable, a quoting the lexer rejects) is
@@ -33,6 +40,7 @@ import re
 import tomllib
 import typing as typ
 
+from .documentation_rust import RustFacts, build_rust_facts
 from .interrogate_invocation import (
     InterrogateRun,
     RecipeLine,
@@ -48,13 +56,14 @@ from .markdown_envelope import (
     OPERATION_READ_MAKEFILE,
     PRUNED_DIRECTORIES,
     Repository,
-    _is_symlink,
-    _raise_walk_error,
-    _read_text,
     is_file,
+    is_symlink,
+    raise_walk_error,
+    read_text,
     resolved_root,
     within_checkout,
 )
+from .rust_clippy import ClippyRun, clippy_runs
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -103,6 +112,7 @@ class DocumentationApplicability(typ.TypedDict):
     root_makefile: bool
     python_files: bool
     pyproject: bool
+    rust_library: bool
 
 
 class DocumentationEnvelope(typ.TypedDict):
@@ -120,6 +130,8 @@ class DocumentationEnvelope(typ.TypedDict):
     runs: list[InterrogateRun]
     configs: list[InterrogateConfig]
     python_files: list[str]
+    clippy_runs: list[ClippyRun]
+    rust: RustFacts
 
 
 class Rule(typ.NamedTuple):
@@ -142,6 +154,7 @@ class MakefileAnalysis:
     is_resolved: bool = True
     elsewhere: list[str] = dataclasses.field(default_factory=list)
     runs: list[InterrogateRun] = dataclasses.field(default_factory=list)
+    clippy: list[ClippyRun] = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -342,6 +355,7 @@ def _analyse_makefile(
         is_resolved=walk.is_resolved,
         elsewhere=_elsewhere(index, walk.names),
         runs=_interrogate_runs(index, walk.names, values),
+        clippy=clippy_runs(index, walk.names, values),
     )
 
 
@@ -359,7 +373,7 @@ def _decode_config(
     if not relative.endswith(".toml"):
         return None, "not a TOML file; the policy reads only TOML configuration"
     try:
-        parsed = tomllib.loads(_read_text(path, OPERATION_READ_CONFIG))
+        parsed = tomllib.loads(read_text(path, OPERATION_READ_CONFIG))
     except UnicodeDecodeError as error:
         return None, f"not UTF-8 text: {error}"
     except tomllib.TOMLDecodeError as error:
@@ -425,7 +439,7 @@ def _python_files(checkout: pathlib.Path) -> list[str]:
         Paths relative to the checkout, sorted.
     """
     found: list[str] = []
-    for current, directories, files in os.walk(checkout, onerror=_raise_walk_error):
+    for current, directories, files in os.walk(checkout, onerror=raise_walk_error):
         directories[:] = sorted(
             name for name in directories if name not in PYTHON_PRUNED_DIRECTORIES
         )
@@ -434,7 +448,7 @@ def _python_files(checkout: pathlib.Path) -> list[str]:
             (base / name).relative_to(checkout).as_posix()
             for name in files
             if name.endswith(".py")
-            and not _is_symlink(base / name, OPERATION_SCAN_PYTHON)
+            and not is_symlink(base / name, OPERATION_SCAN_PYTHON)
         )
     return sorted(found)
 
@@ -479,6 +493,7 @@ def build_documentation_envelope(
     )
     configs = _load_configs(checkout, root, analysis.runs)
     python_files = _python_files(checkout)
+    rust = build_rust_facts(checkout, root)
     return {
         "schema_version": ENVELOPE_SCHEMA_VERSION,
         "kind": ENVELOPE_KIND,
@@ -487,6 +502,7 @@ def build_documentation_envelope(
             "root_makefile": has_makefile,
             "python_files": bool(python_files),
             "pyproject": any(c["path"] == PYPROJECT_FILENAME for c in configs),
+            "rust_library": bool(rust["crates"]),
         },
         "makefile_path": analysis.path,
         "lint_target": analysis.has_lint_target,
@@ -496,4 +512,6 @@ def build_documentation_envelope(
         "runs": analysis.runs,
         "configs": configs,
         "python_files": python_files,
+        "clippy_runs": analysis.clippy,
+        "rust": rust,
     }

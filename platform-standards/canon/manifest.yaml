@@ -164,6 +164,21 @@ artifacts:
     description: >
       Rule package manifest for the Dependabot update-shape policy.
     sha256: e1a41a66ef0bd795c9e701aa51a7d7f0cabe3b4d972d55017016d87aa42efb27
+  - id: lint-rule-rust-toolchain-policy
+    type: opa-policy
+    path: >-
+      platform-standards/canon/lint-rules/rust-toolchain-policy/policy/rust_toolchain_policy.rego
+    description: >
+      Audit-only RT-022 to RT-027 policy holding the Rust toolchain to an exact
+      pin, a fresh nightly, a Dependabot entry that moves it, and a declared
+      MSRV that CI exercises.
+    sha256: daeb617edde3a10b7435fc926ce2817a26fcbe1eaaee97cc3e2541322af75ec6
+  - id: lint-rule-rust-toolchain-policy-manifest
+    type: lint-config
+    path: platform-standards/canon/lint-rules/rust-toolchain-policy/rule.yaml
+    description: >
+      Rule package manifest for the Rust toolchain policy.
+    sha256: 79586b19ecafeb8e4db15e1e85765904f41e12e0298204978ae89795e6800421
   - id: lint-rule-spelling-config-baseline
     type: opa-policy
     path: >-
@@ -179,6 +194,41 @@ artifacts:
     description: >
       Rule package manifest for the spelling configuration baseline policy.
     sha256: 905b08a399dc8ce651aa49c996a4bb62b48b77ebaf2506aa7ffab6fc90844cb3
+  - id: lint-rule-yaml-lint-baseline
+    type: opa-policy
+    path: >-
+      platform-standards/canon/lint-rules/yaml-lint-baseline/policy/yaml_lint_baseline.rego
+    description: >
+      Audit-only YL-001 to YL-005 policy holding the lint gate to strict yamllint over tracked YAML and actionlint, the estate base and thin local yamllint configuration, the actionlint runner labels, and the pinned CI installer.
+    sha256: c751420c6199bff459210e8943434d38642546461061780165e40b78814f69f8
+  - id: lint-rule-yaml-lint-baseline-manifest
+    type: lint-config
+    path: >-
+      platform-standards/canon/lint-rules/yaml-lint-baseline/rule.yaml
+    description: >
+      Rule package manifest for the YAML lint baseline policy.
+    sha256: f1038b09562e6eae2b0ae1bb00c5c7ac3182dfe717915dba4a842b0ad3cc4680
+  - id: yamllint-estate-config
+    type: lint-config
+    path: >-
+      platform-standards/canon/lint/yaml/.yamllint-estate.yml
+    description: >
+      Canonical estate yamllint base, copied verbatim into consumers as .yamllint-estate.yml.
+    sha256: da747ab7bfd5d335efff5ec5a3c9b963060ca960785bf7ba423f45b9571dd112
+  - id: yamllint-local-config
+    type: lint-config
+    path: >-
+      platform-standards/canon/lint/yaml/.yamllint.yml
+    description: >
+      Thin local yamllint configuration consumers start from; it extends the estate base.
+    sha256: 6050781cd3ea090de807b87226d1da077d8177bd6fc02fea508c581a8226815e
+  - id: actionlint-config
+    type: lint-config
+    path: >-
+      platform-standards/canon/lint/yaml/actionlint.yaml
+    description: >
+      Canonical actionlint configuration declaring the estate's self-hosted runner labels, copied to .github/actionlint.yaml.
+    sha256: 5ae6fd1d7dbf58bb2dd5f779fbb6fa0dff37cb5b21e69bef8255a29696793765
   - id: lint-rule-uv-gate-baseline
     type: opa-policy
     path: >-
@@ -187,13 +237,13 @@ artifacts:
       Audit-only UV-001 to UV-007 policy holding a checkout to reaching uv
       through the vendored uv_gate helper, with no cache override, bypassing
       recipe, unpinned tool, or unpinned Git dependency.
-    sha256: c49f074c85d0be1cb632bf0a53df0d615a82f4a6949fb942c9465c4cb5ef3084
+    sha256: b90759131d2024f54c46740a8d2b8a2bc92ef6fa667b754b8949a1cb5c2ca554
   - id: lint-rule-uv-gate-baseline-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/uv-gate-baseline/rule.yaml
     description: >
       Rule package manifest for the uv gate baseline policy.
-    sha256: eabafe43773b5bcd0ffb648d4cb82aa189d44f19f40f84c918f4c777fa93bb5b
+    sha256: 97d4df1b767975edc85eefd58ab5af39c96bbf8c6666a469fa47cf10c2e885fd
   - id: lint-rule-documentation-presence
     type: opa-policy
     path: >-
@@ -203,12 +253,21 @@ artifacts:
       interrogate docstring-coverage gate that `make lint` reaches, at a
       threshold of 100, over every file the repository owns.
     sha256: 529692d088f9227437dfbc2ac281280643b7bba2515e035f208ae097d1bf9297
+  - id: lint-rule-documentation-presence-rust
+    type: opa-policy
+    path: >-
+      platform-standards/canon/lint-rules/documentation-presence/policy/documentation_presence_rust.rego
+    description: >
+      Audit-only DG-003 and DG-004 policy holding every Rust library crate to
+      `missing_docs` at deny and requiring a clippy run that `make lint`
+      reaches.
+    sha256: eda24e2ca6b484d1b602962866ba2733e97f8aa491e903a6c594fcb87af38d66
   - id: lint-rule-documentation-presence-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/documentation-presence/rule.yaml
     description: >
       Rule package manifest for the documentation presence policy.
-    sha256: d800ba1a07f7581011651e0c64e830fd15b03a862d00646e4728bb93619e2b68
+    sha256: a07bc3be4a0119663078cacf9cc6451bc6e756b5df7d5403e405d8b6bb07df33
   - id: lint-rule-whitaker-provisioning
     type: opa-policy
     path: platform-standards/canon/lint-rules/whitaker-provisioning/policy/whitaker_provisioning.rego
