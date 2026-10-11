@@ -158,12 +158,12 @@ script must name both cargo and clippy as string literals, so a lone
 an argument of an interpreter (`sh scripts/x.sh`, `./scripts/x.sh`,
 `uv run --script scripts/x.py`); naming it in `echo`, `cat` or `test -x` does
 not run it. The guide must lie inside the checkout (a link to a file outside it
-is refused), and a guide that cannot be read or is not UTF-8 makes DG-004
-indeterminate rather than reading as "no exception recorded". A record whose
-scripts fail any of these is noncompliant and the finding says which; a section
-that names no script is noncompliant. The audit checks no more than that: it
-does not read what the script does with clippy. A recipe that already runs
-`cargo clippy` needs no record, and a stale one is ignored.
+is refused), and a guide or script that cannot be read or is not UTF-8 makes
+DG-004 indeterminate rather than reading as "no exception recorded". A record
+whose scripts fail any of these is noncompliant and the finding says which; a
+section that names no script is noncompliant. The audit checks no more than
+that: it does not read what the script does with clippy. A recipe that already
+runs `cargo clippy` needs no record, and a stale one is ignored.
 
 The Rust rules apply when the checkout owns at least one library crate (or a
 Cargo manifest the audit cannot read).

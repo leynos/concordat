@@ -33,7 +33,8 @@
             "path": "scripts/lint_lanes.sh",
             "exists": true,
             "runs_clippy": true,
-            "reached": true
+            "reached": true,
+            "error": null
           }
         ]
       }

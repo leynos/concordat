@@ -201,7 +201,7 @@ def exception_guide(body: str) -> str:
 def exception_scenario(
     guide_body: str,
     *,
-    script: str | None = LANES_SCRIPT,
+    script: str | bytes | None = LANES_SCRIPT,
     makefile: str = EXCEPTION_MAKEFILE,
 ) -> Scenario:
     """Return a Rust scenario whose lint reaches clippy only through a script.
@@ -589,6 +589,10 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
         "Makefile": ".PHONY: lint\nlint:\n\tcargo fmt --check\n",
         "docs/developers-guide.md": b"\xff\xfe## Clippy gate",
     }),
+    "rust_exception_script_unreadable": exception_scenario(
+        "Clippy runs through `scripts/lint_lanes.sh` for the PyO3 lanes.",
+        script=b"\xff\xfe cargo clippy",
+    ),
     "rust_exception_names_no_script": exception_scenario(
         "Clippy runs through a wrapper because of the PyO3 lanes.",
     ),

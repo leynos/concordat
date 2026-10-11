@@ -59,6 +59,7 @@ class ExceptionScript(typ.TypedDict):
     exists: bool
     runs_clippy: bool
     reached: bool
+    error: str | None
 
 
 class ClippyExceptions(typ.TypedDict):
@@ -118,23 +119,35 @@ def _script_fact(
     relative: str,
     lines: cabc.Sequence[str],
 ) -> ExceptionScript:
-    """Return what the audit can confirm about one named script."""
+    """Return what the audit can confirm about one named script.
+
+    A script the filesystem refuses to describe, or that is not UTF-8, carries
+    an ``error`` and is not read as simply absent or as not running clippy.
+
+    Returns
+    -------
+    ExceptionScript
+        The script's facts.
+    """
     path = checkout / relative
     inside = ".." not in relative.split("/") and within_checkout(
         root, path, OPERATION_READ_SCRIPT
     )
-    exists = inside and probe_file(path).present
+    probe = probe_file(path) if inside else None
+    exists = probe is not None and probe.present
+    error = probe.read_error if probe is not None else None
     runs_clippy = False
     if exists:
         try:
             runs_clippy = _runs_clippy(read_text(path, OPERATION_READ_SCRIPT))
-        except UnicodeDecodeError:
-            runs_clippy = False
+        except UnicodeDecodeError as decoding:
+            error = f"not UTF-8 text: {decoding}"
     return {
         "path": relative,
         "exists": exists,
         "runs_clippy": runs_clippy,
         "reached": exists and any(invokes_script(line, relative) for line in lines),
+        "error": error,
     }
 
 

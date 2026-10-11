@@ -224,7 +224,34 @@ valid_exception_scripts := [script |
 
 has_valid_exception if count(valid_exception_scripts) > 0
 
-script_problem(script) := "does not exist inside the checkout" if not script.exists
+# A guide or script the audit cannot examine makes the exception unknowable: the
+# verdict is indeterminate alone, not indeterminate beside an ordinary "no clippy".
+script_errors := [script |
+	some exception in exceptions
+	some script in exception.scripts
+	script.error != null
+]
+
+exception_unreadable if count(exception_errors) > 0
+
+exception_unreadable if count(script_errors) > 0
+
+deny contains f if {
+	rust_in_scope
+	count(rust_crates) > 0
+	count(clippy_resolved) == 0
+	not has_valid_exception
+	some script in script_errors
+	f := crate_finding(
+		"DG-004", "indeterminate", "docs/developers-guide.md",
+		sprintf("the clippy-gate exception names `%s`, which the audit cannot examine: %s", [script.path, script.error]),
+	)
+}
+
+script_problem(script) := "does not exist inside the checkout" if {
+	not script.exists
+	script.error == null
+}
 
 script_problem(script) := "does not run clippy as a cargo subcommand" if {
 	script.exists
@@ -269,6 +296,7 @@ deny contains f if {
 	not has_valid_exception
 	some exception in exceptions
 	some script in exception.scripts
+	script.error == null
 	f := crate_finding(
 		"DG-004", "noncompliant", exception.path,
 		sprintf("the clippy-gate exception at line %d names `%s`, which %s", [exception.line, script.path, script_problem(script)]),
@@ -329,6 +357,7 @@ deny contains f if {
 	rust_in_scope
 	count(rust_crates) > 0
 	not has_valid_exception
+	not exception_unreadable
 	input.lint_target
 	count(clippy_resolved) == 0
 	count(clippy_unresolved) == 0

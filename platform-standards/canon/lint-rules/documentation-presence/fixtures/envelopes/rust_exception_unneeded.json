@@ -40,7 +40,8 @@
             "path": "scripts/gone.py",
             "exists": false,
             "runs_clippy": false,
-            "reached": false
+            "reached": false,
+            "error": null
           }
         ]
       }

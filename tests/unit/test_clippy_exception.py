@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pathlib
+import tempfile
 import typing as typ
 
 import pytest
@@ -9,6 +11,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from concordat.errors import OperationalRuleError
+from concordat.rules import clippy_exception as module
 from concordat.rules.clippy_exception import (
     EXCEPTION_KEYWORD,
     _candidate_paths,
@@ -16,10 +19,8 @@ from concordat.rules.clippy_exception import (
 )
 from concordat.rules.documentation_envelope import build_documentation_envelope
 from concordat.rules.exception_docs import sections_in_text
+from concordat.rules.fs_probe import FileProbe
 from concordat.rules.make_commands import invokes_script
-
-if typ.TYPE_CHECKING:
-    import pathlib
 
 GUIDE = "docs/developers-guide.md"
 LINT_MAKEFILE: typ.Final = ".PHONY: lint\nlint:\n\tsh scripts/lanes.sh\n"
@@ -94,6 +95,7 @@ def test_the_exception_facts_record_existence_clippy_and_reach(
         "exists": True,
         "runs_clippy": True,
         "reached": True,
+        "error": None,
     }
     assert scripts["scripts/quiet.sh"]["runs_clippy"] is False
     assert scripts["scripts/quiet.sh"]["reached"] is False
@@ -258,3 +260,128 @@ def test_only_matching_headings_outside_fences_are_sections(
     )
 
     assert len(sections_in_text(text, EXCEPTION_KEYWORD)) == expected
+
+
+def test_a_script_the_filesystem_refuses_to_describe_carries_an_error(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A refused probe is an error fact, not an absent script."""
+    _write(tmp_path, "Makefile", LINT_MAKEFILE)
+    _write(tmp_path, "scripts/lanes.sh", "cargo clippy\n")
+    _write(tmp_path, GUIDE, "## Clippy gate\n\n`scripts/lanes.sh`\n")
+    real = module.probe_file
+
+    def refuse_scripts(path: pathlib.Path) -> FileProbe:
+        if path.name == "lanes.sh":
+            return FileProbe(present=False, read_error="permission denied")
+        return real(path)
+
+    monkeypatch.setattr(module, "probe_file", refuse_scripts)
+
+    (exception,) = _exceptions(tmp_path)
+
+    script = exception["scripts"][0]
+    assert (script["exists"], script["error"]) == (False, "permission denied")
+
+
+def test_a_guide_the_filesystem_refuses_to_describe_is_an_error(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A refused guide probe is carried, not read as no exception recorded."""
+    _write(tmp_path, GUIDE, "## Clippy gate\n\n`scripts/lanes.sh`\n")
+    monkeypatch.setattr(
+        module,
+        "probe_file",
+        lambda _path: FileProbe(present=False, read_error="permission denied"),
+    )
+
+    result = build_documentation_envelope(tmp_path)["clippy_exceptions"]
+
+    assert result == {"records": [], "errors": [f"{GUIDE}: permission denied"]}
+
+
+_TOKENS: typ.Final = st.sampled_from([
+    "scripts/a.sh",
+    "b.py",
+    "`c.txt`",
+    "-flag",
+    "/abs/x.sh",
+    "make",
+    "scripts/a.sh",
+    "d.sh",
+    "plain",
+    "tools/e.js",
+])
+
+
+@given(st.lists(_TOKENS, max_size=12))
+def test_candidates_are_the_unique_script_paths_in_first_seen_order(
+    tokens: list[str],
+) -> None:
+    """Backticked script-like tokens, de-duplicated, in order of appearance."""
+    body = " ".join(f"`{t.strip('`')}`" for t in tokens)
+    expected = list(
+        dict.fromkeys(
+            t.strip("`")
+            for t in tokens
+            if not t.strip("`").startswith(("/", "-"))
+            and ("/" in t or t.strip("`").endswith(module._SCRIPT_SUFFIXES))
+        )
+    )
+
+    assert module._candidate_paths(body) == expected
+
+
+_COMMANDS: typ.Final = st.sampled_from([
+    "sh",
+    "bash",
+    "python3",
+    "uv run --script",
+    "env FOO=1 sh",
+])
+_NON_RUNNERS: typ.Final = st.sampled_from([
+    "echo",
+    "cat",
+    "test -x",
+    "ls -l",
+    "grep -q x",
+])
+
+
+@given(_COMMANDS, st.sampled_from(["", "./"]), st.sampled_from(["", ".old", "x"]))
+def test_an_interpreter_runs_the_exact_path_only(
+    command: str, prefix: str, suffix: str
+) -> None:
+    """The exact path (with or without ./) runs; a longer path does not."""
+    line = f"{command} {prefix}scripts/lanes.sh{suffix}"
+
+    assert invokes_script(line, "scripts/lanes.sh") is (suffix == "")
+
+
+@given(_NON_RUNNERS, st.sampled_from(["", "./"]))
+def test_a_non_executing_command_never_runs_the_script(
+    command: str, prefix: str
+) -> None:
+    """Printing, listing or testing a path is not running it."""
+    assert (
+        invokes_script(f"{command} {prefix}scripts/lanes.sh", "scripts/lanes.sh")
+        is False
+    )
+
+
+@given(
+    st.lists(st.sampled_from(["a", "b", "c", "d"]), min_size=1, max_size=4, unique=True)
+)
+def test_the_lint_walk_visits_prerequisites_in_order(targets: list[str]) -> None:
+    """The targets `lint` reaches come out in prerequisite order."""
+    makefile = (
+        ".PHONY: lint\nlint: "
+        + " ".join(targets)
+        + "\n\ttrue lint\n"
+        + "".join(f"{t}:\n\ttrue {t}1\n\ttrue {t}2\n" for t in targets)
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        _write(pathlib.Path(tmp), "Makefile", makefile)
+        envelope = build_documentation_envelope(pathlib.Path(tmp))
+
+    assert envelope["reachable_targets"] == ["lint", *targets]

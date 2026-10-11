@@ -261,7 +261,7 @@ artifacts:
       Audit-only DG-003 and DG-004 policy holding every Rust library crate to
       `missing_docs` at deny and requiring a clippy run that `make lint`
       reaches.
-    sha256: c7bfc28921de53d5b6f44e788f851c48de131703f9110083367d670292380bc9
+    sha256: 32b4e2ed93f4d960d0b340544b15be8aa75ed6fca930ba266af362b64c3750d5
   - id: lint-rule-documentation-presence-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/documentation-presence/rule.yaml
