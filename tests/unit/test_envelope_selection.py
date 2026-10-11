@@ -24,6 +24,9 @@ from concordat.rules.codescene_coverage_envelope import (
 from concordat.rules.dependabot_envelope import (
     ENVELOPE_KIND as DEPENDABOT_ENVELOPE_KIND,
 )
+from concordat.rules.documentation_envelope import (
+    ENVELOPE_KIND as DOCUMENTATION_ENVELOPE_KIND,
+)
 from concordat.rules.envelope import (
     BUILD_DEFAULTS_ENVELOPE_KIND,
     ENVELOPE_KIND,
@@ -125,6 +128,11 @@ class TestRegisteredPackages:
                 "uv-gate-baseline",
                 UV_GATE_ENVELOPE_KIND,
                 id="uv-gate-baseline",
+            ),
+            pytest.param(
+                "documentation-presence",
+                DOCUMENTATION_ENVELOPE_KIND,
+                id="documentation-presence",
             ),
             pytest.param(
                 "whitaker-provisioning",
@@ -357,6 +365,7 @@ class TestDeclaredInputKind:
             ("dependabot-update-shape", DEPENDABOT_ENVELOPE_KIND),
             ("spelling-config-baseline", SPELLING_ENVELOPE_KIND),
             ("uv-gate-baseline", UV_GATE_ENVELOPE_KIND),
+            ("documentation-presence", DOCUMENTATION_ENVELOPE_KIND),
         ):
             rule_dir = packages.rule_package_dir(rule_id)
             declared = packages._declared_input_kind(rule_dir)

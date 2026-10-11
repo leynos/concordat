@@ -627,6 +627,14 @@ the Section 2.1.2 format.
   Acceptance: compliant and noncompliant generated fixtures for every check,
   each clause mutation-proved, and the behavioural tests running the real
   policy over a checkout that vendors the canonical helper.
+- [x] Ship the documentation-presence rule package (DG-001, DG-002), from the
+  interrogate roll-out (DF12-104): a command `make lint` reaches runs
+  interrogate at 100 over every owned Python file, with no relaxing flag or
+  exclusion beyond test data and vendored trees, and the run is exact (verbose
+  level 2 and a failure on any `MISSED` row). Rust `missing_docs` rules join
+  the package from DG-003. Acceptance: compliant and noncompliant generated
+  fixtures for every check, and behavioural tests running the real policy over
+  generated checkouts.
 - [ ] Ship the Rust formatting and linting rule packages (RT-001 to RT-005):
   rustfmt wiring and template-matched configuration, clippy presence with
   `[lints]` entries at the template level or stricter, and Whitaker presence

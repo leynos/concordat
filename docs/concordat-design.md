@@ -1818,6 +1818,8 @@ breakdown of what constitutes "compliance" within the framework.
 | UV-005       | No recipe that reaches uv refreshes, upgrades, locks, purges the cache, or retries, outside a maintenance target.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Quality-Gate Integrity          | Conftest (`uv-gate-baseline`)                                       | error                | 2                        |
 | UV-006       | Every tool spec is pinned to an exact version or a full commit, or to a release tag for a tool whose own rule requires one.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Quality-Gate Integrity          | Conftest (`uv-gate-baseline`)                                       | error                | 2                        |
 | UV-007       | Git dependencies in `pyproject.toml` are pinned to a full commit.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Quality-Gate Integrity          | Conftest (`uv-gate-baseline`)                                       | error                | 2                        |
+| DG-001       | A command `make lint` reaches runs interrogate at a threshold of at least 100 over every Python file the repository owns (package, tests, scripts, benchmarks, GitHub Actions code), with no relaxing flag and no exclusion beyond test data and vendored trees.                                                                                                                                                                                                                                                                                                                                                                    | Quality-Gate Integrity          | Conftest (`documentation-presence`)                                 | error                | 2                        |
+| DG-002       | The interrogate run is exact: verbose level 2 and a recipe that fails on any `MISSED` row, because interrogate rounds its percentage to one decimal.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Quality-Gate Integrity          | Conftest (`documentation-presence`)                                 | error                | 2                        |
 | CV-001       | Superseded by CV-005, which states this requirement and the publisher clauses it depends on as one rule. Retained for the identifier's history; audit CV-005 instead.                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Quality-Gate Integrity          | OPA/Conftest                                                        | error                | 4                        |
 | CV-002       | A workflow with a push trigger restricted to main (optionally alongside `workflow_dispatch`) uploads coverage to CodeScene (`mode: upload`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Quality-Gate Integrity          | OPA/Conftest + file presence                                        | error                | 4                        |
 | CV-003       | Every secret referenced by a guarded workflow step exists in BOTH the Actions and Dependabot secret stores (guards silently skip when the secret is absent).                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Quality-Gate Integrity          | Python/GitHub API                                                   | error                | 4                        |
@@ -2370,6 +2372,41 @@ the `uv-gate-baseline` rule package.
   for it.
 - **Actuators:** none yet; the package ships audit-only, and each migration
   pull request uses it as its proof of compliance.
+
+##### Python documentation presence (DG-001, DG-002)
+
+Docstring *presence* is a lint tier of its own: Ruff's `D` rules cover the
+public surface and the style of a docstring, but leave nested closures, dunder
+methods and test doubles undocumented. leynos/cuprum (ADR-004) runs
+`interrogate --fail-under 100` over every Python scope inside `make lint`, and
+leynos/dev-env-rocky does the same for its Ansible modules. The
+`documentation-presence` rule package holds every Python repository to that
+standard, as the DF12-104 roll-out proceeds.
+
+- **Identifiers:** the package has its own `DG-` prefix, for "documentation
+  gate". `DP-` is taken by the dependency-pin actionability checks (DP-001,
+  DP-002). The Rust `missing_docs` rules join the package from DG-003.
+- **Sensors:** one Conftest policy over `makeutil` facts, `pyproject.toml`, and
+  the tree's Python files. The envelope builder, not the policy, expands the
+  Makefile's single-valued variables (and the `dir`, `notdir`, `lastword`,
+  `firstword`, `abspath`, `realpath` and `strip` functions), follows `lint`
+  through its prerequisites and `$(MAKE)` calls, and records each interrogate
+  invocation as a structured run, so the Rego stays a statement of the standard
+  rather than a shell parser. An invocation the builder cannot resolve, a
+  configuration file it cannot read, or a `lint` target it cannot follow is
+  indeterminate.
+- **Exactness (DG-002):** interrogate compares a percentage rounded to one
+  decimal, so `--fail-under 100` passes a lone gap once a repository has more
+  than about two thousand definitions per gap; cuprum passed its own gate with
+  three. DG-002 therefore requires verbose level 2, which prints a `MISSED` row
+  per undocumented definition, and a recipe that fails on any such row.
+- **Exemptions:** files under `fixtures`, vendored trees and tool caches need no
+  coverage and may be excluded (the `exempt_pattern` parameter). Nothing else
+  may be excluded, and no ignore flag is accepted except
+  `--ignore-overloaded- functions`, because Ruff forbids a docstring on an
+  overload stub.
+- **Actuators:** none; the package ships audit-only, and each roll-out pull
+  request uses it as its proof of compliance.
 
 ##### Rust formatting and linting (RT-001 to RT-005)
 

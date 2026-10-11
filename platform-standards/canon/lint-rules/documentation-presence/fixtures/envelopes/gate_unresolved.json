@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "kind": "policy-input/documentation-presence",
+  "repository": {
+    "path": ".",
+    "name": null
+  },
+  "applicability": {
+    "root_makefile": true,
+    "python_files": true,
+    "pyproject": true
+  },
+  "makefile_path": "Makefile",
+  "lint_target": true,
+  "reachable_targets": [
+    "lint",
+    "interrogate"
+  ],
+  "reachability_resolved": true,
+  "interrogate_elsewhere": [],
+  "runs": [
+    {
+      "target": "interrogate",
+      "line": 11,
+      "command": "@report=\"$$($(INTERROGATE) $(FLAGS) $(INTERROGATE_TARGETS))\";  status=$$?;  printf '%s\\n' \"$$report\";  test \"$$status\" -eq 0 || exit \"$$status\";  if printf '%s\\n' \"$$report\" | grep -q '| *MISSED |'; then exit 1; fi",
+      "resolved": false,
+      "paths": [
+        "."
+      ],
+      "fail_under": null,
+      "verbose": 0,
+      "config": null,
+      "excludes": [],
+      "ignores": [],
+      "guarded": true
+    }
+  ],
+  "configs": [
+    {
+      "path": "pyproject.toml",
+      "table": {},
+      "error": null
+    }
+  ],
+  "python_files": [
+    ".github/scripts/helper.py",
+    "pkg/__init__.py",
+    "pkg/core.py",
+    "scripts/tool.py",
+    "tests/test_core.py"
+  ]
+}

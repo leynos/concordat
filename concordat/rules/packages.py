@@ -34,6 +34,13 @@ from .codescene_coverage_envelope import (
 )
 from .dependabot_envelope import ENVELOPE_KIND as DEPENDABOT_ENVELOPE_KIND
 from .dependabot_envelope import DependabotEnvelope, build_dependabot_envelope
+from .documentation_envelope import (
+    ENVELOPE_KIND as DOCUMENTATION_ENVELOPE_KIND,
+)
+from .documentation_envelope import (
+    DocumentationEnvelope,
+    build_documentation_envelope,
+)
 from .envelope import (
     BUILD_DEFAULTS_ENVELOPE_KIND,
     ENVELOPE_KIND,
@@ -86,6 +93,7 @@ type RuleEnvelope = (
     | DependabotEnvelope
     | SpellingEnvelope
     | ProvisioningEnvelope
+    | DocumentationEnvelope
 )
 type EnvelopeResolver = cabc.Callable[[str, pathlib.Path], RuleEnvelope]
 
@@ -410,6 +418,24 @@ def _uv_gate_envelope(
     return build_uv_gate_envelope(checkout, inspect=inspect_makefile_observed)
 
 
+def _documentation_envelope(
+    checkout: pathlib.Path,
+    _parameters: cabc.Mapping[str, object] | None = None,
+) -> DocumentationEnvelope:
+    """Build the documentation-presence envelope, ignoring the parameters.
+
+    `documentation-presence` reads its threshold, exemption pattern and verbose
+    level through `data.parameters` in the policy, so the second argument exists
+    only to give every builder one callable type.
+
+    Returns
+    -------
+    DocumentationEnvelope
+        The `policy-input/documentation-presence` document for *checkout*.
+    """
+    return build_documentation_envelope(checkout, inspect=inspect_makefile_observed)
+
+
 def _provisioning_envelope(
     checkout: pathlib.Path,
     _parameters: cabc.Mapping[str, object] | None = None,
@@ -444,6 +470,7 @@ PACKAGE_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     "dependabot-update-shape": _dependabot_envelope,
     "spelling-config-baseline": _spelling_envelope,
     "uv-gate-baseline": _uv_gate_envelope,
+    "documentation-presence": _documentation_envelope,
     "whitaker-provisioning": _provisioning_envelope,
 })
 
@@ -458,6 +485,7 @@ INPUT_KIND_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     DEPENDABOT_ENVELOPE_KIND: _dependabot_envelope,
     SPELLING_ENVELOPE_KIND: _spelling_envelope,
     UV_GATE_ENVELOPE_KIND: _uv_gate_envelope,
+    DOCUMENTATION_ENVELOPE_KIND: _documentation_envelope,
     PROVISIONING_ENVELOPE_KIND: _provisioning_envelope,
 })
 
