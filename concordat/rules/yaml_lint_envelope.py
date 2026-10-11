@@ -67,8 +67,6 @@ OPERATION_READ_YAMLLINT_LOCAL: typ.Final = "read-yamllint-local"
 OPERATION_READ_ACTIONLINT_CONFIG: typ.Final = "read-actionlint-config"
 OPERATION_SCAN_YAML: typ.Final = "scan-yaml-files"
 
-_yaml = YAML(typ="safe")
-
 
 class DecodedFile(typ.TypedDict):
     """One decoded YAML input file, or the file with the reason it failed."""
@@ -176,12 +174,18 @@ def _load_yaml_file(
     fact: DecodedFile = {"path": name, "parsed": None, "error": error}
     if text is None:
         return fact
+    # A parser per read: ruamel.yaml does not promise that an instance stays
+    # usable after a failed load, and a bad configuration must not corrupt the
+    # reading of the next one.
     try:
-        parsed: object = _yaml.load(text)
+        parsed: object = YAML(typ="safe").load(text)
+        fact["parsed"] = json_safe(parsed)
     except YAMLError as decode_error:
         fact["error"] = f"invalid YAML: {decode_error}"
-        return fact
-    fact["parsed"] = json_safe(parsed)
+    except TypeError as key_error:
+        # A mapping key JSON cannot carry, such as a YAML date: recorded as a
+        # configuration error, never as a crash of the audit.
+        fact["error"] = f"unsupported mapping key: {key_error}"
     return fact
 
 

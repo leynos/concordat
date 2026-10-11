@@ -2447,11 +2447,11 @@ configuration, one pinned installer and one gate shape, and ship as the
   SHA in each repository, so Dependabot moves the tool versions in one place.
 - **Sensors:** a Makefile policy over `makeutil` facts follows the static
   closure from `lint` with the same machinery as the Markdown rule, reading
-  `xargs` as a transparent wrapper because yamllint has no Git mode. A file
-  digest for the base, a decoded local configuration and actionlint
-  configuration, and decoded workflows cover the rest. An unresolvable
-  variable, a conditional or `include` in the closure, or an undecodable file
-  is indeterminate. Composite actions are not inspected.
+  `xargs` as a transparent wrapper because yamllint has no Git mode. The base's
+  file digest, the decoded local and actionlint configurations, and the decoded
+  workflows cover the rest. An unresolvable variable, a conditional or
+  `include` in the closure, or an undecodable file is indeterminate. Composite
+  actions are not inspected.
 - **Actuators:** none yet; the package ships audit-only, and each rollout pull
   request uses it as its proof of compliance.
 

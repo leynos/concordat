@@ -13,11 +13,14 @@ from concordat.rules.makefile_facts import MakefileFacts, MakeutilReport
 from concordat.rules.yaml_lint_envelope import (
     ENVELOPE_KIND,
     ENVELOPE_SCHEMA_VERSION,
+    DecodedFile,
+    YamlLintEnvelope,
     build_yaml_lint_envelope,
 )
 from tests.unit.rule_test_support import MINIMAL_REPORT
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import pathlib
 
 RULE_ID: typ.Final = "yaml-lint-baseline"
@@ -109,11 +112,21 @@ def test_the_local_config_is_decoded(tmp_path: pathlib.Path) -> None:
     }
 
 
+def _local_config(envelope: YamlLintEnvelope) -> DecodedFile | None:
+    """Return the envelope's local yamllint fact."""
+    return envelope["yamllint_local"]
+
+
+def _actionlint_config(envelope: YamlLintEnvelope) -> DecodedFile | None:
+    """Return the envelope's actionlint fact."""
+    return envelope["actionlint_config"]
+
+
 @pytest.mark.parametrize(
-    "config",
+    ("name", "select"),
     [
-        (".yamllint.yml", "yamllint_local"),
-        (".github/actionlint.yaml", "actionlint_config"),
+        (".yamllint.yml", _local_config),
+        (".github/actionlint.yaml", _actionlint_config),
     ],
     ids=["yamllint", "actionlint"],
 )
@@ -123,20 +136,46 @@ def test_the_local_config_is_decoded(tmp_path: pathlib.Path) -> None:
     ids=["invalid YAML", "not UTF-8"],
 )
 def test_an_undecodable_config_keeps_its_reason(
-    tmp_path: pathlib.Path, config: tuple[str, str], damage: tuple[bytes, str]
+    tmp_path: pathlib.Path,
+    name: str,
+    select: cabc.Callable[[YamlLintEnvelope], DecodedFile | None],
+    damage: tuple[bytes, str],
 ) -> None:
     """A content failure is evidence for an indeterminate verdict, not absence."""
-    name, key = config
     content, reason = damage
     (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
     (tmp_path / name).write_bytes(content)
 
-    envelope = typ.cast("dict[str, typ.Any]", build_yaml_lint_envelope(tmp_path))
-    fact = envelope[key]
+    fact = select(build_yaml_lint_envelope(tmp_path))
 
     assert fact is not None
     assert fact["parsed"] is None
     assert reason in str(fact["error"]), fact
+
+
+def test_a_failed_read_does_not_spoil_the_next_one(tmp_path: pathlib.Path) -> None:
+    """Each configuration is read with a fresh parser."""
+    _write(tmp_path, ".yamllint.yml", "a: [\n")
+    _write(tmp_path, ".github/actionlint.yaml", "self-hosted-runner:\n  labels: [a]\n")
+
+    envelope = build_yaml_lint_envelope(tmp_path)
+
+    assert _local_config(envelope) is not None
+    assert (_actionlint_config(envelope) or {}).get("error") is None
+    assert (_actionlint_config(envelope) or {}).get("parsed") == {
+        "self-hosted-runner": {"labels": ["a"]}
+    }
+
+
+def test_a_date_mapping_key_is_a_configuration_error(tmp_path: pathlib.Path) -> None:
+    """JSON cannot carry a date key; the audit records it rather than crashing."""
+    _write(tmp_path, ".yamllint.yml", "2001-01-01: first\n")
+
+    local = _local_config(build_yaml_lint_envelope(tmp_path))
+
+    assert local is not None
+    assert local["parsed"] is None
+    assert "unsupported mapping key" in str(local["error"]), local
 
 
 def test_alternate_yamllint_names_are_listed(tmp_path: pathlib.Path) -> None:

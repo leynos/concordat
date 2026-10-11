@@ -994,21 +994,22 @@ the pattern concordat#264 removes.
 
 The envelope builders are pure queries. `inspect_makefile` reads no clock and
 writes no log, and `_build_workflows` only reads and tags workflow facts. Each
-builder (`build_envelope`, `build_markdown_envelope`, `build_spelling_envelope`
-and `build_build_defaults_envelope`) takes a keyword `inspect` of type
-`MakefileInspector`, defaulting to the pure `inspect_makefile`.
-`build_build_defaults_envelope` also takes
+builder (`build_envelope`, `build_markdown_envelope`, `build_spelling_envelope`,
+`build_yaml_lint_envelope` and `build_build_defaults_envelope`) takes a keyword
+`inspect` of type `MakefileInspector`, defaulting to the pure
+`inspect_makefile`. `build_build_defaults_envelope` also takes
 `report_undecodable(path, category)`, which defaults to `None` and so reports
 nothing.
 
 Observation is wired in at the command boundary, `rules/packages.py`, which
-passes `makefile_observed.inspect_makefile_observed` as `inspect` and
-`envelope.log_undecodable_workflow` as `report_undecodable`.
-`inspect_makefile_observed` times the query with an injected `clock` and passes
-one `MakefileParseEvent` (operation, tool, outcome, elapsed seconds) to an
-injected `emit`; the default emitter writes a debug log record. The outcome is
-a fixed word (`complete`, `recovered`, `refused`, `timeout`, `launch-failure` or
-`error`), never the tool's output, which can quote Makefile content.
+passes `makefile_observed.inspect_makefile_observed` as `inspect` (the YAML
+lint package's builder included) and `envelope.log_undecodable_workflow` as
+`report_undecodable`. `inspect_makefile_observed` times the query with an
+injected `clock` and passes one `MakefileParseEvent` (operation, tool, outcome,
+elapsed seconds) to an injected `emit`; the default emitter writes a debug log
+record. The outcome is a fixed word (`complete`, `recovered`, `refused`,
+`timeout`, `launch-failure` or `error`), never the tool's output, which can
+quote Makefile content.
 
 `MakefileRefusedError` (an `OperationalRuleError`) is raised for `makeutil`
 exit status 2. `build_build_defaults_envelope` carries it as `makefile_error`

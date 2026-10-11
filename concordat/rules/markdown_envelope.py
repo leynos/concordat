@@ -235,7 +235,25 @@ def _is_dir(path: pathlib.Path, operation: str) -> bool:
 
 
 def is_symlink(path: pathlib.Path, operation: str) -> bool:
-    """Return whether the path is itself a symbolic link, raising on a refusal."""
+    """Return whether the path is itself a symbolic link, raising on a refusal.
+
+    The probe reads the link rather than its target, so a dangling link is
+    still a link.
+
+    Parameters
+    ----------
+    path:
+        The path to examine.
+    operation:
+        The operation name an `OperationalRuleError` reports if the filesystem
+        refuses to answer.
+
+    Returns
+    -------
+    bool
+        Whether *path* is itself a symbolic link. Absence is ``False``; a
+        refused probe raises an `OperationalRuleError` naming *operation*.
+    """
     return _require(fs_probe.probe_symlink(path), path, operation)
 
 
@@ -375,7 +393,21 @@ def _alternate_configs(checkout: pathlib.Path) -> list[str]:
 
 
 def json_safe(value: object) -> object:
-    """Return *value* with any non-JSON scalar (a YAML timestamp) stringified."""
+    """Return *value* with any non-JSON scalar (a YAML timestamp) stringified.
+
+    Parameters
+    ----------
+    value:
+        A decoded document: mappings, sequences and scalars.
+
+    Returns
+    -------
+    object
+        The same document after a JSON round trip, with every scalar JSON
+        cannot represent replaced by its string form. A mapping key JSON
+        cannot carry, such as a YAML date, raises `TypeError`, which the caller
+        is expected to record as a decoding error.
+    """
     return typ.cast("object", json.loads(json.dumps(value, default=str)))
 
 
