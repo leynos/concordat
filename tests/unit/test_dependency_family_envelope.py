@@ -269,7 +269,10 @@ def test_each_nested_crate_layout_is_named(tmp_path: pathlib.Path, crate: str) -
 
     problems = build_dependency_family_envelope(tmp_path)["problems"]
 
-    assert [p for p in problems if p.startswith(f"{crate}/Cargo.toml is a Cargo")]
+    assert [p for p in problems if p.startswith(f"{crate}/Cargo.toml is a Cargo")], (
+        f"expected a problem naming {crate}/Cargo.toml as an ungoverned manifest; "
+        f"got {problems}"
+    )
 
 
 def test_an_undeclared_nested_cargo_manifest_is_a_problem(
