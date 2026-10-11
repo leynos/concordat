@@ -74,8 +74,9 @@ below.
   the `env:` of the workflow, the job and the step, innermost winning, as
   GitHub resolves them. Only a literal string value counts: an expression
   (`${{ ... }}`), a value that is not a string, a name defined nowhere (a
-  variable set through `$GITHUB_ENV`, say) and a value that itself names
-  another variable all stay unresolved, hence indeterminate.
+  variable set through `$GITHUB_ENV`, say) and a value that contains a dollar
+  sign at all (so any reference to another variable, however it is spaced) all
+  stay unresolved, hence indeterminate.
 - **UV-007** (error): a Git dependency in `pyproject.toml` (a requirement with
   `git+`, or a `[tool.uv.sources]` Git entry) is pinned to a full commit. A tag
   or a branch can move. A published wheel (any non-Git requirement) needs no

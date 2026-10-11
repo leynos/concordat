@@ -593,6 +593,11 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
             job_env=f"REF: {SHA}\n      SPEC: {OTHER_TOOL}@${{REF}}"
         )
     }),
+    "wf_env_nested_after_whitespace": Scenario({
+        ".github/workflows/ci.yml": wf_env_workflow(
+            job_env=f"REF: {SHA}\n      SPEC: 'ruff==0.16.4 ${{REF}}'"
+        )
+    }),
     "wf_env_non_string": Scenario({
         ".github/workflows/ci.yml": wf_env_workflow(job_env="SPEC: 12")
     }),

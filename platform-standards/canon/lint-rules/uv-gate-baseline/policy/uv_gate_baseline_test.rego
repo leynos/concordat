@@ -243,6 +243,8 @@ test_wf_env_prefix_collision if reported(data.fixtures.wf_env_prefix_collision) 
 
 test_wf_env_nested_value if reported(data.fixtures.wf_env_nested_value) == {"UV-006/indeterminate"}
 
+test_wf_env_nested_after_whitespace if reported(data.fixtures.wf_env_nested_after_whitespace) == {"UV-006/indeterminate"}
+
 test_wf_env_non_string if reported(data.fixtures.wf_env_non_string) == {"UV-006/indeterminate"}
 
 test_action_step_env_pinned if reported(data.fixtures.action_step_env_pinned) == set()

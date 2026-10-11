@@ -561,9 +561,11 @@ action_steps := [{"run": step.run, "env": env, "path": file.path} |
 
 env_steps := array.concat(workflow_steps, action_steps)
 
+# A value is substituted only when it is a literal: no dollar sign at all, so no
+# expression and no reference to another variable that could hide behind it.
 substitutable(value) if {
 	is_string(value)
-	not contains(value, "${{")
+	not contains(value, "$")
 }
 
 # What may follow a bare `$NAME` for it to end there rather than continue the name.
