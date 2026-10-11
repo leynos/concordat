@@ -519,11 +519,84 @@ release_tag_pinned(spec) if {
 	regex.match(pattern, spec)
 }
 
-unresolved(spec) if regex.match(`\$[({]`, spec)
+unresolved(spec) if regex.match(`\$[({A-Za-z_]`, spec)
+
+# -- workflow environment variables -----------------------------------------------
+#
+# A step's `run` text may name a tool spec through an environment variable. GitHub
+# resolves `env:` from the workflow, then the job, then the step, the innermost
+# winning, so the policy does the same. Only a string value that is not an
+# expression is substituted; anything else leaves the reference in place, which
+# UV-006 then reports as indeterminate rather than guessing.
+
+as_object(value) := value if is_object(value)
+
+as_object(value) := {} if not is_object(value)
+
+merged_env(layers) := object.union_n([as_object(layer) | some layer in layers])
+
+# (workflow file, step) pairs with the env that applies to the step.
+workflow_steps := [{"run": step.run, "env": env, "path": file.path} |
+	some file in input.workflows
+	file.error == null
+	document := as_object(file.parsed)
+	some _, job in as_object(object.get(document, "jobs", {}))
+	some step in object.get(as_object(job), "steps", [])
+	is_string(step.run)
+	env := merged_env([
+		object.get(document, "env", {}),
+		object.get(as_object(job), "env", {}),
+		object.get(as_object(step), "env", {}),
+	])
+]
+
+action_steps := [{"run": step.run, "env": env, "path": file.path} |
+	some file in input.actions
+	file.error == null
+	document := as_object(file.parsed)
+	some step in object.get(as_object(object.get(document, "runs", {})), "steps", [])
+	is_string(step.run)
+	env := merged_env([object.get(as_object(step), "env", {})])
+]
+
+env_steps := array.concat(workflow_steps, action_steps)
+
+substitutable(value) if {
+	is_string(value)
+	not contains(value, "${{")
+}
+
+# What may follow a bare `$NAME` for it to end there rather than continue the name.
+name_followers := [" ", "\t", "\n", "\"", "'", "\\", ";", ")", "|", "&"]
+
+env_replacements(env) := object.union(braced, bare) if {
+	braced := {sprintf("${%s}", [name]): value |
+		some name, value in env
+		substitutable(value)
+	}
+	bare := {sprintf("$%s%s", [name, follower]): sprintf("%s%s", [value, follower]) |
+		some name, value in env
+		substitutable(value)
+		some follower in name_followers
+	}
+}
+
+# One simultaneous pass, with a trailing space so a bare `$NAME` at the end of the
+# text still has a follower. Rego has no recursion, so there is no second pass: a
+# value that itself names another variable stays unresolved (and so indeterminate).
+expand_env(text, env) := trim_suffix(strings.replace_n(env_replacements(env), concat("", [text, " "])), " ")
+
+run_texts := {step.run | some step in env_steps}
 
 tool_sources := array.concat(
-	[{"text": line.text, "path": makefile_path, "line": line.line} | some line in recipe_lines],
-	[{"text": item.text, "path": item.path, "line": 0} | some item in workflow_strings],
+	array.concat(
+		[{"text": line.text, "path": makefile_path, "line": line.line} | some line in recipe_lines],
+		[{"text": expand_env(step.run, step.env), "path": step.path, "line": 0} | some step in env_steps],
+	),
+	[{"text": item.text, "path": item.path, "line": 0} |
+		some item in workflow_strings
+		not item.text in run_texts
+	],
 )
 
 deny contains f if {

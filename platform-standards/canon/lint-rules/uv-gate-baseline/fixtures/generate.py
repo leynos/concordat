@@ -121,6 +121,48 @@ def workflow(run: str, *, env: str = "") -> str:
     )
 
 
+def wf_env_workflow(
+    *,
+    top_env: str = "",
+    job_env: str = "",
+    step_env: str = "",
+    run: str = 'uvx --from "${SPEC}" x',
+) -> str:
+    """Return a workflow whose step runs *run*, with env at each level.
+
+    Each argument is the body of an ``env:`` mapping (``NAME: value``); an empty
+    one omits the mapping.
+
+    Returns
+    -------
+    str
+        The workflow text.
+    """
+    top = f"env:\n  {top_env}\n" if top_env else ""
+    job = f"    env:\n      {job_env}\n" if job_env else ""
+    step = f"        env:\n          {step_env}\n" if step_env else ""
+    return (
+        f"name: ci\non: push\n{top}jobs:\n  gate:\n    runs-on: ubuntu-latest\n"
+        f"{job}    steps:\n      - run: {run!r}\n{step}"
+    )
+
+
+def action_with_env(spec: str) -> str:
+    """Return a composite action whose step reads the tool spec from ``env:``.
+
+    Returns
+    -------
+    str
+        The action text.
+    """
+    return (
+        "name: setup\nruns:\n  using: composite\n  steps:\n"
+        "    - shell: bash\n"
+        "      run: 'uvx --from \"${SPEC}\" x'\n"
+        f"      env:\n        SPEC: {spec}\n"
+    )
+
+
 @dataclasses.dataclass(frozen=True)
 class Scenario:
     """The files one fixture checkout holds, by relative path.
@@ -496,6 +538,69 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     }),
     "tool_uvx_pinned_only_bypass": Scenario({
         "Makefile": makefile("uvx --from ruff==0.16.4 ruff check .")
+    }),
+    # A tool spec named through a workflow `env:` variable resolves innermost-first.
+    "wf_env_job_pinned": Scenario({
+        ".github/workflows/ci.yml": wf_env_workflow(job_env=f"SPEC: {OTHER_TOOL}@{SHA}")
+    }),
+    "wf_env_workflow_level_branch": Scenario({
+        ".github/workflows/ci.yml": wf_env_workflow(top_env=f"SPEC: {OTHER_TOOL}@main")
+    }),
+    "wf_env_step_overrides_job_bad": Scenario({
+        ".github/workflows/ci.yml": wf_env_workflow(
+            job_env=f"SPEC: {OTHER_TOOL}@{SHA}",
+            step_env=f"SPEC: {OTHER_TOOL}@main",
+        )
+    }),
+    "wf_env_step_overrides_job_good": Scenario({
+        ".github/workflows/ci.yml": wf_env_workflow(
+            job_env=f"SPEC: {OTHER_TOOL}@main",
+            step_env=f"SPEC: {OTHER_TOOL}@{SHA}",
+        )
+    }),
+    "wf_env_job_overrides_workflow_good": Scenario({
+        ".github/workflows/ci.yml": wf_env_workflow(
+            top_env=f"SPEC: {OTHER_TOOL}@main",
+            job_env=f"SPEC: {OTHER_TOOL}@{SHA}",
+        )
+    }),
+    "wf_env_bare_dollar": Scenario({
+        ".github/workflows/ci.yml": wf_env_workflow(
+            job_env=f"SPEC: {OTHER_TOOL}@{SHA}", run="uvx --from $SPEC x"
+        )
+    }),
+    "wf_env_bare_dollar_at_the_end": Scenario({
+        ".github/workflows/ci.yml": wf_env_workflow(
+            job_env=f"SPEC: {OTHER_TOOL}@{SHA}", run="uvx --from $SPEC"
+        )
+    }),
+    "wf_env_name_is_a_prefix": Scenario({
+        ".github/workflows/ci.yml": wf_env_workflow(
+            job_env=f"SPEC: {OTHER_TOOL}@{SHA}", run="uvx --from $SPEC_OTHER x"
+        )
+    }),
+    "wf_env_expression_value": Scenario({
+        ".github/workflows/ci.yml": wf_env_workflow(job_env="SPEC: ${{ inputs.spec }}")
+    }),
+    "wf_env_undefined": Scenario({".github/workflows/ci.yml": wf_env_workflow()}),
+    "wf_env_prefix_collision": Scenario({
+        ".github/workflows/ci.yml": wf_env_workflow(
+            job_env=f"SPEC_OTHER: {OTHER_TOOL}@{SHA}", run="uvx --from $SPEC x"
+        )
+    }),
+    "wf_env_nested_value": Scenario({
+        ".github/workflows/ci.yml": wf_env_workflow(
+            job_env=f"REF: {SHA}\n      SPEC: {OTHER_TOOL}@${{REF}}"
+        )
+    }),
+    "wf_env_non_string": Scenario({
+        ".github/workflows/ci.yml": wf_env_workflow(job_env="SPEC: 12")
+    }),
+    "action_step_env_pinned": Scenario({
+        ".github/actions/setup/action.yml": action_with_env(f"{OTHER_TOOL}@{SHA}")
+    }),
+    "action_step_env_branch": Scenario({
+        ".github/actions/setup/action.yml": action_with_env(f"{OTHER_TOOL}@main")
     }),
     # UV-007
     "git_dep_tag": Scenario({
