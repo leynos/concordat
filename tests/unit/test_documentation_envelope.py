@@ -280,7 +280,7 @@ def test_a_redirection_destination_is_not_a_scanned_path(
         ("uv run --with interrogate --python 3.14 interrogate -f 100 pkg", 1),
         ("python3 -m interrogate -f 100 pkg", 1),
         (
-            "UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools uv tool run --from i interrogate pkg",
+            "UV_CACHE_DIR=.uv-cache uv tool run --from i interrogate pkg",
             1,
         ),
         ("env X=1 uv run interrogate -f 100 pkg", 1),
