@@ -146,6 +146,21 @@ def _relationships_path() -> pathlib.Path:
     return rule_package_dir(RULE_ID).parents[1] / "data" / DATA_FILENAME
 
 
+def _relationship_document(
+    path: pathlib.Path, problems: list[str]
+) -> dict[str, object] | None:
+    """Return the decoded relationship data, or None with the reason recorded."""
+    try:
+        document: object = _yaml.load(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, YAMLError) as error:
+        problems.append(f"cannot read the relationship data {path.name}: {error}")
+        return None
+    data = mapping(document)
+    if data is None:
+        problems.append(f"the relationship data {path.name} is not a mapping")
+    return data
+
+
 def _load_relationships(
     problems: list[str],
 ) -> tuple[int | None, list[dict[str, object]]]:
@@ -160,37 +175,26 @@ def _load_relationships(
         The schema version and the relationship mappings.
     """
     path = _relationships_path()
-    try:
-        document: object = _yaml.load(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, YAMLError) as error:
-        problems.append(f"cannot read the relationship data {path.name}: {error}")
-        return None, []
-    data = mapping(document)
+    data = _relationship_document(path, problems)
     if data is None:
-        problems.append(f"the relationship data {path.name} is not a mapping")
         return None, []
     listed = sequence(data.get("relationships"))
     version = data.get("schema_version")
     if listed is None or not isinstance(version, int):
         problems.append(f"the relationship data {path.name} has no versioned list")
         return None, []
-    relationships = [item for entry in listed if (item := mapping(entry)) is not None]
-    return version, relationships
+    return version, [item for entry in listed if (item := mapping(entry)) is not None]
 
 
 def _cargo_requirement(value: object) -> tuple[str, bool]:
     """Return a Cargo requirement's text and whether it is workspace-inherited."""
     if isinstance(value, str):
         return value, False
-    table = mapping(value)
-    if table is not None:
-        if table.get("workspace") is True:
-            return "", True
-        version = table.get("version")
-        if isinstance(version, str):
-            return version, False
-        return "", False
-    return "", False
+    table = mapping(value) or {}
+    version = table.get("version")
+    if table.get("workspace") is True:
+        return "", True
+    return (version if isinstance(version, str) else ""), False
 
 
 def _classify(requirement: str) -> tuple[str, bool]:
@@ -470,6 +474,38 @@ def _nested_pyprojects(checkout: pathlib.Path) -> list[pathlib.Path]:
     )
 
 
+def _read_pyproject(
+    checkout: pathlib.Path, problems: list[str]
+) -> dict[str, object] | None:
+    """Return the decoded root `pyproject.toml`, or None with the reason recorded.
+
+    Only the root project is read; a repository with Python projects in
+    subdirectories gets a problem fact rather than a pass for them.
+
+    Returns
+    -------
+    dict[str, object] | None
+        The decoded document, or None when absent or unreadable.
+    """
+    problems.extend(
+        f"{nested.relative_to(checkout).as_posix()} is not read: only the root "
+        "pyproject.toml is"
+        for nested in _nested_pyprojects(checkout)
+    )
+    path = checkout / "pyproject.toml"
+    probe = probe_file(path)
+    if probe.read_error is not None:
+        problems.append(f"cannot read pyproject.toml: {probe.read_error}")
+        return None
+    if not probe.present:
+        return None
+    try:
+        return tomllib.loads(path.read_text(encoding="utf-8"))
+    except (tomllib.TOMLDecodeError, UnicodeDecodeError, OSError) as error:
+        problems.append(f"cannot parse pyproject.toml: {error}")
+        return None
+
+
 def _python_declarations(
     checkout: pathlib.Path,
     config: ConfigFile | None,
@@ -477,30 +513,13 @@ def _python_declarations(
 ) -> list[Declaration]:
     """Return every dependency edge of the root `pyproject.toml`.
 
-    Only the root project is read; a repository with Python projects in
-    subdirectories gets a problem fact rather than a pass for them.
-
     Returns
     -------
     list[Declaration]
         One declaration per requirement, with its locked versions and coverage.
     """
-    path = checkout / "pyproject.toml"
-    probe = probe_file(path)
-    if probe.read_error is not None:
-        problems.append(f"cannot read pyproject.toml: {probe.read_error}")
-        return []
-    problems.extend(
-        f"{nested.relative_to(checkout).as_posix()} is not read: only the root "
-        "pyproject.toml is"
-        for nested in _nested_pyprojects(checkout)
-    )
-    if not probe.present:
-        return []
-    try:
-        parsed = tomllib.loads(path.read_text(encoding="utf-8"))
-    except (tomllib.TOMLDecodeError, UnicodeDecodeError, OSError) as error:
-        problems.append(f"cannot parse pyproject.toml: {error}")
+    parsed = _read_pyproject(checkout, problems)
+    if parsed is None:
         return []
     ecosystem = "uv" if probe_file(checkout / "uv.lock").present else "pip"
     rows = _python_requirements(parsed)
@@ -510,13 +529,16 @@ def _python_declarations(
     names = {normalise(m.group("name")) for m, _, _ in matches if m}
     versions, reason = _lock_versions(checkout / "uv.lock", names, python=True)
     evidence = (config, ecosystem, versions, reason)
-    declarations: list[Declaration] = []
-    for (match, section, extra), (_, _, text) in zip(matches, rows, strict=True):
-        if match is None:
-            problems.append(f"cannot read the requirement {text!r} in pyproject.toml")
-            continue
-        declarations.append(_python_declaration((match, section, extra), evidence))
-    return declarations
+    problems.extend(
+        f"cannot read the requirement {text!r} in pyproject.toml"
+        for (match, _, _), (_, _, text) in zip(matches, rows, strict=True)
+        if match is None
+    )
+    return [
+        _python_declaration((m, section, extra), evidence)
+        for m, section, extra in matches
+        if m is not None
+    ]
 
 
 def _python_declaration(
@@ -554,9 +576,7 @@ def _exception_from(item: object) -> RelationshipException | None:
     RelationshipException | None
         The exception with its relationship, rationale and review trigger.
     """
-    table = mapping(item)
-    if table is None:
-        return None
+    table = mapping(item) or {}
     texts = [table.get(name) for name in _EXCEPTION_FIELDS]
     if not all(isinstance(text, str) and text.strip() for text in texts):
         return None
@@ -583,6 +603,16 @@ def _read_concordat(path: pathlib.Path, problems: list[str]) -> object:
         return None
 
 
+def _family_exceptions(document: object, problems: list[str]) -> list[object]:
+    """Return the raw `dependencies.family_exceptions` list of `.concordat`."""
+    section = (mapping(document) or {}).get("dependencies")
+    raw = (mapping(section) or {}).get("family_exceptions")
+    listed = sequence(raw)
+    if raw is not None and listed is None:
+        problems.append("dependencies.family_exceptions in .concordat is not a list")
+    return listed or []
+
+
 def _load_exceptions(
     checkout: pathlib.Path, problems: list[str]
 ) -> list[RelationshipException]:
@@ -597,12 +627,7 @@ def _load_exceptions(
         The exceptions that name all three fields.
     """
     document = _read_concordat(checkout / ".concordat", problems)
-    section = mapping((mapping(document) or {}).get("dependencies")) or {}
-    raw = section.get("family_exceptions")
-    listed = sequence(raw)
-    if raw is not None and listed is None:
-        problems.append("dependencies.family_exceptions in .concordat is not a list")
-    parsed = [_exception_from(item) for item in listed or []]
+    parsed = [_exception_from(item) for item in _family_exceptions(document, problems)]
     problems.extend(
         "a dependencies.family_exceptions entry in .concordat needs a "
         "relationship, a rationale and a review_trigger"

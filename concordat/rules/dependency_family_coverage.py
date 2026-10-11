@@ -185,9 +185,9 @@ def coverage(
     if found is None:
         return _missing_coverage(f"no {ecosystem} entry covers {directories[0]}")
     index, entry = found
-    return _entry_coverage(
-        config, index, typ.cast("dict[str, object]", entry), package, ecosystem
-    )
+    table = typ.cast("dict[str, object]", entry)
+    ignored = is_ignored(table, package, python=ecosystem in {"pip", "uv"})
+    return {**_entry_coverage(config, index, table, package), "ignored": ignored}
 
 
 def _matching_groups(
@@ -211,7 +211,6 @@ def _entry_coverage(
     index: int,
     entry: dict[str, object],
     package: str,
-    ecosystem: str,
 ) -> Coverage:
     """Return the group coverage of *package* in one covering entry."""
     order = config["group_order"][index] if index < len(config["group_order"]) else None
@@ -223,6 +222,6 @@ def _entry_coverage(
         "catch_all": first is not None and first not in narrow,
         "matching": matching,
         "matching_narrow": narrow,
-        "ignored": is_ignored(entry, package, python=ecosystem in {"pip", "uv"}),
+        "ignored": False,
         "reason": None,
     }
