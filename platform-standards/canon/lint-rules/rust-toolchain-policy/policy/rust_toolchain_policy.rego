@@ -91,7 +91,10 @@ deny contains finding("RT-022", "error", "noncompliant", pin_path, msg) if {
 # -- Exceptions -----------------------------------------------------------------
 
 # An exception is current only while it names the channel the repository is
-# pinned to, so every move of the pin has to re-justify it.
+# pinned to, so every move of the pin has to re-justify it. A repository whose
+# nightly is coupled to compiler internals cannot build on a stable release, so
+# the exception also stands in for an MSRV (RT-025): there is no stable
+# toolchain to declare.
 exempt if {
   has_pin
   some document in input.exceptions
@@ -156,6 +159,7 @@ declares_msrv(crate) if {
 
 deny contains finding("RT-025", "warning", "noncompliant", crate.path, msg) if {
   applies
+  not exempt
   some crate in input.crates
   crate.is_publishable
   crate.has_lib

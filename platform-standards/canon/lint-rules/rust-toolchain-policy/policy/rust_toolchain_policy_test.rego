@@ -94,6 +94,11 @@ test_a_current_exception_exempts_age_and_movability if {
   count(audit(data.fixtures.excepted_old_nightly)) == 0
 }
 
+# A nightly coupled to compiler internals has no stable MSRV to declare.
+test_a_current_exception_exempts_the_msrv_of_a_library if {
+  count(audit(data.fixtures.excepted_library_without_msrv)) == 0
+}
+
 test_a_stale_exception_exempts_nothing if {
   rules(data.fixtures.stale_exception) == {"RT-023", "RT-024"}
 }

@@ -54,9 +54,10 @@ are not compared: they are usually a host tool's toolchain.
 A repository whose nightly cannot move (whitaker, coupled to `ra_ap_syntax` and
 a vendored `clippy_utils`) records a section in `docs/developers-guide.md`
 whose heading contains "Toolchain policy" and which names the pinned channel.
-That exempts RT-023 and RT-024 for as long as the section names the current
-pin, so each move of the pin re-justifies it. RT-022, RT-025, RT-026 and RT-027
-still apply.
+That exempts RT-023, RT-024 and RT-025 for as long as the section names the
+current pin, so each move of the pin re-justifies it: a nightly coupled to
+compiler internals cannot build on a stable release, so there is no stable MSRV
+to declare. RT-022, RT-026 and RT-027 still apply.
 
 ## What the rule declines to judge
 

@@ -301,10 +301,10 @@ It requires that:
 
 A repository whose nightly cannot move records that in
 `docs/developers-guide.md` under a heading containing "Toolchain policy",
-naming the pinned channel in the section. That exempts RT-023 and RT-024 while
-the section names the current pin. A repository with no Cargo manifest is
-outside the rule. Workspace members are judged where `.concordat` declares them
-as Rust surfaces.
+naming the pinned channel in the section. That exempts RT-023, RT-024 and
+RT-025 while the section names the current pin. A repository with no Cargo
+manifest is outside the rule. Workspace members are judged where `.concordat`
+declares them as Rust surfaces.
 
 `dependabot-update-shape` audits `.github/dependabot.yml` against the estate's
 update shape (DB-005):

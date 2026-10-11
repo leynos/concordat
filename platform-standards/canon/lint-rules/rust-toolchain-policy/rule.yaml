@@ -8,7 +8,7 @@ description: >-
   move the pin (RT-024), a `rust-version` on every publishable library crate
   (RT-025), every declared MSRV exercised by CI (RT-026), and CI naming no
   dated nightly other than the pin (RT-027). A recorded toolchain-policy
-  exception that names the pinned channel exempts RT-023 and RT-024, for a
+  exception that names the pinned channel exempts RT-023, RT-024 and RT-025, for a
   repository whose nightly is coupled to something it cannot move. Audit-only:
   this rule declares no mutations.
 version: 0.1.0
