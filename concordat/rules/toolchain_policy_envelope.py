@@ -132,7 +132,8 @@ class ToolchainPolicyEnvelope(typ.TypedDict):
     workspace_rust_version:
         The workspace's shared `rust-version`, or None.
     crates:
-        Every governed package, workspace members expanded.
+        Every governed surface that has a `[package]` table. Workspace
+        members are included only where `.concordat` declares them.
     dependabot:
         The `rust-toolchain` update entries.
     ci:
@@ -155,9 +156,23 @@ class ToolchainPolicyEnvelope(typ.TypedDict):
     exceptions: list[DocumentScan]
 
 
-def _is_package_publishable(package: dict[str, object]) -> bool:
-    """Return whether Cargo would let this package be published."""
+def _is_package_publishable(
+    package: dict[str, object], workspace_publish: object
+) -> bool:
+    """Return whether Cargo would let this package be published.
+
+    `publish.workspace = true` inherits the workspace's value, as
+    `rust-version.workspace = true` does.
+
+    Returns
+    -------
+    bool
+        False for `publish = false`, an empty registry list, or an inherited
+        one of those; True otherwise.
+    """
     publish = package.get("publish", True)
+    if isinstance(publish, dict) and publish.get("workspace") is True:
+        publish = workspace_publish
     return publish is not False and publish != []
 
 
@@ -170,7 +185,9 @@ def _rust_version(package: dict[str, object]) -> tuple[str | None, bool]:
     return None, inherits
 
 
-def _crate_facts(checkout: pathlib.Path, surface: CargoSurface) -> CrateFacts | None:
+def _crate_facts(
+    checkout: pathlib.Path, surface: CargoSurface, workspace_publish: object
+) -> CrateFacts | None:
     """Return the package facts for one manifest, or None for a virtual root."""
     parsed = surface["parsed"]
     package = parsed.get("package")
@@ -184,22 +201,31 @@ def _crate_facts(checkout: pathlib.Path, surface: CargoSurface) -> CrateFacts | 
     return {
         "path": surface["path"],
         "name": name if isinstance(name, str) else None,
-        "is_publishable": _is_package_publishable(typed),
+        "is_publishable": _is_package_publishable(typed, workspace_publish),
         "has_lib": has_lib,
         "rust_version": rust_version,
         "inherits_workspace": inherits,
     }
 
 
-def _workspace_rust_version(surfaces: cabc.Iterable[CargoSurface]) -> str | None:
-    """Return the first `[workspace.package] rust-version` among *surfaces*."""
+def _workspace_package_value(
+    surfaces: cabc.Iterable[CargoSurface], key: str, *, default: object
+) -> object:
+    """Return the first `[workspace.package]` *key* among *surfaces*, or *default*."""
     for surface in surfaces:
         workspace = surface["parsed"].get("workspace")
         package = workspace.get("package") if isinstance(workspace, dict) else None
-        value = package.get("rust-version") if isinstance(package, dict) else None
-        if isinstance(value, str):
-            return value
-    return None
+        if isinstance(package, dict):
+            shared = typ.cast("dict[str, object]", package)
+            if key in shared:
+                return shared[key]
+    return default
+
+
+def _workspace_rust_version(surfaces: cabc.Iterable[CargoSurface]) -> str | None:
+    """Return the shared `[workspace.package] rust-version`, or None."""
+    value = _workspace_package_value(surfaces, "rust-version", default=None)
+    return value if isinstance(value, str) else None
 
 
 def _normalise_directory(directory: str) -> str:
@@ -281,10 +307,13 @@ def build_toolchain_policy_envelope(
     resolved = parameters if parameters is not None else {}
     resolution = resolve_rust_surfaces(checkout)
     toolchain = inspect_toolchain(checkout)
+    workspace_publish = _workspace_package_value(
+        resolution.surfaces, "publish", default=True
+    )
     crates = [
         facts
         for surface in resolution.surfaces
-        if (facts := _crate_facts(checkout, surface)) is not None
+        if (facts := _crate_facts(checkout, surface, workspace_publish)) is not None
     ]
     channel = toolchain["channel"] if toolchain is not None else None
     is_version = toolchain is not None and toolchain["channel_kind"] == CHANNEL_VERSION

@@ -295,8 +295,8 @@ It requires that:
   with a daily or weekly interval (RT-024);
 - every publishable library crate declares `rust-version` (RT-025, a warning);
 - every declared MSRV is exercised by CI: a workflow installs that toolchain,
-  a job or step runs cargo-msrv or is named for the MSRV, or the pin is that
-  version (RT-026);
+  a job or step runs cargo-msrv or is named for the MSRV, a step selects its
+  toolchain from `rust-version`, or the pin is that version (RT-026);
 - no workflow names a dated nightly other than the pinned one (RT-027).
 
 A repository whose nightly cannot move records that in

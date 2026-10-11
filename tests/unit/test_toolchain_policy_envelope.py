@@ -49,18 +49,20 @@ def test_a_checkout_without_rust_is_not_applicable(tmp_path: pathlib.Path) -> No
     """No Cargo manifest puts the repository outside the rule."""
     envelope = _build(tmp_path)
 
-    assert envelope["schema_version"] == ENVELOPE_SCHEMA_VERSION
-    assert envelope["kind"] == ENVELOPE_KIND
-    assert envelope["applicable"] is False
-    assert envelope["toolchain"] is None
-    assert envelope["evaluated_on"] == "2026-10-11"
+    assert envelope["schema_version"] == ENVELOPE_SCHEMA_VERSION, envelope
+    assert envelope["kind"] == ENVELOPE_KIND, envelope
+    assert envelope["applicable"] is False, envelope
+    assert envelope["toolchain"] is None, envelope
+    assert envelope["evaluated_on"] == "2026-10-11", envelope
 
 
 def test_the_date_defaults_to_the_current_utc_day(tmp_path: pathlib.Path) -> None:
     """The command boundary's clock is the UTC date."""
     envelope = build_toolchain_policy_envelope(tmp_path)
 
-    assert envelope["evaluated_on"] == dt.datetime.now(dt.UTC).date().isoformat()
+    assert envelope["evaluated_on"] == dt.datetime.now(dt.UTC).date().isoformat(), (
+        envelope
+    )
 
 
 def test_the_pin_and_the_manifest_are_read(tmp_path: pathlib.Path) -> None:
@@ -71,10 +73,10 @@ def test_the_pin_and_the_manifest_are_read(tmp_path: pathlib.Path) -> None:
 
     envelope = _build(tmp_path)
 
-    assert envelope["applicable"] is True
-    assert envelope["toolchain"]["channel"] == "nightly-2026-09-20"
-    assert envelope["toolchain"]["channel_kind"] == "nightly-dated"
-    assert envelope["pin_minor"] is None
+    assert envelope["applicable"] is True, envelope
+    assert envelope["toolchain"]["channel"] == "nightly-2026-09-20", envelope
+    assert envelope["toolchain"]["channel_kind"] == "nightly-dated", envelope
+    assert envelope["pin_minor"] is None, envelope
     assert envelope["crates"] == [
         {
             "path": "Cargo.toml",
@@ -84,7 +86,7 @@ def test_the_pin_and_the_manifest_are_read(tmp_path: pathlib.Path) -> None:
             "rust_version": "1.85",
             "inherits_workspace": False,
         }
-    ]
+    ], envelope
 
 
 def test_a_numeric_pin_carries_its_minor(tmp_path: pathlib.Path) -> None:
@@ -92,7 +94,8 @@ def test_a_numeric_pin_carries_its_minor(tmp_path: pathlib.Path) -> None:
     _write(tmp_path, "Cargo.toml", _MANIFEST)
     _write(tmp_path, "rust-toolchain.toml", '[toolchain]\nchannel = "1.93.1"\n')
 
-    assert _build(tmp_path)["pin_minor"] == "1.93"
+    envelope = _build(tmp_path)
+    assert envelope["pin_minor"] == "1.93", envelope
 
 
 _PUBLISH_CASES: typ.Final = {
@@ -114,7 +117,7 @@ def test_publishability_follows_cargo(tmp_path: pathlib.Path, publish: str) -> N
 
     crate = _build(tmp_path)["crates"][0]
 
-    assert crate["is_publishable"] is _PUBLISH_CASES[publish]
+    assert crate["is_publishable"] is _PUBLISH_CASES[publish], crate
 
 
 def test_an_application_has_no_library(tmp_path: pathlib.Path) -> None:
@@ -122,14 +125,16 @@ def test_an_application_has_no_library(tmp_path: pathlib.Path) -> None:
     _write(tmp_path, "Cargo.toml", _MANIFEST)
     _write(tmp_path, "src/main.rs", "fn main() {}\n")
 
-    assert _build(tmp_path)["crates"][0]["has_lib"] is False
+    envelope = _build(tmp_path)
+    assert envelope["crates"][0]["has_lib"] is False, envelope
 
 
 def test_an_explicit_lib_table_is_a_library(tmp_path: pathlib.Path) -> None:
     """A `[lib]` table with a custom path still builds a library."""
     _write(tmp_path, "Cargo.toml", f'{_MANIFEST}[lib]\npath = "core.rs"\n')
 
-    assert _build(tmp_path)["crates"][0]["has_lib"] is True
+    envelope = _build(tmp_path)
+    assert envelope["crates"][0]["has_lib"] is True, envelope
 
 
 def test_workspace_inheritance_is_recorded(tmp_path: pathlib.Path) -> None:
@@ -143,9 +148,9 @@ def test_workspace_inheritance_is_recorded(tmp_path: pathlib.Path) -> None:
 
     envelope = _build(tmp_path)
 
-    assert envelope["workspace_rust_version"] == "1.80"
-    assert envelope["crates"][0]["rust_version"] is None
-    assert envelope["crates"][0]["inherits_workspace"] is True
+    assert envelope["workspace_rust_version"] == "1.80", envelope
+    assert envelope["crates"][0]["rust_version"] is None, envelope
+    assert envelope["crates"][0]["inherits_workspace"] is True, envelope
 
 
 def test_an_unreadable_pin_stays_a_fact(tmp_path: pathlib.Path) -> None:
@@ -155,8 +160,8 @@ def test_an_unreadable_pin_stays_a_fact(tmp_path: pathlib.Path) -> None:
 
     toolchain = _build(tmp_path)["toolchain"]
 
-    assert toolchain["parse_error"] is not None
-    assert toolchain["channel"] is None
+    assert toolchain["parse_error"] is not None, toolchain
+    assert toolchain["channel"] is None, toolchain
 
 
 def test_dependabot_rust_toolchain_entries_are_extracted(
@@ -180,14 +185,15 @@ def test_dependabot_rust_toolchain_entries_are_extracted(
         "present": True,
         "error": None,
         "entries": [{"directories": ["/rust"], "interval": "weekly"}],
-    }
+    }, dependabot
 
 
 def test_a_missing_dependabot_file_is_absent(tmp_path: pathlib.Path) -> None:
     """No configuration is recorded as absent, not as an empty list of entries."""
     _write(tmp_path, "Cargo.toml", _MANIFEST)
 
-    assert _build(tmp_path)["dependabot"]["present"] is False
+    envelope = _build(tmp_path)
+    assert envelope["dependabot"]["present"] is False, envelope
 
 
 def test_an_undecodable_dependabot_file_carries_its_reason(
@@ -199,8 +205,8 @@ def test_an_undecodable_dependabot_file_carries_its_reason(
 
     dependabot = _build(tmp_path)["dependabot"]
 
-    assert dependabot["present"] is True
-    assert dependabot["error"] is not None
+    assert dependabot["present"] is True, dependabot
+    assert dependabot["error"] is not None, dependabot
 
 
 _WORKFLOW = """\
@@ -231,11 +237,11 @@ def test_the_workflows_toolchains_are_read_as_data(tmp_path: pathlib.Path) -> No
 
     ci = _build(tmp_path)["ci"]
 
-    assert ci["errors"] == []
-    assert ci["dated_nightlies"] == ["nightly-2026-03-26", "nightly-2026-09-20"]
-    assert ci["numeric_minors"] == ["1.85", "1.93"]
-    assert ci["msrv_job"] is True
-    assert ci["reads_manifest_msrv"] is False
+    assert ci["errors"] == [], ci
+    assert ci["dated_nightlies"] == ["nightly-2026-03-26", "nightly-2026-09-20"], ci
+    assert ci["numeric_minors"] == ["1.85", "1.93"], ci
+    assert ci["msrv_job"] is True, ci
+    assert ci["reads_manifest_msrv"] is False, ci
 
 
 def test_a_toolchain_in_a_comment_is_not_ci_using_it(tmp_path: pathlib.Path) -> None:
@@ -249,8 +255,8 @@ def test_a_toolchain_in_a_comment_is_not_ci_using_it(tmp_path: pathlib.Path) -> 
 
     ci = _build(tmp_path)["ci"]
 
-    assert ci["dated_nightlies"] == []
-    assert ci["numeric_minors"] == []
+    assert ci["dated_nightlies"] == [], ci
+    assert ci["numeric_minors"] == [], ci
 
 
 def test_a_step_reading_the_manifest_msrv_exercises_it(
@@ -269,7 +275,7 @@ def test_a_step_reading_the_manifest_msrv_exercises_it(
 
     ci = _build(tmp_path)["ci"]
 
-    assert ci["reads_manifest_msrv"] is True
+    assert ci["reads_manifest_msrv"] is True, ci
 
 
 def test_reading_the_msrv_without_selecting_a_toolchain_is_not_credited(
@@ -283,7 +289,8 @@ def test_reading_the_msrv_without_selecting_a_toolchain_is_not_credited(
         "jobs:\n  b:\n    steps:\n      - run: grep rust-version Cargo.toml\n",
     )
 
-    assert _build(tmp_path)["ci"]["reads_manifest_msrv"] is False
+    envelope = _build(tmp_path)
+    assert envelope["ci"]["reads_manifest_msrv"] is False, envelope
 
 
 def test_an_undecodable_workflow_carries_its_reason(tmp_path: pathlib.Path) -> None:
@@ -293,8 +300,8 @@ def test_an_undecodable_workflow_carries_its_reason(tmp_path: pathlib.Path) -> N
 
     errors = _build(tmp_path)["ci"]["errors"]
 
-    assert len(errors) == 1
-    assert errors[0].startswith(".github/workflows/ci.yml: ")
+    assert len(errors) == 1, errors
+    assert errors[0].startswith(".github/workflows/ci.yml: "), errors
 
 
 def test_a_recorded_exception_is_found(tmp_path: pathlib.Path) -> None:
@@ -310,4 +317,117 @@ def test_a_recorded_exception_is_found(tmp_path: pathlib.Path) -> None:
 
     sections = _build(tmp_path)["exceptions"][0]["sections"]
 
-    assert sections[0]["channels_named"] == ["nightly-2026-09-20"]
+    assert sections[0]["channels_named"] == ["nightly-2026-09-20"], sections
+
+
+@pytest.mark.parametrize(
+    ("command", "minors"),
+    [
+        pytest.param("rustup install 1.85", ["1.85"], id="install-alias"),
+        pytest.param(
+            "rustup toolchain install --profile minimal 1.85.0",
+            ["1.85"],
+            id="option-before-the-toolchain",
+        ),
+        pytest.param(
+            "rustup toolchain install 1.85 --profile minimal --component clippy",
+            ["1.85"],
+            id="option-values-are-not-toolchains",
+        ),
+        pytest.param(
+            "rustup toolchain install stable 1.85", ["1.85"], id="every-install-name"
+        ),
+        pytest.param("rustup run 1.85 cargo check", ["1.85"], id="run"),
+        pytest.param("rustup default 1.85 && rustup show", ["1.85"], id="default"),
+        pytest.param("cargo +1.85 check --lib", ["1.85"], id="cargo-override"),
+        pytest.param("rustup override set 1.85 --path x", ["1.85"], id="override-set"),
+    ],
+)
+def test_the_rustup_command_forms_are_read(
+    tmp_path: pathlib.Path, command: str, minors: list[str]
+) -> None:
+    """Each documented way to select a toolchain on a command line is credited."""
+    _write(tmp_path, "Cargo.toml", _MANIFEST)
+    _write(
+        tmp_path,
+        ".github/workflows/ci.yml",
+        f"jobs:\n  b:\n    steps:\n      - run: {command}\n",
+    )
+
+    ci = _build(tmp_path)["ci"]
+
+    assert ci["numeric_minors"] == minors, ci
+
+
+_MATRIX_WORKFLOW = """\
+jobs:
+  test:
+    strategy:
+      matrix:
+        rust: [stable, "1.85"]
+        include:
+          - rust: nightly-2026-03-26
+    steps:
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+      - run: cargo +${{ matrix.rust }} check
+"""
+
+
+def test_a_matrix_reference_is_resolved_to_every_leg(tmp_path: pathlib.Path) -> None:
+    """The MSRV is usually a matrix leg, so `matrix.rust` expands to its values."""
+    _write(tmp_path, "Cargo.toml", _MANIFEST)
+    _write(tmp_path, ".github/workflows/ci.yml", _MATRIX_WORKFLOW)
+
+    ci = _build(tmp_path)["ci"]
+
+    assert ci["numeric_minors"] == ["1.85"], ci
+    assert ci["dated_nightlies"] == ["nightly-2026-03-26"], ci
+
+
+def test_an_unknown_matrix_key_names_nothing(tmp_path: pathlib.Path) -> None:
+    """A reference to a key the matrix does not define is not a toolchain."""
+    _write(tmp_path, "Cargo.toml", _MANIFEST)
+    _write(
+        tmp_path,
+        ".github/workflows/ci.yml",
+        "jobs:\n  t:\n    steps:\n      - run: cargo +${{ matrix.other }} check\n",
+    )
+
+    ci = _build(tmp_path)["ci"]
+
+    assert ci["numeric_minors"] == [], ci
+    assert ci["dated_nightlies"] == [], ci
+
+
+@pytest.mark.parametrize(
+    ("member_publish", "workspace_publish", "expected"),
+    [
+        pytest.param(
+            "publish.workspace = true\n", "publish = false\n", False, id="false"
+        ),
+        pytest.param("publish.workspace = true\n", "", True, id="unset-is-publishable"),
+        pytest.param(
+            "publish.workspace = true\n", "publish = []\n", False, id="empty-list"
+        ),
+    ],
+)
+def test_publish_is_inherited_from_the_workspace(
+    tmp_path: pathlib.Path,
+    member_publish: str,
+    workspace_publish: str,
+    *,
+    expected: bool,
+) -> None:
+    """`publish.workspace = true` takes the workspace's value, as rust-version does."""
+    _write(
+        tmp_path,
+        "Cargo.toml",
+        f"[workspace.package]\n{workspace_publish}\n"
+        f'[package]\nname = "demo"\nversion = "0.1.0"\n{member_publish}',
+    )
+
+    crate = _build(tmp_path)["crates"][0]
+
+    assert crate["is_publishable"] is expected, crate
