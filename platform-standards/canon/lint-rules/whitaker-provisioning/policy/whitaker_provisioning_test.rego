@@ -205,13 +205,13 @@ test_without_the_exemption_the_developer_script_is_a_route if {
 # A pinned-suite install is exempt in one named workflow, and only there:
 # a second workflow in the same repository that installs Whitaker by hand is a
 # route, so the exemption is by path and not by repository.
-test_an_exemption_covers_only_its_workflow if {
+test_a_workflow_exemption_covers_only_its_workflow if {
 	profile(data.fixtures.exempt_pinned_suite) == {["QG-002", "noncompliant", ".github/workflows/release.yml"]}
 	is_route(data.fixtures.exempt_pinned_suite)
 }
 
 # The same workflow in another repository is a route: the exemption names its repository.
-test_an_exemption_does_not_travel if {
+test_a_workflow_exemption_does_not_travel if {
 	profile(data.fixtures.exempt_pinned_suite_elsewhere) == {["QG-002", "noncompliant", ".github/workflows/ci.yml"]}
 	is_route(data.fixtures.exempt_pinned_suite_elsewhere)
 }
