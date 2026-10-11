@@ -36,3 +36,16 @@ Feature: Dependency-family contracts rule run
     Then the audit exit status is 1
     And the audit output reports "DF-006"
     And the audit output reports "no decodable Dependabot configuration"
+
+  Scenario: exactly pinned Pylint and Astroid sharing a group are audited clean
+    Given a checkout pinning Pylint and Astroid exactly with a shared Dependabot group
+    When I audit the checkout for its dependency families
+    Then the audit exit status is 0
+    And the audit table reports zero findings
+
+  Scenario: exactly pinned Pylint and Astroid left to the catch-all are reported
+    Given a checkout pinning Pylint and Astroid exactly under the catch-all group
+    When I audit the checkout for its dependency families
+    Then the audit exit status is 1
+    And the audit output reports "DF-001"
+    And the audit output reports "pylint-astroid"
