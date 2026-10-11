@@ -107,12 +107,28 @@ class YamlLintEnvelope(typ.TypedDict):
     workflows: list[WorkflowFile]
 
 
+def _is_tracked_yaml(candidate: pathlib.Path) -> bool:
+    """Return whether *candidate* is a regular YAML file rather than a link.
+
+    The check never follows symbolic links, so a link alone does not count.
+
+    Returns
+    -------
+    bool
+        Whether the path has a YAML suffix and is a regular file.
+    """
+    if candidate.suffix.lower() not in YAML_SUFFIXES:
+        return False
+    return not is_symlink(candidate, OPERATION_SCAN_YAML) and is_file(
+        candidate, OPERATION_SCAN_YAML
+    )
+
+
 def _has_yaml_files(checkout: pathlib.Path) -> bool:
     """Return whether any YAML file exists outside the pruned directories.
 
-    The walk never follows symbolic links, and a directory that cannot be
-    listed raises rather than being skipped, through `markdown_envelope`'s
-    walk-error handler.
+    A directory that cannot be listed raises rather than being skipped,
+    through `markdown_envelope`'s walk-error handler.
 
     Returns
     -------
@@ -123,14 +139,8 @@ def _has_yaml_files(checkout: pathlib.Path) -> bool:
         directories[:] = sorted(
             name for name in directories if name not in PRUNED_DIRECTORIES
         )
-        for name in files:
-            candidate = pathlib.Path(current) / name
-            if candidate.suffix.lower() not in YAML_SUFFIXES:
-                continue
-            if is_symlink(candidate, OPERATION_SCAN_YAML):
-                continue
-            if is_file(candidate, OPERATION_SCAN_YAML):
-                return True
+        if any(_is_tracked_yaml(pathlib.Path(current) / name) for name in files):
+            return True
     return False
 
 
@@ -157,6 +167,27 @@ def _read_input(
         return None, f"not UTF-8 text: {error}"
 
 
+def _decode_yaml(text: str) -> tuple[object | None, str | None]:
+    """Decode YAML text into a JSON-safe document, or the reason it failed.
+
+    A parser is created per call: ruamel.yaml does not promise that an
+    instance stays usable after a failed load, and a bad configuration must
+    not corrupt the reading of the next one.
+
+    Returns
+    -------
+    tuple[object | None, str | None]
+        ``(document, None)`` on success, or ``(None, reason)``. A mapping key
+        JSON cannot carry, such as a YAML date, is a reason, never a crash.
+    """
+    try:
+        return json_safe(YAML(typ="safe").load(text)), None
+    except YAMLError as decode_error:
+        return None, f"invalid YAML: {decode_error}"
+    except TypeError as key_error:
+        return None, f"unsupported mapping key: {key_error}"
+
+
 def _load_yaml_file(
     checkout: pathlib.Path, root: pathlib.Path, name: str, operation: str
 ) -> DecodedFile | None:
@@ -171,22 +202,10 @@ def _load_yaml_file(
     if read is None:
         return None
     text, error = read
-    fact: DecodedFile = {"path": name, "parsed": None, "error": error}
     if text is None:
-        return fact
-    # A parser per read: ruamel.yaml does not promise that an instance stays
-    # usable after a failed load, and a bad configuration must not corrupt the
-    # reading of the next one.
-    try:
-        parsed: object = YAML(typ="safe").load(text)
-        fact["parsed"] = json_safe(parsed)
-    except YAMLError as decode_error:
-        fact["error"] = f"invalid YAML: {decode_error}"
-    except TypeError as key_error:
-        # A mapping key JSON cannot carry, such as a YAML date: recorded as a
-        # configuration error, never as a crash of the audit.
-        fact["error"] = f"unsupported mapping key: {key_error}"
-    return fact
+        return {"path": name, "parsed": None, "error": error}
+    parsed, reason = _decode_yaml(text)
+    return {"path": name, "parsed": parsed, "error": reason}
 
 
 def _load_base(checkout: pathlib.Path, root: pathlib.Path) -> DigestedFile | None:
