@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "kind": "policy-input/yaml-lint-baseline",
+  "repository": {
+    "path": ".",
+    "name": null
+  },
+  "applicability": {
+    "yaml_files": true,
+    "workflows": true,
+    "root_makefile": false
+  },
+  "makefile": null,
+  "yamllint_base": {
+    "path": ".yamllint-estate.yml",
+    "sha256": "da747ab7bfd5d335efff5ec5a3c9b963060ca960785bf7ba423f45b9571dd112",
+    "error": null
+  },
+  "yamllint_local": {
+    "path": ".yamllint.yml",
+    "parsed": {
+      "extends": ".yamllint-estate.yml"
+    },
+    "error": null
+  },
+  "alternate_yamllint_configs": [],
+  "actionlint_config": {
+    "path": ".github/actionlint.yaml",
+    "parsed": {
+      "self-hosted-runner": {
+        "labels": [
+          "ubicloud-*"
+        ]
+      }
+    },
+    "error": null
+  },
+  "workflows": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "parsed": {
+        "name": "CI",
+        "on": [
+          "push"
+        ],
+        "jobs": {
+          "lint": {
+            "runs-on": "ubuntu-latest",
+            "steps": [
+              {
+                "uses": "actions/checkout@0000000000000000000000000000000000000000"
+              },
+              {
+                "uses": "leynos/shared-actions/.github/actions/install-yaml-lint@0123456789abcdef0123456789abcdef01234567"
+              },
+              {
+                "run": "make lint"
+              }
+            ]
+          }
+        }
+      },
+      "error": null
+    }
+  ]
+}

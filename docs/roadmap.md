@@ -645,6 +645,15 @@ the Section 2.1.2 format.
   the package from DG-003. Acceptance: compliant and noncompliant generated
   fixtures for every check, and behavioural tests running the real policy over
   generated checkouts.
+- [x] Ship the YAML lint rule package (YL-001 to YL-005), from DF12-101: the
+  `lint` gate runs `yamllint --strict` over the Git-tracked YAML and actionlint
+  bindingly; the estate yamllint base is present verbatim and the local
+  configuration only extends it; `.github/actionlint.yaml` declares the estate
+  runner labels; and CI installs the tools through the pinned
+  `install-yaml-lint` action with no hand-rolled install. Acceptance: compliant
+  and noncompliant generated fixtures for every check, and the estate survey
+  recorded with the rollout. Progress: shipped audit-only as
+  `yaml-lint-baseline`; mutations remain open.
 - [ ] Ship the Rust formatting and linting rule packages (RT-001 to RT-005):
   rustfmt wiring and template-matched configuration, clippy presence with
   `[lints]` entries at the template level or stricter, and Whitaker presence

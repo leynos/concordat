@@ -92,6 +92,8 @@ from .whitaker_provisioning_envelope import (
     ProvisioningEnvelope,
     build_whitaker_provisioning_envelope,
 )
+from .yaml_lint_envelope import ENVELOPE_KIND as YAML_LINT_ENVELOPE_KIND
+from .yaml_lint_envelope import YamlLintEnvelope, build_yaml_lint_envelope
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -109,6 +111,7 @@ type RuleEnvelope = (
     | ProvisioningEnvelope
     | DocumentationEnvelope
     | ToolchainPolicyEnvelope
+    | YamlLintEnvelope
 )
 type EnvelopeResolver = cabc.Callable[[str, pathlib.Path], RuleEnvelope]
 
@@ -521,6 +524,24 @@ def _provisioning_envelope(
     return build_whitaker_provisioning_envelope(checkout)
 
 
+def _yaml_lint_envelope(
+    checkout: pathlib.Path,
+    _parameters: cabc.Mapping[str, object] | None = None,
+) -> YamlLintEnvelope:
+    """Build the YAML lint envelope, ignoring the manifest parameters.
+
+    `yaml-lint-baseline` reads its accepted base digests, installer action and
+    runner labels through `data.parameters` in the policy, so the second
+    argument exists only to give every builder one callable type.
+
+    Returns
+    -------
+    YamlLintEnvelope
+        The `policy-input/yaml-lint-baseline` document for *checkout*.
+    """
+    return build_yaml_lint_envelope(checkout, inspect=inspect_makefile_observed)
+
+
 # Every rule package's envelope builder, keyed by package identifier. The
 # mapping is the complete list rather than the exceptions to a default: a
 # package that reads facts of one shape and a policy that expects another
@@ -541,6 +562,7 @@ PACKAGE_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     "uv-gate-baseline": _uv_gate_envelope,
     "documentation-presence": _documentation_envelope,
     "whitaker-provisioning": _provisioning_envelope,
+    "yaml-lint-baseline": _yaml_lint_envelope,
 })
 
 # The same builders by the envelope kind they produce, so a package whose input
@@ -558,6 +580,7 @@ INPUT_KIND_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     UV_GATE_ENVELOPE_KIND: _uv_gate_envelope,
     DOCUMENTATION_ENVELOPE_KIND: _documentation_envelope,
     PROVISIONING_ENVELOPE_KIND: _provisioning_envelope,
+    YAML_LINT_ENVELOPE_KIND: _yaml_lint_envelope,
 })
 
 

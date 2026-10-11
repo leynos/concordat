@@ -1,0 +1,5 @@
+---
+extends: .yamllint-estate.yml
+yaml-files:
+  - '*.yml'
+ignore-from-file: .gitignore

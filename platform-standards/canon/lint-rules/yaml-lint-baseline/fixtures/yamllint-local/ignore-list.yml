@@ -1,0 +1,4 @@
+---
+extends: .yamllint-estate.yml
+ignore:
+  - tests/data/

@@ -700,6 +700,21 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   manifest parameter; the fixture generator copies them into `data.json`'s
   `parameters`, so the Rego suite compares against the runner's text.
 
+- `policy-input/yaml-lint-baseline` —
+  `yaml_lint_envelope.build_yaml_lint_envelope`. It reuses
+  `markdown_envelope`'s containment guard and readers: the same `makeutil`
+  report for the root `Makefile` and the same decoded workflows, plus the
+  SHA-256 of `.yamllint-estate.yml` (the baseline wants the canonical bytes, so
+  no decoding), `.yamllint.yml` and the actionlint configuration decoded as
+  YAML, and the alternate yamllint configuration names present. Applicability
+  is whether any YAML file exists outside the pruned directories. The package
+  is registered by identifier and declares its kind; every other input reaches
+  the policy as manifest parameters. The accepted base digests are
+  `base_sha256s`, and the canonical files ship under `canon/lint/yaml/`: editing
+  `.yamllint-estate.yml` changes its digest, so add the new digest to the
+  manifest defaults (keep the old one while consumers catch up) and regenerate
+  the fixtures.
+
 The Markdown package's `fixtures/generate.py` lays each scenario out as a
 temporary checkout and records what `build_markdown_envelope` produces, so the
 checked-in envelopes are exactly the production builder's output;
