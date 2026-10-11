@@ -26,12 +26,9 @@ from __future__ import annotations
 import dataclasses
 import os
 import pathlib
-import re
 import tomllib
 import typing as typ
 
-from .interrogate_invocation import lex_segments
-from .makefile_expansion import UNRESOLVED_MARK, expand, shown
 from .markdown_envelope import (
     PRUNED_DIRECTORIES,
     _is_symlink,
@@ -40,12 +37,14 @@ from .markdown_envelope import (
     is_file,
     within_checkout,
 )
-
-if typ.TYPE_CHECKING:
-    import collections.abc as cabc
+from .rust_source import (
+    LINT_NAME,
+    RootAttribute,
+    leading_attributes,
+    suppressions_in,
+)
 
 CARGO_MANIFEST: typ.Final = "Cargo.toml"
-LINT_NAME: typ.Final = "missing_docs"
 OPERATION_READ_CARGO: typ.Final = "read-cargo-manifest"
 OPERATION_READ_CRATE_ROOT: typ.Final = "read-crate-root"
 OPERATION_SCAN_CARGO: typ.Final = "scan-cargo-manifests"
@@ -64,35 +63,6 @@ RUST_PRUNED_DIRECTORIES: typ.Final = PRUNED_DIRECTORIES | frozenset({
     "templates",
     "examples",
 })
-
-# A reference the expansion could not settle that is named for clippy, or that
-# stands where the `cargo` word should and is followed by `clippy`.
-_UNRESOLVED_CLIPPY: typ.Final = re.compile(
-    r"\$[({][^)}\s]*clippy[^)}\s]*[)}]|\$[({][^)}]*[)}]\s+clippy(?![\w.-])",
-    re.IGNORECASE,
-)
-_ASSIGNMENT: typ.Final = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
-# Wrappers that run the next word as a command without changing which tool it is.
-_WRAPPERS: typ.Final = frozenset({"env", "time", "nice", "command", "exec"})
-# `cargo` flags that take a value as the next word, so that word is not the subcommand.
-_CARGO_VALUE_FLAGS: typ.Final = frozenset({
-    "-Z",
-    "-C",
-    "--config",
-    "--color",
-    "--manifest-path",
-    "--target-dir",
-})
-
-LINT_KINDS: typ.Final = frozenset({"deny", "forbid", "warn", "allow", "expect"})
-
-
-class RootAttribute(typ.TypedDict):
-    """One crate-level inner attribute that names `missing_docs`."""
-
-    kind: str
-    has_reason: bool
-    condition: str | None
 
 
 class Suppression(typ.TypedDict):
@@ -117,15 +87,6 @@ class RustCrate(typ.TypedDict):
     attributes: list[RootAttribute]
     suppressions: list[Suppression]
     source_errors: list[str]
-
-
-class ClippyRun(typ.TypedDict):
-    """One recipe line, in a target `lint` reaches, that runs clippy."""
-
-    target: str
-    line: int
-    command: str
-    resolved: bool
 
 
 class RustFacts(typ.TypedDict):
@@ -208,252 +169,6 @@ def _lib_root(manifest: _Manifest) -> str:
     custom = lib.get("path") if isinstance(lib, dict) else None
     relative = custom if isinstance(custom, str) else "src/lib.rs"
     return (pathlib.PurePosixPath(manifest.directory) / relative).as_posix()
-
-
-def _skip_trivia(text: str, index: int) -> int:
-    """Return the index of the next token, past whitespace and comments."""
-    while index < len(text):
-        if text[index].isspace():
-            index += 1
-        elif text.startswith("//", index):
-            end = text.find("\n", index)
-            index = len(text) if end == -1 else end + 1
-        elif text.startswith("/*", index):
-            end = text.find("*/", index + 2)
-            index = len(text) if end == -1 else end + 2
-        else:
-            break
-    return index
-
-
-def _scan_balanced(text: str, start: int) -> int | None:
-    """Return the index just past the bracket that closes the one at *start*.
-
-    Strings are skipped, so a `reason` containing a bracket does not end the
-    attribute early.
-
-    Returns
-    -------
-    int | None
-        The index after the closing bracket, or ``None`` if it never closes.
-    """
-    depth, index = 0, start
-    while index < len(text):
-        char = text[index]
-        if char == '"':
-            index += 1
-            while index < len(text) and text[index] != '"':
-                index += 2 if text[index] == "\\" else 1
-        elif char in "([{":
-            depth += 1
-        elif char in ")]}":
-            depth -= 1
-            if depth == 0:
-                return index + 1
-        index += 1
-    return None
-
-
-def _split_top_level(text: str) -> list[str]:
-    """Split on commas that sit outside brackets and strings."""
-    parts: list[str] = []
-    depth, start, index = 0, 0, 0
-    while index < len(text):
-        char = text[index]
-        if char == '"':
-            index += 1
-            while index < len(text) and text[index] != '"':
-                index += 2 if text[index] == "\\" else 1
-        elif char in "([{":
-            depth += 1
-        elif char in ")]}":
-            depth -= 1
-        elif char == "," and depth == 0:
-            parts.append(text[start:index].strip())
-            start = index + 1
-        index += 1
-    parts.append(text[start:].strip())
-    return [part for part in parts if part]
-
-
-def _lint_attributes(body: str, condition: str | None) -> typ.Iterator[RootAttribute]:
-    """Yield the `missing_docs` attributes inside one attribute's text.
-
-    `cfg_attr(condition, inner...)` is unwrapped, carrying its condition, so
-    `#![cfg_attr(not(test), deny(missing_docs))]` is seen for what it is.
-
-    Yields
-    ------
-    RootAttribute
-        One entry per lint attribute that names `missing_docs`.
-    """
-    head, _, rest = body.partition("(")
-    name = head.strip()
-    arguments = rest.rsplit(")", 1)[0]
-    if name == "cfg_attr":
-        parts = _split_top_level(arguments)
-        if len(parts) >= 2:
-            for inner in parts[1:]:
-                yield from _lint_attributes(inner, parts[0])
-        return
-    if name not in LINT_KINDS:
-        return
-    items = _split_top_level(arguments)
-    lints = [item for item in items if not item.startswith("reason")]
-    if LINT_NAME in lints:
-        yield {
-            "kind": name,
-            "has_reason": any(item.startswith("reason") for item in items),
-            "condition": condition,
-        }
-
-
-def leading_attributes(source: str) -> tuple[list[RootAttribute], int]:
-    """Return the `missing_docs` inner attributes at the top of a crate root.
-
-    Inner attributes must precede every item, so reading stops at the first
-    token that is not one. Comments and inner doc comments are skipped.
-
-    Returns
-    -------
-    tuple[list[RootAttribute], int]
-        The attributes in source order, and the index where the run ends.
-    """
-    found: list[RootAttribute] = []
-    index = _skip_trivia(source, 0)
-    while source.startswith("#![", index):
-        end = _scan_balanced(source, index + 2)
-        if end is None:
-            break
-        found.extend(_lint_attributes(source[index + 3 : end - 1], None))
-        index = _skip_trivia(source, end)
-    return found, index
-
-
-_ATTRIBUTE_START: typ.Final = re.compile(r"#!?\[")
-_RAW_STRING_OPEN: typ.Final = re.compile(r'b?r(#*)"')
-
-
-def _blank(text: str) -> str:
-    """Return *text* with everything but newlines turned into spaces."""
-    return "".join(char if char == "\n" else " " for char in text)
-
-
-def _block_comment_end(source: str, index: int) -> int:
-    """Return the index just past the (nestable) block comment at *index*."""
-    depth, position = 0, index
-    while position < len(source):
-        if source.startswith("/*", position):
-            depth, position = depth + 1, position + 2
-        elif source.startswith("*/", position):
-            depth, position = depth - 1, position + 2
-            if depth == 0:
-                return position
-        else:
-            position += 1
-    return len(source)
-
-
-def _string_end(source: str, index: int) -> int:
-    """Return the index of the quote that closes the string opened before *index*."""
-    position = index
-    while position < len(source) and source[position] != '"':
-        position += 2 if source[position] == "\\" else 1
-    return min(position, len(source))
-
-
-def _char_literal_end(source: str, index: int) -> int | None:
-    """Return the end of the char literal at *index*, or ``None`` for a lifetime."""
-    if source.startswith("\\", index + 1):
-        close = source.find("'", index + 3)
-        return None if close == -1 else close + 1
-    if source.startswith("'", index + 2):
-        return index + 3
-    return None
-
-
-def mask_literals(source: str) -> str:
-    """Return *source* with comments and the contents of literals blanked out.
-
-    Comments become spaces and string, raw string and byte string contents
-    become spaces while their quotes stay, so a `reason = "..."` is still seen
-    to have a value but `"#[allow(missing_docs)]"` in a string or a block
-    comment is not an attribute. Character literals are blanked; a lifetime
-    (`'a`) has no closing quote and is left alone. Newlines are kept, so line
-    numbers do not move.
-
-    Returns
-    -------
-    str
-        A string of the same length and line structure as *source*.
-    """
-    out: list[str] = []
-    index = 0
-    while index < len(source):
-        raw = _RAW_STRING_OPEN.match(source, index)
-        if source.startswith("//", index):
-            end = source.find("\n", index)
-            end = len(source) if end == -1 else end
-            out.append(_blank(source[index:end]))
-            index = end
-        elif source.startswith("/*", index):
-            end = _block_comment_end(source, index)
-            out.append(_blank(source[index:end]))
-            index = end
-        elif raw is not None:
-            closing = '"' + raw.group(1)
-            body_start = raw.end()
-            close = source.find(closing, body_start)
-            end = len(source) if close == -1 else close
-            out.append(raw.group(0) + _blank(source[body_start:end]))
-            index = end
-        elif source[index] == '"':
-            end = _string_end(source, index + 1)
-            out.append('"' + _blank(source[index + 1 : end]))
-            index = end
-            if index < len(source):
-                out.append('"')
-                index += 1
-        elif source[index] == "'" and (end := _char_literal_end(source, index)):
-            out.append("'" + _blank(source[index + 1 : end - 1]) + "'")
-            index = end
-        else:
-            out.append(source[index])
-            index += 1
-    return "".join(out)
-
-
-def suppressions_in(
-    source: str, *, skip_before: int = 0
-) -> list[tuple[int, str, bool]]:
-    """Return the `allow`/`expect` of `missing_docs` anywhere in a source file.
-
-    These are the module-level and item-level suppressions that hide
-    undocumented items from a crate whose root denies the lint. Attributes that
-    start before *skip_before* (the crate root's own leading run, which
-    :func:`leading_attributes` already reports) are left out. Comments and
-    literals are masked first (:func:`mask_literals`), so an attribute named in
-    a comment, a doc example or a string is not one.
-
-    Returns
-    -------
-    list[tuple[int, str, bool]]
-        Line number, kind (`allow` or `expect`) and whether a `reason` is given.
-    """
-    found: list[tuple[int, str, bool]] = []
-    source = mask_literals(source)
-    for match in _ATTRIBUTE_START.finditer(source):
-        start = match.start()
-        if start < skip_before:
-            continue
-        end = _scan_balanced(source, match.end() - 1)
-        if end is None:
-            continue
-        for attribute in _lint_attributes(source[match.end() : end - 1], None):
-            if attribute["kind"] in {"allow", "expect"}:
-                line = source.count("\n", 0, start) + 1
-                found.append((line, attribute["kind"], attribute["has_reason"]))
-    return found
 
 
 def _read_manifest(
@@ -605,104 +320,3 @@ def build_rust_facts(checkout: pathlib.Path, root: pathlib.Path) -> RustFacts:
         if (facts := _crate_facts(checkout, root, manifest, workspaces)) is not None
     ]
     return {"crates": crates, "errors": errors}
-
-
-def _blank_references(text: str) -> str:
-    """Replace each balanced `$(...)` or `${...}` Make reference with one word.
-
-    The estate's Makefiles build `RUSTFLAGS` with `$(if ...)` and `$(shell ...)`
-    in the same line as `cargo clippy`; once the references are single words the
-    shell lexer reads the line as the command it is. A reference that names
-    cargo (`$(CARGO)`, or the `$(or $(shell command -v cargo), ...)` it expands
-    to when the variable is conditional) stands for the tool and becomes the
-    word `cargo`; any other becomes the unresolved mark.
-
-    Returns
-    -------
-    str
-        The text with each reference replaced by a single word.
-    """
-    out: list[str] = []
-    index = 0
-    while index < len(text):
-        if text[index] == "$" and text[index + 1 : index + 2] in {"(", "{"}:
-            end = _scan_balanced(text, index + 1)
-            if end is not None:
-                is_tool = "cargo" in text[index:end].lower()
-                out.append(" cargo " if is_tool else UNRESOLVED_MARK)
-                index = end
-                continue
-        out.append(text[index])
-        index += 1
-    return "".join(out)
-
-
-def _command_start(words: list[str]) -> int:
-    """Return the index of the command word after assignments and wrappers."""
-    index = 0
-    while index < len(words):
-        word = words[index].lstrip("@-+")
-        if _ASSIGNMENT.match(word) or word in _WRAPPERS:
-            index += 1
-        elif word == "rustup" and words[index + 1 : index + 2] == ["run"]:
-            index += 3
-        else:
-            break
-    return index
-
-
-def _is_cargo_clippy(words: list[str]) -> bool:
-    """Return whether one simple command is `cargo [flags] clippy ...`."""
-    start = _command_start(words)
-    if start >= len(words) or words[start].lstrip("@-+").rsplit("/", 1)[-1] != "cargo":
-        return False
-    arguments = iter(words[start + 1 :])
-    for argument in arguments:
-        if argument in _CARGO_VALUE_FLAGS:
-            next(arguments, None)
-        elif not argument.startswith(("-", "+")):
-            return argument == "clippy"
-    return False
-
-
-def clippy_runs(
-    index: cabc.Mapping[str, cabc.Sequence[typ.Any]],
-    reachable: list[str],
-    values: cabc.Mapping[str, str],
-) -> list[ClippyRun]:
-    """Return every recipe line in a reachable target that runs `cargo clippy`.
-
-    *index* maps a target to its rules, each with a `recipes` list of
-    `(line, text)` pairs. A run is a simple command whose command word is
-    `cargo` (also through `env`, `time` or `rustup run`) and whose subcommand is
-    `clippy`; `rustup component add clippy`, `cargo-clippy` in a test and
-    `$(MAKE) clippy` are not runs (the last leads to a target that the
-    reachability walk reads in its own right). Other parts of the line, such as
-    a `RUSTFLAGS` value built with `$(if ...)`, do not change which tool runs.
-    A line the lexer rejects, or that reaches clippy through an unresolved
-    reference, is carried as unresolved so the policy cannot read it as proof
-    either way.
-
-    Returns
-    -------
-    list[ClippyRun]
-        The lines in target and line order.
-    """
-    runs: list[ClippyRun] = []
-    for target in reachable:
-        for rule in index[target]:
-            for line, text in rule.recipes:
-                expanded = expand(text, values).text
-                segments = lex_segments(_blank_references(expanded))
-                is_unresolved = _UNRESOLVED_CLIPPY.search(
-                    shown(expanded)
-                ) is not None or (segments is None and "clippy" in expanded)
-                is_run = any(_is_cargo_clippy(words) for words in segments or [])
-                if is_run or is_unresolved:
-                    runs.append({
-                        "target": target,
-                        "line": line,
-                        "command": " ".join(shown(expanded).split()),
-                        "resolved": is_run,
-                    })
-    return runs

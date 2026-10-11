@@ -72,8 +72,10 @@ interrogate:
 - **EN-001** (error, indeterminate): the envelope is not a
   `policy-input/documentation-presence` document at schema version 1.
 
-The rule applies when the checkout owns at least one Python file outside the
-exempt trees. A checkout with none is compliant with no findings.
+DG-001 and DG-002 apply when the checkout owns at least one Python file outside
+the exempt trees; a checkout with none is compliant with them and has no
+findings from them. DG-003 and DG-004 apply independently, when the checkout
+owns a Rust library crate (see "Rust checks").
 
 ## Rust checks
 

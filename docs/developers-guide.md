@@ -689,11 +689,13 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   `Cargo.toml` (walk pruned of `fixtures`, `examples`, `templates`, `vendor`,
   `third_party`, `patches` and `target`) decoded with `tomllib`,
   `[lints] workspace = true` resolved against the nearest `[workspace]`, and
-  the library root's leading inner attributes scanned with a small tokenizer
-  that skips comments and strings. `clippy_runs` records the clippy lines in
-  the targets `lint` reaches. Rules DG-003 and DG-004 live in
-  `documentation_presence_rust.rego`, beside the Python rules in the same
-  package.
+  the library root's leading inner attributes and every module-level or
+  item-level suppression read by `rust_source` (comments and literals masked
+  first, so attribute-like text is never an attribute).
+  `rust_clippy.clippy_runs` lexes the recipe lines in the targets `lint`
+  reaches and records each `cargo ... clippy` command. Rules DG-003 and DG-004
+  live in `documentation_presence_rust.rego`, beside the Python rules in the
+  same package.
 
 - `policy-input/spelling-config-baseline` —
   `spelling_envelope.build_spelling_envelope`. It reuses `markdown_envelope`'s

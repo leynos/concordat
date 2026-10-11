@@ -7,7 +7,7 @@ import typing as typ
 import pytest
 
 from concordat.rules.documentation_envelope import build_documentation_envelope
-from concordat.rules.documentation_rust import (
+from concordat.rules.rust_source import (
     leading_attributes,
     mask_literals,
     suppressions_in,

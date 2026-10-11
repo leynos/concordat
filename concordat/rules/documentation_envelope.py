@@ -33,7 +33,7 @@ import re
 import tomllib
 import typing as typ
 
-from .documentation_rust import ClippyRun, RustFacts, build_rust_facts, clippy_runs
+from .documentation_rust import RustFacts, build_rust_facts
 from .interrogate_invocation import (
     InterrogateRun,
     RecipeLine,
@@ -55,6 +55,7 @@ from .markdown_envelope import (
     resolved_root,
     within_checkout,
 )
+from .rust_clippy import ClippyRun, clippy_runs
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
