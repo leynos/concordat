@@ -2409,7 +2409,7 @@ standard, as the DF12-104 roll-out proceeds.
 - **Exemptions:** files under `fixtures`, vendored trees and tool caches need no
   coverage and may be excluded (the `exempt_pattern` parameter). Nothing else
   may be excluded, and no ignore flag is accepted except
-  `--ignore-overloaded- functions`, because Ruff forbids a docstring on an
+  `--ignore-overloaded-functions`, because Ruff forbids a docstring on an
   overload stub.
 - **Actuators:** none; the package ships audit-only, and each roll-out pull
   request uses it as its proof of compliance.

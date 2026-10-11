@@ -271,6 +271,45 @@ def test_a_redirection_destination_is_not_a_scanned_path(
     assert runs[0]["paths"] == ["pkg"]
 
 
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        ("uv run interrogate -f 100 pkg", 1),
+        ("uv tool run --from 'interrogate==1.7.0' interrogate -f 100 pkg", 1),
+        ("uvx --from interrogate==1.7.0 interrogate -f 100 pkg", 1),
+        ("uv run --with interrogate --python 3.14 interrogate -f 100 pkg", 1),
+        ("python3 -m interrogate -f 100 pkg", 1),
+        ("true interrogate -f 100 pkg", 0),
+        ("echo interrogate -f 100 pkg", 0),
+        ("uv run true interrogate -f 100 pkg", 0),
+        ("uv tool install interrogate==1.7.0", 0),
+        ("uv run --with interrogate", 0),
+    ],
+)
+def test_only_a_launcher_or_the_tool_itself_runs_interrogate(
+    tmp_path: pathlib.Path, command: str, expected: int
+) -> None:
+    """A command that merely has `interrogate` among its arguments is no run."""
+    runs = _runs(tmp_path, f"lint:\n\t{command}\n")
+
+    assert len(runs) == expected
+
+
+def test_make_in_another_directory_is_not_followed_and_is_unresolved(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`make -C sub interrogate` runs sub's target, which this walk cannot read."""
+    _write(
+        tmp_path,
+        "Makefile",
+        "lint:\n\t$(MAKE) -C sub interrogate\ninterrogate:\n\tinterrogate pkg\n",
+    )
+
+    envelope = build_documentation_envelope(tmp_path)
+
+    assert envelope["reachability_resolved"] is False
+
+
 def test_a_make_command_in_text_is_not_followed(tmp_path: pathlib.Path) -> None:
     """Only a `make` in command position reaches its target."""
     _write(

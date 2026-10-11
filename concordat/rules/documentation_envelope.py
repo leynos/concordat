@@ -175,6 +175,11 @@ def _goals(arguments: list[str]) -> list[str]:
     return [word for word in arguments if not word.startswith("-") and "=" not in word]
 
 
+def _changes_directory(arguments: list[str]) -> bool:
+    """Return whether a `make` command's options move it to another directory."""
+    return any(word.startswith(("-C", "--directory")) for word in arguments)
+
+
 def _make_goals(text: str) -> Successors:
     """Return the targets that `make` commands in an expanded recipe line name.
 
@@ -193,7 +198,10 @@ def _make_goals(text: str) -> Successors:
     commands = [words for words in segments if words[0].lstrip("@-+") == "make"]
     goals = [goal for words in commands for goal in _goals(words[1:])]
     named = [goal for goal in goals if UNRESOLVED_MARK not in goal]
-    return Successors(named, is_resolved=len(named) == len(goals))
+    # `make -C dir target` runs another Makefile, whose `interrogate` is not
+    # this one's, so the walk cannot follow it and says so.
+    delegates = any(_changes_directory(words[1:]) for words in commands)
+    return Successors(named, is_resolved=not delegates and len(named) == len(goals))
 
 
 def _rule_successors(rule: Rule, values: cabc.Mapping[str, str]) -> Successors:

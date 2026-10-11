@@ -63,9 +63,22 @@ SEGMENT_BREAKS: typ.Final = frozenset({";", "&&", "||", "|", "&", "(", ")", ";;"
 # A command that only prints text mentioning interrogate, or calls make, is not
 # an invocation; a recursive make is followed by the reachability walk instead.
 NON_EXECUTING: typ.Final = frozenset({"echo", "printf", "make"})
-# Flags before the tool name that take it as their value: `uv run --with
-# interrogate interrogate` names the package twice and runs it once.
-INSTALL_FLAGS: typ.Final = frozenset({"--with", "--from", "install"})
+# The commands that launch a tool by name. `interrogate` is run, not merely
+# named, when it is the first word or follows only a launcher's own words: its
+# subcommands (`run`, `tool run`), its flags and their values (`uv run --with
+# interrogate interrogate` names the package twice and runs it once).
+LAUNCHERS: typ.Final = frozenset({"uv", "uvx", "python", "python3", "pipx"})
+LAUNCHER_SUBCOMMANDS: typ.Final = frozenset({"run", "tool"})
+LAUNCHER_VALUE_FLAGS: typ.Final = frozenset({
+    "--with",
+    "--from",
+    "--python",
+    "-p",
+    "--group",
+    "--extra",
+    "--project",
+    "--directory",
+})
 
 _NAMES_TOOL: typ.Final = re.compile(r"(?<![\w-])interrogate(?![\w-])")
 _UNRESOLVED_TOOL: typ.Final = re.compile(
@@ -242,11 +255,35 @@ def scan_options(arguments: list[str]) -> Options:
     return options
 
 
+def _is_launcher_prefix(prefix: list[str]) -> bool:
+    """Return whether *prefix* is only a launcher's subcommands, flags and values.
+
+    A flag that takes a value consumes the next word, so a word that is such a
+    flag's value (`--with interrogate`) is not a command.
+
+    Returns
+    -------
+    bool
+        Whether the words before the tool are all the launcher's own.
+    """
+    if posixpath.basename(prefix[0]) not in LAUNCHERS:
+        return False
+    awaiting_value = False
+    for word in prefix[1:]:
+        if awaiting_value:
+            awaiting_value = False
+        elif word in LAUNCHER_VALUE_FLAGS:
+            awaiting_value = True
+        elif not (word.startswith("-") or word in LAUNCHER_SUBCOMMANDS):
+            return False
+    return not awaiting_value
+
+
 def _is_tool_word(words: list[str], index: int) -> bool:
     """Return whether ``words[index]`` runs interrogate rather than names it."""
     if posixpath.basename(words[index]) != "interrogate":
         return False
-    return index == 0 or words[index - 1] not in INSTALL_FLAGS
+    return index == 0 or _is_launcher_prefix(words[:index])
 
 
 def _build_run(line: RecipeLine, words: list[str]) -> InterrogateRun:
