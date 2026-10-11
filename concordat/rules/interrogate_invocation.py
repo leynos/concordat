@@ -71,6 +71,7 @@ _NAMES_TOOL: typ.Final = re.compile(r"(?<![\w-])interrogate(?![\w-])")
 _UNRESOLVED_TOOL: typ.Final = re.compile(
     r"\$[({][^)}\s]*interrogate[^)}\s]*[)}]", re.IGNORECASE
 )
+_SHORT_OPTION: typ.Final = re.compile(r"-[^-]")
 _REDIRECT_OPERATOR: typ.Final = re.compile(r"\d*(?:>>?|<)")
 _REDIRECT_ATTACHED: typ.Final = re.compile(r"\d*[<>]")
 _QUOTED: typ.Final = re.compile(r"'[^']*'|\"[^\"]*\"")
@@ -216,7 +217,7 @@ def _consume(options: Options, word: str, queue: collections.deque[str]) -> None
     """Read one word: an option, a redirection or a path."""
     if word.startswith("--"):
         _consume_long(options, word, queue)
-    elif word.startswith("-") and len(word) > 1:
+    elif _SHORT_OPTION.match(word):
         _consume_short(options, word, queue)
     elif _REDIRECT_OPERATOR.fullmatch(word):
         # The destination is a file the shell opens, not a path to measure.
