@@ -204,9 +204,109 @@ clippy_resolved := [run | some run in object.get(input, "clippy_runs", []); run.
 
 clippy_unresolved := [run | some run in object.get(input, "clippy_runs", []); not run.resolved]
 
+# A repository that runs clippy through a wrapper script records why in its
+# developers' guide (a section whose heading contains "Clippy gate") and names the
+# script in backticks. The record stands in for a `cargo clippy` recipe line only
+# while a named script exists in the checkout, mentions clippy as a cargo
+# subcommand, and is reached from a recipe `lint` reaches. The audit cannot see
+# inside the script, so it checks no more than that.
+exceptions := object.get(object.get(input, "clippy_exceptions", {}), "records", [])
+
+exception_errors := object.get(object.get(input, "clippy_exceptions", {}), "errors", [])
+
+valid_exception_scripts := [script |
+	some exception in exceptions
+	some script in exception.scripts
+	script.exists
+	script.runs_clippy
+	script.reached
+]
+
+has_valid_exception if count(valid_exception_scripts) > 0
+
+# A guide or script the audit cannot examine makes the exception unknowable: the
+# verdict is indeterminate alone, not indeterminate beside an ordinary "no clippy".
+script_errors := [script |
+	some exception in exceptions
+	some script in exception.scripts
+	script.error != null
+]
+
+exception_unreadable if count(exception_errors) > 0
+
+exception_unreadable if count(script_errors) > 0
+
 deny contains f if {
 	rust_in_scope
 	count(rust_crates) > 0
+	count(clippy_resolved) == 0
+	not has_valid_exception
+	some script in script_errors
+	f := crate_finding(
+		"DG-004", "indeterminate", "docs/developers-guide.md",
+		sprintf("the clippy-gate exception names `%s`, which the audit cannot examine: %s", [script.path, script.error]),
+	)
+}
+
+script_problem(script) := "does not exist inside the checkout" if {
+	not script.exists
+	script.error == null
+}
+
+script_problem(script) := "does not run clippy as a cargo subcommand" if {
+	script.exists
+	not script.runs_clippy
+}
+
+script_problem(script) := "is not run by any command in a recipe that `make lint` reaches" if {
+	script.exists
+	script.runs_clippy
+	not script.reached
+}
+
+deny contains f if {
+	rust_in_scope
+	count(rust_crates) > 0
+	count(clippy_resolved) == 0
+	not has_valid_exception
+	some error in exception_errors
+	f := crate_finding(
+		"DG-004", "indeterminate", "docs/developers-guide.md",
+		sprintf("the document that would record a clippy-gate exception cannot be read, so the audit cannot tell whether one exists: %s", [error]),
+	)
+}
+
+deny contains f if {
+	rust_in_scope
+	count(rust_crates) > 0
+	count(clippy_resolved) == 0
+	not has_valid_exception
+	some exception in exceptions
+	count(exception.scripts) == 0
+	f := crate_finding(
+		"DG-004", "noncompliant", exception.path,
+		sprintf("the clippy-gate exception at line %d names no script in backticks, so the audit cannot check it", [exception.line]),
+	)
+}
+
+deny contains f if {
+	rust_in_scope
+	count(rust_crates) > 0
+	count(clippy_resolved) == 0
+	not has_valid_exception
+	some exception in exceptions
+	some script in exception.scripts
+	script.error == null
+	f := crate_finding(
+		"DG-004", "noncompliant", exception.path,
+		sprintf("the clippy-gate exception at line %d names `%s`, which %s", [exception.line, script.path, script_problem(script)]),
+	)
+}
+
+deny contains f if {
+	rust_in_scope
+	count(rust_crates) > 0
+	not has_valid_exception
 	not input.applicability.root_makefile
 	f := finding(
 		"DG-004", "noncompliant", 0,
@@ -217,6 +317,7 @@ deny contains f if {
 deny contains f if {
 	rust_in_scope
 	count(rust_crates) > 0
+	not has_valid_exception
 	input.applicability.root_makefile
 	not input.lint_target
 	f := finding(
@@ -228,6 +329,7 @@ deny contains f if {
 deny contains f if {
 	rust_in_scope
 	count(rust_crates) > 0
+	not has_valid_exception
 	input.lint_target
 	count(clippy_resolved) == 0
 	count(clippy_unresolved) > 0
@@ -240,6 +342,7 @@ deny contains f if {
 deny contains f if {
 	rust_in_scope
 	count(rust_crates) > 0
+	not has_valid_exception
 	input.lint_target
 	count(clippy_resolved) == 0
 	count(clippy_unresolved) == 0
@@ -253,12 +356,14 @@ deny contains f if {
 deny contains f if {
 	rust_in_scope
 	count(rust_crates) > 0
+	not has_valid_exception
+	not exception_unreadable
 	input.lint_target
 	count(clippy_resolved) == 0
 	count(clippy_unresolved) == 0
 	input.reachability_resolved
 	f := finding(
 		"DG-004", "noncompliant", 0,
-		"`make lint` reaches no clippy run, so a `missing_docs` lint at deny is not compiled by the gate",
+		"`make lint` reaches no clippy run, and no recorded clippy-gate exception stands in for one, so a `missing_docs` lint at deny is not compiled by the gate",
 	)
 }

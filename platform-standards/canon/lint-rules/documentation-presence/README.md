@@ -131,7 +131,39 @@ A single crate sets `[lints.rust] missing_docs = "deny"` itself.
   own right). Other parts of the line, such as a `RUSTFLAGS` value built with
   `$(if ...)` or `$(shell ...)` as the estate's Makefiles have, do not change
   which tool runs. A command reached only through a variable named for clippy
-  (`$(CLIPPY_CMD)`), or a line the lexer rejects, is indeterminate.
+  (`$(CLIPPY_CMD)`), or a line the lexer rejects, is indeterminate. A recorded
+  clippy-gate exception (below) stands in for the recipe line.
+
+### The clippy-gate exception
+
+A repository can have a reason to run clippy through a wrapper script, such as
+femtologging's lint lanes for PyO3 and the toolchain. The audit cannot see
+inside a script, so the estate's exception idiom (set by
+`rust-toolchain-policy`) applies: a reasoned record in the consumer repository.
+Add a section to `docs/developers-guide.md` whose heading contains "Clippy
+gate" and whose body says why, naming the script in backticks:
+
+```markdown
+## Clippy gate exception
+
+Clippy runs through `scripts/lint_rust_lanes.py`, because the PyO3 lanes need
+a toolchain that a plain `cargo clippy` recipe line cannot select.
+```
+
+DG-004 accepts the record only while a named script exists inside the checkout,
+runs clippy through cargo, and is run by a command in a recipe that `make lint`
+reaches. A shell script must contain a `cargo ... clippy` command; any other
+script must name both cargo and clippy as string literals, so a lone
+`print("clippy")` does not count. The script is run when it is the command or
+an argument of an interpreter (`sh scripts/x.sh`, `./scripts/x.sh`,
+`uv run --script scripts/x.py`); naming it in `echo`, `cat` or `test -x` does
+not run it. The guide must lie inside the checkout (a link to a file outside it
+is refused), and a guide or script that cannot be read or is not UTF-8 makes
+DG-004 indeterminate rather than reading as "no exception recorded". A record
+whose scripts fail any of these is noncompliant and the finding says which; a
+section that names no script is noncompliant. The audit checks no more than
+that: it does not read what the script does with clippy. A recipe that already
+runs `cargo clippy` needs no record, and a stale one is ignored.
 
 The Rust rules apply when the checkout owns at least one library crate (or a
 Cargo manifest the audit cannot read).

@@ -388,12 +388,17 @@ def test_masking_preserves_length_and_line_structure(source: str) -> None:
 
 
 @given(st.lists(_RUST_PIECES, max_size=30).map("".join))
-def test_masking_is_idempotent_and_never_adds_attributes(source: str) -> None:
-    """Masked text masks to itself, and masking cannot create an attribute."""
+def test_masking_never_adds_attributes(source: str) -> None:
+    """Masking only blanks text, so it cannot create an attribute.
+
+    It is not idempotent on arbitrary text: two adjacent character literals
+    share a quote (`'x''y'`), and once the first is blanked the second pass can
+    read the shared quote as an opener. Real Rust has no such sequence.
+    """
     masked = mask_literals(source)
 
-    assert mask_literals(masked) == masked
-    assert masked.count("#[allow") <= source.count("#[allow")
+    assert masked.count("#[") <= source.count("#[")
+    assert masked.count("#![") <= source.count("#![")
 
 
 def test_code_after_a_raw_string_is_still_scanned() -> None:

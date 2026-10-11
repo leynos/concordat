@@ -90,6 +90,27 @@ def find_exception_sections(
     return [_scan_document(checkout, relative, keyword) for relative in documents]
 
 
+def sections_in_text(text: str, keyword: str) -> list[tuple[str, int, str]]:
+    """Return `(heading, line, body text)` for each section naming *keyword*.
+
+    Headings inside fenced code blocks are not sections. The function reads
+    nothing: a caller decides how a document that cannot be read is reported.
+
+    Returns
+    -------
+    list[tuple[str, int, str]]
+        The heading text, its one-based line and the section's body.
+    """
+    lines = text.splitlines()
+    headings = list(extract_headings(lines))
+    folded = keyword.casefold()
+    return [
+        (heading.text, heading.line, "\n".join(_section_body(lines, headings, index)))
+        for index, heading in enumerate(headings)
+        if folded in heading.text.casefold()
+    ]
+
+
 def _scan_document(
     checkout: pathlib.Path,
     relative: str,

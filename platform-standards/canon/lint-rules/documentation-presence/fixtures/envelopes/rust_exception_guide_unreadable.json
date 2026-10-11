@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "kind": "policy-input/documentation-presence",
+  "repository": {
+    "path": ".",
+    "name": null
+  },
+  "applicability": {
+    "root_makefile": true,
+    "python_files": false,
+    "pyproject": false,
+    "rust_library": true
+  },
+  "makefile_path": "Makefile",
+  "lint_target": true,
+  "reachable_targets": [
+    "lint"
+  ],
+  "reachability_resolved": true,
+  "interrogate_elsewhere": [],
+  "runs": [],
+  "configs": [],
+  "python_files": [],
+  "clippy_runs": [],
+  "clippy_exceptions": {
+    "records": [],
+    "errors": [
+      "docs/developers-guide.md: not UTF-8 text: 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte"
+    ]
+  },
+  "rust": {
+    "crates": [
+      {
+        "manifest": "Cargo.toml",
+        "name": "demo",
+        "root": "src/lib.rs",
+        "root_error": null,
+        "manifest_level": "deny",
+        "inherits_workspace": false,
+        "workspace_level": null,
+        "attributes": [],
+        "suppressions": [],
+        "source_errors": []
+      }
+    ],
+    "errors": []
+  }
+}

@@ -28,6 +28,10 @@
     "tests/fixtures/sample.py"
   ],
   "clippy_runs": [],
+  "clippy_exceptions": {
+    "records": [],
+    "errors": []
+  },
   "rust": {
     "crates": [],
     "errors": []

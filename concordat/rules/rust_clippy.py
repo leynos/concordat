@@ -13,8 +13,8 @@ import re
 import typing as typ
 
 from .interrogate_invocation import lex_segments
-from .makefile_expansion import UNRESOLVED_MARK, expand, shown
-from .rust_source import scan_balanced
+from .make_commands import blank_references, command_start
+from .makefile_expansion import expand, shown
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -25,9 +25,6 @@ _UNRESOLVED_CLIPPY: typ.Final = re.compile(
     r"\$[({][^)}\s]*clippy[^)}\s]*[)}]|\$[({][^)}]*[)}]\s+clippy(?![\w.-])",
     re.IGNORECASE,
 )
-_ASSIGNMENT: typ.Final = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
-# Wrappers that run the next word as a command without changing which tool it is.
-_WRAPPERS: typ.Final = frozenset({"env", "time", "nice", "command", "exec"})
 # `cargo` flags that take a value as the next word, so that word is not the subcommand.
 _CARGO_VALUE_FLAGS: typ.Final = frozenset({
     "-Z",
@@ -48,53 +45,9 @@ class ClippyRun(typ.TypedDict):
     resolved: bool
 
 
-def _blank_references(text: str) -> str:
-    """Replace each balanced `$(...)` or `${...}` Make reference with one word.
-
-    A reference that names cargo (`$(CARGO)`, or the
-    `$(or $(shell command -v cargo), ...)` it expands to when the variable is
-    conditional) stands for the tool and becomes the word `cargo`; any other
-    becomes the unresolved mark.
-
-    Returns
-    -------
-    str
-        The text with each reference replaced by a single word.
-    """
-    out: list[str] = []
-    index = 0
-    while index < len(text):
-        end = (
-            scan_balanced(text, index + 1)
-            if text.startswith(("$(", "${"), index)
-            else None
-        )
-        if end is None:
-            out.append(text[index])
-            index += 1
-            continue
-        out.append(" cargo " if "cargo" in text[index:end].lower() else UNRESOLVED_MARK)
-        index = end
-    return "".join(out)
-
-
-def _command_start(words: list[str]) -> int:
-    """Return the index of the command word after assignments and wrappers."""
-    index = 0
-    while index < len(words):
-        word = words[index].lstrip("@-+")
-        if _ASSIGNMENT.match(word) or word in _WRAPPERS:
-            index += 1
-        elif word == "rustup" and words[index + 1 : index + 2] == ["run"]:
-            index += 3
-        else:
-            break
-    return index
-
-
-def _is_cargo_clippy(words: list[str]) -> bool:
+def is_cargo_clippy(words: list[str]) -> bool:
     """Return whether one simple command is `cargo [flags] clippy ...`."""
-    start = _command_start(words)
+    start = command_start(words)
     if start >= len(words) or words[start].lstrip("@-+").rsplit("/", 1)[-1] != "cargo":
         return False
     arguments = iter(words[start + 1 :])
@@ -108,8 +61,8 @@ def _is_cargo_clippy(words: list[str]) -> bool:
 
 def _run_on_line(target: str, line: int, expanded: str) -> ClippyRun | None:
     """Return the clippy run an expanded recipe line holds, if it holds one."""
-    segments = lex_segments(_blank_references(expanded))
-    is_run = any(_is_cargo_clippy(words) for words in segments or [])
+    segments = lex_segments(blank_references(expanded))
+    is_run = any(is_cargo_clippy(words) for words in segments or [])
     is_unresolved = _UNRESOLVED_CLIPPY.search(shown(expanded)) is not None or (
         segments is None and "clippy" in expanded
     )
@@ -121,6 +74,31 @@ def _run_on_line(target: str, line: int, expanded: str) -> ClippyRun | None:
         "command": " ".join(shown(expanded).split()),
         "resolved": is_run,
     }
+
+
+def reachable_lines(
+    index: cabc.Mapping[str, cabc.Sequence[typ.Any]],
+    reachable: list[str],
+    values: cabc.Mapping[str, str],
+) -> list[str]:
+    """Return the expanded text of every recipe line in a reachable target.
+
+    The exception record uses these to prove that a script it names is really
+    run by `make lint`: the script's path has to appear in one of them.
+
+    Returns
+    -------
+    list[str]
+        The expanded recipe lines. Make references that could not be settled
+        and shell dollars stay as the expansion's placeholders, so a line can
+        still be lexed.
+    """
+    return [
+        expand(text, values).text
+        for target in reachable
+        for rule in index[target]
+        for _line, text in rule.recipes
+    ]
 
 
 def clippy_runs(

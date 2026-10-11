@@ -121,7 +121,9 @@ class Scenario:
         these over it; a value of ``None`` removes the file.
     """
 
-    files: cabc.Mapping[str, str | None] = dataclasses.field(default_factory=dict)
+    files: cabc.Mapping[str, str | bytes | None] = dataclasses.field(
+        default_factory=dict
+    )
 
 
 BASE: typ.Final = {
@@ -161,7 +163,7 @@ def crate_manifest(lints: str = "") -> str:
     return f"{package}\n{lints}" if lints else package
 
 
-def rust_scenario(files: cabc.Mapping[str, str | None]) -> Scenario:
+def rust_scenario(files: cabc.Mapping[str, str | bytes | None]) -> Scenario:
     """Return a Rust-only scenario laid over the clippy Makefile.
 
     Returns
@@ -174,6 +176,48 @@ def rust_scenario(files: cabc.Mapping[str, str | None]) -> Scenario:
         "pyproject.toml": None,
         "Makefile": CLIPPY_MAKEFILE,
         **files,
+    })
+
+
+EXCEPTION_MAKEFILE: typ.Final = (
+    ".PHONY: lint\nLANES ?= scripts/lint_lanes.sh\nlint:\n\tsh $(LANES)\n"
+)
+LANES_SCRIPT: typ.Final = (
+    "#!/bin/sh\n# Run clippy once per feature lane.\n"
+    "cargo clippy --workspace --features lane-a -- -D warnings\n"
+)
+
+
+def exception_guide(body: str) -> str:
+    """Return a developers' guide holding a clippy-gate exception section.
+
+    Returns
+    -------
+    str
+        The Markdown text.
+    """
+    return f"# Developers' guide\n\n## Clippy gate exception\n\n{body}\n"
+
+
+def exception_scenario(
+    guide_body: str,
+    *,
+    script: str | bytes | None = LANES_SCRIPT,
+    makefile: str = EXCEPTION_MAKEFILE,
+) -> Scenario:
+    """Return a Rust scenario whose lint reaches clippy only through a script.
+
+    Returns
+    -------
+    Scenario
+        A deny-compliant crate, *makefile*, an optional lane script and a guide.
+    """
+    return rust_scenario({
+        "Cargo.toml": crate_manifest('[lints.rust]\nmissing_docs = "deny"\n'),
+        "src/lib.rs": LIB_ROOT,
+        "Makefile": makefile,
+        "scripts/lint_lanes.sh": script,
+        "docs/developers-guide.md": exception_guide(guide_body),
     })
 
 
@@ -528,6 +572,50 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
             '\tRUSTFLAGS="-D warnings$(if $(X),-Zthreads=8)" cargo clippy\n'
         ),
     }),
+    # DG-004 exception: a recorded wrapper script stands in for a clippy recipe line.
+    "rust_exception_valid": exception_scenario(
+        "Clippy runs through `scripts/lint_lanes.sh`: the PyO3 lanes need a "
+        "toolchain that `cargo clippy` in a recipe cannot select."
+    ),
+    "rust_exception_script_missing": exception_scenario(
+        "Clippy runs through `scripts/other_lanes.sh` for the PyO3 lanes.",
+    ),
+    "rust_exception_script_without_clippy": exception_scenario(
+        "Clippy runs through `scripts/lint_lanes.sh` for the PyO3 lanes.",
+        script="#!/bin/sh\ncargo fmt --check\n",
+    ),
+    "rust_exception_script_not_reached": exception_scenario(
+        "Clippy runs through `scripts/lint_lanes.sh` for the PyO3 lanes.",
+        makefile=".PHONY: lint\nlint:\n\tcargo fmt --check\n",
+    ),
+    "rust_exception_script_only_echoed": exception_scenario(
+        "Clippy runs through `scripts/lint_lanes.sh` for the PyO3 lanes.",
+        makefile=".PHONY: lint\nlint:\n\techo scripts/lint_lanes.sh\n",
+    ),
+    "rust_exception_guide_unreadable": rust_scenario({
+        "Cargo.toml": crate_manifest('[lints.rust]\nmissing_docs = "deny"\n'),
+        "src/lib.rs": LIB_ROOT,
+        "Makefile": ".PHONY: lint\nlint:\n\tcargo fmt --check\n",
+        "docs/developers-guide.md": b"\xff\xfe## Clippy gate",
+    }),
+    "rust_exception_script_unreadable": exception_scenario(
+        "Clippy runs through `scripts/lint_lanes.sh` for the PyO3 lanes.",
+        script=b"\xff\xfe cargo clippy",
+    ),
+    "rust_exception_names_no_script": exception_scenario(
+        "Clippy runs through a wrapper because of the PyO3 lanes.",
+    ),
+    "rust_exception_path_escape": exception_scenario(
+        "Clippy runs through `../lint_lanes.sh` for the PyO3 lanes.",
+    ),
+    "rust_exception_unneeded": rust_scenario({
+        "Cargo.toml": crate_manifest('[lints.rust]\nmissing_docs = "deny"\n'),
+        "src/lib.rs": LIB_ROOT,
+        "Makefile": CLIPPY_MAKEFILE,
+        "docs/developers-guide.md": exception_guide(
+            "Clippy runs through `scripts/gone.py`."
+        ),
+    }),
     "rust_and_python_compliant": Scenario({
         "Makefile": makefile(lint="lint: interrogate\n\tcargo clippy -- -D warnings\n"),
         "Cargo.toml": crate_manifest('[lints.rust]\nmissing_docs = "deny"\n'),
@@ -552,7 +640,10 @@ def lay_out(scenario: Scenario, checkout: Path) -> None:
             continue
         path = checkout / relative
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
+        if isinstance(text, bytes):
+            path.write_bytes(text)
+        else:
+            path.write_text(text, encoding="utf-8")
 
 
 def build_fixture_envelope(scenario: Scenario) -> DocumentationEnvelope:

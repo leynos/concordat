@@ -56,6 +56,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -89,6 +93,10 @@
       ],
       "python_files": [],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -124,6 +132,10 @@
         "tests/fixtures/sample.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -185,6 +197,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -224,6 +240,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -263,6 +283,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -304,6 +328,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -345,6 +373,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -386,6 +418,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -447,6 +483,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -505,6 +545,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -546,6 +590,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -607,6 +655,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -665,6 +717,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -726,6 +782,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -787,6 +847,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -848,6 +912,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -911,6 +979,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -974,6 +1046,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -1037,6 +1113,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -1100,6 +1180,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -1164,6 +1248,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -1227,6 +1315,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -1290,6 +1382,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -1356,6 +1452,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -1420,6 +1520,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -1483,6 +1587,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -1546,6 +1654,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -1611,6 +1723,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -1677,6 +1793,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -1735,6 +1855,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -1795,6 +1919,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -1853,6 +1981,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -1929,6 +2061,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -1991,6 +2127,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -2057,6 +2197,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -2118,6 +2262,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -2181,6 +2329,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -2242,6 +2394,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -2305,6 +2461,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -2366,6 +2526,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -2427,6 +2591,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -2488,6 +2656,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -2549,6 +2721,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -2610,6 +2786,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -2671,6 +2851,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -2732,6 +2916,10 @@
         "tests/test_core.py"
       ],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -2768,6 +2956,10 @@
           "resolved": true
         }
       ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [
           {
@@ -2817,6 +3009,10 @@
           "resolved": true
         }
       ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [
           {
@@ -2866,6 +3062,10 @@
           "resolved": true
         }
       ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [
           {
@@ -2921,6 +3121,10 @@
           "resolved": true
         }
       ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [
           {
@@ -2976,6 +3180,10 @@
           "resolved": true
         }
       ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [
           {
@@ -3031,6 +3239,10 @@
           "resolved": true
         }
       ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": []
@@ -3067,6 +3279,10 @@
           "resolved": true
         }
       ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [
           {
@@ -3116,6 +3332,10 @@
           "resolved": true
         }
       ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [
           {
@@ -3165,6 +3385,10 @@
           "resolved": true
         }
       ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [
           {
@@ -3214,6 +3438,10 @@
           "resolved": true
         }
       ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [
           {
@@ -3275,6 +3503,10 @@
           "resolved": true
         }
       ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [
           {
@@ -3324,6 +3556,10 @@
           "resolved": true
         }
       ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [
           {
@@ -3379,6 +3615,10 @@
           "resolved": true
         }
       ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [
           {
@@ -3434,6 +3674,10 @@
           "resolved": true
         }
       ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [
           {
@@ -3489,6 +3733,10 @@
           "resolved": true
         }
       ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [
           {
@@ -3544,6 +3792,10 @@
           "resolved": true
         }
       ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [
           {
@@ -3600,6 +3852,10 @@
           "resolved": true
         }
       ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [
           {
@@ -3656,6 +3912,10 @@
           "resolved": true
         }
       ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [
           {
@@ -3712,6 +3972,10 @@
           "resolved": true
         }
       ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [
           {
@@ -3761,6 +4025,10 @@
           "resolved": true
         }
       ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [],
         "errors": [
@@ -3799,6 +4067,10 @@
           "resolved": true
         }
       ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [
           {
@@ -3839,6 +4111,10 @@
       "configs": [],
       "python_files": [],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [
           {
@@ -3879,6 +4155,10 @@
       "configs": [],
       "python_files": [],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [
           {
@@ -3921,6 +4201,10 @@
       "configs": [],
       "python_files": [],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [
           {
@@ -3971,6 +4255,10 @@
           "resolved": true
         }
       ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [
           {
@@ -4020,6 +4308,10 @@
           "resolved": false
         }
       ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [
           {
@@ -4062,6 +4354,10 @@
       "configs": [],
       "python_files": [],
       "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [
           {
@@ -4112,6 +4408,10 @@
           "resolved": true
         }
       ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [
           {
@@ -4161,6 +4461,10 @@
           "resolved": true
         }
       ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [
           {
@@ -4210,6 +4514,606 @@
           "resolved": true
         }
       ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
+      "rust": {
+        "crates": [
+          {
+            "manifest": "Cargo.toml",
+            "name": "demo",
+            "root": "src/lib.rs",
+            "root_error": null,
+            "manifest_level": "deny",
+            "inherits_workspace": false,
+            "workspace_level": null,
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
+          }
+        ],
+        "errors": []
+      }
+    },
+    "rust_exception_valid": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": false,
+        "pyproject": false,
+        "rust_library": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [],
+      "python_files": [],
+      "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [
+          {
+            "path": "docs/developers-guide.md",
+            "heading": "Clippy gate exception",
+            "line": 3,
+            "scripts": [
+              {
+                "path": "scripts/lint_lanes.sh",
+                "exists": true,
+                "runs_clippy": true,
+                "reached": true,
+                "error": null
+              }
+            ]
+          }
+        ],
+        "errors": []
+      },
+      "rust": {
+        "crates": [
+          {
+            "manifest": "Cargo.toml",
+            "name": "demo",
+            "root": "src/lib.rs",
+            "root_error": null,
+            "manifest_level": "deny",
+            "inherits_workspace": false,
+            "workspace_level": null,
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
+          }
+        ],
+        "errors": []
+      }
+    },
+    "rust_exception_script_missing": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": false,
+        "pyproject": false,
+        "rust_library": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [],
+      "python_files": [],
+      "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [
+          {
+            "path": "docs/developers-guide.md",
+            "heading": "Clippy gate exception",
+            "line": 3,
+            "scripts": [
+              {
+                "path": "scripts/other_lanes.sh",
+                "exists": false,
+                "runs_clippy": false,
+                "reached": false,
+                "error": null
+              }
+            ]
+          }
+        ],
+        "errors": []
+      },
+      "rust": {
+        "crates": [
+          {
+            "manifest": "Cargo.toml",
+            "name": "demo",
+            "root": "src/lib.rs",
+            "root_error": null,
+            "manifest_level": "deny",
+            "inherits_workspace": false,
+            "workspace_level": null,
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
+          }
+        ],
+        "errors": []
+      }
+    },
+    "rust_exception_script_without_clippy": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": false,
+        "pyproject": false,
+        "rust_library": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [],
+      "python_files": [],
+      "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [
+          {
+            "path": "docs/developers-guide.md",
+            "heading": "Clippy gate exception",
+            "line": 3,
+            "scripts": [
+              {
+                "path": "scripts/lint_lanes.sh",
+                "exists": true,
+                "runs_clippy": false,
+                "reached": true,
+                "error": null
+              }
+            ]
+          }
+        ],
+        "errors": []
+      },
+      "rust": {
+        "crates": [
+          {
+            "manifest": "Cargo.toml",
+            "name": "demo",
+            "root": "src/lib.rs",
+            "root_error": null,
+            "manifest_level": "deny",
+            "inherits_workspace": false,
+            "workspace_level": null,
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
+          }
+        ],
+        "errors": []
+      }
+    },
+    "rust_exception_script_not_reached": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": false,
+        "pyproject": false,
+        "rust_library": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [],
+      "python_files": [],
+      "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [
+          {
+            "path": "docs/developers-guide.md",
+            "heading": "Clippy gate exception",
+            "line": 3,
+            "scripts": [
+              {
+                "path": "scripts/lint_lanes.sh",
+                "exists": true,
+                "runs_clippy": true,
+                "reached": false,
+                "error": null
+              }
+            ]
+          }
+        ],
+        "errors": []
+      },
+      "rust": {
+        "crates": [
+          {
+            "manifest": "Cargo.toml",
+            "name": "demo",
+            "root": "src/lib.rs",
+            "root_error": null,
+            "manifest_level": "deny",
+            "inherits_workspace": false,
+            "workspace_level": null,
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
+          }
+        ],
+        "errors": []
+      }
+    },
+    "rust_exception_script_only_echoed": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": false,
+        "pyproject": false,
+        "rust_library": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [],
+      "python_files": [],
+      "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [
+          {
+            "path": "docs/developers-guide.md",
+            "heading": "Clippy gate exception",
+            "line": 3,
+            "scripts": [
+              {
+                "path": "scripts/lint_lanes.sh",
+                "exists": true,
+                "runs_clippy": true,
+                "reached": false,
+                "error": null
+              }
+            ]
+          }
+        ],
+        "errors": []
+      },
+      "rust": {
+        "crates": [
+          {
+            "manifest": "Cargo.toml",
+            "name": "demo",
+            "root": "src/lib.rs",
+            "root_error": null,
+            "manifest_level": "deny",
+            "inherits_workspace": false,
+            "workspace_level": null,
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
+          }
+        ],
+        "errors": []
+      }
+    },
+    "rust_exception_guide_unreadable": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": false,
+        "pyproject": false,
+        "rust_library": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [],
+      "python_files": [],
+      "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": [
+          "docs/developers-guide.md: not UTF-8 text: 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte"
+        ]
+      },
+      "rust": {
+        "crates": [
+          {
+            "manifest": "Cargo.toml",
+            "name": "demo",
+            "root": "src/lib.rs",
+            "root_error": null,
+            "manifest_level": "deny",
+            "inherits_workspace": false,
+            "workspace_level": null,
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
+          }
+        ],
+        "errors": []
+      }
+    },
+    "rust_exception_script_unreadable": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": false,
+        "pyproject": false,
+        "rust_library": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [],
+      "python_files": [],
+      "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [
+          {
+            "path": "docs/developers-guide.md",
+            "heading": "Clippy gate exception",
+            "line": 3,
+            "scripts": [
+              {
+                "path": "scripts/lint_lanes.sh",
+                "exists": true,
+                "runs_clippy": false,
+                "reached": true,
+                "error": "not UTF-8 text: 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte"
+              }
+            ]
+          }
+        ],
+        "errors": []
+      },
+      "rust": {
+        "crates": [
+          {
+            "manifest": "Cargo.toml",
+            "name": "demo",
+            "root": "src/lib.rs",
+            "root_error": null,
+            "manifest_level": "deny",
+            "inherits_workspace": false,
+            "workspace_level": null,
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
+          }
+        ],
+        "errors": []
+      }
+    },
+    "rust_exception_names_no_script": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": false,
+        "pyproject": false,
+        "rust_library": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [],
+      "python_files": [],
+      "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [
+          {
+            "path": "docs/developers-guide.md",
+            "heading": "Clippy gate exception",
+            "line": 3,
+            "scripts": []
+          }
+        ],
+        "errors": []
+      },
+      "rust": {
+        "crates": [
+          {
+            "manifest": "Cargo.toml",
+            "name": "demo",
+            "root": "src/lib.rs",
+            "root_error": null,
+            "manifest_level": "deny",
+            "inherits_workspace": false,
+            "workspace_level": null,
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
+          }
+        ],
+        "errors": []
+      }
+    },
+    "rust_exception_path_escape": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": false,
+        "pyproject": false,
+        "rust_library": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [],
+      "python_files": [],
+      "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [
+          {
+            "path": "docs/developers-guide.md",
+            "heading": "Clippy gate exception",
+            "line": 3,
+            "scripts": [
+              {
+                "path": "../lint_lanes.sh",
+                "exists": false,
+                "runs_clippy": false,
+                "reached": false,
+                "error": null
+              }
+            ]
+          }
+        ],
+        "errors": []
+      },
+      "rust": {
+        "crates": [
+          {
+            "manifest": "Cargo.toml",
+            "name": "demo",
+            "root": "src/lib.rs",
+            "root_error": null,
+            "manifest_level": "deny",
+            "inherits_workspace": false,
+            "workspace_level": null,
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
+          }
+        ],
+        "errors": []
+      }
+    },
+    "rust_exception_unneeded": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": false,
+        "pyproject": false,
+        "rust_library": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [],
+      "python_files": [],
+      "clippy_runs": [
+        {
+          "target": "lint",
+          "line": 4,
+          "command": "cargo clippy --workspace --all-targets -- -D warnings",
+          "resolved": true
+        }
+      ],
+      "clippy_exceptions": {
+        "records": [
+          {
+            "path": "docs/developers-guide.md",
+            "heading": "Clippy gate exception",
+            "line": 3,
+            "scripts": [
+              {
+                "path": "scripts/gone.py",
+                "exists": false,
+                "runs_clippy": false,
+                "reached": false,
+                "error": null
+              }
+            ]
+          }
+        ],
+        "errors": []
+      },
       "rust": {
         "crates": [
           {
@@ -4291,6 +5195,10 @@
           "resolved": true
         }
       ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
       "rust": {
         "crates": [
           {

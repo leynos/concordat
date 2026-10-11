@@ -111,3 +111,49 @@ test_rust_clippy_through_sub_make if rust_reported(data.fixtures.rust_clippy_thr
 
 # Attribute text in a doc comment or a string is not a suppression.
 test_rust_suppression_text_in_string if rust_reported(data.fixtures.rust_suppression_text_in_string) == set()
+
+# -- DG-004 exception: a recorded wrapper script ------------------------------------
+
+test_rust_exception_valid if rust_reported(data.fixtures.rust_exception_valid) == set()
+
+test_rust_exception_script_missing if rust_reported(data.fixtures.rust_exception_script_missing) == {"DG-004/noncompliant"}
+
+test_rust_exception_script_without_clippy if rust_reported(data.fixtures.rust_exception_script_without_clippy) == {"DG-004/noncompliant"}
+
+test_rust_exception_script_not_reached if rust_reported(data.fixtures.rust_exception_script_not_reached) == {"DG-004/noncompliant"}
+
+test_rust_exception_script_only_echoed if rust_reported(data.fixtures.rust_exception_script_only_echoed) == {"DG-004/noncompliant"}
+
+# A guide the audit cannot read is indeterminate, never "no exception recorded".
+test_rust_exception_guide_unreadable if rust_reported(data.fixtures.rust_exception_guide_unreadable) == {"DG-004/indeterminate"}
+
+test_rust_exception_script_unreadable if rust_reported(data.fixtures.rust_exception_script_unreadable) == {"DG-004/indeterminate"}
+
+test_rust_exception_names_no_script if rust_reported(data.fixtures.rust_exception_names_no_script) == {"DG-004/noncompliant"}
+
+test_rust_exception_path_escape if rust_reported(data.fixtures.rust_exception_path_escape) == {"DG-004/noncompliant"}
+
+# A recipe that already runs cargo clippy needs no exception, and a stale record is ignored.
+test_rust_exception_unneeded if rust_reported(data.fixtures.rust_exception_unneeded) == set()
+
+# The findings name the script and what is wrong with it.
+test_rust_exception_script_missing_names_the_script if {
+	some f in rust_findings(data.fixtures.rust_exception_script_missing)
+	contains(f.msg, "scripts/other_lanes.sh")
+	contains(f.msg, "does not exist")
+}
+
+test_rust_exception_script_without_clippy_says_why if {
+	some f in rust_findings(data.fixtures.rust_exception_script_without_clippy)
+	contains(f.msg, "does not run clippy as a cargo subcommand")
+}
+
+test_rust_exception_script_not_reached_says_why if {
+	some f in rust_findings(data.fixtures.rust_exception_script_not_reached)
+	contains(f.msg, "not run by any command")
+}
+
+test_rust_exception_names_no_script_says_so if {
+	some f in rust_findings(data.fixtures.rust_exception_names_no_script)
+	contains(f.msg, "names no script")
+}
