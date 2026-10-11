@@ -80,15 +80,15 @@
         },
         {
           "id": "pylint-astroid",
-          "kind": "tuple",
+          "kind": "family",
           "members": [
             "pylint",
             "astroid"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "cuprum",
           "provenance": [
-            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair, and Pylint declares the Astroid range it supports, so the pair moves together"
           ]
         },
         {
@@ -297,15 +297,15 @@
         },
         {
           "id": "pylint-astroid",
-          "kind": "tuple",
+          "kind": "family",
           "members": [
             "pylint",
             "astroid"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "cuprum",
           "provenance": [
-            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair, and Pylint declares the Astroid range it supports, so the pair moves together"
           ]
         },
         {
@@ -501,15 +501,15 @@
         },
         {
           "id": "pylint-astroid",
-          "kind": "tuple",
+          "kind": "family",
           "members": [
             "pylint",
             "astroid"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "cuprum",
           "provenance": [
-            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair, and Pylint declares the Astroid range it supports, so the pair moves together"
           ]
         },
         {
@@ -726,15 +726,15 @@
         },
         {
           "id": "pylint-astroid",
-          "kind": "tuple",
+          "kind": "family",
           "members": [
             "pylint",
             "astroid"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "cuprum",
           "provenance": [
-            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair, and Pylint declares the Astroid range it supports, so the pair moves together"
           ]
         },
         {
@@ -930,15 +930,15 @@
         },
         {
           "id": "pylint-astroid",
-          "kind": "tuple",
+          "kind": "family",
           "members": [
             "pylint",
             "astroid"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "cuprum",
           "provenance": [
-            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair, and Pylint declares the Astroid range it supports, so the pair moves together"
           ]
         },
         {
@@ -1134,15 +1134,15 @@
         },
         {
           "id": "pylint-astroid",
-          "kind": "tuple",
+          "kind": "family",
           "members": [
             "pylint",
             "astroid"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "cuprum",
           "provenance": [
-            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair, and Pylint declares the Astroid range it supports, so the pair moves together"
           ]
         },
         {
@@ -1351,15 +1351,15 @@
         },
         {
           "id": "pylint-astroid",
-          "kind": "tuple",
+          "kind": "family",
           "members": [
             "pylint",
             "astroid"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "cuprum",
           "provenance": [
-            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair, and Pylint declares the Astroid range it supports, so the pair moves together"
           ]
         },
         {
@@ -1597,15 +1597,15 @@
         },
         {
           "id": "pylint-astroid",
-          "kind": "tuple",
+          "kind": "family",
           "members": [
             "pylint",
             "astroid"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "cuprum",
           "provenance": [
-            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair, and Pylint declares the Astroid range it supports, so the pair moves together"
           ]
         },
         {
@@ -1851,15 +1851,15 @@
         },
         {
           "id": "pylint-astroid",
-          "kind": "tuple",
+          "kind": "family",
           "members": [
             "pylint",
             "astroid"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "cuprum",
           "provenance": [
-            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair, and Pylint declares the Astroid range it supports, so the pair moves together"
           ]
         },
         {
@@ -2105,15 +2105,15 @@
         },
         {
           "id": "pylint-astroid",
-          "kind": "tuple",
+          "kind": "family",
           "members": [
             "pylint",
             "astroid"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "cuprum",
           "provenance": [
-            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair, and Pylint declares the Astroid range it supports, so the pair moves together"
           ]
         },
         {
@@ -2372,15 +2372,15 @@
         },
         {
           "id": "pylint-astroid",
-          "kind": "tuple",
+          "kind": "family",
           "members": [
             "pylint",
             "astroid"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "cuprum",
           "provenance": [
-            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair, and Pylint declares the Astroid range it supports, so the pair moves together"
           ]
         },
         {
@@ -2639,15 +2639,15 @@
         },
         {
           "id": "pylint-astroid",
-          "kind": "tuple",
+          "kind": "family",
           "members": [
             "pylint",
             "astroid"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "cuprum",
           "provenance": [
-            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair, and Pylint declares the Astroid range it supports, so the pair moves together"
           ]
         },
         {
@@ -2810,15 +2810,15 @@
         },
         {
           "id": "pylint-astroid",
-          "kind": "tuple",
+          "kind": "family",
           "members": [
             "pylint",
             "astroid"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "cuprum",
           "provenance": [
-            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair, and Pylint declares the Astroid range it supports, so the pair moves together"
           ]
         },
         {
@@ -3027,15 +3027,15 @@
         },
         {
           "id": "pylint-astroid",
-          "kind": "tuple",
+          "kind": "family",
           "members": [
             "pylint",
             "astroid"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "cuprum",
           "provenance": [
-            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair, and Pylint declares the Astroid range it supports, so the pair moves together"
           ]
         },
         {
@@ -3231,15 +3231,15 @@
         },
         {
           "id": "pylint-astroid",
-          "kind": "tuple",
+          "kind": "family",
           "members": [
             "pylint",
             "astroid"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "cuprum",
           "provenance": [
-            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair, and Pylint declares the Astroid range it supports, so the pair moves together"
           ]
         },
         {
@@ -3444,15 +3444,15 @@
         },
         {
           "id": "pylint-astroid",
-          "kind": "tuple",
+          "kind": "family",
           "members": [
             "pylint",
             "astroid"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "cuprum",
           "provenance": [
-            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair, and Pylint declares the Astroid range it supports, so the pair moves together"
           ]
         },
         {
@@ -3617,15 +3617,15 @@
         },
         {
           "id": "pylint-astroid",
-          "kind": "tuple",
+          "kind": "family",
           "members": [
             "pylint",
             "astroid"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "cuprum",
           "provenance": [
-            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair, and Pylint declares the Astroid range it supports, so the pair moves together"
           ]
         },
         {
@@ -3827,15 +3827,15 @@
         },
         {
           "id": "pylint-astroid",
-          "kind": "tuple",
+          "kind": "family",
           "members": [
             "pylint",
             "astroid"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "cuprum",
           "provenance": [
-            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair, and Pylint declares the Astroid range it supports, so the pair moves together"
           ]
         },
         {
@@ -4033,15 +4033,15 @@
         },
         {
           "id": "pylint-astroid",
-          "kind": "tuple",
+          "kind": "family",
           "members": [
             "pylint",
             "astroid"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "cuprum",
           "provenance": [
-            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair, and Pylint declares the Astroid range it supports, so the pair moves together"
           ]
         },
         {
@@ -4202,15 +4202,15 @@
         },
         {
           "id": "pylint-astroid",
-          "kind": "tuple",
+          "kind": "family",
           "members": [
             "pylint",
             "astroid"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "cuprum",
           "provenance": [
-            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair, and Pylint declares the Astroid range it supports, so the pair moves together"
           ]
         },
         {
@@ -4345,15 +4345,15 @@
         },
         {
           "id": "pylint-astroid",
-          "kind": "tuple",
+          "kind": "family",
           "members": [
             "pylint",
             "astroid"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "cuprum",
           "provenance": [
-            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair, and Pylint declares the Astroid range it supports, so the pair moves together"
           ]
         },
         {
@@ -4488,15 +4488,15 @@
         },
         {
           "id": "pylint-astroid",
-          "kind": "tuple",
+          "kind": "family",
           "members": [
             "pylint",
             "astroid"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "cuprum",
           "provenance": [
-            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair, and Pylint declares the Astroid range it supports, so the pair moves together"
           ]
         },
         {
@@ -4629,15 +4629,15 @@
         },
         {
           "id": "pylint-astroid",
-          "kind": "tuple",
+          "kind": "family",
           "members": [
             "pylint",
             "astroid"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "cuprum",
           "provenance": [
-            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair"
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair, and Pylint declares the Astroid range it supports, so the pair moves together"
           ]
         },
         {
