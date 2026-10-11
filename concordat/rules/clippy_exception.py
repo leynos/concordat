@@ -65,14 +65,18 @@ class ClippyException(typ.TypedDict):
     scripts: list[ExceptionScript]
 
 
+def _is_script_path(token: str) -> bool:
+    """Return whether a backticked token names a script inside the checkout."""
+    if token.startswith(("/", "-")):
+        return False
+    return "/" in token or token.endswith(_SCRIPT_SUFFIXES)
+
+
 def _candidate_paths(body: str) -> list[str]:
     """Return the backticked tokens of *body* that look like script paths."""
-    found: list[str] = []
-    for token in _BACKTICKED.findall(body):
-        looks_like_path = "/" in token or token.endswith(_SCRIPT_SUFFIXES)
-        if looks_like_path and token not in found and not token.startswith(("/", "-")):
-            found.append(token)
-    return found
+    return list(
+        dict.fromkeys(t for t in _BACKTICKED.findall(body) if _is_script_path(t))
+    )
 
 
 def _script_fact(
