@@ -1,0 +1,41 @@
+schema_version: 1
+id: documentation-presence
+name: documentation presence
+description: >-
+  Audits a checkout's Python docstring-coverage gate: a command that
+  `make lint` reaches runs interrogate at a threshold of 100 over every Python
+  file the repository owns, with no ignore flag and no exclusion beyond test
+  data and vendored trees (DG-001); and that run is exact, because interrogate
+  rounds its percentage to one decimal and so passes a lone gap in a large
+  repository: it prints every definition (verbose level 2) and the recipe
+  fails on any MISSED row (DG-002). A repository that owns no Python is out of
+  scope. Audit-only: this rule declares no mutations.
+version: 0.1.0
+sensor:
+  type: conftest
+  input: policy-input/documentation-presence
+  policy: policy/
+  tests:
+    - policy/
+  data:
+    - fixtures/data.json
+parameters:
+  schema:
+    type: object
+    additionalProperties: false
+    properties:
+      required_threshold:
+        type: number
+        description: The least `--fail-under` value a run may use.
+      exempt_pattern:
+        type: string
+        description: >-
+          A regular expression for paths that need no coverage and may be
+          excluded from a run: test data and vendored or cached trees.
+      required_verbosity:
+        type: integer
+        description: The verbose level that prints a MISSED row per definition.
+  defaults:
+    required_threshold: 100
+    exempt_pattern: '(^|/)(fixtures|vendor|node_modules|\.venv|\.uv-cache|\.uv-tools)(/|$)'
+    required_verbosity: 2

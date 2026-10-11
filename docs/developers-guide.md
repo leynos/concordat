@@ -670,6 +670,22 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   Adding a helper version means adding a digest to the manifest and, if the
   tests should exercise it, refreshing that copy.
 
+- `policy-input/documentation-presence` —
+  `documentation_envelope.build_documentation_envelope`. It reuses
+  `markdown_envelope`'s containment guard and readers: the same `makeutil`
+  report for the root `Makefile`, `pyproject.toml` (or a TOML file named by an
+  invocation's `--config`) decoded with `tomllib` for its `[tool.interrogate]`
+  table, and a walk of the tree, pruned like the Markdown scan plus `vendor`,
+  `site-packages` and `venv`, for the Python files. Unlike the other envelopes
+  it also does analysis: it expands the single-valued Make variables and a few
+  text functions, follows `lint` through its prerequisites and `$(MAKE)` calls,
+  lexes each reachable recipe with `shlex`, and records every interrogate
+  invocation as a run (paths, threshold, verbose level, relaxing flags, config,
+  excludes and whether the recipe greps for `MISSED`). That keeps the Rego free
+  of shell parsing; an invocation it cannot resolve is carried with
+  `resolved: false`. The package is registered by identifier and declares its
+  kind, and the thresholds reach the policy as manifest parameters.
+
 - `policy-input/spelling-config-baseline` —
   `spelling_envelope.build_spelling_envelope`. It reuses `markdown_envelope`'s
   containment guard and readers: the same `makeutil` report for the root

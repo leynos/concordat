@@ -1,0 +1,2409 @@
+{
+  "fixtures": {
+    "compliant": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate -vv --fail-under 100 pkg scripts tests .github/scripts",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": "100",
+          "verbose": 2,
+          "config": null,
+          "excludes": [],
+          "ignores": [],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "not_applicable": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": false,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": false,
+      "reachable_targets": [],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": []
+    },
+    "only_fixtures": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": false,
+      "reachable_targets": [],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        "tests/fixtures/sample.py"
+      ]
+    },
+    "vendored_python_ignored": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate -vv --fail-under 100 pkg scripts tests .github/scripts",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": "100",
+          "verbose": 2,
+          "config": null,
+          "excludes": [],
+          "ignores": [],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "no_makefile": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": false,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": null,
+      "lint_target": false,
+      "reachable_targets": [],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "no_lint_target": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": false,
+      "reachable_targets": [],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "no_gate": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "gate_outside_lint": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "lint_unresolved_prerequisite": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint"
+      ],
+      "reachability_resolved": false,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "gate_through_sub_make": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 11,
+          "command": "interrogate -vv --fail-under 100 pkg scripts tests .github/scripts",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": "100",
+          "verbose": 2,
+          "config": null,
+          "excludes": [],
+          "ignores": [],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "gate_unresolved": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 11,
+          "command": "@report=\"$$($(INTERROGATE) $(FLAGS) $(INTERROGATE_TARGETS))\"; \\\n  status=$$?; \\\n  printf '%s\\n' \"$$report\"; \\\n  test \"$$status\" -eq 0 || exit \"$$status\"; \\\n  if printf '%s\\n' \"$$report\" | grep -q '| *MISSED |'; then exit 1; fi",
+          "resolved": false,
+          "paths": [
+            "."
+          ],
+          "fail_under": null,
+          "verbose": 0,
+          "config": null,
+          "excludes": [],
+          "ignores": [],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "gate_named_only_in_echo": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "gate_variable_twice": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 11,
+          "command": "interrogate $",
+          "resolved": false,
+          "paths": [
+            "\u0001"
+          ],
+          "fail_under": null,
+          "verbose": 0,
+          "config": null,
+          "excludes": [],
+          "ignores": [],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "threshold_low": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate -vv --fail-under 95 pkg scripts tests .github/scripts",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": "95",
+          "verbose": 2,
+          "config": null,
+          "excludes": [],
+          "ignores": [],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "threshold_missing": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate -vv pkg scripts tests .github/scripts",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": null,
+          "verbose": 2,
+          "config": null,
+          "excludes": [],
+          "ignores": [],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "threshold_not_a_number": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate -vv --fail-under high pkg scripts tests .github/scripts",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": "high",
+          "verbose": 2,
+          "config": null,
+          "excludes": [],
+          "ignores": [],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "threshold_from_config": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate -vv pkg scripts tests .github/scripts",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": null,
+          "verbose": 2,
+          "config": null,
+          "excludes": [],
+          "ignores": [],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {
+            "fail-under": 100
+          },
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "threshold_from_config_low": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate -vv pkg scripts tests .github/scripts",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": null,
+          "verbose": 2,
+          "config": null,
+          "excludes": [],
+          "ignores": [],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {
+            "fail-under": 90
+          },
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "threshold_cli_beats_config": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate -vv --fail-under 100 pkg scripts tests .github/scripts",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": "100",
+          "verbose": 2,
+          "config": null,
+          "excludes": [],
+          "ignores": [],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {
+            "fail-under": 50
+          },
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "ignore_flag": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate -vv --fail-under 100 --ignore-nested-functions pkg scripts tests .github/scripts",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": "100",
+          "verbose": 2,
+          "config": null,
+          "excludes": [],
+          "ignores": [
+            "--ignore-nested-functions"
+          ],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "ignore_short_flags": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate -vv -f 100 -nC pkg scripts tests .github/scripts",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": "100",
+          "verbose": 2,
+          "config": null,
+          "excludes": [],
+          "ignores": [
+            "--ignore-nested-functions",
+            "--ignore-nested-classes"
+          ],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "ignore_regex_flag": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate -vv --fail-under 100 --ignore-regex ^main$ pkg scripts tests .github/scripts",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": "100",
+          "verbose": 2,
+          "config": null,
+          "excludes": [],
+          "ignores": [
+            "--ignore-regex ^main$"
+          ],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "ignore_config": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate -vv --fail-under 100 pkg scripts tests .github/scripts",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": "100",
+          "verbose": 2,
+          "config": null,
+          "excludes": [],
+          "ignores": [],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {
+            "ignore-magic": true
+          },
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "ignore_config_and_regex": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate -vv --fail-under 100 pkg scripts tests .github/scripts",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": "100",
+          "verbose": 2,
+          "config": null,
+          "excludes": [],
+          "ignores": [],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {
+            "ignore-magic": true,
+            "ignore-regex": [
+              "^main$"
+            ]
+          },
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "ignore_config_false": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate -vv --fail-under 100 pkg scripts tests .github/scripts",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": "100",
+          "verbose": 2,
+          "config": null,
+          "excludes": [],
+          "ignores": [],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {
+            "ignore-magic": false,
+            "ignore-regex": []
+          },
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "ignore_overloaded_allowed": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate -vv --fail-under 100 --ignore-overloaded-functions pkg scripts tests .github/scripts",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": "100",
+          "verbose": 2,
+          "config": null,
+          "excludes": [],
+          "ignores": [],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {
+            "ignore-overloaded-functions": true
+          },
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "exclude_tests": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate -vv --fail-under 100 --exclude tests pkg scripts tests .github/scripts",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": "100",
+          "verbose": 2,
+          "config": null,
+          "excludes": [
+            "tests"
+          ],
+          "ignores": [],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "exclude_tests_config": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate -vv --fail-under 100 pkg scripts tests .github/scripts",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": "100",
+          "verbose": 2,
+          "config": null,
+          "excludes": [],
+          "ignores": [],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {
+            "exclude": [
+              "tests"
+            ]
+          },
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "exclude_fixtures_allowed": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate -vv --fail-under 100 pkg scripts tests .github/scripts",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": "100",
+          "verbose": 2,
+          "config": null,
+          "excludes": [],
+          "ignores": [],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {
+            "exclude": [
+              "tests/fixtures"
+            ]
+          },
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/fixtures/sample.py",
+        "tests/test_core.py"
+      ]
+    },
+    "scope_partial": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate -vv --fail-under 100 pkg",
+          "resolved": true,
+          "paths": [
+            "pkg"
+          ],
+          "fail_under": "100",
+          "verbose": 2,
+          "config": null,
+          "excludes": [],
+          "ignores": [],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "scope_single_directory_missing": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate -vv --fail-under 100 pkg scripts tests",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests"
+          ],
+          "fail_under": "100",
+          "verbose": 2,
+          "config": null,
+          "excludes": [],
+          "ignores": [],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "scope_dot": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate -vv --fail-under 100 .",
+          "resolved": true,
+          "paths": [
+            "."
+          ],
+          "fail_under": "100",
+          "verbose": 2,
+          "config": null,
+          "excludes": [],
+          "ignores": [],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "scope_two_runs": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate",
+        "interrogate-tests"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 16,
+          "command": "interrogate -vv --fail-under 100 pkg",
+          "resolved": true,
+          "paths": [
+            "pkg"
+          ],
+          "fail_under": "100",
+          "verbose": 2,
+          "config": null,
+          "excludes": [],
+          "ignores": [],
+          "guarded": true
+        },
+        {
+          "target": "interrogate-tests",
+          "line": 5,
+          "command": "interrogate -vv --fail-under 100 scripts tests .github/scripts",
+          "resolved": true,
+          "paths": [
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": "100",
+          "verbose": 2,
+          "config": null,
+          "excludes": [],
+          "ignores": [],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "scope_file_target": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate -vv --fail-under 100 pkg scripts tests .github/scripts",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": "100",
+          "verbose": 2,
+          "config": null,
+          "excludes": [],
+          "ignores": [],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "conftest.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "config_not_toml": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate -vv --fail-under 100 --config setup.cfg pkg scripts tests .github/scripts",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": "100",
+          "verbose": 2,
+          "config": "setup.cfg",
+          "excludes": [],
+          "ignores": [],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        },
+        {
+          "path": "setup.cfg",
+          "table": null,
+          "error": "not a TOML file; the policy reads only TOML configuration"
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "config_missing": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate -vv --fail-under 100 --config nowhere.toml pkg scripts tests .github/scripts",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": "100",
+          "verbose": 2,
+          "config": "nowhere.toml",
+          "excludes": [],
+          "ignores": [],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "config_by_make_functions": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 11,
+          "command": "interrogate -vv --config pyproject.toml pkg scripts tests .github/scripts",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": null,
+          "verbose": 2,
+          "config": "pyproject.toml",
+          "excludes": [],
+          "ignores": [],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {
+            "fail-under": 100
+          },
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "verbose_missing": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate --fail-under 100 pkg scripts tests .github/scripts",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": "100",
+          "verbose": 0,
+          "config": null,
+          "excludes": [],
+          "ignores": [],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "verbose_from_config": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate --fail-under 100 pkg scripts tests .github/scripts",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": "100",
+          "verbose": 0,
+          "config": null,
+          "excludes": [],
+          "ignores": [],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {
+            "verbose": 2
+          },
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "verbose_one": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate -v --fail-under 100 pkg scripts tests .github/scripts",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": "100",
+          "verbose": 1,
+          "config": null,
+          "excludes": [],
+          "ignores": [],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "verbose_split": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate -v -v --fail-under 100 pkg scripts tests .github/scripts",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": "100",
+          "verbose": 2,
+          "config": null,
+          "excludes": [],
+          "ignores": [],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "guard_result_ignored": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate -vv --fail-under 100 pkg scripts tests .github/scripts > report.txt",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": "100",
+          "verbose": 2,
+          "config": null,
+          "excludes": [],
+          "ignores": [],
+          "guarded": false
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "guard_negated": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate -vv --fail-under 100 pkg scripts tests .github/scripts > report.txt",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": "100",
+          "verbose": 2,
+          "config": null,
+          "excludes": [],
+          "ignores": [],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "guard_and_exit": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate -vv --fail-under 100 pkg scripts tests .github/scripts > report.txt",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": "100",
+          "verbose": 2,
+          "config": null,
+          "excludes": [],
+          "ignores": [],
+          "guarded": true
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "unguarded": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate -vv --fail-under 100 pkg scripts tests .github/scripts",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": "100",
+          "verbose": 2,
+          "config": null,
+          "excludes": [],
+          "ignores": [],
+          "guarded": false
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    },
+    "unguarded_and_quiet": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": true,
+        "pyproject": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "interrogate"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [
+        {
+          "target": "interrogate",
+          "line": 10,
+          "command": "interrogate --fail-under 100 pkg scripts tests .github/scripts",
+          "resolved": true,
+          "paths": [
+            "pkg",
+            "scripts",
+            "tests",
+            ".github/scripts"
+          ],
+          "fail_under": "100",
+          "verbose": 0,
+          "config": null,
+          "excludes": [],
+          "ignores": [],
+          "guarded": false
+        }
+      ],
+      "configs": [
+        {
+          "path": "pyproject.toml",
+          "table": {},
+          "error": null
+        }
+      ],
+      "python_files": [
+        ".github/scripts/helper.py",
+        "pkg/__init__.py",
+        "pkg/core.py",
+        "scripts/tool.py",
+        "tests/test_core.py"
+      ]
+    }
+  },
+  "parameters": {
+    "required_threshold": 100,
+    "exempt_pattern": "(^|/)(fixtures|vendor|node_modules|\\.venv|\\.uv-cache|\\.uv-tools)(/|$)",
+    "required_verbosity": 2
+  }
+}

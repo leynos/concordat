@@ -682,6 +682,34 @@ An `include`, a recovered Makefile parse, an unresolvable variable, or a file
 that cannot be decoded makes the affected check indeterminate rather than
 passing it, even when the checkout shows no other sign of using uv.
 
+### Auditing Python docstring coverage
+
+The `documentation-presence` package audits the interrogate gate that keeps
+every Python definition documented:
+
+```shell
+concordat artefact rule run documentation-presence --repo /path/to/checkout
+```
+
+It applies when the checkout owns Python files (outside `fixtures`, vendored
+and cached trees) and reports:
+
+- **DG-001**: a command that `make lint` reaches (through prerequisites or
+  `$(MAKE) target`) runs interrogate at a threshold of at least 100, with no
+  relaxing flag (`--ignore-nested-functions` and the like, or the same switches
+  in `[tool.interrogate]`), no exclusion beyond test data and vendored trees,
+  and every owned Python file, including `.github/**` scripts, under one run's
+  paths.
+- **DG-002**: the run is exact. It prints every definition (`-vv`, or
+  `verbose = 2` in the configuration) and its recipe fails on any `MISSED` row,
+  because interrogate rounds its percentage to one decimal and so passes a lone
+  gap in a large repository.
+
+A variable the audit cannot resolve to one value, a configuration file that is
+missing or not TOML, or a `lint` target it cannot follow makes the affected
+check indeterminate rather than passing it. The package README carries the
+reference Makefile wiring.
+
 ### Auditing Markdown formatting wiring
 
 The `markdown-formatting-baseline` package audits how a checkout formats and

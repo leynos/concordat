@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "kind": "policy-input/documentation-presence",
+  "repository": {
+    "path": ".",
+    "name": null
+  },
+  "applicability": {
+    "root_makefile": true,
+    "python_files": false,
+    "pyproject": true
+  },
+  "makefile_path": "Makefile",
+  "lint_target": false,
+  "reachable_targets": [],
+  "reachability_resolved": true,
+  "interrogate_elsewhere": [],
+  "runs": [],
+  "configs": [
+    {
+      "path": "pyproject.toml",
+      "table": {},
+      "error": null
+    }
+  ],
+  "python_files": []
+}
