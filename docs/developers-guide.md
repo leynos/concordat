@@ -958,7 +958,7 @@ and a coverage build cannot use a Cranelift one. ADR-003 records the change.
 The Markdown, spelling, uv gate, YAML lint and build-defaults envelope builders
 read the same files through one guarded set of functions in
 `concordat/rules/markdown_envelope.py`. Import them by name; they are public
-because three builders share them, and a private-name import across modules is
+because five builders share them, and a private-name import across modules is
 the pattern concordat#264 removes.
 
 - `resolved_root(checkout)` returns the checkout with every symbolic link in
