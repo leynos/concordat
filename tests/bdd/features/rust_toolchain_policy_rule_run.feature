@@ -40,3 +40,15 @@ Feature: Rust toolchain policy rule run
     When I audit the checkout for its toolchain policy
     Then the toolchain audit exit status is 0
     And the toolchain audit table reports zero findings
+
+  Scenario: the shared msrv-check action exercises a declared MSRV
+    Given a checkout declaring an MSRV and a job that uses the shared msrv-check action
+    When I audit the checkout for its toolchain policy
+    Then the toolchain audit exit status is 0
+    And the toolchain audit table reports zero findings
+
+  Scenario: a lookalike action does not exercise a declared MSRV
+    Given a checkout declaring an MSRV and a job that uses a lookalike of the msrv-check action
+    When I audit the checkout for its toolchain policy
+    Then the toolchain audit exit status is 1
+    And the toolchain audit output reports "RT-026" and "rust-version 1.85 is declared"

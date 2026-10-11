@@ -101,6 +101,40 @@ def given_unexercised_msrv(toolchain_checkout: pathlib.Path) -> None:
     )
 
 
+def _msrv_checkout(checkout: pathlib.Path, action: str) -> None:
+    """Write a library declaring rust-version 1.85 whose one job uses *action*."""
+    _write(checkout, "Cargo.toml", f'{_MANIFEST}rust-version = "1.85"\n')
+    _write(checkout, "src/lib.rs", "")
+    _write(checkout, "rust-toolchain.toml", _pin("1.93.1"))
+    _write(checkout, ".github/dependabot.yml", _DEPENDABOT)
+    _write(
+        checkout,
+        ".github/workflows/ci.yml",
+        f"jobs:\n  check:\n    steps:\n      - uses: {action}\n",
+    )
+
+
+@given("a checkout declaring an MSRV and a job that uses the shared msrv-check action")
+def given_shared_msrv_action(toolchain_checkout: pathlib.Path) -> None:
+    """Write a library whose MSRV job calls the shared action."""
+    _msrv_checkout(
+        toolchain_checkout,
+        "leynos/shared-actions/.github/actions/msrv-check@" + "a" * 40,
+    )
+
+
+@given(
+    "a checkout declaring an MSRV and a job that uses a lookalike of the "
+    "msrv-check action"
+)
+def given_lookalike_msrv_action(toolchain_checkout: pathlib.Path) -> None:
+    """Write a library whose job calls an action that only starts like it."""
+    _msrv_checkout(
+        toolchain_checkout,
+        "leynos/shared-actions/.github/actions/msrv-check-lookalike@v1",
+    )
+
+
 @given("a checkout with an old nightly and a toolchain policy exception naming it")
 def given_excepted_pin(toolchain_checkout: pathlib.Path) -> None:
     """Write an old pin whose developers' guide records a current exception."""

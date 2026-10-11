@@ -181,7 +181,7 @@ def _resolve(value: object, scope: _Scope) -> list[str]:
 def _action_toolchains(step: dict[str, object], scope: _Scope) -> list[str]:
     """Return the toolchains a toolchain-installing action step selects."""
     uses = step.get("uses")
-    if not isinstance(uses, str) or not uses.startswith(_TOOLCHAIN_ACTIONS):
+    if not isinstance(uses, str) or uses.partition("@")[0] not in _TOOLCHAIN_ACTIONS:
         return []
     inputs = step.get("with")
     names = _resolve(inputs.get("toolchain"), scope) if isinstance(inputs, dict) else []
@@ -272,7 +272,7 @@ def _walk_steps(
 def _uses_msrv_action(step: dict[str, object]) -> bool:
     """Return whether *step* calls the shared msrv-check action."""
     uses = step.get("uses")
-    return isinstance(uses, str) and uses.startswith(_MSRV_ACTION)
+    return isinstance(uses, str) and uses.partition("@")[0] == _MSRV_ACTION
 
 
 def _step_text(label: str, step: dict[str, object]) -> str:

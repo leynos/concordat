@@ -702,6 +702,14 @@ def test_both_rust_version_spellings_credit_a_selecting_step(
             id="another-shared-action",
         ),
         pytest.param("someone/else/msrv-check-lookalike@v1", False, id="lookalike"),
+        pytest.param(
+            "leynos/shared-actions/.github/actions/msrv-check-lookalike@v1",
+            False,
+            id="same-prefix-longer-name",
+        ),
+        pytest.param(
+            "leynos/shared-actions/.github/actions/msrv-check", True, id="no-ref"
+        ),
     ],
 )
 def test_the_shared_msrv_check_action_makes_an_msrv_job(
@@ -718,3 +726,27 @@ def test_the_shared_msrv_check_action_makes_an_msrv_job(
     ci = _build(tmp_path)["ci"]
 
     assert ci["msrv_job"] is expected, ci
+
+
+@pytest.mark.parametrize(
+    "uses",
+    [
+        "dtolnay/rust-toolchain-lookalike@nightly-2026-03-26",
+        "actions-rust-lang/setup-rust-toolchain-extra@1.85",
+    ],
+)
+def test_a_toolchain_action_is_matched_by_its_whole_path(
+    tmp_path: pathlib.Path, uses: str
+) -> None:
+    """An action whose name merely starts like a supported one names no toolchain."""
+    _write(tmp_path, "Cargo.toml", _MANIFEST)
+    _write(
+        tmp_path,
+        ".github/workflows/ci.yml",
+        f"jobs:\n  b:\n    steps:\n      - uses: {uses}\n",
+    )
+
+    ci = _build(tmp_path)["ci"]
+
+    assert ci["dated_nightlies"] == [], ci
+    assert ci["numeric_minors"] == [], ci
