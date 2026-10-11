@@ -261,6 +261,32 @@ def test_an_unparsable_manifest_is_a_problem(tmp_path: pathlib.Path) -> None:
     assert str(tmp_path) not in envelope["problems"][0]
 
 
+def test_an_undeclared_nested_cargo_manifest_is_a_problem(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Without declared surfaces only the root is read; others are named."""
+    _write(tmp_path, "rust/Cargo.toml", _MEMBER)
+    _write(tmp_path, "target/debug/Cargo.toml", _MEMBER)
+    _write(tmp_path, ".cargo/Cargo.toml", _MEMBER)
+
+    envelope = build_dependency_family_envelope(tmp_path)
+
+    assert envelope["declarations"] == []
+    assert envelope["problems"] == [
+        (
+            "rust/Cargo.toml is a Cargo manifest outside the governed Rust "
+            "surfaces; declare language.rust.surfaces in .concordat to read it"
+        )
+    ]
+
+
+def test_a_declared_surface_list_is_authoritative(layout: pathlib.Path) -> None:
+    """A repository that declares its surfaces is not second-guessed."""
+    _write(layout, "other/Cargo.toml", _MEMBER)
+
+    assert build_dependency_family_envelope(layout)["problems"] == []
+
+
 def test_a_nested_python_project_is_reported_not_read(tmp_path: pathlib.Path) -> None:
     """Only the root `pyproject.toml` is read, and the others are named."""
     _write(tmp_path, "sub/pyproject.toml", _PYPROJECT)

@@ -332,7 +332,16 @@ def _cargo_surfaces(
         detail = str(error).replace(str(checkout), ".")
         problems.append(f"the Rust surfaces could not be resolved: {detail}")
         return []
-    return [dict(surface) for surface in resolution.surfaces]
+    surfaces = [dict(surface) for surface in resolution.surfaces]
+    if not resolution.declared:
+        governed = {str(surface["path"]) for surface in surfaces}
+        problems.extend(
+            f"{relative} is a Cargo manifest outside the governed Rust surfaces; "
+            "declare language.rust.surfaces in .concordat to read it"
+            for nested in _nested_files(checkout, "Cargo.toml")
+            if (relative := nested.relative_to(checkout).as_posix()) not in governed
+        )
+    return surfaces
 
 
 def _cargo_declarations(
@@ -453,19 +462,19 @@ def _python_requirements(
 _SKIPPED_DIRECTORIES = frozenset({"node_modules", "target", "venv", "build", "dist"})
 
 
-def _nested_pyprojects(checkout: pathlib.Path) -> list[pathlib.Path]:
-    """Return every `pyproject.toml` below the root, at any depth.
+def _nested_files(checkout: pathlib.Path, name: str) -> list[pathlib.Path]:
+    """Return every file called *name* below the root, at any depth.
 
     Hidden directories and vendored or generated trees are not projects.
 
     Returns
     -------
     list[pathlib.Path]
-        The nested project files, in path order.
+        The nested files, in path order.
     """
     return sorted(
         path
-        for path in checkout.glob("**/pyproject.toml")
+        for path in checkout.glob(f"**/{name}")
         if path.parent != checkout
         and not any(
             part.startswith(".") or part in _SKIPPED_DIRECTORIES
@@ -490,7 +499,7 @@ def _read_pyproject(
     problems.extend(
         f"{nested.relative_to(checkout).as_posix()} is not read: only the root "
         "pyproject.toml is"
-        for nested in _nested_pyprojects(checkout)
+        for nested in _nested_files(checkout, "pyproject.toml")
     )
     path = checkout / "pyproject.toml"
     probe = probe_file(path)
