@@ -816,6 +816,17 @@ For a checkout that owns Rust library crates the same package also reports:
   also needs a reason.
 - **DG-004**: a clippy run is reachable from `make lint`.
 
+The audit reads a command the way the shell runs it. An environment prefix is
+not part of the command, so
+`UV_CACHE_DIR=.uv-cache uv tool run ... interrogate` and
+`env -i X=1 uv run interrogate ...` are runs of interrogate, and
+`X=1 $(MAKE) interrogate` reaches the `interrogate` target. A Make prefix (`@`,
+`-`, `+`) is ignored. A quoted `"X=1"` is a command name, not an assignment,
+and a word that merely names the tool (`true interrogate ...`, or the package in
+`uv run --with interrogate`) is no run. `make -C dir target` runs another
+Makefile, so the walk cannot follow it and reports the reachability as
+unresolved.
+
 A variable the audit cannot resolve to one value, a configuration file that is
 missing or not TOML, or a `lint` target it cannot follow makes the affected
 check indeterminate rather than passing it. The package README carries the

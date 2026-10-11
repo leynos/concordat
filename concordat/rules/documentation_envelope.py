@@ -44,6 +44,7 @@ from .documentation_rust import RustFacts, build_rust_facts
 from .interrogate_invocation import (
     InterrogateRun,
     RecipeLine,
+    command_words,
     has_missed_guard,
     lex_segments,
     runs_in,
@@ -193,6 +194,12 @@ def _changes_directory(arguments: list[str]) -> bool:
     return any(word.startswith(("-C", "--directory")) for word in arguments)
 
 
+def _make_commands(segments: list[list[str]]) -> list[list[str]]:
+    """Return the simple commands that call `make`, past any environment prefix."""
+    commands = map(command_words, segments)
+    return [words for words in commands if words and words[0].lstrip("@-+") == "make"]
+
+
 def _make_goals(text: str) -> Successors:
     """Return the targets that `make` commands in an expanded recipe line name.
 
@@ -208,7 +215,7 @@ def _make_goals(text: str) -> Successors:
     segments = lex_segments(text)
     if segments is None:
         return Successors([], is_resolved=not re.search(r"\bmake\b", text))
-    commands = [words for words in segments if words[0].lstrip("@-+") == "make"]
+    commands = _make_commands(segments)
     goals = [goal for words in commands for goal in _goals(words[1:])]
     named = [goal for goal in goals if UNRESOLVED_MARK not in goal]
     # `make -C dir target` runs another Makefile, whose `interrogate` is not

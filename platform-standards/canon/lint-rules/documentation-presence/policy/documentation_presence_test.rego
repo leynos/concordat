@@ -106,6 +106,8 @@ test_guard_result_ignored if reported(data.fixtures.guard_result_ignored) == {"D
 
 test_ignore_config_and_regex if reported(data.fixtures.ignore_config_and_regex) == {"DG-001/noncompliant"}
 
+test_gate_behind_environment_prefix if reported(data.fixtures.gate_behind_environment_prefix) == set()
+
 # A partial scope names each directory it misses, once, with a file to look at.
 test_scope_partial_names_every_directory if {
 	messages := {f.msg | some f in findings(data.fixtures.scope_partial)}
