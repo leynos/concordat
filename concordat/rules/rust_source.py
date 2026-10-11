@@ -16,6 +16,7 @@ import typing as typ
 LINT_NAME: typ.Final = "missing_docs"
 LINT_KINDS: typ.Final = frozenset({"deny", "forbid", "warn", "allow", "expect"})
 _ATTRIBUTE_START: typ.Final = re.compile(r"#!?\[")
+_COMMENT_EDGE: typ.Final = re.compile(r"/\*|\*/")
 _RAW_STRING_OPEN: typ.Final = re.compile(r'b?r(#*)"')
 
 type Masked = tuple[str, int]
@@ -39,15 +40,10 @@ def _string_close(text: str, index: int) -> int:
 def _block_comment_end(text: str, index: int) -> int:
     """Return the index just past the (nestable) block comment at *index*."""
     depth = 0
-    while index < len(text):
-        if text.startswith("/*", index):
-            depth, index = depth + 1, index + 2
-        elif text.startswith("*/", index):
-            depth, index = depth - 1, index + 2
-            if depth == 0:
-                return index
-        else:
-            index += 1
+    for edge in _COMMENT_EDGE.finditer(text, index):
+        depth += 1 if edge.group() == "/*" else -1
+        if depth == 0:
+            return edge.end()
     return len(text)
 
 

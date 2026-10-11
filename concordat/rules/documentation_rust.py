@@ -202,6 +202,33 @@ def _workspace_level(manifest: _Manifest, workspaces: list[_Manifest]) -> str | 
     return None
 
 
+def _rust_files(
+    checkout: pathlib.Path, root: pathlib.Path, root_relative: str
+) -> typ.Iterator[pathlib.Path]:
+    """Yield the `.rs` files of the library's source tree, in path order.
+
+    The tree is the directory holding the library root (`src/`). Tests, benches
+    and examples are separate crates and are not part of the library. Symbolic
+    links are not followed.
+
+    Yields
+    ------
+    pathlib.Path
+        Each regular `.rs` file under the tree.
+    """
+    base = checkout / pathlib.PurePosixPath(root_relative).parent
+    if not within_checkout(root, base, OPERATION_SCAN_RUST) or not base.is_dir():
+        return
+    for current, directories, files in os.walk(base, onerror=_raise_walk_error):
+        directories[:] = sorted(
+            name for name in directories if name not in RUST_PRUNED_DIRECTORIES
+        )
+        for name in sorted(files):
+            path = pathlib.Path(current) / name
+            if name.endswith(".rs") and not _is_symlink(path, OPERATION_SCAN_RUST):
+                yield path
+
+
 def _scan_sources(
     checkout: pathlib.Path,
     root: pathlib.Path,
@@ -210,39 +237,26 @@ def _scan_sources(
 ) -> tuple[list[Suppression], list[str]]:
     """Scan the library's source tree for module and item level suppressions.
 
-    The tree is the directory holding the library root (`src/`). Tests, benches
-    and examples are separate crates and are not part of the library.
-
     Returns
     -------
     tuple[list[Suppression], list[str]]
         The suppressions in file and line order, and the files that could not
         be decoded.
     """
-    base = checkout / pathlib.PurePosixPath(root_relative).parent
     found: list[Suppression] = []
     unreadable: list[str] = []
-    if not within_checkout(root, base, OPERATION_SCAN_RUST) or not base.is_dir():
-        return found, unreadable
-    for current, directories, files in os.walk(base, onerror=_raise_walk_error):
-        directories[:] = sorted(
-            name for name in directories if name not in RUST_PRUNED_DIRECTORIES
+    for path in _rust_files(checkout, root, root_relative):
+        relative = path.relative_to(checkout).as_posix()
+        try:
+            text = _read_text(path, OPERATION_SCAN_RUST)
+        except UnicodeDecodeError:
+            unreadable.append(relative)
+            continue
+        skip = skip_before if relative == root_relative else 0
+        found.extend(
+            {"file": relative, "line": line, "kind": kind, "has_reason": reason}
+            for line, kind, reason in suppressions_in(text, skip_before=skip)
         )
-        for name in sorted(files):
-            path = pathlib.Path(current) / name
-            if not name.endswith(".rs") or _is_symlink(path, OPERATION_SCAN_RUST):
-                continue
-            relative = path.relative_to(checkout).as_posix()
-            try:
-                text = _read_text(path, OPERATION_SCAN_RUST)
-            except UnicodeDecodeError:
-                unreadable.append(relative)
-                continue
-            skip = skip_before if relative == root_relative else 0
-            found.extend(
-                {"file": relative, "line": line, "kind": kind, "has_reason": reason}
-                for line, kind, reason in suppressions_in(text, skip_before=skip)
-            )
     return found, unreadable
 
 
