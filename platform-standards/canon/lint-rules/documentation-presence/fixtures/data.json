@@ -520,7 +520,8 @@
       "applicability": {
         "root_makefile": true,
         "python_files": true,
-        "pyproject": true
+        "pyproject": true,
+        "rust_library": false
       },
       "makefile_path": "Makefile",
       "lint_target": true,
@@ -543,7 +544,12 @@
         "pkg/core.py",
         "scripts/tool.py",
         "tests/test_core.py"
-      ]
+      ],
+      "clippy_runs": [],
+      "rust": {
+        "crates": [],
+        "errors": []
+      }
     },
     "gate_variable_twice": {
       "schema_version": 1,
@@ -1238,7 +1244,8 @@
       "applicability": {
         "root_makefile": true,
         "python_files": true,
-        "pyproject": true
+        "pyproject": true,
+        "rust_library": false
       },
       "makefile_path": "Makefile",
       "lint_target": true,
@@ -1286,7 +1293,12 @@
         "pkg/core.py",
         "scripts/tool.py",
         "tests/test_core.py"
-      ]
+      ],
+      "clippy_runs": [],
+      "rust": {
+        "crates": [],
+        "errors": []
+      }
     },
     "ignore_config_false": {
       "schema_version": 1,
@@ -2369,7 +2381,8 @@
       "applicability": {
         "root_makefile": true,
         "python_files": true,
-        "pyproject": true
+        "pyproject": true,
+        "rust_library": false
       },
       "makefile_path": "Makefile",
       "lint_target": true,
@@ -2412,7 +2425,12 @@
         "pkg/core.py",
         "scripts/tool.py",
         "tests/test_core.py"
-      ]
+      ],
+      "clippy_runs": [],
+      "rust": {
+        "crates": [],
+        "errors": []
+      }
     },
     "guard_negated": {
       "schema_version": 1,
@@ -2424,7 +2442,8 @@
       "applicability": {
         "root_makefile": true,
         "python_files": true,
-        "pyproject": true
+        "pyproject": true,
+        "rust_library": false
       },
       "makefile_path": "Makefile",
       "lint_target": true,
@@ -2467,7 +2486,12 @@
         "pkg/core.py",
         "scripts/tool.py",
         "tests/test_core.py"
-      ]
+      ],
+      "clippy_runs": [],
+      "rust": {
+        "crates": [],
+        "errors": []
+      }
     },
     "guard_and_exit": {
       "schema_version": 1,
@@ -2479,7 +2503,8 @@
       "applicability": {
         "root_makefile": true,
         "python_files": true,
-        "pyproject": true
+        "pyproject": true,
+        "rust_library": false
       },
       "makefile_path": "Makefile",
       "lint_target": true,
@@ -2522,7 +2547,12 @@
         "pkg/core.py",
         "scripts/tool.py",
         "tests/test_core.py"
-      ]
+      ],
+      "clippy_runs": [],
+      "rust": {
+        "crates": [],
+        "errors": []
+      }
     },
     "unguarded": {
       "schema_version": 1,
