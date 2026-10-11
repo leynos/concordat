@@ -82,7 +82,6 @@ from .uv_gate_envelope import (
     ENVELOPE_KIND as UV_GATE_ENVELOPE_KIND,
 )
 from .uv_gate_envelope import (
-    UvGateEnvelope,
     build_uv_gate_envelope,
 )
 from .whitaker_provisioning_envelope import (
@@ -470,42 +469,6 @@ def _spelling_envelope(
     )
 
 
-def _uv_gate_envelope(
-    checkout: pathlib.Path,
-    _parameters: cabc.Mapping[str, object] | None = None,
-) -> UvGateEnvelope:
-    """Build the uv gate envelope, ignoring the manifest parameters.
-
-    `uv-gate-baseline` reads its accepted digests, recipe patterns and
-    release-tag tools through `data.parameters` in the policy, so the second
-    argument exists only to give every builder one callable type.
-
-    Returns
-    -------
-    UvGateEnvelope
-        The `policy-input/uv-gate-baseline` document for *checkout*.
-    """
-    return build_uv_gate_envelope(checkout, inspect=inspect_makefile_observed)
-
-
-def _documentation_envelope(
-    checkout: pathlib.Path,
-    _parameters: cabc.Mapping[str, object] | None = None,
-) -> DocumentationEnvelope:
-    """Build the documentation-presence envelope, ignoring the parameters.
-
-    `documentation-presence` reads its threshold, exemption pattern and verbose
-    level through `data.parameters` in the policy, so the second argument exists
-    only to give every builder one callable type.
-
-    Returns
-    -------
-    DocumentationEnvelope
-        The `policy-input/documentation-presence` document for *checkout*.
-    """
-    return build_documentation_envelope(checkout, inspect=inspect_makefile_observed)
-
-
 def _provisioning_envelope(
     checkout: pathlib.Path,
     _parameters: cabc.Mapping[str, object] | None = None,
@@ -524,22 +487,53 @@ def _provisioning_envelope(
     return build_whitaker_provisioning_envelope(checkout)
 
 
-def _yaml_lint_envelope(
-    checkout: pathlib.Path,
-    _parameters: cabc.Mapping[str, object] | None = None,
-) -> YamlLintEnvelope:
-    """Build the YAML lint envelope, ignoring the manifest parameters.
+class _ParameterBlindBuilder[E](typ.Protocol):
+    """A registry builder: the checkout, then manifest parameters it ignores."""
 
-    `yaml-lint-baseline` reads its accepted base digests, installer action and
-    runner labels through `data.parameters` in the policy, so the second
-    argument exists only to give every builder one callable type.
+    __name__: str
+
+    def __call__(
+        self,
+        checkout: pathlib.Path,
+        _parameters: cabc.Mapping[str, object] | None = None,
+        /,
+    ) -> E:
+        """Build the envelope for *checkout*."""
+        ...
+
+
+def _observed[E](
+    build: cabc.Callable[..., E],
+) -> _ParameterBlindBuilder[E]:
+    """Adapt a builder that reads no manifest parameters to the registry's type.
+
+    The policies behind these packages read their tunables through
+    `data.parameters`, so the second argument exists only to give every
+    builder one callable type. The builder runs with the observed Makefile
+    inspector, looked up at call time so the command boundary's wiring is what
+    a test replaces. The result keeps the builder's name and docstring, which
+    the registry checks report.
 
     Returns
     -------
-    YamlLintEnvelope
-        The `policy-input/yaml-lint-baseline` document for *checkout*.
+    _ParameterBlindBuilder
+        A resolver taking the checkout and the ignored parameters.
     """
-    return build_yaml_lint_envelope(checkout, inspect=inspect_makefile_observed)
+
+    @functools.wraps(build)
+    def resolve(
+        checkout: pathlib.Path,
+        _parameters: cabc.Mapping[str, object] | None = None,
+        /,
+    ) -> E:
+        return build(checkout, inspect=inspect_makefile_observed)
+
+    return typ.cast("_ParameterBlindBuilder[E]", resolve)
+
+
+_uv_gate_envelope = _observed(build_uv_gate_envelope)
+_documentation_envelope = _observed(build_documentation_envelope)
+_yaml_lint_envelope = _observed(build_yaml_lint_envelope)
 
 
 # Every rule package's envelope builder, keyed by package identifier. The
