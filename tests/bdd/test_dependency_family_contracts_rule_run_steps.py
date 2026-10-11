@@ -175,6 +175,20 @@ def given_exception(family_checkout: pathlib.Path) -> None:
     _write_pyo3(family_checkout, narrow="", concordat=_EXCEPTION)
 
 
+@given("a checkout whose PyO3 crate sits in an undeclared subdirectory")
+def given_undeclared_crate(family_checkout: pathlib.Path) -> None:
+    """Write the crate under `rust/` with no `.concordat` surface declaration."""
+    crate = family_checkout / "rust"
+    crate.mkdir()
+    (crate / "Cargo.toml").write_text(_CARGO, encoding="utf-8")
+    (crate / "Cargo.lock").write_text(_LOCK, encoding="utf-8")
+    github = family_checkout / ".github"
+    github.mkdir()
+    (github / "dependabot.yml").write_text(
+        _CONFIG.format(narrow=_NARROW), encoding="utf-8"
+    )
+
+
 @given("a checkout that declares PyO3 but has no Dependabot configuration")
 def given_no_dependabot(family_checkout: pathlib.Path) -> None:
     """Write the crate and lock without `.github/dependabot.yml`."""

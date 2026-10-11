@@ -9,6 +9,7 @@ outside the root each stay a fact with a reason.
 
 from __future__ import annotations
 
+import os
 import typing as typ
 
 import pytest
@@ -259,6 +260,52 @@ def test_an_unparsable_manifest_is_a_problem(tmp_path: pathlib.Path) -> None:
     assert len(envelope["problems"]) == 1
     assert envelope["problems"][0].startswith("the Rust surfaces could not be resolved")
     assert str(tmp_path) not in envelope["problems"][0]
+
+
+def test_an_undeclared_nested_cargo_manifest_is_a_problem(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Without declared surfaces only the root is read; others are named."""
+    _write(tmp_path, "rust/Cargo.toml", _MEMBER)
+    _write(tmp_path, "target/debug/Cargo.toml", _MEMBER)
+    _write(tmp_path, ".cargo/Cargo.toml", _MEMBER)
+    _write(tmp_path, "vendor/serde/Cargo.toml", _MEMBER)
+
+    envelope = build_dependency_family_envelope(tmp_path)
+
+    assert envelope["declarations"] == []
+    assert envelope["problems"] == [
+        (
+            "rust/Cargo.toml is a Cargo manifest outside the governed Rust "
+            "surfaces; declare language.rust.surfaces in .concordat to read it"
+        )
+    ]
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can list any directory")
+def test_a_directory_the_scan_cannot_list_is_a_problem(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A shorter result is never silent: the unreadable directory is named."""
+    _write(tmp_path, "rust/locked/Cargo.toml", _MEMBER)
+    locked = tmp_path / "rust" / "locked"
+    locked.chmod(0)
+    try:
+        problems = build_dependency_family_envelope(tmp_path)["problems"]
+    finally:
+        locked.chmod(0o755)
+
+    assert any(
+        problem.startswith("cannot scan rust/locked for Cargo.toml")
+        for problem in problems
+    )
+
+
+def test_a_declared_surface_list_is_authoritative(layout: pathlib.Path) -> None:
+    """A repository that declares its surfaces is not second-guessed."""
+    _write(layout, "other/Cargo.toml", _MEMBER)
+
+    assert build_dependency_family_envelope(layout)["problems"] == []
 
 
 def test_a_nested_python_project_is_reported_not_read(tmp_path: pathlib.Path) -> None:

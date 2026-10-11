@@ -2171,12 +2171,14 @@ surface resolver) and the root `pyproject.toml`, each with its section, target,
 optionality, published package identity (a renamed dependency resolves to the
 name Dependabot matches), requirement, locked versions, and the covering
 `updates` entry, first-matching group and `ignore` rule. A relationship applies
-only where the repository declares every member, so unrelated duplicate crate
-versions and a copied wheel template in a pure-Python repository draw no
-finding. A repository may stay on an older generation by recording an exception
-in `.concordat` under `dependencies.family_exceptions`, naming the
-relationship, a rationale and a review trigger. Missing facts are DF-006
-indeterminate findings, never passes.
+only where the repository declares every member, and a Cargo manifest that no
+declared surface governs is a problem fact rather than an unread pass (a
+repository without `language.rust.surfaces` is read at its root only), so
+unrelated duplicate crate versions and a copied wheel template in a pure-Python
+repository draw no finding. A repository may stay on an older generation by
+recording an exception in `.concordat` under `dependencies.family_exceptions`,
+naming the relationship, a rationale and a review trigger. Missing facts are
+DF-006 indeterminate findings, never passes.
 
 ##### Rust toolchain policy (RT-022 through RT-027)
 

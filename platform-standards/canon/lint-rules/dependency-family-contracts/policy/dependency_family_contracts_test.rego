@@ -130,6 +130,12 @@ test_unparsable_manifest if {
   profile(findings) == {["DF-006", "indeterminate"]}
 }
 
+# A Cargo manifest no declared surface governs is reported, not passed over.
+test_undeclared_manifest if {
+  findings := policy.deny with input as data.fixtures.undeclared_manifest
+  profile(findings) == {["DF-006", "indeterminate"]}
+}
+
 # A Python project outside the root is reported, not passed over.
 test_nested_pyproject if {
   findings := policy.deny with input as data.fixtures.nested_pyproject
