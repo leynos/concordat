@@ -202,13 +202,13 @@ artifacts:
       Audit-only UV-001 to UV-007 policy holding a checkout to reaching uv
       through the vendored uv_gate helper, with no cache override, bypassing
       recipe, unpinned tool, or unpinned Git dependency.
-    sha256: c49f074c85d0be1cb632bf0a53df0d615a82f4a6949fb942c9465c4cb5ef3084
+    sha256: b90759131d2024f54c46740a8d2b8a2bc92ef6fa667b754b8949a1cb5c2ca554
   - id: lint-rule-uv-gate-baseline-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/uv-gate-baseline/rule.yaml
     description: >
       Rule package manifest for the uv gate baseline policy.
-    sha256: eabafe43773b5bcd0ffb648d4cb82aa189d44f19f40f84c918f4c777fa93bb5b
+    sha256: 97d4df1b767975edc85eefd58ab5af39c96bbf8c6666a469fa47cf10c2e885fd
   - id: lint-rule-documentation-presence
     type: opa-policy
     path: >-

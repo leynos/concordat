@@ -251,6 +251,23 @@ test_action_step_env_pinned if reported(data.fixtures.action_step_env_pinned) ==
 
 test_action_step_env_branch if reported(data.fixtures.action_step_env_branch) == {"UV-006/noncompliant"}
 
+# `name[extra] @ git+URL@<sha>` is a pin when, and only when, the URL is a full commit.
+test_tool_extras_direct_reference_sha if reported(data.fixtures.tool_extras_direct_reference_sha) == set()
+
+test_tool_extras_direct_reference_fragment if reported(data.fixtures.tool_extras_direct_reference_fragment) == set()
+
+test_tool_extras_direct_reference_double_quoted if reported(data.fixtures.tool_extras_direct_reference_double_quoted) == set()
+
+test_tool_extras_direct_reference_branch if reported(data.fixtures.tool_extras_direct_reference_branch) == {"UV-006/noncompliant"}
+
+test_tool_extras_direct_reference_tag if reported(data.fixtures.tool_extras_direct_reference_tag) == {"UV-006/noncompliant"}
+
+test_tool_extras_direct_reference_short_sha if reported(data.fixtures.tool_extras_direct_reference_short_sha) == {"UV-006/noncompliant"}
+
+test_tool_extras_direct_reference_not_git if reported(data.fixtures.tool_extras_direct_reference_not_git) == {"UV-006/noncompliant"}
+
+test_tool_extras_direct_reference_suffix if reported(data.fixtures.tool_extras_direct_reference_suffix) == {"UV-006/noncompliant"}
+
 # Lines and messages that make a finding usable.
 
 test_bypass_names_the_recipe_line if {
