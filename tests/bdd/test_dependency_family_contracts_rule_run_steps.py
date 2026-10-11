@@ -69,6 +69,42 @@ dependencies:
 """
 
 
+_PYPROJECT: typ.Final = """\
+[project]
+name = "demo"
+version = "0.1.0"
+
+[dependency-groups]
+dev = ["pylint==4.0.9", "astroid==4.0.4"]
+"""
+_UV_LOCK: typ.Final = """\
+version = 1
+
+[[package]]
+name = "pylint"
+version = "4.0.9"
+
+[[package]]
+name = "astroid"
+version = "4.0.4"
+"""
+_UV_CONFIG: typ.Final = """\
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: daily
+    groups:
+{narrow}      minor-and-patch:
+        patterns: ['*']
+        update-types: [minor, patch]
+"""
+_PYLINT_GROUP: typ.Final = (
+    "      pylint-astroid:\n        patterns: ['pylint', 'astroid']\n"
+)
+
+
 @pytest.fixture
 def family_checkout(tmp_path: pathlib.Path) -> pathlib.Path:
     """Provide the checkout directory one scenario audits."""
@@ -88,6 +124,29 @@ def _write_pyo3(checkout: pathlib.Path, *, narrow: str, concordat: str = "") -> 
     )
     if concordat:
         (checkout / ".concordat").write_text(concordat, encoding="utf-8")
+
+
+def _write_pylint_pair(checkout: pathlib.Path, *, narrow: str) -> None:
+    """Write exact Pylint and Astroid pins, their uv lock and a uv entry."""
+    (checkout / "pyproject.toml").write_text(_PYPROJECT, encoding="utf-8")
+    (checkout / "uv.lock").write_text(_UV_LOCK, encoding="utf-8")
+    github = checkout / ".github"
+    github.mkdir()
+    (github / "dependabot.yml").write_text(
+        _UV_CONFIG.format(narrow=narrow), encoding="utf-8"
+    )
+
+
+@given("a checkout pinning Pylint and Astroid exactly with a shared Dependabot group")
+def given_pylint_grouped(family_checkout: pathlib.Path) -> None:
+    """Write the compliant shape: the pair in one group ahead of the catch-all."""
+    _write_pylint_pair(family_checkout, narrow=_PYLINT_GROUP)
+
+
+@given("a checkout pinning Pylint and Astroid exactly under the catch-all group")
+def given_pylint_catch_all(family_checkout: pathlib.Path) -> None:
+    """Write the split shape: both pins fall to the catch-all."""
+    _write_pylint_pair(family_checkout, narrow="")
 
 
 @given("a checkout that declares no related packages")
