@@ -87,22 +87,8 @@ def given_floating_pin(toolchain_checkout: pathlib.Path) -> None:
     _write(toolchain_checkout, ".github/dependabot.yml", _DEPENDABOT)
 
 
-@given("a checkout declaring an MSRV that no workflow exercises")
-def given_unexercised_msrv(toolchain_checkout: pathlib.Path) -> None:
-    """Write a library with rust-version 1.85 and a workflow that never uses it."""
-    _write(toolchain_checkout, "Cargo.toml", f'{_MANIFEST}rust-version = "1.85"\n')
-    _write(toolchain_checkout, "src/lib.rs", "")
-    _write(toolchain_checkout, "rust-toolchain.toml", _pin("1.93.1"))
-    _write(toolchain_checkout, ".github/dependabot.yml", _DEPENDABOT)
-    _write(
-        toolchain_checkout,
-        ".github/workflows/ci.yml",
-        "jobs:\n  test:\n    steps:\n      - run: cargo test\n",
-    )
-
-
-def _msrv_checkout(checkout: pathlib.Path, action: str) -> None:
-    """Write a library declaring rust-version 1.85 whose one job uses *action*."""
+def _msrv_checkout(checkout: pathlib.Path, step: str) -> None:
+    """Write a library declaring rust-version 1.85 whose one job runs *step*."""
     _write(checkout, "Cargo.toml", f'{_MANIFEST}rust-version = "1.85"\n')
     _write(checkout, "src/lib.rs", "")
     _write(checkout, "rust-toolchain.toml", _pin("1.93.1"))
@@ -110,8 +96,14 @@ def _msrv_checkout(checkout: pathlib.Path, action: str) -> None:
     _write(
         checkout,
         ".github/workflows/ci.yml",
-        f"jobs:\n  check:\n    steps:\n      - uses: {action}\n",
+        f"jobs:\n  check:\n    steps:\n      - {step}\n",
     )
+
+
+@given("a checkout declaring an MSRV that no workflow exercises")
+def given_unexercised_msrv(toolchain_checkout: pathlib.Path) -> None:
+    """Write a library with rust-version 1.85 and a workflow that never uses it."""
+    _msrv_checkout(toolchain_checkout, "run: cargo test")
 
 
 _MSRV_ACTIONS: typ.Final = {
@@ -132,7 +124,7 @@ _MSRV_ACTIONS: typ.Final = {
 )
 def given_msrv_action(toolchain_checkout: pathlib.Path, which: str) -> None:
     """Write a library whose one job calls the named action."""
-    _msrv_checkout(toolchain_checkout, _MSRV_ACTIONS[which])
+    _msrv_checkout(toolchain_checkout, f"uses: {_MSRV_ACTIONS[which]}")
 
 
 @given("a checkout with an old nightly and a toolchain policy exception naming it")
