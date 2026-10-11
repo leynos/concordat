@@ -270,6 +270,68 @@ def test_a_nested_python_project_is_reported_not_read(tmp_path: pathlib.Path) ->
     ]
 
 
+def test_a_deeply_nested_python_project_is_reported_not_read(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A project at any depth is named; hidden and vendored trees are not."""
+    _write(tmp_path, "packages/a/pyproject.toml", _PYPROJECT)
+    _write(tmp_path, ".venv/lib/pyproject.toml", _PYPROJECT)
+    _write(tmp_path, "node_modules/x/pyproject.toml", _PYPROJECT)
+
+    assert build_dependency_family_envelope(tmp_path)["problems"] == [
+        "packages/a/pyproject.toml is not read: only the root pyproject.toml is"
+    ]
+
+
+def test_optional_dependencies_are_optional_declarations(
+    tmp_path: pathlib.Path,
+) -> None:
+    """An extra's requirement is recorded with its extra and as optional."""
+    _write(
+        tmp_path,
+        "pyproject.toml",
+        '[project]\nname = "demo"\nversion = "0.1.0"\n'
+        '[project.optional-dependencies]\nfast = ["Typing_Extensions>=4,<5"]\n',
+    )
+    _write(tmp_path, "uv.lock", "version = 1\n")
+    _write(tmp_path, ".github/dependabot.yml", _CONFIG)
+
+    declared = _by_package(build_dependency_family_envelope(tmp_path))[
+        "pyproject.toml", "typing-extensions"
+    ]
+
+    assert declared["section"] == "optional-dependencies:fast"
+    assert declared["optional"] is True
+    assert declared["requirement_kind"] == "bounded"
+    assert declared["upper_bounded"] is True
+    assert declared["coverage"]["entry"] is not None
+
+
+def test_an_ignore_wildcard_and_python_spelling_protect_a_package(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`serde-*` ignores serde-pyobject; `Typing_Extensions` ignores its package."""
+    _write(
+        tmp_path,
+        "pyproject.toml",
+        '[project]\nname = "demo"\nversion = "0.1.0"\n'
+        'dependencies = ["typing.extensions>=4,<5"]\n',
+    )
+    _write(
+        tmp_path,
+        ".github/dependabot.yml",
+        "version: 2\nupdates:\n  - package-ecosystem: pip\n    directory: /\n"
+        "    schedule:\n      interval: daily\n    ignore:\n"
+        "      - dependency-name: Typing_Extensions\n",
+    )
+
+    declared = _by_package(build_dependency_family_envelope(tmp_path))[
+        "pyproject.toml", "typing-extensions"
+    ]
+
+    assert declared["coverage"]["ignored"] is True
+
+
 def test_an_exception_needs_a_rationale_and_a_review_trigger(
     layout: pathlib.Path,
 ) -> None:

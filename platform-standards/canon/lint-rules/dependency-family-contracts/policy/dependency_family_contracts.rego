@@ -14,7 +14,7 @@ import rego.v1
 
 finding(rule_id, verdict, path, message) := {
   "rule_id": rule_id,
-  "severity": "warn",
+  "severity": "error",
   "verdict": verdict,
   "path": path,
   "line": 0,

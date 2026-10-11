@@ -24,7 +24,6 @@ cannot be read at all raises an operational error.
 
 from __future__ import annotations
 
-import fnmatch
 import pathlib
 import re
 import tomllib
@@ -36,6 +35,14 @@ from ruamel.yaml.error import YAMLError
 from concordat.errors import OperationalRuleError
 
 from .dependabot_envelope import build_dependabot_envelope
+from .dependency_family_coverage import (
+    Coverage,
+    coverage,
+    directories_of,
+    mapping,
+    normalise,
+    sequence,
+)
 from .fs_probe import probe_file
 from .rust_surfaces import resolve_rust_surfaces
 
@@ -64,18 +71,6 @@ class Resolved(typ.TypedDict):
 
     versions: list[str]
     lock: str | None
-    reason: str | None
-
-
-class Coverage(typ.TypedDict):
-    """How Dependabot treats one declaration's published package name."""
-
-    entry: int | None
-    group: str | None
-    catch_all: bool
-    matching: list[str]
-    matching_narrow: list[str]
-    ignored: bool
     reason: str | None
 
 
@@ -170,183 +165,24 @@ def _load_relationships(
     except (OSError, UnicodeDecodeError, YAMLError) as error:
         problems.append(f"cannot read the relationship data {path.name}: {error}")
         return None, []
-    mapping = _mapping(document)
-    if mapping is None:
+    data = mapping(document)
+    if data is None:
         problems.append(f"the relationship data {path.name} is not a mapping")
         return None, []
-    listed = _sequence(mapping.get("relationships"))
-    version = mapping.get("schema_version")
+    listed = sequence(data.get("relationships"))
+    version = data.get("schema_version")
     if listed is None or not isinstance(version, int):
         problems.append(f"the relationship data {path.name} has no versioned list")
         return None, []
-    relationships = [item for entry in listed if (item := _mapping(entry)) is not None]
+    relationships = [item for entry in listed if (item := mapping(entry)) is not None]
     return version, relationships
-
-
-def _mapping(value: object) -> dict[str, object] | None:
-    """Return *value* as a string-keyed mapping, or None when it is not one."""
-    return typ.cast("dict[str, object]", value) if isinstance(value, dict) else None
-
-
-def _sequence(value: object) -> list[object] | None:
-    """Return *value* as a list, or None when it is not one."""
-    return typ.cast("list[object]", value) if isinstance(value, list) else None
-
-
-def _normalise(name: str) -> str:
-    """Return a Python package name in its comparison form (PEP 503)."""
-    return re.sub(r"[-_.]+", "-", name).lower()
-
-
-def _directory_matches(pattern: str, directory: str) -> bool:
-    """Return whether a Dependabot directory glob covers *directory*.
-
-    `*` stays within one path segment and `**` spans segments, as Dependabot
-    reads them; a leading or trailing slash is optional in the configuration.
-
-    Returns
-    -------
-    bool
-        Whether the glob covers the directory.
-    """
-    wanted = "/" + directory.strip("/")
-    glob = "/" + pattern.strip("/")
-    tokens = {"**/": "(?:.*/)?", "**": ".*", "*": "[^/]*"}
-    regex = "".join(
-        tokens.get(part, re.escape(part)) for part in re.split(r"(\*\*/|\*\*|\*)", glob)
-    )
-    return re.fullmatch(regex, wanted) is not None
-
-
-def _entry_directories(entry: dict[str, object]) -> list[str]:
-    """Return the directories one `updates` entry lists."""
-    listed = _sequence(entry.get("directories"))
-    if listed is not None:
-        return [str(item) for item in listed]
-    single = entry.get("directory")
-    return [str(single)] if single is not None else []
-
-
-def _group_takes(group: dict[str, object], package: str) -> bool:
-    """Return whether *group* takes a version update of *package*."""
-    if group.get("applies-to", "version-updates") != "version-updates":
-        return False
-    patterns = _sequence(group.get("patterns"))
-    if patterns is None:
-        return False
-    excluded = _sequence(group.get("exclude-patterns")) or []
-    excludes = [str(item) for item in excluded]
-    if any(fnmatch.fnmatchcase(package, pattern) for pattern in excludes):
-        return False
-    return any(fnmatch.fnmatchcase(package, str(pattern)) for pattern in patterns)
-
-
-def _is_ignored(entry: dict[str, object], package: str) -> bool:
-    """Return whether an `ignore` rule of *entry* names *package*."""
-    rules = _sequence(entry.get("ignore")) or []
-    return any(
-        (rule_map := _mapping(rule)) is not None
-        and rule_map.get("dependency-name") == package
-        for rule in rules
-    )
-
-
-def _directories_of(manifest: str) -> list[str]:
-    """Return a manifest's directory and each ancestor, as Dependabot directories.
-
-    A workspace member is updated through its workspace root, so a covering
-    entry for an ancestor directory covers the member too.
-
-    Returns
-    -------
-    list[str]
-        The `/`-rooted directories from the manifest's own up to the root.
-    """
-    parent = pathlib.PurePosixPath(manifest).parent
-    chain = [parent, *parent.parents]
-    return ["/" + str(item).strip("./") if str(item) != "." else "/" for item in chain]
-
-
-def _coverage(
-    config: ConfigFile | None,
-    ecosystem: str,
-    directories: cabc.Sequence[str],
-    package: str,
-) -> Coverage:
-    """Return how Dependabot's configuration treats one published package.
-
-    Returns
-    -------
-    Coverage
-        The covering entry, the first group that takes the package, whether
-        that group is a catch-all, and whether an `ignore` rule names it; or
-        the reason none could be established.
-    """
-    missing: Coverage = {
-        "entry": None,
-        "group": None,
-        "catch_all": False,
-        "matching": [],
-        "matching_narrow": [],
-        "ignored": False,
-        "reason": None,
-    }
-    if config is None or config["error"] is not None:
-        return {**missing, "reason": "no decodable Dependabot configuration"}
-    parsed = _mapping(config["parsed"]) or {}
-    updates = _sequence(parsed.get("updates"))
-    if updates is None:
-        return {**missing, "reason": "the Dependabot configuration has no updates"}
-    for directory in directories:
-        for index, raw in enumerate(updates):
-            entry = _mapping(raw)
-            if (
-                entry is not None
-                and entry.get("package-ecosystem") == ecosystem
-                and any(
-                    _directory_matches(pattern, directory)
-                    for pattern in _entry_directories(entry)
-                )
-            ):
-                return _entry_coverage(config, index, entry, package)
-    return {**missing, "reason": f"no {ecosystem} entry covers {directories[0]}"}
-
-
-def _entry_coverage(
-    config: ConfigFile,
-    index: int,
-    entry: dict[str, object],
-    package: str,
-) -> Coverage:
-    """Return the group coverage of *package* in one covering entry."""
-    order = config["group_order"][index] if index < len(config["group_order"]) else None
-    groups = _mapping(entry.get("groups"))
-    matching: list[str] = []
-    narrow: list[str] = []
-    if groups is not None and order:
-        for name in order:
-            group = _mapping(groups.get(name))
-            if group is not None and _group_takes(group, package):
-                matching.append(name)
-                if group.get("patterns") != ["*"]:
-                    narrow.append(name)
-    first = matching[0] if matching else None
-    return {
-        "entry": index,
-        "group": first,
-        "catch_all": first is not None and first not in narrow,
-        "matching": matching,
-        "matching_narrow": narrow,
-        "ignored": _is_ignored(entry, package),
-        "reason": None,
-    }
 
 
 def _cargo_requirement(value: object) -> tuple[str, bool]:
     """Return a Cargo requirement's text and whether it is workspace-inherited."""
     if isinstance(value, str):
         return value, False
-    table = _mapping(value)
+    table = mapping(value)
     if table is not None:
         if table.get("workspace") is True:
             return "", True
@@ -384,8 +220,21 @@ def _classify(requirement: str) -> tuple[str, bool]:
     return "caret", False
 
 
+def _read_lock(lock: pathlib.Path) -> tuple[dict[str, object], str | None]:
+    """Return a decoded lock file, or why it could not be read."""
+    probe = probe_file(lock)
+    if probe.read_error is not None:
+        return {}, f"cannot read {lock.name}: {probe.read_error}"
+    if not probe.present:
+        return {}, f"{lock.name} is absent"
+    try:
+        return tomllib.loads(lock.read_text(encoding="utf-8")), None
+    except (tomllib.TOMLDecodeError, UnicodeDecodeError, OSError) as error:
+        return {}, f"cannot parse {lock.name}: {error}"
+
+
 def _lock_versions(
-    lock: pathlib.Path, package_names: cabc.Collection[str], *, normalise: bool
+    lock: pathlib.Path, package_names: cabc.Collection[str], *, python: bool
 ) -> tuple[dict[str, list[str]], str | None]:
     """Return the locked versions of the named packages, or why not.
 
@@ -394,22 +243,14 @@ def _lock_versions(
     tuple[dict[str, list[str]], str | None]
         Versions by package name, and the reason the lock was unreadable.
     """
-    probe = probe_file(lock)
-    if probe.read_error is not None:
-        return {}, f"cannot read {lock.name}: {probe.read_error}"
-    if not probe.present:
-        return {}, f"{lock.name} is absent"
-    try:
-        document = tomllib.loads(lock.read_text(encoding="utf-8"))
-    except (tomllib.TOMLDecodeError, UnicodeDecodeError, OSError) as error:
-        return {}, f"cannot parse {lock.name}: {error}"
+    document, reason = _read_lock(lock)
+    if reason is not None:
+        return {}, reason
     found: dict[str, list[str]] = {}
-    for raw in _sequence(document.get("package")) or []:
-        item = _mapping(raw)
-        if item is None:
-            continue
+    items = (mapping(raw) or {} for raw in sequence(document.get("package")) or [])
+    for item in items:
         name = str(item.get("name", ""))
-        key = _normalise(name) if normalise else name
+        key = normalise(name) if python else name
         if key in package_names and isinstance(item.get("version"), str):
             found.setdefault(key, []).append(str(item["version"]))
     return found, None
@@ -452,32 +293,42 @@ def _workspace_requirements(
     """Return `[workspace.dependencies]` from every workspace surface."""
     inherited: dict[str, object] = {}
     for surface in surfaces:
-        workspace = _mapping((_mapping(surface.get("parsed")) or {}).get("workspace"))
-        listed = _mapping((workspace or {}).get("dependencies"))
+        workspace = mapping((mapping(surface.get("parsed")) or {}).get("workspace"))
+        listed = mapping((workspace or {}).get("dependencies"))
         if listed is not None:
             inherited.update(listed)
     return inherited
+
+
+def _section_tables(
+    body: dict[str, object], target: str | None
+) -> list[tuple[str, str | None, dict[str, object]]]:
+    """Return the dependency tables of one manifest body or target body."""
+    found = ((section, mapping(body.get(section))) for section in _CARGO_SECTIONS)
+    return [(section, target, table) for section, table in found if table is not None]
 
 
 def _cargo_tables(
     parsed: dict[str, object],
 ) -> list[tuple[str, str | None, dict[str, object]]]:
     """Return each dependency table with its section and target."""
-    tables: list[tuple[str, str | None, dict[str, object]]] = []
-    for section in _CARGO_SECTIONS:
-        table = _mapping(parsed.get(section))
-        if table is not None:
-            tables.append((section, None, table))
-    targets = _mapping(parsed.get("target")) or {}
-    for target, raw in targets.items():
-        body = _mapping(raw)
-        if body is None:
-            continue
-        for section in _CARGO_SECTIONS:
-            table = _mapping(body.get(section))
-            if table is not None:
-                tables.append((section, str(target), table))
+    tables = _section_tables(parsed, None)
+    for target, raw in (mapping(parsed.get("target")) or {}).items():
+        tables.extend(_section_tables(mapping(raw) or {}, str(target)))
     return tables
+
+
+def _cargo_surfaces(
+    checkout: pathlib.Path, problems: list[str]
+) -> list[dict[str, object]]:
+    """Return the governed Cargo surfaces, or none with the reason recorded."""
+    try:
+        resolution = resolve_rust_surfaces(checkout)
+    except OperationalRuleError as error:
+        detail = str(error).replace(str(checkout), ".")
+        problems.append(f"the Rust surfaces could not be resolved: {detail}")
+        return []
+    return [dict(surface) for surface in resolution.surfaces]
 
 
 def _cargo_declarations(
@@ -486,51 +337,52 @@ def _cargo_declarations(
     problems: list[str],
 ) -> list[Declaration]:
     """Return every dependency edge of the governed Cargo surfaces."""
-    try:
-        resolution = resolve_rust_surfaces(checkout)
-    except OperationalRuleError as error:
-        detail = str(error).replace(str(checkout), ".")
-        problems.append(f"the Rust surfaces could not be resolved: {detail}")
-        return []
-    surfaces = [dict(surface) for surface in resolution.surfaces]
+    surfaces = _cargo_surfaces(checkout, problems)
     inherited = _workspace_requirements(surfaces)
-    declarations: list[Declaration] = []
-    for surface in surfaces:
-        manifest = str(surface["path"])
-        parsed = _mapping(surface.get("parsed"))
-        if parsed is None:
-            problems.append(f"{manifest} could not be parsed")
-            continue
-        lock = _cargo_lock(checkout, manifest)
-        table_rows = _cargo_tables(parsed)
-        names = {
-            _published(key, value, inherited)
-            for _, _, table in table_rows
-            for key, value in table.items()
-        }
-        versions, reason = _lock_versions(lock, names, normalise=False)
-        for section, target, table in table_rows:
-            for key, value in table.items():
-                declarations.append(
-                    _cargo_declaration(
-                        (manifest, section, target),
-                        (key, value, inherited),
-                        (
-                            config,
-                            versions,
-                            lock.relative_to(checkout).as_posix(),
-                            reason,
-                        ),
-                    )
-                )
-    return declarations
+    parsed = [(str(s["path"]), mapping(s.get("parsed"))) for s in surfaces]
+    problems.extend(
+        f"{path} could not be parsed" for path, doc in parsed if doc is None
+    )
+    return [
+        declaration
+        for path, doc in parsed
+        if doc is not None
+        for declaration in _surface_declarations(
+            (checkout, path, doc), inherited, config
+        )
+    ]
+
+
+def _surface_declarations(
+    surface: tuple[pathlib.Path, str, dict[str, object]],
+    inherited: dict[str, object],
+    config: ConfigFile | None,
+) -> list[Declaration]:
+    """Return every dependency edge of one parsed Cargo manifest."""
+    checkout, manifest, parsed = surface
+    lock = _cargo_lock(checkout, manifest)
+    table_rows = _cargo_tables(parsed)
+    names = {
+        _published(key, value, inherited)
+        for _, _, table in table_rows
+        for key, value in table.items()
+    }
+    versions, reason = _lock_versions(lock, names, python=False)
+    evidence = (config, versions, lock.relative_to(checkout).as_posix(), reason)
+    return [
+        _cargo_declaration(
+            (manifest, section, target), (key, value, inherited), evidence
+        )
+        for section, target, table in table_rows
+        for key, value in table.items()
+    ]
 
 
 def _published(key: str, value: object, inherited: dict[str, object]) -> str:
     """Return the published package name behind a Cargo dependency key."""
-    table = _mapping(value)
+    table = mapping(value)
     if table is not None and table.get("workspace") is True:
-        table = _mapping(inherited.get(key)) or table
+        table = mapping(inherited.get(key)) or table
     if table is not None and isinstance(table.get("package"), str):
         return str(table["package"])
     return key
@@ -550,7 +402,7 @@ def _cargo_declaration(
         requirement, _ = _cargo_requirement(inherited[key])
     package = _published(key, value, inherited)
     kind, bounded = _classify(requirement)
-    optional = (_mapping(value) or {}).get("optional") is True
+    optional = (mapping(value) or {}).get("optional") is True
     return {
         "manifest": manifest,
         "ecosystem": "cargo",
@@ -564,34 +416,58 @@ def _cargo_declaration(
         "requirement_kind": kind,
         "upper_bounded": bounded,
         "resolved": _resolved(versions, package, lock_name, lock_reason),
-        "coverage": _coverage(config, "cargo", _directories_of(manifest), package),
+        "coverage": coverage(config, "cargo", directories_of(manifest), package),
     }
+
+
+def _named_rows(
+    section: str, name: str | None, items: object
+) -> list[tuple[str, str | None, str]]:
+    """Return the string requirements of one list as `(section, name, text)`."""
+    return [
+        (section, name, item) for item in sequence(items) or [] if isinstance(item, str)
+    ]
 
 
 def _python_requirements(
     parsed: dict[str, object],
 ) -> list[tuple[str, str | None, str]]:
     """Return the `(section, extra, requirement)` strings of a pyproject."""
-    found: list[tuple[str, str | None, str]] = []
-    project = _mapping(parsed.get("project")) or {}
-    found.extend(
-        ("dependencies", None, str(item))
-        for item in _sequence(project.get("dependencies")) or []
-    )
-    extras = _mapping(project.get("optional-dependencies")) or {}
-    for extra, items in extras.items():
-        found.extend(
-            ("optional-dependencies", str(extra), str(item))
-            for item in _sequence(items) or []
-        )
-    groups = _mapping(parsed.get("dependency-groups")) or {}
-    for group, items in groups.items():
-        found.extend(
-            ("dependency-groups", str(group), item)
-            for item in _sequence(items) or []
-            if isinstance(item, str)
-        )
+    project = mapping(parsed.get("project")) or {}
+    found = _named_rows("dependencies", None, project.get("dependencies"))
+    extras = mapping(project.get("optional-dependencies")) or {}
+    groups = mapping(parsed.get("dependency-groups")) or {}
+    for section, tables in (
+        ("optional-dependencies", extras),
+        ("dependency-groups", groups),
+    ):
+        for name, items in tables.items():
+            found.extend(_named_rows(section, str(name), items))
     return found
+
+
+_SKIPPED_DIRECTORIES = frozenset({"node_modules", "target", "venv", "build", "dist"})
+
+
+def _nested_pyprojects(checkout: pathlib.Path) -> list[pathlib.Path]:
+    """Return every `pyproject.toml` below the root, at any depth.
+
+    Hidden directories and vendored or generated trees are not projects.
+
+    Returns
+    -------
+    list[pathlib.Path]
+        The nested project files, in path order.
+    """
+    return sorted(
+        path
+        for path in checkout.glob("**/pyproject.toml")
+        if path.parent != checkout
+        and not any(
+            part.startswith(".") or part in _SKIPPED_DIRECTORIES
+            for part in path.relative_to(checkout).parts[:-1]
+        )
+    )
 
 
 def _python_declarations(
@@ -617,7 +493,7 @@ def _python_declarations(
     problems.extend(
         f"{nested.relative_to(checkout).as_posix()} is not read: only the root "
         "pyproject.toml is"
-        for nested in sorted(checkout.glob("*/pyproject.toml"))
+        for nested in _nested_pyprojects(checkout)
     )
     if not probe.present:
         return []
@@ -631,33 +507,43 @@ def _python_declarations(
     matches = [
         (_REQUIREMENT_NAME.match(text), section, extra) for section, extra, text in rows
     ]
-    names = {_normalise(m.group("name")) for m, _, _ in matches if m}
-    versions, reason = _lock_versions(checkout / "uv.lock", names, normalise=True)
-    lock_name = "uv.lock"
+    names = {normalise(m.group("name")) for m, _, _ in matches if m}
+    versions, reason = _lock_versions(checkout / "uv.lock", names, python=True)
+    evidence = (config, ecosystem, versions, reason)
     declarations: list[Declaration] = []
     for (match, section, extra), (_, _, text) in zip(matches, rows, strict=True):
         if match is None:
             problems.append(f"cannot read the requirement {text!r} in pyproject.toml")
             continue
-        package = _normalise(match.group("name"))
-        spec = match.group("spec")
-        kind, bounded = _classify(spec)
-        declarations.append({
-            "manifest": "pyproject.toml",
-            "ecosystem": ecosystem,
-            "section": section if extra is None else f"{section}:{extra}",
-            "target": None,
-            "optional": section == "optional-dependencies",
-            "workspace_inherited": False,
-            "declared_name": match.group("name"),
-            "package": package,
-            "requirement": spec,
-            "requirement_kind": kind,
-            "upper_bounded": bounded,
-            "resolved": _resolved(versions, package, lock_name, reason),
-            "coverage": _coverage(config, ecosystem, ["/"], package),
-        })
+        declarations.append(_python_declaration((match, section, extra), evidence))
     return declarations
+
+
+def _python_declaration(
+    requirement: tuple[re.Match[str], str, str | None],
+    evidence: tuple[ConfigFile | None, str, dict[str, list[str]], str | None],
+) -> Declaration:
+    """Return one `pyproject.toml` requirement as a declaration fact."""
+    match, section, extra = requirement
+    config, ecosystem, versions, reason = evidence
+    package = normalise(match.group("name"))
+    spec = match.group("spec")
+    kind, bounded = _classify(spec)
+    return {
+        "manifest": "pyproject.toml",
+        "ecosystem": ecosystem,
+        "section": section if extra is None else f"{section}:{extra}",
+        "target": None,
+        "optional": section == "optional-dependencies",
+        "workspace_inherited": False,
+        "declared_name": match.group("name"),
+        "package": package,
+        "requirement": spec,
+        "requirement_kind": kind,
+        "upper_bounded": bounded,
+        "resolved": _resolved(versions, package, "uv.lock", reason),
+        "coverage": coverage(config, ecosystem, ["/"], package),
+    }
 
 
 def _exception_from(item: object) -> RelationshipException | None:
@@ -668,7 +554,7 @@ def _exception_from(item: object) -> RelationshipException | None:
     RelationshipException | None
         The exception with its relationship, rationale and review trigger.
     """
-    table = _mapping(item)
+    table = mapping(item)
     if table is None:
         return None
     texts = [table.get(name) for name in _EXCEPTION_FIELDS]
@@ -680,6 +566,21 @@ def _exception_from(item: object) -> RelationshipException | None:
         "rationale": rationale,
         "review_trigger": review_trigger,
     }
+
+
+def _read_concordat(path: pathlib.Path, problems: list[str]) -> object:
+    """Return the decoded `.concordat` document, or None with the reason recorded."""
+    probe = probe_file(path)
+    if probe.read_error is not None:
+        problems.append(f"cannot read .concordat: {probe.read_error}")
+        return None
+    if not probe.present:
+        return None
+    try:
+        return _yaml.load(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, YAMLError) as error:
+        problems.append(f"cannot parse .concordat: {error}")
+        return None
 
 
 def _load_exceptions(
@@ -695,37 +596,20 @@ def _load_exceptions(
     list[RelationshipException]
         The exceptions that name all three fields.
     """
-    path = checkout / ".concordat"
-    probe = probe_file(path)
-    if probe.read_error is not None:
-        problems.append(f"cannot read .concordat: {probe.read_error}")
-        return []
-    if not probe.present:
-        return []
-    try:
-        document: object = _yaml.load(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, YAMLError) as error:
-        problems.append(f"cannot parse .concordat: {error}")
-        return []
-    section = _mapping((_mapping(document) or {}).get("dependencies")) or {}
+    document = _read_concordat(checkout / ".concordat", problems)
+    section = mapping((mapping(document) or {}).get("dependencies")) or {}
     raw = section.get("family_exceptions")
-    if raw is None:
-        return []
-    listed = _sequence(raw)
-    if listed is None:
+    listed = sequence(raw)
+    if raw is not None and listed is None:
         problems.append("dependencies.family_exceptions in .concordat is not a list")
-        return []
-    valid: list[RelationshipException] = []
-    for item in listed:
-        exception = _exception_from(item)
-        if exception is None:
-            problems.append(
-                "a dependencies.family_exceptions entry in .concordat needs a "
-                "relationship, a rationale and a review_trigger"
-            )
-        else:
-            valid.append(exception)
-    return valid
+    parsed = [_exception_from(item) for item in listed or []]
+    problems.extend(
+        "a dependencies.family_exceptions entry in .concordat needs a "
+        "relationship, a rationale and a review_trigger"
+        for exception in parsed
+        if exception is None
+    )
+    return [exception for exception in parsed if exception is not None]
 
 
 def build_dependency_family_envelope(
