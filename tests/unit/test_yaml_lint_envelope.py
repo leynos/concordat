@@ -110,7 +110,7 @@ def test_the_local_config_is_decoded(tmp_path: pathlib.Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("name", "key"),
+    "config",
     [
         (".yamllint.yml", "yamllint_local"),
         (".github/actionlint.yaml", "actionlint_config"),
@@ -118,14 +118,16 @@ def test_the_local_config_is_decoded(tmp_path: pathlib.Path) -> None:
     ids=["yamllint", "actionlint"],
 )
 @pytest.mark.parametrize(
-    ("content", "reason"),
+    "damage",
     [(b"a: [\n", "invalid YAML"), (b"\xff\xfe", "not UTF-8")],
     ids=["invalid YAML", "not UTF-8"],
 )
 def test_an_undecodable_config_keeps_its_reason(
-    tmp_path: pathlib.Path, name: str, key: str, content: bytes, reason: str
+    tmp_path: pathlib.Path, config: tuple[str, str], damage: tuple[bytes, str]
 ) -> None:
     """A content failure is evidence for an indeterminate verdict, not absence."""
+    name, key = config
+    content, reason = damage
     (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
     (tmp_path / name).write_bytes(content)
 
