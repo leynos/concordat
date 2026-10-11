@@ -129,6 +129,8 @@ class TestRegisteredPackages:
                 "dependency-family-contracts",
                 FAMILY_ENVELOPE_KIND,
                 id="dependency-family-contracts",
+            ),
+            pytest.param(
                 "rust-toolchain-policy",
                 TOOLCHAIN_POLICY_ENVELOPE_KIND,
                 id="rust-toolchain-policy",

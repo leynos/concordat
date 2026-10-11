@@ -404,6 +404,8 @@ def _dependency_family_envelope(
         The `policy-input/dependency-family-contracts` document for *checkout*.
     """
     return build_dependency_family_envelope(checkout)
+
+
 def utc_today() -> dt.date:
     """Return the current UTC date: the audit's only clock read.
 
@@ -534,7 +536,6 @@ PACKAGE_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     "main-owned-codescene-coverage": _coverage_envelope,
     "dependabot-update-shape": _dependabot_envelope,
     "dependency-family-contracts": _dependency_family_envelope,
-    "rust-toolchain-policy": build_toolchain_policy_envelope,
     "rust-toolchain-policy": _toolchain_policy_envelope,
     "spelling-config-baseline": _spelling_envelope,
     "uv-gate-baseline": _uv_gate_envelope,
@@ -552,7 +553,6 @@ INPUT_KIND_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     COVERAGE_ENVELOPE_KIND: _coverage_envelope,
     DEPENDABOT_ENVELOPE_KIND: _dependabot_envelope,
     FAMILY_ENVELOPE_KIND: _dependency_family_envelope,
-    TOOLCHAIN_POLICY_ENVELOPE_KIND: build_toolchain_policy_envelope,
     TOOLCHAIN_POLICY_ENVELOPE_KIND: _toolchain_policy_envelope,
     SPELLING_ENVELOPE_KIND: _spelling_envelope,
     UV_GATE_ENVELOPE_KIND: _uv_gate_envelope,

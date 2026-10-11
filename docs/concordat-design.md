@@ -2170,6 +2170,7 @@ finding. A repository may stay on an older generation by recording an exception
 in `.concordat` under `dependencies.family_exceptions`, naming the
 relationship, a rationale and a review trigger. Missing facts are DF-006
 indeterminate findings, never passes.
+
 ##### Rust toolchain policy (RT-022 through RT-027)
 
 The estate audit of 2026-10-11 (DF12-102) found 53 of 72 Rust repositories
