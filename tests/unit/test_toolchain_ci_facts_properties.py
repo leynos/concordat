@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import dataclasses
 import pathlib
+import re
 import tempfile
 import typing as typ
 
@@ -30,6 +31,9 @@ _ROUTES: typ.Final = (
     "action_input",
     "action_ref",
     "rustup_install",
+    "rustup_install_alias",
+    "rustup_run",
+    "rustup_override",
     "rustup_default",
     "cargo_override",
     "env_reference",
@@ -77,6 +81,12 @@ def _step(
             step = {"uses": f"dtolnay/rust-toolchain@{tool}"}
         case "rustup_install":
             step = {"run": f"rustup toolchain install --profile minimal {tool}"}
+        case "rustup_install_alias":
+            step = {"run": f"rustup install {tool}"}
+        case "rustup_run":
+            step = {"run": f"rustup run {tool} cargo check"}
+        case "rustup_override":
+            step = {"run": f"rustup override set {tool} --path ."}
         case "rustup_default":
             step = {"run": f"rustup default {tool} && rustup show"}
         case "cargo_override":
@@ -95,45 +105,65 @@ def _step(
     return step, env
 
 
-def _workflow(selections: list[_Selection]) -> dict[str, object]:
-    """Render *selections* as one workflow, one job per selection."""
+def _workflow(selections: list[_Selection], per_job: int = 1) -> dict[str, object]:
+    """Render *selections* as one workflow, `per_job` steps to each job."""
     env: dict[str, str] = {}
     jobs: dict[str, object] = {}
-    for index, selection in enumerate(selections):
-        step, step_env = _step(index, selection)
-        env.update(step_env)
-        job: dict[str, object] = {"runs-on": "ubuntu-latest", "steps": [step]}
-        if selection.route == "matrix_leg":
-            job["strategy"] = {"matrix": {"rust": [selection.toolchain]}}
-        jobs[f"job{index}"] = job
+    for start in range(0, len(selections), per_job):
+        chunk = selections[start : start + per_job]
+        steps: list[dict[str, object]] = []
+        for offset, selection in enumerate(chunk):
+            step, step_env = _step(start + offset, selection)
+            env.update(step_env)
+            steps.append(step)
+        job: dict[str, object] = {"runs-on": "ubuntu-latest", "steps": steps}
+        legs = [s.toolchain for s in chunk if s.route == "matrix_leg"]
+        if legs:
+            job["strategy"] = {"matrix": {"rust": legs}}
+        jobs[f"job{start}"] = job
     return {"env": env, "jobs": jobs} if env else {"jobs": jobs}
 
 
-def _read(document: object) -> dict[str, typ.Any]:
-    """Return the extractor's facts for a checkout holding *document*."""
+def _read(*documents: object) -> dict[str, typ.Any]:
+    """Return the extractor's facts for a checkout holding every document."""
     with tempfile.TemporaryDirectory() as scratch:
         workflows = pathlib.Path(scratch) / ".github" / "workflows"
         workflows.mkdir(parents=True)
-        with (workflows / "ci.yml").open("w", encoding="utf-8") as handle:
-            YAML(typ="safe").dump(document, handle)
+        for index, document in enumerate(documents):
+            with (workflows / f"w{index}.yml").open("w", encoding="utf-8") as handle:
+                YAML(typ="safe").dump(document, handle)
         return typ.cast("dict[str, typ.Any]", ci_facts(pathlib.Path(scratch)))
 
 
+_NUMERIC_TOOLCHAIN: typ.Final = re.compile(r"\d+\.\d+\.\d+")
+
+
 def _expected(selections: list[_Selection]) -> tuple[list[str], list[str]]:
-    """Return the dated nightlies and numeric minors the decisions name."""
+    """Return the dated nightlies and numeric minors the decisions name.
+
+    The minor is computed here by splitting the generated `M.m.p` text, not by
+    the production helper, so a defect in that helper cannot hide itself.
+
+    Returns
+    -------
+    tuple[list[str], list[str]]
+        The sorted dated nightlies and the sorted numeric `major.minor` values.
+    """
     names = {s.toolchain for s in selections}
     nightlies = sorted(n for n in names if n.startswith("nightly-"))
-    minors = sorted({m for n in names if (m := minor_of(n)) is not None})
+    minors = sorted({
+        ".".join(n.split(".")[:2]) for n in names if _NUMERIC_TOOLCHAIN.fullmatch(n)
+    })
     return nightlies, minors
 
 
 @settings(max_examples=60, deadline=None)
-@given(st.lists(_SELECTIONS, max_size=6))
+@given(st.lists(_SELECTIONS, max_size=6), st.integers(1, 3))
 def test_every_route_names_exactly_its_toolchains(
-    selections: list[_Selection],
+    selections: list[_Selection], per_job: int
 ) -> None:
     """Whatever route selects a toolchain, the facts name it, and nothing else."""
-    facts = _read(_workflow(selections))
+    facts = _read(_workflow(selections, per_job))
     nightlies, minors = _expected(selections)
 
     assert facts["errors"] == [], facts
@@ -142,15 +172,47 @@ def test_every_route_names_exactly_its_toolchains(
 
 
 @settings(max_examples=40, deadline=None)
-@given(st.lists(_SELECTIONS, min_size=1, max_size=6), st.randoms(use_true_random=False))
-def test_order_and_duplication_do_not_change_the_facts(
-    selections: list[_Selection], rng: random.Random
+@given(
+    st.lists(_SELECTIONS, min_size=1, max_size=6),
+    st.integers(1, 3),
+    st.integers(1, 3),
+    st.randoms(use_true_random=False),
+)
+def test_order_grouping_and_duplication_do_not_change_the_facts(
+    selections: list[_Selection],
+    per_job: int,
+    files: int,
+    rng: random.Random,
 ) -> None:
-    """The facts are a set: reordering or repeating the steps changes nothing."""
+    """The facts are a set: steps, jobs and files can be reordered or repeated."""
     shuffled = list(selections) + list(selections)
     rng.shuffle(shuffled)
+    chunks = [shuffled[i::files] for i in range(files)]
 
-    assert _read(_workflow(shuffled)) == _read(_workflow(selections))
+    split = _read(*(_workflow(chunk, per_job) for chunk in chunks if chunk))
+
+    assert split == _read(_workflow(selections)), (selections, split)
+
+
+@settings(max_examples=80, deadline=None)
+@given(st.integers(0, 999), st.integers(0, 999), st.integers(0, 999))
+def test_numeric_versions_reduce_to_their_major_and_minor(
+    major: int, minor: int, patch: int
+) -> None:
+    """`M.m` and `M.m.p` both reduce to `M.m`."""
+    assert minor_of(f"{major}.{minor}") == f"{major}.{minor}"
+    assert minor_of(f"{major}.{minor}.{patch}") == f"{major}.{minor}"
+
+
+@settings(max_examples=120, deadline=None)
+@given(
+    st.text(max_size=12).filter(
+        lambda text: re.fullmatch(r"\d+\.\d+(\.\d+)?", text) is None
+    )
+)
+def test_anything_else_has_no_numeric_minor(text: str) -> None:
+    """Channels, dates, partial versions and trailing noise are not numeric."""
+    assert minor_of(text) is None, text
 
 
 _SCALARS: typ.Final = st.one_of(

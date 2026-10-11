@@ -92,7 +92,7 @@ class _Evidence:
 
 def minor_of(version: str) -> str | None:
     """Return the `major.minor` of a numeric version, or None."""
-    match = _NUMERIC.match(version)
+    match = _NUMERIC.fullmatch(version)
     return match.group("minor") if match else None
 
 
@@ -133,16 +133,27 @@ def _axis_entries(key: object, listed: object) -> list[dict[object, object]]:
     return [{key: item} for item in _as_list(listed)]
 
 
+def _matrix_entries(matrix: object) -> cabc.Iterator[dict[object, object]]:
+    """Yield every leg-sized mapping the matrix's axes and `include` contribute."""
+    if isinstance(matrix, dict):
+        for key, listed in matrix.items():
+            yield from _axis_entries(key, listed)
+
+
+def _scalar_items(entry: dict[object, object]) -> cabc.Iterator[tuple[str, str]]:
+    """Yield `(name, text)` for each scalar value in one matrix leg."""
+    for name, item in entry.items():
+        text = _stringify(item)
+        if text is not None:
+            yield str(name), text
+
+
 def _matrix_values(matrix: object) -> dict[str, list[str]]:
     """Map each matrix key to every scalar it takes, `include` entries too."""
-    if not isinstance(matrix, dict):
-        return {}
     values: dict[str, list[str]] = {}
-    for key, listed in matrix.items():
-        for entry in _axis_entries(key, listed):
-            for name, item in entry.items():
-                if (text := _stringify(item)) is not None:
-                    values.setdefault(str(name), []).append(text)
+    for entry in _matrix_entries(matrix):
+        for name, text in _scalar_items(entry):
+            values.setdefault(name, []).append(text)
     return values
 
 
@@ -295,7 +306,7 @@ def ci_facts(checkout: pathlib.Path) -> CiFacts:
             errors.append(f"{workflow['path']}: {workflow['error']}")
     return {
         "errors": errors,
-        "dated_nightlies": sorted(n for n in evidence.names if _NIGHTLY.match(n)),
+        "dated_nightlies": sorted(n for n in evidence.names if _NIGHTLY.fullmatch(n)),
         "numeric_minors": sorted({
             m for n in evidence.names if (m := minor_of(n)) is not None
         }),

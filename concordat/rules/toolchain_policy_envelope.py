@@ -208,18 +208,19 @@ def _crate_facts(
     }
 
 
+def _workspace_package(surface: CargoSurface) -> dict[str, object]:
+    """Return a manifest's `[workspace.package]` table, or an empty one."""
+    workspace = surface["parsed"].get("workspace")
+    package = workspace.get("package") if isinstance(workspace, dict) else None
+    return typ.cast("dict[str, object]", package) if isinstance(package, dict) else {}
+
+
 def _workspace_package_value(
     surfaces: cabc.Iterable[CargoSurface], key: str, *, default: object
 ) -> object:
     """Return the first `[workspace.package]` *key* among *surfaces*, or *default*."""
-    for surface in surfaces:
-        workspace = surface["parsed"].get("workspace")
-        package = workspace.get("package") if isinstance(workspace, dict) else None
-        if isinstance(package, dict):
-            shared = typ.cast("dict[str, object]", package)
-            if key in shared:
-                return shared[key]
-    return default
+    shared = (_workspace_package(surface) for surface in surfaces)
+    return next((package[key] for package in shared if key in package), default)
 
 
 def _workspace_rust_version(surfaces: cabc.Iterable[CargoSurface]) -> str | None:
