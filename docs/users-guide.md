@@ -342,9 +342,13 @@ concordat artefact rule run dependency-family-contracts --repo /path/to/checkout
 
 A relationship applies only where the repository declares every member:
 
-- a family or type-identity pair (for example `pyo3` with `pyo3-build-config`)
-  needs one narrow group taking both ahead of the catch-all (DF-001), and not
-  shadowed by an earlier group (DF-003);
+- a family or type-identity pair (for example `pyo3` with `pyo3-build-config`,
+  or `pyo3` with the `serde-pyobject` bridge) needs one narrow group taking
+  both ahead of the catch-all (DF-001), and not shadowed by an earlier group
+  (DF-003). Dependabot matches the published package name, so a bridge renamed
+  in `Cargo.toml` (`pyo3-serde = { package = "serde-pyobject" }`) is named in
+  the group by `serde-pyobject`, not by the alias, and an `ignore` rule would
+  freeze the pair rather than move it;
 - independently versioned packages (for example maturin with PyO3) need an upper
   bound or an `ignore` rule on a member (DF-002); an exact pin is not one;
 - a missing configuration, an unreadable manifest or lock, a Python project

@@ -262,6 +262,19 @@ def test_an_unparsable_manifest_is_a_problem(tmp_path: pathlib.Path) -> None:
     assert str(tmp_path) not in envelope["problems"][0]
 
 
+@pytest.mark.parametrize("crate", ["rust", "rust_extension", "tei-py"])
+def test_each_nested_crate_layout_is_named(tmp_path: pathlib.Path, crate: str) -> None:
+    """The layouts the pilots use (a `rust/`, `rust_extension/` or named crate)."""
+    _write(tmp_path, f"{crate}/Cargo.toml", _MEMBER)
+
+    problems = build_dependency_family_envelope(tmp_path)["problems"]
+
+    assert [p for p in problems if p.startswith(f"{crate}/Cargo.toml is a Cargo")], (
+        f"expected a problem naming {crate}/Cargo.toml as an ungoverned manifest; "
+        f"got {problems}"
+    )
+
+
 def test_an_undeclared_nested_cargo_manifest_is_a_problem(
     tmp_path: pathlib.Path,
 ) -> None:

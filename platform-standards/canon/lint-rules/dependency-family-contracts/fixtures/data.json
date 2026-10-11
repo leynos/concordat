@@ -25,15 +25,16 @@
         },
         {
           "id": "pyo3-serde-bridge",
-          "kind": "tuple",
+          "kind": "type-identity",
           "members": [
             "pyo3",
             "serde-pyobject"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "tei-rapporteur",
           "provenance": [
-            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name",
+            "serde-pyobject converts to and from pyo3 types, so an ignore rule would freeze the bridge and let a PyO3 bump arrive alone; the two move together"
           ]
         },
         {
@@ -242,15 +243,16 @@
         },
         {
           "id": "pyo3-serde-bridge",
-          "kind": "tuple",
+          "kind": "type-identity",
           "members": [
             "pyo3",
             "serde-pyobject"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "tei-rapporteur",
           "provenance": [
-            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name",
+            "serde-pyobject converts to and from pyo3 types, so an ignore rule would freeze the bridge and let a PyO3 bump arrive alone; the two move together"
           ]
         },
         {
@@ -446,15 +448,16 @@
         },
         {
           "id": "pyo3-serde-bridge",
-          "kind": "tuple",
+          "kind": "type-identity",
           "members": [
             "pyo3",
             "serde-pyobject"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "tei-rapporteur",
           "provenance": [
-            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name",
+            "serde-pyobject converts to and from pyo3 types, so an ignore rule would freeze the bridge and let a PyO3 bump arrive alone; the two move together"
           ]
         },
         {
@@ -671,15 +674,16 @@
         },
         {
           "id": "pyo3-serde-bridge",
-          "kind": "tuple",
+          "kind": "type-identity",
           "members": [
             "pyo3",
             "serde-pyobject"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "tei-rapporteur",
           "provenance": [
-            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name",
+            "serde-pyobject converts to and from pyo3 types, so an ignore rule would freeze the bridge and let a PyO3 bump arrive alone; the two move together"
           ]
         },
         {
@@ -875,15 +879,16 @@
         },
         {
           "id": "pyo3-serde-bridge",
-          "kind": "tuple",
+          "kind": "type-identity",
           "members": [
             "pyo3",
             "serde-pyobject"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "tei-rapporteur",
           "provenance": [
-            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name",
+            "serde-pyobject converts to and from pyo3 types, so an ignore rule would freeze the bridge and let a PyO3 bump arrive alone; the two move together"
           ]
         },
         {
@@ -1079,15 +1084,16 @@
         },
         {
           "id": "pyo3-serde-bridge",
-          "kind": "tuple",
+          "kind": "type-identity",
           "members": [
             "pyo3",
             "serde-pyobject"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "tei-rapporteur",
           "provenance": [
-            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name",
+            "serde-pyobject converts to and from pyo3 types, so an ignore rule would freeze the bridge and let a PyO3 bump arrive alone; the two move together"
           ]
         },
         {
@@ -1296,15 +1302,16 @@
         },
         {
           "id": "pyo3-serde-bridge",
-          "kind": "tuple",
+          "kind": "type-identity",
           "members": [
             "pyo3",
             "serde-pyobject"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "tei-rapporteur",
           "provenance": [
-            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name",
+            "serde-pyobject converts to and from pyo3 types, so an ignore rule would freeze the bridge and let a PyO3 bump arrive alone; the two move together"
           ]
         },
         {
@@ -1458,9 +1465,11 @@
           "requirement_kind": "caret",
           "upper_bounded": false,
           "resolved": {
-            "versions": [],
+            "versions": [
+              "0.8.0"
+            ],
             "lock": "Cargo.lock",
-            "reason": "serde-pyobject is not in Cargo.lock"
+            "reason": null
           },
           "coverage": {
             "entry": 0,
@@ -1517,7 +1526,7 @@
       "exceptions": [],
       "problems": []
     },
-    "renamed_bridge_ignored_by_published_name": {
+    "renamed_bridge_grouped_by_published_name": {
       "schema_version": 1,
       "kind": "policy-input/dependency-family-contracts",
       "repository": {
@@ -1542,15 +1551,16 @@
         },
         {
           "id": "pyo3-serde-bridge",
-          "kind": "tuple",
+          "kind": "type-identity",
           "members": [
             "pyo3",
             "serde-pyobject"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "tei-rapporteur",
           "provenance": [
-            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name",
+            "serde-pyobject converts to and from pyo3 types, so an ignore rule would freeze the bridge and let a PyO3 bump arrive alone; the two move together"
           ]
         },
         {
@@ -1704,19 +1714,24 @@
           "requirement_kind": "caret",
           "upper_bounded": false,
           "resolved": {
-            "versions": [],
+            "versions": [
+              "0.8.0"
+            ],
             "lock": "Cargo.lock",
-            "reason": "serde-pyobject is not in Cargo.lock"
+            "reason": null
           },
           "coverage": {
             "entry": 0,
-            "group": "minor-and-patch",
-            "catch_all": true,
+            "group": "pyo3",
+            "catch_all": false,
             "matching": [
+              "pyo3",
               "minor-and-patch"
             ],
-            "matching_narrow": [],
-            "ignored": true,
+            "matching_narrow": [
+              "pyo3"
+            ],
+            "ignored": false,
             "reason": null
           }
         }
@@ -1736,7 +1751,8 @@
                 "pyo3": {
                   "patterns": [
                     "pyo3",
-                    "pyo3-build-config"
+                    "pyo3-build-config",
+                    "serde-pyobject"
                   ]
                 },
                 "minor-and-patch": {
@@ -1748,15 +1764,7 @@
                     "patch"
                   ]
                 }
-              },
-              "ignore": [
-                {
-                  "dependency-name": "serde-pyobject",
-                  "versions": [
-                    ">=0.9"
-                  ]
-                }
-              ]
+              }
             }
           ]
         },
@@ -1771,7 +1779,7 @@
       "exceptions": [],
       "problems": []
     },
-    "renamed_bridge_ignored_by_alias": {
+    "renamed_bridge_grouped_by_alias": {
       "schema_version": 1,
       "kind": "policy-input/dependency-family-contracts",
       "repository": {
@@ -1796,15 +1804,16 @@
         },
         {
           "id": "pyo3-serde-bridge",
-          "kind": "tuple",
+          "kind": "type-identity",
           "members": [
             "pyo3",
             "serde-pyobject"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "tei-rapporteur",
           "provenance": [
-            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name",
+            "serde-pyobject converts to and from pyo3 types, so an ignore rule would freeze the bridge and let a PyO3 bump arrive alone; the two move together"
           ]
         },
         {
@@ -1958,9 +1967,11 @@
           "requirement_kind": "caret",
           "upper_bounded": false,
           "resolved": {
-            "versions": [],
+            "versions": [
+              "0.8.0"
+            ],
             "lock": "Cargo.lock",
-            "reason": "serde-pyobject is not in Cargo.lock"
+            "reason": null
           },
           "coverage": {
             "entry": 0,
@@ -1990,7 +2001,8 @@
                 "pyo3": {
                   "patterns": [
                     "pyo3",
-                    "pyo3-build-config"
+                    "pyo3-build-config",
+                    "pyo3-serde"
                   ]
                 },
                 "minor-and-patch": {
@@ -2002,15 +2014,7 @@
                     "patch"
                   ]
                 }
-              },
-              "ignore": [
-                {
-                  "dependency-name": "pyo3-serde",
-                  "versions": [
-                    ">=0.9"
-                  ]
-                }
-              ]
+              }
             }
           ]
         },
@@ -2050,15 +2054,16 @@
         },
         {
           "id": "pyo3-serde-bridge",
-          "kind": "tuple",
+          "kind": "type-identity",
           "members": [
             "pyo3",
             "serde-pyobject"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "tei-rapporteur",
           "provenance": [
-            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name",
+            "serde-pyobject converts to and from pyo3 types, so an ignore rule would freeze the bridge and let a PyO3 bump arrive alone; the two move together"
           ]
         },
         {
@@ -2292,6 +2297,282 @@
       "exceptions": [],
       "problems": []
     },
+    "maturin_pyo3_ignored": {
+      "schema_version": 1,
+      "kind": "policy-input/dependency-family-contracts",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "relationships_version": 1,
+      "relationships": [
+        {
+          "id": "pyo3-build-config-family",
+          "kind": "family",
+          "members": [
+            "pyo3",
+            "pyo3-build-config"
+          ],
+          "relation": "same-group",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml declares pyo3 and pyo3-build-config at one version",
+            "leynos/tei-rapporteur#185 (the 0.29.2 update failed on a source deprecation, not on the family)"
+          ]
+        },
+        {
+          "id": "pyo3-serde-bridge",
+          "kind": "type-identity",
+          "members": [
+            "pyo3",
+            "serde-pyobject"
+          ],
+          "relation": "same-group",
+          "owner": "tei-rapporteur",
+          "provenance": [
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name",
+            "serde-pyobject converts to and from pyo3 types, so an ignore rule would freeze the bridge and let a PyO3 bump arrive alone; the two move together"
+          ]
+        },
+        {
+          "id": "maturin-pyo3",
+          "kind": "tuple",
+          "members": [
+            "maturin",
+            "pyo3"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins maturin and rust/cuprum-rust builds PyO3 (leynos/cuprum#589)",
+            "femtologging pyproject.toml pins maturin[patchelf] and rust_extension/Cargo.toml declares PyO3 0.29.0"
+          ]
+        },
+        {
+          "id": "ortho-config-fluent-bundle",
+          "kind": "type-identity",
+          "members": [
+            "ortho_config",
+            "fluent-bundle"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml constrains fluent-bundle to the version ortho_config resolves, or the FluentValue types would differ"
+          ]
+        },
+        {
+          "id": "rustcrypto-digest-family",
+          "kind": "family",
+          "members": [
+            "digest",
+            "sha2",
+            "sha1",
+            "md-5"
+          ],
+          "relation": "same-group",
+          "owner": "netsuke",
+          "provenance": [
+            "netsuke Cargo.toml declares digest, sha2, sha1 and md-5 at 0.11 (leynos/netsuke#477, closed)"
+          ]
+        },
+        {
+          "id": "pylint-astroid",
+          "kind": "family",
+          "members": [
+            "pylint",
+            "astroid"
+          ],
+          "relation": "same-group",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml pins Pylint 4.0.9 and Astroid 4.0.4 as a mutually compatible pair, and Pylint declares the Astroid range it supports, so the pair moves together"
+          ]
+        },
+        {
+          "id": "pytest-pytest-bdd",
+          "kind": "tuple",
+          "members": [
+            "pytest",
+            "pytest-bdd"
+          ],
+          "relation": "upper-bound-or-ignore",
+          "owner": "cuprum",
+          "provenance": [
+            "cuprum pyproject.toml constrains pytest below 9.1 until pytest-bdd supports its node-based fixtures (leynos/cuprum#384)"
+          ]
+        }
+      ],
+      "declarations": [
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "pyo3",
+          "package": "pyo3",
+          "requirement": "0.28.3",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.28.3"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "pyo3",
+            "catch_all": false,
+            "matching": [
+              "pyo3",
+              "minor-and-patch"
+            ],
+            "matching_narrow": [
+              "pyo3"
+            ],
+            "ignored": true,
+            "reason": null
+          }
+        },
+        {
+          "manifest": "Cargo.toml",
+          "ecosystem": "cargo",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "pyo3-build-config",
+          "package": "pyo3-build-config",
+          "requirement": "0.28.3",
+          "requirement_kind": "caret",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [
+              "0.28.3"
+            ],
+            "lock": "Cargo.lock",
+            "reason": null
+          },
+          "coverage": {
+            "entry": 0,
+            "group": "pyo3",
+            "catch_all": false,
+            "matching": [
+              "pyo3",
+              "minor-and-patch"
+            ],
+            "matching_narrow": [
+              "pyo3"
+            ],
+            "ignored": false,
+            "reason": null
+          }
+        },
+        {
+          "manifest": "pyproject.toml",
+          "ecosystem": "pip",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "maturin",
+          "package": "maturin",
+          "requirement": "==1.13.3",
+          "requirement_kind": "exact",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [],
+            "lock": null,
+            "reason": "uv.lock is absent"
+          },
+          "coverage": {
+            "entry": 1,
+            "group": "minor-and-patch",
+            "catch_all": true,
+            "matching": [
+              "minor-and-patch"
+            ],
+            "matching_narrow": [],
+            "ignored": false,
+            "reason": null
+          }
+        }
+      ],
+      "config": {
+        "path": ".github/dependabot.yml",
+        "parsed": {
+          "version": 2,
+          "updates": [
+            {
+              "package-ecosystem": "cargo",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "pyo3": {
+                  "patterns": [
+                    "pyo3",
+                    "pyo3-build-config"
+                  ]
+                },
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              },
+              "ignore": [
+                {
+                  "dependency-name": "pyo3",
+                  "versions": [
+                    ">=0.9"
+                  ]
+                }
+              ]
+            },
+            {
+              "package-ecosystem": "pip",
+              "directory": "/",
+              "schedule": {
+                "interval": "daily"
+              },
+              "groups": {
+                "minor-and-patch": {
+                  "patterns": [
+                    "*"
+                  ],
+                  "update-types": [
+                    "minor",
+                    "patch"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "error": null,
+        "group_order": [
+          [
+            "pyo3",
+            "minor-and-patch"
+          ],
+          [
+            "minor-and-patch"
+          ]
+        ]
+      },
+      "exceptions": [],
+      "problems": []
+    },
     "maturin_bounded": {
       "schema_version": 1,
       "kind": "policy-input/dependency-family-contracts",
@@ -2317,15 +2598,16 @@
         },
         {
           "id": "pyo3-serde-bridge",
-          "kind": "tuple",
+          "kind": "type-identity",
           "members": [
             "pyo3",
             "serde-pyobject"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "tei-rapporteur",
           "provenance": [
-            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name",
+            "serde-pyobject converts to and from pyo3 types, so an ignore rule would freeze the bridge and let a PyO3 bump arrive alone; the two move together"
           ]
         },
         {
@@ -2584,15 +2866,16 @@
         },
         {
           "id": "pyo3-serde-bridge",
-          "kind": "tuple",
+          "kind": "type-identity",
           "members": [
             "pyo3",
             "serde-pyobject"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "tei-rapporteur",
           "provenance": [
-            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name",
+            "serde-pyobject converts to and from pyo3 types, so an ignore rule would freeze the bridge and let a PyO3 bump arrive alone; the two move together"
           ]
         },
         {
@@ -2755,15 +3038,16 @@
         },
         {
           "id": "pyo3-serde-bridge",
-          "kind": "tuple",
+          "kind": "type-identity",
           "members": [
             "pyo3",
             "serde-pyobject"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "tei-rapporteur",
           "provenance": [
-            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name",
+            "serde-pyobject converts to and from pyo3 types, so an ignore rule would freeze the bridge and let a PyO3 bump arrive alone; the two move together"
           ]
         },
         {
@@ -2972,15 +3256,16 @@
         },
         {
           "id": "pyo3-serde-bridge",
-          "kind": "tuple",
+          "kind": "type-identity",
           "members": [
             "pyo3",
             "serde-pyobject"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "tei-rapporteur",
           "provenance": [
-            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name",
+            "serde-pyobject converts to and from pyo3 types, so an ignore rule would freeze the bridge and let a PyO3 bump arrive alone; the two move together"
           ]
         },
         {
@@ -3176,15 +3461,16 @@
         },
         {
           "id": "pyo3-serde-bridge",
-          "kind": "tuple",
+          "kind": "type-identity",
           "members": [
             "pyo3",
             "serde-pyobject"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "tei-rapporteur",
           "provenance": [
-            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name",
+            "serde-pyobject converts to and from pyo3 types, so an ignore rule would freeze the bridge and let a PyO3 bump arrive alone; the two move together"
           ]
         },
         {
@@ -3389,15 +3675,16 @@
         },
         {
           "id": "pyo3-serde-bridge",
-          "kind": "tuple",
+          "kind": "type-identity",
           "members": [
             "pyo3",
             "serde-pyobject"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "tei-rapporteur",
           "provenance": [
-            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name",
+            "serde-pyobject converts to and from pyo3 types, so an ignore rule would freeze the bridge and let a PyO3 bump arrive alone; the two move together"
           ]
         },
         {
@@ -3593,15 +3880,16 @@
         },
         {
           "id": "pyo3-serde-bridge",
-          "kind": "tuple",
+          "kind": "type-identity",
           "members": [
             "pyo3",
             "serde-pyobject"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "tei-rapporteur",
           "provenance": [
-            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name",
+            "serde-pyobject converts to and from pyo3 types, so an ignore rule would freeze the bridge and let a PyO3 bump arrive alone; the two move together"
           ]
         },
         {
@@ -3743,15 +4031,16 @@
         },
         {
           "id": "pyo3-serde-bridge",
-          "kind": "tuple",
+          "kind": "type-identity",
           "members": [
             "pyo3",
             "serde-pyobject"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "tei-rapporteur",
           "provenance": [
-            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name",
+            "serde-pyobject converts to and from pyo3 types, so an ignore rule would freeze the bridge and let a PyO3 bump arrive alone; the two move together"
           ]
         },
         {
@@ -3953,15 +4242,16 @@
         },
         {
           "id": "pyo3-serde-bridge",
-          "kind": "tuple",
+          "kind": "type-identity",
           "members": [
             "pyo3",
             "serde-pyobject"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "tei-rapporteur",
           "provenance": [
-            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name",
+            "serde-pyobject converts to and from pyo3 types, so an ignore rule would freeze the bridge and let a PyO3 bump arrive alone; the two move together"
           ]
         },
         {
@@ -4159,15 +4449,16 @@
         },
         {
           "id": "pyo3-serde-bridge",
-          "kind": "tuple",
+          "kind": "type-identity",
           "members": [
             "pyo3",
             "serde-pyobject"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "tei-rapporteur",
           "provenance": [
-            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name",
+            "serde-pyobject converts to and from pyo3 types, so an ignore rule would freeze the bridge and let a PyO3 bump arrive alone; the two move together"
           ]
         },
         {
@@ -4328,15 +4619,16 @@
         },
         {
           "id": "pyo3-serde-bridge",
-          "kind": "tuple",
+          "kind": "type-identity",
           "members": [
             "pyo3",
             "serde-pyobject"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "tei-rapporteur",
           "provenance": [
-            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name",
+            "serde-pyobject converts to and from pyo3 types, so an ignore rule would freeze the bridge and let a PyO3 bump arrive alone; the two move together"
           ]
         },
         {
@@ -4471,15 +4763,16 @@
         },
         {
           "id": "pyo3-serde-bridge",
-          "kind": "tuple",
+          "kind": "type-identity",
           "members": [
             "pyo3",
             "serde-pyobject"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "tei-rapporteur",
           "provenance": [
-            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name",
+            "serde-pyobject converts to and from pyo3 types, so an ignore rule would freeze the bridge and let a PyO3 bump arrive alone; the two move together"
           ]
         },
         {
@@ -4614,15 +4907,16 @@
         },
         {
           "id": "pyo3-serde-bridge",
-          "kind": "tuple",
+          "kind": "type-identity",
           "members": [
             "pyo3",
             "serde-pyobject"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "tei-rapporteur",
           "provenance": [
-            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name",
+            "serde-pyobject converts to and from pyo3 types, so an ignore rule would freeze the bridge and let a PyO3 bump arrive alone; the two move together"
           ]
         },
         {
@@ -4755,15 +5049,16 @@
         },
         {
           "id": "pyo3-serde-bridge",
-          "kind": "tuple",
+          "kind": "type-identity",
           "members": [
             "pyo3",
             "serde-pyobject"
           ],
-          "relation": "upper-bound-or-ignore",
+          "relation": "same-group",
           "owner": "tei-rapporteur",
           "provenance": [
-            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name"
+            "tei-rapporteur tei-py/Cargo.toml renames serde-pyobject to pyo3-serde; Dependabot matches the published name",
+            "serde-pyobject converts to and from pyo3 types, so an ignore rule would freeze the bridge and let a PyO3 bump arrive alone; the two move together"
           ]
         },
         {
