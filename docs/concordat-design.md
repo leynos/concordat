@@ -1771,6 +1771,12 @@ The following table serves as the master list of requirements for the Auditor.
 It defines the scope of work for implementation, and provides an itemized
 breakdown of what constitutes "compliance" within the framework.
 
+A check ID's prefix names its family, and a new family takes a prefix no row
+below already uses. `DG-` (documentation gate) is allocated to the
+`documentation-presence` package: DG-001 and DG-002 are the Python docstring
+gate, and DG-003 onwards are the Rust `missing_docs` rules. `DP-` stays with
+the dependency-pin actionability checks.
+
 #### Table 3: Auditor check catalogue
 
 | **Check ID** | **Description**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | **Audit Domain**                | **Implementation Tool**                                             | **Default Severity** | **Implementation Phase** |
