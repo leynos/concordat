@@ -160,34 +160,45 @@ _layouts = st.lists(
 )
 
 
+def _write_layout(
+    checkout: pathlib.Path, directories: list[tuple[str, ...]], *, declared: bool
+) -> None:
+    """Write a Cargo manifest in each directory, and the declaration if asked."""
+    for parts in directories:
+        manifest = checkout.joinpath(*parts, "Cargo.toml")
+        manifest.parent.mkdir(parents=True, exist_ok=True)
+        manifest.write_text(_MANIFEST, encoding="utf-8")
+    if declared:
+        (checkout / ".concordat").write_text(
+            "language:\n  rust:\n    surfaces: []\n", encoding="utf-8"
+        )
+
+
+def _is_eligible(parts: tuple[str, ...]) -> bool:
+    """Return whether a manifest in *parts* is nested and outside skipped trees."""
+    hidden = any(part.startswith(".") or part in _SKIPPED for part in parts)
+    return bool(parts) and not hidden
+
+
 @given(directories=_layouts, declared=st.booleans())
 def test_every_ungoverned_cargo_manifest_is_named_exactly_once(
     directories: list[tuple[str, ...]], *, declared: bool
 ) -> None:
     """Without declared surfaces each eligible nested manifest is a problem."""
-    with tempfile.TemporaryDirectory() as raw:
-        checkout = pathlib.Path(raw)
-        for parts in directories:
-            manifest = checkout.joinpath(*parts, "Cargo.toml")
-            manifest.parent.mkdir(parents=True, exist_ok=True)
-            manifest.write_text(_MANIFEST, encoding="utf-8")
-        if declared:
-            (checkout / ".concordat").write_text(
-                "language:\n  rust:\n    surfaces: []\n", encoding="utf-8"
-            )
-        expected = sorted(
+    expected = (
+        []
+        if declared
+        else sorted(
             "/".join((*parts, "Cargo.toml"))
             for parts in directories
-            if parts
-            and not any(p.startswith(".") or p in _SKIPPED for p in parts)
-            and not declared
+            if _is_eligible(parts)
         )
-
+    )
+    with tempfile.TemporaryDirectory() as raw:
+        checkout = pathlib.Path(raw)
+        _write_layout(checkout, directories, declared=declared)
         problems = build_dependency_family_envelope(checkout)["problems"]
 
-    named = sorted(
-        problem.split(" is a Cargo manifest", 1)[0]
-        for problem in problems
-        if " is a Cargo manifest outside" in problem
-    )
+    marker = " is a Cargo manifest outside"
+    named = sorted(p.split(marker, 1)[0] for p in problems if marker in p)
     assert named == expected
