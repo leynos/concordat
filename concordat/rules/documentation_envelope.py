@@ -1,16 +1,23 @@
 """Build the `policy-input/documentation-presence` envelope.
 
-The documentation-presence rule package holds a checkout to one standard: every
-Python file it owns is covered by an `interrogate` run that `make lint` reaches,
-at a threshold of 100, with no relaxing ignore flag, and with a guard that
-fails on any `MISSED` row. The policy cannot decide that from raw Makefile
+The documentation-presence rule package holds a checkout to two standards. For
+Python (DG-001, DG-002), every file it owns is covered by an `interrogate` run
+that `make lint` reaches, at a threshold of 100, with no relaxing ignore flag,
+and with a guard that fails on any `MISSED` row. For Rust (DG-003, DG-004),
+every library crate denies `missing_docs`, without unreasoned suppressions, and
+`make lint` reaches `cargo clippy`. The policy cannot decide the Python half
+from raw Makefile
 text, because the run is usually spelled through variables
 (`$(INTERROGATE) $(INTERROGATE_TARGETS)`) and sits in a target the `lint`
 target reaches only through prerequisites. This module therefore does the
 mechanical part: it expands the Make variables the Makefile defines
 (`makefile_expansion`), follows `lint` through its prerequisites and `make`
 commands, and records every `interrogate` invocation it finds as a structured
-fact (`interrogate_invocation`). The policy decides what the facts mean.
+fact (`interrogate_invocation`). The Rust half is collected by
+`documentation_rust` (crates, lint levels, crate-root attributes and
+suppressions, via `rust_source`) and `rust_clippy` (the `cargo clippy` commands
+`lint` reaches); this module combines those facts with the Python and Makefile
+ones into one envelope. The policy decides what the facts mean.
 
 Each fact is recorded as it was found. A recipe the expansion could not fully
 resolve (a Make function, an unset variable, a quoting the lexer rejects) is

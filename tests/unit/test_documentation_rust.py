@@ -5,8 +5,13 @@ from __future__ import annotations
 import typing as typ
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
+from concordat.errors import OperationalRuleError
+from concordat.rules import fs_probe
 from concordat.rules.documentation_envelope import build_documentation_envelope
+from concordat.rules.fs_probe import FileProbe
 from concordat.rules.rust_source import (
     leading_attributes,
     mask_literals,
@@ -314,3 +319,85 @@ def test_character_literals_are_blanked_and_lifetimes_are_not(literal: str) -> N
     """A character literal's body is blanked; a lifetime's is not."""
     assert mask_literals(literal) == "'" + " " * (len(literal) - 2) + "'"
     assert mask_literals("&'a str") == "&'a str"
+
+
+def test_a_top_level_library_root_does_not_read_the_crates_other_targets(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A top-level library root must not pull in tests and benches."""
+    _write(tmp_path, "Cargo.toml", LIB_MANIFEST + '[lib]\npath = "lib.rs"\n')
+    _write(tmp_path, "lib.rs", "#![deny(missing_docs)]\nmod m;\n")
+    _write(tmp_path, "m.rs", "#[allow(missing_docs)]\npub fn f() {}\n")
+    _write(tmp_path, "tests/it.rs", "#![allow(missing_docs)]\n")
+    _write(tmp_path, "benches/b.rs", "#![allow(missing_docs)]\n")
+
+    (crate,) = _crates(tmp_path)
+
+    assert [item["file"] for item in crate["suppressions"]] == ["m.rs"]
+
+
+def test_a_source_directory_the_filesystem_refuses_to_describe_is_an_error(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A refused probe is an audit failure, never a library with no sources."""
+    _write(tmp_path, "Cargo.toml", LIB_MANIFEST)
+    _write(tmp_path, "src/lib.rs", "")
+    monkeypatch.setattr(
+        fs_probe,
+        "probe_dir",
+        lambda _path: FileProbe(present=False, read_error="permission denied"),
+    )
+
+    with pytest.raises(OperationalRuleError, match="permission denied"):
+        _crates(tmp_path)
+
+
+_RUST_PIECES: typ.Final = st.sampled_from([
+    "#[allow(missing_docs)]",
+    "/* ",
+    " */",
+    "/*",
+    "//",
+    '"',
+    'r#"',
+    '"#',
+    "'a",
+    "'x'",
+    "'\\n'",
+    "\\",
+    "\n",
+    " ",
+    "fn f() {}",
+    "#![deny(missing_docs)]",
+    "(",
+    ")",
+    "[",
+    "]",
+])
+
+
+@given(st.lists(_RUST_PIECES, max_size=30).map("".join))
+def test_masking_preserves_length_and_line_structure(source: str) -> None:
+    """Whatever the input, masking never moves a byte or a line."""
+    masked = mask_literals(source)
+
+    assert len(masked) == len(source)
+    assert [i for i, c in enumerate(masked) if c == "\n"] == [
+        i for i, c in enumerate(source) if c == "\n"
+    ]
+
+
+@given(st.lists(_RUST_PIECES, max_size=30).map("".join))
+def test_masking_is_idempotent_and_never_adds_attributes(source: str) -> None:
+    """Masked text masks to itself, and masking cannot create an attribute."""
+    masked = mask_literals(source)
+
+    assert mask_literals(masked) == masked
+    assert masked.count("#[allow") <= source.count("#[allow")
+
+
+def test_code_after_a_raw_string_is_still_scanned() -> None:
+    """The closing delimiter ends the raw string; what follows is source again."""
+    source = 'const S: &str = r#"x"#;\n#[allow(missing_docs)]\nmod m;\n'
+
+    assert suppressions_in(source) == [(2, "allow", False)]

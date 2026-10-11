@@ -208,10 +208,13 @@ def _mask_raw_string(source: str, index: int) -> Masked | None:
     opening = _RAW_STRING_OPEN.match(source, index)
     if opening is None:
         return None
+    closing = '"' + opening.group(1)
     body_start = opening.end()
-    close = source.find('"' + opening.group(1), body_start)
-    end = len(source) if close == -1 else close
-    return opening.group(0) + _blank(source[body_start:end]), end
+    close = source.find(closing, body_start)
+    if close == -1:
+        return opening.group(0) + _blank(source[body_start:]), len(source)
+    body = _blank(source[body_start:close])
+    return opening.group(0) + body + closing, close + len(closing)
 
 
 def _mask_string(source: str, index: int) -> Masked | None:

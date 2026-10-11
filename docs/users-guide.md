@@ -722,6 +722,24 @@ missing or not TOML, or a `lint` target it cannot follow makes the affected
 check indeterminate rather than passing it. The package README carries the
 reference Makefile wiring.
 
+#### Upgrading to rule 0.2.0
+
+Version 0.2.0 of `documentation-presence` adds the Rust rules. Repositories
+that own no Rust library crate see no change. A repository that owns one is now
+audited for DG-003 and DG-004, including a Rust-only repository that owns no
+Python, which 0.1.0 treated as out of scope. To remediate:
+
+1. Set `missing_docs = "deny"` in `[workspace.lints.rust]` (or in each crate's
+   `[lints.rust]`) and add `[lints] workspace = true` to every member that
+   should inherit it. Document the public items the lint then reports.
+2. Give every module-level or item-level `allow(missing_docs)` or
+   `expect(missing_docs)` a `reason`, or remove it. Only generated or
+   macro-produced items justify one.
+3. Make sure `make lint` reaches a `cargo clippy` command written in the
+   recipe (a wrapper script that runs clippy out of sight reads as
+   noncompliant). Indeterminate findings name the manifest, source file or
+   recipe line the audit could not read.
+
 ### Auditing Markdown formatting wiring
 
 The `markdown-formatting-baseline` package audits how a checkout formats and

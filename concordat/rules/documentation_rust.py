@@ -31,6 +31,7 @@ import typing as typ
 
 from .markdown_envelope import (
     PRUNED_DIRECTORIES,
+    _is_dir,
     _is_symlink,
     _raise_walk_error,
     _read_text,
@@ -62,6 +63,15 @@ RUST_PRUNED_DIRECTORIES: typ.Final = PRUNED_DIRECTORIES | frozenset({
     "fixtures_macros",
     "templates",
     "examples",
+})
+
+
+# Separate cargo targets that live beside the library: when the root is top-level
+# (`[lib] path = "lib.rs"`) the walk starts at the package directory and must not
+# read their suppressions as the library's.
+RUST_SOURCE_PRUNED_DIRECTORIES: typ.Final = RUST_PRUNED_DIRECTORIES | frozenset({
+    "tests",
+    "benches",
 })
 
 
@@ -217,11 +227,13 @@ def _rust_files(
         Each regular `.rs` file under the tree.
     """
     base = checkout / pathlib.PurePosixPath(root_relative).parent
-    if not within_checkout(root, base, OPERATION_SCAN_RUST) or not base.is_dir():
+    if not within_checkout(root, base, OPERATION_SCAN_RUST) or not _is_dir(
+        base, OPERATION_SCAN_RUST
+    ):
         return
     for current, directories, files in os.walk(base, onerror=_raise_walk_error):
         directories[:] = sorted(
-            name for name in directories if name not in RUST_PRUNED_DIRECTORIES
+            name for name in directories if name not in RUST_SOURCE_PRUNED_DIRECTORIES
         )
         for name in sorted(files):
             path = pathlib.Path(current) / name
