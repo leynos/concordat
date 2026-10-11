@@ -305,3 +305,12 @@ def test_masking_keeps_the_length_the_quotes_and_the_line_numbers() -> None:
     assert len(masked) == len(source)
     assert masked.count("\n") == source.count("\n")
     assert suppressions_in(source) == [(3, "expect", True)]
+
+
+@pytest.mark.parametrize(
+    "literal", ["'x'", "'#'", "'\\n'", "'\\''", "'\\u{1F600}'", "'\\x41'"]
+)
+def test_character_literals_are_blanked_and_lifetimes_are_not(literal: str) -> None:
+    """A character literal's body is blanked; a lifetime's is not."""
+    assert mask_literals(literal) == "'" + " " * (len(literal) - 2) + "'"
+    assert mask_literals("&'a str") == "&'a str"

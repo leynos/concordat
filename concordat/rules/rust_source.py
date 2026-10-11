@@ -17,6 +17,9 @@ LINT_NAME: typ.Final = "missing_docs"
 LINT_KINDS: typ.Final = frozenset({"deny", "forbid", "warn", "allow", "expect"})
 _ATTRIBUTE_START: typ.Final = re.compile(r"#!?\[")
 _COMMENT_EDGE: typ.Final = re.compile(r"/\*|\*/")
+# A character literal is one character or one escape (`\n`, `\'`, `\u{1F600}`); a
+# lifetime (`'a`) has no closing quote, so it never matches.
+_CHAR_LITERAL: typ.Final = re.compile(r"'(?:\\.[^']*|[^\\'])'")
 _RAW_STRING_OPEN: typ.Final = re.compile(r'b?r(#*)"')
 
 type Masked = tuple[str, int]
@@ -222,16 +225,10 @@ def _mask_string(source: str, index: int) -> Masked | None:
 
 def _mask_char(source: str, index: int) -> Masked | None:
     """Blank the character literal at *index*; a lifetime is left alone."""
-    if source[index] != "'":
+    literal = _CHAR_LITERAL.match(source, index)
+    if literal is None:
         return None
-    if source.startswith("\\", index + 1):
-        close = source.find("'", index + 3)
-        end = None if close == -1 else close + 1
-    else:
-        end = index + 3 if source.startswith("'", index + 2) else None
-    if end is None:
-        return None
-    return "'" + _blank(source[index + 1 : end - 1]) + "'", end
+    return "'" + _blank(literal.group()[1:-1]) + "'", literal.end()
 
 
 _MASKS: typ.Final = (
