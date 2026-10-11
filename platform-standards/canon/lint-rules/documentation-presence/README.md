@@ -111,8 +111,14 @@ A single crate sets `[lints.rust] missing_docs = "deny"` itself.
   without a `reason` fails. `#![cfg_attr(not(test), deny(missing_docs))]`
   counts as a deny; any other `cfg_attr` condition leaves a configuration
   unchecked and is indeterminate, as is a manifest that is not valid TOML or a
-  library root that is absent. Item-level `#[allow(missing_docs)]` is outside
-  the rule.
+  library root that is absent. Module-level and item-level suppressions hide
+  items from a crate whose root denies the lint, so any `allow(missing_docs)` or
+  `expect(missing_docs)` (`#[...]` or `#![...]`, also inside `cfg_attr`) in
+  the library's source tree (the directory of its root, usually `src/`) needs a
+  `reason`; one without fails. The reason is what the rule checks: that the
+  code is generated or macro-produced (diesel's `schema.rs` is the model) is
+  for the reviewer. Tests, benches and examples are separate crates and are not
+  scanned.
 - **DG-004** (error): a clippy invocation (`cargo clippy`, `$(CARGO) clippy`) is
   reachable from `make lint`, so the gate compiles the crates under the lint
   level. No root `Makefile`, no `lint` target, or no clippy run in the targets

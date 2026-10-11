@@ -58,6 +58,22 @@ test_rust_manifest_invalid if rust_reported(data.fixtures.rust_manifest_invalid)
 
 test_rust_root_missing if rust_reported(data.fixtures.rust_root_missing) == {"DG-003/indeterminate"}
 
+# Module and item level suppressions need a reason; tests are other crates.
+test_rust_item_expect_with_reason if rust_reported(data.fixtures.rust_item_expect_with_reason) == set()
+
+test_rust_item_allow_without_reason if rust_reported(data.fixtures.rust_item_allow_without_reason) == {"DG-003/noncompliant"}
+
+test_rust_item_expect_without_reason if rust_reported(data.fixtures.rust_item_expect_without_reason) == {"DG-003/noncompliant"}
+
+test_rust_suppression_in_tests_ignored if rust_reported(data.fixtures.rust_suppression_in_tests_ignored) == set()
+
+test_rust_item_allow_points_at_the_file if {
+	findings := rust_findings(data.fixtures.rust_item_allow_without_reason)
+	findings[0].path == "src/lib.rs"
+	findings[0].line == 0
+	contains(findings[0].msg, "line 2")
+}
+
 # Only the crate that fails is named, and the finding points at its manifest.
 test_rust_one_member_unset_names_the_crate if {
 	findings := rust_findings(data.fixtures.rust_one_member_unset)

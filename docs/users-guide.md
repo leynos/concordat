@@ -712,7 +712,9 @@ For a checkout that owns Rust library crates the same package also reports:
   crate inherits with `[lints] workspace = true`, or through a crate-root
   `#![deny(missing_docs)]` (which beats the manifest). `warn` and `allow` fail;
   a crate-root `#![expect(missing_docs, reason = "...")]` is accepted for
-  generated items, and an `expect` without a reason fails.
+  generated items, and an `expect` without a reason fails. Any module-level or
+  item-level `allow` or `expect` of `missing_docs` in the library's sources
+  also needs a reason.
 - **DG-004**: a clippy run is reachable from `make lint`.
 
 A variable the audit cannot resolve to one value, a configuration file that is

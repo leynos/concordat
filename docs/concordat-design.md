@@ -2438,9 +2438,17 @@ required, so `clippy::missing_docs_in_private_items` is not used.
   accepted, for items a derive macro generates (mxd's `cli-defs` is the
   precedent). The reason is mandatory. Vendored upstream code that deliberately
   allows the lint is exempted by repository, not by the rule.
-- **Limit:** item-level `#[allow(missing_docs)]` or `#[expect]` is not audited;
-  the rule checks the crate-level contract. The roll-out's survey measures the
-  residue with `--force-warn missing_docs`.
+- **Suppressions:** the builder also scans the library's source tree for
+  module-level and item-level `allow` or `expect` of `missing_docs`, because
+  each hides items from a crate whose root denies the lint (mxd's survey found
+  78 such items). Each needs a `reason`; whether the code is generated is for
+  the reviewer. Tests, benches and examples are separate crates and are not
+  scanned. The roll-out's survey measures the residue with
+  `--force-warn missing_docs`.
+- **Mutation proof:** each DG-003 and DG-004 clause was mutated in the policy
+  (reason check inverted, suppression finding disabled, `allow` no longer
+  flagged, the `cfg_attr` condition ignored, the clippy requirement dropped)
+  and each mutation fails at least one fixture test.
 - **Reachability (DG-004):** the lint fails builds only where a gate compiles
   the crate, so the rule requires a clippy run reachable from `lint`; a plain
   `cargo check` in `lint` would also compile it but the estate's gates are

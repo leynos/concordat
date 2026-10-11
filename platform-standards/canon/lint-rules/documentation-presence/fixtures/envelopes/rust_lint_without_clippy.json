@@ -32,7 +32,9 @@
         "manifest_level": "deny",
         "inherits_workspace": false,
         "workspace_level": null,
-        "attributes": []
+        "attributes": [],
+        "suppressions": [],
+        "source_errors": []
       }
     ],
     "errors": []

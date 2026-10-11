@@ -426,6 +426,32 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
         "Cargo.toml": crate_manifest(),
         "src/lib.rs": '#![cfg_attr(feature = "docs", deny(missing_docs))]\n',
     }),
+    "rust_item_expect_with_reason": rust_scenario({
+        "Cargo.toml": crate_manifest('[lints.rust]\nmissing_docs = "deny"\n'),
+        "src/lib.rs": LIB_ROOT + "mod schema;\n",
+        "src/schema.rs": (
+            "#![expect(\n"
+            "    missing_docs,\n"
+            '    reason = "diesel macros generate undocumented items"\n'
+            ")]\n"
+            "pub fn generated() {}\n"
+        ),
+    }),
+    "rust_item_allow_without_reason": rust_scenario({
+        "Cargo.toml": crate_manifest('[lints.rust]\nmissing_docs = "deny"\n'),
+        "src/lib.rs": LIB_ROOT + "#[allow(missing_docs)]\npub mod hidden;\n",
+        "src/hidden.rs": "pub fn undocumented() {}\n",
+    }),
+    "rust_item_expect_without_reason": rust_scenario({
+        "Cargo.toml": crate_manifest('[lints.rust]\nmissing_docs = "deny"\n'),
+        "src/lib.rs": LIB_ROOT + "pub mod nested;\n",
+        "src/nested.rs": "#![expect(missing_docs)]\npub fn undocumented() {}\n",
+    }),
+    "rust_suppression_in_tests_ignored": rust_scenario({
+        "Cargo.toml": crate_manifest('[lints.rust]\nmissing_docs = "deny"\n'),
+        "src/lib.rs": LIB_ROOT,
+        "tests/it.rs": "#![allow(missing_docs)]\n",
+    }),
     "rust_manifest_invalid": rust_scenario({
         "Cargo.toml": "[package\n",
     }),

@@ -16,8 +16,9 @@ decides nothing: the policy turns the facts into a verdict. A manifest or crate
 root it cannot read is carried with an error, so the policy reports an
 indeterminate verdict rather than judging text it could not parse.
 
-Item-level suppressions (`#[allow(missing_docs)]` on a module) are out of
-scope: the rule checks the crate-level contract, not every item.
+Module-level and item-level suppressions (`#[allow(missing_docs)]` on a module
+or item) are recorded too, from the library's source tree, because each hides
+items from a crate whose root denies the lint. The policy requires a reason.
 """
 
 from __future__ import annotations
@@ -47,6 +48,7 @@ LINT_NAME: typ.Final = "missing_docs"
 OPERATION_READ_CARGO: typ.Final = "read-cargo-manifest"
 OPERATION_READ_CRATE_ROOT: typ.Final = "read-crate-root"
 OPERATION_SCAN_CARGO: typ.Final = "scan-cargo-manifests"
+OPERATION_SCAN_RUST: typ.Final = "scan-rust-sources"
 
 # Trees whose crates are test data, samples or third-party code, not crates the
 # repository owns and publishes. A fixture crate that is deliberately
@@ -81,6 +83,15 @@ class RootAttribute(typ.TypedDict):
     condition: str | None
 
 
+class Suppression(typ.TypedDict):
+    """A `missing_docs` allow or expect on a module or item, not the crate root."""
+
+    file: str
+    line: int
+    kind: str
+    has_reason: bool
+
+
 class RustCrate(typ.TypedDict):
     """The `missing_docs` facts of one library crate."""
 
@@ -92,6 +103,8 @@ class RustCrate(typ.TypedDict):
     inherits_workspace: bool
     workspace_level: str | None
     attributes: list[RootAttribute]
+    suppressions: list[Suppression]
+    source_errors: list[str]
 
 
 class ClippyRun(typ.TypedDict):
@@ -283,7 +296,7 @@ def _lint_attributes(body: str, condition: str | None) -> typ.Iterator[RootAttri
         }
 
 
-def root_attributes(source: str) -> list[RootAttribute]:
+def leading_attributes(source: str) -> tuple[list[RootAttribute], int]:
     """Return the `missing_docs` inner attributes at the top of a crate root.
 
     Inner attributes must precede every item, so reading stops at the first
@@ -291,8 +304,8 @@ def root_attributes(source: str) -> list[RootAttribute]:
 
     Returns
     -------
-    list[RootAttribute]
-        The attributes in source order.
+    tuple[list[RootAttribute], int]
+        The attributes in source order, and the index where the run ends.
     """
     found: list[RootAttribute] = []
     index = _skip_trivia(source, 0)
@@ -302,6 +315,44 @@ def root_attributes(source: str) -> list[RootAttribute]:
             break
         found.extend(_lint_attributes(source[index + 3 : end - 1], None))
         index = _skip_trivia(source, end)
+    return found, index
+
+
+_ATTRIBUTE_START: typ.Final = re.compile(r"#!?\[")
+
+
+def suppressions_in(
+    source: str, *, skip_before: int = 0
+) -> list[tuple[int, str, bool]]:
+    """Return the `allow`/`expect` of `missing_docs` anywhere in a source file.
+
+    These are the module-level and item-level suppressions that hide
+    undocumented items from a crate whose root denies the lint. Attributes that
+    start before *skip_before* (the crate root's own leading run, which
+    :func:`leading_attributes` already reports) are left out. A line comment that
+    mentions an attribute is not one, because the scan only sees text that
+    starts with `#[` or `#![` outside a `//` comment.
+
+    Returns
+    -------
+    list[tuple[int, str, bool]]
+        Line number, kind (`allow` or `expect`) and whether a `reason` is given.
+    """
+    found: list[tuple[int, str, bool]] = []
+    for match in _ATTRIBUTE_START.finditer(source):
+        start = match.start()
+        if start < skip_before:
+            continue
+        line_start = source.rfind("\n", 0, start) + 1
+        if source[line_start:start].lstrip().startswith("//"):
+            continue
+        end = _scan_balanced(source, match.end() - 1)
+        if end is None:
+            continue
+        for attribute in _lint_attributes(source[match.end() : end - 1], None):
+            if attribute["kind"] in {"allow", "expect"}:
+                line = source.count("\n", 0, start) + 1
+                found.append((line, attribute["kind"], attribute["has_reason"]))
     return found
 
 
@@ -336,6 +387,50 @@ def _workspace_level(manifest: _Manifest, workspaces: list[_Manifest]) -> str | 
     return None
 
 
+def _scan_sources(
+    checkout: pathlib.Path,
+    root: pathlib.Path,
+    root_relative: str,
+    skip_before: int,
+) -> tuple[list[Suppression], list[str]]:
+    """Scan the library's source tree for module and item level suppressions.
+
+    The tree is the directory holding the library root (`src/`). Tests, benches
+    and examples are separate crates and are not part of the library.
+
+    Returns
+    -------
+    tuple[list[Suppression], list[str]]
+        The suppressions in file and line order, and the files that could not
+        be decoded.
+    """
+    base = checkout / pathlib.PurePosixPath(root_relative).parent
+    found: list[Suppression] = []
+    unreadable: list[str] = []
+    if not within_checkout(root, base, OPERATION_SCAN_RUST) or not base.is_dir():
+        return found, unreadable
+    for current, directories, files in os.walk(base, onerror=_raise_walk_error):
+        directories[:] = sorted(
+            name for name in directories if name not in RUST_PRUNED_DIRECTORIES
+        )
+        for name in sorted(files):
+            path = pathlib.Path(current) / name
+            if not name.endswith(".rs") or _is_symlink(path, OPERATION_SCAN_RUST):
+                continue
+            relative = path.relative_to(checkout).as_posix()
+            try:
+                text = _read_text(path, OPERATION_SCAN_RUST)
+            except UnicodeDecodeError:
+                unreadable.append(relative)
+                continue
+            skip = skip_before if relative == root_relative else 0
+            found.extend(
+                {"file": relative, "line": line, "kind": kind, "has_reason": reason}
+                for line, kind, reason in suppressions_in(text, skip_before=skip)
+            )
+    return found, unreadable
+
+
 def _crate_facts(
     checkout: pathlib.Path,
     root: pathlib.Path,
@@ -355,15 +450,19 @@ def _crate_facts(
     package = manifest.table["package"]
     attributes: list[RootAttribute] = []
     root_error: str | None = None
+    skip_before = 0
     if has_root:
         try:
-            attributes = root_attributes(
+            attributes, skip_before = leading_attributes(
                 _read_text(root_path, OPERATION_READ_CRATE_ROOT)
             )
         except UnicodeDecodeError as error:
             root_error = f"not UTF-8 text: {error}"
     else:
         root_error = "the library root file does not exist"
+    suppressions, source_errors = _scan_sources(
+        checkout, root, root_relative, skip_before
+    )
     return {
         "manifest": manifest.path,
         "name": package.get("name") if isinstance(package.get("name"), str) else None,
@@ -373,6 +472,8 @@ def _crate_facts(
         "inherits_workspace": inherits,
         "workspace_level": _workspace_level(manifest, workspaces) if inherits else None,
         "attributes": attributes,
+        "suppressions": suppressions,
+        "source_errors": source_errors,
     }
 
 

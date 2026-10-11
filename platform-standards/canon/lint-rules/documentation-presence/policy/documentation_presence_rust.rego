@@ -13,6 +13,7 @@
 # `missing_docs` attribute at the root decides when there is one. A crate-root
 # `#![expect(missing_docs, reason = "...")]` is the one accepted exception, for
 # items a derive macro generates and a crate cannot document.
+# Module-level and item-level `allow`/`expect(missing_docs)` need a `reason` too.
 # DG-004: `make lint` reaches clippy, because the lint only fails the build
 # where a gate compiles the crate: `-D warnings` then makes a regression block.
 package canon.lint_rules.documentation_presence
@@ -166,6 +167,34 @@ deny contains f if {
 	f := crate_finding(
 		"DG-003", "noncompliant", crate.manifest,
 		sprintf("%s does not deny `missing_docs` (level: %s); set `missing_docs = \"deny\"` in `[workspace.lints.rust]` and `[lints] workspace = true` in the crate, or in its own `[lints.rust]`", [crate_label(crate), manifest_level(crate)]),
+	)
+}
+
+# Module-level and item-level suppressions hide undocumented items from a crate
+# whose root denies the lint, so each needs a reason. The reason is what the
+# rule can check; that the code is generated or macro-produced is for the
+# reviewer, who reads the reason.
+unreasoned(crate) := [s | some s in object.get(crate, "suppressions", []); not s.has_reason]
+
+deny contains f if {
+	rust_in_scope
+	some crate in rust_crates
+	suppressed := unreasoned(crate)
+	count(suppressed) > 0
+	first := suppressed[0]
+	f := crate_finding(
+		"DG-003", "noncompliant", first.file,
+		sprintf("%s has %d `%s(missing_docs)` suppression(s) without a `reason` (first at line %d); each must give a reason and sit on generated or macro-produced code", [crate_label(crate), count(suppressed), first.kind, first.line]),
+	)
+}
+
+deny contains f if {
+	rust_in_scope
+	some crate in rust_crates
+	some file in object.get(crate, "source_errors", [])
+	f := crate_finding(
+		"DG-003", "indeterminate", file,
+		sprintf("%s has a source file that is not UTF-8 text, so its suppressions cannot be read", [crate_label(crate)]),
 	)
 }
 

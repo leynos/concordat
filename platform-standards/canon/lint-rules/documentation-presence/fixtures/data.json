@@ -2687,7 +2687,9 @@
             "manifest_level": null,
             "inherits_workspace": true,
             "workspace_level": "deny",
-            "attributes": []
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
           }
         ],
         "errors": []
@@ -2734,7 +2736,9 @@
             "manifest_level": "deny",
             "inherits_workspace": false,
             "workspace_level": null,
-            "attributes": []
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
           }
         ],
         "errors": []
@@ -2787,7 +2791,9 @@
                 "has_reason": false,
                 "condition": null
               }
-            ]
+            ],
+            "suppressions": [],
+            "source_errors": []
           }
         ],
         "errors": []
@@ -2840,7 +2846,9 @@
                 "has_reason": false,
                 "condition": "not(test)"
               }
-            ]
+            ],
+            "suppressions": [],
+            "source_errors": []
           }
         ],
         "errors": []
@@ -2893,7 +2901,9 @@
                 "has_reason": true,
                 "condition": null
               }
-            ]
+            ],
+            "suppressions": [],
+            "source_errors": []
           }
         ],
         "errors": []
@@ -2976,7 +2986,9 @@
             "manifest_level": "deny",
             "inherits_workspace": false,
             "workspace_level": null,
-            "attributes": []
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
           }
         ],
         "errors": []
@@ -3023,7 +3035,9 @@
             "manifest_level": null,
             "inherits_workspace": false,
             "workspace_level": null,
-            "attributes": []
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
           }
         ],
         "errors": []
@@ -3070,7 +3084,9 @@
             "manifest_level": null,
             "inherits_workspace": false,
             "workspace_level": null,
-            "attributes": []
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
           }
         ],
         "errors": []
@@ -3117,7 +3133,9 @@
             "manifest_level": null,
             "inherits_workspace": true,
             "workspace_level": "deny",
-            "attributes": []
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
           },
           {
             "manifest": "crates/extra/Cargo.toml",
@@ -3127,7 +3145,9 @@
             "manifest_level": null,
             "inherits_workspace": false,
             "workspace_level": null,
-            "attributes": []
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
           }
         ],
         "errors": []
@@ -3174,7 +3194,9 @@
             "manifest_level": "warn",
             "inherits_workspace": false,
             "workspace_level": null,
-            "attributes": []
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
           }
         ],
         "errors": []
@@ -3227,7 +3249,9 @@
                 "has_reason": false,
                 "condition": null
               }
-            ]
+            ],
+            "suppressions": [],
+            "source_errors": []
           }
         ],
         "errors": []
@@ -3280,7 +3304,9 @@
                 "has_reason": false,
                 "condition": null
               }
-            ]
+            ],
+            "suppressions": [],
+            "source_errors": []
           }
         ],
         "errors": []
@@ -3333,7 +3359,9 @@
                 "has_reason": false,
                 "condition": null
               }
-            ]
+            ],
+            "suppressions": [],
+            "source_errors": []
           }
         ],
         "errors": []
@@ -3386,7 +3414,226 @@
                 "has_reason": false,
                 "condition": "feature = \"docs\""
               }
-            ]
+            ],
+            "suppressions": [],
+            "source_errors": []
+          }
+        ],
+        "errors": []
+      }
+    },
+    "rust_item_expect_with_reason": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": false,
+        "pyproject": false,
+        "rust_library": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [],
+      "python_files": [],
+      "clippy_runs": [
+        {
+          "target": "lint",
+          "line": 4,
+          "command": "cargo clippy --workspace --all-targets -- -D warnings",
+          "resolved": true
+        }
+      ],
+      "rust": {
+        "crates": [
+          {
+            "manifest": "Cargo.toml",
+            "name": "demo",
+            "root": "src/lib.rs",
+            "root_error": null,
+            "manifest_level": "deny",
+            "inherits_workspace": false,
+            "workspace_level": null,
+            "attributes": [],
+            "suppressions": [
+              {
+                "file": "src/schema.rs",
+                "line": 1,
+                "kind": "expect",
+                "has_reason": true
+              }
+            ],
+            "source_errors": []
+          }
+        ],
+        "errors": []
+      }
+    },
+    "rust_item_allow_without_reason": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": false,
+        "pyproject": false,
+        "rust_library": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [],
+      "python_files": [],
+      "clippy_runs": [
+        {
+          "target": "lint",
+          "line": 4,
+          "command": "cargo clippy --workspace --all-targets -- -D warnings",
+          "resolved": true
+        }
+      ],
+      "rust": {
+        "crates": [
+          {
+            "manifest": "Cargo.toml",
+            "name": "demo",
+            "root": "src/lib.rs",
+            "root_error": null,
+            "manifest_level": "deny",
+            "inherits_workspace": false,
+            "workspace_level": null,
+            "attributes": [],
+            "suppressions": [
+              {
+                "file": "src/lib.rs",
+                "line": 2,
+                "kind": "allow",
+                "has_reason": false
+              }
+            ],
+            "source_errors": []
+          }
+        ],
+        "errors": []
+      }
+    },
+    "rust_item_expect_without_reason": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": false,
+        "pyproject": false,
+        "rust_library": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [],
+      "python_files": [],
+      "clippy_runs": [
+        {
+          "target": "lint",
+          "line": 4,
+          "command": "cargo clippy --workspace --all-targets -- -D warnings",
+          "resolved": true
+        }
+      ],
+      "rust": {
+        "crates": [
+          {
+            "manifest": "Cargo.toml",
+            "name": "demo",
+            "root": "src/lib.rs",
+            "root_error": null,
+            "manifest_level": "deny",
+            "inherits_workspace": false,
+            "workspace_level": null,
+            "attributes": [],
+            "suppressions": [
+              {
+                "file": "src/nested.rs",
+                "line": 1,
+                "kind": "expect",
+                "has_reason": false
+              }
+            ],
+            "source_errors": []
+          }
+        ],
+        "errors": []
+      }
+    },
+    "rust_suppression_in_tests_ignored": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": false,
+        "pyproject": false,
+        "rust_library": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [],
+      "python_files": [],
+      "clippy_runs": [
+        {
+          "target": "lint",
+          "line": 4,
+          "command": "cargo clippy --workspace --all-targets -- -D warnings",
+          "resolved": true
+        }
+      ],
+      "rust": {
+        "crates": [
+          {
+            "manifest": "Cargo.toml",
+            "name": "demo",
+            "root": "src/lib.rs",
+            "root_error": null,
+            "manifest_level": "deny",
+            "inherits_workspace": false,
+            "workspace_level": null,
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
           }
         ],
         "errors": []
@@ -3471,7 +3718,9 @@
             "manifest_level": null,
             "inherits_workspace": false,
             "workspace_level": null,
-            "attributes": []
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
           }
         ],
         "errors": []
@@ -3509,7 +3758,9 @@
             "manifest_level": "deny",
             "inherits_workspace": false,
             "workspace_level": null,
-            "attributes": []
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
           }
         ],
         "errors": []
@@ -3547,7 +3798,9 @@
             "manifest_level": "deny",
             "inherits_workspace": false,
             "workspace_level": null,
-            "attributes": []
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
           }
         ],
         "errors": []
@@ -3587,7 +3840,9 @@
             "manifest_level": "deny",
             "inherits_workspace": false,
             "workspace_level": null,
-            "attributes": []
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
           }
         ],
         "errors": []
@@ -3635,7 +3890,9 @@
             "manifest_level": "deny",
             "inherits_workspace": false,
             "workspace_level": null,
-            "attributes": []
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
           }
         ],
         "errors": []
@@ -3682,7 +3939,9 @@
             "manifest_level": "deny",
             "inherits_workspace": false,
             "workspace_level": null,
-            "attributes": []
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
           }
         ],
         "errors": []
@@ -3729,7 +3988,9 @@
             "manifest_level": "deny",
             "inherits_workspace": false,
             "workspace_level": null,
-            "attributes": []
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
           }
         ],
         "errors": []
@@ -3808,7 +4069,9 @@
             "manifest_level": "deny",
             "inherits_workspace": false,
             "workspace_level": null,
-            "attributes": []
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
           }
         ],
         "errors": []

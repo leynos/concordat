@@ -45,7 +45,9 @@
             "has_reason": true,
             "condition": null
           }
-        ]
+        ],
+        "suppressions": [],
+        "source_errors": []
       }
     ],
     "errors": []
