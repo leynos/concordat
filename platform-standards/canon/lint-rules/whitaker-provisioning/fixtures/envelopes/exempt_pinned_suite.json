@@ -2,7 +2,7 @@
   "actions": [],
   "kind": "policy-input/whitaker-provisioning",
   "repository": {
-    "name": "leynos/weaver",
+    "name": "leynos/example-pinned-suite",
     "path": "exempt-pinned-suite"
   },
   "schema_version": 1,

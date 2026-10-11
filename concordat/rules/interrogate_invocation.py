@@ -80,6 +80,11 @@ LAUNCHER_VALUE_FLAGS: typ.Final = frozenset({
     "--directory",
 })
 
+_ASSIGNMENT: typ.Final = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
+# Make removes these from the front of a recipe line before the shell runs it.
+MAKE_PREFIXES: typ.Final = "@-+"
+# Stands before a leading `NAME=value` word the shell saw quoted: a command name.
+QUOTED_MARK: typ.Final = "\x02"
 _NAMES_TOOL: typ.Final = re.compile(r"(?<![\w-])interrogate(?![\w-])")
 _UNRESOLVED_TOOL: typ.Final = re.compile(
     r"\$[({][^)}\s]*interrogate[^)}\s]*[)}]", re.IGNORECASE
@@ -143,6 +148,49 @@ def has_missed_guard(text: str) -> bool:
     return _GUARD.search(neutral) is not None
 
 
+def _tokens(text: str, *, is_posix: bool) -> list[str] | None:
+    """Lex *text* into words (quotes removed when POSIX) and operators, or ``None``."""
+    lexer = shlex.shlex(text, posix=is_posix, punctuation_chars=";&|()")
+    lexer.whitespace_split = True
+    try:
+        return [word.replace(SHELL_DOLLAR, "$") for word in lexer]
+    except ValueError:
+        return None
+
+
+def _split(words: list[str]) -> list[list[str]]:
+    """Group *words* into simple commands at every shell separator."""
+    segments: list[list[str]] = [[]]
+    for word in words:
+        if word in SEGMENT_BREAKS:
+            segments.append([])
+        else:
+            segments[-1].append(word)
+    return [segment for segment in segments if segment]
+
+
+def _mark_quoted_assignment(words: list[str], raw: list[str]) -> list[str]:
+    """Mark a quoted leading `NAME=value` word, which the shell runs as a command.
+
+    `"X=1" interrogate` tries to run a command named `X=1`; only an unquoted
+    assignment is an environment prefix. The POSIX lexer drops the quotes, so
+    the non-POSIX tokens say which leading word was quoted.
+
+    Returns
+    -------
+    list[str]
+        *words*, with the first quoted leading assignment carrying QUOTED_MARK.
+    """
+    marked = list(words)
+    for index, (word, original) in enumerate(zip(words, raw, strict=True)):
+        if not _ASSIGNMENT.match(word.lstrip(MAKE_PREFIXES)):
+            break
+        if original.lstrip(MAKE_PREFIXES)[:1] in {"'", '"'}:
+            marked[index] = QUOTED_MARK + word
+            break
+    return marked
+
+
 def lex_segments(command: str) -> list[list[str]] | None:
     """Split a shell command into simple commands, or ``None`` if it won't lex.
 
@@ -159,19 +207,20 @@ def lex_segments(command: str) -> list[list[str]] | None:
     flattened = re.sub(rf'"?{SHELL_DOLLAR}\(', " ( ", command)
     flattened = re.sub(r'\)"', " ) ", flattened)
     flattened = re.sub(r"\$([({])", rf"{UNRESOLVED_MARK} \1", flattened)
-    lexer = shlex.shlex(flattened, posix=True, punctuation_chars=";&|()")
-    lexer.whitespace_split = True
-    try:
-        words = [word.replace(SHELL_DOLLAR, "$") for word in lexer]
-    except ValueError:
+    words = _tokens(flattened, is_posix=True)
+    if words is None:
         return None
-    segments: list[list[str]] = [[]]
-    for word in words:
-        if word in SEGMENT_BREAKS:
-            segments.append([])
-        else:
-            segments[-1].append(word)
-    return [segment for segment in segments if segment]
+    segments = _split(words)
+    raw = _tokens(flattened, is_posix=False)
+    raw_segments = _split(raw) if raw is not None else []
+    if len(raw_segments) != len(segments):
+        return segments
+    return [
+        _mark_quoted_assignment(group, original)
+        if len(group) == len(original)
+        else group
+        for group, original in zip(segments, raw_segments, strict=True)
+    ]
 
 
 @dataclasses.dataclass(slots=True)
@@ -321,9 +370,61 @@ def unresolved_run(line: RecipeLine, text: str) -> InterrogateRun:
     }
 
 
-def _run_in_segment(line: RecipeLine, words: list[str]) -> InterrogateRun | None:
+# `env` options that take the next word as their value.
+ENV_VALUE_OPTIONS: typ.Final = frozenset({
+    "-u",
+    "--unset",
+    "-C",
+    "--chdir",
+    "-S",
+    "--split-string",
+})
+
+
+def _skip_env(words: list[str], start: int) -> int:
+    """Return the index after an `env` command's options, from just past `env`."""
+    index = start
+    while index < len(words) and words[index].startswith("-"):
+        option = words[index]
+        index += 2 if option in ENV_VALUE_OPTIONS else 1
+        if option == "--":
+            break
+    return index
+
+
+def command_words(words: list[str]) -> list[str]:
+    """Return a simple command's words without its leading environment prefix.
+
+    `UV_CACHE_DIR=.uv-cache uv tool run ...` and `env -i X=1 uv run ...` run the
+    command after the assignments and `env` options, so those words do not
+    decide what it is. A Make prefix (`@`, `-`, `+`) is not part of the word.
+
+    Parameters
+    ----------
+    words
+        The words of one simple command, including any environment prefix.
+
+    Returns
+    -------
+    list[str]
+        The words from the command itself, or an empty list when none remain.
+    """
+    start = 0
+    while start < len(words):
+        word = words[start].lstrip(MAKE_PREFIXES)
+        if _ASSIGNMENT.match(word):
+            start += 1
+        elif word == "env":
+            start = _skip_env(words, start + 1)
+        else:
+            break
+    return words[start:]
+
+
+def _run_in_segment(line: RecipeLine, raw_words: list[str]) -> InterrogateRun | None:
     """Return the run a simple command makes, or ``None`` if it runs no tool."""
-    if words[0].lstrip("@-+") in NON_EXECUTING:
+    words = command_words(raw_words)
+    if not words or words[0].lstrip("@-+") in NON_EXECUTING:
         return None
     for index in range(len(words)):
         if _is_tool_word(words, index):

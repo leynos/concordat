@@ -380,32 +380,39 @@ class TestRuleRun:
         assert result.verdict == "noncompliant", result
 
     @pytest.mark.parametrize(
-        ("origin", "workflow_findings"),
+        ("origin", "findings"),
         [
             pytest.param(
+                "git@github.com:leynos/agent-helper-scripts.git",
+                {".github/workflows/ci.yml"},
+                id="agent-helper-scripts-exempts-only-its-bootstrap-script",
+            ),
+            pytest.param(
                 "git@github.com:leynos/weaver.git",
-                {".github/workflows/release.yml"},
-                id="weaver-exempts-only-its-ci-workflow",
+                {".github/workflows/ci.yml", "get-rust-tooling"},
+                id="weaver-is-audited-since-its-exemption-was-removed",
             ),
             pytest.param(
                 "git@github.com:leynos/other.git",
-                {".github/workflows/ci.yml", ".github/workflows/release.yml"},
+                {".github/workflows/ci.yml", "get-rust-tooling"},
                 id="another-repository-is-audited",
             ),
         ],
     )
-    def test_the_shipped_weaver_exemption_is_scoped_by_repository_and_path(
+    def test_the_shipped_exemptions_are_scoped_by_repository_and_path(
         self,
         tmp_path: pathlib.Path,
         origin: str,
-        workflow_findings: set[str],
+        findings: set[str],
     ) -> None:
         """The manifest default, not a test fixture, decides who is exempt.
 
-        The Rego tests inject their own parameters, so removing or widening the
-        `leynos/weaver` entry in `rule.yaml` would leave them green. This runs
-        the real runner with the shipped defaults against a checkout whose
-        origin is Weaver and one whose origin is not.
+        The Rego tests inject their own parameters, so adding or widening an
+        entry in `rule.yaml` would leave them green. This runs the real runner
+        with the shipped defaults against a checkout whose origin is the
+        exempt repository and ones whose origin is not, so a repository the
+        manifest no longer exempts (Weaver, once its CI moved onto
+        `install-whitaker`) is audited.
         """
         repository = pygit2.init_repository(str(tmp_path))
         repository.remotes.create("origin", origin)
@@ -416,11 +423,15 @@ class TestRuleRun:
             "    steps:\n      - run: cargo install --locked --git "
             "https://github.com/leynos/whitaker --rev 2bc0c3f whitaker-installer\n",
         )
-        _write(tmp_path, ".github/workflows/release.yml", BINSTALL_WORKFLOW)
+        _write(
+            tmp_path,
+            "get-rust-tooling",
+            "#!/usr/bin/env bash\ncargo install whitaker-installer\n",
+        )
 
         result = runner.run_rule(RULE_ID, tmp_path)
 
-        assert {f.path for f in result.findings} == workflow_findings, result
+        assert {f.path for f in result.findings} == findings, result
 
     @pytest.mark.parametrize(
         ("selector", "verdict"),

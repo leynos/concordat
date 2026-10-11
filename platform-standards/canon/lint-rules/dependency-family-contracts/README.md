@@ -27,8 +27,10 @@ policy opens no file and contacts no registry.
   group takes one of them first. Repair: move it ahead of the shadowing group.
 - **DF-006** The facts could not be established: no decodable Dependabot
   configuration, a manifest or lock that cannot be read, a Python project
-  outside the root, or an exception without a rationale and a review trigger.
-  Always indeterminate, never compliant.
+  outside the root, a Cargo manifest outside the governed Rust surfaces (a
+  repository that has not declared `language.rust.surfaces` is read at its root
+  only), or an exception without a rationale and a review trigger. Always
+  indeterminate, never compliant.
 
 DF-004 (derived-input equality between a tool pin and its generated inputs) and
 DF-005 (a documented bound relaxed without migration evidence) are not yet

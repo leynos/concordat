@@ -683,11 +683,18 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   invocation as a run (paths, threshold, verbose level, relaxing flags, config,
   excludes and whether the recipe greps for `MISSED`). That keeps the Rego free
   of shell parsing; an invocation it cannot resolve is carried with
-  `resolved: false`. The package is registered by identifier and declares its
-  kind, and the thresholds reach the policy as manifest parameters. The Rust
-  facts come from `documentation_rust.build_rust_facts`: each owned
-  `Cargo.toml` (walk pruned of `fixtures`, `examples`, `templates`, `vendor`,
-  `third_party`, `patches` and `target`) decoded with `tomllib`,
+  `resolved: false`. `interrogate_invocation.command_words` is the one place
+  that decides where a simple command starts: it skips leading `NAME=value`
+  assignments, `env` and its options (and the values of `-u`, `-C` and `-S`),
+  and ignores the Make recipe prefixes `@`, `-` and `+`. The lexer marks a
+  quoted leading assignment, which the shell runs as a command name, so it is
+  not skipped. Both the interrogate-run detector and the `make` reachability
+  walk (`make -C` and `--directory` make it unresolved) call it, so the two
+  agree on what a command is. The package is registered by identifier and
+  declares its kind, and the thresholds reach the policy as manifest
+  parameters. The Rust facts come from `documentation_rust.build_rust_facts`:
+  each owned `Cargo.toml` (walk pruned of `fixtures`, `examples`, `templates`,
+  `vendor`, `third_party`, `patches` and `target`) decoded with `tomllib`,
   `[lints] workspace = true` resolved against the nearest `[workspace]`, and
   the library root's leading inner attributes and every module-level or
   item-level suppression read by `rust_source` (comments and literals masked
@@ -928,11 +935,17 @@ locked versions from `Cargo.lock` or `uv.lock`, and Dependabot's treatment of
 it (covering entry, first matching group in document order, narrow groups that
 match, `ignore` rule). The estate's relationship data is read from
 `platform-standards/canon/data/dependency-families.yaml` and the repository's
-exceptions from `.concordat`. A manifest the surface resolver rejects, a Python
-project outside the root, an unreadable lock and a missing configuration become
-`problems` or per-declaration reasons, which the policy turns into DF-006
-indeterminate findings. To make a newly discovered family a checked contract,
-add one relationship (id, kind, members by published name, relation, owner and
+exceptions from `.concordat`. When `language.rust.surfaces` is undeclared the
+resolver falls back to the root `Cargo.toml`, so the builder walks the tree
+(skipping hidden directories and `target`, `vendor`, `node_modules`, `venv`,
+`build` and `dist`) and names every other `Cargo.toml` as a problem; a declared
+list stays authoritative. The same walk finds nested `pyproject.toml` files,
+and a directory it cannot list is a problem rather than a shorter result. A
+manifest the surface resolver rejects, a Python project outside the root, an
+unreadable lock and a missing configuration become `problems` or
+per-declaration reasons, which the policy turns into DF-006 indeterminate
+findings. To make a newly discovered family a checked contract, add one
+relationship (id, kind, members by published name, relation, owner and
 provenance) to the data file and a fixture scenario to `fixtures/generate.py`;
 no Python or Rego edit is needed.
 

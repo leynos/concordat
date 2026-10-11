@@ -342,13 +342,23 @@ concordat artefact rule run dependency-family-contracts --repo /path/to/checkout
 
 A relationship applies only where the repository declares every member:
 
-- a family or type-identity pair (for example `pyo3` with `pyo3-build-config`)
-  needs one narrow group taking both ahead of the catch-all (DF-001), and not
-  shadowed by an earlier group (DF-003);
+- a family or type-identity pair (for example `pyo3` with `pyo3-build-config`,
+  or `pyo3` with the `serde-pyobject` bridge) needs one narrow group taking
+  both ahead of the catch-all (DF-001), and not shadowed by an earlier group
+  (DF-003). Dependabot matches the published package name, so a bridge renamed
+  in `Cargo.toml` (`pyo3-serde = { package = "serde-pyobject" }`) is named in
+  the group by `serde-pyobject`, not by the alias, and an `ignore` rule would
+  freeze the pair rather than move it;
 - independently versioned packages (for example maturin with PyO3) need an upper
   bound or an `ignore` rule on a member (DF-002); an exact pin is not one;
-- a missing configuration, an unreadable manifest or lock, or a Python project
-  outside the root is reported as indeterminate (DF-006).
+- a missing configuration, an unreadable manifest or lock, a Python project
+  outside the root, or a Cargo manifest outside the governed Rust surfaces is
+  reported as indeterminate (DF-006). A repository that has not declared
+  `language.rust.surfaces` is read at its root only, so each nested
+  `Cargo.toml` (hidden, `target`, `vendor`, `node_modules` and similar trees
+  excepted) is named and the result is indeterminate until the repository
+  declares its surfaces. A directory that cannot be listed during that scan is
+  reported the same way.
 
 To keep an older generation deliberately, record an exception in `.concordat`:
 
@@ -547,15 +557,6 @@ that CI never runs may be exempted by name, repository and reason in the rule's
 parameters. Exemptions match the repository slug read from the `origin` remote.
 See `platform-standards/canon/lint-rules/whitaker-provisioning/README.md` for
 what the policy recognizes and what it declines to judge.
-
-One temporary exemption ships in the defaults: `leynos/weaver`
-`.github/workflows/ci.yml`. Weaver pins the Whitaker lint suite to source
-revision `2bc0c3f` because leynos/whitaker#311 (`no_expect_outside_tests` flags
-`cfg(test)` companion-module helpers since suite `4e8a8ab`) regresses its lint,
-and `install-whitaker` refuses a suite pin by design. Every other workflow in
-Weaver, and the same path in any other repository, is still audited. The
-exemption is removed when the fix for #311 moves Weaver's step onto
-`install-whitaker`.
 
 ### Auditing the Rust build defaults
 
@@ -813,6 +814,17 @@ For a checkout that owns Rust library crates the same package also reports:
   a `docs/developers-guide.md` section whose heading contains "Clippy gate" and
   whose body names the script in backticks; the script must exist, run clippy
   through cargo, and be run by a command in a recipe `make lint` reaches.
+
+The audit reads a command the way the shell runs it. An environment prefix is
+not part of the command, so
+`UV_CACHE_DIR=.uv-cache uv tool run ... interrogate` and
+`env -i X=1 uv run interrogate ...` are runs of interrogate, and
+`X=1 $(MAKE) interrogate` reaches the `interrogate` target. A Make prefix (`@`,
+`-`, `+`) is ignored. A quoted `"X=1"` is a command name, not an assignment,
+and a word that merely names the tool (`true interrogate ...`, or the package in
+`uv run --with interrogate`) is no run. `make -C dir target` runs another
+Makefile, so the walk cannot follow it and reports the reachability as
+unresolved.
 
 A variable the audit cannot resolve to one value, a configuration file that is
 missing or not TOML, or a `lint` target it cannot follow makes the affected

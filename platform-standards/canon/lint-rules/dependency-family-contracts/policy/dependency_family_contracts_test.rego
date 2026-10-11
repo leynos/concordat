@@ -47,22 +47,28 @@ test_nested_manifest_grouped if {
   count(findings) == 0
 }
 
-# A renamed bridge with no ignore rule is an unprotected tuple.
+# A renamed bridge left to the catch-all is an unprotected type-identity family.
 test_renamed_bridge_unprotected if {
   findings := policy.deny with input as data.fixtures.renamed_bridge_unprotected
-  ids(findings) == {"DF-002"}
+  ids(findings) == {"DF-001"}
 }
 
-# An ignore rule on the published name protects it.
-test_renamed_bridge_ignored_by_published_name if {
-  findings := policy.deny with input as data.fixtures.renamed_bridge_ignored_by_published_name
+# A group naming the published package takes the bridge with PyO3.
+test_renamed_bridge_grouped_by_published_name if {
+  findings := policy.deny with input as data.fixtures.renamed_bridge_grouped_by_published_name
   count(findings) == 0
 }
 
-# An ignore rule on the alias protects nothing: Dependabot matches the published name.
-test_renamed_bridge_ignored_by_alias if {
-  findings := policy.deny with input as data.fixtures.renamed_bridge_ignored_by_alias
-  ids(findings) == {"DF-002"}
+# A group naming only the alias takes nothing: Dependabot matches the published name.
+test_renamed_bridge_grouped_by_alias if {
+  findings := policy.deny with input as data.fixtures.renamed_bridge_grouped_by_alias
+  ids(findings) == {"DF-001"}
+}
+
+# An ignore rule on a member protects an independently versioned tuple.
+test_maturin_pyo3_ignored if {
+  findings := policy.deny with input as data.fixtures.maturin_pyo3_ignored
+  count(findings) == 0
 }
 
 # An exact pin is not an upper bound.
@@ -127,6 +133,12 @@ test_no_dependabot if {
 # An unparsable manifest is indeterminate, not compliant.
 test_unparsable_manifest if {
   findings := policy.deny with input as data.fixtures.unparsable_manifest
+  profile(findings) == {["DF-006", "indeterminate"]}
+}
+
+# A Cargo manifest no declared surface governs is reported, not passed over.
+test_undeclared_manifest if {
+  findings := policy.deny with input as data.fixtures.undeclared_manifest
   profile(findings) == {["DF-006", "indeterminate"]}
 }
 
