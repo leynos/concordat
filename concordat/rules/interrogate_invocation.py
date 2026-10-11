@@ -399,6 +399,11 @@ def command_words(words: list[str]) -> list[str]:
     command after the assignments and `env` options, so those words do not
     decide what it is. A Make prefix (`@`, `-`, `+`) is not part of the word.
 
+    Parameters
+    ----------
+    words
+        The words of one simple command, including any environment prefix.
+
     Returns
     -------
     list[str]
