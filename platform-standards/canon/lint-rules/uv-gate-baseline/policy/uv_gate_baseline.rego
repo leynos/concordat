@@ -110,7 +110,13 @@ single_valued(name) if {
 
 joined(text) := regex.replace(text, `\\\n[[:space:]]*`, " ")
 
-variable_value[name] := joined(variable.raw_value) if {
+# Make turns `\#` in a variable's value into a literal `#`, so a pin such as
+# `@<sha>\#subdirectory=x` reaches the shell as `@<sha>#subdirectory=x`. In a
+# recipe line the backslash is kept and, inside quotes, reaches the shell, so
+# only variable values are unescaped.
+make_unescaped(text) := replace(text, `\#`, "#")
+
+variable_value[name] := make_unescaped(joined(variable.raw_value)) if {
 	some variable in input.makefile.variables
 	name := variable.name
 	single_valued(name)
