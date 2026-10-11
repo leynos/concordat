@@ -253,12 +253,21 @@ artifacts:
       interrogate docstring-coverage gate that `make lint` reaches, at a
       threshold of 100, over every file the repository owns.
     sha256: 529692d088f9227437dfbc2ac281280643b7bba2515e035f208ae097d1bf9297
+  - id: lint-rule-documentation-presence-rust
+    type: opa-policy
+    path: >-
+      platform-standards/canon/lint-rules/documentation-presence/policy/documentation_presence_rust.rego
+    description: >
+      Audit-only DG-003 and DG-004 policy holding every Rust library crate to
+      `missing_docs` at deny and requiring a clippy run that `make lint`
+      reaches.
+    sha256: eda24e2ca6b484d1b602962866ba2733e97f8aa491e903a6c594fcb87af38d66
   - id: lint-rule-documentation-presence-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/documentation-presence/rule.yaml
     description: >
       Rule package manifest for the documentation presence policy.
-    sha256: d800ba1a07f7581011651e0c64e830fd15b03a862d00646e4728bb93619e2b68
+    sha256: a07bc3be4a0119663078cacf9cc6451bc6e756b5df7d5403e405d8b6bb07df33
   - id: lint-rule-whitaker-provisioning
     type: opa-policy
     path: platform-standards/canon/lint-rules/whitaker-provisioning/policy/whitaker_provisioning.rego

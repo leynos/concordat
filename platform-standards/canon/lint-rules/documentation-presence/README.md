@@ -1,6 +1,10 @@
 # documentation-presence
 
-Audits a checkout's Python docstring-coverage gate. The tool is
+Audits a checkout's documentation-presence gates: Python docstring coverage
+(DG-001, DG-002) and Rust `missing_docs` (DG-003, DG-004). The Rust rules are
+described under "Rust checks" below.
+
+The Python gate is interrogate. The tool is
 [interrogate](https://interrogate.readthedocs.io/), which measures docstring
 *presence* (Ruff's `D` rules keep owning docstring *style*); the standard is
 that every Python file a repository owns, whether package, tests, scripts,
@@ -68,8 +72,69 @@ interrogate:
 - **EN-001** (error, indeterminate): the envelope is not a
   `policy-input/documentation-presence` document at schema version 1.
 
-The rule applies when the checkout owns at least one Python file outside the
-exempt trees. A checkout with none is compliant with no findings.
+DG-001 and DG-002 apply when the checkout owns at least one Python file outside
+the exempt trees; a checkout with none is compliant with them and has no
+findings from them. DG-003 and DG-004 apply independently, when the checkout
+owns a Rust library crate (see "Rust checks").
+
+## Rust checks
+
+The standard is that every library crate a repository owns denies the
+`missing_docs` lint, so an undocumented public item fails the build rather than
+accumulating. Private items are not asked for, so
+`clippy::missing_docs_in_private_items` is not part of the rule. The envelope's
+`rust` section lists each library crate (a package with `src/lib.rs` or a
+`[lib]` table, outside `fixtures`, `examples`, `templates`, `vendor`,
+`third_party`, `patches` and `target` trees) with the three places that can set
+the lint, and `clippy_runs` lists the clippy invocations `make lint` reaches.
+
+The reference wiring is a workspace table that every member inherits:
+
+```toml
+# Cargo.toml (workspace root)
+[workspace.lints.rust]
+missing_docs = "deny"
+
+# crates/core/Cargo.toml
+[lints]
+workspace = true
+```
+
+A single crate sets `[lints.rust] missing_docs = "deny"` itself.
+
+- **DG-003** (error): every library crate ends with `missing_docs` at `deny` or
+  `forbid`. A crate-root inner attribute beats the manifest, as in rustc, so
+  the last `missing_docs` attribute at the root decides when there is one;
+  otherwise the crate's own `[lints.rust]` level applies, or the workspace
+  level when the crate opts in with `[lints] workspace = true` (a workspace
+  table alone is not inherited). `warn` and `allow` fail. The one accepted
+  exception is a crate-root `#![expect(missing_docs, reason = "...")]` for
+  items a derive macro generates and the crate cannot document; an `expect`
+  without a `reason` fails. `#![cfg_attr(not(test), deny(missing_docs))]`
+  counts as a deny; any other `cfg_attr` condition leaves a configuration
+  unchecked and is indeterminate, as is a manifest that is not valid TOML or a
+  library root that is absent. Module-level and item-level suppressions hide
+  items from a crate whose root denies the lint, so any `allow(missing_docs)` or
+  `expect(missing_docs)` (`#[...]` or `#![...]`, also inside `cfg_attr`) in
+  the library's source tree (the directory of its root, usually `src/`) needs a
+  `reason`; one without fails. The reason is what the rule checks: that the
+  code is generated or macro-produced (diesel's `schema.rs` is the model) is
+  for the reviewer. Tests, benches and examples are separate crates and are not
+  scanned.
+- **DG-004** (error): a clippy invocation (`cargo clippy`, `$(CARGO) clippy`) is
+  reachable from `make lint`, so the gate compiles the crates under the lint
+  level. No root `Makefile`, no `lint` target, or no clippy run in the targets
+  it reaches fails. A run is a simple command whose command word is `cargo`
+  (also through `env`, `time` or `rustup run`) with `clippy` as its subcommand,
+  so `rustup component add clippy`, a `cargo-clippy` probe and `$(MAKE) clippy`
+  are not runs (the last leads to a target the reachability walk reads in its
+  own right). Other parts of the line, such as a `RUSTFLAGS` value built with
+  `$(if ...)` or `$(shell ...)` as the estate's Makefiles have, do not change
+  which tool runs. A command reached only through a variable named for clippy
+  (`$(CLIPPY_CMD)`), or a line the lexer rejects, is indeterminate.
+
+The Rust rules apply when the checkout owns at least one library crate (or a
+Cargo manifest the audit cannot read).
 
 ## Indeterminate verdicts
 
@@ -86,8 +151,7 @@ run was found.
 
 The package uses its own `DG-` prefix (documentation gate). `DP-` was already
 taken by the dependency-pin actionability checks in the design document. DG-001
-and DG-002 are the Python rules; the Rust `missing_docs` rules are numbered
-from DG-003 in this package.
+and DG-002 are the Python rules; DG-003 and DG-004 are the Rust rules.
 
 ## Fixtures and tests
 
