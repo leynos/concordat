@@ -326,6 +326,47 @@ def test_a_renamed_related_dependency_in_a_nested_manifest_is_a_problem(
     assert "declares serde-pyobject" in problem
 
 
+def test_a_member_inheriting_a_renamed_dependency_from_a_nested_workspace(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The nested workspace's own table says which package the member means."""
+    _write(
+        tmp_path,
+        "tei/Cargo.toml",
+        '[workspace]\nmembers = ["py"]\n[workspace.dependencies]\n'
+        'pyo3-serde = { package = "serde-pyobject", version = "0.8.0" }\n',
+    )
+    _write(
+        tmp_path,
+        "tei/py/Cargo.toml",
+        '[package]\nname = "x"\nversion = "0.1.0"\n[dependencies]\n'
+        "pyo3-serde = { workspace = true }\n",
+    )
+
+    problems = build_dependency_family_envelope(tmp_path)["problems"]
+
+    assert [p for p in problems if p.startswith("tei/py/Cargo.toml")]
+    assert all("declares serde-pyobject" in p for p in problems)
+
+
+def test_a_nested_cargo_symlink_is_refused_not_followed(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A link could lead outside the checkout, so it is named and never read."""
+    outside = tmp_path / "outside"
+    _write(outside, "Cargo.toml", _MEMBER)
+    checkout = tmp_path / "checkout"
+    (checkout / "tools").mkdir(parents=True)
+    (checkout / "tools" / "Cargo.toml").symlink_to(outside / "Cargo.toml")
+
+    (problem,) = build_dependency_family_envelope(checkout)["problems"]
+
+    assert problem == (
+        "tools/Cargo.toml is a Cargo manifest outside the governed Rust surfaces "
+        "and cannot be read: is a symbolic link"
+    )
+
+
 def test_an_unparsable_nested_cargo_manifest_fails_closed(
     tmp_path: pathlib.Path,
 ) -> None:
