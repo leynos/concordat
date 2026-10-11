@@ -338,11 +338,6 @@ tool_segment_pattern(tool) := sprintf(
 	[segment_start, env_assignment_prefix, tool_word(tool)],
 )
 
-tool_binding_pattern(tool) := sprintf(
-	`%s(%s)*%s(([[:space:]][^;|&]*)?(&&[^;|&]*)*)$`,
-	[segment_start, env_assignment_prefix, tool_word(tool)],
-)
-
 # The same shape, with the argument list as the final capture and the `&&`
 # tail uncaptured, so the arguments of the invocation whose status reaches
 # Make can be read rather than inferred.
@@ -361,10 +356,10 @@ tool_arguments(recipe, tool) := {tokens |
 		tool_segment_pattern(tool), expand(recipe.text), -1,
 	)
 	arguments := match[count(match) - 1]
-	tokens := {token |
+	tokens := [token |
 		some token in split(trim_space(arguments), " ")
 		token != ""
-	}
+	]
 }
 
 tool_invoked(recipe, tool) if count(tool_arguments(recipe, tool)) > 0
@@ -382,18 +377,13 @@ binding_arguments(recipe, tool) := {tokens |
 		tool_binding_segment_pattern(tool), expand(recipe.text), -1,
 	)
 	arguments := match[count(match) - 1]
-	tokens := {token |
+	tokens := [token |
 		some token in split(trim_space(arguments), " ")
 		token != ""
-	}
+	]
 }
 
 invocation_binds(recipe, tool, tokens) if tokens in binding_arguments(recipe, tool)
-
-tool_binding(recipe, tool) if {
-	tool_invoked(recipe, tool)
-	count(binding_arguments(recipe, tool)) > 0
-}
 
 # A token such as `$(YAMLLINT_PATHS)` left in the argument list names a
 # variable the policy could not resolve; the flags behind it are unproven.
@@ -416,27 +406,99 @@ makefile_check_root := {"YL-001": lint_target, "YL-002": lint_target}
 check_tool := {"YL-001": "yamllint", "YL-002": "actionlint"}
 
 # A tool that is told not to do its job still exits zero, so the flags are part
-# of the invocation's meaning: `-d`/`--config-data` replaces the estate
-# configuration inline, `--no-warnings` hides what `--strict` exists to fail
-# on, and an empty `-shellcheck=` switches off the shellcheck integration that
-# makes actionlint read `run:` scripts.
-yamllint_overrides(tokens) := {token |
+# of the invocation's meaning. The tokens are an ordered list, because several
+# of the flags take the next word as their value.
+#
+# yamllint: `-d`/`--config-data` (in every spelling) replaces the estate
+# configuration inline, `-c`/`--config-file` replaces it with a file other than
+# the repository's own `.yamllint.yml`, and `--no-warnings` hides what
+# `--strict` exists to fail on.
+yamllint_flag_overrides(tokens) := {token |
 	some token in tokens
 	token in {"-d", "--config-data", "--no-warnings"}
 }
 
-actionlint_overrides(tokens) := {token |
+yamllint_config_data_overrides(tokens) := {token |
 	some token in tokens
-	regex.match(`^-{1,2}shellcheck=("")?('')?$`, token)
+	regex.match(`^(-d.+|--config-data=.*)$`, token)
 }
 
-# `git ls-files` must feed yamllint with every pathspec, so the lint covers the
-# tracked YAML and nothing from vendored or ignored trees.
+yamllint_short_config_overrides(tokens) := {token |
+	some token in tokens
+	regex.match(`^-c.+$`, token)
+	token != concat("", ["-c", local_filename])
+}
+
+yamllint_long_config_overrides(tokens) := {token |
+	some token in tokens
+	startswith(token, "--config-file=")
+	token != concat("", ["--config-file=", local_filename])
+}
+
+yamllint_separate_config_overrides(tokens) := {pair |
+	some index, token in tokens
+	token in {"-c", "--config-file"}
+	value := next_token(tokens, index)
+	value != local_filename
+	pair := trim_space(concat(" ", [token, value]))
+}
+
+next_token(tokens, index) := tokens[index + 1] if count(tokens) > index + 1
+
+next_token(tokens, index) := "" if count(tokens) <= index + 1
+
+# actionlint: an empty `-shellcheck` value, attached or separate, switches off
+# the script analysis that makes actionlint read `run:` scripts.
+actionlint_attached_overrides(tokens) := {token |
+	some token in tokens
+	regex.match(`^--?shellcheck=(""|'')?$`, token)
+}
+
+actionlint_separate_overrides(tokens) := {pair |
+	some index, token in tokens
+	token in {"-shellcheck", "--shellcheck"}
+	value := next_token(tokens, index)
+	value in {`""`, "''"}
+	pair := concat(" ", [token, value])
+}
+
+yamllint_overrides(tokens) := union({
+	yamllint_flag_overrides(tokens),
+	yamllint_config_data_overrides(tokens),
+	yamllint_short_config_overrides(tokens),
+	yamllint_long_config_overrides(tokens),
+	yamllint_separate_config_overrides(tokens),
+})
+
+actionlint_overrides(tokens) := union({
+	actionlint_attached_overrides(tokens),
+	actionlint_separate_overrides(tokens),
+})
+
+# Informational flags make a tool print and exit zero without linting anything.
+informational_flags := {
+	"yamllint": {"-h", "--help", "--version"},
+	"actionlint": {"-h", "-help", "--help", "-version", "--version"},
+}
+
+informational(tool, tokens) if {
+	some token in tokens
+	token in informational_flags[tool]
+}
+
+# `git ls-files` must feed yamllint through `xargs`, with every pathspec in the
+# producer's arguments, so the lint covers the tracked YAML and nothing from
+# vendored or ignored trees. Co-occurrence in one recipe is not enough: the
+# list could be discarded and one file linted by name.
+git_fed_yamllint_pattern := `git[[:space:]]+ls-files([^;|&]*)\|[[:space:]]*xargs([[:space:]]+-[^[:space:]]+([[:space:]]+[0-9]+)?)*[[:space:]]+([^[:space:];|&()]*/)?yamllint([[:space:]]|$)`
+
 recipe_selects_tracked_yaml(recipe) if {
-	text := expand(recipe.text)
-	regex.match(`git[[:space:]]+ls-files`, text)
+	some match in regex.find_all_string_submatch_n(
+		git_fed_yamllint_pattern, expand(recipe.text), -1,
+	)
+	producer := match[1]
 	every pathspec in yaml_pathspecs {
-		contains(text, pathspec)
+		contains(producer, pathspec)
 	}
 }
 
@@ -448,6 +510,7 @@ recipe_satisfies("YL-001", recipe) if {
 	some tokens in binding_arguments(recipe, "yamllint")
 	strict_flag(tokens)
 	count(yamllint_overrides(tokens)) == 0
+	not informational("yamllint", tokens)
 	count(unresolved_tokens(tokens)) == 0
 	recipe_selects_tracked_yaml(recipe)
 }
@@ -455,6 +518,7 @@ recipe_satisfies("YL-001", recipe) if {
 recipe_satisfies("YL-002", recipe) if {
 	some tokens in binding_arguments(recipe, "actionlint")
 	count(actionlint_overrides(tokens)) == 0
+	not informational("actionlint", tokens)
 	count(unresolved_tokens(tokens)) == 0
 }
 
@@ -600,6 +664,20 @@ deny contains f if {
 	f := finding(
 		"YL-002", "noncompliant", makefile_path, recipe.location.start_line,
 		sprintf("%q-path recipe runs actionlint with %s, which switches off the shellcheck integration", [lint_target, concat(", ", sort(overrides))]),
+	)
+}
+
+deny contains f if {
+	some check_id, tool in check_tool
+	root := makefile_check_root[check_id]
+	closure_provable(root)
+	some recipe in path_recipes(root)
+	not recipe_satisfies(check_id, recipe)
+	some tokens in binding_arguments(recipe, tool)
+	informational(tool, tokens)
+	f := finding(
+		check_id, "noncompliant", makefile_path, recipe.location.start_line,
+		sprintf("%q-path recipe runs %s only to print information; it lints nothing", [root, tool]),
 	)
 }
 
@@ -823,15 +901,6 @@ workflow_jobs(workflow) := jobs if {
 	is_object(jobs)
 }
 
-workflow_steps(workflow) := {[job_id, index, step] |
-	some job_id, job in workflow_jobs(workflow)
-	is_object(job)
-	steps := object.get(job, "steps", [])
-	is_array(steps)
-	some index, step in steps
-	is_object(step)
-}
-
 # A condition GitHub Actions never satisfies, written either as the YAML
 # boolean or as an expression whose whole body is the `false` literal. Only
 # the literal is judged: any other expression depends on run-time context the
@@ -847,8 +916,8 @@ disabled_condition(value) if {
 condition_disabled(holder) if disabled_condition(object.get(holder, "if", null))
 
 # Steps that CI can actually reach. A step guarded by a literally false
-# condition, or sitting in a job guarded by one, never runs, so it cannot be
-# the evidence that the repository lints its Markdown.
+# condition, or sitting in a job guarded by one, never runs, so it can neither
+# install the lint tools nor be the evidence that CI runs the lint gate.
 workflow_enabled_steps(workflow) := {[job_id, index, step] |
 	some job_id, job in workflow_jobs(workflow)
 	is_object(job)
@@ -860,25 +929,12 @@ workflow_enabled_steps(workflow) := {[job_id, index, step] |
 	not condition_disabled(step)
 }
 
-# A `run:` step that invokes markdownlint-cli2 as a command, or drives the
-# Makefile's markdownlint target, lints Markdown outside the action's pinned
-# release. Lines that only provision the linter are not invocations: an
-# install (`npm install -g markdownlint-cli2@...`), a path test or quoted
-# package spec (the name is not in command position), or a `--version`
-# probe. Provisioning is the Markdown gate's installer when no compliant
-# action step lints Markdown in that workflow, and otherwise it supplies the
-# executable to something else, such as a test suite that runs the linter
-# as a subprocess, which this check does not govern.
-shell_invocation_pattern := `(?m)^[^\n]*((^|[[:space:];&|(])([^[:space:]"']*/)?markdownlint-cli2([[:space:]]|$)|\bmake\b[^\n]*\bmarkdownlint\b)[^\n]*`
-
-version_probe_pattern := `markdownlint-cli2[[:space:]]+(-V|--version)([[:space:]]|$)`
-
-install_line_pattern := `(?m)^[[:space:]]*(npm|bun|pnpm|yarn)[[:space:]]+(install|add|i)\b[^\n]*markdownlint-cli2`
-
 step_label(step, index) := step.name if {
 	is_string(step.name)
 } else := sprintf("step %d", [index + 1])
 
+# A job that calls a reusable workflow may run the lint gate inside it; the
+# policy cannot see that far.
 reusable_job_present if {
 	some workflow in input.workflows
 	some _, job in workflow_jobs(workflow)
@@ -892,19 +948,50 @@ workflow_decode_failed if {
 }
 
 
-# A step that runs the lint gate: `make lint`, with any options or other
-# targets, as a whole word so `make markdownlint` and `make lint-whitaker` are
-# not mistaken for it.
-lint_step_pattern := `(^|[[:space:];&|(])make([[:space:]]+[^[:space:]\n]+)*[[:space:]]+lint([[:space:]]|$)`
+# A step that runs the lint gate: `make lint`, in command position, with any
+# options or other targets, as a whole word so `make markdownlint` and
+# `make lint-whitaker` are not mistaken for it. The policy does not parse
+# shell, so it proves the one shape it can read directly, after erasing what
+# the shell would not execute: quoted text (`echo '; make lint'` passes the
+# words to echo) and comments. A dry run (`-n`, `--dry-run`, `-q`, `-t`) runs
+# no recipe, and anything after the target but `&&` or a redirect (`|| true`,
+# `; exit 0`, a pipe) leaves the exit status unable to fail the job.
+without_quoted_text(script) := regex.replace(
+	regex.replace(script, `'[^'\n]*'`, "''"),
+	`"[^"\n]*"`, `""`,
+)
+
+without_comments(script) := regex.replace(script, `(?m)(^|[[:space:]])#.*$`, "${1}")
+
+lint_command_pattern := sprintf(
+	`(?m)(^|[;&(])[[:space:]]*(%s)*make(([[:space:]]+[^[:space:];|&()\n]+)*)[[:space:]]+lint(([[:space:]]+([^[:space:];|&()\n]+|[0-9]*>&[0-9]+))*)[[:space:]]*(&&|$)`,
+	[env_assignment_prefix],
+)
+
+dry_run_pattern := `(^|[[:space:]])(-[a-zA-Z]*[nqt][a-zA-Z]*|--dry-run|--just-print|--recon|--question|--touch)([[:space:]]|$)`
+
+lint_commands(script) := {match[0] |
+	some match in regex.find_all_string_submatch_n(
+		lint_command_pattern,
+		without_comments(without_quoted_text(script)),
+		-1,
+	)
+	not regex.match(dry_run_pattern, match[0])
+}
+
+# `continue-on-error` turns a failing step or job into a pass.
+continues_on_error(holder) if object.get(holder, "continue-on-error", false) in {true, "true"}
 
 step_runs_lint(step) if {
 	is_string(step.run)
-	regex.match(lint_step_pattern, step.run)
+	not continues_on_error(step)
+	count(lint_commands(step.run)) > 0
 }
 
 lint_steps := {[workflow.path, job_id, index, step] |
 	some workflow in input.workflows
 	some [job_id, index, step] in workflow_enabled_steps(workflow)
+	not continues_on_error(workflow_jobs(workflow)[job_id])
 	step_runs_lint(step)
 }
 

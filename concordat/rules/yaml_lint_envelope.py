@@ -32,12 +32,12 @@ from .markdown_envelope import (
     PRUNED_DIRECTORIES,
     Repository,
     WorkflowFile,
-    _is_symlink,
-    _json_safe,
-    _raise_walk_error,
-    _read_text,
     is_file,
+    is_symlink,
+    json_safe,
     load_workflows,
+    raise_walk_error,
+    read_text,
     resolved_root,
     within_checkout,
 )
@@ -49,14 +49,12 @@ ENVELOPE_SCHEMA_VERSION: typ.Final = 1
 ENVELOPE_KIND: typ.Final = "policy-input/yaml-lint-baseline"
 YAMLLINT_BASE_FILENAME: typ.Final = ".yamllint-estate.yml"
 YAMLLINT_LOCAL_FILENAME: typ.Final = ".yamllint.yml"
-# Every other place yamllint would find a configuration. The baseline mandates
-# the two names above, so these are reported as facts for the policy to name in
-# its finding rather than silently accepted as equivalent.
-ALTERNATE_YAMLLINT_FILENAMES: typ.Final = (
-    ".yamllint",
-    ".yamllint.yaml",
-    ".config/yamllint/config",
-)
+# The other project-level names yamllint reads, and reads before
+# `.yamllint.yml`, so each silently replaces the file the baseline governs. They
+# are reported as facts for the policy to name in its finding. The user-global
+# `$XDG_CONFIG_HOME/yamllint/config` is not a repository file and is not looked
+# for: yamllint consults it only when no project file exists.
+ALTERNATE_YAMLLINT_FILENAMES: typ.Final = (".yamllint", ".yamllint.yaml")
 # actionlint reads either spelling, `.yaml` first.
 ACTIONLINT_CONFIG_FILENAMES: typ.Final = (
     ".github/actionlint.yaml",
@@ -123,7 +121,7 @@ def _has_yaml_files(checkout: pathlib.Path) -> bool:
     bool
         Whether a YAML file was found.
     """
-    for current, directories, files in os.walk(checkout, onerror=_raise_walk_error):
+    for current, directories, files in os.walk(checkout, onerror=raise_walk_error):
         directories[:] = sorted(
             name for name in directories if name not in PRUNED_DIRECTORIES
         )
@@ -131,7 +129,7 @@ def _has_yaml_files(checkout: pathlib.Path) -> bool:
             candidate = pathlib.Path(current) / name
             if candidate.suffix.lower() not in YAML_SUFFIXES:
                 continue
-            if _is_symlink(candidate, OPERATION_SCAN_YAML):
+            if is_symlink(candidate, OPERATION_SCAN_YAML):
                 continue
             if is_file(candidate, OPERATION_SCAN_YAML):
                 return True
@@ -156,7 +154,7 @@ def _read_input(
     if not within_checkout(root, path, operation) or not is_file(path, operation):
         return None
     try:
-        return _read_text(path, operation), None
+        return read_text(path, operation), None
     except UnicodeDecodeError as error:
         return None, f"not UTF-8 text: {error}"
 
@@ -183,7 +181,7 @@ def _load_yaml_file(
     except YAMLError as decode_error:
         fact["error"] = f"invalid YAML: {decode_error}"
         return fact
-    fact["parsed"] = _json_safe(parsed)
+    fact["parsed"] = json_safe(parsed)
     return fact
 
 

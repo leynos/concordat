@@ -110,37 +110,70 @@ def test_the_local_config_is_decoded(tmp_path: pathlib.Path) -> None:
 
 
 @pytest.mark.parametrize(
+    ("name", "key"),
+    [
+        (".yamllint.yml", "yamllint_local"),
+        (".github/actionlint.yaml", "actionlint_config"),
+    ],
+    ids=["yamllint", "actionlint"],
+)
+@pytest.mark.parametrize(
     ("content", "reason"),
     [(b"a: [\n", "invalid YAML"), (b"\xff\xfe", "not UTF-8")],
     ids=["invalid YAML", "not UTF-8"],
 )
-def test_an_undecodable_local_config_keeps_its_reason(
-    tmp_path: pathlib.Path, content: bytes, reason: str
+def test_an_undecodable_config_keeps_its_reason(
+    tmp_path: pathlib.Path, name: str, key: str, content: bytes, reason: str
 ) -> None:
     """A content failure is evidence for an indeterminate verdict, not absence."""
-    (tmp_path / ".yamllint.yml").write_bytes(content)
+    (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+    (tmp_path / name).write_bytes(content)
 
-    local = build_yaml_lint_envelope(tmp_path)["yamllint_local"]
+    envelope = typ.cast("dict[str, typ.Any]", build_yaml_lint_envelope(tmp_path))
+    fact = envelope[key]
 
-    assert local is not None
-    assert local["parsed"] is None
-    assert reason in str(local["error"]), local
+    assert fact is not None
+    assert fact["parsed"] is None
+    assert reason in str(fact["error"]), fact
 
 
 def test_alternate_yamllint_names_are_listed(tmp_path: pathlib.Path) -> None:
     """Yamllint would honour these, so the policy names them in its finding."""
     _write(tmp_path, ".yamllint", "extends: default\n")
     _write(tmp_path, ".yamllint.yaml", "extends: default\n")
-    _write(tmp_path, ".config/yamllint/config", "extends: default\n")
 
     envelope = build_yaml_lint_envelope(tmp_path)
 
     assert envelope["alternate_yamllint_configs"] == [
         ".yamllint",
         ".yamllint.yaml",
-        ".config/yamllint/config",
     ]
     assert envelope["yamllint_local"] is None
+
+
+def test_a_repository_dot_config_directory_is_not_a_yamllint_config(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Yamllint reads `.config` only under the user's home, never the project."""
+    _write(tmp_path, ".config/yamllint/config", "extends: default\n")
+    _write(tmp_path, ".yamllint.yml", "extends: .yamllint-estate.yml\n")
+
+    envelope = build_yaml_lint_envelope(tmp_path)
+
+    assert envelope["alternate_yamllint_configs"] == []
+
+
+def test_duplicate_keys_in_the_local_config_are_rejected(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The safe YAML loader refuses duplicate mapping keys, as the others do."""
+    _write(tmp_path, ".yamllint.yml", "ignore: first/\nignore: second/\n")
+
+    local = build_yaml_lint_envelope(tmp_path)["yamllint_local"]
+
+    assert local is not None
+    assert local["parsed"] is None
+    assert local["error"] is not None
 
 
 def test_actionlint_config_accepts_either_spelling(tmp_path: pathlib.Path) -> None:
@@ -196,6 +229,7 @@ def test_the_makefile_report_is_forwarded(tmp_path: pathlib.Path) -> None:
         ".yamllint-estate.yml",
         ".yamllint.yml",
         ".github/actionlint.yaml",
+        ".github/actionlint.yml",
         "Makefile",
     ],
 )

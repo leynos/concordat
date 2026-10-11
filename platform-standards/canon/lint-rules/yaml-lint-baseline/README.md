@@ -46,24 +46,28 @@ repository root, as the Makefile's recipes do.
   because they replace the estate configuration or hide what `--strict` fails
   on. A flag behind a Make variable the policy cannot resolve is indeterminate.
 - **YL-002** (error): a recipe reachable from `lint` runs actionlint with a
-  binding exit status and without an empty `-shellcheck=`, which would switch
-  off the script analysis that makes actionlint worth running.
+  binding exit status and without an empty `-shellcheck` value (`-shellcheck=`,
+  `-shellcheck ""`), which would switch off the script analysis that makes
+  actionlint worth running; a recipe that only prints `-version` is refused.
 - **YL-003** (error): `.yamllint-estate.yml` has a digest in `base_sha256s`,
   `.yamllint.yml` extends it and sets only the keys in `local_allowed_keys`
-  (`extends` and `ignore` by default), and no `.yamllint`, `.yamllint.yaml` or
-  `.config/yamllint/config` exists, because yamllint reads those before
-  `.yamllint.yml` and they would silently replace it. A local `ignore` replaces
-  the base's rather than adding to it.
+  (`extends` and `ignore` by default), and neither `.yamllint` nor
+  `.yamllint.yaml` exists, because yamllint reads those before `.yamllint.yml`
+  and they would silently replace it. The user-global
+  `$XDG_CONFIG_HOME/yamllint/config` is not a repository file and is not
+  audited. A local `ignore` replaces the base's rather than adding to it.
 - **YL-004** (error): `.github/actionlint.yaml` (or `.yml`) exists and lists
   every label in `runner_labels` (`ubicloud-*` by default) under
   `self-hosted-runner.labels`. Applies when the checkout has workflows.
-- **YL-005** (error): every enabled CI step that runs `make lint` has an
-  earlier enabled step in the same job using `installer_action`, pinned to a
-  full commit SHA; some job runs `make lint` at all; no enabled `run:` step
-  matches a `hand_rolled_patterns` entry (a `uv tool install yamllint`, an
-  actionlint download, an `apt install shellcheck`); and no step uses a
-  `lint_actions` entry. A job that calls a reusable workflow leaves the absence
-  of a lint job indeterminate, because the policy cannot see inside it.
+- **YL-005** (error): every enabled CI step that runs `make lint` (in command
+  position, not quoted text or a comment, not a dry run, and without
+  `continue-on-error` or a trailing `|| true`) has an earlier enabled step in
+  the same job using `installer_action`, pinned to a full commit SHA; some job
+  runs `make lint` at all; no enabled `run:` step matches a
+  `hand_rolled_patterns` entry (a `uv tool install yamllint`, an actionlint
+  download, an `apt install shellcheck`); and no step uses a `lint_actions`
+  entry. A job that calls a reusable workflow leaves the absence of a lint job
+  indeterminate, because the policy cannot see inside it.
 
 A checkout with no YAML file is out of scope. Every check fails closed: a
 Makefile with includes, conditional rules on the lint path, dynamic recursive

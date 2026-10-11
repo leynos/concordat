@@ -955,10 +955,11 @@ and a coverage build cannot use a Cranelift one. ADR-003 records the change.
 
 ### The shared checkout readers in `markdown_envelope`
 
-The Markdown, spelling and build-defaults envelope builders read the same files
-through one guarded set of functions in `concordat/rules/markdown_envelope.py`.
-Import them by name; they are public because three builders share them, and a
-private-name import across modules is the pattern concordat#264 removes.
+The Markdown, spelling, uv gate, YAML lint and build-defaults envelope builders
+read the same files through one guarded set of functions in
+`concordat/rules/markdown_envelope.py`. Import them by name; they are public
+because three builders share them, and a private-name import across modules is
+the pattern concordat#264 removes.
 
 - `resolved_root(checkout)` returns the checkout with every symbolic link in
   its own path resolved. It raises `OperationalRuleError` (operation
@@ -973,6 +974,16 @@ private-name import across modules is the pattern concordat#264 removes.
 - `is_file(path, operation)` returns whether *path* is a regular file. Absence
   is `False`; a probe that cannot answer (a permission error, say) raises,
   because reading that as absence would report a broken checkout as compliant.
+- `read_text(path, operation)` returns the file's text. A file that cannot be
+  opened raises `OperationalRuleError`; undecodable bytes raise
+  `UnicodeDecodeError`, which the caller records as a fact.
+- `is_symlink(path, operation)` returns whether *path* is itself a symbolic
+  link, reading the link rather than its target. A refused probe raises.
+- `raise_walk_error(error)` is the `os.walk` error callback that turns a
+  directory it cannot list into an `OperationalRuleError`, so an unreadable
+  tree does not read as an empty one.
+- `json_safe(value)` returns *value* with any non-JSON scalar, such as a YAML
+  timestamp, stringified.
 - `load_workflows(checkout, root)` returns one fact per file under
   `.github/workflows`, sorted by name, each decoded as YAML 1.2 or carrying its
   decoding error. It returns an empty list when there is no workflows

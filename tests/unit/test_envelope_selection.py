@@ -49,6 +49,9 @@ from concordat.rules.uv_gate_envelope import (
 from concordat.rules.whitaker_provisioning_envelope import (
     ENVELOPE_KIND as PROVISIONING_ENVELOPE_KIND,
 )
+from concordat.rules.yaml_lint_envelope import (
+    ENVELOPE_KIND as YAML_LINT_ENVELOPE_KIND,
+)
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -149,6 +152,11 @@ class TestRegisteredPackages:
                 "documentation-presence",
                 DOCUMENTATION_ENVELOPE_KIND,
                 id="documentation-presence",
+            ),
+            pytest.param(
+                "yaml-lint-baseline",
+                YAML_LINT_ENVELOPE_KIND,
+                id="yaml-lint-baseline",
             ),
             pytest.param(
                 "whitaker-provisioning",
@@ -384,6 +392,7 @@ class TestDeclaredInputKind:
             ("spelling-config-baseline", SPELLING_ENVELOPE_KIND),
             ("uv-gate-baseline", UV_GATE_ENVELOPE_KIND),
             ("documentation-presence", DOCUMENTATION_ENVELOPE_KIND),
+            ("yaml-lint-baseline", YAML_LINT_ENVELOPE_KIND),
         ):
             rule_dir = packages.rule_package_dir(rule_id)
             declared = packages._declared_input_kind(rule_dir)

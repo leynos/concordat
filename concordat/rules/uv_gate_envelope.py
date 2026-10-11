@@ -32,10 +32,10 @@ from .markdown_envelope import (
     WorkflowFile,
     _is_dir,
     _load_workflow,
-    _raise_walk_error,
-    _read_text,
     is_file,
     load_workflows,
+    raise_walk_error,
+    read_text,
     resolved_root,
     within_checkout,
 )
@@ -176,7 +176,7 @@ def _load_pyproject(checkout: pathlib.Path, root: pathlib.Path) -> PyprojectFile
         return None
     fact: PyprojectFile = {"path": PYPROJECT_FILENAME, "parsed": None, "error": None}
     try:
-        fact["parsed"] = tomllib.loads(_read_text(path, OPERATION_READ_PYPROJECT))
+        fact["parsed"] = tomllib.loads(read_text(path, OPERATION_READ_PYPROJECT))
     except UnicodeDecodeError as error:
         fact["error"] = f"not UTF-8 text: {error}"
     except tomllib.TOMLDecodeError as error:
@@ -299,7 +299,7 @@ def _action_manifests(directory: pathlib.Path) -> list[pathlib.PurePosixPath]:
         The manifests' paths relative to the checkout, sorted.
     """
     found: list[pathlib.PurePosixPath] = []
-    for current, directories, files in os.walk(directory, onerror=_raise_walk_error):
+    for current, directories, files in os.walk(directory, onerror=raise_walk_error):
         directories.sort()
         base = pathlib.Path(current).relative_to(directory)
         found.extend(

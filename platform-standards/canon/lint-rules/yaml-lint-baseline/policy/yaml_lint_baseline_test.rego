@@ -62,6 +62,14 @@ test_actionlint_section_not_mapping if {
   }
 }
 
+# A recipe that only prints the version lints nothing.
+test_actionlint_version if {
+  findings := policy.deny with input as data.fixtures.actionlint_version
+  profile(findings) == {
+    ["YL-002", "noncompliant", "Makefile", 11, "\"lint\"-path recipe runs actionlint only to print information; it lints nothing"],
+  }
+}
+
 # actionlint also reads `actionlint.yml`.
 test_actionlint_yml_spelling if {
   findings := policy.deny with input as data.fixtures.actionlint_yml_spelling
@@ -107,6 +115,58 @@ test_base_missing if {
   profile(findings) == {
     ["YL-003", "noncompliant", ".yamllint-estate.yml", 0, ".yamllint-estate.yml is missing; copy the canonical estate yamllint base verbatim"],
   }
+}
+
+# A `&&` chain that ends in `make lint` still runs it.
+test_ci_chained if {
+  findings := policy.deny with input as data.fixtures.ci_chained
+  count(findings) == 0
+}
+
+# A comment is not executed.
+test_ci_decoy_comment if {
+  findings := policy.deny with input as data.fixtures.ci_decoy_comment
+  profile(findings) == {
+    ["YL-005", "noncompliant", ".github/workflows", 0, "no CI job runs `make lint`; the YAML lint gate is not enforced in CI"],
+  }
+}
+
+# The same holds for double quotes.
+test_ci_decoy_double_quoted if {
+  findings := policy.deny with input as data.fixtures.ci_decoy_double_quoted
+  profile(findings) == {
+    ["YL-005", "noncompliant", ".github/workflows", 0, "no CI job runs `make lint`; the YAML lint gate is not enforced in CI"],
+  }
+}
+
+# Printing the words is not running the gate.
+test_ci_decoy_echo if {
+  findings := policy.deny with input as data.fixtures.ci_decoy_echo
+  profile(findings) == {
+    ["YL-005", "noncompliant", ".github/workflows", 0, "no CI job runs `make lint`; the YAML lint gate is not enforced in CI"],
+  }
+}
+
+# A separator inside quoted text is data, not a command boundary.
+test_ci_decoy_quoted if {
+  findings := policy.deny with input as data.fixtures.ci_decoy_quoted
+  profile(findings) == {
+    ["YL-005", "noncompliant", ".github/workflows", 0, "no CI job runs `make lint`; the YAML lint gate is not enforced in CI"],
+  }
+}
+
+# A dry run executes no recipe.
+test_ci_dry_run if {
+  findings := policy.deny with input as data.fixtures.ci_dry_run
+  profile(findings) == {
+    ["YL-005", "noncompliant", ".github/workflows", 0, "no CI job runs `make lint`; the YAML lint gate is not enforced in CI"],
+  }
+}
+
+# An environment assignment before `make` is still `make lint`.
+test_ci_env_prefix if {
+  findings := policy.deny with input as data.fixtures.ci_env_prefix
+  count(findings) == 0
 }
 
 # Installing shellcheck by hand forks the pinned version.
@@ -157,6 +217,14 @@ test_ci_installer_other_job if {
   }
 }
 
+# `continue-on-error` on the job does the same.
+test_ci_job_continue_on_error if {
+  findings := policy.deny with input as data.fixtures.ci_job_continue_on_error
+  profile(findings) == {
+    ["YL-005", "noncompliant", ".github/workflows", 0, "no CI job runs `make lint`; the YAML lint gate is not enforced in CI"],
+  }
+}
+
 # A lint job that never runs is not CI enforcement.
 test_ci_lint_disabled if {
   findings := policy.deny with input as data.fixtures.ci_lint_disabled
@@ -179,6 +247,12 @@ test_ci_malformed_only if {
   kinds(findings) == {
     ["YL-005", "indeterminate", ".github/workflows/broken.yml"],
   }
+}
+
+# A multi-line script runs `make lint` on its own line.
+test_ci_multi_line if {
+  findings := policy.deny with input as data.fixtures.ci_multi_line
+  count(findings) == 0
 }
 
 # A lint job with no installer step has no pinned tools.
@@ -205,11 +279,41 @@ test_ci_other_lint_targets if {
   }
 }
 
+# A pipe leaves the gate's status to the last command.
+test_ci_piped if {
+  findings := policy.deny with input as data.fixtures.ci_piped
+  profile(findings) == {
+    ["YL-005", "noncompliant", ".github/workflows", 0, "no CI job runs `make lint`; the YAML lint gate is not enforced in CI"],
+  }
+}
+
+# A redirect after the target does not mask its status.
+test_ci_redirected if {
+  findings := policy.deny with input as data.fixtures.ci_redirected
+  count(findings) == 0
+}
+
 # A reusable workflow may run the gate, so absence is not proven.
 test_ci_reusable_only if {
   findings := policy.deny with input as data.fixtures.ci_reusable_only
   profile(findings) == {
     ["YL-005", "indeterminate", ".github/workflows", 0, "no workflow provably runs `make lint`; a job calls a reusable workflow that was not inspected"],
+  }
+}
+
+# `|| true` leaves the exit status unable to fail the job.
+test_ci_soft_skip if {
+  findings := policy.deny with input as data.fixtures.ci_soft_skip
+  profile(findings) == {
+    ["YL-005", "noncompliant", ".github/workflows", 0, "no CI job runs `make lint`; the YAML lint gate is not enforced in CI"],
+  }
+}
+
+# `continue-on-error` turns a failing step into a pass.
+test_ci_step_continue_on_error if {
+  findings := policy.deny with input as data.fixtures.ci_step_continue_on_error
+  profile(findings) == {
+    ["YL-005", "noncompliant", ".github/workflows", 0, "no CI job runs `make lint`; the YAML lint gate is not enforced in CI"],
   }
 }
 
@@ -260,10 +364,64 @@ test_config_data if {
   }
 }
 
+# An attached `-d` value replaces the estate configuration inline.
+test_config_data_attached if {
+  findings := policy.deny with input as data.fixtures.config_data_attached
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint with -drelaxed, which overrides the estate configuration or hides warnings"],
+  }
+}
+
+# `--config-data=` replaces the estate configuration inline.
+test_config_data_long if {
+  findings := policy.deny with input as data.fixtures.config_data_long
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint with --config-data=relaxed, which overrides the estate configuration or hides warnings"],
+  }
+}
+
+# `--config-file=` with another file replaces the estate configuration.
+test_config_file_attached if {
+  findings := policy.deny with input as data.fixtures.config_file_attached
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint with --config-file=relaxed.yml, which overrides the estate configuration or hides warnings"],
+  }
+}
+
+# Naming the repository's own configuration file changes nothing.
+test_config_file_local if {
+  findings := policy.deny with input as data.fixtures.config_file_local
+  count(findings) == 0
+}
+
+# `-c` with another file replaces the estate configuration.
+test_config_file_other if {
+  findings := policy.deny with input as data.fixtures.config_file_other
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint with -c relaxed.yml, which overrides the estate configuration or hides warnings"],
+  }
+}
+
+# An attached `-c` value replaces the estate configuration.
+test_config_short_attached if {
+  findings := policy.deny with input as data.fixtures.config_short_attached
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint with -crelaxed.yml, which overrides the estate configuration or hides warnings"],
+  }
+}
+
 # A literal `$(MAKE) target` chain is a proven edge of the lint closure.
 test_delegated if {
   findings := policy.deny with input as data.fixtures.delegated
   count(findings) == 0
+}
+
+# A `git ls-files` whose output is discarded lints one file by name.
+test_discarded_ls_files if {
+  findings := policy.deny with input as data.fixtures.discarded_ls_files
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint without a `git ls-files` list covering *.yml and *.yaml; select tracked YAML only"],
+  }
 }
 
 # Printing a command is not running it.
@@ -466,11 +624,27 @@ test_other_lint_targets_beside_lint if {
   count(findings) == 0
 }
 
+# The double-dash spelling of an empty `-shellcheck=` does the same.
+test_shellcheck_long if {
+  findings := policy.deny with input as data.fixtures.shellcheck_long
+  profile(findings) == {
+    ["YL-002", "noncompliant", "Makefile", 11, "\"lint\"-path recipe runs actionlint with --shellcheck=, which switches off the shellcheck integration"],
+  }
+}
+
 # An empty `-shellcheck=` switches off the script analysis.
 test_shellcheck_off if {
   findings := policy.deny with input as data.fixtures.shellcheck_off
   profile(findings) == {
     ["YL-002", "noncompliant", "Makefile", 11, "\"lint\"-path recipe runs actionlint with -shellcheck=, which switches off the shellcheck integration"],
+  }
+}
+
+# An empty `-shellcheck` value in the next word switches off the script analysis.
+test_shellcheck_separate if {
+  findings := policy.deny with input as data.fixtures.shellcheck_separate
+  profile(findings) == {
+    ["YL-002", "noncompliant", "Makefile", 11, "\"lint\"-path recipe runs actionlint with -shellcheck \"\", which switches off the shellcheck integration"],
   }
 }
 
@@ -524,5 +698,13 @@ test_yaml_only_no_makefile if {
   profile(findings) == {
     ["YL-001", "noncompliant", "Makefile", 0, "root Makefile is missing"],
     ["YL-002", "noncompliant", "Makefile", 0, "root Makefile is missing"],
+  }
+}
+
+# A recipe that only prints the version lints nothing.
+test_yamllint_version if {
+  findings := policy.deny with input as data.fixtures.yamllint_version
+  profile(findings) == {
+    ["YL-001", "noncompliant", "Makefile", 8, "\"lint\"-path recipe runs yamllint only to print information; it lints nothing"],
   }
 }

@@ -724,10 +724,9 @@ It applies when the checkout has any YAML file, and reports:
   `-shellcheck=`.
 - **YL-003**: `.yamllint-estate.yml` is the canonical estate base, copied
   verbatim from `canon/lint/yaml/`. `.yamllint.yml` extends it and sets only
-  `extends` and `ignore`; a local `ignore` replaces the base's, so restate any
-  base pattern you still need. `.yamllint`, `.yamllint.yaml` and
-  `.config/yamllint/config` are reported, because yamllint reads the first two
-  before `.yamllint.yml`.
+  `extends` and `ignore`; a local `ignore` replaces the base's, so a repository
+  restates any base pattern it still needs. `.yamllint` and `.yamllint.yaml`
+  are reported, because yamllint reads them before `.yamllint.yml`.
 - **YL-004**: `.github/actionlint.yaml` lists `ubicloud-*` under
   `self-hosted-runner.labels`.
 - **YL-005**: every CI job that runs `make lint` first uses
