@@ -27,20 +27,19 @@ reports it as indeterminate rather than as a clean absence.
 from __future__ import annotations
 
 import datetime as dt
-import re
 import typing as typ
 
 from .dependabot_envelope import build_dependabot_envelope
 from .envelope import DEFAULT_EXCEPTION_DOCUMENTS
 from .exception_docs import DocumentScan, find_exception_sections
 from .fs_probe import probe_file
-from .markdown_envelope import load_workflows, resolved_root
 from .rust_surfaces import resolve_rust_surfaces
 from .toolchain import (
     CHANNEL_VERSION,
     ToolchainFacts,
     inspect_toolchain,
 )
+from .toolchain_ci_facts import CiFacts, ci_facts, minor_of
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -53,24 +52,6 @@ ENVELOPE_SCHEMA_VERSION: typ.Final = 1
 ENVELOPE_KIND: typ.Final = "policy-input/rust-toolchain-policy"
 DEFAULT_EXCEPTION_KEYWORD: typ.Final = "Toolchain policy"
 ROOT_DIRECTORY: typ.Final = "/"
-
-_NIGHTLY: typ.Final = re.compile(r"^nightly-\d{4}-\d{2}-\d{2}$")
-_NUMERIC: typ.Final = re.compile(r"^(?P<minor>\d+\.\d+)(?:\.\d+)?$")
-_ENV_REFERENCE: typ.Final = re.compile(r"^\$\{\{\s*env\.(?P<name>\w+)\s*\}\}$")
-# The three places a step names a toolchain in a command: rustup installing or
-# selecting one, and cargo's `+toolchain` override.
-_RUSTUP_COMMAND: typ.Final = re.compile(
-    r"rustup\s+(?:toolchain\s+install|default|override\s+set)\s+(?P<value>[\w.-]+)"
-)
-_CARGO_OVERRIDE: typ.Final = re.compile(r"\bcargo\s+\+(?P<value>[\w.-]+)")
-_MSRV_JOB: typ.Final = re.compile(r"(?i)\bmsrv\b|cargo[- ]msrv")
-_READS_MANIFEST_MSRV: typ.Final = re.compile(r"(?i)rust[-_]version")
-_SELECTS_TOOLCHAIN: typ.Final = re.compile(r"(?i)rustup|toolchain")
-_TOOLCHAIN_ACTIONS: typ.Final = (
-    "dtolnay/rust-toolchain",
-    "actions-rust-lang/setup-rust-toolchain",
-    "leynos/shared-actions/.github/actions/setup-rust",
-)
 
 
 class CrateFacts(typ.TypedDict):
@@ -128,32 +109,6 @@ class DependabotEntry(typ.TypedDict):
     interval: str | None
 
 
-class CiFacts(typ.TypedDict):
-    """Store which toolchains the workflows name, read as data.
-
-    Attributes
-    ----------
-    errors:
-        Workflow paths that did not decode, each with its reason. The policy
-        cannot judge CI from a workflow it could not read.
-    dated_nightlies:
-        Every distinct dated-nightly toolchain a workflow names.
-    numeric_minors:
-        Every distinct `major.minor` of a numeric release a workflow names.
-    msrv_job:
-        True when a job id or name, or a step command, is about the MSRV.
-    reads_manifest_msrv:
-        True when a toolchain-selecting step reads the manifest's
-        `rust-version`, so every declared MSRV is exercised by construction.
-    """
-
-    errors: list[str]
-    dated_nightlies: list[str]
-    numeric_minors: list[str]
-    msrv_job: bool
-    reads_manifest_msrv: bool
-
-
 class ToolchainPolicyEnvelope(typ.TypedDict):
     """Store the evidence evaluated by the toolchain-policy rule.
 
@@ -198,12 +153,6 @@ class ToolchainPolicyEnvelope(typ.TypedDict):
     dependabot: DependabotFacts
     ci: CiFacts
     exceptions: list[DocumentScan]
-
-
-def _minor(version: str) -> str | None:
-    """Return the `major.minor` of a numeric version, or None."""
-    match = _NUMERIC.match(version)
-    return match.group("minor") if match else None
 
 
 def _is_package_publishable(package: dict[str, object]) -> bool:
@@ -251,105 +200,6 @@ def _workspace_rust_version(surfaces: cabc.Iterable[CargoSurface]) -> str | None
         if isinstance(value, str):
             return value
     return None
-
-
-def _toolchain_names(value: object, env: dict[str, str]) -> list[str]:
-    """Resolve a toolchain value, following one `${{ env.NAME }}` reference."""
-    if not isinstance(value, str):
-        return []
-    reference = _ENV_REFERENCE.match(value.strip())
-    resolved = env.get(reference.group("name"), "") if reference else value.strip()
-    return [resolved] if resolved else []
-
-
-def _collect_env(node: object, env: dict[str, str]) -> None:
-    """Gather every literal `env:` entry in a workflow into *env*."""
-    match node:
-        case dict():
-            for key, value in node.items():
-                if key == "env" and isinstance(value, dict):
-                    env.update({
-                        str(name): text
-                        for name, text in value.items()
-                        if isinstance(text, str)
-                    })
-                _collect_env(value, env)
-        case list():
-            for item in node:
-                _collect_env(item, env)
-        case _:
-            pass
-
-
-def _step_toolchains(step: dict[str, object], env: dict[str, str]) -> list[str]:
-    """Return the toolchains one workflow step names."""
-    names: list[str] = []
-    uses = step.get("uses")
-    inputs = step.get("with")
-    if isinstance(uses, str) and uses.startswith(_TOOLCHAIN_ACTIONS):
-        if isinstance(inputs, dict):
-            names += _toolchain_names(inputs.get("toolchain"), env)
-        # `dtolnay/rust-toolchain@nightly-2026-03-26` names its toolchain in
-        # the ref, which is the action's documented way to select one.
-        ref = uses.rpartition("@")[2]
-        if ref and not re.fullmatch(r"[0-9a-f]{40}", ref):
-            names.append(ref)
-    run = step.get("run")
-    if isinstance(run, str):
-        names += [m.group("value") for m in _RUSTUP_COMMAND.finditer(run)]
-        names += [m.group("value") for m in _CARGO_OVERRIDE.finditer(run)]
-    return names
-
-
-def _walk_steps(document: object) -> cabc.Iterator[tuple[str, dict[str, object]]]:
-    """Yield `(job label, step)` for every step of every job in a workflow."""
-    jobs = document.get("jobs") if isinstance(document, dict) else None
-    if not isinstance(jobs, dict):
-        return
-    for job_id, job in jobs.items():
-        if not isinstance(job, dict):
-            continue
-        steps = job.get("steps")
-        if not isinstance(steps, list):
-            continue
-        label = f"{job_id} {job.get('name', '')}"
-        for step in steps:
-            if isinstance(step, dict):
-                yield label, typ.cast("dict[str, object]", step)
-
-
-def _ci_facts(checkout: pathlib.Path) -> CiFacts:
-    """Read the workflows' toolchain evidence, retaining decode failures."""
-    errors: list[str] = []
-    names: set[str] = set()
-    msrv_job = False
-    reads_manifest_msrv = False
-    for workflow in load_workflows(checkout, resolved_root(checkout)):
-        if workflow["error"] is not None:
-            errors.append(f"{workflow['path']}: {workflow['error']}")
-            continue
-        document = workflow["parsed"]
-        env: dict[str, str] = {}
-        _collect_env(document, env)
-        for label, step in _walk_steps(document):
-            found = _step_toolchains(step, env)
-            names.update(found)
-            run = step.get("run")
-            step_text = (
-                f"{label} {step.get('name', '')} {run if isinstance(run, str) else ''}"
-            )
-            msrv_job = msrv_job or bool(_MSRV_JOB.search(step_text))
-            reads_manifest_msrv = reads_manifest_msrv or (
-                bool(_SELECTS_TOOLCHAIN.search(step_text))
-                and bool(_READS_MANIFEST_MSRV.search(step_text))
-            )
-    return {
-        "errors": errors,
-        "dated_nightlies": sorted(n for n in names if _NIGHTLY.match(n)),
-        "numeric_minors": sorted({m for n in names if (m := _minor(n)) is not None}),
-        "msrv_job": msrv_job,
-        "reads_manifest_msrv": reads_manifest_msrv,
-    }
 
 
 def _normalise_directory(directory: str) -> str:
@@ -445,11 +295,11 @@ def build_toolchain_policy_envelope(
         "applicable": bool(resolution.surfaces),
         "evaluated_on": (today or dt.datetime.now(dt.UTC).date()).isoformat(),
         "toolchain": toolchain,
-        "pin_minor": _minor(channel) if is_version and channel is not None else None,
+        "pin_minor": minor_of(channel) if is_version and channel is not None else None,
         "workspace_rust_version": _workspace_rust_version(resolution.surfaces),
         "crates": crates,
         "dependabot": _dependabot_facts(checkout),
-        "ci": _ci_facts(checkout),
+        "ci": ci_facts(checkout),
         "exceptions": find_exception_sections(
             checkout,
             _exception_documents(resolved),

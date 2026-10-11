@@ -847,13 +847,13 @@ resolver), the `rust-toolchain` entries of the Dependabot configuration (read
 through `build_dependabot_envelope`), the toolchains the workflows name, and
 any recorded exception (read by `find_exception_sections`). The builder takes
 "today" as an argument, defaulting to the current UTC date, and records it as
-`evaluated_on`, so the policy never reads a clock. The workflow facts are
-extracted from decoded YAML, not by searching text: a step's `uses` ref, its
-`with.toolchain` input (following one `${{ env.NAME }}` reference), and
-`rustup` or `cargo +toolchain` commands in its `run`. A workflow that does not
-decode is recorded with its reason, which makes RT-026 and RT-027
-indeterminate. The window and the accepted Dependabot intervals reach Conftest
-as `data.parameters`.
+`evaluated_on`, so the policy never reads a clock. The workflow facts
+(`toolchain_ci_facts.py`) are extracted from decoded YAML, not by searching
+text: a step's `uses` ref, its `with.toolchain` input (following one
+`${{ env.NAME }}` reference), and `rustup` or `cargo +toolchain` commands in its
+`run`. A workflow that does not decode is recorded with its reason, which
+makes RT-026 and RT-027 indeterminate. The window and the accepted Dependabot
+intervals reach Conftest as `data.parameters`.
 
 `dependabot-update-shape` takes its own as well. `build_dependabot_envelope` (in
 `dependabot_envelope.py`) assembles a `policy-input/dependabot-update-shape`
