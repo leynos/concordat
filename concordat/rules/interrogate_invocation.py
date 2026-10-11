@@ -206,8 +206,8 @@ def _record_long(options: Options, flag: str, value: str) -> None:
 def _consume_long(options: Options, word: str, queue: collections.deque[str]) -> None:
     """Read `--flag`, `--flag=value` or `--flag value`."""
     flag, has_value, value = word.partition("=")
-    if flag in VALUE_LONG and not has_value and queue:
-        value = queue.popleft()
+    if flag in VALUE_LONG:
+        value = value if has_value else (queue.popleft() if queue else "")
     _record_long(options, flag, value)
 
 

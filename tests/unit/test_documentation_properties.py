@@ -14,7 +14,8 @@ import typing as typ
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from concordat.rules.interrogate_invocation import scan_options
+from concordat.rules.documentation_envelope import Rule, _reachable
+from concordat.rules.interrogate_invocation import lex_segments, scan_options
 from concordat.rules.makefile_expansion import expand, shown, single_assignments
 
 if typ.TYPE_CHECKING:
@@ -98,3 +99,53 @@ def test_options_and_paths_are_read_apart(
     assert options.paths == paths
     assert options.verbose == verbosity
     assert options.fail_under == (None if threshold is None else str(threshold))
+
+
+_TARGETS = st.sampled_from([f"t{i}" for i in range(8)])
+
+
+@given(
+    edges=st.dictionaries(_TARGETS, st.lists(_TARGETS, max_size=4), max_size=8),
+    has_lint=st.booleans(),
+)
+def test_reachability_is_the_transitive_closure_from_lint(
+    edges: dict[str, list[str]], *, has_lint: bool
+) -> None:
+    """The walk reaches exactly what `lint` leads to, once each, in any graph."""
+    graph = {**edges, **({"lint": ["t0"]} if has_lint else {})}
+    index = {name: [Rule(deps, [])] for name, deps in graph.items()}
+    expected: set[str] = set()
+    pending = ["lint"]
+    while pending:
+        name = pending.pop()
+        if name in graph and name not in expected:
+            expected.add(name)
+            pending.extend(graph[name])
+
+    walk = _reachable(index, {})
+
+    assert set(walk.names) == expected
+    assert len(walk.names) == len(set(walk.names))
+    assert walk.is_resolved is True
+
+
+_COMMAND = st.lists(_WORDS, min_size=1, max_size=4)
+
+
+@given(
+    commands=st.lists(_COMMAND, min_size=1, max_size=4),
+    separators=st.lists(
+        st.sampled_from([";", "&&", "||", "|"]), min_size=3, max_size=3
+    ),
+)
+def test_lexing_splits_at_every_separator_and_nowhere_else(
+    commands: list[list[str]], separators: list[str]
+) -> None:
+    """Each generated simple command comes back as its own list of words."""
+    text = ""
+    for position, words in enumerate(commands):
+        text += " ".join(words)
+        if position < len(commands) - 1:
+            text += f" {separators[position]} "
+
+    assert lex_segments(text) == commands
