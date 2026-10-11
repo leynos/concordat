@@ -25,6 +25,11 @@ from ruamel.yaml import YAML
 if typ.TYPE_CHECKING:
     import types
 
+RELEASED_DIGESTS = {
+    "0.1.0": "cc8dc5dfba51efcca4e3c117e55e2fcbb463455929f5988efbf9c4532988f163",
+    "0.2.0": "1aee16702de67cc7dd5dfe15e434f589dfaecf3ca813c85fbff5320c5fe584fe",
+}
+
 _PACKAGE_DIR = (
     pathlib.Path(__file__).resolve().parents[2]
     / "platform-standards"
@@ -151,3 +156,17 @@ def test_the_vendored_test_copy_is_the_canonical_helper() -> None:
     )
 
     assert hashlib.sha256(copy.read_bytes()).hexdigest() in accepted
+
+
+def test_every_released_canon_digest_stays_listed() -> None:
+    """Dropping a version would fail every repository that still vendors it."""
+    manifest = YAML(typ="safe").load(
+        (_PACKAGE_DIR / "rule.yaml").read_text(encoding="utf-8")
+    )
+    digests = manifest["parameters"]["defaults"]["gate_digests"]
+
+    assert set(digests) >= {"0.1.0", "0.2.0"}
+    # Whole digests, not prefixes: a single changed character would fail every
+    # repository that still vendors that release.
+    assert digests["0.1.0"] == RELEASED_DIGESTS["0.1.0"]
+    assert digests["0.2.0"] == RELEASED_DIGESTS["0.2.0"]
