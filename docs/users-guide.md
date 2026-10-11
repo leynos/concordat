@@ -278,6 +278,34 @@ runs them, so correct Makefiles no longer draw false findings:
 A Makefile that 0.3.1 reported as noncompliant or indeterminate only because of
 one of these shapes can now be compliant. Nothing needs migrating.
 
+`rust-toolchain-policy` audits the Rust toolchain a repository builds with
+(RT-022 to RT-027; see [Migrating to 0.2](migrating-to-0.2.md) for adopting it):
+
+```shell
+concordat artefact rule run rust-toolchain-policy --repo /path/to/checkout
+```
+
+It requires that:
+
+- `rust-toolchain.toml` pins the channel exactly, as a release such as `1.93.1`
+  or a dated nightly such as `nightly-2026-09-20`, never `stable` or `nightly`
+  (RT-022);
+- a pinned nightly is at most `window_days` old, 56 by default (RT-023);
+- `.github/dependabot.yml` has a `rust-toolchain` entry on the pin's directory
+  with a daily or weekly interval (RT-024);
+- every publishable library crate declares `rust-version` (RT-025, a warning);
+- every declared MSRV is exercised by CI: a workflow installs that toolchain,
+  a job or step runs cargo-msrv or is named for the MSRV, a step selects its
+  toolchain from `rust-version`, or the pin is that version (RT-026);
+- no workflow names a dated nightly other than the pinned one (RT-027).
+
+A repository whose nightly cannot move records that in
+`docs/developers-guide.md` under a heading containing "Toolchain policy",
+naming the pinned channel in the section. That exempts RT-023, RT-024 and
+RT-025 while the section names the current pin. A repository with no Cargo
+manifest is outside the rule. Workspace members are judged where `.concordat`
+declares them as Rust surfaces.
+
 `dependabot-update-shape` audits `.github/dependabot.yml` against the estate's
 update shape (DB-005):
 

@@ -164,6 +164,21 @@ artifacts:
     description: >
       Rule package manifest for the Dependabot update-shape policy.
     sha256: e1a41a66ef0bd795c9e701aa51a7d7f0cabe3b4d972d55017016d87aa42efb27
+  - id: lint-rule-rust-toolchain-policy
+    type: opa-policy
+    path: >-
+      platform-standards/canon/lint-rules/rust-toolchain-policy/policy/rust_toolchain_policy.rego
+    description: >
+      Audit-only RT-022 to RT-027 policy holding the Rust toolchain to an exact
+      pin, a fresh nightly, a Dependabot entry that moves it, and a declared
+      MSRV that CI exercises.
+    sha256: daeb617edde3a10b7435fc926ce2817a26fcbe1eaaee97cc3e2541322af75ec6
+  - id: lint-rule-rust-toolchain-policy-manifest
+    type: lint-config
+    path: platform-standards/canon/lint-rules/rust-toolchain-policy/rule.yaml
+    description: >
+      Rule package manifest for the Rust toolchain policy.
+    sha256: 79586b19ecafeb8e4db15e1e85765904f41e12e0298204978ae89795e6800421
   - id: lint-rule-spelling-config-baseline
     type: opa-policy
     path: >-
