@@ -270,6 +270,14 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
             )
         )
     }),
+    "gate_through_uv_gate": Scenario({
+        "Makefile": makefile(
+            tool=(
+                "python3 scripts/uv_gate.py tool --from 'interrogate==1.7.0' "
+                "-- interrogate"
+            )
+        )
+    }),
     "gate_variable_twice": Scenario({
         "Makefile": makefile(extra="FLAGS = -vv --fail-under 100\n")
     }),

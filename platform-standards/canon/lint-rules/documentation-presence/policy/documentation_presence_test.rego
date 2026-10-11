@@ -108,6 +108,8 @@ test_ignore_config_and_regex if reported(data.fixtures.ignore_config_and_regex) 
 
 test_gate_behind_environment_prefix if reported(data.fixtures.gate_behind_environment_prefix) == set()
 
+test_gate_through_uv_gate if reported(data.fixtures.gate_through_uv_gate) == set()
+
 # A partial scope names each directory it misses, once, with a file to look at.
 test_scope_partial_names_every_directory if {
 	messages := {f.msg | some f in findings(data.fixtures.scope_partial)}

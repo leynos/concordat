@@ -294,6 +294,13 @@ def test_a_redirection_destination_is_not_a_scanned_path(
         ('"X=1" interrogate -f 100 pkg', 0),
         ("'X=1' uv run interrogate -f 100 pkg", 0),
         ("X=1 true interrogate -f 100 pkg", 0),
+        (
+            "python3 scripts/uv_gate.py tool --from interrogate -- interrogate pkg",
+            1,
+        ),
+        ("python3 scripts/uv_gate.py run -- interrogate -f 100 pkg", 1),
+        ("python3 scripts/uv_gate.py run -- true interrogate -f 100 pkg", 0),
+        ("python3 scripts/other.py tool -- interrogate -f 100 pkg", 0),
         ("true interrogate -f 100 pkg", 0),
         ("echo interrogate -f 100 pkg", 0),
         ("uv run true interrogate -f 100 pkg", 0),

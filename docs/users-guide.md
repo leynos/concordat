@@ -879,9 +879,11 @@ not part of the command, so
 `X=1 $(MAKE) interrogate` reaches the `interrogate` target. A Make prefix (`@`,
 `-`, `+`) is ignored. A quoted `"X=1"` is a command name, not an assignment,
 and a word that merely names the tool (`true interrogate ...`, or the package in
-`uv run --with interrogate`) is no run. `make -C dir target` runs another
-Makefile, so the walk cannot follow it and reports the reachability as
-unresolved.
+`uv run --with interrogate`) is no run. The vendored helper counts as a
+launcher:
+`python3 scripts/uv_gate.py tool --from interrogate==1.7.0 -- interrogate …` is
+a run. `make -C dir target` runs another Makefile, so the walk cannot follow it
+and reports the reachability as unresolved.
 
 A variable the audit cannot resolve to one value, a configuration file that is
 missing or not TOML, or a `lint` target it cannot follow makes the affected

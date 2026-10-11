@@ -304,6 +304,28 @@ def scan_options(arguments: list[str]) -> Options:
     return options
 
 
+# The vendored uv helper, run as `python3 scripts/uv_gate.py <uv-style arguments>`.
+GATE_HELPER: typ.Final = "uv_gate.py"
+
+
+def _launcher_arguments(prefix: list[str]) -> list[str] | None:
+    """Return the words after a launcher, or ``None`` when *prefix* is no launcher.
+
+    The vendored helper is a launcher too: `python3 scripts/uv_gate.py tool
+    --from interrogate==1.7.0 -- interrogate` takes the same arguments as uv.
+
+    Returns
+    -------
+    list[str] | None
+        The launcher's own words (subcommands, flags and values), or ``None``.
+    """
+    if posixpath.basename(prefix[0]) not in LAUNCHERS:
+        return None
+    if len(prefix) > 1 and posixpath.basename(prefix[1]) == GATE_HELPER:
+        return prefix[2:]
+    return prefix[1:]
+
+
 def _is_launcher_prefix(prefix: list[str]) -> bool:
     """Return whether *prefix* is only a launcher's subcommands, flags and values.
 
@@ -315,10 +337,11 @@ def _is_launcher_prefix(prefix: list[str]) -> bool:
     bool
         Whether the words before the tool are all the launcher's own.
     """
-    if posixpath.basename(prefix[0]) not in LAUNCHERS:
+    arguments = _launcher_arguments(prefix)
+    if arguments is None:
         return False
     awaiting_value = False
-    for word in prefix[1:]:
+    for word in arguments:
         if awaiting_value:
             awaiting_value = False
         elif word in LAUNCHER_VALUE_FLAGS:
