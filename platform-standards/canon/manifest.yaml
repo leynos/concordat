@@ -194,6 +194,21 @@ artifacts:
     description: >
       Rule package manifest for the uv gate baseline policy.
     sha256: eabafe43773b5bcd0ffb648d4cb82aa189d44f19f40f84c918f4c777fa93bb5b
+  - id: lint-rule-documentation-presence
+    type: opa-policy
+    path: >-
+      platform-standards/canon/lint-rules/documentation-presence/policy/documentation_presence.rego
+    description: >
+      Audit-only DG-001 and DG-002 policy holding a Python checkout to an exact
+      interrogate docstring-coverage gate that `make lint` reaches, at a
+      threshold of 100, over every file the repository owns.
+    sha256: 529692d088f9227437dfbc2ac281280643b7bba2515e035f208ae097d1bf9297
+  - id: lint-rule-documentation-presence-manifest
+    type: lint-config
+    path: platform-standards/canon/lint-rules/documentation-presence/rule.yaml
+    description: >
+      Rule package manifest for the documentation presence policy.
+    sha256: d800ba1a07f7581011651e0c64e830fd15b03a862d00646e4728bb93619e2b68
   - id: lint-rule-whitaker-provisioning
     type: opa-policy
     path: platform-standards/canon/lint-rules/whitaker-provisioning/policy/whitaker_provisioning.rego
