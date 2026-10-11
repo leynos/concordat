@@ -683,8 +683,15 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   invocation as a run (paths, threshold, verbose level, relaxing flags, config,
   excludes and whether the recipe greps for `MISSED`). That keeps the Rego free
   of shell parsing; an invocation it cannot resolve is carried with
-  `resolved: false`. The package is registered by identifier and declares its
-  kind, and the thresholds reach the policy as manifest parameters.
+  `resolved: false`. `interrogate_invocation.command_words` is the one place
+  that decides where a simple command starts: it skips leading `NAME=value`
+  assignments, `env` and its options (and the values of `-u`, `-C` and `-S`),
+  and ignores the Make recipe prefixes `@`, `-` and `+`. The lexer marks a
+  quoted leading assignment, which the shell runs as a command name, so it is
+  not skipped. Both the interrogate-run detector and the `make` reachability
+  walk (`make -C` and `--directory` make it unresolved) call it, so the two
+  agree on what a command is. The package is registered by identifier and
+  declares its kind, and the thresholds reach the policy as manifest parameters.
 
 - `policy-input/spelling-config-baseline` —
   `spelling_envelope.build_spelling_envelope`. It reuses `markdown_envelope`'s
