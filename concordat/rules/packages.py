@@ -70,6 +70,13 @@ from .spelling_envelope import (
     build_spelling_envelope,
 )
 from .spelling_envelope import ENVELOPE_KIND as SPELLING_ENVELOPE_KIND
+from .toolchain_policy_envelope import (
+    ENVELOPE_KIND as TOOLCHAIN_POLICY_ENVELOPE_KIND,
+)
+from .toolchain_policy_envelope import (
+    ToolchainPolicyEnvelope,
+    build_toolchain_policy_envelope,
+)
 from .uv_gate_envelope import (
     ENVELOPE_KIND as UV_GATE_ENVELOPE_KIND,
 )
@@ -100,6 +107,7 @@ type RuleEnvelope = (
     | SpellingEnvelope
     | ProvisioningEnvelope
     | DocumentationEnvelope
+    | ToolchainPolicyEnvelope
 )
 type EnvelopeResolver = cabc.Callable[[str, pathlib.Path], RuleEnvelope]
 
@@ -492,6 +500,7 @@ PACKAGE_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     "main-owned-codescene-coverage": _coverage_envelope,
     "dependabot-update-shape": _dependabot_envelope,
     "dependency-family-contracts": _dependency_family_envelope,
+    "rust-toolchain-policy": build_toolchain_policy_envelope,
     "spelling-config-baseline": _spelling_envelope,
     "uv-gate-baseline": _uv_gate_envelope,
     "documentation-presence": _documentation_envelope,
@@ -508,6 +517,7 @@ INPUT_KIND_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     COVERAGE_ENVELOPE_KIND: _coverage_envelope,
     DEPENDABOT_ENVELOPE_KIND: _dependabot_envelope,
     FAMILY_ENVELOPE_KIND: _dependency_family_envelope,
+    TOOLCHAIN_POLICY_ENVELOPE_KIND: build_toolchain_policy_envelope,
     SPELLING_ENVELOPE_KIND: _spelling_envelope,
     UV_GATE_ENVELOPE_KIND: _uv_gate_envelope,
     DOCUMENTATION_ENVELOPE_KIND: _documentation_envelope,

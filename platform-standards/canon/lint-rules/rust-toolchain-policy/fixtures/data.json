@@ -1,0 +1,1630 @@
+{
+  "fixtures": {
+    "app_without_msrv": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [
+          "nightly-2026-09-20"
+        ],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": false,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": null
+        }
+      ],
+      "dependabot": {
+        "entries": [
+          {
+            "directories": [
+              "/"
+            ],
+            "interval": "daily"
+          }
+        ],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "nightly-2026-09-20",
+        "channel_kind": "nightly-dated",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
+    "ci_competing_nightly": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [
+          "nightly-2026-03-26",
+          "nightly-2026-09-20"
+        ],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [
+          "1.85"
+        ],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": "1.85"
+        }
+      ],
+      "dependabot": {
+        "entries": [
+          {
+            "directories": [
+              "/"
+            ],
+            "interval": "daily"
+          }
+        ],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "nightly-2026-09-20",
+        "channel_kind": "nightly-dated",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
+    "compliant": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [
+          "nightly-2026-09-20"
+        ],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [
+          "1.85"
+        ],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": "1.85"
+        }
+      ],
+      "dependabot": {
+        "entries": [
+          {
+            "directories": [
+              "/"
+            ],
+            "interval": "daily"
+          }
+        ],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "nightly-2026-09-20",
+        "channel_kind": "nightly-dated",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
+    "dependabot_monthly": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [
+          "nightly-2026-09-20"
+        ],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [
+          "1.85"
+        ],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": "1.85"
+        }
+      ],
+      "dependabot": {
+        "entries": [
+          {
+            "directories": [
+              "/"
+            ],
+            "interval": "monthly"
+          }
+        ],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "nightly-2026-09-20",
+        "channel_kind": "nightly-dated",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
+    "dependabot_unreadable": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [
+          "nightly-2026-09-20"
+        ],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [
+          "1.85"
+        ],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": "1.85"
+        }
+      ],
+      "dependabot": {
+        "entries": [],
+        "error": "invalid YAML: boom",
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "nightly-2026-09-20",
+        "channel_kind": "nightly-dated",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
+    "dependabot_weekly": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [
+          "nightly-2026-09-20"
+        ],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [
+          "1.85"
+        ],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": "1.85"
+        }
+      ],
+      "dependabot": {
+        "entries": [
+          {
+            "directories": [
+              "/"
+            ],
+            "interval": "weekly"
+          }
+        ],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "nightly-2026-09-20",
+        "channel_kind": "nightly-dated",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
+    "dependabot_wrong_directory": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [
+          "nightly-2026-09-20"
+        ],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [
+          "1.85"
+        ],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": "1.85"
+        }
+      ],
+      "dependabot": {
+        "entries": [
+          {
+            "directories": [
+              "/rust"
+            ],
+            "interval": "daily"
+          }
+        ],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "nightly-2026-09-20",
+        "channel_kind": "nightly-dated",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
+    "edge_nightly": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [
+          "1.85"
+        ],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": "1.85"
+        }
+      ],
+      "dependabot": {
+        "entries": [
+          {
+            "directories": [
+              "/"
+            ],
+            "interval": "daily"
+          }
+        ],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "nightly-2026-08-16",
+        "channel_kind": "nightly-dated",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
+    "excepted_old_nightly": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [
+          "1.85"
+        ],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": "1.85"
+        }
+      ],
+      "dependabot": {
+        "entries": [],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": true,
+          "read_error": null,
+          "sections": [
+            {
+              "body_lines": 4,
+              "channels_named": [
+                "nightly-2026-03-26"
+              ],
+              "heading": "Toolchain policy exception",
+              "level": 2,
+              "line": 10,
+              "path": "docs/developers-guide.md"
+            }
+          ]
+        }
+      ],
+      "kind": "policy-input/rust-toolchain-policy",
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "nightly-2026-03-26",
+        "channel_kind": "nightly-dated",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
+    "floating_stable": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [
+          "1.85"
+        ],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": "1.85"
+        }
+      ],
+      "dependabot": {
+        "entries": [
+          {
+            "directories": [
+              "/"
+            ],
+            "interval": "daily"
+          }
+        ],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "stable",
+        "channel_kind": "stable",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
+    "inherited_msrv": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [
+          "nightly-2026-09-20"
+        ],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [
+          "1.85"
+        ],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": true,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": null
+        }
+      ],
+      "dependabot": {
+        "entries": [
+          {
+            "directories": [
+              "/"
+            ],
+            "interval": "daily"
+          }
+        ],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "nightly-2026-09-20",
+        "channel_kind": "nightly-dated",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": "1.85"
+    },
+    "inherits_nothing": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [
+          "nightly-2026-09-20"
+        ],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": true,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": null
+        }
+      ],
+      "dependabot": {
+        "entries": [
+          {
+            "directories": [
+              "/"
+            ],
+            "interval": "daily"
+          }
+        ],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "nightly-2026-09-20",
+        "channel_kind": "nightly-dated",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
+    "just_over_nightly": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [
+          "1.85"
+        ],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": "1.85"
+        }
+      ],
+      "dependabot": {
+        "entries": [
+          {
+            "directories": [
+              "/"
+            ],
+            "interval": "daily"
+          }
+        ],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "nightly-2026-08-15",
+        "channel_kind": "nightly-dated",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
+    "lib_without_msrv": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [
+          "nightly-2026-09-20"
+        ],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": null
+        }
+      ],
+      "dependabot": {
+        "entries": [
+          {
+            "directories": [
+              "/"
+            ],
+            "interval": "daily"
+          }
+        ],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "nightly-2026-09-20",
+        "channel_kind": "nightly-dated",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
+    "msrv_is_the_pin": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": "1.85"
+        }
+      ],
+      "dependabot": {
+        "entries": [
+          {
+            "directories": [
+              "/"
+            ],
+            "interval": "daily"
+          }
+        ],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "pin_minor": "1.85",
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "1.85.0",
+        "channel_kind": "version",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
+    "msrv_job": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [
+          "nightly-2026-09-20"
+        ],
+        "errors": [],
+        "msrv_job": true,
+        "numeric_minors": [],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": "1.85"
+        }
+      ],
+      "dependabot": {
+        "entries": [
+          {
+            "directories": [
+              "/"
+            ],
+            "interval": "daily"
+          }
+        ],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "nightly-2026-09-20",
+        "channel_kind": "nightly-dated",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
+    "msrv_not_in_ci": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [
+          "nightly-2026-09-20"
+        ],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [
+          "1.95"
+        ],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": "1.85"
+        }
+      ],
+      "dependabot": {
+        "entries": [
+          {
+            "directories": [
+              "/"
+            ],
+            "interval": "daily"
+          }
+        ],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "nightly-2026-09-20",
+        "channel_kind": "nightly-dated",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
+    "msrv_patch_spelling": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [
+          "nightly-2026-09-20"
+        ],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [
+          "1.85"
+        ],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": "1.85.0"
+        }
+      ],
+      "dependabot": {
+        "entries": [
+          {
+            "directories": [
+              "/"
+            ],
+            "interval": "daily"
+          }
+        ],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "nightly-2026-09-20",
+        "channel_kind": "nightly-dated",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
+    "msrv_read_from_manifest": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [
+          "nightly-2026-09-20"
+        ],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [],
+        "reads_manifest_msrv": true
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": "1.85"
+        }
+      ],
+      "dependabot": {
+        "entries": [
+          {
+            "directories": [
+              "/"
+            ],
+            "interval": "daily"
+          }
+        ],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "nightly-2026-09-20",
+        "channel_kind": "nightly-dated",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
+    "no_channel": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [
+          "nightly-2026-09-20"
+        ],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [
+          "1.85"
+        ],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": "1.85"
+        }
+      ],
+      "dependabot": {
+        "entries": [
+          {
+            "directories": [
+              "/"
+            ],
+            "interval": "daily"
+          }
+        ],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": null,
+        "channel_kind": "unknown",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
+    "no_dependabot_entry": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [
+          "nightly-2026-09-20"
+        ],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [
+          "1.85"
+        ],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": "1.85"
+        }
+      ],
+      "dependabot": {
+        "entries": [],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "nightly-2026-09-20",
+        "channel_kind": "nightly-dated",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
+    "no_dependabot_file": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [
+          "nightly-2026-09-20"
+        ],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [
+          "1.85"
+        ],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": "1.85"
+        }
+      ],
+      "dependabot": {
+        "entries": [],
+        "error": null,
+        "present": false
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "nightly-2026-09-20",
+        "channel_kind": "nightly-dated",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
+    "no_pin": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [
+          "nightly-2026-09-20"
+        ],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [
+          "1.85"
+        ],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": "1.85"
+        }
+      ],
+      "dependabot": {
+        "entries": [
+          {
+            "directories": [
+              "/"
+            ],
+            "interval": "daily"
+          }
+        ],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": null,
+      "workspace_rust_version": null
+    },
+    "not_applicable": {
+      "applicable": false,
+      "ci": {
+        "dated_nightlies": [
+          "nightly-2026-09-20"
+        ],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [
+          "1.85"
+        ],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": "1.85"
+        }
+      ],
+      "dependabot": {
+        "entries": [
+          {
+            "directories": [
+              "/"
+            ],
+            "interval": "daily"
+          }
+        ],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": null,
+      "workspace_rust_version": null
+    },
+    "numeric_pin": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [
+          "1.85"
+        ],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": "1.85"
+        }
+      ],
+      "dependabot": {
+        "entries": [
+          {
+            "directories": [
+              "/"
+            ],
+            "interval": "daily"
+          }
+        ],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "pin_minor": "1.93",
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "1.93.1",
+        "channel_kind": "version",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
+    "old_nightly": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [
+          "1.85"
+        ],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": "1.85"
+        }
+      ],
+      "dependabot": {
+        "entries": [
+          {
+            "directories": [
+              "/"
+            ],
+            "interval": "daily"
+          }
+        ],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "nightly-2026-03-26",
+        "channel_kind": "nightly-dated",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
+    "stale_exception": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [
+          "1.85"
+        ],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": "1.85"
+        }
+      ],
+      "dependabot": {
+        "entries": [],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": true,
+          "read_error": null,
+          "sections": [
+            {
+              "body_lines": 4,
+              "channels_named": [
+                "nightly-2026-03-26"
+              ],
+              "heading": "Toolchain policy exception",
+              "level": 2,
+              "line": 10,
+              "path": "docs/developers-guide.md"
+            }
+          ]
+        }
+      ],
+      "kind": "policy-input/rust-toolchain-policy",
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "nightly-2026-04-01",
+        "channel_kind": "nightly-dated",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
+    "unpublished_lib_without_msrv": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [
+          "nightly-2026-09-20"
+        ],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": false,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": null
+        }
+      ],
+      "dependabot": {
+        "entries": [
+          {
+            "directories": [
+              "/"
+            ],
+            "interval": "daily"
+          }
+        ],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "nightly-2026-09-20",
+        "channel_kind": "nightly-dated",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
+    "unreadable_pin": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [
+          "nightly-2026-09-20"
+        ],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [
+          "1.85"
+        ],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": "1.85"
+        }
+      ],
+      "dependabot": {
+        "entries": [
+          {
+            "directories": [
+              "/"
+            ],
+            "interval": "daily"
+          }
+        ],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": null,
+        "channel_kind": "unknown",
+        "parse_error": "boom",
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
+    "workflow_unreadable": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [
+          "nightly-2026-09-20"
+        ],
+        "errors": [
+          ".github/workflows/ci.yml: invalid YAML: boom"
+        ],
+        "msrv_job": false,
+        "numeric_minors": [],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": "1.85"
+        }
+      ],
+      "dependabot": {
+        "entries": [
+          {
+            "directories": [
+              "/"
+            ],
+            "interval": "daily"
+          }
+        ],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "nightly-2026-09-20",
+        "channel_kind": "nightly-dated",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    },
+    "workspace_msrv_not_in_ci": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [
+          "nightly-2026-09-20"
+        ],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [
+          "1.95"
+        ],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": true,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": null
+        }
+      ],
+      "dependabot": {
+        "entries": [
+          {
+            "directories": [
+              "/"
+            ],
+            "interval": "daily"
+          }
+        ],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/rust-toolchain-policy",
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "nightly-2026-09-20",
+        "channel_kind": "nightly-dated",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": "1.80"
+    },
+    "wrong_kind": {
+      "applicable": true,
+      "ci": {
+        "dated_nightlies": [
+          "nightly-2026-09-20"
+        ],
+        "errors": [],
+        "msrv_job": false,
+        "numeric_minors": [
+          "1.85"
+        ],
+        "reads_manifest_msrv": false
+      },
+      "crates": [
+        {
+          "has_lib": true,
+          "inherits_workspace": false,
+          "is_publishable": true,
+          "name": "demo",
+          "path": "Cargo.toml",
+          "rust_version": "1.85"
+        }
+      ],
+      "dependabot": {
+        "entries": [
+          {
+            "directories": [
+              "/"
+            ],
+            "interval": "daily"
+          }
+        ],
+        "error": null,
+        "present": true
+      },
+      "evaluated_on": "2026-10-11",
+      "exceptions": [],
+      "kind": "policy-input/dependabot-update-shape",
+      "pin_minor": null,
+      "repository": {
+        "name": null,
+        "path": "."
+      },
+      "schema_version": 1,
+      "toolchain": {
+        "channel": "nightly-2026-09-20",
+        "channel_kind": "nightly-dated",
+        "parse_error": null,
+        "path": "rust-toolchain.toml"
+      },
+      "workspace_rust_version": null
+    }
+  }
+}

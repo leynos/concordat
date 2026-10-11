@@ -666,6 +666,11 @@ the Section 2.1.2 format.
   and direct cargo workflow steps that assign `RUSTFLAGS` restate the fast
   flags. The envelope now carries the `makeutil` report and decoded workflows
   (ADR-003).
+- [x] Ship the Rust toolchain policy rule (RT-022 to RT-027, DF12-102): the
+  `rust-toolchain-policy` package pins the channel exactly, keeps a nightly
+  within a 56-day window, requires a Dependabot `rust-toolchain` entry, and
+  requires a declared MSRV to be exercised by CI. RT-006 stays until RT-023 is
+  live estate-wide, then a separate change retires it.
 - [ ] Ship the remaining Rust toolchain and acceleration rule packages (RT-006,
   RT-007, RT-010, RT-011): nightly pins no older than one year, required
   toolchain components, Polonius-next for application-only repositories, and

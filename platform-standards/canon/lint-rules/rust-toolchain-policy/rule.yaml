@@ -1,0 +1,56 @@
+schema_version: 1
+id: rust-toolchain-policy
+name: Rust toolchain policy
+description: >-
+  Audits the Rust toolchain a repository builds with: the channel pinned
+  exactly in `rust-toolchain.toml` (RT-022), a pinned nightly no older than
+  the freshness window (RT-023), a Dependabot `rust-toolchain` entry that can
+  move the pin (RT-024), a `rust-version` on every publishable library crate
+  (RT-025), every declared MSRV exercised by CI (RT-026), and CI naming no
+  dated nightly other than the pin (RT-027). A recorded toolchain-policy
+  exception that names the pinned channel exempts RT-023 and RT-024, for a
+  repository whose nightly is coupled to something it cannot move. Audit-only:
+  this rule declares no mutations.
+version: 0.1.0
+sensor:
+  type: conftest
+  input: policy-input/rust-toolchain-policy
+  policy: policy/
+  tests:
+    - policy/
+  data:
+    - fixtures/data.json
+parameters:
+  schema:
+    type: object
+    additionalProperties: false
+    properties:
+      window_days:
+        type: integer
+        minimum: 1
+        description: >-
+          The oldest a pinned dated nightly may be, in days, when the audit
+          runs.
+      dependabot_intervals:
+        type: array
+        items:
+          type: string
+        description: >-
+          The schedule intervals of a `rust-toolchain` Dependabot entry that
+          count as keeping the pin moving.
+      exception_documents:
+        type: array
+        items:
+          type: string
+        description: Documents scanned for a recorded toolchain-policy exception.
+      exception_keyword:
+        type: string
+        description: The phrase an exception section's heading must contain.
+  defaults:
+    window_days: 56
+    dependabot_intervals:
+      - daily
+      - weekly
+    exception_documents:
+      - docs/developers-guide.md
+    exception_keyword: Toolchain policy
