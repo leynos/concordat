@@ -9,11 +9,12 @@ with the builder's `fnmatch` and regular-expression handling.
 
 from __future__ import annotations
 
+import operator
 import pathlib
 import tempfile
 import typing as typ
 
-from hypothesis import given
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from concordat.rules.dependency_family_coverage import coverage, is_ignored
@@ -152,22 +153,32 @@ def test_python_ignore_names_are_compared_normalised(spelling: str) -> None:
 
 _COMPONENTS: typ.Final = ("a", "b", "rust", "target", ".hidden", "vendor", "venv")
 _SKIPPED: typ.Final = frozenset({"target", "vendor", "venv"})
-_MANIFEST: typ.Final = '[package]\nname = "x"\nversion = "0.1.0"\n'
+_RELATED: typ.Final = (
+    '[package]\nname = "x"\nversion = "0.1.0"\n[dependencies]\npyo3 = "0.28"\n'
+)
+_UNRELATED: typ.Final = (
+    '[package]\nname = "x"\nversion = "0.1.0"\n[dependencies]\nserde = "1"\n'
+)
 _layouts = st.lists(
-    st.lists(st.sampled_from(_COMPONENTS), max_size=3).map(tuple),
+    st.tuples(
+        st.lists(st.sampled_from(_COMPONENTS), max_size=3).map(tuple), st.booleans()
+    ),
     max_size=6,
-    unique=True,
+    unique_by=operator.itemgetter(0),
 )
 
 
 def _write_layout(
-    checkout: pathlib.Path, directories: list[tuple[str, ...]], *, declared: bool
+    checkout: pathlib.Path,
+    layout: list[tuple[tuple[str, ...], bool]],
+    *,
+    declared: bool,
 ) -> None:
     """Write a Cargo manifest in each directory, and the declaration if asked."""
-    for parts in directories:
+    for parts, related in layout:
         manifest = checkout.joinpath(*parts, "Cargo.toml")
         manifest.parent.mkdir(parents=True, exist_ok=True)
-        manifest.write_text(_MANIFEST, encoding="utf-8")
+        manifest.write_text(_RELATED if related else _UNRELATED, encoding="utf-8")
     if declared:
         (checkout / ".concordat").write_text(
             "language:\n  rust:\n    surfaces: []\n", encoding="utf-8"
@@ -180,23 +191,24 @@ def _is_eligible(parts: tuple[str, ...]) -> bool:
     return bool(parts) and not hidden
 
 
-@given(directories=_layouts, declared=st.booleans())
-def test_every_ungoverned_cargo_manifest_is_named_exactly_once(
-    directories: list[tuple[str, ...]], *, declared: bool
+@settings(deadline=None)
+@given(layout=_layouts, declared=st.booleans())
+def test_every_ungoverned_related_cargo_manifest_is_named_exactly_once(
+    layout: list[tuple[tuple[str, ...], bool]], *, declared: bool
 ) -> None:
-    """Without declared surfaces each eligible nested manifest is a problem."""
+    """Without declared surfaces each eligible related nested manifest is named."""
     expected = (
         []
         if declared
         else sorted(
             "/".join((*parts, "Cargo.toml"))
-            for parts in directories
-            if _is_eligible(parts)
+            for parts, related in layout
+            if related and _is_eligible(parts)
         )
     )
     with tempfile.TemporaryDirectory() as raw:
         checkout = pathlib.Path(raw)
-        _write_layout(checkout, directories, declared=declared)
+        _write_layout(checkout, layout, declared=declared)
         problems = build_dependency_family_envelope(checkout)["problems"]
 
     marker = " is a Cargo manifest outside"

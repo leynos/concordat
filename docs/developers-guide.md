@@ -935,16 +935,17 @@ match, `ignore` rule). The estate's relationship data is read from
 exceptions from `.concordat`. When `language.rust.surfaces` is undeclared the
 resolver falls back to the root `Cargo.toml`, so the builder walks the tree
 (skipping hidden directories and `target`, `vendor`, `node_modules`, `venv`,
-`build` and `dist`) and names every other `Cargo.toml` as a problem; a declared
-list stays authoritative. The same walk finds nested `pyproject.toml` files,
-and a directory it cannot list is a problem rather than a shorter result. A
-manifest the surface resolver rejects, a Python project outside the root, an
-unreadable lock and a missing configuration become `problems` or
-per-declaration reasons, which the policy turns into DF-006 indeterminate
-findings. To make a newly discovered family a checked contract, add one
-relationship (id, kind, members by published name, relation, owner and
-provenance) to the data file and a fixture scenario to `fixtures/generate.py`;
-no Python or Rego edit is needed.
+`build` and `dist`) and reads every other `Cargo.toml` loosely, naming it as a
+problem when it cannot be decoded or declares a package (by published name)
+that a relationship lists; a declared list stays authoritative. The same walk
+finds nested `pyproject.toml` files, and a directory it cannot list is a
+problem rather than a shorter result. A manifest the surface resolver rejects,
+a Python project outside the root, an unreadable lock and a missing
+configuration become `problems` or per-declaration reasons, which the policy
+turns into DF-006 indeterminate findings. To make a newly discovered family a
+checked contract, add one relationship (id, kind, members by published name,
+relation, owner and provenance) to the data file and a fixture scenario to
+`fixtures/generate.py`; no Python or Rego edit is needed.
 
 Workflow discovery in that builder is explicitly fallible. An absent
 `.github/workflows` directory is a repository with no workflows and yields an

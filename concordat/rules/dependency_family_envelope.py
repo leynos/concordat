@@ -323,8 +323,46 @@ def _cargo_tables(
     return tables
 
 
+def _ungoverned_problem(
+    checkout: pathlib.Path,
+    nested: pathlib.Path,
+    members: cabc.Collection[str],
+    inherited: dict[str, object],
+) -> str | None:
+    """Return the problem an unread nested manifest poses, or None when benign.
+
+    A manifest that cannot be read or decoded is a problem, since nothing can
+    be said about what it declares. One that decodes is a problem only when it
+    declares a package some recorded relationship names: otherwise no
+    relationship could apply to it and its absence from the audit hides nothing.
+
+    Returns
+    -------
+    str | None
+        The problem sentence, or None when the manifest relates to nothing.
+    """
+    relative = nested.relative_to(checkout).as_posix()
+    outside = f"{relative} is a Cargo manifest outside the governed Rust surfaces"
+    try:
+        parsed = tomllib.loads(nested.read_text(encoding="utf-8"))
+    except (tomllib.TOMLDecodeError, UnicodeDecodeError, OSError) as error:
+        return f"{outside} and cannot be read: {error}"
+    declared = {
+        _published(key, value, inherited)
+        for _, _, table in _cargo_tables(parsed)
+        for key, value in table.items()
+    }
+    related = sorted(declared & set(members))
+    if not related:
+        return None
+    return (
+        f"{outside} and declares {', '.join(related)}; "
+        "declare language.rust.surfaces in .concordat to read it"
+    )
+
+
 def _cargo_surfaces(
-    checkout: pathlib.Path, problems: list[str]
+    checkout: pathlib.Path, problems: list[str], members: cabc.Collection[str]
 ) -> list[dict[str, object]]:
     """Return the governed Cargo surfaces, or none with the reason recorded."""
     try:
@@ -336,12 +374,13 @@ def _cargo_surfaces(
     surfaces = [dict(surface) for surface in resolution.surfaces]
     if not resolution.declared:
         governed = {str(surface["path"]) for surface in surfaces}
-        problems.extend(
-            f"{relative} is a Cargo manifest outside the governed Rust surfaces; "
-            "declare language.rust.surfaces in .concordat to read it"
+        inherited = _workspace_requirements(surfaces)
+        found = (
+            _ungoverned_problem(checkout, nested, members, inherited)
             for nested in _nested_files(checkout, "Cargo.toml", problems)
-            if (relative := nested.relative_to(checkout).as_posix()) not in governed
+            if nested.relative_to(checkout).as_posix() not in governed
         )
+        problems.extend(problem for problem in found if problem is not None)
     return surfaces
 
 
@@ -349,9 +388,10 @@ def _cargo_declarations(
     checkout: pathlib.Path,
     config: ConfigFile | None,
     problems: list[str],
+    members: cabc.Collection[str],
 ) -> list[Declaration]:
     """Return every dependency edge of the governed Cargo surfaces."""
-    surfaces = _cargo_surfaces(checkout, problems)
+    surfaces = _cargo_surfaces(checkout, problems, members)
     inherited = _workspace_requirements(surfaces)
     parsed = [(str(s["path"]), mapping(s.get("parsed"))) for s in surfaces]
     problems.extend(
@@ -686,9 +726,14 @@ def build_dependency_family_envelope(
     """
     problems: list[str] = []
     config = build_dependabot_envelope(checkout)["config"]
-    declarations = _cargo_declarations(checkout, config, problems)
-    declarations += _python_declarations(checkout, config, problems)
     version, relationships = _load_relationships(problems)
+    members = {
+        str(member)
+        for relationship in relationships
+        for member in sequence(relationship.get("members")) or []
+    }
+    declarations = _cargo_declarations(checkout, config, problems, members)
+    declarations += _python_declarations(checkout, config, problems)
     return {
         "schema_version": ENVELOPE_SCHEMA_VERSION,
         "kind": ENVELOPE_KIND,

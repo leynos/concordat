@@ -354,11 +354,13 @@ A relationship applies only where the repository declares every member:
 - a missing configuration, an unreadable manifest or lock, a Python project
   outside the root, or a Cargo manifest outside the governed Rust surfaces is
   reported as indeterminate (DF-006). A repository that has not declared
-  `language.rust.surfaces` is read at its root only, so each nested
-  `Cargo.toml` (hidden, `target`, `vendor`, `node_modules` and similar trees
-  excepted) is named and the result is indeterminate until the repository
-  declares its surfaces. A directory that cannot be listed during that scan is
-  reported the same way.
+  `language.rust.surfaces` is read at its root only. Each nested `Cargo.toml`
+  (hidden, `target`, `vendor`, `node_modules` and similar trees excepted) is
+  then read loosely: one that declares a package a recorded relationship names,
+  or that cannot be read or decoded, is named and makes the result
+  indeterminate until the repository declares its surfaces. A nested manifest
+  that names no related package draws nothing. A directory that cannot be
+  listed during that scan is reported the same way.
 
 To keep an older generation deliberately, record an exception in `.concordat`:
 

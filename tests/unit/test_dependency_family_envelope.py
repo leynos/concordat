@@ -290,9 +290,68 @@ def test_an_undeclared_nested_cargo_manifest_is_a_problem(
     assert envelope["problems"] == [
         (
             "rust/Cargo.toml is a Cargo manifest outside the governed Rust "
-            "surfaces; declare language.rust.surfaces in .concordat to read it"
+            "surfaces and declares pyo3, pyo3-build-config, serde-pyobject; declare "
+            "language.rust.surfaces in .concordat to read it"
         )
     ]
+
+
+_UNRELATED: typ.Final = (
+    '[package]\nname = "x"\nversion = "0.1.0"\n[dependencies]\nserde = "1"\n'
+)
+
+
+def test_an_unrelated_nested_cargo_manifest_is_not_a_problem(
+    tmp_path: pathlib.Path,
+) -> None:
+    """No recorded relationship names its packages, so reading it cannot matter."""
+    _write(tmp_path, "tools/Cargo.toml", _UNRELATED)
+
+    assert build_dependency_family_envelope(tmp_path)["problems"] == []
+
+
+def test_a_renamed_related_dependency_in_a_nested_manifest_is_a_problem(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The published name behind a `package =` rename is what relationships name."""
+    _write(
+        tmp_path,
+        "tei-py/Cargo.toml",
+        '[package]\nname = "x"\nversion = "0.1.0"\n[dependencies]\n'
+        'pyo3-serde = { package = "serde-pyobject", version = "0.8.0" }\n',
+    )
+
+    (problem,) = build_dependency_family_envelope(tmp_path)["problems"]
+
+    assert "declares serde-pyobject" in problem
+
+
+def test_an_unparsable_nested_cargo_manifest_fails_closed(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A manifest that cannot be decoded may hide a relationship, so it is named."""
+    _write(tmp_path, "tools/Cargo.toml", "[package\n")
+
+    (problem,) = build_dependency_family_envelope(tmp_path)["problems"]
+
+    assert problem.startswith("tools/Cargo.toml is a Cargo manifest outside")
+    assert "cannot be read" in problem
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can read any file")
+def test_an_unreadable_nested_cargo_manifest_fails_closed(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A manifest the process may not open is named, not skipped."""
+    _write(tmp_path, "tools/Cargo.toml", _UNRELATED)
+    manifest = tmp_path / "tools" / "Cargo.toml"
+    manifest.chmod(0)
+    try:
+        problems = build_dependency_family_envelope(tmp_path)["problems"]
+    finally:
+        manifest.chmod(0o644)
+
+    assert [p for p in problems if "cannot be read" in p]
 
 
 @pytest.mark.skipif(os.geteuid() == 0, reason="root can list any directory")
