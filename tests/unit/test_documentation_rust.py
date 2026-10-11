@@ -7,7 +7,11 @@ import typing as typ
 import pytest
 
 from concordat.rules.documentation_envelope import build_documentation_envelope
-from concordat.rules.documentation_rust import leading_attributes, suppressions_in
+from concordat.rules.documentation_rust import (
+    leading_attributes,
+    mask_literals,
+    suppressions_in,
+)
 
 if typ.TYPE_CHECKING:
     import pathlib
@@ -168,13 +172,31 @@ def test_a_malformed_manifest_is_recorded_as_an_error(tmp_path: pathlib.Path) ->
     [
         ("\tcargo clippy --workspace -- -D warnings\n", [True]),
         ("\t$(CARGO) clippy --all-targets\n", [True]),
-        ("\t@echo running clippy later\n", []),
-        ("\tcat clippy.toml\n", []),
-        ("\t$(CLIPPY_CMD) --workspace\n", [False]),
+        ("\tcargo +nightly clippy --locked\n", [True]),
+        ("\tcargo --locked clippy\n", [True]),
+        ("\tcargo -Z unstable-options clippy\n", [True]),
+        ("\tcargo fmt --check && cargo clippy\n", [True]),
+        ("\tRUSTFLAGS=-Dwarnings cargo clippy\n", [True]),
+        ("\trustup run nightly cargo clippy\n", [True]),
         (
-            '\tRUSTFLAGS="-D warnings$(if $(X),-Zthreads=8)" $(CARGO) clippy\n',
+            '\tRUSTFLAGS="-D warnings$(if $(X),$(shell uname -s))" $(CARGO) clippy\n',
             [True],
         ),
+        (
+            (
+                "\t$(or $(shell command -v cargo 2>/dev/null),$(HOME)/.cargo/bin/cargo)"
+                " clippy --all-targets\n"
+            ),
+            [True],
+        ),
+        ("\t@echo running clippy later\n", []),
+        ("\tcat clippy.toml\n", []),
+        ("\trustup component add clippy\n", []),
+        ("\t$(MAKE) clippy\n", []),
+        ('\ttest -x "$$(command -v cargo-clippy)" || echo clippy missing\n', []),
+        ("\tcargo build --features clippy\n", []),
+        ("\t$(CLIPPY_CMD) --workspace\n", [False]),
+        ("\t$(UNKNOWN) clippy\n", [False]),
     ],
 )
 def test_clippy_runs_are_recorded_from_lint_recipes(
@@ -246,3 +268,40 @@ def test_an_undecodable_source_file_is_recorded(tmp_path: pathlib.Path) -> None:
     (crate,) = _crates(tmp_path)
 
     assert crate["source_errors"] == ["src/bad.rs"]
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        'const S: &str = "#[allow(missing_docs)]";\n',
+        'const S: &str = r#"#[allow(missing_docs)]"#;\n',
+        'const S: &[u8] = b"#[allow(missing_docs)]";\n',
+        "/* #[allow(missing_docs)] */\nfn f() {}\n",
+        "/* outer /* #[allow(missing_docs)] */ still comment */\nfn f() {}\n",
+        "/// ```\n/// #[allow(missing_docs)]\n/// ```\nfn f() {}\n",
+        "let c = '#'; // #[allow(missing_docs)]\n",
+    ],
+)
+def test_attribute_text_in_comments_and_literals_is_not_a_suppression(
+    source: str,
+) -> None:
+    """Only a real attribute counts, never text that merely contains one."""
+    assert suppressions_in(source) == []
+
+
+def test_a_lifetime_does_not_mask_the_rest_of_the_line() -> None:
+    """`'a` has no closing quote; the attribute after it is still found."""
+    source = "fn f<'a>(x: &'a str) {}\n#[allow(missing_docs)]\nmod m;\n"
+
+    assert suppressions_in(source) == [(2, "allow", False)]
+
+
+def test_masking_keeps_the_length_the_quotes_and_the_line_numbers() -> None:
+    """A `reason` string stays a string, and line numbers do not move."""
+    source = '/* a\nb */\n#[expect(missing_docs, reason = "why")]\nmod m;\n'
+
+    masked = mask_literals(source)
+
+    assert len(masked) == len(source)
+    assert masked.count("\n") == source.count("\n")
+    assert suppressions_in(source) == [(3, "expect", True)]

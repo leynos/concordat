@@ -122,10 +122,14 @@ A single crate sets `[lints.rust] missing_docs = "deny"` itself.
 - **DG-004** (error): a clippy invocation (`cargo clippy`, `$(CARGO) clippy`) is
   reachable from `make lint`, so the gate compiles the crates under the lint
   level. No root `Makefile`, no `lint` target, or no clippy run in the targets
-  it reaches fails. A line that names `clippy` as a word is a run even when its
-  other parts (a `RUSTFLAGS` value built with `$(if ...)` or `$(shell ...)`, as
-  the estate's Makefiles have) do not expand; a command reached only through a
-  variable named for clippy (`$(CLIPPY_CMD)`) is indeterminate.
+  it reaches fails. A run is a simple command whose command word is `cargo`
+  (also through `env`, `time` or `rustup run`) with `clippy` as its subcommand,
+  so `rustup component add clippy`, a `cargo-clippy` probe and `$(MAKE) clippy`
+  are not runs (the last leads to a target the reachability walk reads in its
+  own right). Other parts of the line, such as a `RUSTFLAGS` value built with
+  `$(if ...)` or `$(shell ...)` as the estate's Makefiles have, do not change
+  which tool runs. A command reached only through a variable named for clippy
+  (`$(CLIPPY_CMD)`), or a line the lexer rejects, is indeterminate.
 
 The Rust rules apply when the checkout owns at least one library crate (or a
 Cargo manifest the audit cannot read).

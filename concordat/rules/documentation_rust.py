@@ -30,7 +30,8 @@ import re
 import tomllib
 import typing as typ
 
-from .makefile_expansion import expand, shown
+from .interrogate_invocation import lex_segments
+from .makefile_expansion import UNRESOLVED_MARK, expand, shown
 from .markdown_envelope import (
     PRUNED_DIRECTORIES,
     _is_symlink,
@@ -64,13 +65,24 @@ RUST_PRUNED_DIRECTORIES: typ.Final = PRUNED_DIRECTORIES | frozenset({
     "examples",
 })
 
-# `cargo clippy`, `$(CARGO) clippy` and `cargo +nightly clippy` all name clippy
-# as a word of its own; `clippy.toml` and `cargo-clippy-driver` do not.
-_CLIPPY_WORD: typ.Final = re.compile(r"(?<![\w./-])clippy(?![\w.-])")
+# A reference the expansion could not settle that is named for clippy, or that
+# stands where the `cargo` word should and is followed by `clippy`.
 _UNRESOLVED_CLIPPY: typ.Final = re.compile(
-    r"\$[({][^)}\s]*clippy[^)}\s]*[)}]", re.IGNORECASE
+    r"\$[({][^)}\s]*clippy[^)}\s]*[)}]|\$[({][^)}]*[)}]\s+clippy(?![\w.-])",
+    re.IGNORECASE,
 )
-PRINTING_COMMANDS: typ.Final = frozenset({"echo", "printf"})
+_ASSIGNMENT: typ.Final = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
+# Wrappers that run the next word as a command without changing which tool it is.
+_WRAPPERS: typ.Final = frozenset({"env", "time", "nice", "command", "exec"})
+# `cargo` flags that take a value as the next word, so that word is not the subcommand.
+_CARGO_VALUE_FLAGS: typ.Final = frozenset({
+    "-Z",
+    "-C",
+    "--config",
+    "--color",
+    "--manifest-path",
+    "--target-dir",
+})
 
 LINT_KINDS: typ.Final = frozenset({"deny", "forbid", "warn", "allow", "expect"})
 
@@ -319,6 +331,96 @@ def leading_attributes(source: str) -> tuple[list[RootAttribute], int]:
 
 
 _ATTRIBUTE_START: typ.Final = re.compile(r"#!?\[")
+_RAW_STRING_OPEN: typ.Final = re.compile(r'b?r(#*)"')
+
+
+def _blank(text: str) -> str:
+    """Return *text* with everything but newlines turned into spaces."""
+    return "".join(char if char == "\n" else " " for char in text)
+
+
+def _block_comment_end(source: str, index: int) -> int:
+    """Return the index just past the (nestable) block comment at *index*."""
+    depth, position = 0, index
+    while position < len(source):
+        if source.startswith("/*", position):
+            depth, position = depth + 1, position + 2
+        elif source.startswith("*/", position):
+            depth, position = depth - 1, position + 2
+            if depth == 0:
+                return position
+        else:
+            position += 1
+    return len(source)
+
+
+def _string_end(source: str, index: int) -> int:
+    """Return the index of the quote that closes the string opened before *index*."""
+    position = index
+    while position < len(source) and source[position] != '"':
+        position += 2 if source[position] == "\\" else 1
+    return min(position, len(source))
+
+
+def _char_literal_end(source: str, index: int) -> int | None:
+    """Return the end of the char literal at *index*, or ``None`` for a lifetime."""
+    if source.startswith("\\", index + 1):
+        close = source.find("'", index + 3)
+        return None if close == -1 else close + 1
+    if source.startswith("'", index + 2):
+        return index + 3
+    return None
+
+
+def mask_literals(source: str) -> str:
+    """Return *source* with comments and the contents of literals blanked out.
+
+    Comments become spaces and string, raw string and byte string contents
+    become spaces while their quotes stay, so a `reason = "..."` is still seen
+    to have a value but `"#[allow(missing_docs)]"` in a string or a block
+    comment is not an attribute. Character literals are blanked; a lifetime
+    (`'a`) has no closing quote and is left alone. Newlines are kept, so line
+    numbers do not move.
+
+    Returns
+    -------
+    str
+        A string of the same length and line structure as *source*.
+    """
+    out: list[str] = []
+    index = 0
+    while index < len(source):
+        raw = _RAW_STRING_OPEN.match(source, index)
+        if source.startswith("//", index):
+            end = source.find("\n", index)
+            end = len(source) if end == -1 else end
+            out.append(_blank(source[index:end]))
+            index = end
+        elif source.startswith("/*", index):
+            end = _block_comment_end(source, index)
+            out.append(_blank(source[index:end]))
+            index = end
+        elif raw is not None:
+            closing = '"' + raw.group(1)
+            body_start = raw.end()
+            close = source.find(closing, body_start)
+            end = len(source) if close == -1 else close
+            out.append(raw.group(0) + _blank(source[body_start:end]))
+            index = end
+        elif source[index] == '"':
+            end = _string_end(source, index + 1)
+            out.append('"' + _blank(source[index + 1 : end]))
+            index = end
+            if index < len(source):
+                out.append('"')
+                index += 1
+        elif source[index] == "'" and (end := _char_literal_end(source, index)):
+            out.append("'" + _blank(source[index + 1 : end - 1]) + "'")
+            index = end
+        else:
+            out.append(source[index])
+            index += 1
+    return "".join(out)
 
 
 def suppressions_in(
@@ -329,9 +431,9 @@ def suppressions_in(
     These are the module-level and item-level suppressions that hide
     undocumented items from a crate whose root denies the lint. Attributes that
     start before *skip_before* (the crate root's own leading run, which
-    :func:`leading_attributes` already reports) are left out. A line comment that
-    mentions an attribute is not one, because the scan only sees text that
-    starts with `#[` or `#![` outside a `//` comment.
+    :func:`leading_attributes` already reports) are left out. Comments and
+    literals are masked first (:func:`mask_literals`), so an attribute named in
+    a comment, a doc example or a string is not one.
 
     Returns
     -------
@@ -339,12 +441,10 @@ def suppressions_in(
         Line number, kind (`allow` or `expect`) and whether a `reason` is given.
     """
     found: list[tuple[int, str, bool]] = []
+    source = mask_literals(source)
     for match in _ATTRIBUTE_START.finditer(source):
         start = match.start()
         if start < skip_before:
-            continue
-        line_start = source.rfind("\n", 0, start) + 1
-        if source[line_start:start].lstrip().startswith("//"):
             continue
         end = _scan_balanced(source, match.end() - 1)
         if end is None:
@@ -507,20 +607,81 @@ def build_rust_facts(checkout: pathlib.Path, root: pathlib.Path) -> RustFacts:
     return {"crates": crates, "errors": errors}
 
 
+def _blank_references(text: str) -> str:
+    """Replace each balanced `$(...)` or `${...}` Make reference with one word.
+
+    The estate's Makefiles build `RUSTFLAGS` with `$(if ...)` and `$(shell ...)`
+    in the same line as `cargo clippy`; once the references are single words the
+    shell lexer reads the line as the command it is. A reference that names
+    cargo (`$(CARGO)`, or the `$(or $(shell command -v cargo), ...)` it expands
+    to when the variable is conditional) stands for the tool and becomes the
+    word `cargo`; any other becomes the unresolved mark.
+
+    Returns
+    -------
+    str
+        The text with each reference replaced by a single word.
+    """
+    out: list[str] = []
+    index = 0
+    while index < len(text):
+        if text[index] == "$" and text[index + 1 : index + 2] in {"(", "{"}:
+            end = _scan_balanced(text, index + 1)
+            if end is not None:
+                is_tool = "cargo" in text[index:end].lower()
+                out.append(" cargo " if is_tool else UNRESOLVED_MARK)
+                index = end
+                continue
+        out.append(text[index])
+        index += 1
+    return "".join(out)
+
+
+def _command_start(words: list[str]) -> int:
+    """Return the index of the command word after assignments and wrappers."""
+    index = 0
+    while index < len(words):
+        word = words[index].lstrip("@-+")
+        if _ASSIGNMENT.match(word) or word in _WRAPPERS:
+            index += 1
+        elif word == "rustup" and words[index + 1 : index + 2] == ["run"]:
+            index += 3
+        else:
+            break
+    return index
+
+
+def _is_cargo_clippy(words: list[str]) -> bool:
+    """Return whether one simple command is `cargo [flags] clippy ...`."""
+    start = _command_start(words)
+    if start >= len(words) or words[start].lstrip("@-+").rsplit("/", 1)[-1] != "cargo":
+        return False
+    arguments = iter(words[start + 1 :])
+    for argument in arguments:
+        if argument in _CARGO_VALUE_FLAGS:
+            next(arguments, None)
+        elif not argument.startswith(("-", "+")):
+            return argument == "clippy"
+    return False
+
+
 def clippy_runs(
     index: cabc.Mapping[str, cabc.Sequence[typ.Any]],
     reachable: list[str],
     values: cabc.Mapping[str, str],
 ) -> list[ClippyRun]:
-    """Return every recipe line in a reachable target that runs clippy.
+    """Return every recipe line in a reachable target that runs `cargo clippy`.
 
     *index* maps a target to its rules, each with a `recipes` list of
-    `(line, text)` pairs. A line that only prints text is not a run. A line that
-    names clippy as a word is a run even when other parts of it (a `RUSTFLAGS`
-    assignment built with `$(if ...)` or `$(shell ...)`, as the estate's
-    Makefiles have) do not expand: those parts do not change which tool runs. A
-    line that reaches clippy only through a variable named for it (`$(CLIPPY)`)
-    is carried as unresolved, so the policy cannot read it as proof either way.
+    `(line, text)` pairs. A run is a simple command whose command word is
+    `cargo` (also through `env`, `time` or `rustup run`) and whose subcommand is
+    `clippy`; `rustup component add clippy`, `cargo-clippy` in a test and
+    `$(MAKE) clippy` are not runs (the last leads to a target that the
+    reachability walk reads in its own right). Other parts of the line, such as
+    a `RUSTFLAGS` value built with `$(if ...)`, do not change which tool runs.
+    A line the lexer rejects, or that reaches clippy through an unresolved
+    reference, is carried as unresolved so the policy cannot read it as proof
+    either way.
 
     Returns
     -------
@@ -531,16 +692,17 @@ def clippy_runs(
     for target in reachable:
         for rule in index[target]:
             for line, text in rule.recipes:
-                text_shown = shown(expand(text, values).text)
-                words = text_shown.split()
-                if words and words[0].lstrip("@-+") in PRINTING_COMMANDS:
-                    continue
-                is_run = _CLIPPY_WORD.search(text_shown) is not None
-                if is_run or _UNRESOLVED_CLIPPY.search(text_shown):
+                expanded = expand(text, values).text
+                segments = lex_segments(_blank_references(expanded))
+                is_unresolved = _UNRESOLVED_CLIPPY.search(
+                    shown(expanded)
+                ) is not None or (segments is None and "clippy" in expanded)
+                is_run = any(_is_cargo_clippy(words) for words in segments or [])
+                if is_run or is_unresolved:
                     runs.append({
                         "target": target,
                         "line": line,
-                        "command": " ".join(text_shown.split()),
+                        "command": " ".join(shown(expanded).split()),
                         "resolved": is_run,
                     })
     return runs

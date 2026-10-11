@@ -2428,7 +2428,9 @@ required, so `clippy::missing_docs_in_private_items` is not used.
   The builder reads each owned `Cargo.toml` with `tomllib`, resolves
   `[lints] workspace = true` against the nearest enclosing `[workspace]`, and
   reads the crate root's leading inner attributes (comments skipped, a
-  `cfg_attr` unwrapped with its condition). Precedence follows rustc: a
+  `cfg_attr` unwrapped with its condition). Suppression scanning masks comments
+  and string, raw-string and character literals first, so attribute text in a
+  doc example or a string is not a suppression. Precedence follows rustc: a
   crate-root attribute beats the manifest level, and the last attribute wins.
   The policy decides; the builder only records.
 - **Scope:** library crates only (a `src/lib.rs` or a `[lib]` table), skipping
@@ -2452,7 +2454,9 @@ required, so `clippy::missing_docs_in_private_items` is not used.
 - **Reachability (DG-004):** the lint fails builds only where a gate compiles
   the crate, so the rule requires a clippy run reachable from `lint`; a plain
   `cargo check` in `lint` would also compile it but the estate's gates are
-  clippy-based.
+  clippy-based. A run is a `cargo` simple command with `clippy` as its
+  subcommand, found by lexing the expanded recipe line; a mention of the word
+  is not a run.
 
 ##### Rust formatting and linting (RT-001 to RT-005)
 

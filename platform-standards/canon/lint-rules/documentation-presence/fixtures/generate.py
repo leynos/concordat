@@ -487,6 +487,30 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
         "src/lib.rs": LIB_ROOT,
         "Makefile": ".PHONY: lint\nlint:\n\t$(CLIPPY_CMD) --workspace\n",
     }),
+    "rust_clippy_only_mentioned": rust_scenario({
+        "Cargo.toml": crate_manifest('[lints.rust]\nmissing_docs = "deny"\n'),
+        "src/lib.rs": LIB_ROOT,
+        "Makefile": (
+            ".PHONY: lint\nlint:\n\trustup component add clippy\n"
+            '\ttest -x "$$(command -v cargo-clippy)" || echo clippy missing\n'
+        ),
+    }),
+    "rust_clippy_through_sub_make": rust_scenario({
+        "Cargo.toml": crate_manifest('[lints.rust]\nmissing_docs = "deny"\n'),
+        "src/lib.rs": LIB_ROOT,
+        "Makefile": (
+            ".PHONY: lint clippy\nlint:\n\t$(MAKE) clippy\n"
+            "clippy:\n\tcargo clippy -- -D warnings\n"
+        ),
+    }),
+    "rust_suppression_text_in_string": rust_scenario({
+        "Cargo.toml": crate_manifest('[lints.rust]\nmissing_docs = "deny"\n'),
+        "src/lib.rs": (
+            LIB_ROOT
+            + "/// Generated code looks like `#[allow(missing_docs)]`.\n"
+            + 'pub const SAMPLE: &str = "#[allow(missing_docs)]";\n'
+        ),
+    }),
     "rust_clippy_with_unresolved_flags": rust_scenario({
         "Cargo.toml": crate_manifest('[lints.rust]\nmissing_docs = "deny"\n'),
         "src/lib.rs": LIB_ROOT,

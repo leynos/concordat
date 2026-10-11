@@ -3977,6 +3977,147 @@
         "errors": []
       }
     },
+    "rust_clippy_only_mentioned": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": false,
+        "pyproject": false,
+        "rust_library": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [],
+      "python_files": [],
+      "clippy_runs": [],
+      "rust": {
+        "crates": [
+          {
+            "manifest": "Cargo.toml",
+            "name": "demo",
+            "root": "src/lib.rs",
+            "root_error": null,
+            "manifest_level": "deny",
+            "inherits_workspace": false,
+            "workspace_level": null,
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
+          }
+        ],
+        "errors": []
+      }
+    },
+    "rust_clippy_through_sub_make": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": false,
+        "pyproject": false,
+        "rust_library": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint",
+        "clippy"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [],
+      "python_files": [],
+      "clippy_runs": [
+        {
+          "target": "clippy",
+          "line": 5,
+          "command": "cargo clippy -- -D warnings",
+          "resolved": true
+        }
+      ],
+      "rust": {
+        "crates": [
+          {
+            "manifest": "Cargo.toml",
+            "name": "demo",
+            "root": "src/lib.rs",
+            "root_error": null,
+            "manifest_level": "deny",
+            "inherits_workspace": false,
+            "workspace_level": null,
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
+          }
+        ],
+        "errors": []
+      }
+    },
+    "rust_suppression_text_in_string": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": false,
+        "pyproject": false,
+        "rust_library": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [],
+      "python_files": [],
+      "clippy_runs": [
+        {
+          "target": "lint",
+          "line": 4,
+          "command": "cargo clippy --workspace --all-targets -- -D warnings",
+          "resolved": true
+        }
+      ],
+      "rust": {
+        "crates": [
+          {
+            "manifest": "Cargo.toml",
+            "name": "demo",
+            "root": "src/lib.rs",
+            "root_error": null,
+            "manifest_level": "deny",
+            "inherits_workspace": false,
+            "workspace_level": null,
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
+          }
+        ],
+        "errors": []
+      }
+    },
     "rust_clippy_with_unresolved_flags": {
       "schema_version": 1,
       "kind": "policy-input/documentation-presence",

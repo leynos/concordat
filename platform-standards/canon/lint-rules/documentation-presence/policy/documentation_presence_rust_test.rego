@@ -103,3 +103,11 @@ test_rust_rules_ignore_a_python_only_checkout if {
 	findings := [f | some f in rust_findings(data.fixtures.compliant); f.rule_id in {"DG-003", "DG-004"}]
 	findings == []
 }
+
+# Naming clippy is not running it: a component install or a probe is no gate.
+test_rust_clippy_only_mentioned if rust_reported(data.fixtures.rust_clippy_only_mentioned) == {"DG-004/noncompliant"}
+
+test_rust_clippy_through_sub_make if rust_reported(data.fixtures.rust_clippy_through_sub_make) == set()
+
+# Attribute text in a doc comment or a string is not a suppression.
+test_rust_suppression_text_in_string if rust_reported(data.fixtures.rust_suppression_text_in_string) == set()
