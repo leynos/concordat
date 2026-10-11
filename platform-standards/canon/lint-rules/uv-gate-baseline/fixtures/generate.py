@@ -451,6 +451,36 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "tool_git_sha_with_suffix": Scenario({
         "Makefile": makefile(gated_tool(f"{OTHER_TOOL}@{SHA}zz", "x"))
     }),
+    "tool_extras_direct_reference_sha": Scenario({
+        "Makefile": makefile(gated_tool(f"tool[extra] @ {OTHER_TOOL}@{SHA}", "x"))
+    }),
+    "tool_extras_direct_reference_fragment": Scenario({
+        "Makefile": makefile(
+            gated_tool(f"tool[a,b] @ {OTHER_TOOL}@{SHA}#subdirectory=packages/x", "x")
+        )
+    }),
+    "tool_extras_direct_reference_double_quoted": Scenario({
+        "Makefile": makefile(
+            f'$(UV_GATE) tool --from "tool[extra] @ {OTHER_TOOL}@{SHA}" -- x'
+        )
+    }),
+    "tool_extras_direct_reference_branch": Scenario({
+        "Makefile": makefile(gated_tool(f"tool[extra] @ {OTHER_TOOL}@main", "x"))
+    }),
+    "tool_extras_direct_reference_tag": Scenario({
+        "Makefile": makefile(gated_tool(f"tool[extra] @ {OTHER_TOOL}@v1.2.3", "x"))
+    }),
+    "tool_extras_direct_reference_short_sha": Scenario({
+        "Makefile": makefile(gated_tool(f"tool[extra] @ {OTHER_TOOL}@{SHA[:12]}", "x"))
+    }),
+    "tool_extras_direct_reference_not_git": Scenario({
+        "Makefile": makefile(
+            gated_tool("tool[extra] @ https://example.invalid/tool-1.0.tar.gz", "x")
+        )
+    }),
+    "tool_extras_direct_reference_suffix": Scenario({
+        "Makefile": makefile(gated_tool(f"tool[extra] @ {OTHER_TOOL}@{SHA}zz", "x"))
+    }),
     "tool_typos_builder_tag": Scenario(),
     "tool_typos_builder_tag_via_gate": Scenario({
         "Makefile": makefile(
