@@ -114,25 +114,25 @@ def _msrv_checkout(checkout: pathlib.Path, action: str) -> None:
     )
 
 
-@given("a checkout declaring an MSRV and a job that uses the shared msrv-check action")
-def given_shared_msrv_action(toolchain_checkout: pathlib.Path) -> None:
-    """Write a library whose MSRV job calls the shared action."""
-    _msrv_checkout(
-        toolchain_checkout,
-        "leynos/shared-actions/.github/actions/msrv-check@" + "a" * 40,
-    )
+_MSRV_ACTIONS: typ.Final = {
+    "the shared msrv-check action": (
+        "leynos/shared-actions/.github/actions/msrv-check@" + "a" * 40
+    ),
+    "a lookalike of the msrv-check action": (
+        "leynos/shared-actions/.github/actions/msrv-check-lookalike@v1"
+    ),
+}
 
 
 @given(
-    "a checkout declaring an MSRV and a job that uses a lookalike of the "
-    "msrv-check action"
-)
-def given_lookalike_msrv_action(toolchain_checkout: pathlib.Path) -> None:
-    """Write a library whose job calls an action that only starts like it."""
-    _msrv_checkout(
-        toolchain_checkout,
-        "leynos/shared-actions/.github/actions/msrv-check-lookalike@v1",
+    parsers.re(
+        r"a checkout declaring an MSRV and a job that uses "
+        r"(?P<which>the shared msrv-check action|a lookalike of the msrv-check action)"
     )
+)
+def given_msrv_action(toolchain_checkout: pathlib.Path, which: str) -> None:
+    """Write a library whose one job calls the named action."""
+    _msrv_checkout(toolchain_checkout, _MSRV_ACTIONS[which])
 
 
 @given("a checkout with an old nightly and a toolchain policy exception naming it")
