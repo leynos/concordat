@@ -74,6 +74,28 @@ def skip_trivia(text: str, index: int) -> int:
     return index
 
 
+def _outside_strings(text: str, start: int = 0) -> typ.Iterator[tuple[int, str]]:
+    """Yield `(index, char)` for each character of *text* outside a string literal.
+
+    Yields
+    ------
+    tuple[int, str]
+        The index and the character; a string's quotes and body are skipped.
+    """
+    index = start
+    while index < len(text):
+        if text[index] == '"':
+            index = _string_close(text, index + 1) + 1
+            continue
+        yield index, text[index]
+        index += 1
+
+
+def _depth_change(char: str) -> int:
+    """Return +1 for an opening bracket, -1 for a closing one, else 0."""
+    return (char in "([{") - (char in ")]}")
+
+
 def scan_balanced(text: str, start: int) -> int | None:
     """Return the index just past the bracket that closes the one at *start*.
 
@@ -85,37 +107,23 @@ def scan_balanced(text: str, start: int) -> int | None:
     int | None
         The index after the closing bracket, or ``None`` if it never closes.
     """
-    depth, index = 0, start
-    while index < len(text):
-        char = text[index]
-        if char == '"':
-            index = _string_close(text, index + 1)
-        elif char in "([{":
-            depth += 1
-        elif char in ")]}":
-            depth -= 1
-            if depth == 0:
-                return index + 1
-        index += 1
+    depth = 0
+    for index, char in _outside_strings(text, start):
+        depth += _depth_change(char)
+        if depth == 0 and char in ")]}":
+            return index + 1
     return None
 
 
 def _split_top_level(text: str) -> list[str]:
     """Split on commas that sit outside brackets and strings."""
     parts: list[str] = []
-    depth, start, index = 0, 0, 0
-    while index < len(text):
-        char = text[index]
-        if char == '"':
-            index = _string_close(text, index + 1)
-        elif char in "([{":
-            depth += 1
-        elif char in ")]}":
-            depth -= 1
-        elif char == "," and depth == 0:
+    depth, start = 0, 0
+    for index, char in _outside_strings(text):
+        depth += _depth_change(char)
+        if char == "," and depth == 0:
             parts.append(text[start:index].strip())
             start = index + 1
-        index += 1
     parts.append(text[start:].strip())
     return [part for part in parts if part]
 
