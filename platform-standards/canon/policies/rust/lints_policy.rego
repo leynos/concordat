@@ -72,6 +72,66 @@ clippy_thresholds := {
   "allow-expect-in-tests": true,
 }
 
+clippy_disallowed_methods := [
+  {"path": "std::env::var", "reason": "inject an environment reader"},
+  {"path": "std::env::var_os", "reason": "inject an environment reader"},
+  {"path": "std::env::vars", "reason": "inject an environment reader"},
+  {"path": "std::env::vars_os", "reason": "inject an environment reader"},
+  {"path": "std::env::set_var", "reason": "use a stub environment in tests"},
+  {"path": "std::env::remove_var", "reason": "use a stub environment in tests"},
+  {
+    "path": "std::env::set_current_dir",
+    "reason": "inject a base-directory seam; confine CWD changes to Command::current_dir",
+  },
+]
+
+contains_disallowed_method(methods, expected) if {
+  some method in methods
+  is_object(method)
+  method.path == expected.path
+  method.reason == expected.reason
+}
+
+disallowed_method_object_fields := {"path", "reason", "replacement", "allow-invalid"}
+
+optional_string_field_is_valid(method, field) if {
+  value := object.get(method, field, null)
+  value == null
+}
+
+optional_string_field_is_valid(method, field) if {
+  value := object.get(method, field, null)
+  is_string(value)
+}
+
+optional_boolean_field_is_valid(method, field) if {
+  value := object.get(method, field, null)
+  value == null
+}
+
+optional_boolean_field_is_valid(method, field) if {
+  value := object.get(method, field, null)
+  is_boolean(value)
+}
+
+valid_disallowed_method(method) if {
+  is_string(method)
+  method != ""
+}
+
+valid_disallowed_method(method) if {
+  is_object(method)
+  path := object.get(method, "path", null)
+  is_string(path)
+  path != ""
+  every field in object.keys(method) {
+    field in disallowed_method_object_fields
+  }
+  optional_string_field_is_valid(method, "reason")
+  optional_string_field_is_valid(method, "replacement")
+  optional_boolean_field_is_valid(method, "allow-invalid")
+}
+
 cargo_manifest := object.get(input, "cargo", null)
 workspace_block := object.get(cargo_manifest, "workspace", null)
 workspace_lints := object.get(workspace_block, "lints", null)
@@ -199,4 +259,63 @@ deny contains msg if {
   actual := object.get(clippy_config, key, null)
   actual != expected
   msg := sprintf("clippy.toml %s must equal %v", [key, expected])
+}
+
+deny contains "clippy.toml disallowed-methods must define the seven approved std::env entries" if {
+  cargo_manifest != null
+  clippy_config != null
+  actual := object.get(clippy_config, "disallowed-methods", null)
+  actual == null
+}
+
+deny contains "clippy.toml disallowed-methods must be an array" if {
+  cargo_manifest != null
+  clippy_config != null
+  actual := object.get(clippy_config, "disallowed-methods", null)
+  actual != null
+  not is_array(actual)
+}
+
+deny contains msg if {
+  cargo_manifest != null
+  clippy_config != null
+  actual := object.get(clippy_config, "disallowed-methods", null)
+  is_array(actual)
+  expected := clippy_disallowed_methods[_]
+  not contains_disallowed_method(actual, expected)
+  msg := sprintf(
+    "clippy.toml disallowed-methods must include %s with reason %q",
+    [expected.path, expected.reason],
+  )
+}
+
+deny contains "clippy.toml disallowed-methods entries must match the Clippy 1.92 schema" if {
+  cargo_manifest != null
+  clippy_config != null
+  actual := object.get(clippy_config, "disallowed-methods", null)
+  is_array(actual)
+  some method in actual
+  not valid_disallowed_method(method)
+}
+
+deny contains "clippy.toml disallowed-methods paths must be unique" if {
+  cargo_manifest != null
+  clippy_config != null
+  actual := object.get(clippy_config, "disallowed-methods", null)
+  is_array(actual)
+  bare_method_paths := [path |
+    some path in actual
+    is_string(path)
+    path != ""
+  ]
+  table_method_paths := [path |
+    some method in actual
+    is_object(method)
+    path := object.get(method, "path", null)
+    is_string(path)
+    path != ""
+  ]
+  actual_paths := array.concat(bare_method_paths, table_method_paths)
+  unique_paths := {path | some path in actual_paths}
+  count(actual_paths) != count(unique_paths)
 }
