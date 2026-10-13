@@ -8,6 +8,7 @@ canonical_clippy_lints := {
   "allow_attributes_without_reason": "deny",
   "blanket_clippy_restriction_lints": "deny",
   "cognitive_complexity": "deny",
+  "disallowed_methods": "deny",
   "needless_pass_by_value": "deny",
   "implicit_hasher": "deny",
   "dbg_macro": "deny",
@@ -271,6 +272,18 @@ test_numeric_reason_on_extension_is_rejected if {
   result[_] == "clippy.toml disallowed-methods entries must match the Clippy 1.92 schema"
 }
 
+test_null_reason_on_extension_is_rejected if {
+  result := data.canon.rust.lints.deny with input as {
+    "cargo": workspace_manifest,
+    "clippy": object.union(clippy_cfg, {
+      "disallowed-methods": array.concat(clippy_cfg["disallowed-methods"], [
+        {"path": "std::env::current_exe", "reason": null},
+      ]),
+    }),
+  }
+  result[_] == "clippy.toml disallowed-methods entries must match the Clippy 1.92 schema"
+}
+
 test_numeric_replacement_on_extension_is_rejected if {
   result := data.canon.rust.lints.deny with input as {
     "cargo": workspace_manifest,
@@ -283,12 +296,36 @@ test_numeric_replacement_on_extension_is_rejected if {
   result[_] == "clippy.toml disallowed-methods entries must match the Clippy 1.92 schema"
 }
 
+test_null_replacement_on_extension_is_rejected if {
+  result := data.canon.rust.lints.deny with input as {
+    "cargo": workspace_manifest,
+    "clippy": object.union(clippy_cfg, {
+      "disallowed-methods": array.concat(clippy_cfg["disallowed-methods"], [
+        {"path": "std::env::current_exe", "replacement": null},
+      ]),
+    }),
+  }
+  result[_] == "clippy.toml disallowed-methods entries must match the Clippy 1.92 schema"
+}
+
 test_string_allow_invalid_on_extension_is_rejected if {
   result := data.canon.rust.lints.deny with input as {
     "cargo": workspace_manifest,
     "clippy": object.union(clippy_cfg, {
       "disallowed-methods": array.concat(clippy_cfg["disallowed-methods"], [
         {"path": "std::env::current_exe", "allow-invalid": "true"},
+      ]),
+    }),
+  }
+  result[_] == "clippy.toml disallowed-methods entries must match the Clippy 1.92 schema"
+}
+
+test_null_allow_invalid_on_extension_is_rejected if {
+  result := data.canon.rust.lints.deny with input as {
+    "cargo": workspace_manifest,
+    "clippy": object.union(clippy_cfg, {
+      "disallowed-methods": array.concat(clippy_cfg["disallowed-methods"], [
+        {"path": "std::env::current_exe", "allow-invalid": null},
       ]),
     }),
   }

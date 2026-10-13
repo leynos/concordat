@@ -7,6 +7,7 @@ clippy_scalar_lints := {
   "allow_attributes_without_reason": "deny",
   "blanket_clippy_restriction_lints": "deny",
   "cognitive_complexity": "deny",
+  "disallowed_methods": "deny",
   "needless_pass_by_value": "deny",
   "implicit_hasher": "deny",
   "dbg_macro": "deny",
@@ -72,6 +73,42 @@ clippy_thresholds := {
   "allow-expect-in-tests": true,
 }
 
+enforcing_lint_level(level) if {
+  level == "deny"
+}
+
+enforcing_lint_level(level) if {
+  level == "forbid"
+}
+
+# Cargo 1.92 declares this field as i8, so enforce its numeric domain. OPA
+# evaluates normalized JSON numbers here, so validate integrality, not spelling.
+# Schema source: https://github.com/rust-lang/cargo/blob/344c4567c634a25837e3c3476aac08af84cf9203/crates/cargo-util-schemas/src/manifest/mod.rs
+integral_numeric_priority(priority) if {
+  is_number(priority)
+  floor(priority) == priority
+  priority >= -128
+  priority <= 127
+}
+
+valid_disallowed_methods_lint_setting(setting) if {
+  is_string(setting)
+  enforcing_lint_level(setting)
+}
+
+valid_disallowed_methods_lint_setting(setting) if {
+  is_object(setting)
+  enforcing_lint_level(object.get(setting, "level", null))
+  count(object.keys(setting)) == 1
+}
+
+valid_disallowed_methods_lint_setting(setting) if {
+  is_object(setting)
+  enforcing_lint_level(object.get(setting, "level", null))
+  integral_numeric_priority(object.get(setting, "priority", null))
+  count(object.keys(setting)) == 2
+}
+
 clippy_disallowed_methods := [
   {"path": "std::env::var", "reason": "inject an environment reader"},
   {"path": "std::env::var_os", "reason": "inject an environment reader"},
@@ -95,21 +132,21 @@ contains_disallowed_method(methods, expected) if {
 disallowed_method_object_fields := {"path", "reason", "replacement", "allow-invalid"}
 
 optional_string_field_is_valid(method, field) if {
-  value := object.get(method, field, null)
-  value == null
+  not field in object.keys(method)
 }
 
 optional_string_field_is_valid(method, field) if {
+  field in object.keys(method)
   value := object.get(method, field, null)
   is_string(value)
 }
 
 optional_boolean_field_is_valid(method, field) if {
-  value := object.get(method, field, null)
-  value == null
+  not field in object.keys(method)
 }
 
 optional_boolean_field_is_valid(method, field) if {
+  field in object.keys(method)
   value := object.get(method, field, null)
   is_boolean(value)
 }
@@ -191,9 +228,19 @@ deny contains msg if {
   scope := lint_scope
   clippy := scope["clippy"]
   required := clippy_scalar_lints[key]
+  key != "disallowed_methods"
   actual := object.get(clippy, key, "")
   actual != required
   msg := sprintf("clippy lint %s must equal %q", [key, required])
+}
+
+deny contains "clippy lint disallowed_methods must use deny or forbid" if {
+  cargo_manifest != null
+  lint_scope_defined
+  scope := lint_scope
+  clippy := scope["clippy"]
+  actual := object.get(clippy, "disallowed_methods", null)
+  not valid_disallowed_methods_lint_setting(actual)
 }
 
 deny contains msg if {

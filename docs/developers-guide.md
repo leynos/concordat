@@ -1240,6 +1240,36 @@ Before that module existed nothing ran them. The continuous-integration policy
 step covers the OpenTofu policies alone, so every clause pinned by a lint-rule
 Rego test was pinned by a test that never executed.
 
+### The root Rust lint policy suite
+
+The root Rust lint policy is separate from the rule-package policies. Its Rego
+policy and tests live in
+`platform-standards/canon/policies/rust/lints_policy.rego` and
+`platform-standards/canon/policies/rust/lints_policy_test.rego`, with the
+method-level cases in
+`platform-standards/canon/policies/rust/lints_method_level_test.rego`. Run them
+with:
+
+```sh
+conftest verify --policy platform-standards/canon/policies/rust
+```
+
+This suite needs no fixture data argument. `make test` runs it alongside the
+discovered rule-package suites through `tests/unit/test_lint_rule_policies.py`,
+which gives each verification invocation a 120-second timeout. The root-policy
+batch helper in `tests/unit/rust_policy_batch_support.py` also uses a
+120-second timeout.
+
+The Rego tests exercise normalized JSON and synthetic policy envelopes. Rust
+1.92.0's `TomlLintConfig` in `crates/cargo-util-schemas/src/manifest/mod.rs`
+models an optional `disallowed_methods` table priority as `i8` (-128 to 127).
+This is Cargo commit `344c4567c634a25837e3c3476aac08af84cf9203`
+([immutable source][cargo-schema]). The Rego check accepts integral normalized
+JSON numbers; OPA cannot establish the raw Cargo TOML token's syntax or type.
+Cargo manifest parsing and packaged-rule checks use separate routes.
+
+[cargo-schema]: https://github.com/rust-lang/cargo/blob/344c4567c634a25837e3c3476aac08af84cf9203/crates/cargo-util-schemas/src/manifest/mod.rs
+
 ### The `OperationalRuleError` contract
 
 `OperationalRuleError` (`concordat/errors.py`) is raised whenever rule
