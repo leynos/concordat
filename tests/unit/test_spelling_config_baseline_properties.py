@@ -1,7 +1,12 @@
 """Independent property tests for the spelling-config-baseline policy.
 
-Two clauses decide over a range rather than a list of shapes: PD-007 compares
-the pinned release with the floor, and PD-011 applies `.gitignore`'s
+Numeric triples use non-negative integers with no strategy upper bound, but
+twelve batches remain sampled evidence rather than an unbounded proof. Named
+examples include values beyond machine integer precision.
+
+Three clauses decide over a range rather than a list of shapes: PD-007 compares
+the pinned release with the floor, PD-013 selects published text, and PD-011
+applies `.gitignore`'s
 last-match rule. Each property varies the compliant fixture in one fact, runs
 the real policy through Conftest, and compares the verdict with a Python
 oracle written from the published semantics (numeric release order; Git's
@@ -15,11 +20,13 @@ import fnmatch
 import json
 import typing as typ
 from pathlib import Path
+from unittest import mock
 
-from hypothesis import given, settings
+from hypothesis import example, given, settings
 from hypothesis import strategies as st
 
 from concordat.rules import runner
+from tests.unit.conftest_batch_support import invoke_conftest_batch
 
 if typ.TYPE_CHECKING:
     from concordat.rules.spelling_envelope import SpellingEnvelope
@@ -31,7 +38,8 @@ _ENVELOPE_FIXTURE: typ.Final = (
     / _RULE_ID
     / "fixtures/envelopes/compliant.json"
 )
-_FLOOR: typ.Final = (0, 1, 3)
+_RELEASES = st.tuples(*(st.integers(min_value=0),) * 3)
+type Release = tuple[int, int, int]
 _PINNED: typ.Final = "@v0.1.3"
 _CACHE: typ.Final = ".typos-oxendict-base.json"
 
@@ -94,18 +102,112 @@ def _ignores_cache(lines: list[str]) -> bool:
     return ignored
 
 
+def _tag(release: Release) -> str:
+    """Render a generated tuple without parsing the policy's input grammar."""
+    return "v{}.{}.{}".format(*release)
+
+
+def _batch_findings(
+    envelopes: list[SpellingEnvelope], overrides: dict[str, object]
+) -> list[tuple[runner.Finding, ...]]:
+    """Evaluate real policy batches with generated parameter defaults."""
+    parameters = runner._rule_parameters(runner._rule_package_dir(_RULE_ID))
+    parameters.update(overrides)
+    with mock.patch.object(runner, "_rule_parameters", return_value=parameters):
+        batches = invoke_conftest_batch(_RULE_ID, envelopes)
+    return [runner._findings_from_results(results) for results in batches]
+
+
 @settings(max_examples=12, deadline=None)
-@given(release=st.tuples(*(st.integers(min_value=0, max_value=12),) * 3))
-def test_the_floor_is_numeric_release_order(release: tuple[int, int, int]) -> None:
-    """A release is below the floor exactly when it sorts before it numerically.
+@example(floor=(0, 9, 0), releases=[(0, 10, 0), (0, 8, 9), (0, 9, 0)])
+@example(
+    floor=(2**53 + 1, 0, 0),
+    releases=[(2**53, 0, 0), (2**64 + 1, 0, 0), (10**100, 0, 0)],
+)
+@given(floor=_RELEASES, releases=st.lists(_RELEASES, min_size=4, max_size=4))
+def test_bare_and_explicit_floors_follow_numeric_release_order(
+    floor: Release, releases: list[Release]
+) -> None:
+    """Both reference forms agree with independent numeric tuple ordering."""
+    envelopes = [
+        _pinned_to(prefix + _tag(release))
+        for release in releases
+        for prefix in ("", "refs/tags/")
+    ]
+    batches = _batch_findings(envelopes, {"builder_floor": _tag(floor)})
+    for release, bare, explicit in zip(
+        releases, batches[::2], batches[1::2], strict=True
+    ):
+        for findings in (bare, explicit):
+            assert {finding.rule_id for finding in findings} == (
+                {"PD-007"} if release < floor else set()
+            ), (release, floor, findings)
+            for finding in findings:
+                assert "below the floor" in finding.message, finding
 
-    Components run past nine, so a string comparison (`v0.10.0` before
-    `v0.9.0`) would disagree with the oracle.
+
+def _with_block(release: str, body: str) -> SpellingEnvelope:
+    """Supply one selected block between the published builder markers."""
+    envelope = _pinned_to(release)
+    agents = envelope["agents_md"]
+    assert agents is not None, "the compliant fixture must carry AGENTS text"
+    agents["text"] = "\n".join((
+        "<!-- typos-config-builder:agents-md:start -->",
+        body,
+        "<!-- typos-config-builder:agents-md:end -->",
+    ))
+    return envelope
+
+
+@settings(max_examples=12, deadline=None)
+@example(published=[(0, 1, 3), (0, 2, 0), (0, 3, 0)], pins=[(0, 2, 0)])
+@example(
+    published=[(2**53, 0, 0), (2**53 + 1, 0, 0), (10**100, 0, 0)],
+    pins=[(2**53 + 1, 0, 0), (2**64 + 1, 0, 0)],
+)
+@given(
+    published=st.lists(_RELEASES, min_size=3, max_size=3, unique=True),
+    pins=st.lists(_RELEASES, min_size=4, max_size=4),
+)
+def test_bare_and_explicit_pins_select_the_oracle_published_block(
+    published: list[Release], pins: list[Release]
+) -> None:
+    """Both forms select the newest eligible block, or the earliest fallback.
+
+    Every draw includes the middle published version, with a newer block that
+    makes empty-pin newest-block fallback observably wrong.
     """
-    tag = "v{}.{}.{}".format(*release)
-    below = [msg for msg in _findings(_pinned_to(tag), "PD-007") if "floor" in msg]
-
-    assert bool(below) == (release < _FLOOR), (tag, below)
+    ordered = sorted(published)
+    blocks = {
+        _tag(version): f"## Spelling\n\nPublished {_tag(version)}."
+        for version in ordered
+    }
+    selected_pins = [*pins, ordered[1]]
+    expected = [
+        max((version for version in ordered if version <= pin), default=ordered[0])
+        for pin in selected_pins
+    ]
+    envelopes = [
+        _with_block(prefix + _tag(pin), body)
+        for pin, selected in zip(selected_pins, expected, strict=True)
+        for prefix in ("", "refs/tags/")
+        for body in (blocks[_tag(selected)], "## Spelling\n\nUnpublished text.")
+    ]
+    batches = _batch_findings(
+        envelopes, {"agents_md_blocks": blocks, "builder_floor": "v0.0.0"}
+    )
+    for index, selected in enumerate(expected):
+        for findings in batches[index * 4 : index * 4 + 4 : 2]:
+            assert not findings, (selected, findings)
+        for findings in batches[index * 4 + 1 : index * 4 + 4 : 2]:
+            assert len(findings) == 1, findings
+            finding = findings[0]
+            assert (finding.rule_id, finding.verdict) == ("PD-013", "noncompliant"), (
+                finding
+            )
+            assert f"typos-config-builder {_tag(selected)}'s" in finding.message, (
+                finding
+            )
 
 
 @settings(max_examples=12, deadline=None)
