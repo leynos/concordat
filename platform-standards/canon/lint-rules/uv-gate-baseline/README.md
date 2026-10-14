@@ -66,20 +66,20 @@ below.
   optionally followed by a fragment such as `#subdirectory=packages/x`. Written
   `\#` in a Make variable's value, the fragment counts as the same pin, because
   Make turns `\#` there into `#`; in a recipe line the backslash reaches the
-  shell, so `\#` there is not a pin. A release tag (`@vMAJOR.MINOR.PATCH`) is
-  also accepted for the Git repositories in `release_tag_tools`, but only when
-  the tool is run directly (`uvx`, `uv tool run`): a tag routed through the
-  helper is refused, because the helper itself rejects it. A Git requirement
-  may carry an environment marker after the commit
-  (`; python_version < '3.13'`). A spec that names a variable the policy cannot
-  resolve to one value is indeterminate. In a workflow or composite action,
-  `${NAME}` and `$NAME` in a step's `run` text resolve from the `env:` of the
-  workflow, the job and the step, innermost winning, as GitHub resolves them.
-  Only a literal string value counts: an expression (`${{ ... }}`), a value
-  that is not a string, a name defined nowhere (a variable set through
-  `$GITHUB_ENV`, say) and a value that contains a dollar sign at all (so any
-  reference to another variable, however it is spaced) all stay unresolved,
-  hence indeterminate.
+  shell, so `\#` there is not a pin. A release tag (`@vMAJOR.MINOR.PATCH` or
+  `@refs/tags/vMAJOR.MINOR.PATCH`) is also accepted for the Git repositories in
+  `release_tag_tools`, but only when the tool is run directly (`uvx`,
+  `uv tool run`): a tag routed through the helper is refused, because the
+  helper itself rejects it. A Git requirement may carry an environment marker
+  after the commit (`; python_version < '3.13'`). A spec that names a variable
+  the policy cannot resolve to one value is indeterminate. In a workflow or
+  composite action, `${NAME}` and `$NAME` in a step's `run` text resolve from
+  the `env:` of the workflow, the job and the step, innermost winning, as
+  GitHub resolves them. Only a literal string value counts: an expression
+  (`${{ ... }}`), a value that is not a string, a name defined nowhere (a
+  variable set through `$GITHUB_ENV`, say) and a value that contains a dollar
+  sign at all (so any reference to another variable, however it is spaced) all
+  stay unresolved, hence indeterminate.
 - **UV-007** (error): a Git dependency in `pyproject.toml` (a requirement with
   `git+`, or a `[tool.uv.sources]` Git entry) is pinned to a full commit. A tag
   or a branch can move. A published wheel (any non-Git requirement) needs no
@@ -127,6 +127,13 @@ any other tool run directly with `uvx` or `uv tool run`, tag-pinned or not, is
 still a UV-003 bypass, and any other tag pin is still a UV-006 failure. Every
 other Git tool, including df12-python-lints, needs a full commit; no rule
 requires a tag for df12-python-lints, and concordat itself pins it by commit.
+
+Explicit `refs/tags/vMAJOR.MINOR.PATCH` references are equivalent to the listed
+tool's existing bare `vMAJOR.MINOR.PATCH` pins. The `v` prefix remains required
+here. This syntax does not expand the repository allowlist, permit branch or
+malformed refs, or allow a tag through the canonical helper. Each command in a
+chained recipe is still judged independently. PD-007 separately enforces the
+builder's minimum release and PD-013 its published agent block.
 
 ## What the checks cannot see
 

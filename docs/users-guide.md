@@ -706,6 +706,12 @@ that mentions Typos), and reports:
 builder release is pinned, but the shared dictionary it reads is live, so an
 edit to it reaches every repository on its next run.
 
+A pin written as `@refs/tags/v0.1.3` is equivalent to `@v0.1.3` for the release
+floor and canonical agent block. Only that anchored tag namespace is
+normalized: branch refs, malformed tags and refs below the floor still fail.
+The UV gate's listed-tool exception accepts either form only in a direct
+invocation, preserving the helper boundary and rolling dictionary behaviour.
+
 ### Auditing the YAML lint gate
 
 The `yaml-lint-baseline` package audits how a checkout lints its YAML and
