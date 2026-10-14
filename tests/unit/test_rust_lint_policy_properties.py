@@ -60,13 +60,11 @@ def test_rust_policy_matches_oracle_for_bounded_method_batches(
     assert actual == expected, list(zip(methods, expected, actual, strict=True))
 
 
-def test_rust_policy_accepts_canonical_methods_and_rejects_mutations() -> None:
-    """Named boundary examples keep positive and negative coverage explicit."""
-    canonical = required_methods()
-    altered_reason = [dict(method) for method in canonical]
-    altered_reason[0]["reason"] = "use a different environment seam"
-    duplicate_path = [*canonical, "std::env::var"]
-    cases: list[tuple[str, cabc.Sequence[object], bool]] = [
+def _valid_method_policy_cases(
+    canonical: list[dict[str, str]],
+) -> list[tuple[str, cabc.Sequence[object], bool]]:
+    """Return the canonical and extensible positive cases."""
+    return [
         ("canonical_pass", canonical, True),
         (
             "permuted_valid_extensions",
@@ -82,6 +80,16 @@ def test_rust_policy_accepts_canonical_methods_and_rejects_mutations() -> None:
             ],
             True,
         ),
+    ]
+
+
+def _invalid_method_policy_cases(
+    canonical: list[dict[str, str]],
+    altered_reason: list[dict[str, str]],
+    duplicate_path: list[object],
+) -> list[tuple[str, cabc.Sequence[object], bool]]:
+    """Return named negative cases for method paths and object fields."""
+    return [
         ("missing_required_pair", canonical[1:], False),
         ("altered_required_reason", altered_reason, False),
         ("duplicate_bare_object_path", duplicate_path, False),
@@ -132,11 +140,25 @@ def test_rust_policy_accepts_canonical_methods_and_rejects_mutations() -> None:
         ),
     ]
 
+
+def _method_policy_cases() -> list[tuple[str, cabc.Sequence[object], bool]]:
+    """Return all named accepted and rejected method-array examples."""
+    canonical = required_methods()
+    altered_reason = [dict(method) for method in canonical]
+    altered_reason[0]["reason"] = "use a different environment seam"
+    duplicate_path = [*canonical, "std::env::var"]
+    return _valid_method_policy_cases(canonical) + _invalid_method_policy_cases(
+        canonical, altered_reason, duplicate_path
+    )
+
+
+def test_rust_policy_accepts_canonical_methods_and_rejects_mutations() -> None:
+    """Named boundary examples keep positive and negative coverage explicit."""
+    cases = _method_policy_cases()
     actual = policy_accepts_batch([methods for _, methods, _ in cases])
     expected = [accepted for _, _, accepted in cases]
-    assert actual == expected, list(
-        zip([name for name, _, _ in cases], expected, actual, strict=True)
-    )
+    case_names = [name for name, _, _ in cases]
+    assert actual == expected, list(zip(case_names, expected, actual, strict=True))
     assert [oracle_accepts(methods) for _, methods, _ in cases] == expected
 
 
@@ -246,37 +268,6 @@ def test_root_policy_batch_rejects_invalid_result_shape(
         )
 
 
-def test_root_policy_batch_rejects_malformed_result_documents(
-    mocker: pytest_mock.MockFixture,
-) -> None:
-    """JSON that is not a Conftest result array cannot be read as a verdict."""
-    malformed: subprocess.CompletedProcess[str] = subprocess.CompletedProcess(
-        args=["conftest"], returncode=0, stdout='{"unexpected": true}', stderr=""
-    )
-    mocker.patch(
-        "tests.unit.rust_policy_batch_support.subprocess.run",
-        return_value=malformed,
-    )
-    with pytest.raises(OperationalRuleError, match="expected a JSON array"):
-        invoke_root_rust_policy_batch([{"cargo": {}, "clippy": {}}])
-
-
-def test_root_policy_batch_rejects_empty_result_array(
-    mocker: pytest_mock.MockerFixture,
-) -> None:
-    """An empty result array cannot satisfy the requested input batch."""
-    empty: subprocess.CompletedProcess[str] = subprocess.CompletedProcess(
-        args=["conftest"], returncode=0, stdout=json.dumps([]), stderr=""
-    )
-    mocker.patch(
-        "tests.unit.rust_policy_batch_support.subprocess.run",
-        return_value=empty,
-    )
-
-    with pytest.raises(OperationalRuleError, match=r"no result for envelope\.json"):
-        invoke_root_rust_policy_batch([{"cargo": {}, "clippy": {}}])
-
-
 def test_root_policy_batch_accepts_conftest_policy_denial_exit_status(
     mocker: pytest_mock.MockFixture,
 ) -> None:
@@ -297,51 +288,50 @@ def test_root_policy_batch_accepts_conftest_policy_denial_exit_status(
     assert results[0][0].get("failures", [])[0].get("msg") == "denied"
 
 
-def test_root_policy_batch_rejects_denial_status_without_policy_failures(
-    mocker: pytest_mock.MockerFixture,
-) -> None:
-    """Conftest exit 1 cannot describe clean result rows."""
-    denied_without_failures: subprocess.CompletedProcess[str] = (
-        subprocess.CompletedProcess(
-            args=["conftest"],
-            returncode=1,
-            stdout=json.dumps([_conftest_result(filename="envelope.json")]),
-            stderr="",
-        )
-    )
-    mocker.patch(
-        "tests.unit.rust_policy_batch_support.subprocess.run",
-        return_value=denied_without_failures,
-    )
-
-    with pytest.raises(
-        OperationalRuleError,
-        match="exit status does not match reported policy failures",
-    ):
-        invoke_root_rust_policy_batch([{"cargo": {}, "clippy": {}}])
-
-
-def test_root_policy_batch_rejects_success_status_with_policy_failures(
-    mocker: pytest_mock.MockerFixture,
-) -> None:
-    """Conftest exit 0 cannot accompany a policy failure."""
-    successful_with_failures: subprocess.CompletedProcess[str] = (
-        subprocess.CompletedProcess(
-            args=["conftest"],
-            returncode=0,
-            stdout=json.dumps([
+@pytest.mark.parametrize(
+    ("stdout", "returncode", "error_pattern"),
+    [
+        pytest.param(
+            '{"unexpected": true}',
+            0,
+            "expected a JSON array",
+            id="malformed-result-document",
+        ),
+        pytest.param(
+            json.dumps([]),
+            0,
+            r"no result for envelope\.json",
+            id="empty-result-array",
+        ),
+        pytest.param(
+            json.dumps([_conftest_result(filename="envelope.json")]),
+            1,
+            "exit status does not match reported policy failures",
+            id="denial-status-without-policy-failures",
+        ),
+        pytest.param(
+            json.dumps([
                 _conftest_result(filename="envelope.json", failures=[{"msg": "denied"}])
             ]),
-            stderr="",
-        )
+            0,
+            "exit status does not match reported policy failures",
+            id="success-status-with-policy-failures",
+        ),
+    ],
+)
+def test_root_policy_batch_rejects_unusable_process_results(
+    mocker: pytest_mock.MockerFixture,
+    stdout: str,
+    returncode: int,
+    error_pattern: str,
+) -> None:
+    """Malformed documents and status conflicts cannot satisfy a batch."""
+    completed: subprocess.CompletedProcess[str] = subprocess.CompletedProcess(
+        args=["conftest"], returncode=returncode, stdout=stdout, stderr=""
     )
     mocker.patch(
         "tests.unit.rust_policy_batch_support.subprocess.run",
-        return_value=successful_with_failures,
+        return_value=completed,
     )
-
-    with pytest.raises(
-        OperationalRuleError,
-        match="exit status does not match reported policy failures",
-    ):
+    with pytest.raises(OperationalRuleError, match=error_pattern):
         invoke_root_rust_policy_batch([{"cargo": {}, "clippy": {}}])

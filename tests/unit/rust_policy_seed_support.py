@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 import collections.abc as cabc
-import datetime as dt
-import re
 import tomllib
 import typing as typ
 from pathlib import Path
 
 import ruamel.yaml
+
+from tests.unit.rust_policy_seed_labels import (
+    Seed,
+    _as_mapping,
+)
+from tests.unit.rust_policy_seed_labels import (
+    _label_seed_issues as _label_seed_issues,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 CANON = ROOT / "platform-standards" / "canon"
@@ -42,53 +48,10 @@ _EXPECTED_DEPENDABOT_LABELS = {
     "github-actions": ["dependencies", "github-actions"],
     "rust-toolchain": ["dependencies", "rust-toolchain"],
 }
-_SOURCE_FIELDS = {
-    "repository",
-    "api",
-    "observed_at",
-    "capture_command",
-    "captured_json_sha256",
-    "approval_reference",
+_EXPECTED_DEPENDABOT_COOLDOWNS = {
+    "cargo": {"default-days": 7, "semver-major-days": 14},
+    "github-actions": {"default-days": 7},
 }
-_EXPECTED_LABEL_NAMES = frozenset({
-    "bug",
-    "bun",
-    "cargo",
-    "codex",
-    "concurrency",
-    "critical",
-    "dependencies",
-    "documentation",
-    "duplicate",
-    "enhancement",
-    "epic",
-    "github-actions",
-    "go",
-    "good first issue",
-    "help wanted",
-    "high",
-    "invalid",
-    "Issue",
-    "low",
-    "medium",
-    "opentofu",
-    "performance",
-    "pip",
-    "question",
-    "refactor",
-    "Roadmap",
-    "rust-toolchain",
-    "testing",
-    "uv",
-    "Windows",
-    "wontfix",
-})
-_EXPECTED_LABEL_CAPTURE_TIME = "2026-09-30T11:38:30Z"
-_EXPECTED_LABEL_CAPTURE_HASH = (
-    "dad7045b340d12e4393f7e94b61d7aea01073fe7faa17075368de29785f5103a"
-)
-
-type Seed = dict[str, object]
 type SeedMutator = cabc.Callable[[Seed], None]
 
 
@@ -110,19 +73,19 @@ def _load_clippy_seed() -> Seed:
     return typ.cast("Seed", document)
 
 
-def _as_mapping(value: object) -> dict[str, object] | None:
-    """Narrow parsed YAML/TOML values to string-keyed tables."""
-    if isinstance(value, dict) and all(isinstance(key, str) for key in value):
-        return typ.cast("Seed", value)
-    return None
-
-
 def _clippy_seed_issues(seed: object) -> tuple[str, ...]:
     """Return violations of the shipped Clippy configuration contract."""
     document = _as_mapping(seed)
     if document is None:
         return ("seed must be a mapping",)
 
+    issues = _clippy_value_issues(document)
+    issues.extend(_clippy_method_issues(document.get("disallowed-methods")))
+    return tuple(issues)
+
+
+def _clippy_value_issues(document: Seed) -> list[str]:
+    """Check the exact approved Clippy thresholds and test-expect setting."""
     issues: list[str] = []
     for key, expected in _EXPECTED_CLIPPY_VALUES.items():
         actual = document.get(key)
@@ -130,30 +93,46 @@ def _clippy_seed_issues(seed: object) -> tuple[str, ...]:
             issues.append(f"{key} must be {expected}")
     if document.get("allow-expect-in-tests") is not True:
         issues.append("allow-expect-in-tests must be true")
+    return issues
 
-    configured_methods = document.get("disallowed-methods")
+
+def _clippy_method_issues(configured_methods: object) -> list[str]:
+    """Check required Clippy methods, reason pairs, and duplicate paths."""
     if not isinstance(configured_methods, list):
-        issues.append("disallowed-methods must be a list")
-        return tuple(issues)
+        return ["disallowed-methods must be a list"]
 
+    issues: list[str] = []
     actual_methods: dict[str, str] = {}
     for rule in configured_methods:
-        method = _as_mapping(rule)
-        if method is None or set(method) != {"path", "reason"}:
-            issues.append("each disallowed method must have path and reason")
+        entry = _clippy_method_entry(rule)
+        if isinstance(entry, str):
+            issues.append(entry)
             continue
-        path = method.get("path")
-        reason = method.get("reason")
-        if not isinstance(path, str) or not isinstance(reason, str):
-            issues.append("disallowed method path and reason must be strings")
-            continue
+        path, reason = entry
         if path in actual_methods:
             issues.append(f"disallowed method {path} is duplicated")
         actual_methods[path] = reason
 
     if actual_methods != _EXPECTED_DISALLOWED_METHODS:
         issues.append("disallowed methods and reasons must match the approved seed")
-    return tuple(issues)
+    return issues
+
+
+def _clippy_method_entry(rule: object) -> tuple[str, str] | str:
+    """Return a valid path/reason pair or its ordered entry-level diagnostic."""
+    method = _as_mapping(rule)
+    if method is None:
+        return "each disallowed method must have path and reason"
+    if set(method) != {"path", "reason"}:
+        return "each disallowed method must have path and reason"
+
+    path = method.get("path")
+    reason = method.get("reason")
+    if not isinstance(path, str):
+        return "disallowed method path and reason must be strings"
+    if not isinstance(reason, str):
+        return "disallowed method path and reason must be strings"
+    return path, reason
 
 
 def _update_for(document: Seed, ecosystem: str) -> Seed:
@@ -173,6 +152,124 @@ def _update_for(document: Seed, ecosystem: str) -> Seed:
     return typ.cast("Seed", matches[0])
 
 
+def _named_dependabot_updates(
+    updates_value: cabc.Sequence[object],
+) -> tuple[dict[str, Seed], list[str]]:
+    """Collect named update entries while preserving duplicate diagnostics."""
+    updates: dict[str, Seed] = {}
+    issues: list[str] = []
+    for value in updates_value:
+        entry = _named_dependabot_entry(value)
+        if isinstance(entry, str):
+            issues.append(entry)
+            continue
+        ecosystem, update = entry
+        if ecosystem in updates:
+            issues.append(f"{ecosystem} update entry is duplicated")
+        else:
+            updates[ecosystem] = update
+    if set(updates) != _EXPECTED_ECOSYSTEMS:
+        issues.append("supported ecosystems must be Cargo, GitHub Actions, and Rust")
+    return updates, issues
+
+
+def _named_dependabot_entry(value: object) -> tuple[str, Seed] | str:
+    """Return an ecosystem/update pair or the existing row diagnostic."""
+    update = _as_mapping(value)
+    if update is None:
+        return "every update must name a package ecosystem"
+    ecosystem = update.get("package-ecosystem")
+    if not isinstance(ecosystem, str):
+        return "every update must name a package ecosystem"
+    return ecosystem, update
+
+
+def _dependabot_route_issues(ecosystem: str, update: Seed) -> list[str]:
+    """Check root and local-action coverage for a supported ecosystem."""
+    if ecosystem == "github-actions":
+        directories = update.get("directories")
+        issues = []
+        if directories != ["/", "/.github/actions/*"]:
+            issues.append("GitHub Actions must cover root and local actions")
+        if "directory" in update:
+            issues.append("GitHub Actions must use the directories form")
+        return issues
+    if update.get("directory") != "/" or "directories" in update:
+        return [f"{ecosystem} must use the root directory"]
+    return []
+
+
+def _dependabot_group_issues(ecosystem: str, update: Seed) -> list[str]:
+    """Accumulate final group-order and content diagnostics."""
+    groups = _as_mapping(update.get("groups"))
+    issues = _dependabot_group_order_issues(ecosystem, groups)
+    issues.extend(_dependabot_group_content_issues(ecosystem, groups))
+    return issues
+
+
+def _dependabot_group_order_issues(ecosystem: str, groups: Seed | None) -> list[str]:
+    """Require the minor-and-patch group to be the final configured group."""
+    if groups is not None and not _minor_patch_group_is_last(groups):
+        return [f"{ecosystem} minor-and-patch group must be last"]
+    return []
+
+
+def _minor_patch_group_is_last(groups: Seed) -> bool:
+    """Return whether a non-empty group map ends in the required group."""
+    return bool(groups) and next(reversed(groups)) == "minor-and-patch"
+
+
+def _dependabot_group_content_issues(ecosystem: str, groups: Seed | None) -> list[str]:
+    """Check group presence, package patterns, and supported update types."""
+    issues: list[str] = []
+    minor_patch = None if groups is None else _as_mapping(groups.get("minor-and-patch"))
+    if minor_patch is None:
+        issues.append(f"{ecosystem} must define the minor-and-patch group")
+        return issues
+    if minor_patch.get("patterns") != ["*"]:
+        issues.append(f"{ecosystem} group must cover all package patterns")
+    if minor_patch.get("update-types") != ["minor", "patch"]:
+        issues.append(f"{ecosystem} group must include minor and patch updates")
+    return issues
+
+
+def _dependabot_cooldown_issues(ecosystem: str, update: Seed) -> list[str]:
+    """Check only the approved Cargo and GitHub Actions cooldown values."""
+    expected_cooldown = _EXPECTED_DEPENDABOT_COOLDOWNS.get(ecosystem)
+    if expected_cooldown is None:
+        return []
+    cooldown = _as_mapping(update.get("cooldown"))
+    if cooldown != expected_cooldown:
+        return [f"{ecosystem} cooldown must match the approved values"]
+    return []
+
+
+def _dependabot_update_issues(ecosystem: str, update: Seed) -> list[str]:
+    """Accumulate a supported ecosystem's route and update policy issues."""
+    issues = _dependabot_route_issues(ecosystem, update)
+    checks = (
+        (
+            update.get("schedule") == {"interval": "daily"},
+            f"{ecosystem} must use the daily schedule",
+        ),
+        (
+            type(update.get("open-pull-requests-limit")) is int
+            and update.get("open-pull-requests-limit") == 5,
+            f"{ecosystem} pull request limit must be 5",
+        ),
+        (
+            update.get("labels") == _EXPECTED_DEPENDABOT_LABELS[ecosystem],
+            f"{ecosystem} labels must match the approved seed",
+        ),
+    )
+    for is_valid, diagnostic in checks:
+        if not is_valid:
+            issues.append(diagnostic)
+    issues.extend(_dependabot_group_issues(ecosystem, update))
+    issues.extend(_dependabot_cooldown_issues(ecosystem, update))
+    return issues
+
+
 def _dependabot_seed_issues(seed: object) -> tuple[str, ...]:
     """Return violations of the shipped Dependabot template contract."""
     document = _as_mapping(seed)
@@ -180,161 +277,12 @@ def _dependabot_seed_issues(seed: object) -> tuple[str, ...]:
         return ("seed must be a mapping",)
     if document.get("version") != 2:
         return ("Dependabot version must be 2",)
-
     updates_value = document.get("updates")
     if not isinstance(updates_value, list):
         return ("updates must be a list",)
 
-    updates: dict[str, Seed] = {}
-    issues: list[str] = []
-    for value in updates_value:
-        update = _as_mapping(value)
-        ecosystem = None if update is None else update.get("package-ecosystem")
-        if not isinstance(ecosystem, str):
-            issues.append("every update must name a package ecosystem")
-            continue
-        if ecosystem in updates:
-            issues.append(f"{ecosystem} update entry is duplicated")
-        elif update is not None:
-            updates[ecosystem] = update
-
-    if set(updates) != _EXPECTED_ECOSYSTEMS:
-        issues.append("supported ecosystems must be Cargo, GitHub Actions, and Rust")
-
+    updates, issues = _named_dependabot_updates(updates_value)
     for ecosystem in sorted(_EXPECTED_ECOSYSTEMS & set(updates)):
-        update = updates[ecosystem]
-        if ecosystem == "github-actions":
-            directories = update.get("directories")
-            if directories != ["/", "/.github/actions/*"]:
-                issues.append("GitHub Actions must cover root and local actions")
-            if "directory" in update:
-                issues.append("GitHub Actions must use the directories form")
-        elif update.get("directory") != "/" or "directories" in update:
-            issues.append(f"{ecosystem} must use the root directory")
+        issues.extend(_dependabot_update_issues(ecosystem, updates[ecosystem]))
 
-        if update.get("schedule") != {"interval": "daily"}:
-            issues.append(f"{ecosystem} must use the daily schedule")
-        if (
-            type(update.get("open-pull-requests-limit")) is not int
-            or update.get("open-pull-requests-limit") != 5
-        ):
-            issues.append(f"{ecosystem} pull request limit must be 5")
-        if update.get("labels") != _EXPECTED_DEPENDABOT_LABELS[ecosystem]:
-            issues.append(f"{ecosystem} labels must match the approved seed")
-
-        groups = _as_mapping(update.get("groups"))
-        if groups is not None and (
-            not groups or next(reversed(groups)) != "minor-and-patch"
-        ):
-            issues.append(f"{ecosystem} minor-and-patch group must be last")
-        minor_patch = (
-            None if groups is None else _as_mapping(groups.get("minor-and-patch"))
-        )
-        if minor_patch is None:
-            issues.append(f"{ecosystem} must define the minor-and-patch group")
-        else:
-            if minor_patch.get("patterns") != ["*"]:
-                issues.append(f"{ecosystem} group must cover all package patterns")
-            if minor_patch.get("update-types") != ["minor", "patch"]:
-                issues.append(f"{ecosystem} group must include minor and patch updates")
-
-        # Rust-toolchain has no specified cooldown requirement. Keep checks below
-        # scoped to the two ecosystems whose cooldown values are part of this seed.
-        if ecosystem in {"cargo", "github-actions"}:
-            cooldown = _as_mapping(update.get("cooldown"))
-            expected_cooldown: dict[str, object] = {"default-days": 7}
-            if ecosystem == "cargo":
-                expected_cooldown["semver-major-days"] = 14
-            if cooldown != expected_cooldown:
-                issues.append(f"{ecosystem} cooldown must match the approved values")
-
-    return tuple(issues)
-
-
-def _label_seed_issues(seed: object) -> tuple[str, ...]:
-    """Return violations of the dated label snapshot and GitHub API bounds."""
-    document = _as_mapping(seed)
-    if document is None:
-        return ("seed must be a mapping",)
-    if set(document) != {"schema_version", "source", "labels"}:
-        return ("label snapshot must use the published top-level shape",)
-    if (
-        type(document.get("schema_version")) is not int
-        or document.get("schema_version") != 1
-    ):
-        return ("label snapshot schema_version must be 1",)
-
-    issues: list[str] = []
-    source = _as_mapping(document.get("source"))
-    if source is None or set(source) != _SOURCE_FIELDS:
-        issues.append("label source must carry every published provenance field")
-    else:
-        expected_source_values = {
-            "repository": "leynos/netsuke",
-            "api": "https://api.github.com/repos/leynos/netsuke/labels",
-            "capture_command": "gh api repos/leynos/netsuke/labels --paginate",
-            "approval_reference": "leynos/concordat#157",
-        }
-        for key, expected in expected_source_values.items():
-            if source.get(key) != expected:
-                issues.append(f"source {key} must match the approved snapshot")
-
-        observed_at = source.get("observed_at")
-        try:
-            parsed_time = (
-                dt.datetime.fromisoformat(observed_at)
-                if isinstance(observed_at, str)
-                else None
-            )
-        except ValueError:
-            parsed_time = None
-        if parsed_time is None or parsed_time.utcoffset() != dt.timedelta(0):
-            issues.append("source observed_at must be a UTC timestamp")
-        if observed_at != _EXPECTED_LABEL_CAPTURE_TIME:
-            issues.append("source observed_at must match the approved snapshot")
-
-        captured_hash = source.get("captured_json_sha256")
-        if not isinstance(captured_hash, str) or not re.fullmatch(
-            r"[0-9a-f]{64}", captured_hash
-        ):
-            issues.append("source captured_json_sha256 must be a lowercase SHA-256")
-        if captured_hash != _EXPECTED_LABEL_CAPTURE_HASH:
-            issues.append(
-                "source captured_json_sha256 must match the approved snapshot"
-            )
-
-    labels_value = document.get("labels")
-    if not isinstance(labels_value, list):
-        issues.append("labels must be a list")
-        return tuple(issues)
-
-    names: list[str] = []
-    for label_value in labels_value:
-        label = _as_mapping(label_value)
-        if label is None or set(label) != {"name", "color", "description"}:
-            issues.append(
-                "each label must use the published name/color/description shape"
-            )
-            continue
-
-        name = label.get("name")
-        if not isinstance(name, str) or not 0 < len(name) <= 50:
-            issues.append("label names must contain between 1 and 50 characters")
-        else:
-            names.append(name)
-
-        color = label.get("color")
-        if not isinstance(color, str) or re.fullmatch(r"[0-9a-fA-F]{6}", color) is None:
-            issues.append("label colors must contain six hexadecimal digits")
-
-        description = label.get("description")
-        if description is not None and (
-            not isinstance(description, str) or len(description) > 100
-        ):
-            issues.append("label descriptions must be null or at most 100 characters")
-
-    if len(names) != len(set(names)):
-        issues.append("label names must be unique")
-    if set(names) != _EXPECTED_LABEL_NAMES:
-        issues.append("label names must match the complete approved snapshot")
     return tuple(issues)

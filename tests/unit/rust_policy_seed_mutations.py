@@ -62,30 +62,29 @@ def _change_dependabot_directories(seed: Seed) -> None:
     _set_update_field(seed, "github-actions", "directories", ["/"])
 
 
-def _change_cargo_default_cooldown(seed: Seed) -> None:
-    """Change Cargo's required default cooldown."""
+def _replace_cargo_cooldown(
+    seed: Seed, default_days: int, semver_major_days: int
+) -> None:
+    """Replace both Cargo cooldown values without changing the update record."""
     _set_update_field(
         seed,
         "cargo",
         "cooldown",
         {
-            "default-days": 8,
-            "semver-major-days": 14,
+            "default-days": default_days,
+            "semver-major-days": semver_major_days,
         },
     )
+
+
+def _change_cargo_default_cooldown(seed: Seed) -> None:
+    """Change Cargo's required default cooldown."""
+    _replace_cargo_cooldown(seed, default_days=8, semver_major_days=14)
 
 
 def _change_cargo_major_cooldown(seed: Seed) -> None:
     """Change Cargo's required major-version cooldown."""
-    _set_update_field(
-        seed,
-        "cargo",
-        "cooldown",
-        {
-            "default-days": 7,
-            "semver-major-days": 15,
-        },
-    )
+    _replace_cargo_cooldown(seed, default_days=7, semver_major_days=15)
 
 
 def _change_actions_cooldown(seed: Seed) -> None:
@@ -93,8 +92,8 @@ def _change_actions_cooldown(seed: Seed) -> None:
     _set_update_field(seed, "github-actions", "cooldown", {"default-days": 8})
 
 
-def _change_dependabot_group_types(seed: Seed) -> None:
-    """Remove patch updates from the minor-and-patch group."""
+def _minor_patch_groups(seed: Seed) -> dict[str, object]:
+    """Return the Cargo groups mapping after checking its required entry."""
     update = _update_for(seed, "cargo")
     if "groups" not in update:
         msg = "Expected minor-and-patch group in the shipped seed"
@@ -106,51 +105,39 @@ def _change_dependabot_group_types(seed: Seed) -> None:
     if "minor-and-patch" not in groups:
         msg = "Expected minor-and-patch group in the shipped seed"
         raise AssertionError(msg)
+    return groups
+
+
+def _minor_patch_group(seed: Seed) -> dict[str, object]:
+    """Return the required group mapping, preserving invalid-type failures."""
+    groups = _minor_patch_groups(seed)
     group = _as_mapping(groups["minor-and-patch"])
     if group is None:
         msg = "Expected minor-and-patch group in the shipped seed"
         raise TypeError(msg)
+    return group
+
+
+def _change_dependabot_group_types(seed: Seed) -> None:
+    """Remove patch updates from the minor-and-patch group."""
+    group = _minor_patch_group(seed)
     group["update-types"] = ["minor"]
 
 
 def _change_dependabot_group_patterns(seed: Seed) -> None:
     """Narrow the minor-and-patch group to a package-name pattern."""
-    update = _update_for(seed, "cargo")
-    if "groups" not in update:
-        msg = "Expected minor-and-patch group in the shipped seed"
-        raise AssertionError(msg)
-    groups = _as_mapping(update["groups"])
-    if groups is None:
-        msg = "Expected minor-and-patch group in the shipped seed"
-        raise TypeError(msg)
-    if "minor-and-patch" not in groups:
-        msg = "Expected minor-and-patch group in the shipped seed"
-        raise AssertionError(msg)
-    group = _as_mapping(groups["minor-and-patch"])
-    if group is None:
-        msg = "Expected minor-and-patch group in the shipped seed"
-        raise TypeError(msg)
+    group = _minor_patch_group(seed)
     group["patterns"] = ["cargo-*"]
 
 
 def _insert_group_after_minor_patch(seed: Seed) -> None:
     """Append a group to detect loss of the required final-group ordering."""
-    update = _update_for(seed, "cargo")
-    if "groups" not in update:
-        msg = "Expected minor-and-patch group in the shipped seed"
-        raise AssertionError(msg)
-    groups = _as_mapping(update["groups"])
-    if groups is None:
-        msg = "Expected minor-and-patch group in the shipped seed"
-        raise TypeError(msg)
-    if "minor-and-patch" not in groups:
-        msg = "Expected minor-and-patch group in the shipped seed"
-        raise AssertionError(msg)
+    groups = _minor_patch_groups(seed)
     groups["later-group"] = {"patterns": ["*"], "update-types": ["major"]}
 
 
-def _remove_label_approval(seed: Seed) -> None:
-    """Remove the required approval reference from snapshot provenance."""
+def _label_source(seed: Seed) -> dict[str, object]:
+    """Return mutable label provenance, preserving type and presence failures."""
     if "source" not in seed:
         msg = "Expected source provenance in the shipped seed"
         raise AssertionError(msg)
@@ -158,30 +145,24 @@ def _remove_label_approval(seed: Seed) -> None:
     if source is None:
         msg = "Expected source provenance in the shipped seed"
         raise TypeError(msg)
+    return source
+
+
+def _remove_label_approval(seed: Seed) -> None:
+    """Remove the required approval reference from snapshot provenance."""
+    source = _label_source(seed)
     source.pop("approval_reference")
 
 
 def _change_label_hash(seed: Seed) -> None:
     """Replace the recorded hash with a different but well-formed digest."""
-    if "source" not in seed:
-        msg = "Expected source provenance in the shipped seed"
-        raise AssertionError(msg)
-    source = _as_mapping(seed["source"])
-    if source is None:
-        msg = "Expected source provenance in the shipped seed"
-        raise TypeError(msg)
+    source = _label_source(seed)
     source["captured_json_sha256"] = "0" * 64
 
 
 def _change_label_capture_time(seed: Seed) -> None:
     """Replace the recorded date with a different valid UTC timestamp."""
-    if "source" not in seed:
-        msg = "Expected source provenance in the shipped seed"
-        raise AssertionError(msg)
-    source = _as_mapping(seed["source"])
-    if source is None:
-        msg = "Expected source provenance in the shipped seed"
-        raise TypeError(msg)
+    source = _label_source(seed)
     source["observed_at"] = "2026-10-01T11:38:30Z"
 
 

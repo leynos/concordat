@@ -3,39 +3,28 @@
 from __future__ import annotations
 
 import copy
-import math
 import typing as typ
 
 from hypothesis import strategies as st
 
 from tests.unit.rust_policy_batch_support import invoke_root_rust_policy_batch
+from tests.unit.rust_policy_oracle_support import (
+    _REQUIRED_METHODS,
+)
+from tests.unit.rust_policy_oracle_support import (
+    oracle_accepts as oracle_accepts,
+)
+from tests.unit.rust_policy_oracle_support import (
+    oracle_accepts_priority as oracle_accepts_priority,
+)
+from tests.unit.rust_policy_oracle_support import (
+    required_methods as required_methods,
+)
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
 _POLICY_INPUT_COUNT: typ.Final = 6
-_CARGO_PRIORITY_MIN: typ.Final = -128
-_CARGO_PRIORITY_MAX: typ.Final = 127
-_REQUIRED_METHODS: typ.Final = (
-    {"path": "std::env::var", "reason": "inject an environment reader"},
-    {"path": "std::env::var_os", "reason": "inject an environment reader"},
-    {"path": "std::env::vars", "reason": "inject an environment reader"},
-    {"path": "std::env::vars_os", "reason": "inject an environment reader"},
-    {"path": "std::env::set_var", "reason": "use a stub environment in tests"},
-    {"path": "std::env::remove_var", "reason": "use a stub environment in tests"},
-    {
-        "path": "std::env::set_current_dir",
-        "reason": (
-            "inject a base-directory seam; confine CWD changes to Command::current_dir"
-        ),
-    },
-)
-_ALLOWED_METHOD_FIELDS: typ.Final = frozenset({
-    "path",
-    "reason",
-    "replacement",
-    "allow-invalid",
-})
 
 # The Cargo lint maps and Clippy thresholds reproduce canonical_lints and
 # clippy_cfg in lints_policy_test.rego. The disallowed_methods Cargo lint is
@@ -122,11 +111,6 @@ _CANONICAL_CLIPPY: typ.Final = {
 }
 
 
-def required_methods() -> list[dict[str, str]]:
-    """Return independent copies of the seven canonical path/reason pairs."""
-    return copy.deepcopy(list(_REQUIRED_METHODS))
-
-
 def canonical_envelope(
     methods: cabc.Sequence[object], priority: object = -1
 ) -> dict[str, object]:
@@ -143,62 +127,6 @@ def canonical_envelope(
             "disallowed-methods": copy.deepcopy(list(methods)),
         },
     }
-
-
-def oracle_accepts_priority(priority: object) -> bool:
-    """Accept finite integral JSON numbers in Cargo's signed i8 domain."""
-    if isinstance(priority, bool):
-        return False
-    if isinstance(priority, int):
-        return _CARGO_PRIORITY_MIN <= priority <= _CARGO_PRIORITY_MAX
-    return (
-        isinstance(priority, float)
-        and math.isfinite(priority)
-        and priority.is_integer()
-        and _CARGO_PRIORITY_MIN <= priority <= _CARGO_PRIORITY_MAX
-    )
-
-
-def oracle_accepts(methods: cabc.Sequence[object], priority: object = -1) -> bool:
-    """Apply method-array rules and normalized JSON priority semantics."""
-    if not oracle_accepts_priority(priority):
-        return False
-    paths: list[str] = []
-    exact_pairs: set[tuple[str, str]] = set()
-    for method in methods:
-        if isinstance(method, str):
-            if not method:
-                return False
-            path = method
-        elif isinstance(method, dict):
-            if any(not isinstance(key, str) for key in method):
-                return False
-            method_fields = typ.cast("dict[str, object]", method)
-            if set(method_fields).difference(_ALLOWED_METHOD_FIELDS):
-                return False
-            path_value = method_fields.get("path")
-            if not isinstance(path_value, str) or not path_value:
-                return False
-            for field in ("reason", "replacement"):
-                if field in method_fields and not isinstance(method_fields[field], str):
-                    return False
-            if (
-                "allow-invalid" in method_fields
-                and type(method_fields["allow-invalid"]) is not bool
-            ):
-                return False
-            path = path_value
-            reason = method_fields.get("reason")
-            if isinstance(reason, str):
-                exact_pairs.add((path, reason))
-        else:
-            return False
-        paths.append(path)
-
-    required_pairs = {
-        (method["path"], method["reason"]) for method in _REQUIRED_METHODS
-    }
-    return len(paths) == len(set(paths)) and required_pairs.issubset(exact_pairs)
 
 
 def policy_accepts_batch(
@@ -234,48 +162,63 @@ def _extension_path() -> st.SearchStrategy[str]:
     return suffix.map(lambda value: f"std::test_extension_{value}")
 
 
-@st.composite
-def method_arrays(draw: st.DrawFn) -> list[object]:
-    """Generate valid and invalid method arrays across the Rego schema."""
-    kind = draw(
-        st.sampled_from((
-            "valid_permutation",
-            "valid_mixed_extensions",
-            "missing_required_pair",
-            "altered_required_reason",
-            "duplicate_mixed_path",
-            "unknown_field",
-            "invalid_path",
-            "invalid_optional_type",
-        ))
-    )
-    methods: list[object] = [dict(method) for method in _REQUIRED_METHODS]
+_METHOD_ARRAY_KINDS: typ.Final = (
+    "valid_permutation",
+    "valid_mixed_extensions",
+    "missing_required_pair",
+    "altered_required_reason",
+    "duplicate_mixed_path",
+    "unknown_field",
+    "invalid_path",
+    "invalid_optional_type",
+)
+
+
+def _valid_method_array(
+    draw: st.DrawFn,
+    methods: list[object],
+    kind: str,
+) -> list[object]:
+    """Draw a valid permutation with or without local extensions."""
     if kind == "valid_permutation":
         return list(draw(st.permutations(methods)))
-    if kind == "valid_mixed_extensions":
-        path_values = draw(
-            st.lists(_extension_path(), min_size=2, max_size=2, unique=True)
-        )
-        object_extension = {
-            "path": path_values[1],
-            "reason": draw(st.text(max_size=10)),
-            "replacement": draw(st.text(max_size=10)),
-            "allow-invalid": draw(st.booleans()),
-        }
-        return list(draw(st.permutations([*methods, path_values[0], object_extension])))
+    path_values = draw(st.lists(_extension_path(), min_size=2, max_size=2, unique=True))
+    object_extension = {
+        "path": path_values[1],
+        "reason": draw(st.text(max_size=10)),
+        "replacement": draw(st.text(max_size=10)),
+        "allow-invalid": draw(st.booleans()),
+    }
+    return list(draw(st.permutations([*methods, path_values[0], object_extension])))
+
+
+def _required_method_mutation(
+    draw: st.DrawFn,
+    methods: list[object],
+    kind: str,
+) -> list[object]:
+    """Draw a missing, altered, or duplicated required method."""
     if kind == "missing_required_pair":
         del methods[draw(st.integers(min_value=0, max_value=len(methods) - 1))]
         return methods
+    index = draw(st.integers(min_value=0, max_value=len(methods) - 1))
+    method = typ.cast("dict[str, str]", methods[index])
     if kind == "altered_required_reason":
-        index = draw(st.integers(min_value=0, max_value=len(methods) - 1))
-        method = typ.cast("dict[str, str]", methods[index])
         method["reason"] = draw(st.text(min_size=1, max_size=12))
         return methods
     if kind == "duplicate_mixed_path":
-        index = draw(st.integers(min_value=0, max_value=len(methods) - 1))
-        method = typ.cast("dict[str, str]", methods[index])
         methods.append(method["path"])
         return methods
+    message = f"unhandled generated case: {kind}"
+    raise AssertionError(message)
+
+
+def _malformed_method_array(
+    draw: st.DrawFn,
+    methods: list[object],
+    kind: str,
+) -> list[object]:
+    """Draw unknown fields, invalid paths, or invalid optional values."""
     if kind == "unknown_field":
         methods.append({
             "path": draw(_extension_path()),
@@ -307,6 +250,25 @@ def method_arrays(draw: st.DrawFn) -> list[object]:
         )
         methods.append({"path": path, **malformed_optional})
         return methods
+    message = f"unhandled generated case: {kind}"
+    raise AssertionError(message)
+
+
+@st.composite
+def method_arrays(draw: st.DrawFn) -> list[object]:
+    """Generate valid and invalid method arrays across the Rego schema."""
+    kind = draw(st.sampled_from(_METHOD_ARRAY_KINDS))
+    methods: list[object] = [dict(method) for method in _REQUIRED_METHODS]
+    if kind in ("valid_permutation", "valid_mixed_extensions"):
+        return _valid_method_array(draw, methods, kind)
+    if kind in (
+        "missing_required_pair",
+        "altered_required_reason",
+        "duplicate_mixed_path",
+    ):
+        return _required_method_mutation(draw, methods, kind)
+    if kind in ("unknown_field", "invalid_path", "invalid_optional_type"):
+        return _malformed_method_array(draw, methods, kind)
     message = f"unhandled generated case: {kind}"
     raise AssertionError(message)
 
