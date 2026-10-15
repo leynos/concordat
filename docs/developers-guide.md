@@ -1016,7 +1016,12 @@ auto-discover, and the Makefile and workflows whose builds replace them:
   BD-007 from proving an LLVM release profile. BD-007 checks package overrides
   for the selected profile in both root `Cargo.toml` and `.cargo/config.toml`;
   profile-level LLVM alone cannot prove coverage if a relevant package override
-  is unresolved or selects Cranelift.
+  is unresolved or selects Cranelift. The private
+  `_populate_manifest_backend_facts` command in `envelope.py` owns just these
+  two optional keys and is called only by `build_build_defaults_envelope`. It
+  composes the existing `codegen_backends` normalizer and
+  `profile_backend_error` shape query; other envelope builders and policy
+  modules consume their own facts rather than calling this command.
 - `toolchain` — the pinned channel and its classification, which decides
   whether the nightly-only clauses apply.
 - `exceptions` — one scan per document declared by the rule's

@@ -290,6 +290,29 @@ def _exception_keyword(parameters: cabc.Mapping[str, object]) -> str:
     return declared if isinstance(declared, str) else DEFAULT_EXCEPTION_KEYWORD
 
 
+def _populate_manifest_backend_facts(
+    envelope: BuildDefaultsEnvelope, cargo_parsed: CargoManifest | None
+) -> None:
+    """Populate only the build-defaults envelope's optional root backend facts.
+
+    Keep normalizing selections and retaining unsupported shapes together at
+    the adapter boundary. The envelope builder is this command's sole caller.
+    """
+    # Omit empty facts so unrelated fixture envelopes keep their exact bytes.
+    # The root manifest is a separate Cargo source from auto-discovered config.
+    manifest = cargo_parsed if cargo_parsed is not None else {}
+    manifest_backends = [
+        selection
+        for selection in codegen_backends(manifest, [])
+        if selection["backend"]
+    ]
+    manifest_error = profile_backend_error(manifest)
+    if manifest_backends:
+        envelope["cargo_manifest_backends"] = manifest_backends
+    if manifest_error is not None:
+        envelope["cargo_manifest_backend_error"] = manifest_error
+
+
 def build_build_defaults_envelope(
     checkout: pathlib.Path,
     parameters: cabc.Mapping[str, object] | None = None,
@@ -360,17 +383,5 @@ def build_build_defaults_envelope(
         "makefile_error": makefile_error,
         "workflows": workflows,
     }
-    # Omit empty facts so unrelated fixture envelopes keep their exact bytes.
-    # The root manifest is a separate Cargo source from auto-discovered config.
-    manifest = cargo_parsed if cargo_parsed is not None else {}
-    manifest_backends = [
-        selection
-        for selection in codegen_backends(manifest, [])
-        if selection["backend"]
-    ]
-    manifest_error = profile_backend_error(manifest)
-    if manifest_backends:
-        envelope["cargo_manifest_backends"] = manifest_backends
-    if manifest_error is not None:
-        envelope["cargo_manifest_backend_error"] = manifest_error
+    _populate_manifest_backend_facts(envelope, cargo_parsed)
     return envelope
