@@ -260,6 +260,14 @@ carry no toolchain the install can rely on. `make test` lists the same tools as
 prerequisites, so the local gate fails by name rather than through unrelated
 rule tests.
 
+The CI lane keys the Go dependency cache with the tracked nested module file
+`platform-standards/tofu/terratest/go.sum`. The coverage publisher uses Go only
+to install pinned Conftest, so it explicitly disables that dependency cache
+rather than looking for a root module that does not exist. The same local
+provisioning contract checks these two cache inputs, including controls that
+reject a missing module key or an enabled publisher cache. Both lanes retain
+their declared Go version and tool-install ordering.
+
 Add a new external tool in three places together: the package's missing-tool
 message, the install step in every suite lane, and the `test` target's
 prerequisites.
