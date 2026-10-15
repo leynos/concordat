@@ -330,18 +330,32 @@ def _launcher_arguments(prefix: list[str]) -> list[str] | None:
     if ".." in script_path.split("/"):
         script_path = ""
     if posixpath.normpath(script_path) == GATE_HELPER:
-        arguments = prefix[2:]
-        if arguments[:1] != ["run"]:
-            return arguments
-        # The helper refuses `run` without one final command separator.
-        if arguments.count("--") != 1:
-            return None
-        if arguments[-1:] != ["--"]:
-            return None
-        return arguments
+        return _gate_helper_arguments(prefix[2:])
     if prefix[1:] != ["-m"]:
         return None
     return prefix[1:]
+
+
+def _gate_helper_arguments(arguments: list[str]) -> list[str] | None:
+    """Return canonical helper arguments, or ``None`` for an invalid run boundary.
+
+    Only `_launcher_arguments` calls this reader, after recognizing the Python
+    interpreter and canonical helper path. Other helper subcommands retain the
+    generic launcher's argument validation.
+
+    Returns
+    -------
+    list[str] | None
+        The arguments unchanged, or ``None`` when `run` lacks one final `--`.
+    """
+    if arguments[:1] != ["run"]:
+        return arguments
+    # The helper refuses `run` without one final command separator.
+    if arguments.count("--") != 1:
+        return None
+    if arguments[-1:] != ["--"]:
+        return None
+    return arguments
 
 
 def _is_launcher_prefix(prefix: list[str]) -> bool:

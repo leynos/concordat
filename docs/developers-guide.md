@@ -730,9 +730,12 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   launcher and helper path are removed before `_is_launcher_prefix` validates
   the remaining uv-style subcommands, flags, and flag values. For helper `run`,
   exactly one `--` must end that prefix before the executable; missing or
-  repeated separators are rejected. The helper `tool` form retains its existing
-  argument validation, as do direct uv and pipx invocations. Apart from the
-  canonical helper, the reader recognizes only the direct
+  repeated separators are rejected. The private `_gate_helper_arguments` reader
+  owns only this helper argument boundary; `_launcher_arguments` calls it after
+  recognizing the Python interpreter and canonical helper path. It is not a
+  general shell or interpreter parser. The helper `tool` form retains its
+  existing argument validation, as do direct uv and pipx invocations. Apart
+  from the canonical helper, the reader recognizes only the direct
   `python -m interrogate` and `python3 -m interrogate` forms. Other interpreter
   options are outside its supported grammar and fail closed; a script operand
   such as `run` or `tool` is not a uv subcommand for Python. The package is
