@@ -53,12 +53,18 @@ _RELEASE_CASES: typ.Final = [
 ]
 
 
+@pytest.fixture
+def coverage_checkout(tmp_path: pathlib.Path) -> None:
+    """Copy coverage inputs into the independent temporary root for each case."""
+    shutil.copytree(_FIXTURES / "coverage-make-profile", tmp_path, dirs_exist_ok=True)
+
+
+@pytest.mark.usefixtures("coverage_checkout")
 @pytest.mark.parametrize(("profile_text", "verdict"), _RELEASE_CASES)
 def test_root_release_backend_determines_whether_coverage_proves_llvm(
     tmp_path: pathlib.Path, profile_text: str, verdict: str
 ) -> None:
     """Release defaults cannot hide a manifest's explicit or unresolved override."""
-    shutil.copytree(_FIXTURES / "coverage-make-profile", tmp_path, dirs_exist_ok=True)
     manifest = tmp_path / "Cargo.toml"
     manifest.write_text(
         profile_text + "\n" + manifest.read_text(encoding="utf-8"), encoding="utf-8"
@@ -69,7 +75,9 @@ def test_root_release_backend_determines_whether_coverage_proves_llvm(
     result = run_rule("rust-build-defaults", tmp_path)
     assert result.verdict == verdict, result
     if verdict != "compliant":
-        assert {finding.rule_id for finding in result.findings} == {"BD-007"}
+        assert {finding.rule_id for finding in result.findings} == {"BD-007"}, (
+            f"unexpected findings: {result.findings!r}"
+        )
 
 
 @pytest.mark.parametrize(
@@ -98,15 +106,17 @@ def test_a_direct_suite_cannot_prove_isolation_from_malformed_manifest_facts(
     )
     result = run_rule("rust-build-defaults", tmp_path)
     assert result.verdict == "indeterminate", result
-    assert {finding.rule_id for finding in result.findings} == {"BD-008"}
+    assert {finding.rule_id for finding in result.findings} == {"BD-008"}, (
+        f"unexpected findings: {result.findings!r}"
+    )
 
 
+@pytest.mark.usefixtures("coverage_checkout")
 @pytest.mark.parametrize(("profile_text", "verdict"), _RELEASE_CASES)
 def test_root_release_backend_is_consistent_in_workflow_coverage(
     tmp_path: pathlib.Path, profile_text: str, verdict: str
 ) -> None:
     """Workflow coverage cannot bypass unproved root facts with config LLVM."""
-    shutil.copytree(_FIXTURES / "coverage-make-profile", tmp_path, dirs_exist_ok=True)
     (tmp_path / "Makefile").unlink()
     manifest = tmp_path / "Cargo.toml"
     manifest.write_text(
@@ -134,15 +144,17 @@ def test_root_release_backend_is_consistent_in_workflow_coverage(
     expected = "compliant" if is_overridden_unknown else verdict
     assert result.verdict == expected, result
     if expected != "compliant":
-        assert {finding.rule_id for finding in result.findings} == {"BD-007"}
+        assert {finding.rule_id for finding in result.findings} == {"BD-007"}, (
+            f"unexpected findings: {result.findings!r}"
+        )
 
 
+@pytest.mark.usefixtures("coverage_checkout")
 @pytest.mark.parametrize("route", ["make", "workflow"])
 def test_config_release_package_backend_prevents_wholly_llvm_coverage(
     tmp_path: pathlib.Path, route: str
 ) -> None:
     """A typed config package override is not erased by the profile's LLVM default."""
-    shutil.copytree(_FIXTURES / "coverage-make-profile", tmp_path, dirs_exist_ok=True)
     config = tmp_path / ".cargo/config.toml"
     with config.open("a", encoding="utf-8") as stream:
         stream.write(
@@ -166,9 +178,12 @@ def test_config_release_package_backend_prevents_wholly_llvm_coverage(
         )
     result = run_rule("rust-build-defaults", tmp_path)
     assert result.verdict == "indeterminate", result
-    assert {finding.rule_id for finding in result.findings} == {"BD-007"}
+    assert {finding.rule_id for finding in result.findings} == {"BD-007"}, (
+        f"unexpected findings: {result.findings!r}"
+    )
 
 
+@pytest.mark.usefixtures("coverage_checkout")
 @pytest.mark.parametrize("route", ["make", "workflow"])
 @pytest.mark.parametrize("profile_flag", ["--release", "--profile release"])
 @pytest.mark.parametrize(
@@ -186,7 +201,6 @@ def test_config_release_backend_overrides_same_manifest_profile(
 ) -> None:
     """Cargo config overrides the same manifest profile for both coverage routes."""
     manifest_backend, config_backend, verdict = backend_case
-    shutil.copytree(_FIXTURES / "coverage-make-profile", tmp_path, dirs_exist_ok=True)
     manifest = tmp_path / "Cargo.toml"
     manifest.write_text(
         f'[profile.release]\ncodegen-backend = "{manifest_backend}"\n\n'
@@ -214,16 +228,18 @@ def test_config_release_backend_overrides_same_manifest_profile(
     result = run_rule("rust-build-defaults", tmp_path)
     assert result.verdict == verdict, result
     if verdict == "noncompliant":
-        assert {finding.rule_id for finding in result.findings} == {"BD-007"}
+        assert {finding.rule_id for finding in result.findings} == {"BD-007"}, (
+            f"unexpected findings: {result.findings!r}"
+        )
 
 
+@pytest.mark.usefixtures("coverage_checkout")
 @pytest.mark.parametrize("route", ["make", "workflow"])
 @pytest.mark.parametrize("profile_flag", ["--release", "--profile release"])
 def test_config_llvm_overrides_unknown_same_manifest_profile(
     tmp_path: pathlib.Path, route: str, profile_flag: str
 ) -> None:
     """An inactive root backend string cannot obscure effective config LLVM."""
-    shutil.copytree(_FIXTURES / "coverage-make-profile", tmp_path, dirs_exist_ok=True)
     manifest = tmp_path / "Cargo.toml"
     manifest.write_text(
         '[profile.release]\ncodegen-backend = "custom"\n\n'
@@ -250,4 +266,4 @@ def test_config_llvm_overrides_unknown_same_manifest_profile(
         )
     result = run_rule("rust-build-defaults", tmp_path)
     assert result.verdict == "compliant", result
-    assert result.findings == ()
+    assert result.findings == (), f"unexpected findings: {result.findings!r}"
