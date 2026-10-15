@@ -1460,18 +1460,23 @@ unresolved values. Public checkout coverage for Whitaker isolation is in
 the scoped-backend fixture remain in `test_build_defaults_rule_run.py`.
 `test_build_defaults_manifest_backends.py` covers typed facts, error
 adaptation, and envelope construction; `test_build_defaults_manifest_routes.py`
-covers public BD-007 release and BD-008 invalid-fact findings.
-`test_build_defaults_isolation_properties.py` batches three semantic properties
-with independent oracles. `policy/manifest_backends_test.rego` checks that
-profile selections prove profile defaults while package overrides do not. Both
-production modules are loaded through the rule's policy directory and
-registered in the canonical package integrity manifest. Keep their ownership
-private: they compose normalized envelope and existing Make reachability and
-assignment facts, rather than adding general Cargo, shell, or Make evaluators.
-For recognized direct Whitaker routes, observed development-flag contamination
-is noncompliant; missing, unresolved, or multiple possible isolation values and
-separate profile backends are indeterminate. Unknown wrappers receive no
-exemption, so ordinary development-flag checks still apply.
+covers public BD-007 release and BD-008 invalid-fact findings, including
+same-profile Cargo configuration precedence over root-manifest defaults. The
+private `config_profile_backend_present` predicate bounds manifest fallback and
+unknown-profile facts to profiles not overridden by Cargo configuration. Active
+unknown backends, malformed root facts, and package overrides retain their
+separate proof boundaries. `test_build_defaults_isolation_properties.py`
+batches three semantic properties with independent oracles.
+`policy/manifest_backends_test.rego` checks that profile selections prove
+profile defaults while package overrides do not. Both production modules are
+loaded through the rule's policy directory and registered in the canonical
+package integrity manifest. Keep their ownership private: they compose
+normalized envelope and existing Make reachability and assignment facts, rather
+than adding general Cargo, shell, or Make evaluators. For recognized direct
+Whitaker routes, observed development-flag contamination is noncompliant;
+missing, unresolved, or multiple possible isolation values and separate profile
+backends are indeterminate. Unknown wrappers receive no exemption, so ordinary
+development-flag checks still apply.
 
 ### The bounded Rego reachability test
 

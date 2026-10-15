@@ -96,9 +96,9 @@ makes only those clauses indeterminate; the others still run. See
   package-override, or backend shape. The bounded `profile_backend_error` check
   does not diagnose every Cargo manifest error. For release-profile coverage, a
   direct root LLVM selection proves LLVM; root Cranelift is noncompliant.
-  Package Cranelift, unknown backend facts, or a relevant error leave the LLVM
-  proof `indeterminate`; a package-level LLVM override does not prove the
-  profile default. A relevant error also makes direct Whitaker isolation
+  Package Cranelift, active unknown backend facts, or a relevant error leave
+  the LLVM proof `indeterminate`; a package-level LLVM override does not prove
+  the profile default. A relevant error also makes direct Whitaker isolation
   `indeterminate`. BD-007 and BD-008 consume these normalized facts, not raw
   TOML. BD-007 checks package overrides for the selected profile in both root
   `Cargo.toml` and `.cargo/config.toml`; profile-level LLVM alone cannot prove
@@ -223,7 +223,11 @@ A coverage path selects LLVM in any of these ways:
   rustc takes the last; a probe on the pinned nightly confirmed it.
 - `--profile P`, where `P` selects `codegen-backend = "llvm"` in the
   configuration or `Cargo.toml`. `--release` counts too, unless the release
-  profile selects Cranelift.
+  profile selects Cranelift. A same-profile backend in Cargo configuration
+  overrides the root manifest's backend; a different configured profile does
+  not displace it. A known same-profile configuration backend also supersedes
+  an unknown root profile string. Active unknown backends, malformed root
+  facts, and non-LLVM package overrides still prevent a wholly LLVM proof.
 - Where only `rustflags` select Cranelift, any assigned `RUSTFLAGS` that does
   not name Cranelift again, because it replaces the source that did.
 

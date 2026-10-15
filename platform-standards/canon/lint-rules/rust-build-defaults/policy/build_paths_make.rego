@@ -247,6 +247,13 @@ coverage_clause_applies if {
 	count(cranelift_routes) > 0
 }
 
+# Cargo configuration overrides only the same profile in Cargo.toml.
+config_profile_backend_present(name) if {
+	some backend in backends
+	backend.scope == "profile"
+	backend.profile == name
+}
+
 manifest_profile_backend(name) := backend.backend if {
 	manifest_backend_error == ""
 	not profile_backend_unproved(name)
@@ -265,7 +272,15 @@ profile_backend_unproved(name) if {
 }
 
 profile_backend_unproved(name) if {
-	some backend in array.concat(backends, manifest_backends)
+	some backend in backends
+	backend.profile == name
+	not backend.backend in {"llvm", "cranelift"}
+}
+
+profile_backend_unproved(name) if {
+	not config_profile_backend_present(name)
+	some backend in manifest_backends
+	backend.scope == "profile"
 	backend.profile == name
 	not backend.backend in {"llvm", "cranelift"}
 }
@@ -277,7 +292,10 @@ profile_selects_llvm(name) if {
 	backend.backend == "llvm"
 }
 
-profile_selects_llvm(name) if manifest_profile_backend(name) == "llvm"
+profile_selects_llvm(name) if {
+	not config_profile_backend_present(name)
+	manifest_profile_backend(name) == "llvm"
+}
 
 release_profile_is_llvm if {
 	manifest_backend_error == ""
@@ -293,6 +311,7 @@ profile_selects_cranelift(name) if {
 }
 
 profile_selects_cranelift(name) if {
+	not config_profile_backend_present(name)
 	some backend in manifest_backends
 	backend.scope == "profile"
 	backend.profile == name
