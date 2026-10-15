@@ -92,6 +92,16 @@ class PolicyEnvelope(typ.TypedDict):
     makefile: MakeutilReport | None
 
 
+def _root_cargo_manifest(
+    surfaces: cabc.Sequence[CargoSurface],
+) -> CargoManifest | None:
+    """Return the first governed root manifest, or None without a root surface."""
+    return next(
+        (surface["parsed"] for surface in surfaces if surface["path"] == "Cargo.toml"),
+        None,
+    )
+
+
 def build_envelope(
     checkout: pathlib.Path, *, inspect: MakefileInspector = inspect_makefile
 ) -> PolicyEnvelope:
@@ -119,14 +129,7 @@ def build_envelope(
 
     root_cargo_toml = root_cargo_toml_exists(cargo_path)
     resolution = resolve_rust_surfaces(checkout)
-    cargo_parsed = next(
-        (
-            surface["parsed"]
-            for surface in resolution.surfaces
-            if surface["path"] == "Cargo.toml"
-        ),
-        None,
-    )
+    cargo_parsed = _root_cargo_manifest(resolution.surfaces)
 
     makefile_report: MakeutilReport | None = None
     if regular_file_exists(makefile_path, operation=OPERATION_PARSE_MAKEFILE):
@@ -345,14 +348,7 @@ def build_build_defaults_envelope(
     """
     resolved = parameters if parameters is not None else {}
     resolution = resolve_rust_surfaces(checkout)
-    cargo_parsed = next(
-        (
-            surface["parsed"]
-            for surface in resolution.surfaces
-            if surface["path"] == "Cargo.toml"
-        ),
-        None,
-    )
+    cargo_parsed = _root_cargo_manifest(resolution.surfaces)
     cargo_config = inspect_cargo_config(checkout)
     toolchain = inspect_toolchain(checkout)
     root = resolved_root(checkout)

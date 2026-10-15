@@ -994,6 +994,14 @@ Returning an empty list for any of those would report the one repository shape
 the reader could not see as being in perfect order, clearing every clause of
 the rule at once.
 
+The private `_root_cargo_manifest` helper in `envelope.py` is shared only by
+`build_envelope` and `build_build_defaults_envelope`. It selects the first exact
+`Cargo.toml` surface from the resolver's governed sequence, returning that
+surface's existing parsed object or `None` when the root is not governed. It
+performs no filesystem access and preserves declared surface ordering; a
+physically present root file is not a substitute for a governed surface. Other
+adapters should use the surface resolver rather than this private helper.
+
 `rust-build-defaults` is the first package to take its own. Its envelope
 (`build_build_defaults_envelope`) carries the facts Cargo and rustup
 auto-discover, and the Makefile and workflows whose builds replace them:
