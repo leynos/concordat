@@ -89,10 +89,10 @@ _VARIABLE_REFERENCE: typ.Final = re.compile(
 # toolchain of its own.
 GO_SETUP_ACTION: typ.Final = "actions/setup-go@"
 
-# The Go release the pinned Conftest is installed under. Naming it here
-# keeps a lane from setting up a different toolchain than the one the
-# other lane proved the install works on.
-GO_VERSION: typ.Final = "1.22"
+# Both suite lanes share one installed Go release. The pull-request lane runs
+# Terratest from its nested module, whose `go` directive is the operative
+# minimum; `test_go_toolchain_contract` checks this pin against that file.
+GO_VERSION: typ.Final = "1.26.9"
 
 # `ensure_tool`'s refusal, as the Makefile spells it. Asserting the message
 # rather than the exit status alone keeps the target from passing by failing

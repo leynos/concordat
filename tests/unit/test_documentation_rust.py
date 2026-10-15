@@ -8,7 +8,7 @@ import tempfile
 import typing as typ
 
 import pytest
-from hypothesis import given
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from concordat.errors import OperationalRuleError
@@ -471,6 +471,8 @@ _CLIPPY_DECOY: typ.Final = st.sampled_from([
 ])
 
 
+# Real parser subprocess and filesystem work are not a performance contract.
+@settings(deadline=None)
 @given(st.lists(st.one_of(_CLIPPY_REAL, _CLIPPY_DECOY), min_size=1, max_size=6))
 def test_clippy_runs_are_exactly_the_cargo_clippy_commands(commands: list[str]) -> None:
     """Each recipe line is a run if and only if it is a real `cargo clippy`."""

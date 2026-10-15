@@ -39,6 +39,8 @@ from __future__ import annotations
 
 import typing as typ
 
+import pytest
+
 from tests.unit.gate_provisioning_support import (
     GO_SETUP_ACTION,
     GO_VERSION,
@@ -47,6 +49,7 @@ from tests.unit.gate_provisioning_support import (
     MAKEFILE_SUITE_TARGET,
     MISSING_TOOL_REFUSAL,
     PACKAGE_DIRECTORY,
+    REPOSITORY_ROOT,
     installed_tool_names,
     installer_program,
     job_steps,
@@ -196,8 +199,9 @@ def test_a_go_install_is_preceded_by_the_shared_go_setup() -> None:
     )
     (_, version), *_ = setups.values()
     assert version == GO_VERSION, (
-        f"the suite lanes must set Go up at {GO_VERSION}, since the pinned "
-        f"Conftest is built against it; found {version!r}"
+        f"the suite lanes must share Go {GO_VERSION}, which satisfies the "
+        "nested Terratest module's local toolchain floor; "
+        f"found {version!r}"
     )
 
 
@@ -275,3 +279,94 @@ def test_each_tool_target_refuses_when_the_tool_is_absent(
             f"`make {tool}` must accept a {tool} on PATH; it exited "
             f"{present.returncode} with {present.stderr!r}"
         )
+
+
+_GO_SUM: typ.Final = "platform-standards/tofu/terratest/go.sum"
+_GO_WORKFLOWS: typ.Final = (
+    ".github/workflows/ci.yml",
+    ".github/workflows/coverage-main.yml",
+)
+
+
+def _go_cache_inputs(workflow: str) -> dict[str, object]:
+    """Read the single Go setup in this repository's named suite lane."""
+    lanes = [lane for lane in suite_lanes() if lane.workflow == workflow]
+    assert len(lanes) == 1, f"expected one suite lane in {workflow}"
+    steps = [
+        step
+        for step in job_steps(lanes[0].job, subject=workflow)
+        if str(step.get("uses", "")).startswith(GO_SETUP_ACTION)
+    ]
+    assert len(steps) == 1, f"expected one Go setup in {workflow}"
+    inputs = steps[0].get("with")
+    assert isinstance(inputs, dict), f"expected Go inputs in {workflow}"
+    return typ.cast("dict[str, object]", inputs)
+
+
+def _assert_go_cache(workflow: str, inputs: dict[str, object]) -> None:
+    """Check these two callers' cache responsibilities without shared policy."""
+    assert workflow in _GO_WORKFLOWS, f"unknown Go cache caller: {workflow}"
+    if workflow == _GO_WORKFLOWS[0]:
+        cache = inputs.get("cache", True)
+        assert cache is True or cache == "true", (
+            "Terratest's Go cache must stay enabled"
+        )
+        assert inputs.get("cache-dependency-path") == _GO_SUM, (
+            "Terratest's Go cache must use its nested go.sum"
+        )
+        assert (REPOSITORY_ROOT / _GO_SUM).is_file(), "the nested go.sum must exist"
+    else:
+        cache = inputs.get("cache")
+        assert cache is False or cache == "false", (
+            "the Conftest-only publisher must explicitly disable Go dependency caching"
+        )
+
+
+@pytest.mark.parametrize("workflow", _GO_WORKFLOWS)
+def test_go_cache_matches_the_callers_dependencies(workflow: str) -> None:
+    """The real Terratest lane and Conftest-only publisher need different keys."""
+    _assert_go_cache(workflow, _go_cache_inputs(workflow))
+
+
+@pytest.mark.parametrize(
+    ("workflow", "inputs"),
+    [
+        (_GO_WORKFLOWS[0], {"cache-dependency-path": _GO_SUM}),
+        (_GO_WORKFLOWS[1], {"cache": "false"}),
+    ],
+    ids=["nested-module", "conftest-only"],
+)
+def test_go_cache_contract_accepts_the_intended_callers(
+    workflow: str, inputs: dict[str, object]
+) -> None:
+    """The caller checks accept the intended supported setup-go inputs."""
+    _assert_go_cache(workflow, inputs)
+
+
+@pytest.mark.parametrize(
+    ("workflow", "inputs", "reason"),
+    [
+        (_GO_WORKFLOWS[0], {}, "nested go.sum"),
+        (_GO_WORKFLOWS[0], {"cache-dependency-path": "go.sum"}, "nested go.sum"),
+        (
+            _GO_WORKFLOWS[0],
+            {"cache": False, "cache-dependency-path": _GO_SUM},
+            "stay enabled",
+        ),
+        (_GO_WORKFLOWS[1], {}, "explicitly disable"),
+        (_GO_WORKFLOWS[1], {"cache": True}, "explicitly disable"),
+    ],
+    ids=[
+        "missing-module-key",
+        "root-key",
+        "cache-disabled",
+        "publisher-default",
+        "publisher-enabled",
+    ],
+)
+def test_go_cache_contract_rejects_the_reproduced_misconfigurations(
+    workflow: str, inputs: dict[str, object], reason: str
+) -> None:
+    """Dropping the module key or enabling the publisher cache must be detected."""
+    with pytest.raises(AssertionError, match=reason):
+        _assert_go_cache(workflow, inputs)
