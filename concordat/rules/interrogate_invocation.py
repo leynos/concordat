@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import collections
 import dataclasses
+import itertools
+import pathlib
 import posixpath
 import re
 import shlex
@@ -69,6 +71,12 @@ NON_EXECUTING: typ.Final = frozenset({"echo", "printf", "make"})
 # interrogate interrogate` names the package twice and runs it once).
 LAUNCHERS: typ.Final = frozenset({"uv", "uvx", "python", "python3", "pipx"})
 LAUNCHER_SUBCOMMANDS: typ.Final = frozenset({"run", "tool"})
+# Supported direct routes whose unknown options can split off a bare suffix.
+_DIRECT_LAUNCHER_ROUTES: typ.Final = {
+    "uv": (("run",), ("tool", "run")),
+    "uvx": ((),),
+    "pipx": (("run",),),
+}
 LAUNCHER_VALUE_FLAGS: typ.Final = frozenset({
     "--with",
     "--from",
@@ -321,33 +329,92 @@ def _launcher_arguments(prefix: list[str]) -> list[str] | None:
     list[str] | None
         The launcher's own words (subcommands, flags and values), or ``None``.
     """
-    launcher = posixpath.basename(prefix[0])
+    # Pure paths normalize away terminal slashes and dots; neither is an
+    # executable basename in the raw shell word.
+    if prefix[0].endswith(("/", "/.")):
+        return None
+    launcher = pathlib.PurePosixPath(prefix[0]).name
     if launcher not in LAUNCHERS:
         return None
     if launcher not in {"python", "python3"}:
         return prefix[1:]
-    script_path = prefix[1] if len(prefix) > 1 else ""
-    if ".." in script_path.split("/"):
-        script_path = ""
-    if posixpath.normpath(script_path) == GATE_HELPER:
+    script_path = pathlib.PurePosixPath(prefix[1] if len(prefix) > 1 else "")
+    if ".." in script_path.parts:
+        return None
+    if script_path == pathlib.PurePosixPath(GATE_HELPER):
         return _gate_helper_arguments(prefix[2:])
     if prefix[1:] != ["-m"]:
         return None
     return prefix[1:]
 
 
+# Private recognition grammar from the selected uv_gate.py.canon test fixture;
+# this is not the broader UV policy's release-tag exception mechanism.
+_GATE_PIN_NAME: typ.Final = r"[A-Za-z0-9][A-Za-z0-9._-]*(?:\[[^\]]+\])?"
+_GATE_NAME: typ.Final = re.compile(_GATE_PIN_NAME)
+_GATE_VERSION: typ.Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+!-]*")
+_GATE_DIRECT_REFERENCE: typ.Final = re.compile(
+    rf"{_GATE_PIN_NAME}\s*@\s*(?P<url>git\+\S+)"
+)
+_GATE_FULL_SHA: typ.Final = re.compile(r"[0-9a-f]{40}")
+
+
+def _gate_spec_is_pinned(spec: str) -> bool:
+    """Recognize only the selected canonical helper's accepted pin syntax."""
+    direct = _GATE_DIRECT_REFERENCE.fullmatch(spec)
+    if direct is not None:
+        spec = direct.group("url")
+    if spec.startswith("git+"):
+        ref = spec.rpartition("@")[2].partition("#")[0]
+        return _GATE_FULL_SHA.fullmatch(ref) is not None
+    return any(_gate_exact_pin(spec, separator) for separator in ("==", "@"))
+
+
+def _gate_exact_pin(spec: str, separator: str) -> bool:
+    """Preserve first-separator semantics, including separators inside extras."""
+    name, found, version = spec.partition(separator)
+    if not found or version == "latest":
+        return False
+    return bool(_GATE_NAME.fullmatch(name) and _GATE_VERSION.fullmatch(version))
+
+
+def _gate_tool_spec(arguments: list[str]) -> str:
+    """Read the helper's first --from value before its first separator.
+
+    With no explicit specification the command is `interrogate`, which the
+    helper refuses as unpinned, so the empty result is also rejected.
+
+    Returns
+    -------
+    str
+        The first explicit specification, or empty when absent or missing.
+    """
+    options = itertools.takewhile(lambda word: word != "--", arguments[1:])
+    for argument in options:
+        if argument == "--from":
+            return next(options, "")
+        if argument.startswith("--from="):
+            return argument.partition("=")[2]
+    return ""
+
+
 def _gate_helper_arguments(arguments: list[str]) -> list[str] | None:
     """Return canonical helper arguments, or ``None`` for an invalid run boundary.
 
     Only `_launcher_arguments` calls this reader, after recognizing the Python
-    interpreter and canonical helper path. Other helper subcommands retain the
-    generic launcher's argument validation.
+    interpreter and canonical helper path. The helper `tool` form additionally
+    requires a specification accepted by its canonical pin recognizer.
 
     Returns
     -------
     list[str] | None
-        The arguments unchanged, or ``None`` when `run` lacks one final `--`.
+        The arguments unchanged, or ``None`` for a refused helper boundary.
     """
+    if arguments[:1] == ["tool"]:
+        spec = _gate_tool_spec(arguments)
+        if UNRESOLVED_MARK in spec:
+            return arguments
+        return arguments if _gate_spec_is_pinned(spec) else None
     if arguments[:1] != ["run"]:
         return arguments
     # The helper refuses `run` without one final command separator.
@@ -487,6 +554,34 @@ def _run_in_segment(line: RecipeLine, raw_words: list[str]) -> InterrogateRun | 
     return None
 
 
+def _unresolved_gate_tool_run(
+    line: RecipeLine, raw_words: list[str]
+) -> InterrogateRun | None:
+    """Recover an unknown helper spec whose Make expression split the command.
+
+    The lexer separates unresolved parenthesized Make expressions from the
+    helper prefix. Retain an indeterminate fact instead of losing the run.
+    Known-refused helper specifications are not recovered. Direct launchers
+    have a separate recipe-provenance boundary.
+
+    Returns
+    -------
+    InterrogateRun | None
+        An unresolved helper fact, or ``None`` when recovery does not apply.
+    """
+    words = command_words(raw_words)
+    if len(words) < 2:
+        return None
+    if pathlib.PurePosixPath(words[1]) != pathlib.PurePosixPath(GATE_HELPER):
+        return None
+    arguments = _launcher_arguments(words)
+    if arguments is None or arguments[:1] != ["tool"]:
+        return None
+    if UNRESOLVED_MARK not in _gate_tool_spec(arguments):
+        return None
+    return unresolved_run(line, line.expansion.text)
+
+
 def _unresolved_tool_runs(line: RecipeLine) -> list[InterrogateRun]:
     """Return an unresolved run when `$(INTERROGATE)` expanded to nothing readable.
 
@@ -500,6 +595,44 @@ def _unresolved_tool_runs(line: RecipeLine) -> list[InterrogateRun]:
     """
     if not line.expansion.is_resolved and _UNRESOLVED_TOOL.search(line.raw):
         return [unresolved_run(line, line.raw)]
+    return []
+
+
+def _unresolved_direct_launcher(raw_words: list[str]) -> bool:
+    """Recognize an unknown option prefix on an existing direct tool route."""
+    words = command_words(raw_words)
+    if not words:
+        return False
+    routes = _DIRECT_LAUNCHER_ROUTES.get(pathlib.PurePosixPath(words[0]).name, ())
+    arguments = tuple(words[1:])
+    if not any(arguments[: len(route)] == route for route in routes):
+        return False
+    return any(UNRESOLVED_MARK in word for word in words) and _is_launcher_prefix(words)
+
+
+def _with_recipe_provenance(
+    line: RecipeLine, segments: list[list[str]], runs: list[InterrogateRun]
+) -> list[InterrogateRun]:
+    """Keep unsupported Make expansion visible without resolved suffix credit.
+
+    Only `runs_in` calls this boundary. The lexer cannot prove which command
+    owns suffixes split from an unsupported expression, so the whole recipe is
+    conservative. Existing detected runs retain their identity and ordering.
+
+    Returns
+    -------
+    list[InterrogateRun]
+        Detected runs with recipe provenance, or an unresolved placeholder
+        when only a supported direct launcher prefix can be recognized.
+    """
+    if line.expansion.is_resolved:
+        return runs
+    for run in runs:
+        run["resolved"] = False
+    if runs:
+        return runs
+    if any(_unresolved_direct_launcher(words) for words in segments):
+        return [unresolved_run(line, line.expansion.text)]
     return []
 
 
@@ -518,5 +651,9 @@ def runs_in(line: RecipeLine) -> list[InterrogateRun]:
     segments = lex_segments(text)
     if segments is None:
         return [unresolved_run(line, text)]
-    runs = (_run_in_segment(line, words) for words in segments)
-    return [run for run in runs if run is not None]
+    runs = (
+        _run_in_segment(line, words) or _unresolved_gate_tool_run(line, words)
+        for words in segments
+    )
+    detected = [run for run in runs if run is not None]
+    return _with_recipe_provenance(line, segments, detected)

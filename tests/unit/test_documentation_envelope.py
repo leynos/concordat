@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import pathlib
+import runpy
+import shlex
 import typing as typ
 
 import pytest
@@ -14,9 +17,6 @@ from concordat.rules.documentation_envelope import (
     ENVELOPE_SCHEMA_VERSION,
     build_documentation_envelope,
 )
-
-if typ.TYPE_CHECKING:
-    import pathlib
 
 RULE_ID: typ.Final = "documentation-presence"
 
@@ -335,7 +335,10 @@ def test_a_redirection_destination_is_not_a_scanned_path(
             id="pipx-does-not-launch-the-python-helper-path",
         ),
         (
-            "python3 scripts/uv_gate.py tool --from interrogate -- interrogate pkg",
+            (
+                "python3 scripts/uv_gate.py tool --from "
+                "interrogate==1.7.0 -- interrogate pkg"
+            ),
             1,
         ),
         ("python3 scripts/uv_gate.py run -- interrogate -f 100 pkg", 1),
@@ -520,3 +523,277 @@ def test_a_make_command_behind_an_environment_prefix_is_followed(
     envelope = build_documentation_envelope(tmp_path)
 
     assert [run["target"] for run in envelope["runs"]] == ["interrogate"]
+
+
+@pytest.mark.parametrize(
+    "spec",
+    [
+        "interrogate==1.7.0",
+        "interrogate@1.7.0",
+        "other[extra]==1.0rc1",
+        "other==1!2.0+local",
+        "other@LATEST",
+        "other@1.0@2",
+        "other==1==2",
+        "interrogate",
+        "interrogate>=1.7",
+        "interrogate~=1.7",
+        "other@latest",
+        "other==latest",
+        "other==",
+        "other@",
+        "-other==1.0",
+        "other===1.0",
+        "other==1.0.*",
+        "other[extra]==1.0",
+        "other[]==1.0",
+        "other[extra==value]==1.0",
+        "other[extra@value]@1.0",
+        "other[extra@value]==1.0",
+        "other[extra==value]@1.0",
+        "git+https://example.invalid/tool.git@" + "a" * 40,
+        "git+ssh://git@example.invalid/tool.git@" + "a" * 40 + "#subdirectory=src",
+        "other[extra] @ git+https://example.invalid/tool.git@" + "a" * 40,
+        "git+https://example.invalid/tool.git@main",
+        "git+@" + "a" * 40,
+        "git+https://example.invalid/tool.git@" + "a" * 40 + "#extra@main",
+        "other[extra] @ git+https://example.invalid/tool.git@" + "a" * 40 + "#src",
+        "git+https://example.invalid/tool.git@" + "A" * 40,
+        "git+https://example.invalid/tool.git@" + "a" * 39,
+        "other @ git+https://example.invalid/tool.git@latest",
+    ],
+)
+def test_helper_tool_specs_match_the_selected_trusted_canon(
+    tmp_path: pathlib.Path,
+    spec: str,
+) -> None:
+    """Credit only specifications the tracked canonical helper accepts.
+
+    The oracle is repository-owned test data, never source from the checkout
+    being audited. Its established canonical-digest test guards provenance.
+    """
+    canon = pathlib.Path(__file__).parents[1] / "fixtures/uv_gate/uv_gate.py.canon"
+    trusted = runpy.run_path(str(canon))
+    validate = trusted["validate_request"]
+    refusal = trusted["GateError"]
+    try:
+        validate("tool", ["--from", spec, "--", "interrogate", "pkg"])
+    except refusal:
+        accepted = False
+    else:
+        accepted = True
+    command = (
+        "python3 scripts/uv_gate.py tool --from "
+        + shlex.quote(spec)
+        + " -- interrogate pkg"
+    )
+
+    assert bool(_runs(tmp_path, f"lint:\n\t{command}\n")) is accepted
+
+
+@pytest.mark.parametrize(
+    ("options", "expected"),
+    [
+        ("--from=interrogate==1.7.0 --", True),
+        ("--from=interrogate --", False),
+        ("--from interrogate --from other==1.0 --", False),
+        ("--from other==1.0 --from interrogate --", True),
+        ("-- --from other==1.0", False),
+        ("-- --", False),
+        ("--", False),
+        ("--from --", False),
+    ],
+)
+def test_helper_tool_uses_the_first_spec_before_the_separator(
+    tmp_path: pathlib.Path,
+    options: str,
+    *,
+    expected: bool,
+) -> None:
+    """The helper selects the first --from before the first separator."""
+    command = f"python3 scripts/uv_gate.py tool {options} interrogate pkg"
+
+    assert bool(_runs(tmp_path, f"lint:\n\t{command}\n")) is expected
+
+
+def test_unresolved_helper_tool_spec_is_not_credited_as_a_resolved_run(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Unknown Make expansion remains visible as an indeterminate run."""
+    runs = _runs(
+        tmp_path,
+        "SPEC = $(shell select-spec)\nlint:\n\tpython3 scripts/uv_gate.py tool "
+        "--from $(SPEC) -- interrogate pkg\n",
+    )
+
+    assert len(runs) == 1
+    assert runs[0]["resolved"] is False
+
+
+@pytest.mark.parametrize(
+    ("launcher", "expected"),
+    [
+        ("python3/", False),
+        ("python3/.", False),
+        ("/usr/bin/python3/", False),
+        ("/usr/bin/python3/.", False),
+        ("./python3", True),
+        ("/usr/bin/python3", True),
+    ],
+)
+def test_helper_launcher_keeps_its_raw_terminal_component(
+    tmp_path: pathlib.Path,
+    launcher: str,
+    *,
+    expected: bool,
+) -> None:
+    """Path normalization must not turn a directory operand into a launcher."""
+    command = f"{launcher} scripts/uv_gate.py run -- interrogate pkg"
+
+    assert bool(_runs(tmp_path, f"lint:\n\t{command}\n")) is expected
+
+
+@pytest.mark.parametrize(
+    "launcher",
+    ["uv run --with", "uv tool run --from", "uvx --from", "pipx run --python"],
+)
+def test_unresolved_direct_launcher_options_remain_unresolved(
+    tmp_path: pathlib.Path,
+    launcher: str,
+) -> None:
+    """An unknown option value must not gain resolved credit from its suffix."""
+    runs = _runs(
+        tmp_path,
+        f"SPEC = $(shell select-spec)\nlint:\n\t{launcher} $(SPEC) interrogate pkg\n",
+    )
+
+    assert len(runs) == 1
+    assert runs[0]["resolved"] is False
+
+
+@pytest.mark.parametrize(
+    "prefix",
+    [
+        "python3 tools/uv_gate.py tool --from $(SPEC)",
+        "python3/ scripts/uv_gate.py tool --from $(SPEC)",
+        "echo scripts/uv_gate.py tool --from $(SPEC)",
+        "uv scripts/uv_gate.py tool --from $(SPEC)",
+        "python3 scripts/uv_gate.py tool --from interrogate --python $(SPEC)",
+    ],
+)
+def test_unknown_spec_recovery_is_only_for_the_canonical_helper(
+    tmp_path: pathlib.Path,
+    prefix: str,
+) -> None:
+    """An unknown value cannot resurrect an invalid helper or unpinned spec."""
+    runs = _runs(
+        tmp_path,
+        f"SPEC = $(shell select-spec)\nlint:\n\t{prefix} -- interrogate pkg\n",
+    )
+
+    assert runs == []
+
+
+@pytest.mark.parametrize(
+    "launcher",
+    ["uv run --with", "uv tool run --from", "uvx --from", "pipx run --python"],
+)
+def test_unresolved_direct_launcher_with_separator_is_not_lost(
+    tmp_path: pathlib.Path,
+    launcher: str,
+) -> None:
+    """Explicit command separators do not hide unmeasured direct routes."""
+    runs = _runs(
+        tmp_path,
+        "SPEC = $(shell select-spec)\nlint:\n\t"
+        f"{launcher} $(SPEC) -- interrogate pkg\n",
+    )
+
+    assert len(runs) == 1
+    assert runs[0]["resolved"] is False
+
+
+@pytest.mark.parametrize(
+    ("launcher", "value"),
+    [
+        ("uv run --with", "interrogate==1.7.0"),
+        ("uv tool run --from", "interrogate==1.7.0"),
+        ("uvx --from", "interrogate==1.7.0"),
+        ("pipx run --python", "3.13"),
+    ],
+)
+def test_known_direct_launcher_option_expansions_stay_resolved(
+    tmp_path: pathlib.Path,
+    launcher: str,
+    value: str,
+) -> None:
+    """A single known Make value retains the complete resolved invocation."""
+    runs = _runs(
+        tmp_path,
+        f"SPEC = {value}\nlint:\n\t{launcher} $(SPEC) interrogate pkg\n",
+    )
+
+    assert len(runs) == 1
+    assert runs[0]["resolved"] is True
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "echo uv run --with $(SPEC) interrogate pkg",
+        "uv run true --with $(SPEC) interrogate pkg",
+        "uv wrong --with $(SPEC) interrogate pkg",
+        "uv/ run --with $(SPEC) interrogate pkg",
+    ],
+)
+def test_unknown_expansion_cannot_credit_wrong_or_invalid_commands(
+    tmp_path: pathlib.Path,
+    command: str,
+) -> None:
+    """Unprovable suffixes are conservative facts, never resolved gate credit."""
+    runs = _runs(
+        tmp_path,
+        f"SPEC = $(shell select-spec)\nlint:\n\t{command}\n",
+    )
+
+    assert not any(run["resolved"] for run in runs)
+
+
+def test_unresolved_recipe_preserves_detected_run_identities(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Conservative recipe provenance changes resolution, not run identities."""
+    runs = _runs(
+        tmp_path,
+        "SPEC = $(shell select-spec)\nlint:\n\tuv run --with $(SPEC) "
+        "interrogate first; interrogate second\n",
+    )
+
+    assert [run["paths"] for run in runs] == [["first"], ["second"]]
+    assert [run["resolved"] for run in runs] == [False, False]
+
+
+def test_plain_python_helper_records_the_complete_interrogate_run(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Plain python launches the helper and retains the complete audit facts."""
+    runs = _runs(
+        tmp_path,
+        "lint:\n\tpython scripts/uv_gate.py run -- interrogate -f 100 pkg\n",
+    )
+
+    assert runs == [
+        {
+            "target": "lint",
+            "line": 2,
+            "command": "interrogate -f 100 pkg",
+            "resolved": True,
+            "paths": ["pkg"],
+            "fail_under": "100",
+            "verbose": 0,
+            "config": None,
+            "excludes": [],
+            "ignores": [],
+            "guarded": False,
+        }
+    ]

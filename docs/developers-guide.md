@@ -733,14 +733,33 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   repeated separators are rejected. The private `_gate_helper_arguments` reader
   owns only this helper argument boundary; `_launcher_arguments` calls it after
   recognizing the Python interpreter and canonical helper path. It is not a
-  general shell or interpreter parser. The helper `tool` form retains its
-  existing argument validation, as do direct uv and pipx invocations. Apart
-  from the canonical helper, the reader recognizes only the direct
-  `python -m interrogate` and `python3 -m interrogate` forms. Other interpreter
-  options are outside its supported grammar and fail closed; a script operand
-  such as `run` or `tool` is not a uv subcommand for Python. The package is
-  registered by identifier and declares its kind, and the thresholds reach the
-  policy as manifest parameters. The Rust facts come from
+  general shell or interpreter parser. The helper `tool` form additionally
+  checks its first `--from` value before the first `--` against the selected
+  canonical helper's exact-pin syntax. Bare names, ranges, and literal `latest`
+  versions cannot receive gate credit; unknown Make values remain unresolved,
+  including when the lexer separates a parenthesized Make expression from the
+  helper prefix. This helper-specific recovery is separate from the direct
+  `uv run`, `uv tool run`, `uvx`, and `pipx run` routes.
+  `_unresolved_direct_launcher` recognizes their existing launcher grammar when
+  unsupported Make expansion splits away an option value.
+  `_with_recipe_provenance`, called only by `runs_in`, conservatively marks
+  every detected run on that unresolved recipe as `resolved: false`, retaining
+  run identity and order. When a supported direct prefix is visible but its
+  suffix cannot be read, it records an unresolved placeholder instead of losing
+  the measurement. This is deliberate recipe-level conservatism, not proof that
+  the lexer can associate arbitrary suffixes with a command. Fully expanded
+  known values retain their resolved invocation facts. The private
+  `_gate_tool_spec` and `_gate_spec_is_pinned` readers serve only this
+  canonical-helper boundary, not general dependency policy or direct uv and
+  pipx invocations. Their accepted exact-version and full lowercase-SHA Git
+  forms follow the tracked `tests/fixtures/uv_gate/uv_gate.py.canon`; test-only
+  semantic comparisons use that trusted fixture, never code from a checkout
+  being audited. Apart from the canonical helper, the reader recognizes only
+  the direct `python -m interrogate` and `python3 -m interrogate` forms. Other
+  interpreter options are outside its supported grammar and fail closed; a
+  script operand such as `run` or `tool` is not a uv subcommand for Python. The
+  package is registered by identifier and declares its kind, and the thresholds
+  reach the policy as manifest parameters. The Rust facts come from
   `documentation_rust.build_rust_facts`: each owned `Cargo.toml` (walk pruned of
   `fixtures`, `examples`, `templates`, `vendor`, `third_party`, `patches` and
   `target`) decoded with `tomllib`, `[lints] workspace = true` resolved against
