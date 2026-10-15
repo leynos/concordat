@@ -17,12 +17,12 @@ from concordat.rules import runner
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
-    from concordat.rules.envelope import PolicyEnvelope
+    from concordat.rules.packages import RuleEnvelope
 
 
 def invoke_conftest_batch(
     rule_id: str,
-    envelopes: cabc.Sequence[PolicyEnvelope],
+    envelopes: cabc.Sequence[RuleEnvelope],
 ) -> list[list[runner._ConftestResult]]:
     """Evaluate every envelope in one Conftest process, one result list each.
 
