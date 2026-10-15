@@ -51,7 +51,14 @@ makes only those clauses indeterminate; the others still run. See
   single `rustflags` source rather than merging them — a matching `[target.*]`
   table replaces `[build] rustflags` outright — so a flag named in one source
   and not another vanishes on the platform the other one matches. The linker
-  flag is the deliberate exception and is governed by BD-002.
+  flag is governed by BD-002. Backend flags introduced by a target remain
+  scoped to that target: Linux development backends need not reach Windows or
+  macOS, nor disjoint Linux architectures. A backend flag in `[build]` is a
+  global default and must be retained by every replacing target source. The
+  private `policy/scoped_backends.rego` module owns that build-level backend
+  check, composing the package's normalized source facts. It does not infer
+  which targets must adopt a backend; BD-004's declared-route gap remains
+  separate.
 - **BD-004** (error): the backend is the development-profile default, or the
   repository records an exception. Both states are accepted; a repository with
   neither is noncompliant. A package override beneath a profile is not the
@@ -80,13 +87,50 @@ makes only those clauses indeterminate; the others still run. See
   `cargo zigbuild` or `cross build` without `--release`, `-r` or `--profile`,
   in a workflow triggered by `release` or a tag push. A repository with no such
   path is not applicable.
+
+  Root `Cargo.toml` profile selections are normalized at the envelope boundary
+  by the existing `concordat.rules.cargo_config.codegen_backends(manifest, [])`
+  helper and remain distinct from `.cargo/config.toml` selections. The envelope
+  emits nonempty `cargo_manifest_backends` only for valid selections, and uses
+  `cargo_manifest_backend_error` for a present but malformed relevant profile,
+  package-override, or backend shape. The bounded `profile_backend_error` check
+  does not diagnose every Cargo manifest error. For release-profile coverage, a
+  direct root LLVM selection proves LLVM; root Cranelift is noncompliant.
+  Package Cranelift, active unknown backend facts, or a relevant error leave
+  the LLVM proof `indeterminate`; a package-level LLVM override does not prove
+  the profile default. A relevant error also makes direct Whitaker isolation
+  `indeterminate`. BD-007 and BD-008 consume these normalized facts, not raw
+  TOML. BD-007 checks package overrides for the selected profile in both root
+  `Cargo.toml` and `.cargo/config.toml`; profile-level LLVM alone cannot prove
+  coverage if a relevant package override is unresolved or selects Cranelift.
 - **BD-008** (error): a Makefile gate recipe that assigns `RUSTFLAGS` restates
   `-Zthreads=8` (on a nightly pin) and the `mold` linker flag (where the build
   targets Linux). A gate recipe is one in the static closure of `lint`, `test`,
   `typecheck` or `build` (the `gate_targets` parameter). The assignment may be
   a prefix on the recipe, a target-specific assignment, or a Makefile-wide one.
-  Coverage recipes and release-profile builds are BD-007's and exempt. A
-  Makefile with no such assignment is not applicable.
+  Coverage recipes and release-profile builds are BD-007's and exempt. Direct
+  installer-managed `whitaker` commands are also exempt: their toolchain must
+  not inherit repository development flags. Cargo commands and wrappers such as
+  Python test runners retain the flag requirement. Global or target-specific
+  assignments are checked only where they reach a remaining gate recipe. Direct
+  Whitaker routes require a statically known `RUSTFLAGS` boundary and reject
+  parallel frontend, Cranelift and mold flags, including explicit encoded-flags
+  and profile overrides. Missing or unresolved suite selections are
+  indeterminate. Unknown wrappers and executable substitutions receive no
+  exemption. A Makefile with no such assignment or suite route is not
+  applicable. Separate profile or package-override Cranelift selections remain
+  indeterminate: replacing `RUSTFLAGS` does not remove them, and this reader
+  does not prove the suite's internal profile override route. This check
+  measures explicit Make/configuration facts, not the caller's ambient
+  environment; runtime and CI route qualification remains separate evidence.
+
+  `policy/isolated_whitaker.rego` privately owns this suite boundary within the
+  package. It composes the existing Make reachability, assignment and flag
+  facts; it is not a general shell or Make evaluator. The production policy
+  directory loads it alongside the development-route clauses. Public `run_rule`
+  tests cover both the exemption and contamination rejection. It consumes the
+  normalized root-manifest facts at the envelope boundary and does not navigate
+  raw TOML.
 - **BD-009** (error): a workflow step that runs a cargo gate build directly
   (`build`, `check`, `clippy`, `doc`, `nextest` or `test`, the
   `gate_cargo_subcommands` parameter) with `RUSTFLAGS` set carries the same
@@ -179,7 +223,11 @@ A coverage path selects LLVM in any of these ways:
   rustc takes the last; a probe on the pinned nightly confirmed it.
 - `--profile P`, where `P` selects `codegen-backend = "llvm"` in the
   configuration or `Cargo.toml`. `--release` counts too, unless the release
-  profile selects Cranelift.
+  profile selects Cranelift. A same-profile backend in Cargo configuration
+  overrides the root manifest's backend; a different configured profile does
+  not displace it. A known same-profile configuration backend also supersedes
+  an unknown root profile string. Active unknown backends, malformed root
+  facts, and non-LLVM package overrides still prevent a wholly LLVM proof.
 - Where only `rustflags` select Cranelift, any assigned `RUSTFLAGS` that does
   not name Cranelift again, because it replaces the source that did.
 
@@ -272,6 +320,15 @@ Findings carry a three-valued `verdict`:
 A repository is `compliant` only when the finding set is empty.
 
 ## Known limitations
+
+BD-004 proves that a development backend selection or recorded repository
+exception exists. It does not prove qualification for every supported target:
+the envelope carries target selectors and Linux placement, but no declared
+backend-support scope or target-scoped exception evidence. Target-local backend
+flags are therefore not proof that all supported development routes use that
+backend. Consumers must independently verify their adopted routes; a missing
+backend on another supported route remains an audit gap requiring policy-owner
+resolution, not an approved exception.
 
 A `makeutil` parse that recovered from a construct it does not understand is
 `indeterminate` for BD-007 and BD-008, even where the Makefile is valid.

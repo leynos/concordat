@@ -247,7 +247,43 @@ coverage_clause_applies if {
 	count(cranelift_routes) > 0
 }
 
-manifest_profile_backend(name) := input.cargo.parsed.profile[name]["codegen-backend"]
+# Cargo configuration overrides only the same profile in Cargo.toml.
+config_profile_backend_present(name) if {
+	some backend in backends
+	backend.scope == "profile"
+	backend.profile == name
+}
+
+manifest_profile_backend(name) := backend.backend if {
+	manifest_backend_error == ""
+	not profile_backend_unproved(name)
+	some backend in manifest_backends
+	backend.scope == "profile"
+	backend.profile == name
+}
+
+# Package overrides from either typed Cargo source cannot establish a profile
+# default; a non-LLVM override prevents proof that every package uses LLVM.
+profile_backend_unproved(name) if {
+	some backend in array.concat(backends, manifest_backends)
+	backend.profile == name
+	backend.scope == "package-override"
+	backend.backend != "llvm"
+}
+
+profile_backend_unproved(name) if {
+	some backend in backends
+	backend.profile == name
+	not backend.backend in {"llvm", "cranelift"}
+}
+
+profile_backend_unproved(name) if {
+	not config_profile_backend_present(name)
+	some backend in manifest_backends
+	backend.scope == "profile"
+	backend.profile == name
+	not backend.backend in {"llvm", "cranelift"}
+}
 
 profile_selects_llvm(name) if {
 	some backend in backends
@@ -256,14 +292,27 @@ profile_selects_llvm(name) if {
 	backend.backend == "llvm"
 }
 
-profile_selects_llvm(name) if manifest_profile_backend(name) == "llvm"
+profile_selects_llvm(name) if {
+	not config_profile_backend_present(name)
+	manifest_profile_backend(name) == "llvm"
+}
 
 release_profile_is_llvm if {
+	manifest_backend_error == ""
+	not profile_backend_unproved("release")
 	not profile_selects_cranelift("release")
 }
 
 profile_selects_cranelift(name) if {
 	some backend in backends
+	backend.scope == "profile"
+	backend.profile == name
+	backend.backend == "cranelift"
+}
+
+profile_selects_cranelift(name) if {
+	not config_profile_backend_present(name)
+	some backend in manifest_backends
 	backend.scope == "profile"
 	backend.profile == name
 	backend.backend == "cranelift"
@@ -334,6 +383,7 @@ make_route_satisfied(rule, segment, "rustflags") if {
 }
 
 make_selects_llvm(rule, segment) if {
+	not profile_selection_unproved(segment)
 	every route in cranelift_routes {
 		make_route_satisfied(rule, segment, route)
 	}
@@ -346,8 +396,21 @@ make_selection_unproven(segment) if {
 	regex.match(`codegen-backend|CODEGEN_BACKEND|RUSTFLAGS|--profile`, text)
 }
 
+profile_selection_unproved(_) if manifest_backend_error != ""
+
+profile_selection_unproved(segment) if {
+	builds_release_profile(segment)
+	profile_backend_unproved("release")
+}
+
+profile_selection_unproved(segment) if {
+	profile_backend_unproved(profile_argument(segment))
+}
+
 coverage_verdict(segment) := "indeterminate" if {
 	make_selection_unproven(segment)
+} else := "indeterminate" if {
+	profile_selection_unproved(segment)
 } else := "noncompliant"
 
 coverage_segments contains [rule, recipe, segment] if {
@@ -419,17 +482,19 @@ gate_rustflags contains [sprintf("the %s target-specific assignment", [target]),
 	reached in closure(target)
 	assignment := target_assignment(rule)
 	assignment.name == "RUSTFLAGS"
+	some [_, site_rule, _, _] in gate_recipe_sites
+	some site_target in site_rule.targets
+	site_target in closure(reached)
 	value := assignment.value
 }
 
 # Make exports a variable that came from the environment, and CI's toolchain
 # setup puts `RUSTFLAGS` there, so a Makefile-wide assignment reaches every
 # gate recipe whether or not it is marked `export`. Its assignments are read
-# together, as an append (`+=`) combines them. It is a gate override only when
-# the Makefile defines a gate target for it to reach.
+# together, as an append (`+=`) combines them. It is a development gate override
+# only when it reaches a non-exempt recipe, not an isolated Whitaker route.
 gate_rustflags contains ["the Makefile-wide assignment", line, "$(RUSTFLAGS)"] if {
-	some target in gate_targets
-	target in known_targets
+	some [_, _, _, _] in gate_recipe_sites
 	lines := [variable.location.start_line | some variable in assignments_of("RUSTFLAGS")]
 	count(lines) > 0
 	line := min(lines)

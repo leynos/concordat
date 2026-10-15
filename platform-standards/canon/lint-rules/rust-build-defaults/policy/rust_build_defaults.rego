@@ -125,11 +125,13 @@ rustflags_sources := [] if not config_readable
 
 # A target table replaces `[build] rustflags` outright on the platform it
 # matches, so a flag that has to survive is repeated in every source. The
-# linker flag is the deliberate exception and is governed by BD-002.
+# linker is governed by BD-002. A backend introduced by a target stays scoped
+# to that target; only a build-level backend must survive every replacement.
 shared_flags := {flag |
 	some source in rustflags_sources
 	some flag in source.flags
 	flag != linker_flag
+	not startswith(flag, "-Zcodegen-backend=")
 }
 
 # -- BD-001: the parallel frontend is a default ----------------------------
@@ -320,6 +322,11 @@ deny contains f if {
 backends := input.cargo_config.backends if config_readable
 
 backends := [] if not config_readable
+
+# Root Cargo.toml selections are normalized at the envelope boundary.
+manifest_backends := object.get(input, "cargo_manifest_backends", [])
+
+manifest_backend_error := object.get(input, "cargo_manifest_backend_error", "")
 
 # A `-Zcodegen-backend=` token in rustflags carries no profile, and applies to
 # every build the source reaches, so it selects the development profile too.

@@ -12,7 +12,13 @@ from __future__ import annotations
 import logging
 import typing as typ
 
-from .cargo_config import CargoConfigFacts, inspect_cargo_config
+from .cargo_config import (
+    CargoConfigFacts,
+    CodegenBackendSelection,
+    codegen_backends,
+    inspect_cargo_config,
+    profile_backend_error,
+)
 from .exception_docs import DocumentScan, find_exception_sections
 from .fs_probe import regular_file_exists
 from .makefile_facts import (
@@ -86,6 +92,16 @@ class PolicyEnvelope(typ.TypedDict):
     makefile: MakeutilReport | None
 
 
+def _root_cargo_manifest(
+    surfaces: cabc.Sequence[CargoSurface],
+) -> CargoManifest | None:
+    """Return the first governed root manifest, or None without a root surface."""
+    return next(
+        (surface["parsed"] for surface in surfaces if surface["path"] == "Cargo.toml"),
+        None,
+    )
+
+
 def build_envelope(
     checkout: pathlib.Path, *, inspect: MakefileInspector = inspect_makefile
 ) -> PolicyEnvelope:
@@ -113,14 +129,7 @@ def build_envelope(
 
     root_cargo_toml = root_cargo_toml_exists(cargo_path)
     resolution = resolve_rust_surfaces(checkout)
-    cargo_parsed = next(
-        (
-            surface["parsed"]
-            for surface in resolution.surfaces
-            if surface["path"] == "Cargo.toml"
-        ),
-        None,
-    )
+    cargo_parsed = _root_cargo_manifest(resolution.surfaces)
 
     makefile_report: MakeutilReport | None = None
     if regular_file_exists(makefile_path, operation=OPERATION_PARSE_MAKEFILE):
@@ -188,6 +197,8 @@ class BuildDefaultsEnvelope(typ.TypedDict):
     cargo: CargoPayload
     toolchain: ToolchainFacts | None
     cargo_config: CargoConfigFacts | None
+    cargo_manifest_backends: typ.NotRequired[list[CodegenBackendSelection]]
+    cargo_manifest_backend_error: typ.NotRequired[str]
     exceptions: list[DocumentScan]
     makefile: MakeutilReport | None
     makefile_error: str | None
@@ -282,6 +293,29 @@ def _exception_keyword(parameters: cabc.Mapping[str, object]) -> str:
     return declared if isinstance(declared, str) else DEFAULT_EXCEPTION_KEYWORD
 
 
+def _populate_manifest_backend_facts(
+    envelope: BuildDefaultsEnvelope, cargo_parsed: CargoManifest | None
+) -> None:
+    """Populate only the build-defaults envelope's optional root backend facts.
+
+    Keep normalizing selections and retaining unsupported shapes together at
+    the adapter boundary. The envelope builder is this command's sole caller.
+    """
+    # Omit empty facts so unrelated fixture envelopes keep their exact bytes.
+    # The root manifest is a separate Cargo source from auto-discovered config.
+    manifest = cargo_parsed if cargo_parsed is not None else {}
+    manifest_backends = [
+        selection
+        for selection in codegen_backends(manifest, [])
+        if selection["backend"]
+    ]
+    manifest_error = profile_backend_error(manifest)
+    if manifest_backends:
+        envelope["cargo_manifest_backends"] = manifest_backends
+    if manifest_error is not None:
+        envelope["cargo_manifest_backend_error"] = manifest_error
+
+
 def build_build_defaults_envelope(
     checkout: pathlib.Path,
     parameters: cabc.Mapping[str, object] | None = None,
@@ -314,14 +348,7 @@ def build_build_defaults_envelope(
     """
     resolved = parameters if parameters is not None else {}
     resolution = resolve_rust_surfaces(checkout)
-    cargo_parsed = next(
-        (
-            surface["parsed"]
-            for surface in resolution.surfaces
-            if surface["path"] == "Cargo.toml"
-        ),
-        None,
-    )
+    cargo_parsed = _root_cargo_manifest(resolution.surfaces)
     cargo_config = inspect_cargo_config(checkout)
     toolchain = inspect_toolchain(checkout)
     root = resolved_root(checkout)
@@ -330,7 +357,7 @@ def build_build_defaults_envelope(
     for workflow in workflows:
         if report_undecodable is not None and workflow["decode_category"] is not None:
             report_undecodable(workflow["path"], workflow["decode_category"])
-    return {
+    envelope: BuildDefaultsEnvelope = {
         "schema_version": ENVELOPE_SCHEMA_VERSION,
         "kind": BUILD_DEFAULTS_ENVELOPE_KIND,
         "repository": {"path": str(checkout), "name": None},
@@ -352,3 +379,5 @@ def build_build_defaults_envelope(
         "makefile_error": makefile_error,
         "workflows": workflows,
     }
+    _populate_manifest_backend_facts(envelope, cargo_parsed)
+    return envelope

@@ -38,3 +38,27 @@ A repository with no governed Rust surface is outside the rule. Workspace
 members are judged where `.concordat` declares them under
 `language.rust.surfaces`. RT-006 (a nightly within a year) remains until RT-023
 is live across the estate; a later release retires it.
+
+## Proposed rust-build-defaults rule-package 0.2.1 update
+
+The proposed 0.2.1 update refines BD-003 for build-wide and target-local
+backend flags, BD-007's proof of release-profile LLVM selection, and BD-008 for
+direct installer-managed Whitaker commands. This is a rule-package version, not
+a Concordat CLI release. Until the owning change is merged and an immutable
+0.2.1 package revision is available and adopted, this is a proposed migration
+boundary, not a released audit contract. After adoption, re-run the audit: a
+target-local backend no longer has to appear in unrelated target sources, while
+a build-wide backend must remain in replacing sources. A recognized direct
+Whitaker route must have a statically known isolation boundary and no
+development-flag contamination; unresolved routes and separate profile backend
+selections remain `indeterminate`. Ordinary Cargo builds and test runners
+retain the development flag requirement. Valid root-manifest selections are
+reported separately from `.cargo/config.toml`; a present but invalid relevant
+selection is recorded as an error fact. That error makes Whitaker isolation
+indeterminate and prevents the audit from proving LLVM for release-profile
+coverage. A root release-profile LLVM selection is direct proof, while
+Cranelift is noncompliant; package-level LLVM is not proof of the profile
+default. The release-profile guard checks package overrides for the selected
+profile in both root `Cargo.toml` and `.cargo/config.toml`; profile-level LLVM
+alone cannot prove coverage if a relevant package override is unresolved or
+selects Cranelift.

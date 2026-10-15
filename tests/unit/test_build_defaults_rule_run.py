@@ -48,6 +48,18 @@ def checkout(name: str) -> pathlib.Path:
 @pytest.mark.parametrize(
     ("fixture", "verdict", "expected"),
     [
+        pytest.param(
+            "compliant-scoped-rustflags-backend",
+            VERDICT_COMPLIANT,
+            set(),
+            id="target-scoped-backends",
+        ),
+        pytest.param(
+            "gate-isolated-whitaker",
+            VERDICT_COMPLIANT,
+            set(),
+            id="isolated-whitaker",
+        ),
         pytest.param("compliant-exception", VERDICT_COMPLIANT, set(), id="exception"),
         pytest.param("compliant-cranelift", VERDICT_COMPLIANT, set(), id="backend"),
         pytest.param(
