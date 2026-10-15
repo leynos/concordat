@@ -191,6 +191,9 @@ def test_config_release_package_backend_prevents_wholly_llvm_coverage(
     [
         pytest.param(("cranelift", "llvm", "compliant"), id="config-llvm-wins"),
         pytest.param(("llvm", "cranelift", "noncompliant"), id="config-cranelift-wins"),
+        pytest.param(
+            ("custom", "llvm", "compliant"), id="config-llvm-overrides-unknown"
+        ),
     ],
 )
 def test_config_release_backend_overrides_same_manifest_profile(
@@ -231,39 +234,5 @@ def test_config_release_backend_overrides_same_manifest_profile(
         assert {finding.rule_id for finding in result.findings} == {"BD-007"}, (
             f"unexpected findings: {result.findings!r}"
         )
-
-
-@pytest.mark.usefixtures("coverage_checkout")
-@pytest.mark.parametrize("route", ["make", "workflow"])
-@pytest.mark.parametrize("profile_flag", ["--release", "--profile release"])
-def test_config_llvm_overrides_unknown_same_manifest_profile(
-    tmp_path: pathlib.Path, route: str, profile_flag: str
-) -> None:
-    """An inactive root backend string cannot obscure effective config LLVM."""
-    manifest = tmp_path / "Cargo.toml"
-    manifest.write_text(
-        '[profile.release]\ncodegen-backend = "custom"\n\n'
-        + manifest.read_text(encoding="utf-8"),
-        encoding="utf-8",
-    )
-    config = tmp_path / ".cargo/config.toml"
-    with config.open("a", encoding="utf-8") as stream:
-        stream.write('\n[profile.release]\ncodegen-backend = "llvm"\n')
-    command = f"cargo llvm-cov {profile_flag} --lcov"
-    if route == "make":
-        (tmp_path / "Makefile").write_text(
-            f"coverage:\n\t{command}\n", encoding="utf-8"
-        )
     else:
-        (tmp_path / "Makefile").unlink()
-        workflow = tmp_path / ".github/workflows/coverage.yml"
-        workflow.parent.mkdir(parents=True)
-        workflow.write_text(
-            "name: coverage\non: push\njobs:\n  coverage:\n"
-            "    runs-on: ubuntu-latest\n    steps:\n"
-            f"      - run: {command}\n",
-            encoding="utf-8",
-        )
-    result = run_rule("rust-build-defaults", tmp_path)
-    assert result.verdict == "compliant", result
-    assert result.findings == (), f"unexpected findings: {result.findings!r}"
+        assert result.findings == (), f"unexpected findings: {result.findings!r}"
