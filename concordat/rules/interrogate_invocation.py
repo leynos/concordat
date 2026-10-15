@@ -313,26 +313,34 @@ def _launcher_arguments(prefix: list[str]) -> list[str] | None:
 
     The vendored helper is a launcher too: `python3 scripts/uv_gate.py tool
     --from interrogate==1.7.0 -- interrogate` takes the same arguments as uv.
+    Other Python invocations are recognized only in the direct `-m` form;
+    additional interpreter options are outside this reader's supported grammar.
 
     Returns
     -------
     list[str] | None
         The launcher's own words (subcommands, flags and values), or ``None``.
     """
-    if posixpath.basename(prefix[0]) not in LAUNCHERS:
+    launcher = posixpath.basename(prefix[0])
+    if launcher not in LAUNCHERS:
         return None
-    if (
-        len(prefix) > 1
-        and ".." not in prefix[1].split("/")
-        and posixpath.normpath(prefix[1]) == GATE_HELPER
-    ):
+    if launcher not in {"python", "python3"}:
+        return prefix[1:]
+    script_path = prefix[1] if len(prefix) > 1 else ""
+    if ".." in script_path.split("/"):
+        script_path = ""
+    if posixpath.normpath(script_path) == GATE_HELPER:
         arguments = prefix[2:]
-        # Unlike uv itself, the helper refuses `run` without a command separator.
-        if arguments[:1] == ["run"] and (
-            arguments.count("--") != 1 or arguments[-1:] != ["--"]
-        ):
+        if arguments[:1] != ["run"]:
+            return arguments
+        # The helper refuses `run` without one final command separator.
+        if arguments.count("--") != 1:
+            return None
+        if arguments[-1:] != ["--"]:
             return None
         return arguments
+    if prefix[1:] != ["-m"]:
+        return None
     return prefix[1:]
 
 

@@ -722,22 +722,36 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   quoted leading assignment, which the shell runs as a command name, so it is
   not skipped. Both the interrogate-run detector and the `make` reachability
   walk (`make -C` and `--directory` make it unresolved) call it, so the two
-  agree on what a command is. The package is registered by identifier and
-  declares its kind, and the thresholds reach the policy as manifest
-  parameters. The Rust facts come from `documentation_rust.build_rust_facts`:
-  each owned `Cargo.toml` (walk pruned of `fixtures`, `examples`, `templates`,
-  `vendor`, `third_party`, `patches` and `target`) decoded with `tomllib`,
-  `[lints] workspace = true` resolved against the nearest `[workspace]`, and
-  the library root's leading inner attributes and every module-level or
-  item-level suppression read by `rust_source` (comments and literals masked
-  first, so attribute-like text is never an attribute). `make_commands` reduces
-  Make references to words and finds command words; `rust_clippy.clippy_runs`
-  lexes the recipe lines in the targets `lint` reaches and records each
-  `cargo ... clippy` command, and `clippy_exception.clippy_exceptions` reads
-  the recorded clippy-gate exception (sections found by `exception_docs`, the
-  scripts they name, and whether each exists, runs clippy and is reached).
-  Rules DG-003 and DG-004 live in `documentation_presence_rust.rego`, beside
-  the Python rules in the same package.
+  agree on what a command is. `interrogate_invocation._launcher_arguments` also
+  recognizes the vendored helper when launched directly by `python` or
+  `python3` at the normalized repository-relative path `scripts/uv_gate.py`,
+  including the safe `./scripts/uv_gate.py` spelling. A parent traversal
+  component (`..`) or a noncanonical path is not recognized as that helper. The
+  launcher and helper path are removed before `_is_launcher_prefix` validates
+  the remaining uv-style subcommands, flags, and flag values. For helper `run`,
+  exactly one `--` must end that prefix before the executable; missing or
+  repeated separators are rejected. The helper `tool` form retains its existing
+  argument validation, as do direct uv and pipx invocations. Apart from the
+  canonical helper, the reader recognizes only the direct
+  `python -m interrogate` and `python3 -m interrogate` forms. Other interpreter
+  options are outside its supported grammar and fail closed; a script operand
+  such as `run` or `tool` is not a uv subcommand for Python. The package is
+  registered by identifier and declares its kind, and the thresholds reach the
+  policy as manifest parameters. The Rust facts come from
+  `documentation_rust.build_rust_facts`: each owned `Cargo.toml` (walk pruned of
+  `fixtures`, `examples`, `templates`, `vendor`, `third_party`, `patches` and
+  `target`) decoded with `tomllib`, `[lints] workspace = true` resolved against
+  the nearest `[workspace]`, and the library root's leading inner attributes
+  and every module-level or item-level suppression read by `rust_source`
+  (comments and literals masked first, so attribute-like text is never an
+  attribute). `make_commands` reduces Make references to words and finds
+  command words; `rust_clippy.clippy_runs` lexes the recipe lines in the targets
+  `lint` reaches and records each `cargo ... clippy` command, and
+  `clippy_exception.clippy_exceptions` reads the recorded clippy-gate exception
+  (sections found by `exception_docs`, the scripts they name, and whether each
+  exists, runs clippy and is reached). Rules DG-003 and DG-004 live in
+  `documentation_presence_rust.rego`, beside the Python rules in the same
+  package.
 
 - `policy-input/spelling-config-baseline` —
   `spelling_envelope.build_spelling_envelope`. It reuses `markdown_envelope`'s

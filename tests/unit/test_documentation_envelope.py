@@ -283,6 +283,36 @@ def test_a_redirection_destination_is_not_a_scanned_path(
         ("uvx --from interrogate==1.7.0 interrogate -f 100 pkg", 1),
         ("uv run --with interrogate --python 3.14 interrogate -f 100 pkg", 1),
         ("python3 -m interrogate -f 100 pkg", 1),
+        pytest.param(
+            "python -m interrogate -f 100 pkg",
+            1,
+            id="python-module-launcher",
+        ),
+        pytest.param(
+            "python3 run -- interrogate -f 100 pkg",
+            0,
+            id="python-script-named-run-is-not-a-launcher",
+        ),
+        pytest.param(
+            "python3 tool run interrogate -f 100 pkg",
+            0,
+            id="python-script-named-tool-is-not-a-launcher",
+        ),
+        pytest.param(
+            "python3 run -m interrogate -f 100 pkg",
+            0,
+            id="python-script-argument-is-not-a-module-switch",
+        ),
+        pytest.param(
+            "python3 -I -m interrogate -f 100 pkg",
+            0,
+            id="unsupported-python-options-fail-closed",
+        ),
+        pytest.param(
+            "pipx run interrogate -f 100 pkg",
+            1,
+            id="pipx-run-launcher-retained",
+        ),
         (
             "UV_CACHE_DIR=.uv-cache uv tool run --from i interrogate pkg",
             1,
@@ -294,6 +324,16 @@ def test_a_redirection_destination_is_not_a_scanned_path(
         ('"X=1" interrogate -f 100 pkg', 0),
         ("'X=1' uv run interrogate -f 100 pkg", 0),
         ("X=1 true interrogate -f 100 pkg", 0),
+        pytest.param(
+            "uv scripts/uv_gate.py run -- interrogate -f 100 pkg",
+            0,
+            id="uv-does-not-launch-the-python-helper-path",
+        ),
+        pytest.param(
+            "pipx scripts/uv_gate.py run -- interrogate -f 100 pkg",
+            0,
+            id="pipx-does-not-launch-the-python-helper-path",
+        ),
         (
             "python3 scripts/uv_gate.py tool --from interrogate -- interrogate pkg",
             1,
