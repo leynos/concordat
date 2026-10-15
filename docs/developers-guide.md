@@ -998,12 +998,25 @@ the rule at once.
 (`build_build_defaults_envelope`) carries the facts Cargo and rustup
 auto-discover, and the Makefile and workflows whose builds replace them:
 
-- `cargo_config` — the `rustflags` sources Cargo would consult, each with its
-  normalized flags and whether it applies on Linux, only on Linux, or could not
-  be placed at all; every codegen-backend selection with the route that made
-  it; and the `[unstable]` gate. A configuration Cargo would refuse to load,
-  including a `rustflags` array with a non-string member, is reported as a
-  parse error rather than read around.
+- `cargo_config` — `.cargo/config.toml` `rustflags` sources Cargo would
+  consult, each with normalized flags and whether it applies on Linux, only on
+  Linux, or could not be placed at all; every codegen-backend selection with
+  the route that made it; and the `[unstable]` gate. A configuration Cargo
+  would refuse to load, including a `rustflags` array with a non-string member,
+  is reported as a parse error rather than read around.
+- `cargo_manifest_backends` — an optional list of normalized profile and
+  package-override selections from the governed root `Cargo.toml`, kept
+  distinct from `.cargo/config.toml` facts because the files have separate
+  Cargo precedence and scope. It is present only when it contains valid,
+  string-valued selections, including non-Cranelift backends. A legitimate
+  absence omits both fields. A present but invalid, relevant profile,
+  package-override, or backend shape is represented by the optional
+  `cargo_manifest_backend_error` string instead. Such an error makes BD-008
+  indeterminate when Whitaker isolation depends on those facts, and prevents
+  BD-007 from proving an LLVM release profile. BD-007 checks package overrides
+  for the selected profile in both root `Cargo.toml` and `.cargo/config.toml`;
+  profile-level LLVM alone cannot prove coverage if a relevant package override
+  is unresolved or selects Cranelift.
 - `toolchain` — the pinned channel and its classification, which decides
   whether the nightly-only clauses apply.
 - `exceptions` — one scan per document declared by the rule's
@@ -1424,6 +1437,28 @@ The BD-008 properties and the BD-009 setup-ordering property
 (`test_build_defaults_workflow_properties.py`) go through the public
 `runner.run_rule` one example at a time, with a small `max_examples`, because
 each example needs a real envelope and one Conftest run.
+
+The named Rego regressions live beside their private modules in
+`policy/scoped_backends_test.rego` and `policy/isolated_whitaker_test.rego`.
+The former checks build-wide backend retention while leaving target-local
+choices scoped; the latter checks the direct suite boundary, contamination, and
+unresolved values. Public checkout coverage for Whitaker isolation is in
+`tests/unit/test_build_defaults_whitaker_isolation.py`; end-to-end findings for
+the scoped-backend fixture remain in `test_build_defaults_rule_run.py`.
+`test_build_defaults_manifest_backends.py` covers typed facts, error
+adaptation, and envelope construction; `test_build_defaults_manifest_routes.py`
+covers public BD-007 release and BD-008 invalid-fact findings.
+`test_build_defaults_isolation_properties.py` batches three semantic properties
+with independent oracles. `policy/manifest_backends_test.rego` checks that
+profile selections prove profile defaults while package overrides do not. Both
+production modules are loaded through the rule's policy directory and
+registered in the canonical package integrity manifest. Keep their ownership
+private: they compose normalized envelope and existing Make reachability and
+assignment facts, rather than adding general Cargo, shell, or Make evaluators.
+For recognized direct Whitaker routes, observed development-flag contamination
+is noncompliant; missing, unresolved, or multiple possible isolation values and
+separate profile backends are indeterminate. Unknown wrappers receive no
+exemption, so ordinary development-flag checks still apply.
 
 ### The bounded Rego reachability test
 

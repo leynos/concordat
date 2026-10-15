@@ -2645,6 +2645,24 @@ qualification remains separate evidence. This is not a shared shell parser or
 evidence of backend qualification on every supported target; the
 supported-route declaration gap remains tracked in issue #153.
 
+Root `Cargo.toml` backend selections are normalized at the envelope boundary
+with the existing `concordat.rules.cargo_config.codegen_backends(manifest, [])`
+helper, keeping them distinct from `.cargo/config.toml` selections. The
+envelope includes the nonempty typed `cargo_manifest_backends` list only when
+valid selections exist; a relevant malformed profile, package-override, or
+backend shape is carried in `cargo_manifest_backend_error`. The bounded
+`profile_backend_error` check validates only those backend shapes, not every
+Cargo manifest error. BD-007 and BD-008 consume the normalized facts; their
+policy does not navigate raw TOML. For release-profile coverage, an explicit
+root LLVM backend proves the profile selection, while root Cranelift is
+noncompliant. A package Cranelift override, unknown backend, or relevant error
+leaves the LLVM proof indeterminate; package-level LLVM does not prove the
+profile default. A relevant manifest error also leaves direct Whitaker
+isolation indeterminate. BD-007 checks package overrides for the selected
+profile in both root `Cargo.toml` and `.cargo/config.toml`; profile-level LLVM
+alone cannot prove coverage if a relevant package override is unresolved or
+selects Cranelift.
+
 Three readings settled the package's shape, each from a defect met while
 surveying the estate for it:
 

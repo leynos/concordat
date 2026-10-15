@@ -577,7 +577,9 @@ workflows whose builds replace them, so it needs `conftest` and `makeutil` on
 - the `mold` linker is named in a source that applies on Linux, and in no
   source that reaches beyond Linux;
 - the sources are repeated rather than merged, because Cargo replaces one with
-  another instead of combining them;
+  another instead of combining them. Backend flags in a target-specific source
+  remain local to that target, whereas a backend named by `[build].rustflags`
+  is a build-wide default and must survive each target source that replaces it;
 - the Cranelift codegen backend is the development-profile default, or the
   repository records an exception.
 
@@ -621,13 +623,35 @@ Three more clauses read the builds that replace those defaults:
   a profile that selects `llvm`. Where the test profile also selects Cranelift,
   set `CARGO_PROFILE_TEST_CODEGEN_BACKEND=llvm` too, because the dev-profile
   override leaves tests on Cranelift and coverage instrumentation then fails. A
-  shared-actions `generate-coverage` step needs nothing: it selects LLVM itself.
+  shared-actions `generate-coverage` step needs nothing: it selects LLVM
+  itself. For a coverage command selecting the release profile, a root-manifest
+  release backend of LLVM proves that profile uses LLVM; an explicit Cranelift
+  backend is noncompliant. A package-level Cranelift override, or a relevant
+  manifest fact that is unavailable or malformed, leaves the LLVM selection
+  `indeterminate`. A package-level LLVM override does not prove the profile's
+  default backend. BD-007 checks package overrides for the selected profile in
+  both root `Cargo.toml` and `.cargo/config.toml`; profile-level LLVM alone
+  cannot prove coverage if a relevant package override is unresolved or selects
+  Cranelift.
 - **BD-008** — a Makefile recipe reachable from `lint`, `test`, `typecheck` or
   `build` that assigns `RUSTFLAGS` restates `-Zthreads=8` (on a nightly
   toolchain only) and the `mold` linker flag (where the build targets Linux).
   An assigned `RUSTFLAGS` replaces every `rustflags` source, so
   `RUSTFLAGS="-D warnings"` alone turns the standard off for that gate.
   netsuke's `GATE_RUSTFLAGS` is the reference shape.
+
+  A directly invoked, installer-managed `whitaker` binary is the exception to
+  retaining those development flags: its toolchain is separate from the
+  repository's Cargo build. The audit requires one statically known `RUSTFLAGS`
+  boundary for that route and rejects development frontend, Cranelift, or
+  `mold` flags there, including encoded flags and explicit development/test
+  profile overrides. Missing or unresolved values, multiple possible
+  assignments, or a separate Cranelift profile backend are `indeterminate`.
+  Only a recognized direct `whitaker` invocation receives this treatment; an
+  unknown wrapper or executable substitution does not. This checks explicit
+  Make and Cargo configuration facts. It does not inspect the caller's ambient
+  environment or prove the suite's runtime backend. Ordinary Cargo commands and
+  test runners remain subject to the fast flag requirement.
 - **BD-009** — a workflow step that runs `cargo build`, `check`, `clippy`,
   `doc`, `nextest` or `test` directly with `RUSTFLAGS` set carries the same
   flags: `-Zthreads=8` unless the step runs a non-nightly toolchain, and the

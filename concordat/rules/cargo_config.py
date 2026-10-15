@@ -490,12 +490,72 @@ def _names_another_os(collapsed: str) -> bool:
     return any(marker in collapsed for marker in _OTHER_OS_MARKERS)
 
 
+def profile_backend_error(document: TomlDocument) -> str | None:
+    """Describe unsupported root-manifest backend shapes without parsing again.
+
+    Only profile, package-override, and backend value shapes belong to this
+    boundary. Other Cargo manifest fields remain the surface reader's concern.
+    Absence is valid; a present unsupported shape cannot prove backend absence.
+
+    Returns
+    -------
+    str | None
+        A description of the unsupported shape, or ``None`` when backend
+        selections are absent or have supported shapes.
+    """
+    profiles = document.get("profile", {})
+    if not isinstance(profiles, dict):
+        return "Cargo.toml profile must be a table"
+    for name, value in sorted(typ.cast("dict[str, object]", profiles).items()):
+        source = f"profile.{name}"
+        if not isinstance(value, dict):
+            return f"Cargo.toml {source} must be a table"
+        error = _profile_backend_shape_error(
+            typ.cast("dict[str, object]", value), source
+        )
+        if error is not None:
+            return error
+    return None
+
+
+def _profile_backend_shape_error(profile: dict[str, object], source: str) -> str | None:
+    """Validate only a profile's direct and package backend selection shapes."""
+    error = _backend_value_error(profile, source)
+    if error is not None:
+        return error
+    packages = profile.get("package", {})
+    if not isinstance(packages, dict):
+        return f"Cargo.toml {source}.package must be a table"
+    for name, value in sorted(typ.cast("dict[str, object]", packages).items()):
+        package_source = f"{source}.package.{name}"
+        if not isinstance(value, dict):
+            return f"Cargo.toml {package_source} must be a table"
+        error = _backend_value_error(
+            typ.cast("dict[str, object]", value), package_source
+        )
+        if error is not None:
+            return error
+    return None
+
+
+def _backend_value_error(table: dict[str, object], source: str) -> str | None:
+    """Retain a present invalid backend value as an error rather than absence."""
+    if BACKEND_KEY not in table:
+        return None
+    backend = table[BACKEND_KEY]
+    if isinstance(backend, str) and backend:
+        return None
+    return f"Cargo.toml {source}.{BACKEND_KEY} must be a nonempty string"
+
+
 def codegen_backends(
     document: TomlDocument,
     sources: list[RustflagsSource],
 ) -> list[CodegenBackendSelection]:
     """Return every codegen backend selection in *document*.
 
+    This normalizer also accepts a parsed root Cargo manifest with an empty
+    sources list, preserving manifest facts separately from configuration facts.
     Three routes, because closing one alone leaves the others open: a
     `codegen-backend` key on a profile, the same key on a package override
     beneath one, and `-Zcodegen-backend=` inside any `rustflags` source. The

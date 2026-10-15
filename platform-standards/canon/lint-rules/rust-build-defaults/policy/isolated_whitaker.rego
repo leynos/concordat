@@ -55,7 +55,10 @@ suite_development_flag(value) if {
 	startswith(token, "-Zthreads=")
 }
 
-suite_development_flag(value) if contains(value, "-fuse-ld=mold")
+suite_development_flag(value) if {
+	some token in flag_tokens(replace(value, "\u001f", " "))
+	endswith(token, "-fuse-ld=mold")
+}
 
 suite_development_flag(value) if {
 	some token in flag_tokens(replace(value, "\u001f", " "))
@@ -94,15 +97,11 @@ separate_suite_backend if {
 }
 
 separate_suite_backend if {
-	some _, profile in object.get(input.cargo.parsed, "profile", {})
-	object.get(profile, "codegen-backend", "") == "cranelift"
+	some backend in manifest_backends
+	backend.backend != "llvm"
 }
 
-separate_suite_backend if {
-	some _, profile in object.get(input.cargo.parsed, "profile", {})
-	some _, override in object.get(profile, "package", {})
-	object.get(override, "codegen-backend", "") == "cranelift"
-}
+suite_isolation_unproved(_, _) if manifest_backend_error != ""
 
 suite_isolation_unproved(_, _) if separate_suite_backend
 

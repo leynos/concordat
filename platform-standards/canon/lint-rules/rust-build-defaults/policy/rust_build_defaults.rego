@@ -323,6 +323,11 @@ backends := input.cargo_config.backends if config_readable
 
 backends := [] if not config_readable
 
+# Root Cargo.toml selections are normalized at the envelope boundary.
+manifest_backends := object.get(input, "cargo_manifest_backends", [])
+
+manifest_backend_error := object.get(input, "cargo_manifest_backend_error", "")
+
 # A `-Zcodegen-backend=` token in rustflags carries no profile, and applies to
 # every build the source reaches, so it selects the development profile too.
 # A package override does not: cargo applies it to the named package alone,

@@ -111,7 +111,7 @@ artifacts:
       Sensor policy for the rust-build-defaults rule package: the parallel
       frontend and linker defaults, the rustflags sources held equal, and the
       codegen backend configured or refused by a recorded exception.
-    sha256: a21ce245f5b5dd0a86f523bf413b14820a365d06683b3a557fb3fdc43d23db1e
+    sha256: a89dd89c73d4ecef4ac89ba07e558858e6ab2a02166666f733b78330200a2514
   - id: lint-rule-rust-build-defaults-build-paths-make
     type: opa-policy
     path: >-
@@ -120,14 +120,14 @@ artifacts:
       Makefile half of rust-build-defaults BD-007 and BD-008: coverage
       recipes select LLVM where Cranelift is the default, and gate recipes
       that assign RUSTFLAGS restate the fast flags.
-    sha256: eb988c7bfef3c347b0146af364b03ec6e1a37d91299917925742940da3daeb92
+    sha256: 2944c81bc304388b586b3e873fe4b538bec3271bdf738c1f48fb6e0fe1a05c80
   - id: lint-rule-rust-build-defaults-isolated-whitaker
     type: opa-policy
     path: >-
       platform-standards/canon/lint-rules/rust-build-defaults/policy/isolated_whitaker.rego
     description: >
       BD-008 direct Whitaker recognition and binding toolchain isolation.
-    sha256: 89fa587b2bc429f5c000ceb87bc825707a5585fed4ba44928442dd6622051ffe
+    sha256: daa8153d5f2344377ec2e08274d8b4f4ac64c14ff7e37a3bdeb1b97b5dc74b74
   - id: lint-rule-rust-build-defaults-scoped-backends
     type: opa-policy
     path: >-
@@ -143,7 +143,7 @@ artifacts:
       Workflow half of rust-build-defaults BD-007 and BD-009: coverage steps
       and dev-profile release builds select LLVM, and direct cargo gate
       steps whose RUSTFLAGS is set keep the fast flags.
-    sha256: 9a6d8214ebbee567d921914ab97a548b89e9771d0a2afad802a8bd909356dcf5
+    sha256: 6bddb57351ac9c075823e41a2033e0c61eef0a4e5465effb8c9da71d7beaa706
   - id: lint-rule-rust-build-defaults-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/rust-build-defaults/rule.yaml

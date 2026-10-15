@@ -155,6 +155,30 @@ def test_development_flag_contamination_is_rejected_at_each_make_boundary(
 
 
 @pytest.mark.parametrize(
+    ("linker", "verdict"),
+    [
+        pytest.param(
+            "-Clink-arg=-fuse-ld=mold-wrapper", "compliant", id="different-linker"
+        ),
+        pytest.param("-Clink-arg=-fuse-ld=mold", "noncompliant", id="embedded-mold"),
+        pytest.param("-C link-arg=-fuse-ld=mold", "noncompliant", id="split-mold"),
+    ],
+)
+def test_linker_contamination_matches_the_complete_linker_token(
+    isolated_checkout: pathlib.Path, linker: str, verdict: str
+) -> None:
+    """A distinct linker name must not be mistaken for the development linker."""
+    (isolated_checkout / "Makefile").write_text(
+        f'lint:\n\tRUSTFLAGS="-D warnings {linker}" whitaker --all\n',
+        encoding="utf-8",
+    )
+    result = run_rule(_RULE_ID, isolated_checkout)
+    assert result.verdict == verdict, result
+    if verdict != "compliant":
+        assert {finding.rule_id for finding in result.findings} == {"BD-008"}
+
+
+@pytest.mark.parametrize(
     ("override", "verdict"),
     [
         pytest.param(

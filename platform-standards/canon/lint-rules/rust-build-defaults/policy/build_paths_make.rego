@@ -247,7 +247,28 @@ coverage_clause_applies if {
 	count(cranelift_routes) > 0
 }
 
-manifest_profile_backend(name) := input.cargo.parsed.profile[name]["codegen-backend"]
+manifest_profile_backend(name) := backend.backend if {
+	manifest_backend_error == ""
+	not profile_backend_unproved(name)
+	some backend in manifest_backends
+	backend.scope == "profile"
+	backend.profile == name
+}
+
+# Package overrides from either typed Cargo source cannot establish a profile
+# default; a non-LLVM override prevents proof that every package uses LLVM.
+profile_backend_unproved(name) if {
+	some backend in array.concat(backends, manifest_backends)
+	backend.profile == name
+	backend.scope == "package-override"
+	backend.backend != "llvm"
+}
+
+profile_backend_unproved(name) if {
+	some backend in array.concat(backends, manifest_backends)
+	backend.profile == name
+	not backend.backend in {"llvm", "cranelift"}
+}
 
 profile_selects_llvm(name) if {
 	some backend in backends
@@ -259,11 +280,20 @@ profile_selects_llvm(name) if {
 profile_selects_llvm(name) if manifest_profile_backend(name) == "llvm"
 
 release_profile_is_llvm if {
+	manifest_backend_error == ""
+	not profile_backend_unproved("release")
 	not profile_selects_cranelift("release")
 }
 
 profile_selects_cranelift(name) if {
 	some backend in backends
+	backend.scope == "profile"
+	backend.profile == name
+	backend.backend == "cranelift"
+}
+
+profile_selects_cranelift(name) if {
+	some backend in manifest_backends
 	backend.scope == "profile"
 	backend.profile == name
 	backend.backend == "cranelift"
@@ -334,6 +364,7 @@ make_route_satisfied(rule, segment, "rustflags") if {
 }
 
 make_selects_llvm(rule, segment) if {
+	not profile_selection_unproved(segment)
 	every route in cranelift_routes {
 		make_route_satisfied(rule, segment, route)
 	}
@@ -346,8 +377,21 @@ make_selection_unproven(segment) if {
 	regex.match(`codegen-backend|CODEGEN_BACKEND|RUSTFLAGS|--profile`, text)
 }
 
+profile_selection_unproved(_) if manifest_backend_error != ""
+
+profile_selection_unproved(segment) if {
+	builds_release_profile(segment)
+	profile_backend_unproved("release")
+}
+
+profile_selection_unproved(segment) if {
+	profile_backend_unproved(profile_argument(segment))
+}
+
 coverage_verdict(segment) := "indeterminate" if {
 	make_selection_unproven(segment)
+} else := "indeterminate" if {
+	profile_selection_unproved(segment)
 } else := "noncompliant"
 
 coverage_segments contains [rule, recipe, segment] if {

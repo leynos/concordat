@@ -87,6 +87,22 @@ makes only those clauses indeterminate; the others still run. See
   `cargo zigbuild` or `cross build` without `--release`, `-r` or `--profile`,
   in a workflow triggered by `release` or a tag push. A repository with no such
   path is not applicable.
+
+  Root `Cargo.toml` profile selections are normalized at the envelope boundary
+  by the existing `concordat.rules.cargo_config.codegen_backends(manifest, [])`
+  helper and remain distinct from `.cargo/config.toml` selections. The envelope
+  emits nonempty `cargo_manifest_backends` only for valid selections, and uses
+  `cargo_manifest_backend_error` for a present but malformed relevant profile,
+  package-override, or backend shape. The bounded `profile_backend_error` check
+  does not diagnose every Cargo manifest error. For release-profile coverage, a
+  direct root LLVM selection proves LLVM; root Cranelift is noncompliant.
+  Package Cranelift, unknown backend facts, or a relevant error leave the LLVM
+  proof `indeterminate`; a package-level LLVM override does not prove the
+  profile default. A relevant error also makes direct Whitaker isolation
+  `indeterminate`. BD-007 and BD-008 consume these normalized facts, not raw
+  TOML. BD-007 checks package overrides for the selected profile in both root
+  `Cargo.toml` and `.cargo/config.toml`; profile-level LLVM alone cannot prove
+  coverage if a relevant package override is unresolved or selects Cranelift.
 - **BD-008** (error): a Makefile gate recipe that assigns `RUSTFLAGS` restates
   `-Zthreads=8` (on a nightly pin) and the `mold` linker flag (where the build
   targets Linux). A gate recipe is one in the static closure of `lint`, `test`,
@@ -112,7 +128,9 @@ makes only those clauses indeterminate; the others still run. See
   package. It composes the existing Make reachability, assignment and flag
   facts; it is not a general shell or Make evaluator. The production policy
   directory loads it alongside the development-route clauses. Public `run_rule`
-  tests cover both the exemption and contamination rejection.
+  tests cover both the exemption and contamination rejection. It consumes the
+  normalized root-manifest facts at the envelope boundary and does not navigate
+  raw TOML.
 - **BD-009** (error): a workflow step that runs a cargo gate build directly
   (`build`, `check`, `clippy`, `doc`, `nextest` or `test`, the
   `gate_cargo_subcommands` parameter) with `RUSTFLAGS` set carries the same

@@ -12,7 +12,13 @@ from __future__ import annotations
 import logging
 import typing as typ
 
-from .cargo_config import CargoConfigFacts, inspect_cargo_config
+from .cargo_config import (
+    CargoConfigFacts,
+    CodegenBackendSelection,
+    codegen_backends,
+    inspect_cargo_config,
+    profile_backend_error,
+)
 from .exception_docs import DocumentScan, find_exception_sections
 from .fs_probe import regular_file_exists
 from .makefile_facts import (
@@ -188,6 +194,8 @@ class BuildDefaultsEnvelope(typ.TypedDict):
     cargo: CargoPayload
     toolchain: ToolchainFacts | None
     cargo_config: CargoConfigFacts | None
+    cargo_manifest_backends: typ.NotRequired[list[CodegenBackendSelection]]
+    cargo_manifest_backend_error: typ.NotRequired[str]
     exceptions: list[DocumentScan]
     makefile: MakeutilReport | None
     makefile_error: str | None
@@ -330,7 +338,7 @@ def build_build_defaults_envelope(
     for workflow in workflows:
         if report_undecodable is not None and workflow["decode_category"] is not None:
             report_undecodable(workflow["path"], workflow["decode_category"])
-    return {
+    envelope: BuildDefaultsEnvelope = {
         "schema_version": ENVELOPE_SCHEMA_VERSION,
         "kind": BUILD_DEFAULTS_ENVELOPE_KIND,
         "repository": {"path": str(checkout), "name": None},
@@ -352,3 +360,17 @@ def build_build_defaults_envelope(
         "makefile_error": makefile_error,
         "workflows": workflows,
     }
+    # Omit empty facts so unrelated fixture envelopes keep their exact bytes.
+    # The root manifest is a separate Cargo source from auto-discovered config.
+    manifest = cargo_parsed if cargo_parsed is not None else {}
+    manifest_backends = [
+        selection
+        for selection in codegen_backends(manifest, [])
+        if selection["backend"]
+    ]
+    manifest_error = profile_backend_error(manifest)
+    if manifest_backends:
+        envelope["cargo_manifest_backends"] = manifest_backends
+    if manifest_error is not None:
+        envelope["cargo_manifest_backend_error"] = manifest_error
+    return envelope

@@ -217,6 +217,7 @@ workflow_route_satisfied(workflow, job, index, step, segment, "rustflags") if {
 }
 
 workflow_selects_llvm(workflow, job, index, step, segment) if {
+	not profile_selection_unproved(segment)
 	every route in cranelift_routes {
 		workflow_route_satisfied(workflow, job, index, step, segment, route)
 	}
@@ -234,6 +235,8 @@ workflow_selection_unknowable(workflow, job, index, step, segment) if {
 
 backend_verdict(workflow, job, index, step, segment) := "indeterminate" if {
 	workflow_selection_unknowable(workflow, job, index, step, segment)
+} else := "indeterminate" if {
+	profile_selection_unproved(segment)
 } else := "noncompliant"
 
 deny contains f if {
