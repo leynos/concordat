@@ -637,7 +637,21 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   takes `--tip <ref>` and exits 2 when the clone or manifest cannot be read. To
   approve a changed action, add the reviewed commit to `install_whitaker_roots`
   first. Git read failures while walking the history surface as
-  `OperationalRuleError`, never a traceback.
+  `OperationalRuleError`, never a traceback. The reviewed revision snapshot
+  under `tests/fixtures/whitaker/` is an independent oracle for the complete
+  shipped list. Its commit, first-parent and action-tree records come directly
+  from a full shared-actions clone, not from the rule manifest or its
+  generator. When refreshing the list, capture the root-to-tip first-parent
+  segment with `git rev-list --first-parent`, record each commit's first parent
+  and action-directory tree with `git rev-parse`, and verify each tree against
+  the approved root. Update the snapshot's frozen tip and the provenance
+  assertions in `tests/unit/test_whitaker_revision_snapshot.py` only after
+  reviewing that history. If action contents change, retain the approved-root
+  review boundary rather than extending this content-identical snapshot. The
+  tests compare the entire ordered list, evaluate every recorded pin through
+  QG-002, and require rejection when manifest entries are removed or altered.
+  The shared batch helper accepts the runner's envelope union so these
+  provisioning envelopes reuse its existing result-to-file completeness checks.
 - `policy-input/markdown-formatting-baseline` —
   `markdown_envelope.build_markdown_envelope`. Alongside the same `makeutil`
   report for the root `Makefile`, it carries `.markdownlint-cli2.jsonc` decoded
