@@ -260,13 +260,23 @@ carry no toolchain the install can rely on. `make test` lists the same tools as
 prerequisites, so the local gate fails by name rather than through unrelated
 rule tests.
 
+The pull-request lane runs Terratest from the tracked nested Go module, whose
+`go` directive requires Go 1.26.0. With `GOTOOLCHAIN=local`, Go stays on the
+release installed by `setup-go`, so that release must meet the module floor; Go
+1.22.12 is below it. Both lanes use the available Go 1.26.9 patch in the
+required Go 1.26 line, keeping their Go installs on one explicit toolchain. The
+Go version contract reads the nested module directive and checks the shared pin
+against it; the workflow contract checks the actual setup action versions and
+install ordering. This contract module owns its release and directive readers
+and semantic errors for its own cases; shared provisioning constants are the
+cross-contract boundary.
+
 The CI lane keys the Go dependency cache with the tracked nested module file
 `platform-standards/tofu/terratest/go.sum`. The coverage publisher uses Go only
 to install pinned Conftest, so it explicitly disables that dependency cache
 rather than looking for a root module that does not exist. The same local
 provisioning contract checks these two cache inputs, including controls that
-reject a missing module key or an enabled publisher cache. Both lanes retain
-their declared Go version and tool-install ordering.
+reject a missing module key or an enabled publisher cache.
 
 Add a new external tool in three places together: the package's missing-tool
 message, the install step in every suite lane, and the `test` target's

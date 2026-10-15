@@ -199,8 +199,9 @@ def test_a_go_install_is_preceded_by_the_shared_go_setup() -> None:
     )
     (_, version), *_ = setups.values()
     assert version == GO_VERSION, (
-        f"the suite lanes must set Go up at {GO_VERSION}, since the pinned "
-        f"Conftest is built against it; found {version!r}"
+        f"the suite lanes must share Go {GO_VERSION}, which satisfies the "
+        "nested Terratest module's local toolchain floor; "
+        f"found {version!r}"
     )
 
 
