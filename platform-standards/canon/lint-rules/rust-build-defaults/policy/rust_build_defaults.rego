@@ -125,11 +125,13 @@ rustflags_sources := [] if not config_readable
 
 # A target table replaces `[build] rustflags` outright on the platform it
 # matches, so a flag that has to survive is repeated in every source. The
-# linker flag is the deliberate exception and is governed by BD-002.
+# linker is governed by BD-002. A backend introduced by a target stays scoped
+# to that target; only a build-level backend must survive every replacement.
 shared_flags := {flag |
 	some source in rustflags_sources
 	some flag in source.flags
 	flag != linker_flag
+	not startswith(flag, "-Zcodegen-backend=")
 }
 
 # -- BD-001: the parallel frontend is a default ----------------------------

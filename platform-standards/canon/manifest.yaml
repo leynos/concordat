@@ -111,7 +111,7 @@ artifacts:
       Sensor policy for the rust-build-defaults rule package: the parallel
       frontend and linker defaults, the rustflags sources held equal, and the
       codegen backend configured or refused by a recorded exception.
-    sha256: 7cca2d9a1fd22cc3bc54326cabf38eaacbd46cd84e3128a388a5da646e7bb810
+    sha256: a21ce245f5b5dd0a86f523bf413b14820a365d06683b3a557fb3fdc43d23db1e
   - id: lint-rule-rust-build-defaults-build-paths-make
     type: opa-policy
     path: >-
@@ -120,7 +120,21 @@ artifacts:
       Makefile half of rust-build-defaults BD-007 and BD-008: coverage
       recipes select LLVM where Cranelift is the default, and gate recipes
       that assign RUSTFLAGS restate the fast flags.
-    sha256: 7cd6a9c623b765319d94c937044fb389e16b576e3633ed987e05b7dfcac68ea4
+    sha256: eb988c7bfef3c347b0146af364b03ec6e1a37d91299917925742940da3daeb92
+  - id: lint-rule-rust-build-defaults-isolated-whitaker
+    type: opa-policy
+    path: >-
+      platform-standards/canon/lint-rules/rust-build-defaults/policy/isolated_whitaker.rego
+    description: >
+      BD-008 direct Whitaker recognition and binding toolchain isolation.
+    sha256: 89fa587b2bc429f5c000ceb87bc825707a5585fed4ba44928442dd6622051ffe
+  - id: lint-rule-rust-build-defaults-scoped-backends
+    type: opa-policy
+    path: >-
+      platform-standards/canon/lint-rules/rust-build-defaults/policy/scoped_backends.rego
+    description: >
+      BD-003 preservation of build-wide backends across target replacements.
+    sha256: 0a5321d7c0c96640536cc64937e70fd0893d9933c5f58db1daea6b7c7f9c7d93
   - id: lint-rule-rust-build-defaults-build-paths-workflows
     type: opa-policy
     path: >-
@@ -136,7 +150,7 @@ artifacts:
     description: >
       Rule package manifest (sensor wiring, parameters, defaults) for
       rust-build-defaults.
-    sha256: 86be4d6efe1c28d045102557c9f0633c46353aea65ecaadd5bbc76e0381fb092
+    sha256: 16acaf69c5a87ec09396381d18ca7b1cdde72d7a8123bac3478f54f2118ba337
   - id: lint-rule-main-owned-codescene-coverage
     type: opa-policy
     path: >-

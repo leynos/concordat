@@ -51,7 +51,14 @@ makes only those clauses indeterminate; the others still run. See
   single `rustflags` source rather than merging them — a matching `[target.*]`
   table replaces `[build] rustflags` outright — so a flag named in one source
   and not another vanishes on the platform the other one matches. The linker
-  flag is the deliberate exception and is governed by BD-002.
+  flag is governed by BD-002. Backend flags introduced by a target remain
+  scoped to that target: Linux development backends need not reach Windows or
+  macOS, nor disjoint Linux architectures. A backend flag in `[build]` is a
+  global default and must be retained by every replacing target source. The
+  private `policy/scoped_backends.rego` module owns that build-level backend
+  check, composing the package's normalized source facts. It does not infer
+  which targets must adopt a backend; BD-004's declared-route gap remains
+  separate.
 - **BD-004** (error): the backend is the development-profile default, or the
   repository records an exception. Both states are accepted; a repository with
   neither is noncompliant. A package override beneath a profile is not the
@@ -85,8 +92,27 @@ makes only those clauses indeterminate; the others still run. See
   targets Linux). A gate recipe is one in the static closure of `lint`, `test`,
   `typecheck` or `build` (the `gate_targets` parameter). The assignment may be
   a prefix on the recipe, a target-specific assignment, or a Makefile-wide one.
-  Coverage recipes and release-profile builds are BD-007's and exempt. A
-  Makefile with no such assignment is not applicable.
+  Coverage recipes and release-profile builds are BD-007's and exempt. Direct
+  installer-managed `whitaker` commands are also exempt: their toolchain must
+  not inherit repository development flags. Cargo commands and wrappers such as
+  Python test runners retain the flag requirement. Global or target-specific
+  assignments are checked only where they reach a remaining gate recipe. Direct
+  Whitaker routes require a statically known `RUSTFLAGS` boundary and reject
+  parallel frontend, Cranelift and mold flags, including explicit encoded-flags
+  and profile overrides. Missing or unresolved suite selections are
+  indeterminate. Unknown wrappers and executable substitutions receive no
+  exemption. A Makefile with no such assignment or suite route is not
+  applicable. Separate profile or package-override Cranelift selections remain
+  indeterminate: replacing `RUSTFLAGS` does not remove them, and this reader
+  does not prove the suite's internal profile override route. This check
+  measures explicit Make/configuration facts, not the caller's ambient
+  environment; runtime and CI route qualification remains separate evidence.
+
+  `policy/isolated_whitaker.rego` privately owns this suite boundary within the
+  package. It composes the existing Make reachability, assignment and flag
+  facts; it is not a general shell or Make evaluator. The production policy
+  directory loads it alongside the development-route clauses. Public `run_rule`
+  tests cover both the exemption and contamination rejection.
 - **BD-009** (error): a workflow step that runs a cargo gate build directly
   (`build`, `check`, `clippy`, `doc`, `nextest` or `test`, the
   `gate_cargo_subcommands` parameter) with `RUSTFLAGS` set carries the same
@@ -272,6 +298,15 @@ Findings carry a three-valued `verdict`:
 A repository is `compliant` only when the finding set is empty.
 
 ## Known limitations
+
+BD-004 proves that a development backend selection or recorded repository
+exception exists. It does not prove qualification for every supported target:
+the envelope carries target selectors and Linux placement, but no declared
+backend-support scope or target-scoped exception evidence. Target-local backend
+flags are therefore not proof that all supported development routes use that
+backend. Consumers must independently verify their adopted routes; a missing
+backend on another supported route remains an audit gap requiring policy-owner
+resolution, not an approved exception.
 
 A `makeutil` parse that recovered from a construct it does not understand is
 `indeterminate` for BD-007 and BD-008, even where the Makefile is valid.

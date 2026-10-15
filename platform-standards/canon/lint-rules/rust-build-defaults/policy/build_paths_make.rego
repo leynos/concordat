@@ -419,17 +419,19 @@ gate_rustflags contains [sprintf("the %s target-specific assignment", [target]),
 	reached in closure(target)
 	assignment := target_assignment(rule)
 	assignment.name == "RUSTFLAGS"
+	some [_, site_rule, _, _] in gate_recipe_sites
+	some site_target in site_rule.targets
+	site_target in closure(reached)
 	value := assignment.value
 }
 
 # Make exports a variable that came from the environment, and CI's toolchain
 # setup puts `RUSTFLAGS` there, so a Makefile-wide assignment reaches every
 # gate recipe whether or not it is marked `export`. Its assignments are read
-# together, as an append (`+=`) combines them. It is a gate override only when
-# the Makefile defines a gate target for it to reach.
+# together, as an append (`+=`) combines them. It is a development gate override
+# only when it reaches a non-exempt recipe, not an isolated Whitaker route.
 gate_rustflags contains ["the Makefile-wide assignment", line, "$(RUSTFLAGS)"] if {
-	some target in gate_targets
-	target in known_targets
+	some [_, _, _, _] in gate_recipe_sites
 	lines := [variable.location.start_line | some variable in assignments_of("RUSTFLAGS")]
 	count(lines) > 0
 	line := min(lines)

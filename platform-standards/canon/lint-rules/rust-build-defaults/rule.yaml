@@ -4,16 +4,20 @@ name: Rust build defaults
 description: >-
   Audits the auto-discovered `.cargo/config.toml` and the pinned toolchain
   against the estate build standard: the parallel `rustc` frontend and the
-  mold linker as defaults (RT-017, RT-008), the `rustflags` sources held
-  equal so neither silently replaces the other (RT-018), and the Cranelift
+  mold linker as defaults (RT-017, RT-008), shared frontend flags retained
+  across `rustflags` replacements while target backends stay scoped (RT-018),
+  and the Cranelift
   codegen backend either configured for the development profile or refused
   by a recorded, current exception (RT-009). It also audits the builds that
   replace those defaults: every coverage path and dev-profile release build
   selects LLVM where Cranelift is the default (RT-019), and every Makefile
-  gate recipe (RT-020) and direct cargo workflow step (RT-021) that assigns
-  `RUSTFLAGS` restates the fast flags.
+  repository-toolchain gate recipe (RT-020) and direct cargo workflow step
+  (RT-021) that assigns
+  `RUSTFLAGS` restates the fast flags. Direct installer-managed Whitaker
+  routes instead require statically known isolation and reject development
+  flag contamination; unresolved profile or ambient routes remain unmeasured.
   Audit-only: this rule declares no mutations.
-version: 0.2.0
+version: 0.2.1
 sensor:
   type: conftest
   input: policy-input/rust-build-defaults
