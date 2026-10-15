@@ -299,6 +299,51 @@ def test_a_redirection_destination_is_not_a_scanned_path(
             1,
         ),
         ("python3 scripts/uv_gate.py run -- interrogate -f 100 pkg", 1),
+        pytest.param(
+            "python3 ./scripts/uv_gate.py run -- interrogate -f 100 pkg",
+            1,
+            id="helper-normalized-relative-path",
+        ),
+        pytest.param(
+            "python3 scripts/sub/../uv_gate.py run -- interrogate -f 100 pkg",
+            0,
+            id="helper-parent-segment-rejected",
+        ),
+        pytest.param(
+            "python3 tools/uv_gate.py run -- interrogate -f 100 pkg",
+            0,
+            id="other-directory-same-helper-basename",
+        ),
+        pytest.param(
+            "python3 uv_gate.py run -- interrogate -f 100 pkg",
+            0,
+            id="bare-helper-basename",
+        ),
+        pytest.param(
+            "python3 /scripts/uv_gate.py run -- interrogate -f 100 pkg",
+            0,
+            id="absolute-helper-path",
+        ),
+        pytest.param(
+            "python3 scripts/uv_gate.py run interrogate -f 100 pkg",
+            0,
+            id="helper-run-missing-command-separator",
+        ),
+        pytest.param(
+            "python3 scripts/uv_gate.py run --python 3.14 interrogate -f 100 pkg",
+            0,
+            id="helper-run-options-without-command-separator",
+        ),
+        pytest.param(
+            "python3 scripts/uv_gate.py run --python 3.14 -- interrogate -f 100 pkg",
+            1,
+            id="helper-run-options-with-command-separator",
+        ),
+        pytest.param(
+            "python3 scripts/uv_gate.py run -- -- interrogate -f 100 pkg",
+            0,
+            id="helper-run-repeated-command-separator",
+        ),
         ("python3 scripts/uv_gate.py run -- true interrogate -f 100 pkg", 0),
         ("python3 scripts/other.py tool -- interrogate -f 100 pkg", 0),
         ("true interrogate -f 100 pkg", 0),

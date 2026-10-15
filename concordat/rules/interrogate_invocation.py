@@ -305,7 +305,7 @@ def scan_options(arguments: list[str]) -> Options:
 
 
 # The vendored uv helper, run as `python3 scripts/uv_gate.py <uv-style arguments>`.
-GATE_HELPER: typ.Final = "uv_gate.py"
+GATE_HELPER: typ.Final = "scripts/uv_gate.py"
 
 
 def _launcher_arguments(prefix: list[str]) -> list[str] | None:
@@ -321,8 +321,18 @@ def _launcher_arguments(prefix: list[str]) -> list[str] | None:
     """
     if posixpath.basename(prefix[0]) not in LAUNCHERS:
         return None
-    if len(prefix) > 1 and posixpath.basename(prefix[1]) == GATE_HELPER:
-        return prefix[2:]
+    if (
+        len(prefix) > 1
+        and ".." not in prefix[1].split("/")
+        and posixpath.normpath(prefix[1]) == GATE_HELPER
+    ):
+        arguments = prefix[2:]
+        # Unlike uv itself, the helper refuses `run` without a command separator.
+        if arguments[:1] == ["run"] and (
+            arguments.count("--") != 1 or arguments[-1:] != ["--"]
+        ):
+            return None
+        return arguments
     return prefix[1:]
 
 
