@@ -1164,6 +1164,32 @@ such as the CV-005 workflow-directory reader, asks `probe_file` whether
 anything is there and keys on `read_error is None` rather than on `present`,
 which answers the different question of whether a regular file is there.
 
+### Released binary installation boundary
+
+`scripts/install_release_binary.py` owns repository CI release-asset
+installation, not general archive extraction or tool-version selection.
+Existing four-field `<TOOL>_*` pins continue to install raw bytes unchanged. An
+archive caller must add `ARCHIVE_FORMAT=tar.gz`, `ARCHIVE_MEMBER` (an exact
+canonical relative name) and `ARCHIVE_MEMBER_SIZE` (the exact positive
+uncompressed byte length), using that same tool prefix. The SHA-256 pin always
+authenticates the downloaded archive before decompression. Only the named
+ordinary file is read, bounded by its declared size plus one byte, and its
+actual length must match the pin.
+
+Archive entries must have canonical relative names and ordinary-file types;
+links, directories, devices, ambiguous paths, missing or duplicate selected
+members, and malformed archives fail closed. No archive tree is extracted.
+Verified bytes are staged beside the destination, made executable and
+atomically renamed; failed replacements preserve the previous executable. When
+a staging path exists after a failure, cleanup is attempted. If cleanup also
+fails, the diagnostic reports the cleanup error alongside any original staging
+error, retaining the original error as the primary cause when present; the
+staging file may remain. `GITHUB_PATH` is updated only after installation
+succeeds, and installation or publication errors return a failing command
+status. Further repository CI binary consumers may reuse this boundary with
+reviewed release pins; new archive formats require their own explicit contract
+and tests.
+
 ### Tool dependencies
 
 Two external tools must be on `PATH`:
