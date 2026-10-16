@@ -187,7 +187,9 @@ def _archive_pin(body: bytes) -> dict[str, str]:
 )
 def test_archive_path_components_are_canonical(name: str, *, unsafe: bool) -> None:
     """Empty and relative components cannot acquire canonical path meaning."""
-    assert installer._has_unsafe_member_components(name) is unsafe
+    assert installer._has_unsafe_member_components(name) is unsafe, (
+        "canonical component validation must match the specified path case"
+    )
 
 
 @pytest.mark.parametrize(
@@ -196,13 +198,17 @@ def test_archive_path_components_are_canonical(name: str, *, unsafe: bool) -> No
 )
 def test_archive_paths_refuse_platform_syntax(name: str, *, unsafe: bool) -> None:
     """A POSIX member cannot be reinterpreted as Windows path syntax."""
-    assert installer._has_platform_path_syntax(name) is unsafe
+    assert installer._has_platform_path_syntax(name) is unsafe, (
+        "platform syntax validation must match the specified path case"
+    )
 
 
 @pytest.mark.parametrize("text", ["1", "27", "+2", " 3 "])
 def test_archive_member_size_parser_preserves_integer_inputs(text: str) -> None:
     """The size parser retains the previously accepted positive integer grammar."""
-    assert installer._positive_member_size(text) == int(text)
+    assert installer._positive_member_size(text) == int(text), (
+        "valid positive integer inputs must retain their numeric value"
+    )
 
 
 @pytest.mark.parametrize("text", ["", "0", "-1", "1.5"])
@@ -225,8 +231,8 @@ def test_archive_member_validation_refuses_sparse_regular_files() -> None:
     with tarfile.open(fileobj=io.BytesIO(output.getvalue()), mode="r:gz") as archive:
         parsed_member = archive.getmember("tool")
 
-    assert parsed_member.isreg()
-    assert parsed_member.sparse is not None
+    assert parsed_member.isreg(), "the sparse fixture must retain a regular type"
+    assert parsed_member.sparse is not None, "the parser must recognize sparse metadata"
     with pytest.raises(installer.InstallError, match="not an ordinary file"):
         installer._validate_archive_member(parsed_member)
 
@@ -250,7 +256,9 @@ def test_archive_selection_returns_the_exact_pinned_member() -> None:
     selected = tarfile.TarInfo("tool")
     selected.size = len(_BODY)
     approved = installer.ArchiveMember("tool", len(_BODY))
-    assert installer._select_archive_member([sibling, selected], approved) is selected
+    assert (
+        installer._select_archive_member([sibling, selected], approved) is selected
+    ), "only the exact approved member may be selected"
 
 
 def test_archive_member_reader_returns_exact_bytes() -> None:
@@ -259,7 +267,9 @@ def test_archive_member_reader_returns_exact_bytes() -> None:
     approved = installer.ArchiveMember("tool", len(_BODY))
     with tarfile.open(fileobj=io.BytesIO(body), mode="r:gz") as archive:
         member = archive.getmembers()[0]
-        assert installer._read_member_bytes(archive, member, approved) == _BODY
+        assert installer._read_member_bytes(archive, member, approved) == _BODY, (
+            "the bounded member reader must preserve the exact executable bytes"
+        )
 
 
 def test_archive_installs_only_the_named_member(tmp_path: Path) -> None:
@@ -370,6 +380,53 @@ def test_malformed_archive_returns_failure(tmp_path: Path, body: bytes) -> None:
     assert status == 1, "malformed archive errors must become a failing status"
     assert not (tmp_path / "runner").exists(), "no executable may be staged"
     assert not (tmp_path / "github_path").exists(), "PATH must not be published"
+
+
+@pytest.mark.parametrize("position", ["first", "later"])
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("GNU.sparse.map", "not-a-number,1"),
+        ("GNU.sparse.realsize", "not-a-number"),
+    ],
+)
+def test_malformed_sparse_metadata_preserves_existing_installation(
+    tmp_path: Path, position: str, field: str, value: str
+) -> None:
+    """Numeric metadata errors fail before replacement or PATH publication."""
+    output = io.BytesIO()
+    with tarfile.open(
+        fileobj=output, mode="w:gz", format=tarfile.PAX_FORMAT
+    ) as archive:
+        if position == "later":
+            archive.addfile(tarfile.TarInfo("LICENSE"), io.BytesIO())
+        member = tarfile.TarInfo("tool")
+        member.size = len(_BODY)
+        member.pax_headers = {
+            "GNU.sparse.map": f"0,{len(_BODY)}",
+            "GNU.sparse.realsize": str(len(_BODY)),
+        }
+        member.pax_headers[field] = value
+        archive.addfile(member, io.BytesIO(_BODY))
+    body = output.getvalue()
+    environment = _environment(tmp_path, _archive_pin(body))
+    binary = tmp_path / "runner" / "makeutil-bin" / "makeutil"
+    binary.parent.mkdir(parents=True)
+    binary.write_bytes(b"previous executable")
+    binary.chmod(0o751)
+    original_mode = binary.stat().st_mode
+    github_path = tmp_path / "github_path"
+    github_path.write_text("existing PATH entry\n")
+
+    status = installer.run("makeutil", environment, _serving(body, []))
+
+    assert status == 1, "malformed sparse metadata must become a failing status"
+    assert binary.read_bytes() == b"previous executable", "old bytes must survive"
+    assert binary.stat().st_mode == original_mode, "old executable mode must survive"
+    assert list(binary.parent.iterdir()) == [binary], "no staging file may remain"
+    assert github_path.read_text() == "existing PATH entry\n", (
+        "PATH must not be appended"
+    )
 
 
 @pytest.mark.parametrize(
@@ -487,6 +544,64 @@ def test_failed_staging_preserves_previous_binary(
     assert binary.read_bytes() == b"previous binary", "old bytes must survive"
     assert list(binary.parent.iterdir()) == [binary], "staging debris must be removed"
     assert not (tmp_path / "github_path").exists(), "PATH must not be published"
+
+
+def test_failed_staging_and_cleanup_preserve_primary_diagnostic(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Cleanup failure adds context without replacing the staging diagnostic."""
+    binary = tmp_path / "runner" / "makeutil-bin" / "makeutil"
+    binary.parent.mkdir(parents=True)
+    binary.write_bytes(b"previous executable")
+    binary.chmod(0o751)
+    original_mode = binary.stat().st_mode
+    github_path = tmp_path / "github_path"
+    github_path.write_text("existing PATH entry\n")
+    cleanup_attempts: list[Path] = []
+    original_replace = Path.replace
+    original_unlink = Path.unlink
+
+    def refuse_replacement(path: Path, target: Path) -> Path:
+        if path.parent == binary.parent and path != binary:
+            message = "primary replacement failure"
+            raise OSError(message)
+        return original_replace(path, target)
+
+    def refuse_staged_cleanup(path: Path, *, missing_ok: bool = False) -> None:
+        if path.parent == binary.parent and path != binary:
+            cleanup_attempts.append(path)
+            message = "secondary cleanup failure"
+            raise OSError(message)
+        original_unlink(path, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Path, "replace", refuse_replacement)
+    monkeypatch.setattr(Path, "unlink", refuse_staged_cleanup)
+    status = installer.run(
+        "makeutil", _environment(tmp_path, _pin()), _serving(_BODY, [])
+    )
+    diagnostic = capsys.readouterr().err
+
+    assert status == 1, "combined staging and cleanup failures must fail the command"
+    assert (
+        "could not install release binary: primary replacement failure" in diagnostic
+    ), "the primary staging diagnostic must be retained"
+    assert "could not remove staged binary: secondary cleanup failure" in diagnostic, (
+        "the secondary cleanup diagnostic must be reported"
+    )
+    assert "staging file may remain:" in diagnostic, (
+        "cleanup failure must disclose debris"
+    )
+    assert len(cleanup_attempts) == 1, (
+        "cleanup must be attempted once for the staged file"
+    )
+    assert binary.read_bytes() == b"previous executable", "old bytes must survive"
+    assert binary.stat().st_mode == original_mode, "old executable mode must survive"
+    assert set(binary.parent.iterdir()) == {binary, *cleanup_attempts}, (
+        "only the existing binary and the unremovable staged file may remain"
+    )
+    assert github_path.read_text() == "existing PATH entry\n", (
+        "failed staging must not append to PATH"
+    )
 
 
 def test_failed_path_publication_returns_failure(tmp_path: Path) -> None:

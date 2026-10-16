@@ -257,7 +257,9 @@ def _read_archive(body: bytes, approved: ArchiveMember) -> bytes:
             members = _validated_archive_members(archive)
             member = _select_archive_member(members, approved)
             binary = _read_member_bytes(archive, member, approved)
-    except (tarfile.TarError, OSError, EOFError, zlib.error) as error:
+    # Numeric PAX sparse metadata can raise ValueError during either opening
+    # the first member or traversing the remaining archive members.
+    except (tarfile.TarError, OSError, EOFError, zlib.error, ValueError) as error:
         message = f"could not read release archive: {error}"
         raise InstallError(message) from error
     if len(binary) != approved.size:
@@ -347,7 +349,7 @@ def _read_member_bytes(
 
 
 def _stage_binary(body: bytes, destination: Path) -> None:
-    """Atomically replace a binary and remove staging files on every failure.
+    """Atomically replace a binary and attempt cleanup on every failure.
 
     Raises
     ------
@@ -355,6 +357,7 @@ def _stage_binary(body: bytes, destination: Path) -> None:
         If the executable cannot be staged or installed.
     """
     staged_path: Path | None = None
+    primary_error: OSError | None = None
     try:
         destination.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile(
@@ -365,15 +368,25 @@ def _stage_binary(body: bytes, destination: Path) -> None:
         staged_path.chmod(0o755)
         staged_path.replace(destination)
     except OSError as error:
-        message = f"could not install release binary: {error}"
-        raise InstallError(message) from error
+        primary_error = error
     finally:
         if staged_path is not None:
             try:
                 staged_path.unlink(missing_ok=True)
             except OSError as error:
-                message = f"could not remove staged binary: {error}"
+                message = (
+                    f"could not remove staged binary: {error}; "
+                    f"staging file may remain: {staged_path}"
+                )
+                if primary_error is not None:
+                    message = (
+                        f"could not install release binary: {primary_error}; {message}"
+                    )
+                    raise InstallError(message) from primary_error
                 raise InstallError(message) from error
+    if primary_error is not None:
+        message = f"could not install release binary: {primary_error}"
+        raise InstallError(message) from primary_error
 
 
 def publish_path(directory: Path, github_path: Path) -> None:
