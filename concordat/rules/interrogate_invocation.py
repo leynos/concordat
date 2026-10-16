@@ -369,17 +369,18 @@ _GATE_FORBIDDEN_FLAGS: typ.Final = frozenset({
     "--offline",
 })
 _GATE_FORBIDDEN_PREFIXES: typ.Final = ("--refresh", "--upgrade", "--reinstall")
-_GATE_FORBIDDEN_SHORT: typ.Final = "UPn"
+_GATE_FORBIDDEN_SHORT: typ.Final = frozenset("UPn")
+_GATE_FORBIDDEN_SHORT_PREFIXES: typ.Final = tuple(
+    f"-{flag}" for flag in sorted(_GATE_FORBIDDEN_SHORT)
+)
 
 
 def _gate_short_flag_is_forbidden(name: str) -> bool:
     """Mirror the canon's short-alias and alphabetic-cluster refusal."""
-    if name[:1] != "-" or name[1:2] in {"", "-"}:
-        return False
     letters = name[1:]
-    return letters[0] in _GATE_FORBIDDEN_SHORT or (
-        letters.isalpha() and any(flag in _GATE_FORBIDDEN_SHORT for flag in letters)
-    )
+    if letters.isalpha():
+        return name.startswith("-") and not _GATE_FORBIDDEN_SHORT.isdisjoint(letters)
+    return name.startswith(_GATE_FORBIDDEN_SHORT_PREFIXES)
 
 
 def _gate_flag_is_forbidden(argument: str) -> bool:
