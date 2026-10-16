@@ -7,7 +7,9 @@ import pathlib
 import subprocess
 import tempfile
 import typing as typ
+from contextlib import contextmanager
 
+from concordat.errors import OperationalRuleError
 from concordat.rules import runner
 
 if typ.TYPE_CHECKING:
@@ -36,14 +38,15 @@ def invoke_root_rust_policy_batch(
     filename therefore remains the case identity, and incomplete or ambiguous
     output fails closed instead of turning into a clean policy result.
 
-    An ``OperationalRuleError`` reports empty inputs; Conftest that cannot run
-    (including a missing executable or timeout); missing or ambiguous output;
-    or an exit status inconsistent with reported policy findings. Shape and
-    decoding errors begin ``conftest produced no usable output`` and include
+    An ``OperationalRuleError`` reports empty inputs; failures to create, write,
+    or clean up temporary storage; Conftest that cannot run (including a
+    missing executable or timeout); missing or ambiguous output; or an exit
+    status inconsistent with reported policy findings. Storage failures and
+    process lookup, timeout, and JSON-decoding failures retain their original
+    cause. Shape errors begin ``conftest produced no usable output`` and include
     their reason and relevant detail. A non-policy exit code reports
     ``conftest exited <code> without evaluating the policy`` and may include
-    more detail. Process lookup, timeout, and JSON-decoding failures retain
-    their original cause.
+    more detail.
 
     Returns
     -------
@@ -56,7 +59,7 @@ def invoke_root_rust_policy_batch(
         )
         raise shape_error
 
-    with tempfile.TemporaryDirectory(prefix="concordat-rust-policy-") as scratch:
+    with _root_policy_batch_directory() as scratch:
         filenames, input_paths = _write_batch_envelopes(
             pathlib.Path(scratch), envelopes
         )
@@ -67,6 +70,36 @@ def invoke_root_rust_policy_batch(
         return matched_results
 
 
+@contextmanager
+def _root_policy_batch_directory() -> cabc.Iterator[str]:
+    """Create and clean temporary storage for one root-policy batch."""
+    prefix = "concordat-rust-policy-"
+    try:
+        scratch = tempfile.TemporaryDirectory(prefix=prefix)
+    except OSError as error:
+        message = "could not create temporary directory for root Rust-policy batch"
+        raise OperationalRuleError(
+            message,
+            operation="create-batch-directory",
+            tool="conftest",
+            resource=prefix,
+        ) from error
+
+    try:
+        yield scratch.name
+    finally:
+        try:
+            scratch.cleanup()
+        except OSError as error:
+            message = "could not clean up root Rust-policy batch directory"
+            raise OperationalRuleError(
+                message,
+                operation="cleanup-batch-directory",
+                tool="conftest",
+                resource=scratch.name,
+            ) from error
+
+
 def _write_batch_envelopes(
     scratch_dir: pathlib.Path, envelopes: cabc.Sequence[dict[str, object]]
 ) -> tuple[list[str], list[pathlib.Path]]:
@@ -74,7 +107,17 @@ def _write_batch_envelopes(
     filenames = runner._envelope_file_names(len(envelopes))
     input_paths = [scratch_dir / filename for filename in filenames]
     for path, envelope in zip(input_paths, envelopes, strict=True):
-        path.write_text(json.dumps(envelope), encoding="utf-8")
+        contents = json.dumps(envelope)
+        try:
+            path.write_text(contents, encoding="utf-8")
+        except OSError as error:
+            message = "could not write root Rust-policy envelope"
+            raise OperationalRuleError(
+                message,
+                operation="write-batch-envelope",
+                tool="conftest",
+                resource=path,
+            ) from error
     return filenames, input_paths
 
 
