@@ -20,6 +20,11 @@ which the workflow sets at job level:
     MAKEUTIL_RELEASES=https://github.com/leynos/makeutil/releases/download
     uv run scripts/install_release_binary.py install makeutil
 
+For a tar.gz asset, also set ``<TOOL>_ARCHIVE_FORMAT=tar.gz``,
+``<TOOL>_ARCHIVE_MEMBER`` to its exact ordinary-file name, and
+``<TOOL>_ARCHIVE_MEMBER_SIZE`` to its exact positive byte length. The archive
+hash is verified before parsing; only the selected bytes are ever staged.
+
 The binary lands in ``$RUNNER_TEMP/<tool>-bin`` and that directory is appended
 to the file named by ``GITHUB_PATH``, as GitHub Actions expects.
 """
@@ -28,13 +33,16 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import io
 import os
 import sys
+import tarfile
 import tempfile
 import typing as typ
 import urllib.error
 import urllib.request
-from pathlib import Path
+import zlib
+from pathlib import Path, PurePosixPath
 
 from cyclopts import App
 
@@ -52,12 +60,70 @@ class InstallError(RuntimeError):
     """The release binary could not be installed as pinned."""
 
 
+def _validate_member_name(name: str) -> None:
+    """Refuse non-canonical archive paths before selecting any member."""
+    parts = name.split("/")
+    if (
+        not name
+        or PurePosixPath(name).is_absolute()
+        or any(part in {"", ".", ".."} for part in parts)
+        or "\\" in name
+        or ":" in name
+    ):
+        message = f"unsafe archive member name: {name!r}"
+        raise InstallError(message)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class ArchiveMember:
+    """The exact ordinary member and byte length approved by a release pin."""
+
+    name: str
+    size: int
+
+    @classmethod
+    def from_environment(
+        cls, prefix: str, environment: cabc.Mapping[str, str]
+    ) -> ArchiveMember | None:
+        """Read an optional complete tar.gz contract, leaving raw pins unchanged.
+
+        Returns
+        -------
+        ArchiveMember | None
+            The approved member, or None when all archive fields are absent.
+
+        Raises
+        ------
+        InstallError
+            If archive fields are incomplete, unsupported or unsafe.
+        """
+        names = ("ARCHIVE_FORMAT", "ARCHIVE_MEMBER", "ARCHIVE_MEMBER_SIZE")
+        if not any(f"{prefix}_{name}" in environment for name in names):
+            return None
+        values = [environment.get(f"{prefix}_{name}", "") for name in names]
+        archive_format, member, size_text = values
+        if archive_format != "tar.gz":
+            message = "archive format must be explicitly tar.gz"
+            raise InstallError(message)
+        _validate_member_name(member)
+        try:
+            size = int(size_text)
+        except ValueError as error:
+            message = "archive member size must be a positive integer"
+            raise InstallError(message) from error
+        if size <= 0:
+            message = "archive member size must be a positive integer"
+            raise InstallError(message)
+        return cls(member, size)
+
+
 @dataclasses.dataclass(frozen=True, slots=True)
 class ReleaseAsset:
     """One pinned release asset: where it is and what it must hash to."""
 
     url: str
     sha256: str
+    archive: ArchiveMember | None = None
 
     @classmethod
     def from_environment(
@@ -91,7 +157,11 @@ class ReleaseAsset:
             message = f"release pin incomplete; unset: {', '.join(missing)}"
             raise InstallError(message)
         url = f"{values['RELEASES']}/v{values['VERSION']}/{values['ASSET']}"
-        return cls(url=url, sha256=values["SHA256"].lower())
+        return cls(
+            url=url,
+            sha256=values["SHA256"].lower(),
+            archive=ArchiveMember.from_environment(prefix, environment),
+        )
 
 
 def fetch_https(url: str) -> bytes:
@@ -145,19 +215,96 @@ def install_release(
             f"digest mismatch for {asset.url}: expected {asset.sha256}, got {actual}"
         )
         raise InstallError(message)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(dir=destination.parent, delete=False) as staged:
-        staged.write(body)
-    staged_path = Path(staged.name)
-    staged_path.chmod(0o755)
-    staged_path.replace(destination)
+    binary = body if asset.archive is None else _read_archive(body, asset.archive)
+    _stage_binary(binary, destination)
     return destination
+
+
+def _read_archive(body: bytes, approved: ArchiveMember) -> bytes:
+    """Read one exact-size ordinary member without extracting an archive tree.
+
+    Returns
+    -------
+    bytes
+        The authenticated selected executable's bytes.
+
+    Raises
+    ------
+    InstallError
+        If archive contents, names, member type or byte length are invalid.
+    """
+    try:
+        with tarfile.open(fileobj=io.BytesIO(body), mode="r:gz") as archive:
+            members = archive.getmembers()
+            for member in members:
+                _validate_member_name(member.name)
+                if (
+                    member.type not in {tarfile.REGTYPE, tarfile.AREGTYPE}
+                    or member.sparse is not None
+                ):
+                    message = f"archive member is not an ordinary file: {member.name}"
+                    raise InstallError(message)
+            selected = [member for member in members if member.name == approved.name]
+            if len(selected) != 1:
+                message = "archive must contain exactly one approved member"
+                raise InstallError(message)
+            member = selected[0]
+            if member.size != approved.size:
+                message = "archive member size differs from its pin"
+                raise InstallError(message)
+            stream = archive.extractfile(member)
+            if stream is None:
+                message = "archive member has no ordinary file contents"
+                raise InstallError(message)
+            with stream:
+                binary = stream.read(approved.size + 1)
+    except (tarfile.TarError, OSError, EOFError, zlib.error) as error:
+        message = f"could not read release archive: {error}"
+        raise InstallError(message) from error
+    if len(binary) != approved.size:
+        message = "archive member bytes differ from their pinned length"
+        raise InstallError(message)
+    return binary
+
+
+def _stage_binary(body: bytes, destination: Path) -> None:
+    """Atomically replace a binary and remove staging files on every failure.
+
+    Raises
+    ------
+    InstallError
+        If the executable cannot be staged or installed.
+    """
+    staged_path: Path | None = None
+    try:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            dir=destination.parent, delete=False
+        ) as staged:
+            staged_path = Path(staged.name)
+            staged.write(body)
+        staged_path.chmod(0o755)
+        staged_path.replace(destination)
+    except OSError as error:
+        message = f"could not install release binary: {error}"
+        raise InstallError(message) from error
+    finally:
+        if staged_path is not None:
+            try:
+                staged_path.unlink(missing_ok=True)
+            except OSError as error:
+                message = f"could not remove staged binary: {error}"
+                raise InstallError(message) from error
 
 
 def publish_path(directory: Path, github_path: Path) -> None:
     """Append ``directory`` to the file GitHub Actions reads `PATH` entries from."""
-    with github_path.open("a", encoding="utf-8") as path_file:
-        path_file.write(f"{directory}\n")
+    try:
+        with github_path.open("a", encoding="utf-8") as path_file:
+            path_file.write(f"{directory}\n")
+    except OSError as error:
+        message = f"could not publish installed binary directory: {error}"
+        raise InstallError(message) from error
 
 
 def _runner_paths(environment: cabc.Mapping[str, str]) -> tuple[Path, Path]:
