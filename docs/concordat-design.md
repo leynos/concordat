@@ -2480,14 +2480,23 @@ the `uv-gate-baseline` rule package.
   patterns are matched. `include`, a recovered parse, an unresolvable tool
   variable, or an undecodable workflow, action, or `pyproject.toml` is
   indeterminate.
-- **Pins and the spelling baseline:** UV-006 accepts a release tag for the
+- **Pins and the spelling baseline:** UV-006 accepts a release tag only for
   repositories in `release_tag_tools`, which lists typos-config-builder, because
   `spelling-config-baseline` (PD-007) requires a release tag there and rejects
-  the commit form. The floor stays with that rule. The tag is accepted only for
-  a direct `uvx` or `uv tool run`, which UV-003 does not call a bypass, because
-  the helper refuses any Git spec that is not a full commit. Every other Git
-  tool, such as df12-python-lints, needs a full commit; no rule requires a tag
-  for it.
+  the commit form. For PD-007, a bare release pin may include or omit the `v`
+  prefix, and the same release may use one anchored `refs/tags/` prefix. The
+  policy removes only that prefix before parsing the release and uses the
+  normalized release both for the floor comparison and for selecting the
+  matching published AGENTS.md block. The `builder_floor` and
+  `agents_md_blocks` keys remain release-only values, without a Git ref
+  namespace. Branch refs, nested namespaces, malformed refs, commit SHAs,
+  trailing path components, and prerelease or build suffixes are not releases.
+  For UV-006, the listed tool's tag must include `v` and may be bare or under
+  `refs/tags/`; the exception applies only to a direct `uvx` or `uv tool run`,
+  which UV-003 does not call a bypass. A tag routed through the canonical
+  helper remains refused, because the helper requires a full commit. Every
+  other Git tool, such as df12-python-lints, needs a full commit; no rule
+  requires a tag for it.
 - **Actuators:** none yet; the package ships audit-only, and each migration
   pull request uses it as its proof of compliance.
 

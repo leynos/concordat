@@ -201,7 +201,7 @@ artifacts:
       Audit-only PD-007 to PD-013 policy holding the spelling gate to one
       pinned typos-config-builder gate with no legacy machinery, and
       AGENTS.md to the builder's published spelling block.
-    sha256: f90ca770936f9cb022b16bb03fa1649fc51fdfaca75754cb316bbc819d18cfdd
+    sha256: 053adc3e22ddac01f2930f921c46544df7041cfe778de08548cb453ae964af16
   - id: lint-rule-spelling-config-baseline-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/spelling-config-baseline/rule.yaml
@@ -251,7 +251,7 @@ artifacts:
       Audit-only UV-001 to UV-007 policy holding a checkout to reaching uv
       through the vendored uv_gate helper, with no cache override, bypassing
       recipe, unpinned tool, or unpinned Git dependency.
-    sha256: b90759131d2024f54c46740a8d2b8a2bc92ef6fa667b754b8949a1cb5c2ca554
+    sha256: 44640c7e569705f79800473ef33ed0d6ca77ad2aa46c5f4ac1cb652c3c243e70
   - id: lint-rule-uv-gate-baseline-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/uv-gate-baseline/rule.yaml

@@ -84,10 +84,11 @@ def given_no_setup(spelling_checkout: pathlib.Path) -> None:
 
 
 @given("a checkout whose spelling target runs the pinned gate")
-def given_pinned_gate(spelling_checkout: pathlib.Path) -> None:
-    """Write the canonical gate at the floor release."""
+@given(parsers.parse('a checkout whose spelling target pins "{release}"'))
+def given_pinned_gate(spelling_checkout: pathlib.Path, release: str = "v0.1.3") -> None:
+    """Write a release pin; explicit tag refs retain the same gate behaviour."""
     _write_setup(
-        spelling_checkout, _GATE_MAKEFILE.format(builder=_BUILDER, release="v0.1.3")
+        spelling_checkout, _GATE_MAKEFILE.format(builder=_BUILDER, release=release)
     )
 
 
