@@ -1180,12 +1180,15 @@ Archive entries must have canonical relative names and ordinary-file types;
 links, directories, devices, ambiguous paths, missing or duplicate selected
 members, and malformed archives fail closed. No archive tree is extracted.
 Verified bytes are staged beside the destination, made executable and
-atomically renamed; failed replacements preserve the previous executable.
-Staging files are removed on failure. `GITHUB_PATH` is updated only after
-installation succeeds, and installation or publication errors return a failing
-command status. Further repository CI binary consumers may reuse this boundary
-with reviewed release pins; new archive formats require their own explicit
-contract and tests.
+atomically renamed; failed replacements preserve the previous executable. When
+a staging path exists after a failure, cleanup is attempted. If cleanup also
+fails, the diagnostic reports the cleanup error alongside any original staging
+error, retaining the original error as the primary cause when present; the
+staging file may remain. `GITHUB_PATH` is updated only after installation
+succeeds, and installation or publication errors return a failing command
+status. Further repository CI binary consumers may reuse this boundary with
+reviewed release pins; new archive formats require their own explicit contract
+and tests.
 
 ### Tool dependencies
 
