@@ -1,4 +1,4 @@
-"""Run every canon lint-rule package's own Rego suite.
+"""Run the root Rust policy and every canon lint-rule package's Rego suite.
 
 Each rule package ships a Conftest/Rego test file beside its policy, and those
 tests are where a clause's semantics are actually pinned. Until this module
@@ -56,6 +56,26 @@ def test_the_package_policy_suite_passes(package: pathlib.Path) -> None:
             str(package / "policy"),
             "--data",
             str(package / "fixtures" / "data.json"),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=CONFTEST_TIMEOUT,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
+def test_the_root_rust_policy_suite_passes() -> None:
+    """Compile and execute root Rust tests through the binding Python gate."""
+    policy_dir = RULE_PACKAGES_DIR.parent / "policies" / "rust"
+    assert (policy_dir / "lints_policy.rego").is_file()
+    assert (policy_dir / "lints_policy_test.rego").is_file()
+    completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed argv, no shell
+        [  # ruff: ignore[start-process-with-partial-path] - resolved from PATH, as the runner resolves it
+            "conftest",
+            "verify",
+            "--policy",
+            str(policy_dir),
         ],
         capture_output=True,
         text=True,

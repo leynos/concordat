@@ -39,6 +39,23 @@ members are judged where `.concordat` declares them under
 `language.rust.surfaces`. RT-006 (a nightly within a year) remains until RT-023
 is live across the estate; a later release retires it.
 
+## Rust policy seed adoption
+
+Repositories adopting the Rust policy seeds should select a merged Concordat
+commit containing them. Copy the Clippy configuration into each applicable
+Cargo root and add only documented local settings. Retain its seven environment
+and current-directory method restrictions, and keep `disallowed_methods` denied
+by the binding Clippy gate. Keep a production environment reader and
+base-directory seam, inject stubs in tests, and do not replace a lossless
+`OsString` adapter with Unicode-only lookup. Adapt the Dependabot seed to the
+actual ecosystems and directories, including every Cargo root and local action
+directory. Preserve the daily cadence and final minor-and-patch catch-all.
+
+Reconcile label names, descriptions, and colours against the dated label
+snapshot, preserving unrelated labels. See the
+[users' guide](users-guide.md#syncing-canonical-platform-standards-artefacts)
+for adoption details. Repositories that do not adopt these seeds need no action.
+
 ## Proposed rust-build-defaults rule-package 0.2.1 update
 
 The proposed 0.2.1 update refines BD-003 for build-wide and target-local

@@ -14,6 +14,7 @@ from __future__ import annotations
 import dataclasses
 import typing as typ
 
+import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
@@ -136,6 +137,7 @@ def _environment_findings(case: WorkflowCase) -> set[str]:
     }
 
 
+@pytest.mark.timeout(120)
 @settings(max_examples=60, deadline=None)
 @given(case=_WORKFLOWS)
 def test_the_environment_clause_matches_the_generated_jobs(case: WorkflowCase) -> None:

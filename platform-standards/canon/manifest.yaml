@@ -41,6 +41,27 @@ artifacts:
     description: >
       Canonical Ruff configuration consumed by Python repositories.
     sha256: 8ed7b7057afc93a72478285b92ae90c3749652a5ea1c78c2defaafc2809fd933
+  - id: rust-clippy-config
+    type: lint-config
+    path: platform-standards/canon/lint/rust/clippy.toml
+    description: >
+      Canonical Clippy thresholds and disallowed ambient environment methods
+      for Rust consumer repositories.
+    sha256: 151c3724d66edabc110386887482e32c4fe9ba5262a420c9a268c977f3948308
+  - id: rust-dependabot-template
+    type: dependency-template
+    path: platform-standards/canon/dependabot/rust-dependabot.yml
+    description: >
+      Rust Dependabot seed; consumers enumerate their actual ecosystems and
+      directories before use.
+    sha256: 46743fbce385217b95e13b6a62214362068a0ce9f822ccbbca08c8c83210b617
+  - id: repository-label-model
+    type: label-model
+    path: platform-standards/canon/labels/repository-labels.yaml
+    description: >
+      Dated GitHub label metadata snapshot for idempotent consumer
+      reconciliation without deleting unrelated labels.
+    sha256: f61251fd6225efef7fb397e3c1207185dc90d9b0083ec5a9e83301732af057d9
   - id: make-include
     type: build-template
     path: platform-standards/canon/make/includes.mk
@@ -58,7 +79,7 @@ artifacts:
     path: platform-standards/canon/policies/rust/lints_policy.rego
     description: >
       OPA policy enforcing the canonical clippy/rust/rustdoc lint baselines.
-    sha256: 9fe70ddd21e4fccaa3d7724c1b855e9ed7886fc7dc27b1fcd78e197924368862
+    sha256: b4908ca9ba623dbd171cc2a074522dd945e07e2123c6a868012252aba8dd690e
   - id: policy-opentofu-enrolment
     type: opa-policy
     path: platform-standards/canon/policies/opentofu/enrolment_policy.rego

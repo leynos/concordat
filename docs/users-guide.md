@@ -219,6 +219,37 @@ Concordat ships a `platform-standards/` template tree. The canonical files under
 `platform-standards/canon/manifest.yaml` by a stable `id`, a `path`, and a
 sha256 digest (a content-derived version).
 
+The Rust policy seeds include `lint/rust/clippy.toml`,
+`dependabot/rust-dependabot.yml`, and `labels/repository-labels.yaml`. Select a
+merged Concordat commit when adopting them; a source repository or an open pull
+request is not a version. The Clippy method list and initial Dependabot shape
+were derived from Netsuke commit `924cb215d3841048dbf6649767a510d2a5dfb1b7`, as
+approved in Concordat issue #157. The Dependabot seed uses the current DB-005
+daily and minor-and-patch grouping contract, so it deliberately differs from
+that older Netsuke file's weekly entries. The label file records its live API
+observation time and response hash; it is a dated snapshot, not a claim about
+future API state.
+
+Copy the Clippy configuration into each applicable Cargo root, then add only
+documented repository-specific settings. Keep the seven environment and
+current-directory disallowed methods: production code should receive an
+environment reader and a base-directory seam, while tests should inject a stub.
+A lossless native `OsString` adapter is a distinct policy boundary; issue #157
+tracks the unresolved exception decision for adapters that cannot preserve
+native values through the available injection API. Do not replace such a reader
+with a Unicode-only lookup merely to satisfy the lint.
+
+Use the Dependabot file as a seed, then enumerate the repository's actual
+ecosystems and directories. Add every Cargo root, every local action directory
+holding an action manifest, and other ecosystems such as `uv`, `gomod`, or
+`opentofu` where present. Remove inapplicable entries. Preserve the DB-005
+daily cadence and final minor-and-patch catch-all on every entry; add a narrow
+earlier group only for a dependency family that must update together. Create
+the dependency and ecosystem labels before using them in Dependabot. Reconcile
+label names, descriptions, and colours idempotently against the selected label
+snapshot, preserving unrelated repository labels. The separate priority model
+and its future Projects synchronization remain under roadmap section 3.
+
 Use `scripts/canon_artifacts.py` to compare a published platform-standards
 checkout against the template and optionally copy missing/outdated artefacts.
 

@@ -8,6 +8,7 @@ canonical_clippy_lints := {
   "allow_attributes_without_reason": "deny",
   "blanket_clippy_restriction_lints": "deny",
   "cognitive_complexity": "deny",
+  "disallowed_methods": "deny",
   "needless_pass_by_value": "deny",
   "implicit_hasher": "deny",
   "dbg_macro": "deny",
@@ -96,15 +97,21 @@ clippy_cfg := {
   "too-many-lines-threshold": 70,
   "excessive-nesting-threshold": 4,
   "allow-expect-in-tests": true,
+  "disallowed-methods": [
+    {"path": "std::env::var", "reason": "inject an environment reader"},
+    {"path": "std::env::var_os", "reason": "inject an environment reader"},
+    {"path": "std::env::vars", "reason": "inject an environment reader"},
+    {"path": "std::env::vars_os", "reason": "inject an environment reader"},
+    {"path": "std::env::set_var", "reason": "use a stub environment in tests"},
+    {"path": "std::env::remove_var", "reason": "use a stub environment in tests"},
+    {
+      "path": "std::env::set_current_dir",
+      "reason": "inject a base-directory seam; confine CWD changes to Command::current_dir",
+    },
+  ],
 }
 
-bad_clippy_cfg := {
-  "cognitive-complexity-threshold": 9,
-  "too-many-arguments-threshold": 6,
-  "too-many-lines-threshold": 70,
-  "excessive-nesting-threshold": 4,
-  "allow-expect-in-tests": true,
-}
+bad_clippy_cfg := object.union(clippy_cfg, {"too-many-arguments-threshold": 6})
 
 test_workspace_manifest_passes if {
   result := data.canon.rust.lints.deny with input as {
@@ -143,4 +150,255 @@ test_missing_clippy_config_is_rejected if {
     "cargo": workspace_manifest,
   }
   result[_] == "clippy.toml must exist when Cargo.toml is present"
+}
+
+test_missing_disallowed_methods_is_rejected if {
+  result := data.canon.rust.lints.deny with input as {
+    "cargo": workspace_manifest,
+    "clippy": object.remove(clippy_cfg, ["disallowed-methods"]),
+  }
+  result[_] == "clippy.toml disallowed-methods must define the seven approved std::env entries"
+}
+
+test_non_array_disallowed_methods_is_rejected if {
+  result := data.canon.rust.lints.deny with input as {
+    "cargo": workspace_manifest,
+    "clippy": object.union(clippy_cfg, {
+      "disallowed-methods": {
+        "path": "std::env::var",
+        "reason": "inject an environment reader",
+      },
+    }),
+  }
+  result == {"clippy.toml disallowed-methods must be an array"}
+}
+
+test_missing_environment_method_is_rejected if {
+  result := data.canon.rust.lints.deny with input as {
+    "cargo": workspace_manifest,
+    "clippy": object.union(clippy_cfg, {
+      "disallowed-methods": [
+        method |
+        some method in clippy_cfg["disallowed-methods"]
+        method.path != "std::env::var_os"
+      ],
+    }),
+  }
+  expected_message := sprintf(
+    "clippy.toml disallowed-methods must include %s with reason %q",
+    ["std::env::var_os", "inject an environment reader"],
+  )
+  result[_] == expected_message
+}
+
+test_each_missing_canonical_disallowed_method_is_rejected if {
+  count(clippy_cfg["disallowed-methods"]) == 7
+  every expected in clippy_cfg["disallowed-methods"] {
+    method_path := expected.path
+    result := data.canon.rust.lints.deny with input as {
+      "cargo": workspace_manifest,
+      "clippy": object.union(clippy_cfg, {
+        "disallowed-methods": [
+          method |
+          some method in clippy_cfg["disallowed-methods"]
+          method.path != method_path
+        ],
+      }),
+    }
+    expected_message := sprintf(
+      "clippy.toml disallowed-methods must include %s with reason %q",
+      [expected.path, expected.reason],
+    )
+    result == {expected_message}
+  }
+}
+
+test_altered_environment_method_reason_is_rejected if {
+  result := data.canon.rust.lints.deny with input as {
+    "cargo": workspace_manifest,
+    "clippy": object.union(clippy_cfg, {
+      "disallowed-methods": [
+        object.union(method, {"reason": "allow direct environment access"}) |
+        some method in clippy_cfg["disallowed-methods"]
+      ],
+    }),
+  }
+  expected_message := sprintf(
+    "clippy.toml disallowed-methods must include %s with reason %q",
+    ["std::env::var", "inject an environment reader"],
+  )
+  result[_] == expected_message
+}
+
+test_local_disallowed_method_extension_passes if {
+  result := data.canon.rust.lints.deny with input as {
+    "cargo": workspace_manifest,
+    "clippy": object.union(clippy_cfg, {
+      "disallowed-methods": array.concat(clippy_cfg["disallowed-methods"], [
+        {"path": "std::env::current_exe"},
+        "std::env::current_dir",
+      ]),
+    }),
+  }
+  count(result) == 0
+}
+
+test_canonical_method_optional_replacement_passes if {
+  result := data.canon.rust.lints.deny with input as {
+    "cargo": workspace_manifest,
+    "clippy": object.union(clippy_cfg, {
+      "disallowed-methods": array.concat(
+        [
+          object.union(clippy_cfg["disallowed-methods"][0], {
+            "replacement": "test_support::Environment::var",
+            "allow-invalid": true,
+          }),
+        ],
+        array.slice(clippy_cfg["disallowed-methods"], 1, count(clippy_cfg["disallowed-methods"])),
+      ),
+    }),
+  }
+  count(result) == 0
+}
+
+test_non_string_non_object_extension_is_rejected if {
+  result := data.canon.rust.lints.deny with input as {
+    "cargo": workspace_manifest,
+    "clippy": object.union(clippy_cfg, {
+      "disallowed-methods": array.concat(clippy_cfg["disallowed-methods"], [
+        17,
+      ]),
+    }),
+  }
+  result[_] == "clippy.toml disallowed-methods entries must match the Clippy 1.92 schema"
+}
+
+test_extension_with_empty_path_is_rejected if {
+  result := data.canon.rust.lints.deny with input as {
+    "cargo": workspace_manifest,
+    "clippy": object.union(clippy_cfg, {
+      "disallowed-methods": array.concat(clippy_cfg["disallowed-methods"], [
+        {"path": "", "reason": "avoid ambient process lookup"},
+      ]),
+    }),
+  }
+  result[_] == "clippy.toml disallowed-methods entries must match the Clippy 1.92 schema"
+}
+
+test_empty_bare_string_extension_is_rejected if {
+  result := data.canon.rust.lints.deny with input as {
+    "cargo": workspace_manifest,
+    "clippy": object.union(clippy_cfg, {
+      "disallowed-methods": array.concat(clippy_cfg["disallowed-methods"], [""]),
+    }),
+  }
+  result[_] == "clippy.toml disallowed-methods entries must match the Clippy 1.92 schema"
+}
+
+test_numeric_reason_on_extension_is_rejected if {
+  result := data.canon.rust.lints.deny with input as {
+    "cargo": workspace_manifest,
+    "clippy": object.union(clippy_cfg, {
+      "disallowed-methods": array.concat(clippy_cfg["disallowed-methods"], [
+        {"path": "std::env::current_exe", "reason": 7},
+      ]),
+    }),
+  }
+  result[_] == "clippy.toml disallowed-methods entries must match the Clippy 1.92 schema"
+}
+
+test_null_reason_on_extension_is_rejected if {
+  result := data.canon.rust.lints.deny with input as {
+    "cargo": workspace_manifest,
+    "clippy": object.union(clippy_cfg, {
+      "disallowed-methods": array.concat(clippy_cfg["disallowed-methods"], [
+        {"path": "std::env::current_exe", "reason": null},
+      ]),
+    }),
+  }
+  result[_] == "clippy.toml disallowed-methods entries must match the Clippy 1.92 schema"
+}
+
+test_numeric_replacement_on_extension_is_rejected if {
+  result := data.canon.rust.lints.deny with input as {
+    "cargo": workspace_manifest,
+    "clippy": object.union(clippy_cfg, {
+      "disallowed-methods": array.concat(clippy_cfg["disallowed-methods"], [
+        {"path": "std::env::current_exe", "replacement": 7},
+      ]),
+    }),
+  }
+  result[_] == "clippy.toml disallowed-methods entries must match the Clippy 1.92 schema"
+}
+
+test_null_replacement_on_extension_is_rejected if {
+  result := data.canon.rust.lints.deny with input as {
+    "cargo": workspace_manifest,
+    "clippy": object.union(clippy_cfg, {
+      "disallowed-methods": array.concat(clippy_cfg["disallowed-methods"], [
+        {"path": "std::env::current_exe", "replacement": null},
+      ]),
+    }),
+  }
+  result[_] == "clippy.toml disallowed-methods entries must match the Clippy 1.92 schema"
+}
+
+test_string_allow_invalid_on_extension_is_rejected if {
+  result := data.canon.rust.lints.deny with input as {
+    "cargo": workspace_manifest,
+    "clippy": object.union(clippy_cfg, {
+      "disallowed-methods": array.concat(clippy_cfg["disallowed-methods"], [
+        {"path": "std::env::current_exe", "allow-invalid": "true"},
+      ]),
+    }),
+  }
+  result[_] == "clippy.toml disallowed-methods entries must match the Clippy 1.92 schema"
+}
+
+test_null_allow_invalid_on_extension_is_rejected if {
+  result := data.canon.rust.lints.deny with input as {
+    "cargo": workspace_manifest,
+    "clippy": object.union(clippy_cfg, {
+      "disallowed-methods": array.concat(clippy_cfg["disallowed-methods"], [
+        {"path": "std::env::current_exe", "allow-invalid": null},
+      ]),
+    }),
+  }
+  result[_] == "clippy.toml disallowed-methods entries must match the Clippy 1.92 schema"
+}
+
+test_unknown_extension_key_is_rejected if {
+  result := data.canon.rust.lints.deny with input as {
+    "cargo": workspace_manifest,
+    "clippy": object.union(clippy_cfg, {
+      "disallowed-methods": array.concat(clippy_cfg["disallowed-methods"], [
+        {"path": "std::env::current_exe", "local-only": true},
+      ]),
+    }),
+  }
+  result[_] == "clippy.toml disallowed-methods entries must match the Clippy 1.92 schema"
+}
+
+test_duplicate_environment_method_path_is_rejected if {
+  result := data.canon.rust.lints.deny with input as {
+    "cargo": workspace_manifest,
+    "clippy": object.union(clippy_cfg, {
+      "disallowed-methods": array.concat(clippy_cfg["disallowed-methods"], [
+        {"path": "std::env::var", "reason": "a stricter local reason"},
+      ]),
+    }),
+  }
+  result[_] == "clippy.toml disallowed-methods paths must be unique"
+}
+
+test_duplicate_bare_and_table_method_path_is_rejected if {
+  result := data.canon.rust.lints.deny with input as {
+    "cargo": workspace_manifest,
+    "clippy": object.union(clippy_cfg, {
+      "disallowed-methods": array.concat(clippy_cfg["disallowed-methods"], [
+        "std::env::var",
+      ]),
+    }),
+  }
+  result[_] == "clippy.toml disallowed-methods paths must be unique"
 }

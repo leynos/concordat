@@ -2594,6 +2594,15 @@ required, so `clippy::missing_docs_in_private_items` is not used.
   `[lints]` drift; Makefile patches adding missing format and lint wiring;
   file-copy of the canonical Whitaker install step from `canon/` where absent.
 
+The canonical Rust `clippy.toml` seed also fixes the seven disallowed ambient
+environment and current-directory methods approved in issue #157. The Rust lint
+policy compares the parsed method paths and reasons so a threshold-only
+configuration cannot pass. Consumer code normally injects an environment reader
+or explicit base directory. A thin adapter promising lossless native `OsString`
+lookup may need a different boundary; issue #157 retains the exception
+decision, so publishing the method list does not authorize a blanket
+suppression or a lossy Unicode conversion.
+
 ##### Rust toolchain currency (RT-006, RT-007)
 
 Nightly pins rot silently: nothing fails when a `rust-toolchain.toml` nightly
