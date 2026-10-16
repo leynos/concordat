@@ -1,0 +1,331 @@
+"""Test generic release-archive installation behavior."""
+
+from __future__ import annotations
+
+import io
+import os
+import tarfile
+import typing as typ
+import zlib
+from pathlib import Path
+
+import pytest
+
+from scripts import install_release_binary as installer
+from scripts.tests.test_install_release_binary import (
+    _BODY,
+    _environment,
+    _pin,
+    _serving,
+)
+
+
+def _archive(entries: list[tuple[str, bytes, bytes]]) -> bytes:
+    """Build a release-shaped gzip tar without touching the filesystem."""
+    output = io.BytesIO()
+    with tarfile.open(fileobj=output, mode="w:gz") as archive:
+        for name, body, kind in entries:
+            member = tarfile.TarInfo(name)
+            member.type = kind
+            member.size = len(body) if kind == tarfile.REGTYPE else 0
+            member.linkname = (
+                "tool" if kind in {tarfile.SYMTYPE, tarfile.LNKTYPE} else ""
+            )
+            archive.addfile(member, io.BytesIO(body))
+    return output.getvalue()
+
+
+def _archive_pin(body: bytes) -> dict[str, str]:
+    """Pin one exact-size executable member of an authenticated archive."""
+    return {
+        **_pin(body),
+        "MAKEUTIL_ARCHIVE_FORMAT": "tar.gz",
+        "MAKEUTIL_ARCHIVE_MEMBER": "tool",
+        "MAKEUTIL_ARCHIVE_MEMBER_SIZE": str(len(_BODY)),
+    }
+
+
+def test_archive_installs_only_the_named_member(tmp_path: Path) -> None:
+    """A release archive installs executable bytes rather than the tar stream."""
+    body = _archive([
+        ("LICENSE", b"licence", tarfile.REGTYPE),
+        ("tool", _BODY, tarfile.REGTYPE),
+    ])
+    environment = _environment(tmp_path, _archive_pin(body))
+
+    status = installer.run("makeutil", environment, _serving(body, []))
+
+    binary = tmp_path / "runner" / "makeutil-bin" / "makeutil"
+    assert status == 0, "the authenticated named member must install"
+    assert binary.read_bytes() == _BODY, "only member bytes may be installed"
+    assert os.access(binary, os.X_OK), "the selected member must be executable"
+    assert list(binary.parent.iterdir()) == [binary], "other entries must not escape"
+    assert (tmp_path / "github_path").read_text() == f"{binary.parent}\n"
+
+
+@pytest.mark.parametrize(
+    "entries",
+    [
+        pytest.param([], id="missing"),
+        pytest.param([("tool", _BODY, tarfile.REGTYPE)] * 2, id="duplicate"),
+        pytest.param([("../tool", _BODY, tarfile.REGTYPE)], id="traversal"),
+        pytest.param([("/tool", _BODY, tarfile.REGTYPE)], id="absolute"),
+        pytest.param([("./tool", _BODY, tarfile.REGTYPE)], id="ambiguous-dot"),
+        pytest.param([("a//tool", _BODY, tarfile.REGTYPE)], id="empty-component"),
+        pytest.param([("tool", b"", tarfile.SYMTYPE)], id="symbolic-link"),
+        pytest.param([("tool", b"", tarfile.LNKTYPE)], id="hard-link"),
+        pytest.param([("tool", b"", tarfile.DIRTYPE)], id="directory"),
+        pytest.param([("tool", b"", tarfile.CHRTYPE)], id="device"),
+        pytest.param([("tool", b"", tarfile.FIFOTYPE)], id="fifo"),
+        pytest.param([("tool", _BODY + b"excess", tarfile.REGTYPE)], id="too-large"),
+        pytest.param([("tool", _BODY[:-1], tarfile.REGTYPE)], id="too-small"),
+    ],
+)
+def test_unsafe_archive_preserves_installed_binary(
+    tmp_path: Path, entries: list[tuple[str, bytes, bytes]]
+) -> None:
+    """A refused replacement leaves the previous executable and PATH untouched."""
+    body = _archive(entries)
+    environment = _environment(tmp_path, _archive_pin(body))
+    binary = tmp_path / "runner" / "makeutil-bin" / "makeutil"
+    binary.parent.mkdir(parents=True)
+    binary.write_bytes(b"previous binary")
+
+    status = installer.run("makeutil", environment, _serving(body, []))
+
+    assert status == 1, "unsafe archive input must refuse the installation"
+    assert binary.read_bytes() == b"previous binary", "replacement must be atomic"
+    assert list(binary.parent.iterdir()) == [binary], "no staging file may remain"
+    assert not (tmp_path / "github_path").exists(), "PATH must not be published"
+
+
+def _late_corrupt_archive() -> bytes:
+    """Place invalid deflate after a complete tar header and decoded block.
+
+    The first non-final stored deflate block contains a tar header declaring
+    16384 bytes. A reserved block type follows its 8192 decoded bytes. This
+    corpus specifies controlled rejection, not which library path detects it.
+
+    Returns
+    -------
+    bytes
+        A gzip stream with a complete initial tar header and invalid deflate data.
+    """
+    member = tarfile.TarInfo("tool")
+    member.size = 16384
+    decoded = member.tobuf() + b"\x00" * (8192 - 512)
+    gzip_header = b"\x1f\x8b\x08\x00" + b"\x00" * 6
+    stored_block = b"\x00\x00\x20\xff\xdf" + decoded
+    return gzip_header + stored_block + b"\x07" + b"\x00" * 8
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        b"not gzip",
+        b"\x1f\x8btruncated",
+        pytest.param(
+            b"\x1f\x8b\x08\x00" + b"\x00" * 6 + b"\x07" + b"\x00" * 8,
+            id="corrupt-deflate",
+        ),
+        pytest.param(_late_corrupt_archive(), id="late-corrupt-deflate"),
+    ],
+)
+def test_malformed_archive_returns_failure(tmp_path: Path, body: bytes) -> None:
+    """Authenticated malformed bytes are still refused before installation."""
+    status = installer.run(
+        "makeutil", _environment(tmp_path, _archive_pin(body)), _serving(body, [])
+    )
+    assert status == 1, "malformed archive errors must become a failing status"
+    assert not (tmp_path / "runner").exists(), "no executable may be staged"
+    assert not (tmp_path / "github_path").exists(), "PATH must not be published"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("ARCHIVE_FORMAT", "zip"),
+        ("ARCHIVE_FORMAT", ""),
+        ("ARCHIVE_MEMBER", ""),
+        ("ARCHIVE_MEMBER", "../tool"),
+        ("ARCHIVE_MEMBER", "/tool"),
+        ("ARCHIVE_MEMBER", "./tool"),
+        ("ARCHIVE_MEMBER_SIZE", ""),
+        ("ARCHIVE_MEMBER_SIZE", "0"),
+        ("ARCHIVE_MEMBER_SIZE", "-1"),
+        ("ARCHIVE_MEMBER_SIZE", "1.5"),
+    ],
+)
+def test_invalid_archive_pin_is_refused_before_download(
+    tmp_path: Path, field: str, value: str
+) -> None:
+    """An archive requires an explicit supported format, exact name and size."""
+    pin = _archive_pin(b"unused")
+    pin[f"MAKEUTIL_{field}"] = value
+    requested: list[str] = []
+
+    status = installer.run(
+        "makeutil", _environment(tmp_path, pin), _serving(b"unused", requested)
+    )
+
+    assert status == 1, "an invalid archive contract must fail closed"
+    assert requested == [], "an invalid archive contract must not download"
+    assert not (tmp_path / "github_path").exists(), "PATH must not be published"
+
+
+def test_digest_is_checked_before_archive_decompression(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A replaced archive never reaches even the archive parser."""
+
+    def refuse_open(*args: object, **kwargs: object) -> typ.NoReturn:
+        pytest.fail("digest verification must precede archive parsing")
+
+    monkeypatch.setattr(tarfile, "open", refuse_open)
+    environment = _environment(tmp_path, _archive_pin(b"pinned archive"))
+    status = installer.run("makeutil", environment, _serving(b"replacement", []))
+
+    assert status == 1, "a digest mismatch must fail before decompression"
+    assert not (tmp_path / "github_path").exists(), "PATH must not be published"
+
+
+@pytest.mark.parametrize(
+    "field", ["ARCHIVE_FORMAT", "ARCHIVE_MEMBER", "ARCHIVE_MEMBER_SIZE"]
+)
+def test_partial_archive_pin_is_refused(tmp_path: Path, field: str) -> None:
+    """Removing any archive field cannot silently select raw installation."""
+    pin = _archive_pin(b"unused")
+    del pin[f"MAKEUTIL_{field}"]
+    requested: list[str] = []
+    status = installer.run(
+        "makeutil", _environment(tmp_path, pin), _serving(b"unused", requested)
+    )
+    assert status == 1, "partial archive pins must fail closed"
+    assert requested == [], "partial pins must fail before downloading"
+
+
+@pytest.mark.parametrize("actual", [_BODY[:-1], _BODY + b"excess"])
+def test_archive_read_is_bounded_and_actual_length_checked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, actual: bytes
+) -> None:
+    """Declared tar size does not replace checking the bounded stream read."""
+    body = _archive([("tool", _BODY, tarfile.REGTYPE)])
+    requested_sizes: list[int | None] = []
+
+    class MemberStream(io.BytesIO):
+        """Record the maximum bytes requested from the selected member."""
+
+        def read(self, size: int | None = -1) -> bytes:
+            """Record the read boundary and provide the stand-in member bytes."""
+            requested_sizes.append(size)
+            return super().read(size)
+
+    def extract_member(
+        _archive: tarfile.TarFile, _member: tarfile.TarInfo
+    ) -> MemberStream:
+        return MemberStream(actual)
+
+    monkeypatch.setattr(tarfile.TarFile, "extractfile", extract_member)
+    status = installer.run(
+        "makeutil", _environment(tmp_path, _archive_pin(body)), _serving(body, [])
+    )
+    assert status == 1, "actual member bytes must match the declared pin"
+    assert requested_sizes == [len(_BODY) + 1], "member reads must be bounded"
+    assert not (tmp_path / "github_path").exists(), "PATH must not be published"
+
+
+@pytest.mark.parametrize("operation", ["chmod", "replace"])
+def test_failed_staging_preserves_previous_binary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, operation: str
+) -> None:
+    """Filesystem errors leave the previous binary and no staging debris."""
+    binary = tmp_path / "runner" / "makeutil-bin" / "makeutil"
+    binary.parent.mkdir(parents=True)
+    binary.write_bytes(b"previous binary")
+
+    def refuse(*_args: object, **_kwargs: object) -> typ.NoReturn:
+        message = "controlled installation failure"
+        raise OSError(message)
+
+    monkeypatch.setattr(Path, operation, refuse)
+    status = installer.run(
+        "makeutil", _environment(tmp_path, _pin()), _serving(_BODY, [])
+    )
+
+    assert status == 1, "installation IO errors must reach the command status"
+    assert binary.read_bytes() == b"previous binary", "old bytes must survive"
+    assert list(binary.parent.iterdir()) == [binary], "staging debris must be removed"
+    assert not (tmp_path / "github_path").exists(), "PATH must not be published"
+
+
+def test_failed_path_publication_returns_failure(tmp_path: Path) -> None:
+    """An installation is not reported successful when PATH cannot be written."""
+    environment = _environment(tmp_path, _pin())
+    github_path = tmp_path / "github_path"
+    github_path.mkdir()
+
+    status = installer.run("makeutil", environment, _serving(_BODY, []))
+
+    assert status == 1, "PATH publication IO errors must fail the command"
+    assert list(github_path.iterdir()) == [], "no PATH entry may be published"
+
+
+def test_late_decompression_failure_preserves_existing_executable(
+    tmp_path: Path,
+) -> None:
+    """Late payload corruption cannot change an already installed executable."""
+    body = _late_corrupt_archive()
+    pin = _archive_pin(body)
+    pin["MAKEUTIL_ARCHIVE_MEMBER_SIZE"] = "16384"
+    environment = _environment(tmp_path, pin)
+    binary = tmp_path / "runner" / "makeutil-bin" / "makeutil"
+    binary.parent.mkdir(parents=True)
+    binary.write_bytes(b"previous executable")
+    binary.chmod(0o751)
+    original_mode = binary.stat().st_mode
+    github_path = tmp_path / "github_path"
+    github_path.write_text("existing PATH entry\n")
+
+    status = installer.run("makeutil", environment, _serving(body, []))
+
+    assert status == 1, "late decompression failure must reach the command status"
+    assert binary.read_bytes() == b"previous executable", "old bytes must survive"
+    assert binary.stat().st_mode == original_mode, "old executable mode must survive"
+    assert list(binary.parent.iterdir()) == [binary], "no staging file may remain"
+    assert github_path.read_text() == "existing PATH entry\n", (
+        "PATH must not be appended"
+    )
+
+
+def test_dependency_deflate_error_preserves_existing_installation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A synthetic zlib dependency failure is translated without side effects.
+
+    This injects the real library exception at the archive-opening boundary;
+    it does not claim a real archive reproduces an unhandled exception.
+    """
+    body = _archive([("tool", _BODY, tarfile.REGTYPE)])
+    environment = _environment(tmp_path, _archive_pin(body))
+    binary = tmp_path / "runner" / "makeutil-bin" / "makeutil"
+    binary.parent.mkdir(parents=True)
+    binary.write_bytes(b"previous executable")
+    binary.chmod(0o751)
+    original_mode = binary.stat().st_mode
+    github_path = tmp_path / "github_path"
+    github_path.write_text("existing PATH entry\n")
+
+    def fail_decompression(*_args: object, **_kwargs: object) -> typ.NoReturn:
+        message = "synthetic dependency deflate failure"
+        raise zlib.error(message)
+
+    monkeypatch.setattr(tarfile, "open", fail_decompression)
+    status = installer.run("makeutil", environment, _serving(body, []))
+
+    assert status == 1, "the dependency exception must become a failing status"
+    assert binary.read_bytes() == b"previous executable", "old bytes must survive"
+    assert binary.stat().st_mode == original_mode, "old executable mode must survive"
+    assert list(binary.parent.iterdir()) == [binary], "no staging file may remain"
+    assert github_path.read_text() == "existing PATH entry\n", (
+        "PATH must not be appended"
+    )
