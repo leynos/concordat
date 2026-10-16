@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import builtins
+import io
 import json
+import os
+import pathlib
 import subprocess
+import tempfile
 import typing as typ
 
 import pytest
@@ -16,10 +21,12 @@ from tests.unit.rust_policy_batch_support import (
     invoke_root_rust_policy_batch,
 )
 from tests.unit.rust_policy_property_support import (
+    interpret_policy_results,
     method_arrays,
+    method_policy_envelopes,
     oracle_accepts,
-    policy_accepts_batch,
     policy_input_count,
+    priority_policy_envelopes,
     required_methods,
 )
 
@@ -54,10 +61,58 @@ def _conftest_result(**updates: object) -> dict[str, object]:
 def test_rust_policy_matches_oracle_for_bounded_method_batches(
     methods: list[list[object]],
 ) -> None:
-    """One Conftest invocation per bounded list must match the Python oracle."""
-    actual = policy_accepts_batch(methods)
+    """One explicit Conftest batch per bounded list matches the Python oracle."""
+    envelopes = method_policy_envelopes(methods)
+    results = invoke_root_rust_policy_batch(envelopes)
+    actual = interpret_policy_results(results)
     expected = [oracle_accepts(entries) for entries in methods]
     assert actual == expected, list(zip(methods, expected, actual, strict=True))
+
+
+def test_policy_envelope_helpers_do_not_access_files_or_start_processes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pure construction and interpretation stay outside the execution boundary."""
+
+    def forbidden_boundary(*_args: object, **_kwargs: object) -> typ.Never:
+        """Reject accidental file or process access by a pure helper."""
+        msg = "pure policy helpers crossed an I/O boundary"
+        raise AssertionError(msg)
+
+    boundaries = (
+        (builtins, "open"),
+        (io, "open"),
+        (os, "open"),
+        (os, "system"),
+        (pathlib.Path, "open"),
+        (pathlib.Path, "read_text"),
+        (pathlib.Path, "write_text"),
+        (tempfile, "TemporaryDirectory"),
+        (subprocess, "run"),
+        (subprocess, "Popen"),
+    )
+    with monkeypatch.context() as patch:
+        for owner, name in boundaries:
+            patch.setattr(owner, name, forbidden_boundary)
+        method_envelopes = method_policy_envelopes([required_methods()])
+        priority_envelopes = priority_policy_envelopes([-1])
+        result_rows = typ.cast(
+            "list[list[_ConftestResult]]",
+            [
+                [_conftest_result(filename="envelope-0.json")],
+                [
+                    _conftest_result(
+                        filename="envelope-1.json",
+                        failures=[{"msg": "denied"}],
+                    )
+                ],
+            ],
+        )
+        interpreted = interpret_policy_results(result_rows)
+
+    assert len(method_envelopes) == 1
+    assert len(priority_envelopes) == 1
+    assert interpreted == [True, False]
 
 
 def _valid_method_policy_cases(
@@ -155,7 +210,9 @@ def _method_policy_cases() -> list[tuple[str, cabc.Sequence[object], bool]]:
 def test_rust_policy_accepts_canonical_methods_and_rejects_mutations() -> None:
     """Named boundary examples keep positive and negative coverage explicit."""
     cases = _method_policy_cases()
-    actual = policy_accepts_batch([methods for _, methods, _ in cases])
+    envelopes = method_policy_envelopes([methods for _, methods, _ in cases])
+    results = invoke_root_rust_policy_batch(envelopes)
+    actual = interpret_policy_results(results)
     expected = [accepted for _, _, accepted in cases]
     case_names = [name for name, _, _ in cases]
     assert actual == expected, list(zip(case_names, expected, actual, strict=True))
@@ -199,7 +256,9 @@ def test_root_policy_batch_accepts_official_clean_shape_without_failures(
         return_value=completed,
     )
 
-    assert policy_accepts_batch([required_methods()]) == [True]
+    envelopes = method_policy_envelopes([required_methods()])
+    results = invoke_root_rust_policy_batch(envelopes)
+    assert interpret_policy_results(results) == [True]
 
 
 @pytest.mark.parametrize(

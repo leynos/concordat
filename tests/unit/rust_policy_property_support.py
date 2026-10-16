@@ -7,7 +7,6 @@ import typing as typ
 
 from hypothesis import strategies as st
 
-from tests.unit.rust_policy_batch_support import invoke_root_rust_policy_batch
 from tests.unit.rust_policy_oracle_support import (
     _REQUIRED_METHODS,
 )
@@ -23,6 +22,8 @@ from tests.unit.rust_policy_oracle_support import (
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+
+    from concordat.rules.runner import _ConftestResult
 
 _POLICY_INPUT_COUNT: typ.Final = 6
 
@@ -129,25 +130,24 @@ def canonical_envelope(
     }
 
 
-def policy_accepts_batch(
+def method_policy_envelopes(
     method_lists: cabc.Sequence[cabc.Sequence[object]],
+) -> list[dict[str, object]]:
+    """Build normalized policy inputs for a bounded list of method arrays."""
+    return [canonical_envelope(methods) for methods in method_lists]
+
+
+def priority_policy_envelopes(
+    priorities: cabc.Sequence[object],
+) -> list[dict[str, object]]:
+    """Build normalized policy inputs for bounded synthetic priorities."""
+    return [canonical_envelope(required_methods(), priority) for priority in priorities]
+
+
+def interpret_policy_results(
+    results_by_input: cabc.Sequence[cabc.Sequence[_ConftestResult]],
 ) -> list[bool]:
-    """Return real Conftest acceptance for one bounded list of method arrays."""
-    envelopes = [canonical_envelope(methods) for methods in method_lists]
-    return _accepted_envelopes(envelopes)
-
-
-def policy_accepts_priority_batch(priorities: cabc.Sequence[object]) -> list[bool]:
-    """Return Conftest acceptance for bounded synthetic JSON priorities."""
-    envelopes = [
-        canonical_envelope(required_methods(), priority) for priority in priorities
-    ]
-    return _accepted_envelopes(envelopes)
-
-
-def _accepted_envelopes(envelopes: cabc.Sequence[dict[str, object]]) -> list[bool]:
-    """Interpret failures after the result wrapper validates every row."""
-    results_by_input = invoke_root_rust_policy_batch(envelopes)
+    """Interpret result rows after the batch boundary validates their shape."""
     return [
         not any(result.get("failures", []) for result in results)
         for results in results_by_input

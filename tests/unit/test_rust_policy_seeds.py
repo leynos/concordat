@@ -3,12 +3,20 @@
 from __future__ import annotations
 
 import copy
+import hashlib
+import json
 import re
+import typing as typ
+from pathlib import Path
 
 import pytest
 
+from tests.unit.rust_policy_seed_labels import _EXPECTED_LABEL_CONTENT
 from tests.unit.rust_policy_seed_mutations import (
+    _bug_label_record,
     _change_actions_cooldown,
+    _change_bug_label_color,
+    _change_bug_label_description,
     _change_cargo_default_cooldown,
     _change_cargo_major_cooldown,
     _change_clippy_reason,
@@ -41,6 +49,30 @@ from tests.unit.rust_policy_seed_support import (
     _load_seed,
     _update_for,
 )
+
+
+@pytest.fixture
+def captured_bug_label() -> dict[str, object]:
+    """Load the bug record from the byte-preserved Netsuke API capture."""
+    capture_path = (
+        Path(__file__).resolve().parents[1]
+        / "fixtures"
+        / "rust_policy"
+        / "netsuke-labels-2026-09-30.json"
+    )
+    records: object = json.loads(capture_path.read_text(encoding="utf-8"))
+    if not isinstance(records, list):
+        msg = "Expected a list in the Netsuke label capture"
+        raise TypeError(msg)
+    bug_records = [
+        record
+        for record in records
+        if isinstance(record, dict) and record.get("name") == "bug"
+    ]
+    if len(bug_records) != 1:
+        msg = "Expected one bug label in the Netsuke label capture"
+        raise AssertionError(msg)
+    return typ.cast("dict[str, object]", bug_records[0])
 
 
 def test_rust_policy_seeds_are_registered() -> None:
@@ -152,6 +184,109 @@ def test_seed_contracts_reject_label_snapshot_mutations(mutate: SeedMutator) -> 
     """Provenance, completeness, and GitHub metadata bounds cannot drift."""
     candidate = copy.deepcopy(_load_seed(LABEL_SEED))
     mutate(candidate)
+    assert _label_seed_issues(candidate)
+
+
+def test_label_seed_matches_captured_bug_record(
+    captured_bug_label: dict[str, object],
+) -> None:
+    """The unchanged seed's bug fields match the independent API capture."""
+    baseline = _load_seed(LABEL_SEED)
+    assert _label_seed_issues(baseline) == ()
+    baseline_bug = _bug_label_record(baseline)
+    fields = ("name", "color", "description")
+    assert {field: baseline_bug[field] for field in fields} == {
+        field: captured_bug_label[field] for field in fields
+    }
+
+
+def test_label_seed_matches_raw_capture_hash_and_content() -> None:
+    """The independent capture hashes to and projects into the full oracle."""
+    capture_path = (
+        Path(__file__).resolve().parents[1]
+        / "fixtures"
+        / "rust_policy"
+        / "netsuke-labels-2026-09-30.json"
+    )
+    capture_bytes = capture_path.read_bytes()
+    assert hashlib.sha256(capture_bytes).hexdigest() == (
+        "dad7045b340d12e4393f7e94b61d7aea01073fe7faa17075368de29785f5103a"
+    )
+    records: object = json.loads(capture_bytes)
+    assert isinstance(records, list)
+
+    projection: dict[str, tuple[str, str | None]] = {}
+    for record in records:
+        assert isinstance(record, dict)
+        assert all(isinstance(key, str) for key in record)
+        record_fields = typ.cast("dict[str, object]", record)
+        assert {"name", "color", "description"} <= set(record_fields)
+        name = record_fields["name"]
+        color = record_fields["color"]
+        description = record_fields["description"]
+        assert isinstance(name, str)
+        assert 0 < len(name) <= 50
+        assert name not in projection
+        assert isinstance(color, str)
+        assert re.fullmatch(r"[0-9a-fA-F]{6}", color)
+        assert description is None or isinstance(description, str)
+        assert description is None or len(description) <= 100
+        projection[name] = (color, description)
+
+    assert len(projection) == 31
+    assert projection == _EXPECTED_LABEL_CONTENT
+    assert _label_seed_issues(_load_seed(LABEL_SEED)) == ()
+
+
+def test_seed_contracts_reject_valid_bug_color_drift(
+    captured_bug_label: dict[str, object],
+) -> None:
+    """A valid colour change still differs from the approved captured label."""
+    baseline = _load_seed(LABEL_SEED)
+    assert _label_seed_issues(baseline) == ()
+    baseline_bug = _bug_label_record(baseline)
+    fields = ("name", "color", "description")
+    assert {field: baseline_bug[field] for field in fields} == {
+        field: captured_bug_label[field] for field in fields
+    }
+
+    candidate = copy.deepcopy(baseline)
+    expected = copy.deepcopy(baseline)
+    _change_bug_label_color(candidate)
+    _bug_label_record(expected)["color"] = "d73a4b"
+    assert candidate == expected
+
+    changed_color = _bug_label_record(candidate)["color"]
+    assert isinstance(changed_color, str)
+    assert changed_color != captured_bug_label["color"]
+    assert re.fullmatch(r"[0-9a-f]{6}", changed_color)
+    assert _label_seed_issues(candidate)
+
+
+def test_seed_contracts_reject_valid_bug_description_drift(
+    captured_bug_label: dict[str, object],
+) -> None:
+    """A valid description change still differs from the approved snapshot."""
+    baseline = _load_seed(LABEL_SEED)
+    assert _label_seed_issues(baseline) == ()
+    baseline_bug = _bug_label_record(baseline)
+    fields = ("name", "color", "description")
+    assert {field: baseline_bug[field] for field in fields} == {
+        field: captured_bug_label[field] for field in fields
+    }
+
+    candidate = copy.deepcopy(baseline)
+    expected = copy.deepcopy(baseline)
+    _change_bug_label_description(candidate)
+    _bug_label_record(expected)["description"] = (
+        "A confirmed defect is not working as intended."
+    )
+    assert candidate == expected
+
+    changed_description = _bug_label_record(candidate)["description"]
+    assert isinstance(changed_description, str)
+    assert 0 < len(changed_description) < 100
+    assert changed_description != captured_bug_label["description"]
     assert _label_seed_issues(candidate)
 
 

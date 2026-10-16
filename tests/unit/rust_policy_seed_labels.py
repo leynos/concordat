@@ -20,39 +20,100 @@ _EXPECTED_SOURCE_VALUES = {
     "capture_command": "gh api repos/leynos/netsuke/labels --paginate",
     "approval_reference": "leynos/concordat#157",
 }
-_EXPECTED_LABEL_NAMES = frozenset({
-    "bug",
-    "bun",
-    "cargo",
-    "codex",
-    "concurrency",
-    "critical",
-    "dependencies",
-    "documentation",
-    "duplicate",
-    "enhancement",
-    "epic",
-    "github-actions",
-    "go",
-    "good first issue",
-    "help wanted",
-    "high",
-    "invalid",
-    "Issue",
-    "low",
-    "medium",
-    "opentofu",
-    "performance",
-    "pip",
-    "question",
-    "refactor",
-    "Roadmap",
-    "rust-toolchain",
-    "testing",
-    "uv",
-    "Windows",
-    "wontfix",
-})
+_EXPECTED_LABEL_CONTENT: dict[str, tuple[str, str | None]] = {
+    "bug": ("d73a4a", "Something isn't working"),
+    "bun": ("ededed", "Dependabot channel for Bun dependency updates."),
+    "cargo": ("ededed", "Dependabot channel for Rust crate updates."),
+    "codex": ("ededed", None),
+    "concurrency": (
+        "5319e7",
+        (
+            "Concurrency, parallelism, and synchronization work, "
+            "including races and deadlocks."
+        ),
+    ),
+    "critical": (
+        "b60205",
+        (
+            "Blocker-level work such as active incidents or production outages. "
+            "Pre-empts all other work."
+        ),
+    ),
+    "dependencies": (
+        "0366d6",
+        "Dependency updates, applied to every Dependabot pull request.",
+    ),
+    "documentation": (
+        "0075ca",
+        "Improvements or additions to documentation",
+    ),
+    "duplicate": ("cfd3d7", "This issue or pull request already exists"),
+    "enhancement": ("a2eeef", "New feature or request"),
+    "epic": ("2da1a3", "Too much excitement for a little cat"),
+    "github-actions": (
+        "ededed",
+        (
+            "Dependabot channel for GitHub Actions updates, batched into one "
+            "pull request per run."
+        ),
+    ),
+    "go": ("ededed", "Dependabot channel for Go module updates."),
+    "good first issue": ("7057ff", "Good for newcomers"),
+    "help wanted": ("008672", "Extra attention is needed"),
+    "high": (
+        "d93f0b",
+        (
+            "Unblocks delivery within the current sprint or release window. "
+            "Reaction time is days, not hours."
+        ),
+    ),
+    "invalid": ("e4e669", "This doesn't seem right"),
+    "Issue": ("ededed", "A pull request originating from an issue"),
+    "low": (
+        "0e8a16",
+        (
+            "Backlog work, hygiene, or technical debt planned opportunistically, "
+            "without a strict deadline."
+        ),
+    ),
+    "medium": (
+        "fbca04",
+        (
+            "Roadmap items to schedule within the current quarter. Clear scope, "
+            "normal review cycles."
+        ),
+    ),
+    "opentofu": (
+        "ededed",
+        "Dependabot channel for OpenTofu provider and module updates.",
+    ),
+    "performance": (
+        "ededed",
+        (
+            "Bugs or prior decisions disproportionately impacting memory, time, "
+            "storage or CPU usage"
+        ),
+    ),
+    "pip": ("ededed", "Dependabot channel for Python dependency updates via pip."),
+    "question": ("d876e3", "Further information is requested"),
+    "refactor": (
+        "a2eeef",
+        "Behaviour-preserving restructuring that improves code health.",
+    ),
+    "Roadmap": ("ededed", "A pull request originating from a roadmap item"),
+    "rust-toolchain": (
+        "ededed",
+        "Dependabot channel for Rust toolchain pin updates.",
+    ),
+    "testing": (
+        "1d76db",
+        "Test coverage, test infrastructure, and verification tooling work.",
+    ),
+    "uv": ("ededed", "Dependabot channel for Python dependency updates via uv."),
+    "Windows": ("ededed", None),
+    "wontfix": ("ffffff", "This will not be worked on"),
+}
+_EXPECTED_LABEL_NAMES = frozenset(_EXPECTED_LABEL_CONTENT)
 _EXPECTED_CAPTURE_TIME = "2026-09-30T11:38:30Z"
 _EXPECTED_CAPTURE_HASH = (
     "dad7045b340d12e4393f7e94b61d7aea01073fe7faa17075368de29785f5103a"
@@ -160,7 +221,24 @@ def _label_record_issues(label_value: object) -> tuple[list[str], str | None]:
     issues, name = _label_name_field_issues(label.get("name"))
     issues.extend(_label_color_field_issues(label.get("color")))
     issues.extend(_label_description_field_issues(label.get("description")))
+    if name is not None:
+        issues.extend(_label_content_issues(label, name))
     return issues, name
+
+
+def _label_content_issues(label: Seed, name: str) -> list[str]:
+    """Require known names to retain their captured colour and description."""
+    expected_content = _EXPECTED_LABEL_CONTENT.get(name)
+    if expected_content is None:
+        return []
+
+    expected_color, expected_description = expected_content
+    issues: list[str] = []
+    if label.get("color") != expected_color:
+        issues.append(f"label {name} colour must match the approved snapshot")
+    if label.get("description") != expected_description:
+        issues.append(f"label {name} description must match the approved snapshot")
+    return issues
 
 
 def _label_name_field_issues(name_value: object) -> tuple[list[str], str | None]:

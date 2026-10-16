@@ -148,6 +148,35 @@ def _label_source(seed: Seed) -> dict[str, object]:
     return source
 
 
+def _bug_label_record(seed: Seed) -> dict[str, object]:
+    """Return the unique bug label record from a mutable snapshot copy."""
+    labels = seed["labels"]
+    if not isinstance(labels, list):
+        msg = "Expected label records in the shipped seed"
+        raise TypeError(msg)
+    bug_labels = [
+        label
+        for label in labels
+        if isinstance(label, dict) and label.get("name") == "bug"
+    ]
+    if len(bug_labels) != 1:
+        msg = "Expected one bug label in the shipped seed"
+        raise AssertionError(msg)
+    return typ.cast("dict[str, object]", bug_labels[0])
+
+
+def _change_bug_label_color(seed: Seed) -> None:
+    """Change the bug colour to a different valid lowercase hex value."""
+    _bug_label_record(seed)["color"] = "d73a4b"
+
+
+def _change_bug_label_description(seed: Seed) -> None:
+    """Change the bug description to another API-valid value."""
+    _bug_label_record(seed)["description"] = (
+        "A confirmed defect is not working as intended."
+    )
+
+
 def _remove_label_approval(seed: Seed) -> None:
     """Remove the required approval reference from snapshot provenance."""
     source = _label_source(seed)

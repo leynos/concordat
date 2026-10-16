@@ -6,10 +6,12 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from tests.unit.rust_policy_batch_support import invoke_root_rust_policy_batch
 from tests.unit.rust_policy_property_support import (
+    interpret_policy_results,
     oracle_accepts,
-    policy_accepts_priority_batch,
     policy_input_count,
+    priority_policy_envelopes,
     priority_values,
     required_methods,
 )
@@ -25,7 +27,9 @@ def test_rust_policy_priority_matches_numeric_oracle_for_bounded_batches(
     priorities: list[object],
 ) -> None:
     """Normalized JSON priorities follow Cargo's i8-aware oracle."""
-    actual = policy_accepts_priority_batch(priorities)
+    envelopes = priority_policy_envelopes(priorities)
+    results = invoke_root_rust_policy_batch(envelopes)
+    actual = interpret_policy_results(results)
     expected = [oracle_accepts(required_methods(), priority) for priority in priorities]
     assert actual == expected, list(zip(priorities, expected, actual, strict=True))
 
@@ -53,6 +57,8 @@ def test_rust_policy_accepts_only_in_range_integral_priorities(
     priority: object, *, expected: bool
 ) -> None:
     """Cargo 1.92 deserializes priorities as i8, rejecting integral overflow."""
-    actual = policy_accepts_priority_batch([priority])
+    envelopes = priority_policy_envelopes([priority])
+    results = invoke_root_rust_policy_batch(envelopes)
+    actual = interpret_policy_results(results)
     assert actual == [expected]
     assert oracle_accepts(required_methods(), priority) is expected
