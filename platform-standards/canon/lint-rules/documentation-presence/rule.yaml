@@ -12,7 +12,7 @@ description: >-
   `missing_docs` (DG-003) and `make lint` reaches clippy so the lint is compiled
   by the gate (DG-004). A repository that owns no Python or Rust library is out
   of scope. Audit-only: this rule declares no mutations.
-version: 0.3.0
+version: 0.3.1
 sensor:
   type: conftest
   input: policy-input/documentation-presence

@@ -890,6 +890,42 @@ missing or not TOML, or a `lint` target it cannot follow makes the affected
 check indeterminate rather than passing it. The package README carries the
 reference Makefile wiring.
 
+#### Upgrading to rule 0.3.1
+
+Version 0.3.1 is a patch correction to recognition of the existing canonical
+helper contract. Once this revision is available and adopted, re-run the audit;
+stored reports do not change automatically. Previously unrecognized valid
+helper invocations can then be measured, without automatically making their
+repositories compliant.
+
+Use `python` or `python3` with the repository-relative `scripts/uv_gate.py`
+path; `./scripts/uv_gate.py` is also supported. For the pinned tool route,
+retain the existing interrogate pin and command separator:
+
+```shell
+python3 scripts/uv_gate.py tool --from interrogate==1.7.0 -- interrogate -vv -f 100 .
+```
+
+The prepared-environment route is also recognized:
+
+```shell
+python3 scripts/uv_gate.py run -- interrogate -vv -f 100 .
+```
+
+For `run`, keep exactly one `--` before the command. Before that separator,
+both modes reject flags that override the helper's network, cache, locking, or
+freshness policy, including `--offline`, refresh, upgrade, and reinstall flags
+and their forbidden short aliases. The helper controls those settings itself.
+Invalid helper paths, unpinned tool specifications and refused argument forms
+receive no gate credit.
+
+Keep the existing DG-001 and DG-002 requirements: `make lint` must reach the
+gate, cover every owned Python file at a threshold of 100, print definitions at
+verbose level 2 and fail on any `MISSED` row. Unsupported Make expansion that
+prevents proving execution or its arguments remains indeterminate, as do
+unreadable configuration and unprovable target reachability. Recognition of a
+helper invocation does not clear these findings or relax the coverage checks.
+
 #### Upgrading to rule 0.3.0
 
 Version 0.3.0 adds the clippy-gate exception: a repository whose `make lint`
