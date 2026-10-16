@@ -174,6 +174,94 @@ def _archive_pin(body: bytes) -> dict[str, str]:
     }
 
 
+@pytest.mark.parametrize(
+    ("name", "unsafe"),
+    [
+        ("bin/tool", False),
+        ("", True),
+        ("/tool", True),
+        ("a//tool", True),
+        ("./tool", True),
+        ("a/../tool", True),
+    ],
+)
+def test_archive_path_components_are_canonical(name: str, *, unsafe: bool) -> None:
+    """Empty and relative components cannot acquire canonical path meaning."""
+    assert installer._has_unsafe_member_components(name) is unsafe
+
+
+@pytest.mark.parametrize(
+    ("name", "unsafe"),
+    [("bin/tool", False), ("a\\tool", True), ("C:tool", True)],
+)
+def test_archive_paths_refuse_platform_syntax(name: str, *, unsafe: bool) -> None:
+    """A POSIX member cannot be reinterpreted as Windows path syntax."""
+    assert installer._has_platform_path_syntax(name) is unsafe
+
+
+@pytest.mark.parametrize("text", ["1", "27", "+2", " 3 "])
+def test_archive_member_size_parser_preserves_integer_inputs(text: str) -> None:
+    """The size parser retains the previously accepted positive integer grammar."""
+    assert installer._positive_member_size(text) == int(text)
+
+
+@pytest.mark.parametrize("text", ["", "0", "-1", "1.5"])
+def test_archive_member_size_parser_refuses_nonpositive_inputs(text: str) -> None:
+    """Invalid and non-positive sizes share the established diagnostic."""
+    with pytest.raises(installer.InstallError, match="must be a positive integer"):
+        installer._positive_member_size(text)
+
+
+def test_archive_member_validation_refuses_sparse_regular_files() -> None:
+    """Regular type flags alone do not authorize sparse members."""
+    output = io.BytesIO()
+    member = tarfile.TarInfo("tool")
+    member.size = 1
+    member.pax_headers = {"GNU.sparse.map": "0,1", "GNU.sparse.realsize": "2"}
+    with tarfile.open(
+        fileobj=output, mode="w:gz", format=tarfile.PAX_FORMAT
+    ) as archive:
+        archive.addfile(member, io.BytesIO(b"x"))
+    with tarfile.open(fileobj=io.BytesIO(output.getvalue()), mode="r:gz") as archive:
+        parsed_member = archive.getmember("tool")
+
+    assert parsed_member.isreg()
+    assert parsed_member.sparse is not None
+    with pytest.raises(installer.InstallError, match="not an ordinary file"):
+        installer._validate_archive_member(parsed_member)
+
+
+def test_archive_validation_checks_members_after_the_selected_file() -> None:
+    """Validation traverses the whole archive before any member is selected."""
+    body = _archive([
+        ("tool", _BODY, tarfile.REGTYPE),
+        ("sibling", b"", tarfile.SYMTYPE),
+    ])
+    with (
+        tarfile.open(fileobj=io.BytesIO(body), mode="r:gz") as archive,
+        pytest.raises(installer.InstallError, match="not an ordinary file"),
+    ):
+        installer._validated_archive_members(archive)
+
+
+def test_archive_selection_returns_the_exact_pinned_member() -> None:
+    """A sibling regular file cannot displace the approved executable."""
+    sibling = tarfile.TarInfo("LICENSE")
+    selected = tarfile.TarInfo("tool")
+    selected.size = len(_BODY)
+    approved = installer.ArchiveMember("tool", len(_BODY))
+    assert installer._select_archive_member([sibling, selected], approved) is selected
+
+
+def test_archive_member_reader_returns_exact_bytes() -> None:
+    """An ordinary selected stream is read through the bounded reader."""
+    body = _archive([("tool", _BODY, tarfile.REGTYPE)])
+    approved = installer.ArchiveMember("tool", len(_BODY))
+    with tarfile.open(fileobj=io.BytesIO(body), mode="r:gz") as archive:
+        member = archive.getmembers()[0]
+        assert installer._read_member_bytes(archive, member, approved) == _BODY
+
+
 def test_archive_installs_only_the_named_member(tmp_path: Path) -> None:
     """A release archive installs executable bytes rather than the tar stream."""
     body = _archive([

@@ -42,7 +42,7 @@ import typing as typ
 import urllib.error
 import urllib.request
 import zlib
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 from cyclopts import App
 
@@ -60,18 +60,45 @@ class InstallError(RuntimeError):
     """The release binary could not be installed as pinned."""
 
 
+def _has_unsafe_member_components(name: str) -> bool:
+    """Detect empty, absolute and relative path components without normalization."""
+    return any(part in {"", ".", ".."} for part in name.split("/"))
+
+
+def _has_platform_path_syntax(name: str) -> bool:
+    """Detect separators and drive syntax that could alter POSIX member meaning."""
+    return any(character in name for character in ("\\", ":"))
+
+
 def _validate_member_name(name: str) -> None:
     """Refuse non-canonical archive paths before selecting any member."""
-    parts = name.split("/")
-    if (
-        not name
-        or PurePosixPath(name).is_absolute()
-        or any(part in {"", ".", ".."} for part in parts)
-        or "\\" in name
-        or ":" in name
-    ):
+    if _has_unsafe_member_components(name) or _has_platform_path_syntax(name):
         message = f"unsafe archive member name: {name!r}"
         raise InstallError(message)
+
+
+def _positive_member_size(size_text: str) -> int:
+    """Parse the exact positive byte length required by an archive pin.
+
+    Returns
+    -------
+    int
+        The pinned positive member size.
+
+    Raises
+    ------
+    InstallError
+        If the field cannot be parsed as a positive integer.
+    """
+    try:
+        size = int(size_text)
+    except ValueError as error:
+        message = "archive member size must be a positive integer"
+        raise InstallError(message) from error
+    if size <= 0:
+        message = "archive member size must be a positive integer"
+        raise InstallError(message)
+    return size
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -106,15 +133,7 @@ class ArchiveMember:
             message = "archive format must be explicitly tar.gz"
             raise InstallError(message)
         _validate_member_name(member)
-        try:
-            size = int(size_text)
-        except ValueError as error:
-            message = "archive member size must be a positive integer"
-            raise InstallError(message) from error
-        if size <= 0:
-            message = "archive member size must be a positive integer"
-            raise InstallError(message)
-        return cls(member, size)
+        return cls(member, _positive_member_size(size_text))
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -235,29 +254,9 @@ def _read_archive(body: bytes, approved: ArchiveMember) -> bytes:
     """
     try:
         with tarfile.open(fileobj=io.BytesIO(body), mode="r:gz") as archive:
-            members = archive.getmembers()
-            for member in members:
-                _validate_member_name(member.name)
-                if (
-                    member.type not in {tarfile.REGTYPE, tarfile.AREGTYPE}
-                    or member.sparse is not None
-                ):
-                    message = f"archive member is not an ordinary file: {member.name}"
-                    raise InstallError(message)
-            selected = [member for member in members if member.name == approved.name]
-            if len(selected) != 1:
-                message = "archive must contain exactly one approved member"
-                raise InstallError(message)
-            member = selected[0]
-            if member.size != approved.size:
-                message = "archive member size differs from its pin"
-                raise InstallError(message)
-            stream = archive.extractfile(member)
-            if stream is None:
-                message = "archive member has no ordinary file contents"
-                raise InstallError(message)
-            with stream:
-                binary = stream.read(approved.size + 1)
+            members = _validated_archive_members(archive)
+            member = _select_archive_member(members, approved)
+            binary = _read_member_bytes(archive, member, approved)
     except (tarfile.TarError, OSError, EOFError, zlib.error) as error:
         message = f"could not read release archive: {error}"
         raise InstallError(message) from error
@@ -265,6 +264,86 @@ def _read_archive(body: bytes, approved: ArchiveMember) -> bytes:
         message = "archive member bytes differ from their pinned length"
         raise InstallError(message)
     return binary
+
+
+def _validated_archive_members(archive: tarfile.TarFile) -> list[tarfile.TarInfo]:
+    """Validate every entry before selection can authorize a payload read.
+
+    Returns
+    -------
+    list[tarfile.TarInfo]
+        All entries, with canonical names and ordinary non-sparse file types.
+    """
+    members = archive.getmembers()
+    for member in members:
+        _validate_archive_member(member)
+    return members
+
+
+def _validate_archive_member(member: tarfile.TarInfo) -> None:
+    """Reject unsafe paths and non-ordinary types, including unselected entries.
+
+    Raises
+    ------
+    InstallError
+        If the entry name or file type is unsafe.
+    """
+    _validate_member_name(member.name)
+    if (
+        member.type not in {tarfile.REGTYPE, tarfile.AREGTYPE}
+        or member.sparse is not None
+    ):
+        message = f"archive member is not an ordinary file: {member.name}"
+        raise InstallError(message)
+
+
+def _select_archive_member(
+    members: list[tarfile.TarInfo], approved: ArchiveMember
+) -> tarfile.TarInfo:
+    """Select one exact-name, exact-size member from validated entries.
+
+    Returns
+    -------
+    tarfile.TarInfo
+        The unique approved member with its pinned size.
+
+    Raises
+    ------
+    InstallError
+        If the name is absent, repeated or has a different byte length.
+    """
+    selected = [member for member in members if member.name == approved.name]
+    if len(selected) != 1:
+        message = "archive must contain exactly one approved member"
+        raise InstallError(message)
+    member = selected[0]
+    if member.size != approved.size:
+        message = "archive member size differs from its pin"
+        raise InstallError(message)
+    return member
+
+
+def _read_member_bytes(
+    archive: tarfile.TarFile, member: tarfile.TarInfo, approved: ArchiveMember
+) -> bytes:
+    """Read the selected member with a strict bound before its length is checked.
+
+    Returns
+    -------
+    bytes
+        At most the pinned number of executable bytes plus one overflow byte.
+
+    Raises
+    ------
+    InstallError
+        If no ordinary stream exists for the selected member.
+    """
+    stream = archive.extractfile(member)
+    if stream is None:
+        message = "archive member has no ordinary file contents"
+        raise InstallError(message)
+    with stream:
+        return stream.read(approved.size + 1)
 
 
 def _stage_binary(body: bytes, destination: Path) -> None:
