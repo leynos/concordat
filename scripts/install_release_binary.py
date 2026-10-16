@@ -371,22 +371,34 @@ def _stage_binary(body: bytes, destination: Path) -> None:
         primary_error = error
     finally:
         if staged_path is not None:
-            try:
-                staged_path.unlink(missing_ok=True)
-            except OSError as error:
-                message = (
-                    f"could not remove staged binary: {error}; "
-                    f"staging file may remain: {staged_path}"
-                )
-                if primary_error is not None:
-                    message = (
-                        f"could not install release binary: {primary_error}; {message}"
-                    )
-                    raise InstallError(message) from primary_error
-                raise InstallError(message) from error
+            _cleanup_staged_binary(staged_path, primary_error)
     if primary_error is not None:
         message = f"could not install release binary: {primary_error}"
         raise InstallError(message) from primary_error
+
+
+def _cleanup_staged_binary(staged_path: Path, primary_error: OSError | None) -> None:
+    """Remove only ``_stage_binary``'s temporary path, retaining its failure cause.
+
+    This private helper is called solely from the staging operation's cleanup
+    boundary; it does not own installation or PATH publication.
+
+    Raises
+    ------
+    InstallError
+        If cleanup fails, with any staging failure retained as the primary cause.
+    """
+    try:
+        staged_path.unlink(missing_ok=True)
+    except OSError as error:
+        message = (
+            f"could not remove staged binary: {error}; "
+            f"staging file may remain: {staged_path}"
+        )
+        if primary_error is not None:
+            message = f"could not install release binary: {primary_error}; {message}"
+            raise InstallError(message) from primary_error
+        raise InstallError(message) from error
 
 
 def publish_path(directory: Path, github_path: Path) -> None:
