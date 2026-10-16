@@ -126,6 +126,17 @@ def _gate_tool_spec(arguments: list[str]) -> str:
     return ""
 
 
+def _gate_tool_arguments_are_valid(arguments: list[str], unresolved_mark: str) -> bool:
+    """Accept an exact pin or retain an unexpanded tool specification."""
+    spec = _gate_tool_spec(arguments)
+    return unresolved_mark in spec or _gate_spec_is_pinned(spec)
+
+
+def _gate_run_arguments_are_valid(arguments: list[str]) -> bool:
+    """Require one final command separator for the helper's run prefix."""
+    return arguments.count("--") == 1 and arguments[-1:] == ["--"]
+
+
 def _gate_helper_arguments(
     arguments: list[str], unresolved_mark: str
 ) -> list[str] | None:
@@ -147,17 +158,12 @@ def _gate_helper_arguments(
     options = itertools.takewhile(lambda word: word != "--", arguments[1:])
     if any(_gate_flag_is_forbidden(option) for option in options):
         return None
-    if arguments[:1] == ["tool"]:
-        spec = _gate_tool_spec(arguments)
-        if unresolved_mark in spec:
-            return arguments
-        return arguments if _gate_spec_is_pinned(spec) else None
-    # The helper refuses `run` without one final command separator.
-    if arguments.count("--") != 1:
-        return None
-    if arguments[-1:] != ["--"]:
-        return None
-    return arguments
+    valid = (
+        _gate_tool_arguments_are_valid(arguments, unresolved_mark)
+        if arguments[:1] == ["tool"]
+        else _gate_run_arguments_are_valid(arguments)
+    )
+    return arguments if valid else None
 
 
 def is_unresolved_tool_prefix(words: list[str], unresolved_mark: str) -> bool:
