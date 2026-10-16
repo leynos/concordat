@@ -8,6 +8,7 @@ The constructors below serve only this module's public installer boundary.
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import io
 import tarfile
@@ -19,6 +20,28 @@ from hypothesis import example, given, settings
 from hypothesis import strategies as st
 
 from scripts import install_release_binary as installer
+
+
+@dataclasses.dataclass(frozen=True)
+class _UnsafeMemberCase:
+    """Inputs owned solely by the whole-archive member-order property."""
+
+    siblings: list[bytes]
+    payload: bytes
+    selected_position: int
+    unsafe_position: int
+    unsafe: tuple[str, bytes]
+
+
+@dataclasses.dataclass(frozen=True)
+class _SelectionCase:
+    """Inputs owned solely by the unique exact-size selection property."""
+
+    siblings: list[bytes]
+    payload: bytes
+    position: int
+    name: str
+    size_delta: int
 
 
 def _archive(entries: list[tuple[str, bytes, bytes]]) -> bytes:
@@ -51,41 +74,43 @@ def _install(body: bytes, root: Path, size: int, member: str = "tool") -> int:
 
 @settings(max_examples=64, deadline=None)
 @example(
-    siblings=[b"licence"],
-    payload=b"tool",
-    selected_position=0,
-    unsafe_position=2,
-    unsafe=("../escape", tarfile.REGTYPE),
+    case=_UnsafeMemberCase(
+        siblings=[b"licence"],
+        payload=b"tool",
+        selected_position=0,
+        unsafe_position=2,
+        unsafe=("../escape", tarfile.REGTYPE),
+    )
 )
 @given(
-    siblings=st.lists(st.binary(max_size=128), max_size=6),
-    payload=st.binary(min_size=1, max_size=128),
-    selected_position=st.integers(min_value=0, max_value=7),
-    unsafe_position=st.integers(min_value=0, max_value=7),
-    unsafe=st.sampled_from([
-        ("../escape", tarfile.REGTYPE),
-        ("/escape", tarfile.REGTYPE),
-        ("unsafe", tarfile.SYMTYPE),
-        ("unsafe", tarfile.DIRTYPE),
-    ]),
+    case=st.builds(
+        _UnsafeMemberCase,
+        siblings=st.lists(st.binary(max_size=128), max_size=6),
+        payload=st.binary(min_size=1, max_size=128),
+        selected_position=st.integers(min_value=0, max_value=7),
+        unsafe_position=st.integers(min_value=0, max_value=7),
+        unsafe=st.sampled_from([
+            ("../escape", tarfile.REGTYPE),
+            ("/escape", tarfile.REGTYPE),
+            ("unsafe", tarfile.SYMTYPE),
+            ("unsafe", tarfile.DIRTYPE),
+        ]),
+    )
 )
 def test_unsafe_members_refuse_installation_at_every_position(
-    siblings: list[bytes],
-    payload: bytes,
-    selected_position: int,
-    unsafe_position: int,
-    unsafe: tuple[str, bytes],
+    case: _UnsafeMemberCase,
 ) -> None:
     """No selected-member position can hide an unsafe sibling from validation."""
     entries = [
         (f"docs/sibling-{index}", body, tarfile.REGTYPE)
-        for index, body in enumerate(siblings)
+        for index, body in enumerate(case.siblings)
     ]
     entries.insert(
-        selected_position % (len(entries) + 1), ("tool", payload, tarfile.REGTYPE)
+        case.selected_position % (len(entries) + 1),
+        ("tool", case.payload, tarfile.REGTYPE),
     )
-    name, kind = unsafe
-    entries.insert(unsafe_position % (len(entries) + 1), (name, b"", kind))
+    name, kind = case.unsafe
+    entries.insert(case.unsafe_position % (len(entries) + 1), (name, b"", kind))
     with (
         tempfile.TemporaryDirectory() as directory,
         pytest.MonkeyPatch.context() as patch,
@@ -103,7 +128,7 @@ def test_unsafe_members_refuse_installation_at_every_position(
             pytest.fail("unsafe archive validation must finish before staging")
 
         patch.setattr(installer, "_stage_binary", refuse_staging)
-        status = _install(_archive(entries), root, len(payload))
+        status = _install(_archive(entries), root, len(case.payload))
 
         assert status == 1, "an unsafe member must reject the entire archive"
         assert binary.read_bytes() == b"previous executable", "old bytes must survive"
@@ -116,36 +141,41 @@ def test_unsafe_members_refuse_installation_at_every_position(
 
 @settings(max_examples=64, deadline=None)
 @given(
-    siblings=st.lists(st.binary(max_size=128), max_size=6),
-    payload=st.binary(min_size=2, max_size=128),
-    position=st.integers(min_value=0, max_value=7),
-    name=st.sampled_from(["tool", "bin/tool", "sbin/runner"]),
-    size_delta=st.sampled_from([-1, 1]),
+    case=st.builds(
+        _SelectionCase,
+        siblings=st.lists(st.binary(max_size=128), max_size=6),
+        payload=st.binary(min_size=2, max_size=128),
+        position=st.integers(min_value=0, max_value=7),
+        name=st.sampled_from(["tool", "bin/tool", "sbin/runner"]),
+        size_delta=st.sampled_from([-1, 1]),
+    )
 )
 def test_only_unique_exact_size_members_install(
-    siblings: list[bytes], payload: bytes, position: int, name: str, size_delta: int
+    case: _SelectionCase,
 ) -> None:
     """Regular siblings do not alter exact-name, unique-member, or size approval."""
     safe_entries = [
         (f"docs/sibling-{index}", body, tarfile.REGTYPE)
-        for index, body in enumerate(siblings)
+        for index, body in enumerate(case.siblings)
     ]
-    selected = (name, payload, tarfile.REGTYPE)
-    safe_entries.insert(position % (len(safe_entries) + 1), selected)
+    selected = (case.name, case.payload, tarfile.REGTYPE)
+    safe_entries.insert(case.position % (len(safe_entries) + 1), selected)
     scenarios = [
-        (safe_entries, len(payload), True),
-        ([*safe_entries, selected], len(payload), False),
-        (safe_entries, len(payload) + size_delta, False),
+        (safe_entries, len(case.payload), True),
+        ([*safe_entries, selected], len(case.payload), False),
+        (safe_entries, len(case.payload) + case.size_delta, False),
     ]
     for entries, pinned_size, approved in scenarios:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            status = _install(_archive(entries), root, pinned_size, name)
+            status = _install(_archive(entries), root, pinned_size, case.name)
             binary = root / "runner" / "tool-bin" / "tool"
             github_path = root / "github_path"
             if approved:
                 assert status == 0, "a unique exact-size selected member must install"
-                assert binary.read_bytes() == payload, "only approved bytes may install"
+                assert binary.read_bytes() == case.payload, (
+                    "only approved bytes may install"
+                )
                 assert list(binary.parent.iterdir()) == [binary], (
                     "safe siblings must not be installed"
                 )
