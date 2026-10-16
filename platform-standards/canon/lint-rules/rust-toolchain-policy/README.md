@@ -41,12 +41,14 @@ link, a refusal) makes the crate indeterminate rather than library-free.
 Each declared MSRV is exercised by CI. It is when any of these holds: a
 workflow names a numeric toolchain with the same `major.minor`; the pin is that
 version; a job id, a job name or a step command is about the MSRV (`msrv`,
-`cargo-msrv`); or a step that selects a toolchain reads `rust-version`. A
-`${{ matrix.KEY }}` reference counts every value the job's matrix gives that
-key, `include` legs too; quote a version in YAML (`"1.80"`), because an unquoted
-`1.80` decodes as the number 1.8. A workflow that cannot be decoded makes the
-clause indeterminate. The estate's cost rule for the MSRV job is
-`cargo check --all-targets` on the MSRV toolchain, never a second test run.
+`cargo-msrv`); a step uses the shared
+`leynos/shared-actions/.github/actions/msrv-check` action; or a step that
+selects a toolchain reads `rust-version`. A `${{ matrix.KEY }}` reference
+counts every value the job's matrix gives that key, `include` legs too; quote a
+version in YAML (`"1.80"`), because an unquoted `1.80` decodes as the number
+1.8. A workflow that cannot be decoded makes the clause indeterminate. The
+estate's cost rule for the MSRV job is `cargo check --all-targets` on the MSRV
+toolchain, never a second test run.
 
 ## RT-027
 

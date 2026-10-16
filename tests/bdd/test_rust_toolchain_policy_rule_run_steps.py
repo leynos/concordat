@@ -87,18 +87,44 @@ def given_floating_pin(toolchain_checkout: pathlib.Path) -> None:
     _write(toolchain_checkout, ".github/dependabot.yml", _DEPENDABOT)
 
 
+def _msrv_checkout(checkout: pathlib.Path, step: str) -> None:
+    """Write a library declaring rust-version 1.85 whose one job runs *step*."""
+    _write(checkout, "Cargo.toml", f'{_MANIFEST}rust-version = "1.85"\n')
+    _write(checkout, "src/lib.rs", "")
+    _write(checkout, "rust-toolchain.toml", _pin("1.93.1"))
+    _write(checkout, ".github/dependabot.yml", _DEPENDABOT)
+    _write(
+        checkout,
+        ".github/workflows/ci.yml",
+        f"jobs:\n  check:\n    steps:\n      - {step}\n",
+    )
+
+
 @given("a checkout declaring an MSRV that no workflow exercises")
 def given_unexercised_msrv(toolchain_checkout: pathlib.Path) -> None:
     """Write a library with rust-version 1.85 and a workflow that never uses it."""
-    _write(toolchain_checkout, "Cargo.toml", f'{_MANIFEST}rust-version = "1.85"\n')
-    _write(toolchain_checkout, "src/lib.rs", "")
-    _write(toolchain_checkout, "rust-toolchain.toml", _pin("1.93.1"))
-    _write(toolchain_checkout, ".github/dependabot.yml", _DEPENDABOT)
-    _write(
-        toolchain_checkout,
-        ".github/workflows/ci.yml",
-        "jobs:\n  test:\n    steps:\n      - run: cargo test\n",
+    _msrv_checkout(toolchain_checkout, "run: cargo test")
+
+
+_MSRV_ACTIONS: typ.Final = {
+    "the shared msrv-check action": (
+        "leynos/shared-actions/.github/actions/msrv-check@" + "a" * 40
+    ),
+    "a lookalike of the msrv-check action": (
+        "leynos/shared-actions/.github/actions/msrv-check-lookalike@v1"
+    ),
+}
+
+
+@given(
+    parsers.re(
+        r"a checkout declaring an MSRV and a job that uses "
+        r"(?P<which>the shared msrv-check action|a lookalike of the msrv-check action)"
     )
+)
+def given_msrv_action(toolchain_checkout: pathlib.Path, which: str) -> None:
+    """Write a library whose one job calls the named action."""
+    _msrv_checkout(toolchain_checkout, f"uses: {_MSRV_ACTIONS[which]}")
 
 
 @given("a checkout with an old nightly and a toolchain policy exception naming it")
