@@ -672,10 +672,11 @@ utility, Conftest, represent the industry standard. OPA's query language, Rego,
 is purpose-built for asserting policies over structured data like YAML or JSON,
 making it far more robust and maintainable than alternatives.[^4]
 
-For ensuring the quality of unstructured prose, a specialized linguistic tool
-is required. Vale is a purpose-built prose linter capable of codifying an
-entire style guide into a set of machine-enforceable rules, a task for which
-general-purpose text-matching tools are ill-suited.[^6]
+Documentation quality currently relies on formatting, Markdown linting,
+spelling checks, and manual prose review. Vale has been retired from the
+standard gates; its configuration and style packs remain available for optional
+legacy use.[^6] Stilyagi is the intended replacement once ready, but is not yet
+required.
 
 Finally, GitHub Actions serves as the native automation engine for
 orchestration as well as remediation. For the specific task of creating pull
@@ -693,7 +694,7 @@ alternative.
 | --------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **OpenTofu**                                  | Declarative management of GitHub API resources (repositories, teams, rulesets).         | Provides a declarative, stateful approach with drift detection (`plan`), and remediation (`apply`). Fully compatible with the mature Terraform GitHub provider.[^9][^10] | **Ansible:** Imperative, not stateful. Less ergonomic for detecting drift in API-managed resources compared to a dedicated IaC tool.                              |
 | **OPA/Conftest**                              | Policy-as-code engine for validating structured configuration files (e.g., YAML, JSON). | Provides a powerful, declarative language (Rego) specifically designed for querying structured data. Enables testable, version-controlled policies.[^4][^11]             | **Custom Scripts (Python/Shell):** Brittle, harder to maintain, and lacks the expressive power of Rego for complex policy evaluation.                             |
-| **Vale**                                      | Prose linter for enforcing documentation, and style guide standards.                    | Codifies linguistic and stylistic rules far more effectively than simple regular expressions. Supports custom, shareable style packs.[^6][^12]                           | **Ad-hoc Regex Scripts:** Inadequate for handling the complexities of natural language; difficult to maintain, and scale.                                         |
+| **Vale (legacy, optional)**                   | Optional local prose checks; retired from standard gates.                               | Existing configuration and style packs remain available for legacy consumers.[^6][^12] Stilyagi is the intended replacement once ready.                                  | Automated prose enforcement is deferred pending Stilyagi adoption; formatting, Markdown linting, spelling, and manual review remain required.                     |
 | `multi-gitter`                                | Scaled remediation via mass pull request generation.                                    | A specialized tool purpose-built for the task of multi-repository changes. More ergonomic and efficient than general-purpose tools.                                      | **Custom Scripts using **`gh`** CLI:** Requires significant boilerplate code to handle cloning, branching, committing, and creating PRs across many repositories. |
 | **GitHub Actions**                            | Primary automation, and orchestration engine.                                           | Native to the platform, providing seamless integration for CI/CD, scheduled tasks, and event-driven automation.[^13][^14]                                                | **External CI/CD Systems (e.g., Jenkins):** Adds operational overhead, and complexity compared to the tightly integrated native solution.                         |
 | **Open Source Security Foundation Scorecard** | Security posture assessment.                                                            | Provides a standardized, automated baseline for security best practices. Integrates easily into CI workflows, and is maintained by the Open Source Security Foundation.  | **Manual Security Audits:** Not scalable, inconsistent, and cannot be integrated into an automated enforcement gate.                                              |
@@ -725,8 +726,9 @@ The mandated directory structure is as follows:
 - `lint/`: Standardized linter configurations (e.g., `python/ruff.toml`,
   `js/eslint.config.js`).
 
-- `docs/`: Canonical documentation templates (`AGENTS.md`), Vale configuration
-  (`.vale.ini`), and custom Vale style packs (`Styles/`).
+- `docs/`: Canonical documentation templates (`AGENTS.md`), plus optional
+  legacy Vale configuration (`.vale.ini`) and style packs (`Styles/`). The Vale
+  assets are retained for existing consumers and are not standard gates.
 
 - `make/`: Reusable Makefile fragments (`includes.mk`).
 
@@ -1561,7 +1563,7 @@ The formal schema for this file is defined below.
 | `language.rust.surfaces`    | Array[Object] | Optional                             | Governed Rust surfaces as `{path, role}` entries (`path` names a `Cargo.toml` relative to the repository root; `role` is optional and, when supplied, `workspace` or `crate` (inferred from the parsed manifest when omitted)). Authoritative when present, including the empty list ("no governed Rust"). Absent: a root `Cargo.toml` implies a single root surface. Introduced in v0.3.0; see §2.2.1. |
 | `infrastructure.opentofu`   | Boolean       | Optional                             | Set to `true` if the repository contains OpenTofu/Terraform code. This enables checks for `Makefile` targets like `tf-plan`. Defaults to `false`.                                                                                                                                                                                                                                                       |
 | `infrastructure.kubernetes` | Boolean       | Optional                             | Set to `true` if the repository contains Kubernetes manifests. This enables Kubernetes-specific validation rules. Defaults to `false`.                                                                                                                                                                                                                                                                  |
-| `docs.style`                | String        | Optional                             | The name of the Vale style to apply. Must correspond to a directory name in `platform-standards/canon/docs/Styles/`. Example: `your-house`.                                                                                                                                                                                                                                                             |
+| `docs.style`                | String        | Optional                             | Legacy Vale style name, corresponding to a directory in `platform-standards/canon/docs/Styles/`. Example: `your-house`. Retained for optional use; it does not enable a standard gate.                                                                                                                                                                                                                  |
 | `libraries`                 | Array[Object] | Optional                             | A list of critical internal libraries consumed by this repository, used for guide parity checks.                                                                                                                                                                                                                                                                                                        |
 | `libraries.name`            | String        | Required (if `libraries` is present) | The name of the consumed library repository (e.g., `acme-lib`).                                                                                                                                                                                                                                                                                                                                         |
 | `libraries.version_tag`     | String        | Required (if `libraries` is present) | The Git tag of the library version being used (e.g., `v2.4.1`). The Auditor uses this to fetch the correct version of the library's user guide for comparison.                                                                                                                                                                                                                                          |
@@ -1737,9 +1739,10 @@ The primary audit domains are:
    `platform-standards/canon/`. Content integrity checks can range from a
    simple checksum match for files that must be identical, to a more complex
    structural validation via OPA for configuration files.
-4. **Prose, and Documentation Quality:** Executes the Vale prose linter against
-   all Markdown files within the repository to enforce the organization's house
-   style guide, checking for issues related to grammar, tone, and terminology.6
+4. **Prose and Documentation Quality:** Audits the documented formatting,
+   Markdown linting, and spelling gates. Manual prose review remains required.
+   Vale is retired from the standard gates; Stilyagi will replace it once
+   ready, subject to a separate adoption change.
 5. **Security Posture:** Integrates, and executes the Open Source Security
    Foundation Scorecard tool. The numeric score and specific findings from
    Scorecard are incorporated into the Auditor's overall report, providing a
@@ -1796,7 +1799,7 @@ the dependency-pin actionability checks.
 | FP-003       | A `Makefile` must exist and contain canonical targets (`lint`, `test`, `build`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | File, and Content Presence      | Python/Content Check                                                | error                | 2                        |
 | FP-004       | For Python projects, a `ruff.toml` file must exist.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | File, and Content Presence      | OPA/Conftest                                                        | error                | 1                        |
 | QG-001       | The `Makefile` lint gate must be binding: no ignore-errors or soft-skip lint recipes, and gate delegation provable over the full static closure of prerequisites and literal `$(MAKE) target` recursion. Soft skips are read as the shell runs them (v0.3.2): a hard-failing `command -v` probe, `which` outside command position, and an assignment-only Make variable prefix are not findings. The gate variable's `?=` assignment (`WHITAKER ?= whitaker`) is the sanctioned estate pattern and is not a finding. Unprovable constructs (includes, recovered parses, ambiguous `lint` definitions) fail closed as indeterminate. | Quality-Gate Integrity          | makeutil + OPA/Conftest (`rust-makefile-baseline`)                  | error                | 2                        |
-| PD-001       | All Markdown files must pass Vale linting against the house style guide.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Prose and Documentation Quality | Vale                                                                | warning              | 2                        |
+| PD-001       | Retired: Vale is no longer a standard documentation gate. Stilyagi adoption is pending; formatting, Markdown linting, spelling, and manual prose review remain required.                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Prose and Documentation Quality | None (retired)                                                      | —                    | Retired                  |
 | PD-002       | A recipe reachable from `check-fmt` runs `mdtablefix --check` with the select and rule flags (`--git --include-untracked --wrap --renumber --breaks --ellipsis --fences`) directly and bindingly.                                                                                                                                                                                                                                                                                                                                                                                                                                   | Prose and Documentation Quality | Conftest (`markdown-formatting-baseline`)                           | error                | 2                        |
 | PD-003       | A recipe reachable from `fmt` runs `mdtablefix --in-place` with the same flags directly rather than via the `mdformat-all` wrapper.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Prose and Documentation Quality | Conftest (`markdown-formatting-baseline`)                           | error                | 2                        |
 | PD-004       | A recipe reachable from `fmt` runs `markdownlint-cli2 --fix` directly rather than via the `mdformat-all` wrapper.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Prose and Documentation Quality | Conftest (`markdown-formatting-baseline`)                           | error                | 2                        |
@@ -2830,7 +2833,7 @@ tracked in roadmap Section 4.2.
 
 The Auditor will be implemented as a composite GitHub Action, primarily written
 in Python 3. This approach provides the necessary flexibility to orchestrate
-calls to external command-line tools like Conftest, and Vale, while also
+calls to external command-line tools like Conftest and Scorecard, while also
 allowing for direct interaction with the GitHub API via a robust client library.
 
 The execution flow of the Auditor action is as follows:
@@ -2854,9 +2857,8 @@ The execution flow of the Auditor action is as follows:
    - A subprocess is spawned to execute `conftest test`, pointing it to the
      relevant configuration files in the target repository, and the policy
      directory within the checked-out `platform-standards` repository.
-   - A subprocess is spawned to execute `vale`, configured to use the
-     `.vale.ini` from `platform-standards`, and targeting all Markdown files in
-     the target repository.
+   - Documentation checks audit the formatting, Markdown linting, and spelling
+     gates. The standard audit does not invoke Vale.
    - A Python GitHub API client fetches repository and branch protection
      settings directly from the GitHub API.
    - A subprocess is spawned to execute the `scorecard` command-line interface
@@ -2971,8 +2973,8 @@ A simple log output from a CI job is easily missed, and cannot be used as a
 granular gate for branch protection. The GitHub Code Scanning feature, however,
 provides a much richer integration. It is designed to ingest security and
 quality findings via SARIF files. By adopting SARIF as the single, unified
-output format, all disparate findings—from OPA policy violations, Vale prose
-suggestions, Scorecard security risks, and custom Python checks—can be
+output format, all disparate findings—from OPA policy violations, documentation
+policy findings, Scorecard security risks, and custom Python checks—can be
 consolidated into a single, machine-readable artefact.
 
 When this SARIF file is uploaded, GitHub treats the findings as native Code
@@ -3123,16 +3125,21 @@ share policy definitions, rely on the same canonical checkout of
 `platform-standards`, and preserve Git history via PRs rather than silent
 commits.
 
-### 5.2. Prose, and documentation linting with Vale
+### 5.2. Documentation quality during the prose-tool transition
 
-To enforce consistency in all written materials, the Auditor will invoke the
-`vale` command-line tool. The tool will be configured to target all Markdown
-files (`--ext=.md`) within the repository. The configuration file (`.vale.ini`)
-and any custom style packs (`Styles/YourHouse/`) will be sourced from the
-`platform-standards/canon/docs/` directory. This ensures that all
-documentation, from the main `README.md` to developer guides, and the
-`AGENTS.md` file, adheres to the defined house style guide for tone, grammar,
-and terminology.12
+Vale is retired from standard gates, including the Auditor and CodeRabbit's
+repository review tool. PD-001 is retained as a retired identifier, not an
+active requirement. Formatting, Markdown linting, spelling, and manual prose
+review remain required; none establishes an automated grammar or tone verdict.
+
+Canonical Vale configuration and style packs remain versioned in
+`platform-standards/canon/docs/` for optional legacy use. Their presence and
+checksums do not require a repository to execute Vale. The local `make vale`
+target is explicitly optional and is outside the standard gate path.
+
+Stilyagi is the intended replacement once ready. Its installation,
+configuration, and enforcement will require a separate adoption change;
+Stilyagi is not yet a standard gate.
 
 ### 5.3. Enforcement via GitHub rulesets and required status checks
 
@@ -3159,10 +3166,11 @@ The enforcement loop will be closed as follows:
    SARIF upload to have a successful conclusion. The `context` of this check
    typically follows the pattern `Code scanning results / <tool-name>`.
 4. Because the Auditor's SARIF report includes all findings, a single
-   `error`-level finding from any of its checks (OPA, Vale, Scorecard, etc.)
-   will cause the Code Scanning result to be non-successful.
-5. This configuration makes the entire suite of Auditor checks a mandatory,
-   non-optional gate that must pass before any pull request can be merged.
+   `error`-level finding from any active check (OPA, Scorecard, etc.) will
+   cause the Code Scanning result to be non-successful.
+5. This configuration makes the active suite of Auditor checks a mandatory
+   gate that must pass before any pull request can be merged. Retired PD-001
+   and optional legacy Vale checks are outside this suite.
 
 ### 5.4. Standardization via reusable GitHub workflows
 
@@ -3229,7 +3237,7 @@ process for managing exemptions is therefore required.
   object has the following keys:
 
 - `check_id`: A string that must exactly match the ID of the check to be
-  exempted, as defined in Table 3 (e.g., `PD-001`).
+  exempted, as defined in Table 3 (e.g., `PD-002`).
 
 - `justification`: A detailed, human-readable string explaining the technical or
   business reason for the exemption. This text is crucial for auditing purposes.
@@ -3367,7 +3375,7 @@ the principle of least privilege.
   metric, especially when it is configured to run on every pull request. The
   implementation must parallelize input/output-bound, and CPU-bound tasks where
   possible. The cost of checking out the `platform-standards` repository and
-  the execution time of external tools like Vale and Scorecard must be
+  the execution time of external tools like Conftest and Scorecard must be
   monitored and optimized. Caching strategies for dependencies and tools within
   the GitHub Actions runner should be employed.
 - **API Rate Limiting:** All components that interact with the GitHub API must

@@ -185,7 +185,7 @@ check-vale: ## Check that the optional Vale binary is installed
 	  }
 	$(VALE_STYLE_ARCHIVE) check
 
-vale: check-vale ## Check prose
+vale: check-vale ## Run optional legacy Vale prose checks
 	"$(VALE)" sync
 	$(UV_ENV) $(UV) run --isolated --python "$(VALE_PYTHON)" \
 	  --with 'git+https://github.com/leynos/concordat-vale.git@$(VALE_HELPER_REF)' \
