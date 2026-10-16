@@ -771,9 +771,9 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   `lint` reaches and records each `cargo ... clippy` command, and
   `clippy_exception.clippy_exceptions` reads the recorded clippy-gate exception
   (sections found by `exception_docs`, the scripts they name, and whether each
-  exists, runs clippy and is reached). Rules DG-003 and DG-004 live in
-  `documentation_presence_rust.rego`, beside the Python rules in the same
-  package.
+  exists, runs clippy and is reached). The documentation gate (DG) rules DG-003
+  and DG-004 live in `documentation_presence_rust.rego`, beside the Python
+  rules in the same package.
 
 - `policy-input/spelling-config-baseline` —
   `spelling_envelope.build_spelling_envelope`. It reuses `markdown_envelope`'s
