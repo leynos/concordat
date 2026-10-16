@@ -735,11 +735,12 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   recognizing the Python interpreter and canonical helper path. It is not a
   general shell or interpreter parser. The helper `tool` form additionally
   checks its first `--from` value before the first `--` against the selected
-  canonical helper's exact-pin syntax. Bare names, ranges, and literal `latest`
-  versions cannot receive gate credit; unknown Make values remain unresolved,
-  including when the lexer separates a parenthesized Make expression from the
-  helper prefix. This helper-specific recovery is separate from the direct
-  `uv run`, `uv tool run`, `uvx`, and `pipx run` routes.
+  canonical helper's exact-pin syntax. Both helper modes reject the canonical
+  helper's forbidden flags before the first `--`. Bare names, ranges, and
+  literal `latest` versions cannot receive gate credit; unknown Make values
+  remain unresolved, including when the lexer separates a parenthesized Make
+  expression from the helper prefix. This helper-specific recovery is separate
+  from the direct `uv run`, `uv tool run`, `uvx`, and `pipx run` routes.
   `_unresolved_direct_launcher` recognizes their existing launcher grammar when
   unsupported Make expansion splits away an option value.
   `_with_recipe_provenance`, called only by `runs_in`, conservatively marks

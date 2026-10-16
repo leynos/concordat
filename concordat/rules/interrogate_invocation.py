@@ -357,6 +357,39 @@ _GATE_DIRECT_REFERENCE: typ.Final = re.compile(
     rf"{_GATE_PIN_NAME}\s*@\s*(?P<url>git\+\S+)"
 )
 _GATE_FULL_SHA: typ.Final = re.compile(r"[0-9a-f]{40}")
+# Match validate_request/_refuse_forbidden in that same trusted fixture.
+# This is a static grammar: consumer helper code must never be imported.
+_GATE_FORBIDDEN_FLAGS: typ.Final = frozenset({
+    "--no-offline",
+    "--no-cache",
+    "--no-frozen",
+    "--no-locked",
+    "--locked",
+    "--frozen",
+    "--offline",
+})
+_GATE_FORBIDDEN_PREFIXES: typ.Final = ("--refresh", "--upgrade", "--reinstall")
+_GATE_FORBIDDEN_SHORT: typ.Final = "UPn"
+
+
+def _gate_short_flag_is_forbidden(name: str) -> bool:
+    """Mirror the canon's short-alias and alphabetic-cluster refusal."""
+    if name[:1] != "-" or name[1:2] in {"", "-"}:
+        return False
+    letters = name[1:]
+    return letters[0] in _GATE_FORBIDDEN_SHORT or (
+        letters.isalpha() and any(flag in _GATE_FORBIDDEN_SHORT for flag in letters)
+    )
+
+
+def _gate_flag_is_forbidden(argument: str) -> bool:
+    """Recognize canonical policy overrides, including equals-value forms."""
+    name = argument.partition("=")[0]
+    return (
+        name in _GATE_FORBIDDEN_FLAGS
+        or name.startswith(_GATE_FORBIDDEN_PREFIXES)
+        or _gate_short_flag_is_forbidden(name)
+    )
 
 
 def _gate_spec_is_pinned(spec: str) -> bool:
@@ -403,20 +436,24 @@ def _gate_helper_arguments(arguments: list[str]) -> list[str] | None:
 
     Only `_launcher_arguments` calls this reader, after recognizing the Python
     interpreter and canonical helper path. The helper `tool` form additionally
-    requires a specification accepted by its canonical pin recognizer.
+    requires a specification accepted by its canonical pin recognizer. Both
+    modes refuse the canonical helper's forbidden pre-separator flags.
 
     Returns
     -------
     list[str] | None
         The arguments unchanged, or ``None`` for a refused helper boundary.
     """
+    if arguments[:1] not in (["run"], ["tool"]):
+        return arguments
+    options = itertools.takewhile(lambda word: word != "--", arguments[1:])
+    if any(_gate_flag_is_forbidden(option) for option in options):
+        return None
     if arguments[:1] == ["tool"]:
         spec = _gate_tool_spec(arguments)
         if UNRESOLVED_MARK in spec:
             return arguments
         return arguments if _gate_spec_is_pinned(spec) else None
-    if arguments[:1] != ["run"]:
-        return arguments
     # The helper refuses `run` without one final command separator.
     if arguments.count("--") != 1:
         return None
