@@ -238,10 +238,30 @@ def test_label_seed_matches_raw_capture_hash_and_content() -> None:
     assert _label_seed_issues(_load_seed(LABEL_SEED)) == ()
 
 
-def test_seed_contracts_reject_valid_bug_color_drift(
+@pytest.mark.parametrize(
+    ("field", "replacement", "mutate"),
+    [
+        pytest.param(
+            "color",
+            "d73a4b",
+            _change_bug_label_color,
+            id="bug_color_drift",
+        ),
+        pytest.param(
+            "description",
+            "A confirmed defect is not working as intended.",
+            _change_bug_label_description,
+            id="bug_description_drift",
+        ),
+    ],
+)
+def test_seed_contracts_reject_valid_bug_field_drift(
     captured_bug_label: dict[str, object],
+    field: typ.Literal["color", "description"],
+    replacement: str,
+    mutate: SeedMutator,
 ) -> None:
-    """A valid colour change still differs from the approved captured label."""
+    """Valid single-field bug label changes differ from the captured record."""
     baseline = _load_seed(LABEL_SEED)
     assert _label_seed_issues(baseline) == ()
     baseline_bug = _bug_label_record(baseline)
@@ -252,41 +272,17 @@ def test_seed_contracts_reject_valid_bug_color_drift(
 
     candidate = copy.deepcopy(baseline)
     expected = copy.deepcopy(baseline)
-    _change_bug_label_color(candidate)
-    _bug_label_record(expected)["color"] = "d73a4b"
+    mutate(candidate)
+    _bug_label_record(expected)[field] = replacement
     assert candidate == expected
 
-    changed_color = _bug_label_record(candidate)["color"]
-    assert isinstance(changed_color, str)
-    assert changed_color != captured_bug_label["color"]
-    assert re.fullmatch(r"[0-9a-f]{6}", changed_color)
-    assert _label_seed_issues(candidate)
-
-
-def test_seed_contracts_reject_valid_bug_description_drift(
-    captured_bug_label: dict[str, object],
-) -> None:
-    """A valid description change still differs from the approved snapshot."""
-    baseline = _load_seed(LABEL_SEED)
-    assert _label_seed_issues(baseline) == ()
-    baseline_bug = _bug_label_record(baseline)
-    fields = ("name", "color", "description")
-    assert {field: baseline_bug[field] for field in fields} == {
-        field: captured_bug_label[field] for field in fields
-    }
-
-    candidate = copy.deepcopy(baseline)
-    expected = copy.deepcopy(baseline)
-    _change_bug_label_description(candidate)
-    _bug_label_record(expected)["description"] = (
-        "A confirmed defect is not working as intended."
-    )
-    assert candidate == expected
-
-    changed_description = _bug_label_record(candidate)["description"]
-    assert isinstance(changed_description, str)
-    assert 0 < len(changed_description) < 100
-    assert changed_description != captured_bug_label["description"]
+    changed_value = _bug_label_record(candidate)[field]
+    assert isinstance(changed_value, str)
+    assert changed_value != captured_bug_label[field]
+    if field == "color":
+        assert re.fullmatch(r"[0-9a-f]{6}", changed_value)
+    else:
+        assert 0 < len(changed_value) < 100
     assert _label_seed_issues(candidate)
 
 

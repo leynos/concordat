@@ -6,6 +6,9 @@ import datetime as dt
 import re
 import typing as typ
 
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
 _SOURCE_FIELDS = {
     "repository",
     "api",
@@ -147,14 +150,21 @@ def _label_seed_issues(seed: object) -> tuple[str, ...]:
     if not isinstance(labels_value, list):
         issues.append("labels must be a list")
         return tuple(issues)
+    issues.extend(_label_collection_issues(labels_value))
+    return tuple(issues)
+
+
+def _label_collection_issues(labels: cabc.Sequence[object]) -> list[str]:
+    """Validate label records and require the complete published name set."""
+    issues: list[str] = []
     names: list[str] = []
-    for label_value in labels_value:
+    for label_value in labels:
         record_issues, name = _label_record_issues(label_value)
         issues.extend(record_issues)
         if name is not None:
             names.append(name)
     issues.extend(_label_snapshot_name_issues(names))
-    return tuple(issues)
+    return issues
 
 
 def _label_source_issues(source_value: object) -> list[str]:
