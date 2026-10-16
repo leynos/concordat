@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import pathlib
 import subprocess
@@ -29,8 +30,69 @@ _ROOT_POLICY_DIR: typ.Final = (
 _CONFTEST_TIMEOUT: typ.Final = 120.0
 
 
+class _TemporaryDirectoryResource(typ.Protocol):
+    """Describe the cleanup surface needed by one batch directory."""
+
+    name: str
+
+    def cleanup(self) -> None:
+        """Remove the temporary directory."""
+        ...
+
+
+class _CreateTemporaryDirectory(typ.Protocol):
+    """Describe the temporary-directory factory used for a batch."""
+
+    def __call__(self, *, prefix: str) -> _TemporaryDirectoryResource:
+        """Create a temporary directory with the requested prefix."""
+        ...
+
+
+class _WriteText(typ.Protocol):
+    """Describe writing one UTF-8 batch envelope."""
+
+    def __call__(
+        self,
+        path: pathlib.Path,
+        contents: str,
+        /,
+        *,
+        encoding: str = "utf-8",
+    ) -> int:
+        """Write the contents and return the number of characters written."""
+        ...
+
+
+class _RunProcess(typ.Protocol):
+    """Describe the fixed, captured Conftest process invocation."""
+
+    def __call__(
+        self,
+        argv: cabc.Sequence[str],
+        /,
+        *,
+        capture_output: typ.Literal[True] = True,
+        text: typ.Literal[True] = True,
+        timeout: float = 120.0,
+        check: typ.Literal[False] = False,
+    ) -> subprocess.CompletedProcess[str]:
+        """Run one captured text process with the batch timeout."""
+        ...
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class _RootRustPolicyBatchOperations:
+    """Bundle the private storage and process operations for one batch."""
+
+    create_directory: _CreateTemporaryDirectory
+    write_text: _WriteText
+    run_process: _RunProcess
+
+
 def invoke_root_rust_policy_batch(
     envelopes: cabc.Sequence[dict[str, object]],
+    *,
+    operations: _RootRustPolicyBatchOperations | None = None,
 ) -> list[list[_ConftestResult]]:
     """Evaluate root-policy envelopes once and retain each input's findings.
 
@@ -59,11 +121,20 @@ def invoke_root_rust_policy_batch(
         )
         raise shape_error
 
-    with _root_policy_batch_directory() as scratch:
-        filenames, input_paths = _write_batch_envelopes(
-            pathlib.Path(scratch), envelopes
+    resolved_operations = (
+        _RootRustPolicyBatchOperations(
+            create_directory=tempfile.TemporaryDirectory,
+            write_text=pathlib.Path.write_text,
+            run_process=subprocess.run,
         )
-        completed = _run_conftest(input_paths)
+        if operations is None
+        else operations
+    )
+    with _root_policy_batch_directory(resolved_operations) as scratch:
+        filenames, input_paths = _write_batch_envelopes(
+            pathlib.Path(scratch), envelopes, resolved_operations
+        )
+        completed = _run_conftest(input_paths, resolved_operations)
         results = runner._decode_results(completed, _ROOT_POLICY_ID)
         matched_results = _match_results_to_inputs(results, filenames)
         _validate_policy_exit_status(completed, results)
@@ -71,11 +142,13 @@ def invoke_root_rust_policy_batch(
 
 
 @contextmanager
-def _root_policy_batch_directory() -> cabc.Iterator[str]:
+def _root_policy_batch_directory(
+    operations: _RootRustPolicyBatchOperations,
+) -> cabc.Iterator[str]:
     """Create and clean temporary storage for one root-policy batch."""
     prefix = "concordat-rust-policy-"
     try:
-        scratch = tempfile.TemporaryDirectory(prefix=prefix)
+        scratch = operations.create_directory(prefix=prefix)
     except OSError as error:
         message = "could not create temporary directory for root Rust-policy batch"
         raise OperationalRuleError(
@@ -101,7 +174,9 @@ def _root_policy_batch_directory() -> cabc.Iterator[str]:
 
 
 def _write_batch_envelopes(
-    scratch_dir: pathlib.Path, envelopes: cabc.Sequence[dict[str, object]]
+    scratch_dir: pathlib.Path,
+    envelopes: cabc.Sequence[dict[str, object]],
+    operations: _RootRustPolicyBatchOperations,
 ) -> tuple[list[str], list[pathlib.Path]]:
     """Write numbered envelopes and return their names and paths."""
     filenames = runner._envelope_file_names(len(envelopes))
@@ -109,7 +184,7 @@ def _write_batch_envelopes(
     for path, envelope in zip(input_paths, envelopes, strict=True):
         contents = json.dumps(envelope)
         try:
-            path.write_text(contents, encoding="utf-8")
+            operations.write_text(path, contents, encoding="utf-8")
         except OSError as error:
             message = "could not write root Rust-policy envelope"
             raise OperationalRuleError(
@@ -123,6 +198,7 @@ def _write_batch_envelopes(
 
 def _run_conftest(
     input_paths: cabc.Sequence[pathlib.Path],
+    operations: _RootRustPolicyBatchOperations,
 ) -> subprocess.CompletedProcess[str]:
     """Run the root policy once, retaining the established process contract."""
     argv = [
@@ -137,7 +213,7 @@ def _run_conftest(
         *map(str, input_paths),
     ]
     try:
-        return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed argv, no shell
+        return operations.run_process(
             argv,
             capture_output=True,
             text=True,
