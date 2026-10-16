@@ -10,6 +10,14 @@ everything else is derived from the current source.
 
 ## Development environment and gates
 
+Vale is retired from the standard gates. Formatting, Markdown linting,
+spelling, and manual prose review remain required. The repository's
+`.coderabbit.yaml` disables CodeRabbit's Vale tool; other review tools retain
+their defaults. `make vale` and the canonical Vale assets remain available for
+optional legacy use. A successful standard gate run does not establish a Vale
+prose verdict. Stilyagi is the intended replacement once ready; it is not yet a
+required gate.
+
 `uv sync --group dev` installs the development dependency group. The group is
 declared in `pyproject.toml` under `[dependency-groups]` as `dev`, and pulls in
 pytest, pytest-xdist, pytest-bdd, pytest-asyncio, pytest-mock, ruff, pyright,

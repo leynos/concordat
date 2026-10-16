@@ -22,18 +22,18 @@ artifacts:
     type: lint-config
     path: platform-standards/canon/docs/.vale.ini
     description: >
-      Canonical Vale configuration wired into the documentation lint job.
+      Legacy Vale configuration for optional prose checks; not a standard gate.
     sha256: 3e4982988aae92a23f1e1583875d145607e485b22c7231fc6a1d0e2bf5843fec
   - id: vale-style-tone
     type: lint-config
     path: platform-standards/canon/docs/Styles/Concordat/Tone.yml
-    description: Concordat-specific Vale tone checks referenced by .vale.ini.
+    description: Optional legacy Vale tone checks referenced by .vale.ini.
     sha256: cec61293974f128207b9219cbbcc84c61686e6fb34e6bfce148e649aadcf94c3
   - id: vale-root-config
     type: lint-config
     path: platform-standards/canon/docs/vale/.vale.ini
     description: >
-      Root-level `.vale.ini` that consumers copy verbatim for local linting.
+      Root-level `.vale.ini` retained for optional legacy local prose checks.
     sha256: 3e4982988aae92a23f1e1583875d145607e485b22c7231fc6a1d0e2bf5843fec
   - id: python-ruff-config
     type: lint-config
