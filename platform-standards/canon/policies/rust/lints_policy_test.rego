@@ -160,6 +160,19 @@ test_missing_disallowed_methods_is_rejected if {
   result[_] == "clippy.toml disallowed-methods must define the seven approved std::env entries"
 }
 
+test_non_array_disallowed_methods_is_rejected if {
+  result := data.canon.rust.lints.deny with input as {
+    "cargo": workspace_manifest,
+    "clippy": object.union(clippy_cfg, {
+      "disallowed-methods": {
+        "path": "std::env::var",
+        "reason": "inject an environment reader",
+      },
+    }),
+  }
+  result == {"clippy.toml disallowed-methods must be an array"}
+}
+
 test_missing_environment_method_is_rejected if {
   result := data.canon.rust.lints.deny with input as {
     "cargo": workspace_manifest,
@@ -176,6 +189,28 @@ test_missing_environment_method_is_rejected if {
     ["std::env::var_os", "inject an environment reader"],
   )
   result[_] == expected_message
+}
+
+test_each_missing_canonical_disallowed_method_is_rejected if {
+  count(clippy_cfg["disallowed-methods"]) == 7
+  every expected in clippy_cfg["disallowed-methods"] {
+    method_path := expected.path
+    result := data.canon.rust.lints.deny with input as {
+      "cargo": workspace_manifest,
+      "clippy": object.union(clippy_cfg, {
+        "disallowed-methods": [
+          method |
+          some method in clippy_cfg["disallowed-methods"]
+          method.path != method_path
+        ],
+      }),
+    }
+    expected_message := sprintf(
+      "clippy.toml disallowed-methods must include %s with reason %q",
+      [expected.path, expected.reason],
+    )
+    result == {expected_message}
+  }
 }
 
 test_altered_environment_method_reason_is_rejected if {
