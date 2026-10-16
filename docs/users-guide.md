@@ -857,6 +857,15 @@ missing or not TOML, or a `lint` target it cannot follow makes the affected
 check indeterminate rather than passing it. The package README carries the
 reference Makefile wiring.
 
+#### Upgrading to rule 0.4.0
+
+Version 0.4.0 lets DG-004 follow `netsuke build <target>` from the `lint`
+recipe into the repository's `Netsukefile`: a `cargo clippy` command in the
+target, or in any target it depends on, satisfies the rule. A manifest the
+audit cannot parse or a target it cannot find makes DG-004 indeterminate.
+Nothing changes for a repository whose `lint` recipe runs `cargo clippy`
+directly.
+
 #### Upgrading to rule 0.3.0
 
 Version 0.3.0 adds the clippy-gate exception: a repository whose `make lint`

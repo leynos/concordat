@@ -221,6 +221,46 @@ def exception_scenario(
     })
 
 
+NETSUKE_MAKEFILE: typ.Final = (
+    ".PHONY: lint\nNETSUKE ?= netsuke\nlint:\n\t$(NETSUKE) build lint\n"
+)
+NETSUKE_MANIFEST: typ.Final = """\
+netsuke_version: "1.0.0"
+
+vars:
+  cargo_flags: "--all-targets --all-features"
+
+actions:
+  - name: clippy-lint
+    command: >-
+      sh -e -c '"$${CARGO:-cargo}" clippy {{ cargo_flags }} -- -D warnings'
+
+  - name: lint
+    deps: clippy-lint
+    command: "true"
+"""
+
+
+def netsuke_scenario(
+    manifest: str | None = NETSUKE_MANIFEST,
+    *,
+    makefile: str = NETSUKE_MAKEFILE,
+) -> Scenario:
+    """Return a Rust scenario whose lint is a Netsuke target.
+
+    Returns
+    -------
+    Scenario
+        A deny-compliant crate, *makefile* and an optional `Netsukefile`.
+    """
+    return rust_scenario({
+        "Cargo.toml": crate_manifest('[lints.rust]\nmissing_docs = "deny"\n'),
+        "src/lib.rs": LIB_ROOT,
+        "Makefile": makefile,
+        "Netsukefile": manifest,
+    })
+
+
 SCENARIOS: typ.Final[dict[str, Scenario]] = {
     "compliant": Scenario(),
     "not_applicable": Scenario({
@@ -616,6 +656,40 @@ SCENARIOS: typ.Final[dict[str, Scenario]] = {
             "Clippy runs through `scripts/gone.py`."
         ),
     }),
+    # DG-004 through Netsuke: `netsuke build <target>` is followed into the Netsukefile.
+    "rust_netsuke_clippy": netsuke_scenario(),
+    "rust_netsuke_default_target": netsuke_scenario(
+        NETSUKE_MANIFEST + "\ndefaults:\n  - lint\n",
+        makefile=".PHONY: lint\nlint:\n\tnetsuke build\n",
+    ),
+    "rust_netsuke_variant_with_clippy": netsuke_scenario(
+        'netsuke_version: "1.0.0"\n\nactions:\n'
+        '  - name: lint\n    when: command_available("whitaker")\n'
+        '    command: "cargo fmt --check"\n'
+        '  - name: lint\n    when: not command_available("whitaker")\n'
+        '    command: "cargo clippy -- -D warnings"\n'
+    ),
+    "rust_netsuke_target_without_clippy": netsuke_scenario(
+        'netsuke_version: "1.0.0"\n\nactions:\n'
+        '  - name: lint\n    command: "cargo fmt --check"\n'
+    ),
+    "rust_netsuke_clippy_only_echoed": netsuke_scenario(
+        'netsuke_version: "1.0.0"\n\nactions:\n'
+        '  - name: lint\n    command: "echo cargo clippy"\n'
+    ),
+    "rust_netsuke_manifest_missing": netsuke_scenario(None),
+    "rust_netsuke_manifest_unparsable": netsuke_scenario("actions: [\n"),
+    "rust_netsuke_target_undefined": netsuke_scenario(
+        'netsuke_version: "1.0.0"\n\nactions:\n'
+        '  - name: check\n    command: "cargo clippy"\n'
+    ),
+    "rust_netsuke_dependency_chain": netsuke_scenario(
+        'netsuke_version: "1.0.0"\n\nactions:\n'
+        "  - name: lint\n    deps:\n      - format\n      - clippy\n"
+        '    command: "true"\n'
+        '  - name: format\n    command: "cargo fmt --check"\n'
+        '  - name: clippy\n    command: "cargo +nightly clippy"\n'
+    ),
     "rust_and_python_compliant": Scenario({
         "Makefile": makefile(lint="lint: interrogate\n\tcargo clippy -- -D warnings\n"),
         "Cargo.toml": crate_manifest('[lints.rust]\nmissing_docs = "deny"\n'),

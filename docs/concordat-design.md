@@ -2574,6 +2574,16 @@ required, so `clippy::missing_docs_in_private_items` is not used.
   audit cannot read is carried as an error and makes DG-004 indeterminate; an
   absent guide records nothing. This verifies that the record is true of the
   repository, not what the script does with clippy.
+- **Netsuke (DG-004):** some repositories keep the lint recipe in a Netsuke
+  manifest, with `lint` running `netsuke build lint`. The builder follows that
+  command into the `Netsukefile`: it parses the YAML, reads the named targets
+  (or the manifest's `defaults`) and what they reach through `deps`, and lexes
+  each `command:` with the recipe lexer, descending into `sh -c` scripts. The
+  manifest schema is Netsuke's current one (`actions` and `targets` lists with
+  `name`, `deps`, `command`, `when`); the shape is taken from Netsuke's own
+  users' guide, not from any consumer's file. It fails closed on a manifest it
+  cannot parse or a target it cannot find, and it does not evaluate template
+  tags.
 - **Reachability (DG-004):** the lint fails builds only where a gate compiles
   the crate, so the rule requires a clippy run reachable from `lint`; a plain
   `cargo check` in `lint` would also compile it but the estate's gates are

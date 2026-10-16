@@ -64,6 +64,7 @@ from .markdown_envelope import (
     resolved_root,
     within_checkout,
 )
+from .netsuke_manifest import ManifestReader
 from .rust_clippy import ClippyRun, clippy_runs, reachable_lines
 
 if typ.TYPE_CHECKING:
@@ -338,7 +339,9 @@ def _elsewhere(index: RuleIndex, reachable: list[str]) -> list[str]:
 
 
 def _analyse_makefile(
-    makefile: pathlib.Path, inspect: MakefileInspector
+    makefile: pathlib.Path,
+    inspect: MakefileInspector,
+    manifests: ManifestReader,
 ) -> MakefileAnalysis:
     """Read the root Makefile and find the interrogate runs `lint` reaches.
 
@@ -358,7 +361,7 @@ def _analyse_makefile(
         is_resolved=walk.is_resolved,
         elsewhere=_elsewhere(index, walk.names),
         runs=_interrogate_runs(index, walk.names, values),
-        clippy=clippy_runs(index, walk.names, values),
+        clippy=clippy_runs(index, walk.names, values, manifests),
         lint_lines=reachable_lines(index, walk.names, values),
     )
 
@@ -491,7 +494,9 @@ def build_documentation_envelope(
     root = resolved_root(checkout)
     has_makefile = _has_root_makefile(checkout, root)
     analysis = (
-        _analyse_makefile(checkout / "Makefile", inspect)
+        _analyse_makefile(
+            checkout / "Makefile", inspect, ManifestReader(checkout, root)
+        )
         if has_makefile
         else MakefileAnalysis()
     )

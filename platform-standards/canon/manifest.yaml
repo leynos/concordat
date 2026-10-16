@@ -281,7 +281,7 @@ artifacts:
     path: platform-standards/canon/lint-rules/documentation-presence/rule.yaml
     description: >
       Rule package manifest for the documentation presence policy.
-    sha256: 51570b3819b4218ff4498c882e25e08d8c62b82b9673c7b07e438a4f421023c4
+    sha256: afa248e8a429d9efd4b6ebda877a537d95f736e5a202e626ad134846e904c53f
   - id: lint-rule-whitaker-provisioning
     type: opa-policy
     path: platform-standards/canon/lint-rules/whitaker-provisioning/policy/whitaker_provisioning.rego

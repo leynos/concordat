@@ -13,11 +13,14 @@ import re
 import typing as typ
 
 from .interrogate_invocation import lex_segments
-from .make_commands import blank_references, command_start
+from .make_commands import blank_references, is_cargo_clippy
 from .makefile_expansion import expand, shown
+from .netsuke_manifest import netsuke_verdict
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+
+    from .netsuke_manifest import ManifestReader, Verdict
 
 # A reference the expansion could not settle that is named for clippy, or that
 # stands where the `cargo` word should and is followed by `clippy`.
@@ -25,15 +28,6 @@ _UNRESOLVED_CLIPPY: typ.Final = re.compile(
     r"\$[({][^)}\s]*clippy[^)}\s]*[)}]|\$[({][^)}]*[)}]\s+clippy(?![\w.-])",
     re.IGNORECASE,
 )
-# `cargo` flags that take a value as the next word, so that word is not the subcommand.
-_CARGO_VALUE_FLAGS: typ.Final = frozenset({
-    "-Z",
-    "-C",
-    "--config",
-    "--color",
-    "--manifest-path",
-    "--target-dir",
-})
 
 
 class ClippyRun(typ.TypedDict):
@@ -45,33 +39,41 @@ class ClippyRun(typ.TypedDict):
     resolved: bool
 
 
-def is_cargo_clippy(words: list[str]) -> bool:
-    """Return whether one simple command is `cargo [flags] clippy ...`."""
-    start = command_start(words)
-    if start >= len(words) or words[start].lstrip("@-+").rsplit("/", 1)[-1] != "cargo":
-        return False
-    arguments = iter(words[start + 1 :])
-    for argument in arguments:
-        if argument in _CARGO_VALUE_FLAGS:
-            next(arguments, None)
-        elif not argument.startswith(("-", "+")):
-            return argument == "clippy"
-    return False
+def _manifest_verdicts(
+    segments: list[list[str]], manifests: ManifestReader | None
+) -> list[Verdict]:
+    """Return what each `netsuke build` command on a line leads to."""
+    if manifests is None:
+        return []
+    found = (netsuke_verdict(manifests, words) for words in segments)
+    return [verdict for verdict in found if verdict is not None]
 
 
-def _run_on_line(target: str, line: int, expanded: str) -> ClippyRun | None:
+def _run_on_line(
+    target: str,
+    line: int,
+    expanded: str,
+    manifests: ManifestReader | None = None,
+) -> ClippyRun | None:
     """Return the clippy run an expanded recipe line holds, if it holds one."""
     segments = lex_segments(blank_references(expanded))
-    is_run = any(is_cargo_clippy(words) for words in segments or [])
-    is_unresolved = _UNRESOLVED_CLIPPY.search(shown(expanded)) is not None or (
-        segments is None and "clippy" in expanded
+    verdicts = _manifest_verdicts(segments or [], manifests)
+    is_run = any(is_cargo_clippy(words) for words in segments or []) or any(
+        verdict.is_run for verdict in verdicts
+    )
+    problems = [verdict.problem for verdict in verdicts if verdict.problem]
+    is_unresolved = (
+        _UNRESOLVED_CLIPPY.search(shown(expanded)) is not None
+        or (segments is None and "clippy" in expanded)
+        or bool(problems)
     )
     if not (is_run or is_unresolved):
         return None
+    note = f" [{'; '.join(problems)}]" if problems and not is_run else ""
     return {
         "target": target,
         "line": line,
-        "command": " ".join(shown(expanded).split()),
+        "command": " ".join(shown(expanded).split()) + note,
         "resolved": is_run,
     }
 
@@ -105,6 +107,7 @@ def clippy_runs(
     index: cabc.Mapping[str, cabc.Sequence[typ.Any]],
     reachable: list[str],
     values: cabc.Mapping[str, str],
+    manifests: ManifestReader | None = None,
 ) -> list[ClippyRun]:
     """Return every recipe line in a reachable target that runs `cargo clippy`.
 
@@ -125,7 +128,7 @@ def clippy_runs(
         The lines in target and line order.
     """
     found = (
-        _run_on_line(target, line, expand(text, values).text)
+        _run_on_line(target, line, expand(text, values).text, manifests)
         for target in reachable
         for rule in index[target]
         for line, text in rule.recipes

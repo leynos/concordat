@@ -5132,6 +5132,469 @@
         "errors": []
       }
     },
+    "rust_netsuke_clippy": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": false,
+        "pyproject": false,
+        "rust_library": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [],
+      "python_files": [],
+      "clippy_runs": [
+        {
+          "target": "lint",
+          "line": 4,
+          "command": "netsuke build lint",
+          "resolved": true
+        }
+      ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
+      "rust": {
+        "crates": [
+          {
+            "manifest": "Cargo.toml",
+            "name": "demo",
+            "root": "src/lib.rs",
+            "root_error": null,
+            "manifest_level": "deny",
+            "inherits_workspace": false,
+            "workspace_level": null,
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
+          }
+        ],
+        "errors": []
+      }
+    },
+    "rust_netsuke_default_target": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": false,
+        "pyproject": false,
+        "rust_library": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [],
+      "python_files": [],
+      "clippy_runs": [
+        {
+          "target": "lint",
+          "line": 3,
+          "command": "netsuke build",
+          "resolved": true
+        }
+      ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
+      "rust": {
+        "crates": [
+          {
+            "manifest": "Cargo.toml",
+            "name": "demo",
+            "root": "src/lib.rs",
+            "root_error": null,
+            "manifest_level": "deny",
+            "inherits_workspace": false,
+            "workspace_level": null,
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
+          }
+        ],
+        "errors": []
+      }
+    },
+    "rust_netsuke_variant_with_clippy": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": false,
+        "pyproject": false,
+        "rust_library": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [],
+      "python_files": [],
+      "clippy_runs": [
+        {
+          "target": "lint",
+          "line": 4,
+          "command": "netsuke build lint",
+          "resolved": true
+        }
+      ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
+      "rust": {
+        "crates": [
+          {
+            "manifest": "Cargo.toml",
+            "name": "demo",
+            "root": "src/lib.rs",
+            "root_error": null,
+            "manifest_level": "deny",
+            "inherits_workspace": false,
+            "workspace_level": null,
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
+          }
+        ],
+        "errors": []
+      }
+    },
+    "rust_netsuke_target_without_clippy": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": false,
+        "pyproject": false,
+        "rust_library": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [],
+      "python_files": [],
+      "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
+      "rust": {
+        "crates": [
+          {
+            "manifest": "Cargo.toml",
+            "name": "demo",
+            "root": "src/lib.rs",
+            "root_error": null,
+            "manifest_level": "deny",
+            "inherits_workspace": false,
+            "workspace_level": null,
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
+          }
+        ],
+        "errors": []
+      }
+    },
+    "rust_netsuke_clippy_only_echoed": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": false,
+        "pyproject": false,
+        "rust_library": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [],
+      "python_files": [],
+      "clippy_runs": [],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
+      "rust": {
+        "crates": [
+          {
+            "manifest": "Cargo.toml",
+            "name": "demo",
+            "root": "src/lib.rs",
+            "root_error": null,
+            "manifest_level": "deny",
+            "inherits_workspace": false,
+            "workspace_level": null,
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
+          }
+        ],
+        "errors": []
+      }
+    },
+    "rust_netsuke_manifest_missing": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": false,
+        "pyproject": false,
+        "rust_library": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [],
+      "python_files": [],
+      "clippy_runs": [
+        {
+          "target": "lint",
+          "line": 4,
+          "command": "netsuke build lint [Netsukefile does not exist]",
+          "resolved": false
+        }
+      ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
+      "rust": {
+        "crates": [
+          {
+            "manifest": "Cargo.toml",
+            "name": "demo",
+            "root": "src/lib.rs",
+            "root_error": null,
+            "manifest_level": "deny",
+            "inherits_workspace": false,
+            "workspace_level": null,
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
+          }
+        ],
+        "errors": []
+      }
+    },
+    "rust_netsuke_manifest_unparsable": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": false,
+        "pyproject": false,
+        "rust_library": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [],
+      "python_files": [],
+      "clippy_runs": [
+        {
+          "target": "lint",
+          "line": 4,
+          "command": "netsuke build lint [Netsukefile cannot be parsed (ParserError)]",
+          "resolved": false
+        }
+      ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
+      "rust": {
+        "crates": [
+          {
+            "manifest": "Cargo.toml",
+            "name": "demo",
+            "root": "src/lib.rs",
+            "root_error": null,
+            "manifest_level": "deny",
+            "inherits_workspace": false,
+            "workspace_level": null,
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
+          }
+        ],
+        "errors": []
+      }
+    },
+    "rust_netsuke_target_undefined": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": false,
+        "pyproject": false,
+        "rust_library": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [],
+      "python_files": [],
+      "clippy_runs": [
+        {
+          "target": "lint",
+          "line": 4,
+          "command": "netsuke build lint [Netsukefile defines no target 'lint']",
+          "resolved": false
+        }
+      ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
+      "rust": {
+        "crates": [
+          {
+            "manifest": "Cargo.toml",
+            "name": "demo",
+            "root": "src/lib.rs",
+            "root_error": null,
+            "manifest_level": "deny",
+            "inherits_workspace": false,
+            "workspace_level": null,
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
+          }
+        ],
+        "errors": []
+      }
+    },
+    "rust_netsuke_dependency_chain": {
+      "schema_version": 1,
+      "kind": "policy-input/documentation-presence",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "root_makefile": true,
+        "python_files": false,
+        "pyproject": false,
+        "rust_library": true
+      },
+      "makefile_path": "Makefile",
+      "lint_target": true,
+      "reachable_targets": [
+        "lint"
+      ],
+      "reachability_resolved": true,
+      "interrogate_elsewhere": [],
+      "runs": [],
+      "configs": [],
+      "python_files": [],
+      "clippy_runs": [
+        {
+          "target": "lint",
+          "line": 4,
+          "command": "netsuke build lint",
+          "resolved": true
+        }
+      ],
+      "clippy_exceptions": {
+        "records": [],
+        "errors": []
+      },
+      "rust": {
+        "crates": [
+          {
+            "manifest": "Cargo.toml",
+            "name": "demo",
+            "root": "src/lib.rs",
+            "root_error": null,
+            "manifest_level": "deny",
+            "inherits_workspace": false,
+            "workspace_level": null,
+            "attributes": [],
+            "suppressions": [],
+            "source_errors": []
+          }
+        ],
+        "errors": []
+      }
+    },
     "rust_and_python_compliant": {
       "schema_version": 1,
       "kind": "policy-input/documentation-presence",
