@@ -23,6 +23,14 @@ _ARCHIVE_SHA256: typ.Final[str] = (
 )
 _ARCHIVE_RELATIVE_PATH: typ.Final[str] = ".vale/packages/concordat-0.3.1.zip"
 _INSTALL_INSTRUCTION: typ.Final[str] = "make install-vale-styles"
+_SNAPSHOTS: typ.Final[pathlib.Path] = (
+    pathlib.Path(__file__).resolve().parents[2] / "tests" / "unit" / "snapshots"
+)
+
+
+def _snapshot(name: str) -> str:
+    """Read a checked-in plain-text Vale archive diagnostic snapshot."""
+    return (_SNAPSHOTS / name).read_text(encoding="utf-8")
 
 
 def _zip_body() -> bytes:
@@ -139,7 +147,9 @@ def test_check_accepts_a_valid_cached_zip_without_fetching(
 
 
 def test_check_rejects_a_tampered_archive_without_fetching(
-    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """A modified cache reports both digests and the repair command."""
     expected = b"the expected archive body"
@@ -157,6 +167,17 @@ def test_check_rejects_a_tampered_archive_without_fetching(
     assert _INSTALL_INSTRUCTION in message
     assert _digest(expected) in message
     assert _digest(body) in message
+
+    status = style_archive.run("check", destination)
+    output = capsys.readouterr()
+    normalized = output.err.replace(str(destination), "<archive-path>")
+    normalized = normalized.replace(_digest(expected), "<expected-sha256>")
+    normalized = normalized.replace(_digest(body), "<actual-sha256>")
+
+    assert status == 1
+    assert output.out == ""
+    assert _INSTALL_INSTRUCTION in output.err
+    assert normalized == _snapshot("vale_style_archive_digest_mismatch.txt")
 
 
 def test_check_reports_a_missing_archive_and_repair_command(
@@ -194,12 +215,20 @@ def test_cli_returns_nonzero_and_prints_one_actionable_diagnostic(
     """The command-line boundary reports a missing cache as one failure."""
     destination = tmp_path / "missing" / "concordat-0.3.1.zip"
     actual_run = style_archive.run
+    original_read_bytes = pathlib.Path.read_bytes
 
     def run_with_test_destination(operation: str) -> int:
         return actual_run(operation, destination)
 
+    def read_stable_missing_archive(path: pathlib.Path) -> bytes:
+        if path == destination:
+            message = "stable missing archive fixture"
+            raise FileNotFoundError(message)
+        return original_read_bytes(path)
+
     monkeypatch.setattr(style_archive, "run", run_with_test_destination)
     monkeypatch.setattr(sys, "argv", ["vale_style_archive", "check"])
+    monkeypatch.setattr(pathlib.Path, "read_bytes", read_stable_missing_archive)
     _forbid_fetch(monkeypatch)
 
     status = style_archive.main()
@@ -209,6 +238,9 @@ def test_cli_returns_nonzero_and_prints_one_actionable_diagnostic(
     assert output.out == ""
     assert output.err.count("\n") == 1
     assert _INSTALL_INSTRUCTION in output.err
+    assert output.err.replace(str(destination), "<archive-path>") == _snapshot(
+        "vale_style_archive_missing_cache.txt"
+    )
 
 
 def test_run_rejects_an_unknown_operation(
@@ -223,4 +255,5 @@ def test_run_rejects_an_unknown_operation(
     assert status == 1
     assert output.out == ""
     assert "unknown Vale style archive operation: publish" in output.err
+    assert output.err == _snapshot("vale_style_archive_unknown_operation.txt")
     assert not destination.parent.exists()

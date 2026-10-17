@@ -1,0 +1,1 @@
+Vale style archive is unavailable at <archive-path>: stable missing archive fixture; run make install-vale-styles
