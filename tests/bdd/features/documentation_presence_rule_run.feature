@@ -17,6 +17,12 @@ Feature: documentation presence rule run
     Then the audit exit status is 0
     And the audit table reports zero findings
 
+  Scenario: a canonical pinned helper tool gate is clean through the CLI
+    Given a checkout with a canonical pinned helper tool gate
+    When I audit the checkout for its documentation gate as JSON
+    Then the audit exit status is 0
+    And the documentation audit JSON has zero findings
+
   Scenario: a lint recipe with no interrogate run is reported
     Given a checkout whose lint recipe never runs interrogate
     When I audit the checkout for its documentation gate

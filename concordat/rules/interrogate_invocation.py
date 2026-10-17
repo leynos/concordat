@@ -17,11 +17,13 @@ from __future__ import annotations
 
 import collections
 import dataclasses
+import pathlib
 import posixpath
 import re
 import shlex
 import typing as typ
 
+from .interrogate_helper_contract import is_unresolved_tool_prefix, python_arguments
 from .makefile_expansion import SHELL_DOLLAR, UNRESOLVED_MARK, Expansion, shown
 
 # Short options that take a value, and the long option each stands for.
@@ -69,6 +71,12 @@ NON_EXECUTING: typ.Final = frozenset({"echo", "printf", "make"})
 # interrogate interrogate` names the package twice and runs it once).
 LAUNCHERS: typ.Final = frozenset({"uv", "uvx", "python", "python3", "pipx"})
 LAUNCHER_SUBCOMMANDS: typ.Final = frozenset({"run", "tool"})
+# Supported direct routes whose unknown options can split off a bare suffix.
+_DIRECT_LAUNCHER_ROUTES: typ.Final = {
+    "uv": (("run",), ("tool", "run")),
+    "uvx": ((),),
+    "pipx": (("run",),),
+}
 LAUNCHER_VALUE_FLAGS: typ.Final = frozenset({
     "--with",
     "--from",
@@ -304,6 +312,31 @@ def scan_options(arguments: list[str]) -> Options:
     return options
 
 
+def _launcher_arguments(prefix: list[str]) -> list[str] | None:
+    """Return the words after a launcher, or ``None`` when *prefix* is no launcher.
+
+    The vendored helper is a launcher too: `python3 scripts/uv_gate.py tool
+    --from interrogate==1.7.0 -- interrogate` takes the same arguments as uv.
+    Other Python invocations are recognized only in the direct `-m` form;
+    additional interpreter options are outside this reader's supported grammar.
+
+    Returns
+    -------
+    list[str] | None
+        The launcher's own words (subcommands, flags and values), or ``None``.
+    """
+    # Pure paths normalize away terminal slashes and dots; neither is an
+    # executable basename in the raw shell word.
+    if prefix[0].endswith(("/", "/.")):
+        return None
+    launcher = pathlib.PurePosixPath(prefix[0]).name
+    if launcher not in LAUNCHERS:
+        return None
+    if launcher not in {"python", "python3"}:
+        return prefix[1:]
+    return python_arguments(prefix[1:], UNRESOLVED_MARK)
+
+
 def _is_launcher_prefix(prefix: list[str]) -> bool:
     """Return whether *prefix* is only a launcher's subcommands, flags and values.
 
@@ -315,10 +348,11 @@ def _is_launcher_prefix(prefix: list[str]) -> bool:
     bool
         Whether the words before the tool are all the launcher's own.
     """
-    if posixpath.basename(prefix[0]) not in LAUNCHERS:
+    arguments = _launcher_arguments(prefix)
+    if arguments is None:
         return False
     awaiting_value = False
-    for word in prefix[1:]:
+    for word in arguments:
         if awaiting_value:
             awaiting_value = False
         elif word in LAUNCHER_VALUE_FLAGS:
@@ -432,6 +466,27 @@ def _run_in_segment(line: RecipeLine, raw_words: list[str]) -> InterrogateRun | 
     return None
 
 
+def _unresolved_gate_tool_run(
+    line: RecipeLine, raw_words: list[str]
+) -> InterrogateRun | None:
+    """Recover an unknown helper spec whose Make expression split the command.
+
+    The lexer separates unresolved parenthesized Make expressions from the
+    helper prefix. Retain an indeterminate fact instead of losing the run.
+    Known-refused helper specifications are not recovered. Direct launchers
+    have a separate recipe-provenance boundary.
+
+    Returns
+    -------
+    InterrogateRun | None
+        An unresolved helper fact, or ``None`` when recovery does not apply.
+    """
+    words = command_words(raw_words)
+    if not is_unresolved_tool_prefix(words, UNRESOLVED_MARK):
+        return None
+    return unresolved_run(line, line.expansion.text)
+
+
 def _unresolved_tool_runs(line: RecipeLine) -> list[InterrogateRun]:
     """Return an unresolved run when `$(INTERROGATE)` expanded to nothing readable.
 
@@ -445,6 +500,44 @@ def _unresolved_tool_runs(line: RecipeLine) -> list[InterrogateRun]:
     """
     if not line.expansion.is_resolved and _UNRESOLVED_TOOL.search(line.raw):
         return [unresolved_run(line, line.raw)]
+    return []
+
+
+def _unresolved_direct_launcher(raw_words: list[str]) -> bool:
+    """Recognize an unknown option prefix on an existing direct tool route."""
+    words = command_words(raw_words)
+    if not words:
+        return False
+    routes = _DIRECT_LAUNCHER_ROUTES.get(pathlib.PurePosixPath(words[0]).name, ())
+    arguments = tuple(words[1:])
+    if not any(arguments[: len(route)] == route for route in routes):
+        return False
+    return any(UNRESOLVED_MARK in word for word in words) and _is_launcher_prefix(words)
+
+
+def _with_recipe_provenance(
+    line: RecipeLine, segments: list[list[str]], runs: list[InterrogateRun]
+) -> list[InterrogateRun]:
+    """Keep unsupported Make expansion visible without resolved suffix credit.
+
+    Only `runs_in` calls this boundary. The lexer cannot prove which command
+    owns suffixes split from an unsupported expression, so the whole recipe is
+    conservative. Existing detected runs retain their identity and ordering.
+
+    Returns
+    -------
+    list[InterrogateRun]
+        Detected runs with recipe provenance, or an unresolved placeholder
+        when only a supported direct launcher prefix can be recognized.
+    """
+    if line.expansion.is_resolved:
+        return runs
+    for run in runs:
+        run["resolved"] = False
+    if runs:
+        return runs
+    if any(_unresolved_direct_launcher(words) for words in segments):
+        return [unresolved_run(line, line.expansion.text)]
     return []
 
 
@@ -463,5 +556,9 @@ def runs_in(line: RecipeLine) -> list[InterrogateRun]:
     segments = lex_segments(text)
     if segments is None:
         return [unresolved_run(line, text)]
-    runs = (_run_in_segment(line, words) for words in segments)
-    return [run for run in runs if run is not None]
+    runs = (
+        _run_in_segment(line, words) or _unresolved_gate_tool_run(line, words)
+        for words in segments
+    )
+    detected = [run for run in runs if run is not None]
+    return _with_recipe_provenance(line, segments, detected)

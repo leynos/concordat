@@ -722,22 +722,66 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   quoted leading assignment, which the shell runs as a command name, so it is
   not skipped. Both the interrogate-run detector and the `make` reachability
   walk (`make -C` and `--directory` make it unresolved) call it, so the two
-  agree on what a command is. The package is registered by identifier and
-  declares its kind, and the thresholds reach the policy as manifest
-  parameters. The Rust facts come from `documentation_rust.build_rust_facts`:
-  each owned `Cargo.toml` (walk pruned of `fixtures`, `examples`, `templates`,
-  `vendor`, `third_party`, `patches` and `target`) decoded with `tomllib`,
-  `[lints] workspace = true` resolved against the nearest `[workspace]`, and
-  the library root's leading inner attributes and every module-level or
-  item-level suppression read by `rust_source` (comments and literals masked
-  first, so attribute-like text is never an attribute). `make_commands` reduces
-  Make references to words and finds command words; `rust_clippy.clippy_runs`
-  lexes the recipe lines in the targets `lint` reaches and records each
-  `cargo ... clippy` command, and `clippy_exception.clippy_exceptions` reads
-  the recorded clippy-gate exception (sections found by `exception_docs`, the
-  scripts they name, and whether each exists, runs clippy and is reached).
-  Rules DG-003 and DG-004 live in `documentation_presence_rust.rego`, beside
-  the Python rules in the same package.
+  agree on what a command is. `interrogate_invocation._launcher_arguments`
+  delegates Python operands to `interrogate_helper_contract.python_arguments`,
+  which recognizes the vendored helper when launched directly by `python` or
+  `python3` at the normalized repository-relative path `scripts/uv_gate.py`,
+  including the safe `./scripts/uv_gate.py` spelling. A parent traversal
+  component (`..`) or a noncanonical path is not recognized as that helper. The
+  launcher and helper path are removed before `_is_launcher_prefix` validates
+  the remaining uv-style subcommands, flags, and flag values. For helper `run`,
+  exactly one `--` must end that prefix before the executable; missing or
+  repeated separators are rejected. The pure `interrogate_helper_contract`
+  adapter owns only the canonical helper path and argument contract; its sole
+  production caller is `interrogate_invocation`. The caller supplies the
+  existing Make unknown marker, and the adapter returns launcher arguments or
+  refusal without shell parsing, filesystem access, or audit-fact construction.
+  Its `is_unresolved_tool_prefix` query identifies existing helper uncertainty;
+  the reader retains placeholder construction and recipe provenance. This is
+  separate from `uv_gate_envelope`, which reads filesystem facts rather than
+  launcher arguments. It is not a general shell or interpreter parser. The
+  helper `tool` form additionally checks its first `--from` value before the
+  first `--` against the selected canonical helper's exact-pin syntax. Both
+  helper modes reject the canonical helper's forbidden flags before the first
+  `--`. Bare names, ranges, and literal `latest` versions cannot receive gate
+  credit; unknown Make values remain unresolved, including when the lexer
+  separates a parenthesized Make expression from the helper prefix. This
+  helper-specific recovery is separate from the direct `uv run`, `uv tool run`,
+  `uvx`, and `pipx run` routes. `_unresolved_direct_launcher` recognizes their
+  existing launcher grammar when unsupported Make expansion splits away an
+  option value. `_with_recipe_provenance`, called only by `runs_in`,
+  conservatively marks every detected run on that unresolved recipe as
+  `resolved: false`, retaining run identity and order. When a supported direct
+  prefix is visible but its suffix cannot be read, it records an unresolved
+  placeholder instead of losing the measurement. This is deliberate
+  recipe-level conservatism, not proof that the lexer can associate arbitrary
+  suffixes with a command. Fully expanded known values retain their resolved
+  invocation facts. The private `_gate_tool_spec` and `_gate_spec_is_pinned`
+  readers serve only this canonical-helper boundary, not general dependency
+  policy or direct uv and pipx invocations. Their accepted exact-version and
+  full lowercase-SHA Git forms follow the tracked
+  `tests/fixtures/uv_gate/uv_gate.py.canon`; test-only semantic comparisons use
+  that trusted fixture, never code from a checkout being audited. Apart from
+  the canonical helper, the reader recognizes only the direct
+  `python -m interrogate` and `python3 -m interrogate` forms. Other interpreter
+  options are outside its supported grammar and fail closed; a script operand
+  such as `run` or `tool` is not a uv subcommand for Python. The package is
+  registered by identifier and declares its kind, and the thresholds reach the
+  policy as manifest parameters. The Rust facts come from
+  `documentation_rust.build_rust_facts`: each owned `Cargo.toml` (walk pruned of
+  `fixtures`, `examples`, `templates`, `vendor`, `third_party`, `patches` and
+  `target`) decoded with `tomllib`, `[lints] workspace = true` resolved against
+  the nearest `[workspace]`, and the library root's leading inner attributes
+  and every module-level or item-level suppression read by `rust_source`
+  (comments and literals masked first, so attribute-like text is never an
+  attribute). `make_commands` reduces Make references to words and finds
+  command words; `rust_clippy.clippy_runs` lexes the recipe lines in the targets
+  `lint` reaches and records each `cargo ... clippy` command, and
+  `clippy_exception.clippy_exceptions` reads the recorded clippy-gate exception
+  (sections found by `exception_docs`, the scripts they name, and whether each
+  exists, runs clippy and is reached). The documentation gate (DG) rules DG-003
+  and DG-004 live in `documentation_presence_rust.rego`, beside the Python
+  rules in the same package.
 
 - `policy-input/spelling-config-baseline` —
   `spelling_envelope.build_spelling_envelope`. It reuses `markdown_envelope`'s

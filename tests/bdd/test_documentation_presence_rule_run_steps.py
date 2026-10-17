@@ -10,6 +10,7 @@ delivers them.
 
 from __future__ import annotations
 
+import json
 import re
 import typing as typ
 
@@ -36,7 +37,7 @@ _GUARDED: typ.Final = (
 )
 _UNGUARDED: typ.Final = "\t$(INTERROGATE) $(FLAGS) $(TARGETS)\n"
 _MAKEFILE: typ.Final = """\
-INTERROGATE ?= interrogate
+INTERROGATE ?= {interrogate}
 TARGETS = {targets}
 FLAGS = {flags}
 
@@ -72,9 +73,11 @@ def _write_makefile(
     flags: str = "-vv --fail-under 100",
     recipe: str = _GUARDED,
 ) -> None:
-    """Write a Makefile whose `lint` reaches the interrogate target."""
+    """Write direct-gate fixtures; the helper scenario shares only the template."""
     (checkout / "Makefile").write_text(
-        _MAKEFILE.format(targets=targets, flags=flags, recipe=recipe),
+        _MAKEFILE.format(
+            targets=targets, flags=flags, recipe=recipe, interrogate="interrogate"
+        ),
         encoding="utf-8",
     )
 
@@ -92,6 +95,26 @@ def given_exact_gate(python_checkout: pathlib.Path) -> None:
     """Write the reference wiring: verbose, threshold 100, guarded."""
     _write_python(python_checkout)
     _write_makefile(python_checkout)
+
+
+@given("a checkout with a canonical pinned helper tool gate")
+def given_helper_tool_gate(python_checkout: pathlib.Path) -> None:
+    """Guard a verbose, exact gate launched through the pinned helper tool."""
+    _write_python(python_checkout)
+    launcher = (
+        "python3 scripts/uv_gate.py tool --from 'interrogate==1.7.0' -- interrogate"
+    )
+    # Share the private template without adding a fifth builder argument.
+    # A single assignment also keeps the fixture inside makeutil's grammar.
+    (python_checkout / "Makefile").write_text(
+        _MAKEFILE.format(
+            interrogate=launcher,
+            targets="pkg scripts tests",
+            flags="-vv --fail-under 100",
+            recipe=_GUARDED,
+        ),
+        encoding="utf-8",
+    )
 
 
 @given("a checkout whose lint recipe never runs interrogate")
@@ -226,14 +249,43 @@ def when_audit_checkout(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Audit the scenario's checkout and record the command's result."""
+    _audit_checkout(python_checkout, cli_invocation, capsys, "table")
+
+
+@when("I audit the checkout for its documentation gate as JSON")
+def when_audit_checkout_as_json(
+    python_checkout: pathlib.Path,
+    cli_invocation: dict[str, RunResult],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Run the same operator command with its structured result format."""
+    _audit_checkout(python_checkout, cli_invocation, capsys, "json")
+
+
+def _audit_checkout(
+    checkout: pathlib.Path,
+    invocation: dict[str, RunResult],
+    capsys: pytest.CaptureFixture[str],
+    output_format: str,
+) -> None:
+    """Share real CLI execution and capture between these two local steps."""
     try:
         returncode = cli.main(
-            ["artefact", "rule", "run", RULE_ID, "--repo", str(python_checkout)],
+            [
+                "artefact",
+                "rule",
+                "run",
+                RULE_ID,
+                "--repo",
+                str(checkout),
+                "--format",
+                output_format,
+            ],
         )
     except SystemExit as exc:
         returncode = int(exc.code or 0)
     captured = capsys.readouterr()
-    cli_invocation["result"] = RunResult(
+    invocation["result"] = RunResult(
         stdout=captured.out, stderr=captured.err, returncode=returncode
     )
 
@@ -251,6 +303,15 @@ def then_audit_clean(cli_invocation: dict[str, RunResult]) -> None:
     stdout = cli_invocation["result"].stdout
     assert re.search(r"\bcompliant\b", stdout), stdout
     assert "DG-0" not in stdout, stdout
+
+
+@then("the documentation audit JSON has zero findings")
+def then_audit_json_clean(cli_invocation: dict[str, RunResult]) -> None:
+    """Assert the complete structured verdict and the entire empty findings list."""
+    payload = json.loads(cli_invocation["result"].stdout)
+    assert payload["rule_package"] == RULE_ID, payload
+    assert payload["verdict"] == "compliant", payload
+    assert payload["findings"] == [], payload
 
 
 @then(parsers.cfparse('the audit output reports "{rule_id}" "{message}"'))
