@@ -140,7 +140,7 @@ spelling: ## Enforce en-GB-oxendict spelling
 nixie: $(NIXIE) ## Validate Mermaid diagrams
 	$(NIXIE) --no-sandbox
 
-vale: $(VALE) $(ACRONYM_SCRIPT) ## Check prose
+vale: $(VALE) $(ACRONYM_SCRIPT) ## Run optional legacy Vale prose checks
 	$(VALE) sync
 	uv run --with "git+https://github.com/leynos/concordat-vale.git" $(ACRONYM_SCRIPT)
 	$(VALE) --no-global .
