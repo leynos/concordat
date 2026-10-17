@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import configparser
+import dataclasses
 import os
 import pathlib
 import re
@@ -37,6 +38,15 @@ EXPECTED_INSTALL_CALL: typ.Final = (
 )
 
 
+@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
+class _ValeSandbox:
+    """Own one Make test's working directory and fake-tool boundary."""
+
+    cwd: pathlib.Path
+    bin_directory: pathlib.Path
+    log_path: pathlib.Path
+
+
 def _configuration() -> configparser.ConfigParser:
     """Parse Vale's global options and selectors as ordinary INI sections."""
     configuration = configparser.ConfigParser(interpolation=None, strict=True)
@@ -57,7 +67,7 @@ def _tool_directory(
     vale: bool = True,
     system: str = "Linux",
     machine: str = "x86_64",
-) -> tuple[pathlib.Path, pathlib.Path]:
+) -> _ValeSandbox:
     """Create logged fake tools without contacting Vale or uv services."""
     bin_directory = tmp_path / "bin"
     bin_directory.mkdir()
@@ -91,22 +101,20 @@ case "$VALE_TEST_FAIL:$*" in
 esac
 """
         _write_executable(bin_directory / "vale", vale_stub)
-    return bin_directory, log_path
+    return _ValeSandbox(cwd=tmp_path, bin_directory=bin_directory, log_path=log_path)
 
 
 def _run_make(
-    cwd: pathlib.Path,
+    sandbox: _ValeSandbox,
     target: str,
-    bin_directory: pathlib.Path,
-    log_path: pathlib.Path,
     *,
     fail: str = "",
     overrides: tuple[str, ...] = (),
 ) -> subprocess.CompletedProcess[str]:
     """Run one optional Make route against the fake tool boundary."""
     environment = os.environ.copy()
-    environment["PATH"] = f"{bin_directory}{os.pathsep}{environment['PATH']}"
-    environment["VALE_TEST_LOG"] = str(log_path)
+    environment["PATH"] = f"{sandbox.bin_directory}{os.pathsep}{environment['PATH']}"
+    environment["VALE_TEST_LOG"] = str(sandbox.log_path)
     environment["VALE_TEST_FAIL"] = fail
     return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - Fixed Make target and arguments.
         [
@@ -117,7 +125,7 @@ def _run_make(
             target,
             *overrides,
         ],
-        cwd=cwd,
+        cwd=sandbox.cwd,
         env=environment,
         capture_output=True,
         check=False,
@@ -178,17 +186,15 @@ def test_vale_runs_sync_then_pinned_helper_then_inspection(
     tmp_path: pathlib.Path,
 ) -> None:
     """The local inspection route is ordered and pins its helper runtime."""
-    bin_directory, log_path = _tool_directory(tmp_path)
+    sandbox = _tool_directory(tmp_path)
     result = _run_make(
-        tmp_path,
+        sandbox,
         "vale",
-        bin_directory,
-        log_path,
         overrides=("VALE=vale", "UV=uv", "VALE_PYTHON=3.13"),
     )
 
     assert result.returncode == 0, result.stderr
-    assert _calls(log_path) == [
+    assert _calls(sandbox.log_path) == [
         "vale\tsync",
         EXPECTED_HELPER_CALL,
         "vale\t--no-global .",
@@ -199,8 +205,8 @@ def test_vale_supports_executable_paths_with_spaces(
     tmp_path: pathlib.Path,
 ) -> None:
     """Quote the injectable Vale path for both executable invocations."""
-    bin_directory, log_path = _tool_directory(tmp_path, vale=False)
-    vale_directory = tmp_path / "vale binary"
+    sandbox = _tool_directory(tmp_path, vale=False)
+    vale_directory = sandbox.cwd / "vale binary"
     vale_directory.mkdir()
     spaced_vale = vale_directory / "vale"
     _write_executable(
@@ -208,15 +214,13 @@ def test_vale_supports_executable_paths_with_spaces(
         '#!/bin/sh\nprintf \'vale\\t%s\\n\' "$*" >> "$VALE_TEST_LOG"\n',
     )
     result = _run_make(
-        tmp_path,
+        sandbox,
         "vale",
-        bin_directory,
-        log_path,
         overrides=(f"VALE={spaced_vale}", "UV=uv", "VALE_PYTHON=3.13"),
     )
 
     assert result.returncode == 0, result.stderr
-    assert _calls(log_path) == [
+    assert _calls(sandbox.log_path) == [
         "vale\tsync",
         EXPECTED_HELPER_CALL,
         "vale\t--no-global .",
@@ -252,63 +256,57 @@ def test_vale_route_propagates_each_step_failure(
     expected_calls: list[str],
 ) -> None:
     """A failed sync, helper or inspection stops the remaining route."""
-    bin_directory, log_path = _tool_directory(tmp_path)
+    sandbox = _tool_directory(tmp_path)
     result = _run_make(
-        tmp_path,
+        sandbox,
         "vale",
-        bin_directory,
-        log_path,
         fail=failure,
         overrides=("VALE=vale", "UV=uv", "VALE_PYTHON=3.13"),
     )
 
     assert result.returncode != 0
-    assert _calls(log_path) == expected_calls
+    assert _calls(sandbox.log_path) == expected_calls
 
 
 def test_missing_vale_preflight_gives_the_install_command(
     tmp_path: pathlib.Path,
 ) -> None:
     """The preflight names the supported installer when its binary is absent."""
-    bin_directory, log_path = _tool_directory(tmp_path, vale=False)
-    missing_binary = tmp_path / "missing-vale"
+    sandbox = _tool_directory(tmp_path, vale=False)
+    missing_binary = sandbox.cwd / "missing-vale"
     result = _run_make(
-        tmp_path,
+        sandbox,
         "vale",
-        bin_directory,
-        log_path,
         overrides=(f"VALE={missing_binary}",),
     )
 
     assert result.returncode != 0
     assert "make install-vale" in result.stderr
-    assert _calls(log_path) == []
+    assert _calls(sandbox.log_path) == []
 
 
 def test_install_uses_the_pinned_linux_archive_and_python(
     tmp_path: pathlib.Path,
 ) -> None:
     """Provisioning passes the approved archive contract to the shared helper."""
-    bin_directory, log_path = _tool_directory(tmp_path)
+    sandbox = _tool_directory(tmp_path)
     result = _run_make(
-        tmp_path,
+        sandbox,
         "install-vale",
-        bin_directory,
-        log_path,
         overrides=("UV=uv", "VALE_PYTHON=3.13"),
     )
 
     assert result.returncode == 0, result.stderr
-    calls = _calls(log_path)
+    calls = _calls(sandbox.log_path)
     assert calls == [EXPECTED_INSTALL_CALL]
-    assert (tmp_path / ".vale/tools").is_dir()
-    assert (tmp_path / ".vale/tools/github_path").is_file()
-    rows = log_path.read_text(encoding="utf-8").splitlines()
+    assert (sandbox.cwd / ".vale/tools").is_dir()
+    assert (sandbox.cwd / ".vale/tools/github_path").is_file()
+    rows = sandbox.log_path.read_text(encoding="utf-8").splitlines()
     assert rows[1] == (
         "pins\t3.22.0\t"
         f"{VALE_ASSET}\t{VALE_SHA256}\t{VALE_RELEASES}\t"
         f"tar.gz\tvale\t{VALE_MEMBER_SIZE}\t"
-        f"{tmp_path / '.vale/tools'}|{tmp_path / '.vale/tools/github_path'}"
+        f"{sandbox.cwd / '.vale/tools'}|{sandbox.cwd / '.vale/tools/github_path'}"
     )
 
 
@@ -316,46 +314,42 @@ def test_install_rejects_other_platforms_before_invoking_uv(
     tmp_path: pathlib.Path,
 ) -> None:
     """The archive pin is not presented as a portable installer."""
-    bin_directory, log_path = _tool_directory(
+    sandbox = _tool_directory(
         tmp_path,
         system="Darwin",
         machine="x86_64",
     )
     result = _run_make(
-        tmp_path,
+        sandbox,
         "install-vale",
-        bin_directory,
-        log_path,
         overrides=("UV=uv",),
     )
 
     assert result.returncode != 0
     assert "Linux x86_64 only" in result.stderr
-    assert _calls(log_path) == []
+    assert _calls(sandbox.log_path) == []
 
 
 def test_install_failure_propagates_without_fallback(tmp_path: pathlib.Path) -> None:
     """A failed binary installer stops the optional provisioning target."""
-    bin_directory, log_path = _tool_directory(tmp_path)
+    sandbox = _tool_directory(tmp_path)
     result = _run_make(
-        tmp_path,
+        sandbox,
         "install-vale",
-        bin_directory,
-        log_path,
         fail="installer",
         overrides=("UV=uv",),
     )
 
     assert result.returncode != 0
-    assert _calls(log_path) == [EXPECTED_INSTALL_CALL]
+    assert _calls(sandbox.log_path) == [EXPECTED_INSTALL_CALL]
 
 
 def test_standard_make_targets_do_not_reach_vale(tmp_path: pathlib.Path) -> None:
     """Vale remains an optional inspection outside routine build and CI gates."""
-    bin_directory, log_path = _tool_directory(tmp_path)
+    sandbox = _tool_directory(tmp_path)
     environment = os.environ.copy()
-    environment["PATH"] = f"{bin_directory}{os.pathsep}{environment['PATH']}"
-    environment["VALE_TEST_LOG"] = str(log_path)
+    environment["PATH"] = f"{sandbox.bin_directory}{os.pathsep}{environment['PATH']}"
+    environment["VALE_TEST_LOG"] = str(sandbox.log_path)
     result = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - Fixed Make targets and arguments.
         [
             str(MAKE),
