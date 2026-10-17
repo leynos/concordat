@@ -17,10 +17,7 @@ REPOSITORY_ROOT: typ.Final = pathlib.Path(__file__).resolve().parents[2]
 MAKEFILE: typ.Final = REPOSITORY_ROOT / "Makefile"
 VALE_CONFIG: typ.Final = REPOSITORY_ROOT / ".vale.ini"
 MAKE: typ.Final = pathlib.Path(shutil.which("make") or "/usr/bin/make")
-VALE_PACKAGE_URL: typ.Final = (
-    "https://github.com/leynos/concordat-vale/releases/download/"
-    "v0.3.1/concordat-0.3.1.zip"
-)
+VALE_PACKAGE_PATH: typ.Final = ".vale/packages/concordat-0.3.1.zip"
 VALE_RELEASES: typ.Final = "https://github.com/vale-cli/vale/releases/download"
 VALE_ASSET: typ.Final = "vale_3.22.0_Linux_64-bit.tar.gz"
 VALE_SHA256: typ.Final = (
@@ -28,6 +25,7 @@ VALE_SHA256: typ.Final = (
 )
 VALE_MEMBER_SIZE: typ.Final = "45954304"
 VALE_HELPER_REF: typ.Final = "031bad66e27daf137f5c4acd8f0c2d8201c3c726"
+VALE_OVERRIDES: typ.Final = ("VALE=vale", "UV=uv", "VALE_PYTHON=3.13")
 EXPECTED_HELPER_CALL: typ.Final = (
     "uv\trun --isolated --python 3.13 --with "
     f"git+https://github.com/leynos/concordat-vale.git@{VALE_HELPER_REF} "
@@ -36,6 +34,13 @@ EXPECTED_HELPER_CALL: typ.Final = (
 EXPECTED_INSTALL_CALL: typ.Final = (
     "uv\trun --isolated --python 3.13 scripts/install_release_binary.py install vale"
 )
+EXPECTED_STYLE_ARCHIVE_CALL: typ.Final = (
+    "uv\trun --isolated --no-project --python 3.13 --with "
+    "cyclopts==4.25.2 python -m scripts.vale_style_archive"
+)
+EXPECTED_STYLE_CHECK_CALL: typ.Final = f"{EXPECTED_STYLE_ARCHIVE_CALL} check"
+EXPECTED_STYLE_INSTALL_CALL: typ.Final = f"{EXPECTED_STYLE_ARCHIVE_CALL} install"
+EXPECTED_ROUTE_PREFIX: typ.Final = (EXPECTED_STYLE_CHECK_CALL, "vale\tsync")
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
@@ -79,6 +84,7 @@ printf 'pins\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\n' \\
   "$VALE_ARCHIVE_FORMAT" "$VALE_ARCHIVE_MEMBER" \\
   "$VALE_ARCHIVE_MEMBER_SIZE" "$RUNNER_TEMP|$GITHUB_PATH" >> "$VALE_TEST_LOG"
 case "$VALE_TEST_FAIL:$*" in
+  style-check:*python\\ -m\\ scripts.vale_style_archive\\ check*) exit 23 ;;
   helper:*update_acronym_allowlist.py*) exit 17 ;;
   installer:*install_release_binary.py*) exit 19 ;;
 esac
@@ -144,12 +150,12 @@ def _calls(log_path: pathlib.Path) -> list[str]:
     ]
 
 
-def test_released_configuration_uses_the_supported_vocabulary_option() -> None:
-    """Use the released package and its built-in Concordat vocabulary."""
+def test_released_configuration_uses_local_package_and_vocabulary() -> None:
+    """Use only the cached style package and its built-in vocabulary."""
     configuration = _configuration()
     global_options = configuration["vale-global"]
 
-    assert global_options["packages"] == VALE_PACKAGE_URL
+    assert global_options["packages"] == VALE_PACKAGE_PATH
     assert global_options["stylespath"] == ".vale/styles"
     assert global_options["minalertlevel"] == "warning"
     assert global_options["vocab"] == "concordat"
@@ -187,18 +193,25 @@ def test_vale_runs_sync_then_pinned_helper_then_inspection(
 ) -> None:
     """The local inspection route is ordered and pins its helper runtime."""
     sandbox = _tool_directory(tmp_path)
-    result = _run_make(
-        sandbox,
-        "vale",
-        overrides=("VALE=vale", "UV=uv", "VALE_PYTHON=3.13"),
-    )
+    result = _run_make(sandbox, "vale", overrides=VALE_OVERRIDES)
 
     assert result.returncode == 0, result.stderr
     assert _calls(sandbox.log_path) == [
-        "vale\tsync",
+        *EXPECTED_ROUTE_PREFIX,
         EXPECTED_HELPER_CALL,
         "vale\t--no-global .",
     ]
+
+
+def test_vale_style_archive_check_failure_stops_before_sync(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A failed cached style check prevents Vale from syncing."""
+    sandbox = _tool_directory(tmp_path)
+    result = _run_make(sandbox, "vale", fail="style-check", overrides=VALE_OVERRIDES)
+
+    assert result.returncode != 0
+    assert _calls(sandbox.log_path) == [EXPECTED_STYLE_CHECK_CALL]
 
 
 def test_vale_supports_executable_paths_with_spaces(
@@ -221,7 +234,7 @@ def test_vale_supports_executable_paths_with_spaces(
 
     assert result.returncode == 0, result.stderr
     assert _calls(sandbox.log_path) == [
-        "vale\tsync",
+        *EXPECTED_ROUTE_PREFIX,
         EXPECTED_HELPER_CALL,
         "vale\t--no-global .",
     ]
@@ -230,19 +243,16 @@ def test_vale_supports_executable_paths_with_spaces(
 @pytest.mark.parametrize(
     ("failure", "expected_calls"),
     [
-        pytest.param("sync", ["vale\tsync"], id="sync-failure"),
+        pytest.param("sync", [*EXPECTED_ROUTE_PREFIX], id="sync-failure"),
         pytest.param(
             "helper",
-            [
-                "vale\tsync",
-                EXPECTED_HELPER_CALL,
-            ],
+            [*EXPECTED_ROUTE_PREFIX, EXPECTED_HELPER_CALL],
             id="helper-failure",
         ),
         pytest.param(
             "inspection",
             [
-                "vale\tsync",
+                *EXPECTED_ROUTE_PREFIX,
                 EXPECTED_HELPER_CALL,
                 "vale\t--no-global .",
             ],
@@ -261,7 +271,7 @@ def test_vale_route_propagates_each_step_failure(
         sandbox,
         "vale",
         fail=failure,
-        overrides=("VALE=vale", "UV=uv", "VALE_PYTHON=3.13"),
+        overrides=VALE_OVERRIDES,
     )
 
     assert result.returncode != 0
@@ -285,10 +295,10 @@ def test_missing_vale_preflight_gives_the_install_command(
     assert _calls(sandbox.log_path) == []
 
 
-def test_install_uses_the_pinned_linux_archive_and_python(
+def test_install_targets_use_the_pinned_binary_and_local_styles(
     tmp_path: pathlib.Path,
 ) -> None:
-    """Provisioning passes the approved archive contract to the shared helper."""
+    """Binary install adds styles; external Vale can install styles alone."""
     sandbox = _tool_directory(tmp_path)
     result = _run_make(
         sandbox,
@@ -298,7 +308,7 @@ def test_install_uses_the_pinned_linux_archive_and_python(
 
     assert result.returncode == 0, result.stderr
     calls = _calls(sandbox.log_path)
-    assert calls == [EXPECTED_INSTALL_CALL]
+    assert calls == [EXPECTED_INSTALL_CALL, EXPECTED_STYLE_INSTALL_CALL]
     assert (sandbox.cwd / ".vale/tools").is_dir()
     assert (sandbox.cwd / ".vale/tools/github_path").is_file()
     rows = sandbox.log_path.read_text(encoding="utf-8").splitlines()
@@ -308,6 +318,13 @@ def test_install_uses_the_pinned_linux_archive_and_python(
         f"tar.gz\tvale\t{VALE_MEMBER_SIZE}\t"
         f"{sandbox.cwd / '.vale/tools'}|{sandbox.cwd / '.vale/tools/github_path'}"
     )
+    standalone = _run_make(
+        sandbox,
+        "install-vale-styles",
+        overrides=("VALE=/external/vale", "UV=uv"),
+    )
+    assert standalone.returncode == 0, standalone.stderr
+    assert _calls(sandbox.log_path) == [*calls, EXPECTED_STYLE_INSTALL_CALL]
 
 
 def test_install_rejects_other_platforms_before_invoking_uv(

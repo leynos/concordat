@@ -19,6 +19,9 @@ VALE_ARCHIVE_MEMBER := vale
 VALE_ARCHIVE_MEMBER_SIZE := 45954304
 VALE_HELPER_REF := 031bad66e27daf137f5c4acd8f0c2d8201c3c726
 UV ?= uv
+VALE_STYLE_ARCHIVE = $(UV_ENV) $(UV) run --isolated --no-project \
+	--python "$(VALE_PYTHON)" --with cyclopts==4.25.2 \
+	python -m scripts.vale_style_archive
 TOOLS = $(MDLINT) $(NIXIE) uv
 VENV_TOOLS = pytest
 ACRONYM_SCRIPT ?= scripts/update_acronym_allowlist.py
@@ -62,7 +65,7 @@ SKYLOS_EXCLUDE_FOLDERS ?= tests
 
 .PHONY: help all clean build build-release lint fmt check-fmt \
 	        markdownlint nixie spelling skylos-allow makeutil conftest test typecheck \
-	        install-vale check-vale vale $(TOOLS) \
+	        install-vale install-vale-styles check-vale vale $(TOOLS) \
         $(VENV_TOOLS)
 
 .DEFAULT_GOAL := all
@@ -169,6 +172,10 @@ install-vale: ## Install the pinned Vale binary on Linux x86_64
 	VALE_ARCHIVE_MEMBER_SIZE="$(VALE_ARCHIVE_MEMBER_SIZE)" \
 	$(UV_ENV) $(UV) run --isolated --python "$(VALE_PYTHON)" \
 	  scripts/install_release_binary.py install vale
+	$(VALE_STYLE_ARCHIVE) install
+
+install-vale-styles: ## Install the verified Vale style package
+	$(VALE_STYLE_ARCHIVE) install
 
 check-vale: ## Check that the optional Vale binary is installed
 	@command -v "$(VALE)" >/dev/null 2>&1 && \
@@ -176,6 +183,7 @@ check-vale: ## Check that the optional Vale binary is installed
 	    printf "%s\n" "Error: Vale is required for prose inspection; run 'make install-vale' first" >&2; \
 	    exit 1; \
 	  }
+	$(VALE_STYLE_ARCHIVE) check
 
 vale: check-vale ## Check prose
 	"$(VALE)" sync
