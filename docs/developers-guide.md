@@ -1271,6 +1271,36 @@ Two external tools must be on `PATH`:
   against the rule package's Rego policy, with a 60-second timeout
   (`CONFTEST_TIMEOUT`).
 
+### Optional prose inspection
+
+`make install-vale` installs the approved Linux x86_64 Vale 3.22.0 binary from
+its pinned release archive. The archive SHA-256, selected member and
+uncompressed member size are pinned in the repository; the verified executable
+is placed at `.vale/tools/vale-bin/vale`, which is ignored by Git. The
+`make vale` target runs `make check-vale` first; that preflight gives an
+installation error if the binary is missing.
+
+The optional `make vale` inspection syncs the released
+[concordat-vale 0.3.1 style archive](https://github.com/leynos/concordat-vale/releases/tag/v0.3.1).
+Its SHA-256 is
+`af015d043de1deda51bc0b583d2abf5a76dff73c896196dbf58ad4d184380bbb`. It then
+runs the project acronym helper from immutable commit
+[`031bad66`](https://github.com/leynos/concordat-vale/commit/031bad66e27daf137f5c4acd8f0c2d8201c3c726)
+with the Python runtime selected by `VALE_PYTHON` (3.13 by default), followed
+by `vale --no-global .`. Vale uses the repository warning-level configuration
+and its native two-second execution budget. `VALE` remains injectable for local
+use. Vocabulary is configured under
+`.vale/styles/config/vocabularies/concordat`; do not add the unsupported
+`VocabPath` setting.
+
+Vale inspection is optional and is not part of the standard lint, test, or
+continuous-integration targets. Its results are findings for review. A full
+tree and matched-change comparison is meaningful only when both runs use the
+same Vale binary, style archive, vocabulary, and acronym-helper revision. A Vale
+`E201` error makes the inspection unmeasured; it is not a clean result.
+Content cleanup tracked separately under issue #311 remains separate from
+adopting and running the inspection tooling.
+
 ### Running a package's own policy tests
 
 Each rule package ships a Conftest/Rego test file beside its policy, and those
