@@ -79,3 +79,24 @@ default. The release-profile guard checks package overrides for the selected
 profile in both root `Cargo.toml` and `.cargo/config.toml`; profile-level LLVM
 alone cannot prove coverage if a relevant package override is unresolved or
 selects Cranelift.
+
+## Optional prose inspection
+
+From a Concordat checkout, optional prose inspection uses the pinned local Vale
+3.22.0 binary and independently digest-verified style archive. On Linux x86_64,
+run:
+
+```shell
+make install-vale
+make vale
+```
+
+With a compatible Vale binary provided separately, install the style archive
+and select that executable:
+
+```shell
+make install-vale-styles
+make VALE=/absolute/path/to/vale vale
+```
+
+See the [users' guide](users-guide.md#optional-prose-inspection) for details.

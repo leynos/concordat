@@ -1,0 +1,1 @@
+Vale style archive digest mismatch at <archive-path>: expected <expected-sha256>, got <actual-sha256>; run make install-vale-styles

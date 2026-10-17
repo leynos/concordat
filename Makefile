@@ -8,7 +8,20 @@ MDTABLEFIX ?= mdtablefix
 MDTABLEFIX_SELECT = --git --include-untracked
 MDTABLEFIX_RULES = --wrap --renumber --breaks --ellipsis --fences
 NIXIE ?= $(shell which nixie)
-VALE ?= $(shell which vale)
+VALE ?= $(CURDIR)/.vale/tools/vale-bin/vale
+VALE_PYTHON ?= 3.13
+VALE_VERSION := 3.22.0
+VALE_ASSET := vale_3.22.0_Linux_64-bit.tar.gz
+VALE_SHA256 := 52f5cd0314a1b7384cac6aa102a68193977312f6ba9c9f3ae001b5deec8e3a10
+VALE_RELEASES := https://github.com/vale-cli/vale/releases/download
+VALE_ARCHIVE_FORMAT := tar.gz
+VALE_ARCHIVE_MEMBER := vale
+VALE_ARCHIVE_MEMBER_SIZE := 45954304
+VALE_HELPER_REF := 031bad66e27daf137f5c4acd8f0c2d8201c3c726
+UV ?= uv
+VALE_STYLE_ARCHIVE = $(UV_ENV) $(UV) run --isolated --no-project \
+	--python "$(VALE_PYTHON)" --with cyclopts==4.25.2 \
+	python -m scripts.vale_style_archive
 TOOLS = $(MDLINT) $(NIXIE) uv
 VENV_TOOLS = pytest
 ACRONYM_SCRIPT ?= scripts/update_acronym_allowlist.py
@@ -51,7 +64,8 @@ SKYLOS_PRODUCTION_TARGETS ?= concordat scripts
 SKYLOS_EXCLUDE_FOLDERS ?= tests
 
 .PHONY: help all clean build build-release lint fmt check-fmt \
-	        markdownlint nixie spelling skylos-allow makeutil conftest test typecheck vale $(TOOLS) \
+	        markdownlint nixie spelling skylos-allow makeutil conftest test typecheck \
+	        install-vale install-vale-styles check-vale vale $(TOOLS) \
         $(VENV_TOOLS)
 
 .DEFAULT_GOAL := all
@@ -140,10 +154,43 @@ spelling: ## Enforce en-GB-oxendict spelling
 nixie: $(NIXIE) ## Validate Mermaid diagrams
 	$(NIXIE) --no-sandbox
 
-vale: $(VALE) $(ACRONYM_SCRIPT) ## Check prose
-	$(VALE) sync
-	uv run --with "git+https://github.com/leynos/concordat-vale.git" $(ACRONYM_SCRIPT)
-	$(VALE) --no-global .
+install-vale: ## Install the pinned Vale binary on Linux x86_64
+	@case "$$(uname -s)/$$(uname -m)" in \
+	  Linux/x86_64) ;; \
+	  *) printf "Error: install-vale supports Linux x86_64 only\n" >&2; exit 2;; \
+	esac
+	@mkdir -p "$(CURDIR)/.vale/tools"
+	@touch "$(CURDIR)/.vale/tools/github_path"
+	RUNNER_TEMP="$(CURDIR)/.vale/tools" \
+	GITHUB_PATH="$(CURDIR)/.vale/tools/github_path" \
+	VALE_VERSION="$(VALE_VERSION)" \
+	VALE_ASSET="$(VALE_ASSET)" \
+	VALE_SHA256="$(VALE_SHA256)" \
+	VALE_RELEASES="$(VALE_RELEASES)" \
+	VALE_ARCHIVE_FORMAT="$(VALE_ARCHIVE_FORMAT)" \
+	VALE_ARCHIVE_MEMBER="$(VALE_ARCHIVE_MEMBER)" \
+	VALE_ARCHIVE_MEMBER_SIZE="$(VALE_ARCHIVE_MEMBER_SIZE)" \
+	$(UV_ENV) $(UV) run --isolated --python "$(VALE_PYTHON)" \
+	  scripts/install_release_binary.py install vale
+	$(VALE_STYLE_ARCHIVE) install
+
+install-vale-styles: ## Install the verified Vale style package
+	$(VALE_STYLE_ARCHIVE) install
+
+check-vale: ## Check that the optional Vale binary is installed
+	@command -v "$(VALE)" >/dev/null 2>&1 && \
+	  test -x "$$(command -v "$(VALE)")" || { \
+	    printf "%s\n" "Error: Vale is required for prose inspection; run 'make install-vale' first" >&2; \
+	    exit 1; \
+	  }
+	$(VALE_STYLE_ARCHIVE) check
+
+vale: check-vale ## Check prose
+	"$(VALE)" sync
+	$(UV_ENV) $(UV) run --isolated --python "$(VALE_PYTHON)" \
+	  --with 'git+https://github.com/leynos/concordat-vale.git@$(VALE_HELPER_REF)' \
+	  python "$(ACRONYM_SCRIPT)"
+	"$(VALE)" --no-global .
 
 makeutil: ## Verify the Makefile parser used by contract tests
 	$(call ensure_tool,$@)

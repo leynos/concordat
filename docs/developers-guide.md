@@ -1271,6 +1271,55 @@ Two external tools must be on `PATH`:
   against the rule package's Rego policy, with a 60-second timeout
   (`CONFTEST_TIMEOUT`).
 
+### Optional prose inspection
+
+`make install-vale` installs the approved Linux x86_64 Vale 3.22.0 binary from
+its pinned release archive, then installs the released Vale style archive. The
+binary archive SHA-256, selected member and uncompressed member size are pinned
+in the repository; the verified executable is placed at
+`.vale/tools/vale-bin/vale`, which is ignored by Git. Users with a compatible
+Vale binary provided separately can run `make install-vale-styles` to install
+the style archive without installing a binary.
+
+The optional `make vale` inspection first runs `make check-vale`, which checks
+that the selected executable is available and the cached style archive has the
+expected digest. The preflight directs users to `make install-vale` when the
+executable is missing and to `make install-vale-styles` when the archive is
+missing or its digest does not match. It reads the local archive without
+fetching or replacing it, so Vale cannot sync an unverified remote package.
+
+The style archive is the released
+[concordat-vale 0.3.1 archive](https://github.com/leynos/concordat-vale/releases/tag/v0.3.1),
+with SHA-256
+`af015d043de1deda51bc0b583d2abf5a76dff73c896196dbf58ad4d184380bbb`. The narrow
+`scripts.vale_style_archive` helper installs or checks this one asset and
+delegates download, digest verification and atomic staging to the existing
+`scripts.install_release_binary.install_release` boundary. The expected URL and
+digest are fixed in source and cannot be overridden through the environment.
+The cached file is opaque archive data staged with mode `0755`; it is read by
+Vale as a package and is never executed. `.vale.ini` points only to
+`.vale/packages/concordat-0.3.1.zip`, so Vale does not fall back to a remote
+package when the local file is unavailable.
+
+After preflight, `make vale` syncs the local style package and runs the project
+acronym helper from immutable commit
+[`031bad66`](https://github.com/leynos/concordat-vale/commit/031bad66e27daf137f5c4acd8f0c2d8201c3c726)
+with the Python runtime selected by `VALE_PYTHON` (3.13 by default), followed
+by `vale --no-global .`. Vale uses the repository warning-level configuration
+and its native two-second execution budget. `VALE` remains injectable for local
+use. Vocabulary is configured under
+`.vale/styles/config/vocabularies/concordat`; do not add the unsupported
+`VocabPath` setting.
+
+Vale inspection is optional and is not part of the standard lint, test, or
+continuous-integration targets. Its results are findings for review, not an
+estate-policy compliance verdict. A full-tree and matched-change comparison is
+meaningful only when both runs use the same Vale binary, style archive,
+vocabulary, and acronym-helper revision, with duplicate findings compared
+explicitly. A Vale `E201` error makes the inspection unmeasured; it is not a
+clean result. Issue #311's content cleanup remains separate from adopting and
+running the inspection tooling.
+
 ### Running a package's own policy tests
 
 Each rule package ships a Conftest/Rego test file beside its policy, and those

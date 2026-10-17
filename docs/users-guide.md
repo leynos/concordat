@@ -23,6 +23,32 @@ workflows read the same flag before applying changes.
 
 2. Invoke the CLI with `uv run` to ensure the correct environment is used.
 
+## Optional prose inspection
+
+From a Concordat checkout, use Vale to review prose against the project's
+writing conventions. On Linux x86_64, install the local binary and style
+package, then run the inspection:
+
+```shell
+make install-vale
+make vale
+```
+
+`make install-vale` installs both the Linux x86_64 binary and style package.
+`make vale` first runs `make check-vale`, which reports installation guidance
+if the selected executable or local style package is unavailable. The binary
+installer supports Linux x86_64 only. On another platform, provide a compatible
+Vale executable and run `make install-vale-styles` before the inspection. Use
+`make VALE=/absolute/path/to/vale vale` to select an executable, or
+`make VALE=vale vale` to use a Vale installation already on `PATH`.
+
+This inspection is optional and runs outside the standard gates and continuous
+integration. Its findings support prose review; they do not establish
+estate-policy compliance. See [developer guidance][vale-guidance] for tool
+requirements, configuration, and comparison limits.
+
+[vale-guidance]: developers-guide.md#optional-prose-inspection
+
 ## Runtime implementation
 
 The public `concordat.hello` entry point uses the optional Rust implementation
