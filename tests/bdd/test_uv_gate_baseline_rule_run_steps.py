@@ -137,13 +137,18 @@ def _spelling_agents_md() -> str:
 
 
 @given("a checkout with the canonical helper and the pinned spelling gate")
-def given_both_rules(uv_checkout: pathlib.Path) -> None:
+@given(
+    parsers.parse('a checkout with the canonical helper and spelling pin "{release}"')
+)
+def given_both_rules(uv_checkout: pathlib.Path, release: str = "v0.1.3") -> None:
     """Write one checkout that both rule packages should accept."""
     _write_checkout(uv_checkout)
     makefile = uv_checkout / "Makefile"
     makefile.write_text(
         makefile.read_text(encoding="utf-8")
-        + f"\n.PHONY: spelling\nspelling:\n{_SPELLING_RECIPE}\n",
+        + "\n.PHONY: spelling\nspelling:\n"
+        + _SPELLING_RECIPE.replace("@v0.1.3", f"@{release}")
+        + "\n",
         encoding="utf-8",
     )
     (uv_checkout / "typos.local.toml").write_text("schema = 1\n", encoding="utf-8")
