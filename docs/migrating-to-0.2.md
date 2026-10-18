@@ -51,8 +51,27 @@ base-directory seam, inject stubs in tests, and do not replace a lossless
 actual ecosystems and directories, including every Cargo root and local action
 directory. Preserve the daily cadence and final minor-and-patch catch-all.
 
-Reconcile label names, descriptions, and colours against the dated label
-snapshot, preserving unrelated labels. See the
+Reconcile label names, descriptions, and colours against the approved 34-label
+policy, preserving unrelated labels. Its source metadata separately attests a
+31-label API capture at `2026-09-08T10:47:29Z`, with raw JSON SHA-256
+`bdd8fa7d9da6e7ef6d2c46a1db2cddff0e803b95797bcae55cad26c18d513133`. The raw
+response is unavailable, so neither YAML nor a Git revision verifies that
+attestation. The approved `security`, `macos`, and `infra` additions belong to
+the later 34-label policy and are not part of the historical capture.
+
+The optional seeds also include the
+[explicit development acceleration reference](../platform-standards/canon/build/rust/dev-fast/config.toml):
+
+- Copy it to a consumer-owned path and explicitly select it with Cargo after
+  qualifying the toolchain, backend, and linker routes. Cargo's test profile
+  inherits `dev`; required overrides remain consumer-owned. The Linux linker
+  condition applies to the compilation target, including cross-compilation,
+  rather than merely to the host. This reference does not replace the
+  auto-discovered defaults audit or existing consumer Make and CI requirements.
+
+See the
+[contributor guidance](developers-guide.md#explicit-development-acceleration-reference)
+and
 [users' guide](users-guide.md#syncing-canonical-platform-standards-artefacts)
 for adoption details. Repositories that do not adopt these seeds need no action.
 
