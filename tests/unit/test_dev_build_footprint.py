@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import pathlib
 
@@ -14,6 +15,16 @@ RULE_ID = "rust-dev-build-footprint"
 MANIFEST = '[package]\nname = "demo"\nversion = "0.1.0"\n'
 DISABLED = "[profile.dev]\nincremental = false\ndebug = 0\n"
 FLAGS = '[build]\nrustflags = ["-Zembed-metadata=no"]\n'
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class DevBuildCase:
+    """One named input scenario and its expected storage-policy findings."""
+
+    profile: str
+    config: str
+    channel: str
+    expected: set[str]
 
 
 def write_checkout(
@@ -34,182 +45,231 @@ def write_checkout(
 
 
 @pytest.mark.parametrize(
-    ("profile", "config", "channel", "expected"),
+    "case",
     [
-        pytest.param(DISABLED, FLAGS, "nightly-2026-05-28", set(), id="nightly"),
-        pytest.param(DISABLED, "", "stable", set(), id="stable"),
-        pytest.param(DISABLED, "", "beta", set(), id="beta"),
-        pytest.param(DISABLED, "", "1.99.0", set(), id="numbered-stable"),
         pytest.param(
-            "", FLAGS, "nightly-2026-05-28", {"DF-001", "DF-002"}, id="defaults"
+            DevBuildCase(DISABLED, FLAGS, "nightly-2026-05-28", set()), id="nightly"
+        ),
+        pytest.param(DevBuildCase(DISABLED, "", "stable", set()), id="stable"),
+        pytest.param(DevBuildCase(DISABLED, "", "beta", set()), id="beta"),
+        pytest.param(DevBuildCase(DISABLED, "", "1.99.0", set()), id="numbered-stable"),
+        pytest.param(
+            DevBuildCase("", FLAGS, "nightly-2026-05-28", {"DF-001", "DF-002"}),
+            id="defaults",
         ),
         pytest.param(
-            DISABLED, "", "nightly-2026-05-28", {"DF-003"}, id="metadata-missing"
+            DevBuildCase(DISABLED, "", "nightly-2026-05-28", {"DF-003"}),
+            id="metadata-missing",
         ),
         pytest.param(
-            DISABLED, FLAGS, "nightly-2025-06-25", {"DF-003"}, id="old-support-unknown"
+            DevBuildCase(DISABLED, FLAGS, "nightly-2025-06-25", {"DF-003"}),
+            id="old-support-unknown",
         ),
         pytest.param(
-            DISABLED, FLAGS, "nightly-2025-06-26", set(), id="supported-boundary"
+            DevBuildCase(DISABLED, FLAGS, "nightly-2025-06-26", set()),
+            id="supported-boundary",
         ),
         pytest.param(
-            DISABLED, FLAGS, "nightly", {"DF-003"}, id="floating-support-unknown"
+            DevBuildCase(DISABLED, FLAGS, "nightly", {"DF-003"}),
+            id="floating-support-unknown",
         ),
         pytest.param(
-            DISABLED, FLAGS, "stable", {"DF-003"}, id="unstable-flag-on-stable"
+            DevBuildCase(DISABLED, FLAGS, "stable", {"DF-003"}),
+            id="unstable-flag-on-stable",
         ),
         pytest.param(
-            DISABLED.replace("debug = 0", 'debug = "none"'),
-            FLAGS,
-            "nightly-2026-05-28",
-            set(),
+            DevBuildCase(
+                DISABLED.replace("debug = 0", 'debug = "none"'),
+                FLAGS,
+                "nightly-2026-05-28",
+                set(),
+            ),
             id="debug-none",
         ),
         pytest.param(
-            DISABLED.replace("debug = 0", "debug = false"),
-            FLAGS,
-            "nightly-2026-05-28",
-            set(),
+            DevBuildCase(
+                DISABLED.replace("debug = 0", "debug = false"),
+                FLAGS,
+                "nightly-2026-05-28",
+                set(),
+            ),
             id="debug-false",
         ),
         pytest.param(
-            DISABLED + "[profile.dev.package.demo]\ndebug = 2\n",
-            FLAGS,
-            "nightly-2026-05-28",
-            {"DF-002"},
+            DevBuildCase(
+                DISABLED + "[profile.dev.package.demo]\ndebug = 2\n",
+                FLAGS,
+                "nightly-2026-05-28",
+                {"DF-002"},
+            ),
             id="package-debug",
         ),
         pytest.param(
-            DISABLED + '[profile.dev.package."*"]\nincremental = true\n',
-            FLAGS,
-            "nightly-2026-05-28",
-            {"DF-001"},
+            DevBuildCase(
+                DISABLED + '[profile.dev.package."*"]\nincremental = true\n',
+                FLAGS,
+                "nightly-2026-05-28",
+                {"DF-001"},
+            ),
             id="wildcard-incremental",
         ),
         pytest.param(
-            DISABLED + "[profile.dev.build-override]\ndebug = true\n",
-            FLAGS,
-            "nightly-2026-05-28",
-            {"DF-002"},
+            DevBuildCase(
+                DISABLED + "[profile.dev.build-override]\ndebug = true\n",
+                FLAGS,
+                "nightly-2026-05-28",
+                {"DF-002"},
+            ),
             id="build-script-debug",
         ),
         pytest.param(
-            DISABLED + "[profile.release]\ndebug = 2\nincremental = true\n",
-            FLAGS,
-            "nightly-2026-05-28",
-            set(),
+            DevBuildCase(
+                DISABLED + "[profile.release]\ndebug = 2\nincremental = true\n",
+                FLAGS,
+                "nightly-2026-05-28",
+                set(),
+            ),
             id="release-outside-scope",
         ),
         pytest.param(
-            DISABLED,
-            FLAGS.replace('"-Zembed-metadata=no"', '"-Z", "embed-metadata=no"'),
-            "nightly-2026-05-28",
-            set(),
+            DevBuildCase(
+                DISABLED,
+                FLAGS.replace('"-Zembed-metadata=no"', '"-Z", "embed-metadata=no"'),
+                "nightly-2026-05-28",
+                set(),
+            ),
             id="split-metadata",
         ),
         pytest.param(
-            DISABLED,
-            FLAGS.replace(
-                '"-Zembed-metadata=no"', '"-Zembed-metadata=no", "-Cdebuginfo=2"'
+            DevBuildCase(
+                DISABLED,
+                FLAGS.replace(
+                    '"-Zembed-metadata=no"', '"-Zembed-metadata=no", "-Cdebuginfo=2"'
+                ),
+                "nightly-2026-05-28",
+                {"DF-002"},
             ),
-            "nightly-2026-05-28",
-            {"DF-002"},
             id="flag-debug",
         ),
         pytest.param(
-            DISABLED,
-            FLAGS.replace(
-                '"-Zembed-metadata=no"', '"-Zembed-metadata=no", "-Cincremental=cache"'
+            DevBuildCase(
+                DISABLED,
+                FLAGS.replace(
+                    '"-Zembed-metadata=no"',
+                    '"-Zembed-metadata=no", "-Cincremental=cache"',
+                ),
+                "nightly-2026-05-28",
+                {"DF-001"},
             ),
-            "nightly-2026-05-28",
-            {"DF-001"},
             id="flag-incremental",
         ),
         pytest.param(
-            DISABLED,
-            FLAGS.replace(
-                '"-Zembed-metadata=no"', '"-Zembed-metadata=no", "-Zembed-metadata=yes"'
+            DevBuildCase(
+                DISABLED,
+                FLAGS.replace(
+                    '"-Zembed-metadata=no"',
+                    '"-Zembed-metadata=no", "-Zembed-metadata=yes"',
+                ),
+                "nightly-2026-05-28",
+                {"DF-003"},
             ),
-            "nightly-2026-05-28",
-            {"DF-003"},
             id="last-metadata-wins",
         ),
         pytest.param(
-            DISABLED,
-            FLAGS.replace(
-                '"-Zembed-metadata=no"',
-                '"-Cdebuginfo=2", "-Cdebuginfo=0", "-Zembed-metadata=no"',
+            DevBuildCase(
+                DISABLED,
+                FLAGS.replace(
+                    '"-Zembed-metadata=no"',
+                    '"-Cdebuginfo=2", "-Cdebuginfo=0", "-Zembed-metadata=no"',
+                ),
+                "nightly-2026-05-28",
+                set(),
             ),
-            "nightly-2026-05-28",
-            set(),
             id="last-debug-wins",
         ),
         pytest.param(
-            DISABLED,
-            FLAGS + '[target.x86_64-unknown-linux-gnu]\nrustflags = ["-Dwarnings"]\n',
-            "nightly-2026-05-28",
-            {"DF-003"},
+            DevBuildCase(
+                DISABLED,
+                FLAGS
+                + '[target.x86_64-unknown-linux-gnu]\nrustflags = ["-Dwarnings"]\n',
+                "nightly-2026-05-28",
+                {"DF-003"},
+            ),
             id="target-replacement",
         ),
         pytest.param(
-            DISABLED,
-            FLAGS + "[profile.dev]\ndebug = 2\n",
-            "nightly-2026-05-28",
-            {"DF-002"},
+            DevBuildCase(
+                DISABLED,
+                FLAGS + "[profile.dev]\ndebug = 2\n",
+                "nightly-2026-05-28",
+                {"DF-002"},
+            ),
             id="config-wins",
         ),
         pytest.param(
-            DISABLED,
-            FLAGS + '[profile.dev]\nrustflags = ["-Cdebuginfo=2"]\n',
-            "nightly-2026-05-28",
-            {"DF-002"},
+            DevBuildCase(
+                DISABLED,
+                FLAGS + '[profile.dev]\nrustflags = ["-Cdebuginfo=2"]\n',
+                "nightly-2026-05-28",
+                {"DF-002"},
+            ),
             id="profile-rustflags",
         ),
         pytest.param(
-            DISABLED,
-            FLAGS + '[profile.dev]\nrustflags = ["-Cdebuginfo=0"]\n',
-            "nightly-2026-05-28",
-            set(),
+            DevBuildCase(
+                DISABLED,
+                FLAGS + '[profile.dev]\nrustflags = ["-Cdebuginfo=0"]\n',
+                "nightly-2026-05-28",
+                set(),
+            ),
             id="additive-profile-flags",
         ),
         pytest.param(
-            DISABLED,
-            FLAGS.replace("[build]", "[build]\nincremental = true"),
-            "nightly-2026-05-28",
-            {"DF-001"},
+            DevBuildCase(
+                DISABLED,
+                FLAGS.replace("[build]", "[build]\nincremental = true"),
+                "nightly-2026-05-28",
+                {"DF-001"},
+            ),
             id="global-incremental-wins",
         ),
         pytest.param(
-            "[profile.dev]\ndebug = 0\n",
-            FLAGS.replace("[build]", "[build]\nincremental = false"),
-            "nightly-2026-05-28",
-            set(),
+            DevBuildCase(
+                "[profile.dev]\ndebug = 0\n",
+                FLAGS.replace("[build]", "[build]\nincremental = false"),
+                "nightly-2026-05-28",
+                set(),
+            ),
             id="global-incremental-off",
         ),
         pytest.param(
-            "", FLAGS + DISABLED, "nightly-2026-05-28", set(), id="config-defaults"
+            DevBuildCase("", FLAGS + DISABLED, "nightly-2026-05-28", set()),
+            id="config-defaults",
         ),
         pytest.param(
-            DISABLED.replace("debug = 0", "debug = 0.0"),
-            FLAGS,
-            "nightly-2026-05-28",
-            {"DF-002"},
+            DevBuildCase(
+                DISABLED.replace("debug = 0", "debug = 0.0"),
+                FLAGS,
+                "nightly-2026-05-28",
+                {"DF-002"},
+            ),
             id="malformed-debug",
         ),
     ],
 )
 def test_real_policy_audits_dev_builds(
     tmp_path: pathlib.Path,
-    profile: str,
-    config: str,
-    channel: str,
-    expected: set[str],
+    case: DevBuildCase,
 ) -> None:
     """Files, default resolution, flag precedence and policy agree end to end."""
-    write_checkout(tmp_path, profile=profile, config=config, channel=channel)
+    write_checkout(
+        tmp_path, profile=case.profile, config=case.config, channel=case.channel
+    )
     result = runner.run_rule(RULE_ID, tmp_path)
-    assert {finding.rule_id for finding in result.findings} == expected, result.findings
-    assert (result.verdict == "compliant") == (not expected), result.verdict
+    assert {finding.rule_id for finding in result.findings} == case.expected, (
+        result.findings
+    )
+    assert (result.verdict == "compliant") == (not case.expected), result.verdict
 
 
 def test_config_merges_with_manifest_overrides(tmp_path: pathlib.Path) -> None:

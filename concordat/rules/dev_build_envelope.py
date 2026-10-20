@@ -9,24 +9,45 @@ from __future__ import annotations
 
 import datetime as dt
 import itertools
-import pathlib
-import tomllib
 import typing as typ
 
 from .cargo_config import (
-    locate_cargo_config,
     normalise_flags,
-    rustflags_cargo_would_refuse,
     rustflags_sources,
 )
+from .dev_build_context import resolve_dev_context, toml_table
 from .rust_surfaces import CargoSurface, resolve_rust_surfaces
-from .toolchain import classify_channel, inspect_toolchain
+from .toolchain import classify_channel
+
+if typ.TYPE_CHECKING:
+    import pathlib
 
 ENVELOPE_KIND: typ.Final = "policy-input/rust-dev-build-footprint"
 # The 1.88.0 compiler source contains this option; 1.87.0 does not. This is
 # a conservative support floor, not a claim about the first introducing nightly.
 METADATA_SUPPORT_FLOOR: typ.Final = dt.date(2025, 6, 26)
 type SettingState = typ.Literal["disabled", "enabled", "unset", "invalid"]
+_DEBUG_LEVELS: typ.Final[dict[str, SettingState]] = {
+    "none": "disabled",
+    "limited": "enabled",
+    "full": "enabled",
+    "line-tables-only": "enabled",
+    "line-directives-only": "enabled",
+}
+_NUMERIC_DEBUG_LEVELS: typ.Final[dict[int, SettingState]] = {
+    0: "disabled",
+    1: "enabled",
+    2: "enabled",
+}
+_FLAG_LEVELS: typ.Final[dict[str, dict[str, SettingState]]] = {
+    "-Cdebuginfo": _DEBUG_LEVELS | {"0": "disabled", "1": "enabled", "2": "enabled"},
+    "-Zembed-metadata": {
+        "no": "disabled",
+        "false": "disabled",
+        "yes": "enabled",
+        "true": "enabled",
+    },
+}
 
 
 class ProfileFact(typ.TypedDict):
@@ -65,77 +86,16 @@ class DevBuildEnvelope(typ.TypedDict):
     surfaces: list[SurfaceFacts]
 
 
-def _table(value: object) -> dict[str, object]:
-    """Return a TOML table, or an empty mapping for a non-table value."""
-    return typ.cast("dict[str, object]", value) if isinstance(value, dict) else {}
-
-
-def _merge(lower: dict[str, object], higher: dict[str, object]) -> dict[str, object]:
-    """Merge Cargo configuration, appending arrays and replacing scalars."""
-    merged = dict(lower)
-    for key, value in higher.items():
-        previous = merged.get(key)
-        match previous, value:
-            case dict(), dict():
-                merged[key] = _merge(_table(previous), _table(value))
-            case list(), list():
-                merged[key] = [*previous, *value]
-            case _:
-                merged[key] = value
-    return merged
-
-
-def _contained(path: pathlib.Path, checkout: pathlib.Path) -> bool:
-    """Keep ambient host files and symlink escapes outside the audit."""
-    return path.resolve().is_relative_to(checkout.resolve())
-
-
-def _document(
-    path: pathlib.Path, checkout: pathlib.Path, errors: list[str]
-) -> dict[str, object]:
-    """Read one contained TOML document, retaining failures as input facts."""
-    try:
-        if not _contained(path, checkout):
-            errors.append(f"{path.name} resolves outside the checkout")
-            return {}
-        with path.open("rb") as handle:
-            return tomllib.load(handle)
-    except FileNotFoundError:
-        if path.is_symlink():
-            errors.append(f"{path.name} is a dangling symlink")
-    except (OSError, ValueError, RuntimeError) as error:
-        errors.append(f"cannot read {path.name}: {error}")
-    return {}
-
-
-def _dev_table(document: dict[str, object], errors: list[str]) -> dict[str, object]:
-    """Select a valid development-profile table, without swallowing bad shapes."""
-    profiles = document.get("profile", {})
-    dev = _table(profiles).get("dev", {})
-    if not isinstance(profiles, dict) or not isinstance(dev, dict):
-        errors.append("profile and profile.dev must be tables")
-    if "inherits" in _table(dev):
-        errors.append("the built-in dev profile cannot inherit another profile")
-    return _table(dev)
-
-
 def _state(value: object, setting: str) -> SettingState:
     """Classify only Cargo's documented profile-value types and spellings."""
-    if value is False:
-        return "disabled"
-    if value is True:
-        return "enabled"
-    if setting == "debug":
-        if type(value) is int and value in {0, 1, 2}:
-            return "disabled" if value == 0 else "enabled"
-        if isinstance(value, str) and value in {
-            "none",
-            "limited",
-            "full",
-            "line-tables-only",
-            "line-directives-only",
-        }:
-            return "disabled" if value == "none" else "enabled"
+    if type(value) is bool:
+        return "enabled" if value else "disabled"
+    if setting != "debug":
+        return "invalid"
+    if type(value) is int:
+        return _NUMERIC_DEBUG_LEVELS.get(value, "invalid")
+    if isinstance(value, str):
+        return _DEBUG_LEVELS.get(value, "invalid")
     return "invalid"
 
 
@@ -143,13 +103,15 @@ def _profile(
     source: str, table: dict[str, object], *, base: bool = False
 ) -> ProfileFact:
     """Preserve the difference between Cargo defaults and inherited overrides."""
+    defaults = {"incremental": True, "debug": True} if base else {}
+    effective = defaults | table
     return {
         "source": source,
-        "incremental": _state(table.get("incremental", True), "incremental")
-        if base or "incremental" in table
+        "incremental": _state(effective["incremental"], "incremental")
+        if "incremental" in effective
         else "unset",
-        "debug": _state(table.get("debug", True), "debug")
-        if base or "debug" in table
+        "debug": _state(effective["debug"], "debug")
+        if "debug" in effective
         else "unset",
     }
 
@@ -164,7 +126,7 @@ def _profile_tables(
         errors.append("profile.dev.package must be a table")
     overrides = [
         (f"profile.dev.package.{name}", table)
-        for name, table in _table(packages).items()
+        for name, table in toml_table(packages).items()
     ]
     if "build-override" in dev:
         overrides.append(("profile.dev.build-override", dev["build-override"]))
@@ -172,7 +134,7 @@ def _profile_tables(
         if not isinstance(table, dict):
             errors.append(f"{source} must be a table")
         else:
-            tables.append((source, _table(table)))
+            tables.append((source, toml_table(table)))
     return tables
 
 
@@ -184,7 +146,7 @@ def _profiles(
         _profile(source, table, base=source == "profile.dev")
         for source, table in _profile_tables(dev, errors)
     ]
-    build = _table(config.get("build"))
+    build = toml_table(config.get("build"))
     if "incremental" in build:
         for fact in facts:
             fact["incremental"] = _state(build["incremental"], "incremental")
@@ -203,15 +165,7 @@ def _flag_state(flags: list[str], option: str) -> SettingState:
     value = values[-1]
     if option == "-Cincremental":
         return "enabled" if value else "invalid"
-    disabled = {"0", "none"} if option == "-Cdebuginfo" else {"no", "false"}
-    enabled = (
-        {"1", "2", "limited", "full", "line-tables-only", "line-directives-only"}
-        if option == "-Cdebuginfo"
-        else {"yes", "true"}
-    )
-    if value in disabled:
-        return "disabled"
-    return "enabled" if value in enabled else "invalid"
+    return _FLAG_LEVELS[option].get(value, "invalid")
 
 
 def _flag_fact(name: str, value: object, *, metadata_required: bool = True) -> FlagFact:
@@ -236,6 +190,12 @@ def _flags(
     if not any(name == "build" for name, _ in sources):
         sources.insert(0, ("build", []))
     facts = list(itertools.starmap(_flag_fact, sources))
+    return [*facts, *_profile_flags(dev, errors)]
+
+
+def _profile_flags(dev: dict[str, object], errors: list[str]) -> list[FlagFact]:
+    """Read additive profile options without imposing replacing-source metadata."""
+    facts: list[FlagFact] = []
     for source, table in _profile_tables(dev, errors):
         if "rustflags" not in table:
             continue
@@ -266,78 +226,15 @@ def _support(channel: str | None) -> str:
     return "unknown"
 
 
-def _ancestors(checkout: pathlib.Path, directory: pathlib.Path) -> list[pathlib.Path]:
-    """Return repository-owned Cargo discovery directories, outermost first."""
-    return [
-        checkout,
-        *(
-            checkout / pathlib.Path(*directory.relative_to(checkout).parts[:i])
-            for i in range(1, len(directory.relative_to(checkout).parts) + 1)
-        ),
-    ]
-
-
 def _surface(checkout: pathlib.Path, surface: CargoSurface) -> SurfaceFacts:
-    """Resolve one declared workspace's repository-owned development defaults."""
-    errors: list[str] = []
-    directory = (checkout / surface["path"]).parent
-    directories = _ancestors(checkout, directory)
-    dev = _dev_table(surface["parsed"], errors)
-    config: dict[str, object] = {}
-    channel: str | None = None
-    for parent in directories:
-        if parent != directory and "workspace" not in surface["parsed"]:
-            ancestor = _document(parent / "Cargo.toml", checkout, errors)
-            if "workspace" in ancestor:
-                errors.append(
-                    "declare the governing workspace, not its member manifest"
-                )
-        location = locate_cargo_config(parent)
-        if location.read_error is not None:
-            errors.append(location.read_error)
-        if location.path is not None:
-            document = _document(location.path, checkout, errors)
-            refusal = rustflags_cargo_would_refuse(document)
-            if refusal is not None:
-                errors.append(refusal)
-            dev = _merge(dev, _dev_table(document, errors))
-            config = _merge(config, document)
-        pin = parent / "rust-toolchain.toml"
-        if pin.exists() or pin.is_symlink():
-            if _contained(pin, checkout):
-                toolchain = inspect_toolchain(parent)
-                channel = toolchain["channel"] if toolchain is not None else None
-                if toolchain is not None and toolchain["parse_error"] is not None:
-                    errors.append(toolchain["parse_error"])
-            else:
-                errors.append("rust-toolchain.toml resolves outside the checkout")
-        elif (parent / "rust-toolchain").exists():
-            channel = None
-    if _table(surface["parsed"].get("package")).get("workspace") is not None:
-        errors.append("declare the governing workspace named by package.workspace")
-    environment = _table(config.get("env"))
-    if any(
-        key
-        in {
-            "RUSTFLAGS",
-            "CARGO_ENCODED_RUSTFLAGS",
-            "CARGO_INCREMENTAL",
-            "CARGO_BUILD_INCREMENTAL",
-            "CARGO_BUILD_RUSTFLAGS",
-        }
-        or key.startswith("CARGO_PROFILE_DEV_")
-        or (key.startswith("CARGO_TARGET_") and key.endswith("_RUSTFLAGS"))
-        for key in environment
-    ):
-        errors.append("Cargo env overrides prevent a static development-profile proof")
-    profiles = _profiles(dev, config, errors)
-    flags = _flags(config, dev, errors)
+    """Normalize storage facts after resolving repository configuration."""
+    context = resolve_dev_context(checkout, surface)
     return {
         "path": surface["path"],
-        "profiles": profiles,
-        "flags": flags,
-        "metadata_support": _support(channel),
-        "errors": errors,
+        "profiles": _profiles(context.dev, context.config, context.errors),
+        "flags": _flags(context.config, context.dev, context.errors),
+        "metadata_support": _support(context.channel),
+        "errors": context.errors,
     }
 
 
