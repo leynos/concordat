@@ -48,7 +48,7 @@ incremental = false
 debug = 0
 ```
 
-For dated nightly pins from **2025-06-26 through 2026-07-12**, put this native
+For dated nightly pins from **2025-06-26 through 2026-07-18**, put this native
 Cargo setting in the effective repository Cargo configuration:
 
 ```toml
@@ -93,10 +93,13 @@ plain channel or TOML. A nearer selected pin shadows ancestor pins and their
 errors, but a malformed selected pin remains indeterminate.
 
 The capability windows follow Cargo's original native control and subsequent
-rename/configuration changes.[^cargo-history] The transition from **2026-07-13
-through 2026-07-28** remains unproven. Earlier, floating, missing, or
-unrecognized nightly selections also produce `DF-003: indeterminate`. No
-compiler probe or pin upgrade is performed by the audit.
+rename/configuration changes.[^cargo-history] Distribution manifests show the
+old Cargo through July 18 and the renamed Cargo from July 19; the upstream
+merge date alone does not establish a nightly release boundary.[^cargo-roll]
+The transition from **2026-07-19 through 2026-07-28** remains unproven.
+Earlier, floating, missing, or unrecognized nightly selections also produce
+`DF-003: indeterminate`. No compiler probe or pin upgrade is performed by the
+audit.
 
 Disabling embedded metadata reduces duplicated metadata in `.rlib` and `.dylib`
 files. Cargo ensures full metadata remains available separately for dependent
@@ -128,3 +131,8 @@ cannot leave the Rego tests silently exercising obsolete facts.
     [#17266](https://github.com/rust-lang/cargo/pull/17266).
 
 [^metadata]: [Cargo unstable features: embed-metadata](https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#embed-metadata).
+
+[^cargo-roll]: Nightly manifests for
+               [2026-07-18](https://static.rust-lang.org/dist/2026-07-18/channel-rust-nightly.toml)
+    and [2026-07-19](https://static.rust-lang.org/dist/2026-07-19/channel-rust-nightly.toml),
+    and the [Rust Cargo submodule update](https://github.com/rust-lang/rust/commit/9a42c6c650cef2d22ed3aa7bda97b8f6005897f3).

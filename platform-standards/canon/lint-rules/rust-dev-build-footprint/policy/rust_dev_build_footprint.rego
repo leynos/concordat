@@ -109,7 +109,7 @@ deny contains finding(id, state_verdict(state), surface.path, msg) if {
 deny contains finding("DF-003", "indeterminate", surface.path, msg) if {
 	some surface in measured
 	surface.metadata_support == "unknown"
-	msg := "native Cargo metadata capability is unproven for this pin, including the 2026-07-13..28 transition"
+	msg := "native Cargo metadata capability is unproven for this pin, including the 2026-07-19..28 transition"
 }
 
 deny contains finding("DF-003", state_verdict(state), surface.path, msg) if {

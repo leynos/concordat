@@ -178,7 +178,7 @@ artifacts:
     description: >-
       Sensor forbidding incremental compilation and debug information in
       default dev builds, with supported-nightly metadata requirements.
-    sha256: f372761ef46b81ce418bb2701fd0b1da3ae92bb8d6028c03ed9cc42f1d7ea133
+    sha256: 5942c8619cb58f1ef9163cf9841089282235b6d7a664c82c84201ce111eb5079
   - id: lint-rule-rust-dev-build-footprint-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/rust-dev-build-footprint/rule.yaml

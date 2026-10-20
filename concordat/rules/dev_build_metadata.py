@@ -15,7 +15,10 @@ from .toolchain import classify_channel
 OLD_SETTING: typ.Final = "no-embed-metadata"
 NEW_SETTING: typ.Final = "embed-metadata"
 _OLD_FLOOR: typ.Final = dt.date(2025, 6, 26)
-_OLD_CEILING: typ.Final = dt.date(2026, 7, 12)
+# Cargo's rename reached nightly distributions after its upstream merge.
+# https://static.rust-lang.org/dist/2026-07-18/channel-rust-nightly.toml
+# https://static.rust-lang.org/dist/2026-07-19/channel-rust-nightly.toml
+_OLD_CEILING: typ.Final = dt.date(2026, 7, 18)
 _NEW_FLOOR: typ.Final = dt.date(2026, 7, 29)
 
 
