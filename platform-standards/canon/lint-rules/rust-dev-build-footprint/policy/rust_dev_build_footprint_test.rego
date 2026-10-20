@@ -6,7 +6,7 @@ import rego.v1
 small := data.fixtures.nightly.surfaces[0]
 
 envelope(surface) := {
-	"schema_version": 1, "kind": "policy-input/rust-dev-build-footprint",
+	"schema_version": 2, "kind": "policy-input/rust-dev-build-footprint",
 	"surfaces": [surface],
 }
 
@@ -50,7 +50,34 @@ test_unset_base_defaults_are_not_a_pass if {
 }
 
 test_unknown_support_is_not_a_pass if {
-	surface := object.union(small, {"metadata_support": "unknown"})
+	surface := object.union(small, {
+		"metadata_support": "unknown",
+		"cargo_metadata": {"setting": "", "state": "unset"},
+	})
 	findings := policy.deny with input as envelope(surface)
 	{[f.rule_id, f.verdict] | some f in findings} == {["DF-003", "indeterminate"]}
+}
+
+test_legacy_envelope_is_not_a_pass if {
+	legacy := object.union(envelope(small), {"schema_version": 1})
+	findings := policy.deny with input as legacy
+	{f.rule_id | some f in findings} == {"DF-000"}
+}
+
+test_missing_native_control_is_not_a_pass if {
+	surface := object.remove(small, {"cargo_metadata"})
+	findings := policy.deny with input as envelope(surface)
+	{f.rule_id | some f in findings} == {"DF-000"}
+}
+
+test_supported_control_name_cannot_be_empty if {
+	surface := object.union(small, {"cargo_metadata": {"setting": "", "state": "disabled"}})
+	findings := policy.deny with input as envelope(surface)
+	{f.rule_id | some f in findings} == {"DF-000"}
+}
+
+test_native_metadata_control_must_be_a_state if {
+	surface := object.union(small, {"cargo_metadata": {"setting": "no-embed-metadata", "state": false}})
+	findings := policy.deny with input as envelope(surface)
+	{f.rule_id | some f in findings} == {"DF-000"}
 }

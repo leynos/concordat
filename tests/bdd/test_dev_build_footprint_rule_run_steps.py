@@ -40,17 +40,17 @@ def given_dev_settings(
     )
 
 
-@given(parsers.parse('its configuration "{metadata}" the metadata flag'))
-def given_metadata_flag(footprint_checkout: pathlib.Path, metadata: str) -> None:
-    """Write the actual flag, or leave the Cargo configuration empty."""
+@given(parsers.parse('its Cargo metadata control is "{metadata}"'))
+def given_metadata_control(footprint_checkout: pathlib.Path, metadata: str) -> None:
+    """Write the native Cargo control, or leave the configuration empty."""
     path = footprint_checkout / ".cargo/config.toml"
     path.parent.mkdir()
-    path.write_text(
-        '[build]\nrustflags = ["-Zembed-metadata=no"]\n'
-        if metadata == "includes"
-        else "",
-        encoding="utf-8",
-    )
+    controls = {
+        "legacy": "[unstable]\nno-embed-metadata = true\n",
+        "modern": "[unstable]\nembed-metadata = false\n",
+        "absent": "",
+    }
+    path.write_text(controls[metadata], encoding="utf-8")
 
 
 @when("I audit the development build footprint")

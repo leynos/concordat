@@ -14,7 +14,7 @@ from concordat.rules.dev_build_envelope import build_dev_build_envelope
 RULE_ID = "rust-dev-build-footprint"
 MANIFEST = '[package]\nname = "demo"\nversion = "0.1.0"\n'
 DISABLED = "[profile.dev]\nincremental = false\ndebug = 0\n"
-FLAGS = '[build]\nrustflags = ["-Zembed-metadata=no"]\n'
+FLAGS = "[build]\nrustflags = []\n[unstable]\nno-embed-metadata = true\n"
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -74,7 +74,12 @@ def write_checkout(
             id="floating-support-unknown",
         ),
         pytest.param(
-            DevBuildCase(DISABLED, FLAGS, "stable", {"DF-003"}),
+            DevBuildCase(
+                DISABLED,
+                FLAGS.replace("[]", '["-Zembed-metadata=no"]'),
+                "stable",
+                {"DF-003"},
+            ),
             id="unstable-flag-on-stable",
         ),
         pytest.param(
@@ -134,18 +139,16 @@ def write_checkout(
         pytest.param(
             DevBuildCase(
                 DISABLED,
-                FLAGS.replace('"-Zembed-metadata=no"', '"-Z", "embed-metadata=no"'),
+                FLAGS.replace("[]", '["-Z", "embed-metadata=no"]'),
                 "nightly-2026-05-28",
-                set(),
+                {"DF-003"},
             ),
             id="split-metadata",
         ),
         pytest.param(
             DevBuildCase(
                 DISABLED,
-                FLAGS.replace(
-                    '"-Zembed-metadata=no"', '"-Zembed-metadata=no", "-Cdebuginfo=2"'
-                ),
+                FLAGS.replace("[]", '["-Cdebuginfo=2"]'),
                 "nightly-2026-05-28",
                 {"DF-002"},
             ),
@@ -154,10 +157,7 @@ def write_checkout(
         pytest.param(
             DevBuildCase(
                 DISABLED,
-                FLAGS.replace(
-                    '"-Zembed-metadata=no"',
-                    '"-Zembed-metadata=no", "-Cincremental=cache"',
-                ),
+                FLAGS.replace("[]", '["-Cincremental=cache"]'),
                 "nightly-2026-05-28",
                 {"DF-001"},
             ),
@@ -166,10 +166,7 @@ def write_checkout(
         pytest.param(
             DevBuildCase(
                 DISABLED,
-                FLAGS.replace(
-                    '"-Zembed-metadata=no"',
-                    '"-Zembed-metadata=no", "-Zembed-metadata=yes"',
-                ),
+                FLAGS.replace("[]", '["-Zembed-metadata=no", "-Zembed-metadata=yes"]'),
                 "nightly-2026-05-28",
                 {"DF-003"},
             ),
@@ -178,10 +175,7 @@ def write_checkout(
         pytest.param(
             DevBuildCase(
                 DISABLED,
-                FLAGS.replace(
-                    '"-Zembed-metadata=no"',
-                    '"-Cdebuginfo=2", "-Cdebuginfo=0", "-Zembed-metadata=no"',
-                ),
+                FLAGS.replace("[]", '["-Cdebuginfo=2", "-Cdebuginfo=0"]'),
                 "nightly-2026-05-28",
                 set(),
             ),
@@ -193,7 +187,7 @@ def write_checkout(
                 FLAGS
                 + '[target.x86_64-unknown-linux-gnu]\nrustflags = ["-Dwarnings"]\n',
                 "nightly-2026-05-28",
-                {"DF-003"},
+                set(),
             ),
             id="target-replacement",
         ),

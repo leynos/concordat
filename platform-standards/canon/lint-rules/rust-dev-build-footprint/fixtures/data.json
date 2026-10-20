@@ -1,7 +1,7 @@
 {
   "fixtures": {
     "nightly": {
-      "schema_version": 1,
+      "schema_version": 2,
       "kind": "policy-input/rust-dev-build-footprint",
       "surfaces": [
         {
@@ -18,17 +18,20 @@
               "source": "build",
               "incremental": "unset",
               "debug": "unset",
-              "metadata": "disabled",
-              "metadata_required": true
+              "metadata": "unset"
             }
           ],
           "metadata_support": "supported",
+          "cargo_metadata": {
+            "setting": "no-embed-metadata",
+            "state": "disabled"
+          },
           "errors": []
         }
       ]
     },
     "stable": {
-      "schema_version": 1,
+      "schema_version": 2,
       "kind": "policy-input/rust-dev-build-footprint",
       "surfaces": [
         {
@@ -45,11 +48,14 @@
               "source": "build",
               "incremental": "unset",
               "debug": "unset",
-              "metadata": "unset",
-              "metadata_required": true
+              "metadata": "unset"
             }
           ],
           "metadata_support": "unsupported",
+          "cargo_metadata": {
+            "setting": "",
+            "state": "unset"
+          },
           "errors": []
         }
       ]
