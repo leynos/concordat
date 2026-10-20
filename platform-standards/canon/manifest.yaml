@@ -176,13 +176,15 @@ artifacts:
     type: opa-policy
     path: platform-standards/canon/lint-rules/rust-dev-build-footprint/policy/rust_dev_build_footprint.rego
     description: >-
-      Sensor forbidding incremental compilation and debug information in default dev builds, with supported-nightly metadata requirements.
+      Sensor forbidding incremental compilation and debug information in
+      default dev builds, with supported-nightly metadata requirements.
     sha256: fa0df5a49eca4c1ee889fdaaa50f48270ced6436703112356b9a198f5e61b097
   - id: lint-rule-rust-dev-build-footprint-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/rust-dev-build-footprint/rule.yaml
     description: >-
-      Rule package manifest for the offline Rust development build footprint audit.
+      Rule package manifest for the offline Rust development build
+      footprint audit.
     sha256: 8ea8f0326cca9e353b6055aa5fcbcc1d749763ccddbe95082363d974012c2caf
   - id: lint-rule-main-owned-codescene-coverage
     type: opa-policy

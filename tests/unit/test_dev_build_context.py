@@ -42,7 +42,7 @@ def test_context_rejects_only_build_environment_overrides(
 def test_context_selects_the_nearest_repository_toolchain(
     tmp_path: pathlib.Path, *, legacy: bool
 ) -> None:
-    """A nested pin shadows the ancestor, including unsupported legacy evidence."""
+    """A nested pin shadows the ancestor, including extensionless legacy pins."""
     write_checkout(tmp_path, channel="stable")
     nested = tmp_path / "rust"
     write_checkout(nested, channel="nightly-2026-05-28")
@@ -54,5 +54,5 @@ def test_context_selects_the_nearest_repository_toolchain(
         encoding="utf-8",
     )
     context = resolve_dev_context(tmp_path, resolve_rust_surfaces(tmp_path).surfaces[0])
-    assert context.channel == (None if legacy else "nightly-2026-05-28"), context
+    assert context.channel == ("nightly" if legacy else "nightly-2026-05-28"), context
     assert not context.errors, context.errors

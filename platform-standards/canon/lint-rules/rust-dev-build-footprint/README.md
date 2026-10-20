@@ -18,8 +18,9 @@ concordat artefact rule run rust-dev-build-footprint --repo /path/to/checkout
 - **DF-002** requires no debug information in the development profile or its
   package and build-script overrides. Accepted disabled profile values are
   `debug = 0`, `debug = false`, and `debug = "none"`. Compiler flags that
-  enable debug information are also reported. Stripping final binaries does not
-  satisfy this check: intermediate artefacts would still carry debug data.
+  enable debug information, including the standalone `-g` alias, are also
+  reported. Stripping final binaries does not satisfy this check: intermediate
+  artefacts would still carry debug data.
 - **DF-003** requires `-Zembed-metadata=no` in the build rustflags and every
   replacing target rustflags source on a supported nightly toolchain. Split
   `-Z`, `embed-metadata=no` tokens are accepted. Stable, beta, and numbered
@@ -65,23 +66,27 @@ The Rust surface resolver honours `.concordat` declarations, including nested
 workspaces. Each surface is measured as a build launched from its directory,
 with Cargo configuration inherited from repository ancestors. Workspace member
 profiles are not authoritative; declare the governing workspace instead of a
-member whose settings Cargo ignores. Symlinks resolving outside the checkout
-are not read. Relevant `[env]` overrides produce an indeterminate finding
-because a static profile proof cannot establish their effective environment.
+member whose settings Cargo ignores. An exact `workspace.exclude` path makes
+that crate standalone, so its own profile is audited. Exclusions are not
+interpreted as glob patterns. Symlinks resolving outside the checkout are not
+read. Relevant `[env]` overrides produce an indeterminate finding because a
+static profile proof cannot establish their effective environment.
 
 ## Supported metadata toolchains
 
-Support is decided from `rust-toolchain.toml`, not whichever compiler happens
-to be installed. The Rust 1.88.0 source contains the boolean `embed_metadata`
-option; 1.87.0 does not.[^support] The audit therefore uses **2025-06-26** as a
-conservative dated-nightly support floor. This is not a claim about the first
-nightly containing the option.
+Support is decided from the nearest repository-owned `rust-toolchain` or
+`rust-toolchain.toml`, not whichever compiler happens to be installed. The
+extensionless filename wins when both exist in one directory; it accepts a
+plain channel or TOML. A nearer selected pin shadows ancestor pins and their
+errors, but a malformed selected pin remains indeterminate. The Rust 1.88.0
+source contains the boolean `embed_metadata` option; 1.87.0 does not.[^support]
+The audit therefore uses **2025-06-26** as a conservative dated-nightly support
+floor. This is not a claim about the first nightly containing the option.
 
 An older, floating, missing, or unrecognized nightly selection leaves support
 unproven and produces `DF-003: indeterminate`. The rule does not incorrectly
-require an unsupported flag or silently approve an unknown toolchain. A legacy
-`rust-toolchain` file does not establish this capability. A nearer declaration
-replaces an inherited one.
+require an unsupported flag or silently approve an unknown toolchain. The same
+capability floor applies to dated nightly channels in either filename.
 
 Disabling embedded metadata reduces duplicated metadata in `.rlib` and `.dylib`
 files. The compiler documentation notes that full metadata then belongs in a

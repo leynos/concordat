@@ -629,14 +629,18 @@ Set `incremental = false` and `debug = 0` under `[profile.dev]` in each
 governed workspace manifest or Cargo configuration. The rule checks package and
 build-script overrides, compiler flags, nested configurations, and Cargo's
 global incremental override, so an apparently small base profile cannot hide
-larger effective settings. Explicit release and custom profiles remain outside
-its scope.
+larger effective settings. The `-g` compiler alias also enables debug
+information. Exact `workspace.exclude` paths are audited as standalone crates;
+ordinary member profiles remain governed by their workspace. Explicit release
+and custom profiles remain outside its scope.
 
 For dated nightly pins from 2025-06-26 onward, retain `-Zembed-metadata=no` in
 the build and replacing target rustflags. Stable/beta pins are exempt from this
-unstable option; unknown support is indeterminate. The audit uses repository
-files alone and needs only `conftest`, with no compiler, network access, or
-live build required. See the
+unstable option; unknown support is indeterminate. The nearest repository pin
+is selected, with `rust-toolchain` taking precedence over `rust-toolchain.toml`
+in the same directory. Shadowed ancestor pins do not contribute errors. The
+audit uses repository files alone and needs only `conftest`, with no compiler,
+network access, or live build required. See the
 [rule reference](../platform-standards/canon/lint-rules/rust-dev-build-footprint/README.md)
 for support boundaries, accepted spellings, and examples. Changing settings
 does not remove existing build artefacts.

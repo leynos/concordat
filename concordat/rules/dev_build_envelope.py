@@ -170,7 +170,9 @@ def _flag_state(flags: list[str], option: str) -> SettingState:
 
 def _flag_fact(name: str, value: object, *, metadata_required: bool = True) -> FlagFact:
     """Normalize compiler settings while preserving additive flag sources."""
-    flags = normalise_flags(value)
+    flags = [
+        "-Cdebuginfo=2" if flag == "-g" else flag for flag in normalise_flags(value)
+    ]
     return {
         "source": name,
         "incremental": _flag_state(flags, "-Cincremental"),

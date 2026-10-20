@@ -27,9 +27,9 @@ from .fs_probe import probe_file
 if typ.TYPE_CHECKING:
     import pathlib
 
-# Cargo reads this name first and falls back to the extensionless spelling, so
-# both are candidates and the first that exists is the file Cargo would use.
-CONFIG_RELATIVE_PATHS: typ.Final = (".cargo/config.toml", ".cargo/config")
+# Cargo retains the extensionless filename's precedence during migrations.
+# A present legacy configuration therefore shadows the TOML-suffixed spelling.
+CONFIG_RELATIVE_PATHS: typ.Final = (".cargo/config", ".cargo/config.toml")
 
 # rustc's single-letter flags that take a separate value. Only these are
 # rejoined with the token that follows: joining an arbitrary flag would

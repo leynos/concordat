@@ -13,7 +13,7 @@ import tomllib
 import typing as typ
 
 from .cargo_config import locate_cargo_config, rustflags_cargo_would_refuse
-from .toolchain import inspect_toolchain
+from .effective_toolchain import inspect_effective_toolchain
 
 if typ.TYPE_CHECKING:
     from .rust_surfaces import CargoSurface
@@ -110,8 +110,24 @@ def _check_workspace(
         return
     directory = (checkout / surface["path"]).parent
     for parent in _ancestors(checkout, directory)[:-1]:
-        if "workspace" in _document(parent / "Cargo.toml", checkout, errors):
+        ancestor = _document(parent / "Cargo.toml", checkout, errors)
+        if "workspace" in ancestor and not _workspace_excludes(
+            parent, ancestor, directory
+        ):
             errors.append("declare the governing workspace, not its member manifest")
+
+
+def _workspace_excludes(
+    root: pathlib.Path, document: dict[str, object], directory: pathlib.Path
+) -> bool:
+    """Respect exact excluded crate paths without inventing glob semantics."""
+    exclusions = toml_table(document.get("workspace")).get("exclude", [])
+    if not isinstance(exclusions, list):
+        return False
+    return any(
+        isinstance(entry, str) and (root / entry).resolve() == directory.resolve()
+        for entry in exclusions
+    )
 
 
 def _merge_config(
@@ -132,20 +148,14 @@ def _merge_config(
 
 
 def _select_toolchain(
-    parent: pathlib.Path, checkout: pathlib.Path, context: DevBuildContext
+    checkout: pathlib.Path, directory: pathlib.Path, context: DevBuildContext
 ) -> None:
-    """Select the nearest pin without consulting a host installation."""
-    pin = parent / "rust-toolchain.toml"
-    if not (pin.exists() or pin.is_symlink()):
-        if (parent / "rust-toolchain").exists():
-            context.channel = None
+    """Retain facts and errors only from the effective repository pin."""
+    toolchain = inspect_effective_toolchain(checkout, directory)
+    if toolchain is None:
         return
-    if not _contained(pin, checkout):
-        context.errors.append("rust-toolchain.toml resolves outside the checkout")
-        return
-    toolchain = inspect_toolchain(parent)
-    context.channel = toolchain["channel"] if toolchain is not None else None
-    if toolchain is not None and toolchain["parse_error"] is not None:
+    context.channel = toolchain["channel"]
+    if toolchain["parse_error"] is not None:
         context.errors.append(toolchain["parse_error"])
 
 
@@ -182,7 +192,7 @@ def resolve_dev_context(
     directory = (checkout / surface["path"]).parent
     for parent in _ancestors(checkout, directory):
         _merge_config(parent, checkout, context)
-        _select_toolchain(parent, checkout, context)
+    _select_toolchain(checkout, directory, context)
     if any(map(_is_build_environment_override, toml_table(context.config.get("env")))):
         errors.append("Cargo env overrides prevent a static development-profile proof")
     return context
