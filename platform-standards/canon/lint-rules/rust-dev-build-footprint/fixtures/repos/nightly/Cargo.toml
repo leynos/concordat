@@ -1,0 +1,7 @@
+[package]
+name = "demo"
+version = "0.1.0"
+
+[profile.dev]
+incremental = false
+debug = 0

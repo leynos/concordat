@@ -27,6 +27,9 @@ from concordat.rules.dependabot_envelope import (
 from concordat.rules.dependency_family_envelope import (
     ENVELOPE_KIND as FAMILY_ENVELOPE_KIND,
 )
+from concordat.rules.dev_build_envelope import (
+    ENVELOPE_KIND as DEV_BUILD_ENVELOPE_KIND,
+)
 from concordat.rules.documentation_envelope import (
     ENVELOPE_KIND as DOCUMENTATION_ENVELOPE_KIND,
 )
@@ -112,6 +115,11 @@ class TestRegisteredPackages:
             pytest.param("rust-makefile-baseline", ENVELOPE_KIND, id="makefile"),
             pytest.param(
                 "rust-build-defaults", BUILD_DEFAULTS_ENVELOPE_KIND, id="build-defaults"
+            ),
+            pytest.param(
+                "rust-dev-build-footprint",
+                DEV_BUILD_ENVELOPE_KIND,
+                id="dev-build-footprint",
             ),
             pytest.param(
                 "markdown-formatting-baseline",
@@ -384,6 +392,7 @@ class TestDeclaredInputKind:
         for rule_id, kind in (
             ("rust-makefile-baseline", ENVELOPE_KIND),
             ("rust-build-defaults", BUILD_DEFAULTS_ENVELOPE_KIND),
+            ("rust-dev-build-footprint", DEV_BUILD_ENVELOPE_KIND),
             ("markdown-formatting-baseline", MARKDOWN_ENVELOPE_KIND),
             ("main-owned-codescene-coverage", COVERAGE_ENVELOPE_KIND),
             ("dependabot-update-shape", DEPENDABOT_ENVELOPE_KIND),
