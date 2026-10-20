@@ -21,10 +21,13 @@ concordat artefact rule run rust-dev-build-footprint --repo /path/to/checkout
   enable debug information, including the standalone `-g` alias, are also
   reported. Stripping final binaries does not satisfy this check: intermediate
   artefacts would still carry debug data.
-- **DF-003** requires `-Zembed-metadata=no` in the build rustflags and every
-  replacing target rustflags source on a supported nightly toolchain. Split
-  `-Z`, `embed-metadata=no` tokens are accepted. Stable, beta, and numbered
-  stable pins are exempt and must not receive this unstable option.
+- **DF-003** requires Cargo's native metadata control on supported nightly
+  pins. Old Cargo uses `[unstable] no-embed-metadata = true`; modern Cargo uses
+  `[unstable] embed-metadata = false`. Raw `-Zembed-metadata` rustflags are
+  rejected: disabling it directly can leave build-script dependencies with
+  incomplete metadata, while enabling it contradicts the native setting.
+  Stable, beta, and numbered stable pins are exempt from the native control;
+  their Cargo ignores `[unstable]` configuration.
 - **DF-000** reports unreadable files, invalid envelope shapes, and facts that
   prevent a reliable measurement. Findings are `indeterminate`, rather than a
   silent pass.
@@ -45,22 +48,31 @@ incremental = false
 debug = 0
 ```
 
-For a supported nightly, add the following flag to existing rustflags without
-removing the repository's other compiler options:
+For dated nightly pins from **2025-06-26 through 2026-07-18**, put this native
+Cargo setting in the effective repository Cargo configuration:
 
 ```toml
-[build]
-rustflags = ["-Zembed-metadata=no"]
+[unstable]
+no-embed-metadata = true
 ```
 
-Each `[target.*].rustflags` source must retain the metadata option because a
-target source replaces the build source. Profile-specific rustflags are
-additive: they need not repeat it, but cannot enable incremental compilation,
-debug information, or metadata embedding. Options within one source use the
-compiler's last assignment. Profiles from Cargo configuration override the
-manifest; nested configuration tables merge and arrays concatenate. Legacy
-`.cargo/config` takes precedence over `.cargo/config.toml` in the same
-directory.
+For dated nightly pins from **2026-07-29 onward**, use the renamed control:
+
+```toml
+[unstable]
+embed-metadata = false
+```
+
+Cargo coordinates full `.rmeta` output with this control. Passing the raw
+compiler disabling flag alone is unsafe for build-script dependencies and
+cannot establish compliance. Remove raw `-Zembed-metadata` tokens from build,
+target, and profile rustflags; keep unrelated compiler options. The native
+setting covers all targets, so target rustflags do not duplicate it.
+
+Options within each rustflags source retain the compiler's last assignment.
+Profiles from Cargo configuration override the manifest; nested configuration
+tables merge and arrays concatenate. Legacy `.cargo/config` takes precedence
+over `.cargo/config.toml` in the same directory.
 
 The Rust surface resolver honours `.concordat` declarations, including nested
 workspaces. Each surface is measured as a build launched from its directory,
@@ -78,20 +90,24 @@ Support is decided from the nearest repository-owned `rust-toolchain` or
 `rust-toolchain.toml`, not whichever compiler happens to be installed. The
 extensionless filename wins when both exist in one directory; it accepts a
 plain channel or TOML. A nearer selected pin shadows ancestor pins and their
-errors, but a malformed selected pin remains indeterminate. The Rust 1.88.0
-source contains the boolean `embed_metadata` option; 1.87.0 does not.[^support]
-The audit therefore uses **2025-06-26** as a conservative dated-nightly support
-floor. This is not a claim about the first nightly containing the option.
+errors, but a malformed selected pin remains indeterminate.
 
-An older, floating, missing, or unrecognized nightly selection leaves support
-unproven and produces `DF-003: indeterminate`. The rule does not incorrectly
-require an unsupported flag or silently approve an unknown toolchain. The same
-capability floor applies to dated nightly channels in either filename.
+The capability windows follow Cargo's original native control and subsequent
+rename/configuration changes.[^cargo-history] Distribution manifests show the
+old Cargo through July 18 and the renamed Cargo from July 19; the upstream
+merge date alone does not establish a nightly release boundary.[^cargo-roll]
+The transition from **2026-07-19 through 2026-07-28** remains unproven.
+Earlier, floating, missing, or unrecognized nightly selections also produce
+`DF-003: indeterminate`. No compiler probe or pin upgrade is performed by the
+audit.
 
 Disabling embedded metadata reduces duplicated metadata in `.rlib` and `.dylib`
-files. The compiler documentation notes that full metadata then belongs in a
-separate `.rmeta` file.[^metadata] The rule does not delete or rewrite
-artefacts.
+files. Cargo ensures full metadata remains available separately for dependent
+compilations.[^metadata] The rule does not delete or rewrite build artefacts.
+
+The internal policy-input envelope is version **2** because native Cargo facts
+replace the former raw-flag compliance contract. Version 1 input fails closed
+with `DF-000`; other rule envelopes are unchanged.
 
 ## Validation
 
@@ -109,7 +125,14 @@ The two recorded policy envelopes are checked against their fixture checkouts by
 `test_recorded_policy_inputs_match_the_real_sensor`; changing extraction
 cannot leave the Rego tests silently exercising obsolete facts.
 
-[^support]: [Rust 1.88.0 compiler options](https://github.com/rust-lang/rust/blob/1.88.0/compiler/rustc_session/src/options.rs)
-    and [Rust 1.87.0 compiler options](https://github.com/rust-lang/rust/blob/1.87.0/compiler/rustc_session/src/options.rs).
+[^cargo-history]: Cargo changes
+                  [#15378](https://github.com/rust-lang/cargo/pull/15378),
+    [#17149](https://github.com/rust-lang/cargo/pull/17149), and
+    [#17266](https://github.com/rust-lang/cargo/pull/17266).
 
-[^metadata]: [Rust Unstable Book: embed-metadata](https://doc.rust-lang.org/beta/unstable-book/compiler-flags/embed-metadata.html).
+[^metadata]: [Cargo unstable features: embed-metadata](https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#embed-metadata).
+
+[^cargo-roll]: Nightly manifests for
+               [2026-07-18](https://static.rust-lang.org/dist/2026-07-18/channel-rust-nightly.toml)
+    and [2026-07-19](https://static.rust-lang.org/dist/2026-07-19/channel-rust-nightly.toml),
+    and the [Rust Cargo submodule update](https://github.com/rust-lang/rust/commit/9a42c6c650cef2d22ed3aa7bda97b8f6005897f3).

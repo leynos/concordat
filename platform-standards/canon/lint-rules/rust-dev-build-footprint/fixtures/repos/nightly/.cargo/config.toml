@@ -1,2 +1,2 @@
-[build]
-rustflags = ["-Zembed-metadata=no"]
+[unstable]
+no-embed-metadata = true

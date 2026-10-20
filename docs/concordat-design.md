@@ -2733,16 +2733,25 @@ workspace member is not accepted as an independent source of profile defaults.
 This prevents the Gauss-shaped failure where dependencies have no debug data
 but named workspace packages explicitly enable full debug information.
 
-Capability selection is deterministic: dated nightly pins from 2025-06-26
-onward support `-Zembed-metadata=no`; stable and beta pins cannot receive the
-unstable option. Earlier or unresolved nightly selections are indeterminate.
-The support floor is a conservative bound established by Rust 1.88.0's compiler
-option declaration, not a claimed introduction date. The sensor does not spawn
-Cargo, rustc, or rustup, read the operator's environment or home configuration,
-or access the network. Unreadable or unsupported input shapes remain explicit
-findings. This keeps tests hermetic on hosts with concurrent agents and
-different installed toolchains. No deletion or mutation is part of the rule;
-storage already consumed by older builds needs separate cleanup.
+The metadata control belongs to Cargo, which coordinates full `.rmeta` output
+for dependencies. Raw rustc `-Zembed-metadata=no` can leave build-script
+compilations with metadata stubs, so raw metadata flags are rejected even when
+profiles are small. Dated nightly pins from 2025-06-26 through 2026-07-18 use
+`[unstable] no-embed-metadata = true`; pins from 2026-07-29 use
+`[unstable] embed-metadata = false`. The 2026-07-19 through 2026-07-28
+transition and unresolved capabilities remain indeterminate. Stable Cargo
+ignores native unstable settings and is exempt. One Cargo setting covers all
+targets.
+
+This input envelope is version 2: the required `cargo_metadata` fact records
+which native control applies and whether it disables embedding. Old version 1
+input fails closed, while other package envelope contracts stay unchanged. The
+sensor does not spawn Cargo, rustc, or rustup, read the operator's environment
+or home configuration, or access the network. Unreadable or unsupported input
+shapes remain explicit findings. This keeps tests hermetic on hosts with
+concurrent agents and different installed toolchains. No deletion or mutation
+is part of the rule; storage already consumed by older builds needs separate
+cleanup.
 
 #### 3.1.4 Verifying the reconciliation invariants
 

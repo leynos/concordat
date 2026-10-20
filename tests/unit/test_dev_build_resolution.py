@@ -151,7 +151,7 @@ def test_short_debug_flags_obey_rustc_assignment_order(
     tmp_path: pathlib.Path, flags: list[str], source: str, expected: set[str]
 ) -> None:
     """The standalone debug alias must participate in the last-option-wins rule."""
-    config = "[build]\nrustflags = " + json.dumps(["-Zembed-metadata=no", *flags])
+    config = FLAGS.replace("[]", json.dumps(flags))
     if source == "profile":
         config = FLAGS + "[profile.dev]\nrustflags = " + json.dumps(flags)
     write_checkout(tmp_path, config=config)

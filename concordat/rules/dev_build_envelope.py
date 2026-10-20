@@ -7,7 +7,6 @@ facts so a small base profile cannot hide a larger effective development build.
 
 from __future__ import annotations
 
-import datetime as dt
 import itertools
 import typing as typ
 
@@ -16,16 +15,15 @@ from .cargo_config import (
     rustflags_sources,
 )
 from .dev_build_context import resolve_dev_context, toml_table
+from .dev_build_metadata import cargo_metadata_facts
 from .rust_surfaces import CargoSurface, resolve_rust_surfaces
-from .toolchain import classify_channel
 
 if typ.TYPE_CHECKING:
     import pathlib
 
+    from .dev_build_metadata import CargoMetadataFact
+
 ENVELOPE_KIND: typ.Final = "policy-input/rust-dev-build-footprint"
-# The 1.88.0 compiler source contains this option; 1.87.0 does not. This is
-# a conservative support floor, not a claim about the first introducing nightly.
-METADATA_SUPPORT_FLOOR: typ.Final = dt.date(2025, 6, 26)
 type SettingState = typ.Literal["disabled", "enabled", "unset", "invalid"]
 _DEBUG_LEVELS: typ.Final[dict[str, SettingState]] = {
     "none": "disabled",
@@ -65,7 +63,6 @@ class FlagFact(typ.TypedDict):
     incremental: SettingState
     debug: SettingState
     metadata: SettingState
-    metadata_required: bool
 
 
 class SurfaceFacts(typ.TypedDict):
@@ -75,6 +72,7 @@ class SurfaceFacts(typ.TypedDict):
     profiles: list[ProfileFact]
     flags: list[FlagFact]
     metadata_support: str
+    cargo_metadata: CargoMetadataFact
     errors: list[str]
 
 
@@ -168,7 +166,7 @@ def _flag_state(flags: list[str], option: str) -> SettingState:
     return _FLAG_LEVELS[option].get(value, "invalid")
 
 
-def _flag_fact(name: str, value: object, *, metadata_required: bool = True) -> FlagFact:
+def _flag_fact(name: str, value: object) -> FlagFact:
     """Normalize compiler settings while preserving additive flag sources."""
     flags = [
         "-Cdebuginfo=2" if flag == "-g" else flag for flag in normalise_flags(value)
@@ -178,7 +176,6 @@ def _flag_fact(name: str, value: object, *, metadata_required: bool = True) -> F
         "incremental": _flag_state(flags, "-Cincremental"),
         "debug": _flag_state(flags, "-Cdebuginfo"),
         "metadata": _flag_state(flags, "-Zembed-metadata"),
-        "metadata_required": metadata_required,
     }
 
 
@@ -196,7 +193,7 @@ def _flags(
 
 
 def _profile_flags(dev: dict[str, object], errors: list[str]) -> list[FlagFact]:
-    """Read additive profile options without imposing replacing-source metadata."""
+    """Read additive profile options independently of replacing flag sources."""
     facts: list[FlagFact] = []
     for source, table in _profile_tables(dev, errors):
         if "rustflags" not in table:
@@ -207,35 +204,20 @@ def _profile_flags(dev: dict[str, object], errors: list[str]) -> list[FlagFact]:
         ):
             errors.append(f"{source}.rustflags must be an array of strings")
         else:
-            facts.append(_flag_fact(source, value, metadata_required=False))
+            facts.append(_flag_fact(source, value))
     return facts
-
-
-def _support(channel: str | None) -> str:
-    """Use a documented capability floor instead of probing the host compiler."""
-    if channel is None:
-        return "unknown"
-    kind = classify_channel(channel)
-    if kind in {"stable", "beta", "version"}:
-        return "unsupported"
-    if kind == "nightly-dated":
-        try:
-            date = dt.date.fromisoformat(channel.removeprefix("nightly-"))
-        except ValueError:
-            return "unknown"
-        if date >= METADATA_SUPPORT_FLOOR:
-            return "supported"
-    return "unknown"
 
 
 def _surface(checkout: pathlib.Path, surface: CargoSurface) -> SurfaceFacts:
     """Normalize storage facts after resolving repository configuration."""
     context = resolve_dev_context(checkout, surface)
+    support, metadata = cargo_metadata_facts(context.channel, context.config)
     return {
         "path": surface["path"],
         "profiles": _profiles(context.dev, context.config, context.errors),
         "flags": _flags(context.config, context.dev, context.errors),
-        "metadata_support": _support(context.channel),
+        "metadata_support": support,
+        "cargo_metadata": metadata,
         "errors": context.errors,
     }
 
@@ -252,7 +234,7 @@ def build_dev_build_envelope(
     """
     resolution = resolve_rust_surfaces(checkout)
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "kind": ENVELOPE_KIND,
         "surfaces": [_surface(checkout, surface) for surface in resolution.surfaces],
     }

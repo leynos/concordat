@@ -8,7 +8,7 @@ finding(id, verdict, path, msg) := {
 }
 
 envelope_ok if {
-	input.schema_version == 1
+	input.schema_version == 2
 	input.kind == "policy-input/rust-dev-build-footprint"
 	is_array(input.surfaces)
 }
@@ -24,6 +24,10 @@ surface_ok(surface) if {
 	is_array(surface.profiles)
 	is_array(surface.flags)
 	surface.metadata_support in {"supported", "unsupported", "unknown"}
+	is_object(surface.cargo_metadata)
+	is_string(surface.cargo_metadata.setting)
+	surface.cargo_metadata.state in {"disabled", "enabled", "unset", "invalid"}
+	metadata_contract_ok(surface)
 	base := [profile | some profile in surface.profiles; profile.source == "profile.dev"]
 	count(base) == 1
 	base[0].incremental != "unset"
@@ -39,8 +43,17 @@ surface_ok(surface) if {
 		source.incremental in {"disabled", "enabled", "unset", "invalid"}
 		source.debug in {"disabled", "enabled", "unset", "invalid"}
 		source.metadata in {"disabled", "enabled", "unset", "invalid"}
-		is_boolean(object.get(source, "metadata_required", true))
 	}
+}
+
+metadata_contract_ok(surface) if {
+	surface.metadata_support == "supported"
+	surface.cargo_metadata.setting in {"no-embed-metadata", "embed-metadata"}
+}
+
+metadata_contract_ok(surface) if {
+	surface.metadata_support != "supported"
+	surface.cargo_metadata.setting == ""
 }
 
 deny contains finding("DF-000", "indeterminate", "", "invalid development-build surface facts") if {
@@ -92,31 +105,26 @@ deny contains finding(id, state_verdict(state), surface.path, msg) if {
 	msg := sprintf("rustflags source %s re-enables or invalidates dev %s", [source.source, setting])
 }
 
+# Cargo owns full-rmeta emission; target rustflags need no duplicated setting.
 deny contains finding("DF-003", "indeterminate", surface.path, msg) if {
 	some surface in measured
 	surface.metadata_support == "unknown"
-	msg := "embed-metadata support is unproven: use a dated nightly from 2025-06-26 onward or a stable/beta pin"
+	msg := "native Cargo metadata capability is unproven for this pin, including the 2026-07-19..28 transition"
 }
 
-metadata_violation(source) if {
-	object.get(source, "metadata_required", true)
-	source.metadata != "disabled"
-}
-
-metadata_violation(source) if source.metadata in {"enabled", "invalid"}
-
-deny contains finding("DF-003", state_verdict(source.metadata), surface.path, msg) if {
+deny contains finding("DF-003", state_verdict(state), surface.path, msg) if {
 	some surface in measured
 	surface.metadata_support == "supported"
-	some source in surface.flags
-	metadata_violation(source)
-	msg := sprintf("rustflags source %s must retain -Zembed-metadata=no on this supported nightly", [source.source])
+	state := surface.cargo_metadata.state
+	state != "disabled"
+	msg := sprintf("native Cargo [unstable].%s must disable embedding (observed %s)", [surface.cargo_metadata.setting, state])
 }
 
+# A raw disabling flag can create metadata-stub dependencies. A raw enabling
+# flag contradicts the Cargo control. Preserve ordering within each source.
 deny contains finding("DF-003", state_verdict(source.metadata), surface.path, msg) if {
 	some surface in measured
-	surface.metadata_support == "unsupported"
 	some source in surface.flags
 	source.metadata != "unset"
-	msg := sprintf("rustflags source %s passes unstable embed-metadata to a stable/beta toolchain", [source.source])
+	msg := sprintf("rustflags source %s must not set raw -Zembed-metadata; use Cargo's native coordination", [source.source])
 }
