@@ -2737,8 +2737,8 @@ The metadata control belongs to Cargo, which coordinates full `.rmeta` output
 for dependencies. Raw rustc `-Zembed-metadata=no` can leave build-script
 compilations with metadata stubs, so raw metadata flags are rejected even when
 profiles are small. Dated nightly pins from 2025-06-26 through 2026-07-18 use
-`[unstable] no-embed-metadata = true`; pins from 2026-07-29 use
-`[unstable] embed-metadata = false`. The 2026-07-19 through 2026-07-28
+`[unstable] no-embed-metadata = true`; pins from 2026-07-31 use
+`[unstable] embed-metadata = false`. The 2026-07-19 through 2026-07-30
 transition and unresolved capabilities remain indeterminate. Stable Cargo
 ignores native unstable settings and is exempt. One Cargo setting covers all
 targets.

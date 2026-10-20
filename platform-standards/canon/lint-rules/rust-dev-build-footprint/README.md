@@ -56,7 +56,7 @@ Cargo setting in the effective repository Cargo configuration:
 no-embed-metadata = true
 ```
 
-For dated nightly pins from **2026-07-29 onward**, use the renamed control:
+For dated nightly pins from **2026-07-31 onward**, use the renamed control:
 
 ```toml
 [unstable]
@@ -96,8 +96,10 @@ The capability windows follow Cargo's original native control and subsequent
 rename/configuration changes.[^cargo-history] Distribution manifests show the
 old Cargo through July 18 and the renamed Cargo from July 19; the upstream
 merge date alone does not establish a nightly release boundary.[^cargo-roll]
-The transition from **2026-07-19 through 2026-07-28** remains unproven.
-Earlier, floating, missing, or unrecognized nightly selections also produce
+The boolean configuration first ships in the July 31 Cargo distribution; July
+29 and 30 still carry the earlier Cargo.[^cargo-boolean-roll] The transition
+from **2026-07-19 through 2026-07-30** remains unproven. Earlier, floating,
+missing, or unrecognized nightly selections also produce
 `DF-003: indeterminate`. No compiler probe or pin upgrade is performed by the
 audit.
 
@@ -136,3 +138,10 @@ cannot leave the Rego tests silently exercising obsolete facts.
                [2026-07-18](https://static.rust-lang.org/dist/2026-07-18/channel-rust-nightly.toml)
     and [2026-07-19](https://static.rust-lang.org/dist/2026-07-19/channel-rust-nightly.toml),
     and the [Rust Cargo submodule update](https://github.com/rust-lang/rust/commit/9a42c6c650cef2d22ed3aa7bda97b8f6005897f3).
+
+[^cargo-boolean-roll]: Nightly manifests for
+                       [2026-07-29](https://static.rust-lang.org/dist/2026-07-29/channel-rust-nightly.toml),
+    [2026-07-30](https://static.rust-lang.org/dist/2026-07-30/channel-rust-nightly.toml),
+    and [2026-07-31](https://static.rust-lang.org/dist/2026-07-31/channel-rust-nightly.toml),
+    and the [included Cargo commit](https://github.com/rust-lang/cargo/commit/7c83d4cc0953b81d823e47d640c64da9b8bd4fac)
+    containing [Cargo #17266](https://github.com/rust-lang/cargo/pull/17266).

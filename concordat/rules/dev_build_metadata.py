@@ -19,7 +19,12 @@ _OLD_FLOOR: typ.Final = dt.date(2025, 6, 26)
 # https://static.rust-lang.org/dist/2026-07-18/channel-rust-nightly.toml
 # https://static.rust-lang.org/dist/2026-07-19/channel-rust-nightly.toml
 _OLD_CEILING: typ.Final = dt.date(2026, 7, 18)
-_NEW_FLOOR: typ.Final = dt.date(2026, 7, 29)
+# The boolean Cargo configuration also depends on the distribution roll:
+# July 29 and 30 still ship the earlier Cargo; July 31 includes PR 17266.
+# https://static.rust-lang.org/dist/2026-07-29/channel-rust-nightly.toml
+# https://static.rust-lang.org/dist/2026-07-30/channel-rust-nightly.toml
+# https://static.rust-lang.org/dist/2026-07-31/channel-rust-nightly.toml
+_NEW_FLOOR: typ.Final = dt.date(2026, 7, 31)
 
 
 class CargoMetadataFact(typ.TypedDict):

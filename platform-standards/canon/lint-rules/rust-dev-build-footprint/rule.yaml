@@ -7,7 +7,7 @@ description: >-
   native Cargo metadata coordination on supported pinned nightly toolchains,
   rejects unsafe raw metadata compiler flags, and leaves stable Cargo exempt.
   Audit-only, with no mutations or host compiler probes.
-version: 0.2.0
+version: 0.2.1
 sensor:
   type: conftest
   input: policy-input/rust-dev-build-footprint
