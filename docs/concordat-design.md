@@ -2718,6 +2718,32 @@ The policy does not attempt to read which tests the prose names.
   configuration in the canonical form; the RT-011 mutation reuses the QG-004
   Makefile patch.
 
+##### Default Rust development build footprint
+
+The audit-only `rust-dev-build-footprint` package owns DF-001 to DF-003:
+development defaults disable incremental compilation and debug information, and
+supported nightly builds disable embedded metadata. It is independent of the
+build-acceleration package so adopting this storage policy does not change
+BD-001 to BD-009 or their accepted exceptions.
+
+Its `policy-input/rust-dev-build-footprint` envelope resolves the governed
+Cargo surfaces, applies repository-contained Cargo configuration precedence,
+and preserves package/build-script overrides and compiler flag sources. A
+workspace member is not accepted as an independent source of profile defaults.
+This prevents the Gauss-shaped failure where dependencies have no debug data
+but named workspace packages explicitly enable full debug information.
+
+Capability selection is deterministic: dated nightly pins from 2025-06-26
+onward support `-Zembed-metadata=no`; stable and beta pins cannot receive the
+unstable option. Earlier or unresolved nightly selections are indeterminate.
+The support floor is a conservative bound established by Rust 1.88.0's compiler
+option declaration, not a claimed introduction date. The sensor does not spawn
+Cargo, rustc, or rustup, read the operator's environment or home configuration,
+or access the network. Unreadable or unsupported input shapes remain explicit
+findings. This keeps tests hermetic on hosts with concurrent agents and
+different installed toolchains. No deletion or mutation is part of the rule;
+storage already consumed by older builds needs separate cleanup.
+
 #### 3.1.4 Verifying the reconciliation invariants
 
 Several checks reduce to a pure comparator over a small structured input, where

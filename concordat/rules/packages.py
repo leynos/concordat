@@ -40,6 +40,8 @@ from .dependency_family_envelope import (
     DependencyFamilyEnvelope,
     build_dependency_family_envelope,
 )
+from .dev_build_envelope import ENVELOPE_KIND as DEV_BUILD_ENVELOPE_KIND
+from .dev_build_envelope import DevBuildEnvelope, build_dev_build_envelope
 from .documentation_envelope import (
     ENVELOPE_KIND as DOCUMENTATION_ENVELOPE_KIND,
 )
@@ -102,6 +104,7 @@ if typ.TYPE_CHECKING:
 type RuleEnvelope = (
     PolicyEnvelope
     | BuildDefaultsEnvelope
+    | DevBuildEnvelope
     | MarkdownEnvelope
     | CoverageEnvelope
     | DependabotEnvelope
@@ -548,6 +551,7 @@ _yaml_lint_envelope = _observed(build_yaml_lint_envelope)
 PACKAGE_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     "rust-makefile-baseline": _makefile_envelope,
     "rust-build-defaults": _build_defaults_envelope,
+    "rust-dev-build-footprint": build_dev_build_envelope,
     "main-owned-codescene-coverage": _coverage_envelope,
     "dependabot-update-shape": _dependabot_envelope,
     "dependency-family-contracts": _dependency_family_envelope,
@@ -565,6 +569,7 @@ PACKAGE_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
 INPUT_KIND_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     ENVELOPE_KIND: _makefile_envelope,
     BUILD_DEFAULTS_ENVELOPE_KIND: _build_defaults_envelope,
+    DEV_BUILD_ENVELOPE_KIND: build_dev_build_envelope,
     MARKDOWN_ENVELOPE_KIND: _markdown_envelope,
     COVERAGE_ENVELOPE_KIND: _coverage_envelope,
     DEPENDABOT_ENVELOPE_KIND: _dependabot_envelope,

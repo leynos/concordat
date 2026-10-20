@@ -634,6 +634,16 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
 - `policy-input/rust-makefile-baseline` — `envelope.build_envelope`, above.
 - `policy-input/rust-build-defaults` —
   `envelope.build_build_defaults_envelope`, below.
+- `policy-input/rust-dev-build-footprint` —
+  `dev_build_envelope.build_dev_build_envelope`. This independent package
+  composes the governed Rust-surface resolver and Cargo/toolchain parsers,
+  measures each surface from its own directory, and merges repository-owned
+  configuration before extracting dev profile and compiler-flag facts. It reads
+  no ambient configuration, executes no compiler, and needs no Makefile
+  inspector. Package/build overrides and replacing flags remain separate facts.
+  Metadata support uses the documented dated-nightly floor; unknown support and
+  unreadable sources fail closed. The real Conftest and CLI tests run against
+  synthetic files and recorded parser-checked envelopes.
 - `policy-input/whitaker-provisioning` —
   `whitaker_provisioning_envelope.build_whitaker_provisioning_envelope`. It
   reuses the CV-005 workflow decoder for `.github/workflows`, decodes every

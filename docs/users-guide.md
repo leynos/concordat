@@ -617,6 +617,30 @@ parameters. Exemptions match the repository slug read from the `origin` remote.
 See `platform-standards/canon/lint-rules/whitaker-provisioning/README.md` for
 what the policy recognizes and what it declines to judge.
 
+### Auditing Rust development build storage
+
+The `rust-dev-build-footprint` rule keeps default development builds small:
+
+```shell
+concordat artefact rule run rust-dev-build-footprint --repo /path/to/checkout
+```
+
+Set `incremental = false` and `debug = 0` under `[profile.dev]` in each
+governed workspace manifest or Cargo configuration. The rule checks package and
+build-script overrides, compiler flags, nested configurations, and Cargo's
+global incremental override, so an apparently small base profile cannot hide
+larger effective settings. Explicit release and custom profiles remain outside
+its scope.
+
+For dated nightly pins from 2025-06-26 onward, retain `-Zembed-metadata=no` in
+the build and replacing target rustflags. Stable/beta pins are exempt from this
+unstable option; unknown support is indeterminate. The audit uses repository
+files alone and needs only `conftest`, with no compiler, network access, or
+live build required. See the
+[rule reference](../platform-standards/canon/lint-rules/rust-dev-build-footprint/README.md)
+for support boundaries, accepted spellings, and examples. Changing settings
+does not remove existing build artefacts.
+
 ### Auditing the Rust build defaults
 
 The `rust-build-defaults` package audits the estate's build standard:

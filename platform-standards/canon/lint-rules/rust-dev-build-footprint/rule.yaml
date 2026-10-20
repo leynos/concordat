@@ -1,0 +1,24 @@
+schema_version: 1
+id: rust-dev-build-footprint
+name: Rust development build footprint
+description: >-
+  Forbids incremental compilation and debug information in the default dev
+  profile, its package/build overrides and replacing rustflags. Requires
+  -Zembed-metadata=no on supported pinned nightly toolchains; stable and beta
+  builds must not receive this unstable option. Audit-only, with no mutations
+  or host compiler probes.
+version: 0.1.0
+sensor:
+  type: conftest
+  input: policy-input/rust-dev-build-footprint
+  policy: policy/
+  tests:
+    - policy/
+  data:
+    - fixtures/data.json
+parameters:
+  schema:
+    type: object
+    additionalProperties: false
+    properties: {}
+  defaults: {}
