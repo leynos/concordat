@@ -649,7 +649,7 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   Envelope version 2 adds a `cargo_metadata` fact with the expected native
   Cargo setting and its effective embedding state. The old boolean control
   applies from 2025-06-26 through 2026-07-18; the renamed boolean applies from
-  2026-07-29. Transition dates, unknown support, and unreadable sources fail
+  2026-07-31. Transition dates, unknown support, and unreadable sources fail
   closed. Raw metadata rustflags cannot substitute for Cargo coordination, and
   the native control covers all targets. Version 1 input is refused; other
   packages retain their envelope versions. The real Conftest and CLI tests run

@@ -40,7 +40,7 @@ class NativeMetadataCase:
             NativeMetadataCase("nightly-2026-07-18", OLD, "compliant"), id="old-end"
         ),
         pytest.param(
-            NativeMetadataCase("nightly-2026-07-29", NEW, "compliant"), id="new-floor"
+            NativeMetadataCase("nightly-2026-07-31", NEW, "compliant"), id="new-floor"
         ),
         pytest.param(
             NativeMetadataCase("nightly-2026-10-20", NEW, "compliant"), id="new-native"
@@ -50,7 +50,7 @@ class NativeMetadataCase:
             id="transition-start",
         ),
         pytest.param(
-            NativeMetadataCase("nightly-2026-07-28", NEW, "indeterminate"),
+            NativeMetadataCase("nightly-2026-07-30", NEW, "indeterminate"),
             id="transition-end",
         ),
         pytest.param(

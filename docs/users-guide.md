@@ -635,11 +635,11 @@ ordinary member profiles remain governed by their workspace. Explicit release
 and custom profiles remain outside its scope.
 
 For dated nightly pins from 2025-06-26 through 2026-07-18, configure Cargo's
-`[unstable] no-embed-metadata = true`. From 2026-07-29 onward, use
+`[unstable] no-embed-metadata = true`. From 2026-07-31 onward, use
 `[unstable] embed-metadata = false`. Cargo must coordinate full metadata
 emission: raw `-Zembed-metadata=no` rustflags can break build-script
 dependencies and are rejected. The native setting covers all targets. The
-intervening 2026-07-19 through 2026-07-28 window and other unknown support are
+intervening 2026-07-19 through 2026-07-30 window and other unknown support are
 indeterminate; stable/beta pins are exempt because stable Cargo ignores
 unstable settings. The nearest repository pin is selected, with
 `rust-toolchain` taking precedence over `rust-toolchain.toml` in the same
