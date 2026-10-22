@@ -102,6 +102,34 @@ def has_dependency(manifest: Manifest) -> bool:
     return any(table for _, _, table in cargo_tables(manifest))
 
 
+def _is_registry_spec(spec: object) -> bool:
+    """Report whether one dependency value resolves from a registry."""
+    match spec:
+        case str():
+            return True
+        case {"path": _} | {"git": _} | {"workspace": True}:
+            return False
+        case dict():
+            return True
+        case _:
+            return False
+
+
+def has_registry_dependency(manifest: Manifest) -> bool:
+    """Report whether a manifest declares a dependency that resolves from a registry.
+
+    A path or git dependency has nothing for Dependabot to update, and a
+    `workspace = true` entry only inherits the workspace table's declaration.
+
+    Returns
+    -------
+    bool
+        True when some dependency names a version rather than a path or git source.
+    """
+    tables = (mapping(manifest.get(table)) or {} for table in DEPENDENCY_TABLES)
+    return any(_is_registry_spec(spec) for table in tables for spec in table.values())
+
+
 def _candidates(root: pathlib.Path, pattern: str) -> list[pathlib.Path]:
     """Return the paths one `members` entry names, glob or literal.
 

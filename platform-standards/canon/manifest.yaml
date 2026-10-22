@@ -213,6 +213,19 @@ artifacts:
     description: >-
       Rule package manifest for the nested cargo offline test audit.
     sha256: 24fa0c1172f43aaecc39e0a1059463dad3185c126553c3c43590a97011491178
+  - id: lint-rule-nested-cargo-fixture-manifests
+    type: opa-policy
+    path: platform-standards/canon/lint-rules/nested-cargo-fixture-manifests/policy/nested_cargo_fixture_manifests.rego
+    description: >-
+      Sensor requiring a cargo Dependabot entry to cover every standalone
+      manifest with registry dependencies.
+    sha256: 86482bf71336aabab4449a6b5356208f7cb41cb88c9a6c620b874642aae52121
+  - id: lint-rule-nested-cargo-fixture-manifests-manifest
+    type: lint-config
+    path: platform-standards/canon/lint-rules/nested-cargo-fixture-manifests/rule.yaml
+    description: >-
+      Rule package manifest for the nested cargo fixture manifest audit.
+    sha256: 6c5428f07bd2beb3b85ae89208c94b2122539500376246d8a8d375e6beaa8971
   - id: lint-rule-main-owned-codescene-coverage
     type: opa-policy
     path: >-

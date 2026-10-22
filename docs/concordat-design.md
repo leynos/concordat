@@ -2959,6 +2959,21 @@ with a string line prints `%!d(string=80)` where a location belongs. The
 malformed fact is reported once as an envelope error, and the ordinary findings
 skip it, rather than the same fact drawing both an error and a garbled warning.
 
+##### Nested cargo fixture manifests
+
+NC-003 (`nested-cargo-fixture-manifests`) asks the question NC-001 cannot: is
+the fixture's dependency graph kept current at all? A standalone manifest with
+a registry dependency must be reached by a `cargo` entry of `dependabot.yml`,
+because Dependabot reads only the directories it is given and `/` covers the
+root manifest alone. The policy reuses the dependency-family coverage matcher
+so a glob means the same thing in both packages. Workspace roots and members,
+and manifests whose dependencies are all path, git or inherited, are not
+candidates. netsuke's own contract reads tracked manifests through Git; this
+package reads the working tree below the root with the shared skip list,
+because the audited checkout need not be a Git checkout. Exemptions follow the
+same convention as NC-001: repository, directory and reason, matched against the
+`origin` slug.
+
 #### 3.1.4 Verifying the reconciliation invariants
 
 Several checks reduce to a pure comparator over a small structured input, where

@@ -1,0 +1,141 @@
+{
+  "fixtures": {
+    "compliant": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-fixture-manifests",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "dependabot": {
+        "state": "present",
+        "path": ".github/dependabot.yml",
+        "error": null
+      },
+      "manifests": [],
+      "problems": []
+    },
+    "covered_fixture": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-fixture-manifests",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "dependabot": {
+        "state": "present",
+        "path": ".github/dependabot.yml",
+        "error": null
+      },
+      "manifests": [
+        {
+          "path": "tests/fixtures/a/Cargo.toml",
+          "directory": "tests/fixtures/a",
+          "covered": true
+        }
+      ],
+      "problems": []
+    },
+    "uncovered_fixture": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-fixture-manifests",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "dependabot": {
+        "state": "present",
+        "path": ".github/dependabot.yml",
+        "error": null
+      },
+      "manifests": [
+        {
+          "path": "tests/fixtures/a/Cargo.toml",
+          "directory": "tests/fixtures/a",
+          "covered": false
+        }
+      ],
+      "problems": []
+    },
+    "no_configuration": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-fixture-manifests",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "dependabot": {
+        "state": "absent",
+        "path": null,
+        "error": null
+      },
+      "manifests": [
+        {
+          "path": "tests/fixtures/a/Cargo.toml",
+          "directory": "tests/fixtures/a",
+          "covered": false
+        }
+      ],
+      "problems": []
+    },
+    "unreadable_configuration": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-fixture-manifests",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "dependabot": {
+        "state": "unreadable",
+        "path": ".github/dependabot.yml",
+        "error": "invalid YAML"
+      },
+      "manifests": [
+        {
+          "path": "tests/fixtures/a/Cargo.toml",
+          "directory": "tests/fixtures/a",
+          "covered": null
+        }
+      ],
+      "problems": []
+    },
+    "unreadable_manifest": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-fixture-manifests",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "dependabot": {
+        "state": "present",
+        "path": ".github/dependabot.yml",
+        "error": null
+      },
+      "manifests": [],
+      "problems": [
+        "tests/fixtures/b/Cargo.toml: cannot read Cargo.toml: bad"
+      ]
+    },
+    "named_elsewhere": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-fixture-manifests",
+      "repository": {
+        "path": ".",
+        "name": "leynos/other"
+      },
+      "dependabot": {
+        "state": "present",
+        "path": ".github/dependabot.yml",
+        "error": null
+      },
+      "manifests": [
+        {
+          "path": "tests/fixtures/a/Cargo.toml",
+          "directory": "tests/fixtures/a",
+          "covered": false
+        }
+      ],
+      "problems": []
+    }
+  }
+}

@@ -549,7 +549,10 @@ actuators that remediate them. Each check ships as a lint rule package under
   leynos/theoremc's main give the expected result for every case, and the
   fixture-lock package's exemptions do not reach it. Promotion to `error` is a
   separate change made once the estate survey is clean. Fixture manifest
-  coverage, nextest configuration and CI wiring follow as separate packages.
+  coverage (NC-003, `nested-cargo-fixture-manifests`) is shipped as the third:
+  every standalone manifest with a registry dependency is covered by a `cargo`
+  entry of `dependabot.yml`. The nextest configuration and CI wiring checks
+  follow as separate packages.
 - [ ] Ship the Dependabot governance rule packages (DB-001 to DB-004):
   manifest-scan sensor diffing package roots against `dependabot.yml` entries,
   cooldown policy checks (tiered for semver ecosystems, `default-days` for

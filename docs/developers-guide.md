@@ -719,6 +719,14 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   question and `runs_only_after_success` the test step's. The builder ignores
   its parameters: exemptions and severity are the policy's to apply. It runs no
   Cargo and reads no network.
+- `policy-input/nested-cargo-fixture-manifests` —
+  `nested_cargo_manifest_envelope.build_nested_cargo_manifest_envelope`. It
+  reuses `nested_cargo` for workspace-member resolution and the registry-
+  dependency test, the Dependabot envelope for the decoded configuration, and
+  `dependency_family_coverage.coverage` for the directory-glob semantics, so
+  coverage here means the same thing as in the dependency-family package. The
+  coverage fact is `False` with no configuration and `None` (indeterminate)
+  with an undecodable one.
 - `policy-input/whitaker-provisioning` —
   `whitaker_provisioning_envelope.build_whitaker_provisioning_envelope`. It
   reuses the CV-005 workflow decoder for `.github/workflows`, decodes every

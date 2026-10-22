@@ -1,0 +1,47 @@
+schema_version: 1
+id: nested-cargo-fixture-manifests
+name: Nested cargo fixture manifests
+description: >-
+  Audits that every standalone Cargo manifest below the root (a fixture crate,
+  probe or sample that no workspace owns and that declares a registry
+  dependency, itself or in the workspace it roots) is covered by a `cargo`
+  entry of `.github/dependabot.yml` (NC-003). Dependabot reads only the
+  directories its configuration lists, and `/` covers the root manifest alone,
+  so a fixture is updated only when its directory, or a glob reaching it, is
+  named. A path-only manifest has nothing to update. A named exemption, with
+  its repository, directory and reason, takes a manifest out of the check.
+  Audit-only: this rule declares no mutations.
+version: 0.1.0
+sensor:
+  type: conftest
+  input: policy-input/nested-cargo-fixture-manifests
+  policy: policy/
+  tests:
+    - policy/
+  data:
+    - fixtures/data.json
+parameters:
+  schema:
+    type: object
+    additionalProperties: false
+    properties:
+      exemptions:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [repository, path, reason]
+          properties:
+            repository:
+              type: string
+            path:
+              type: string
+            reason:
+              type: string
+        description: >-
+          Manifest directories the rule does not audit, each with its
+          repository (`owner/name`, read from the `origin` remote), its
+          directory relative to the root and the reason. A vendored patch that
+          is deliberately left alone belongs here.
+  defaults:
+    exemptions: []

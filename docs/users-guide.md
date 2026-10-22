@@ -783,6 +783,28 @@ evidence the reader could not establish stays reported. The shipped defaults
 record leynos/whitaker's `installer/src/builder.rs`, which builds its own copy
 of the crate from crates.io — the behaviour the installer exists to prove.
 
+### Auditing nested cargo fixture manifests
+
+The `nested-cargo-fixture-manifests` rule keeps fixture dependencies updated:
+
+```shell
+concordat artefact rule run nested-cargo-fixture-manifests --repo /path/to/checkout
+```
+
+**NC-003** reports a `Cargo.toml` below the root that no workspace owns, and
+that declares a registry dependency (itself, or in a workspace it roots), when
+no `cargo` entry of `.github/dependabot.yml` covers its directory. Dependabot
+reads only the directories it is told about, and `directory: "/"` covers the
+root manifest alone, so list the fixture's directory or a glob that reaches it
+(`/tests/fixtures/*`). Path, git and `workspace = true` dependencies have
+nothing to update and draw nothing. With no Dependabot configuration every such
+manifest is uncovered; a configuration that cannot be decoded is indeterminate.
+
+A manifest left alone on purpose is named in the rule's `exemptions` parameter
+with its repository (`owner/name`), directory and reason. No exemption is
+shipped by default. The audit reads the working tree below the root, skipping
+hidden, `target`, `vendor` and similar directories.
+
 ### Auditing Rust development build storage
 
 The `rust-dev-build-footprint` rule keeps default development builds small:
