@@ -738,6 +738,14 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   any profile, and marks each top-level test binary as named or not by the
   grouped filters. It runs neither Cargo nor nextest and does not evaluate
   filtersets.
+- `policy-input/nested-cargo-ci-wiring` —
+  `nested_cargo_wiring_envelope.build_nested_cargo_wiring_envelope`. It reuses
+  the shared workflow reader of the CodeScene coverage envelope, then records
+  every place `CARGO_TARGET_DIR` is set (workflow, job and step `env`, and
+  `CARGO_TARGET_DIR=` assignments in `run` scripts) with its unevaluated value,
+  and per job whether a `setup-rust` step opts out of the wrapper export and
+  whether `RUSTC_WRAPPER` is named anywhere in the workflow or job. The Rego
+  policy classifies the values against the `temporary_patterns` parameter.
 - `policy-input/whitaker-provisioning` —
   `whitaker_provisioning_envelope.build_whitaker_provisioning_envelope`. It
   reuses the CV-005 workflow decoder for `.github/workflows`, decodes every

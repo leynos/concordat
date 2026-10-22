@@ -555,7 +555,9 @@ actuators that remediate them. Each check ships as a lint rule package under
   `nested-cargo-nextest`) is the fourth: where Rust tests spawn `cargo` or
   `rustc`, the configuration serializes them, sets a `slow-timeout` and a
   `global-timeout`, and names each spawning test binary in a grouped override.
-  The CI wiring check follows as a separate package.
+  The CI wiring check (NC-006, `nested-cargo-ci-wiring`) is the fourth: no
+  workflow sets `CARGO_TARGET_DIR` to a per-run or temporary path, and a job
+  that opts out of `setup-rust`'s wrapper export names `RUSTC_WRAPPER` itself.
 - [ ] Ship the Dependabot governance rule packages (DB-001 to DB-004):
   manifest-scan sensor diffing package roots against `dependabot.yml` entries,
   cooldown policy checks (tiered for semver ecosystems, `default-days` for

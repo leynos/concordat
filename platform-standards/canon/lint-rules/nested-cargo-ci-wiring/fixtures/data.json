@@ -1,0 +1,263 @@
+{
+  "fixtures": {
+    "compliant": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-ci-wiring",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "error": null,
+          "target_settings": [],
+          "jobs": [
+            {
+              "id": "test",
+              "opts_out": false,
+              "wrapper_named": false
+            }
+          ]
+        }
+      ]
+    },
+    "no_workflows": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-ci-wiring",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "workflows": []
+    },
+    "stable_target": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-ci-wiring",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "error": null,
+          "target_settings": [
+            {
+              "where": "env",
+              "value": "${{ github.workspace }}/target"
+            }
+          ],
+          "jobs": [
+            {
+              "id": "test",
+              "opts_out": false,
+              "wrapper_named": false
+            }
+          ]
+        }
+      ]
+    },
+    "runner_temp_target": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-ci-wiring",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "error": null,
+          "target_settings": [
+            {
+              "where": "env",
+              "value": "${{ runner.temp }}/target"
+            }
+          ],
+          "jobs": [
+            {
+              "id": "test",
+              "opts_out": false,
+              "wrapper_named": false
+            }
+          ]
+        }
+      ]
+    },
+    "run_id_target": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-ci-wiring",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "error": null,
+          "target_settings": [
+            {
+              "where": "job test",
+              "value": "/mnt/cache/${{ github.run_id }}"
+            }
+          ],
+          "jobs": [
+            {
+              "id": "test",
+              "opts_out": false,
+              "wrapper_named": false
+            }
+          ]
+        }
+      ]
+    },
+    "mktemp_target": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-ci-wiring",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "error": null,
+          "target_settings": [
+            {
+              "where": "step test/3 run",
+              "value": "$(mktemp -d)"
+            }
+          ],
+          "jobs": [
+            {
+              "id": "test",
+              "opts_out": false,
+              "wrapper_named": false
+            }
+          ]
+        }
+      ]
+    },
+    "tmp_target": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-ci-wiring",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "error": null,
+          "target_settings": [
+            {
+              "where": "env",
+              "value": "/tmp/target"
+            }
+          ],
+          "jobs": [
+            {
+              "id": "test",
+              "opts_out": false,
+              "wrapper_named": false
+            }
+          ]
+        }
+      ]
+    },
+    "opt_out_unnamed": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-ci-wiring",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "error": null,
+          "target_settings": [],
+          "jobs": [
+            {
+              "id": "test",
+              "opts_out": true,
+              "wrapper_named": false
+            }
+          ]
+        }
+      ]
+    },
+    "opt_out_scoped": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-ci-wiring",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "error": null,
+          "target_settings": [],
+          "jobs": [
+            {
+              "id": "test",
+              "opts_out": true,
+              "wrapper_named": true
+            }
+          ]
+        }
+      ]
+    },
+    "unreadable_workflow": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-ci-wiring",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "error": "invalid YAML: bad",
+          "target_settings": [],
+          "jobs": [
+            {
+              "id": "test",
+              "opts_out": false,
+              "wrapper_named": false
+            }
+          ]
+        }
+      ]
+    },
+    "exempt_elsewhere": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-ci-wiring",
+      "repository": {
+        "path": ".",
+        "name": "leynos/other"
+      },
+      "workflows": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "error": null,
+          "target_settings": [
+            {
+              "where": "env",
+              "value": "${{ runner.temp }}/target"
+            }
+          ],
+          "jobs": [
+            {
+              "id": "test",
+              "opts_out": false,
+              "wrapper_named": false
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

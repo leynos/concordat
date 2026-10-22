@@ -246,6 +246,19 @@ artifacts:
     description: >-
       Rule package manifest for the nested cargo nextest configuration audit.
     sha256: 5c10239d5859b2888e0a5b3e61209faf4e45260bf354aaab32682f5f4062e619
+  - id: lint-rule-nested-cargo-ci-wiring
+    type: opa-policy
+    path: platform-standards/canon/lint-rules/nested-cargo-ci-wiring/policy/nested_cargo_ci_wiring.rego
+    description: >-
+      Sensor refusing per-run or temporary CARGO_TARGET_DIR values and a silent
+      setup-rust wrapper opt-out in workflows.
+    sha256: 06986f7c6b767f7e0e6f1672bddfe8eb78864932ec1b5e6895ad4ef3d4063660
+  - id: lint-rule-nested-cargo-ci-wiring-manifest
+    type: lint-config
+    path: platform-standards/canon/lint-rules/nested-cargo-ci-wiring/rule.yaml
+    description: >-
+      Rule package manifest for the nested cargo CI wiring audit.
+    sha256: f0563f007d3793a0392a4db3240c02004019c1980e379f01598afbfbd2dab46b
   - id: lint-rule-main-owned-codescene-coverage
     type: opa-policy
     path: >-
