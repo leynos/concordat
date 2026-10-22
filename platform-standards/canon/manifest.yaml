@@ -186,6 +186,19 @@ artifacts:
       Rule package manifest for the offline Rust development build
       footprint audit.
     sha256: 55737bd25ef5314f69085b38f26687644a6ad1826a0edff02cb4108e55860844
+  - id: lint-rule-nested-cargo-fixture-lockfiles
+    type: opa-policy
+    path: platform-standards/canon/lint-rules/nested-cargo-fixture-lockfiles/policy/nested_cargo_fixture_lockfiles.rego
+    description: >-
+      Sensor holding nested-build fixture locks to the workspace lock's
+      registry packages and requiring a lock beside a fixture manifest.
+    sha256: dfad5d4fbf7ae566409a113ebaf252983814ca9d5b9e22f0b4587e0b30d4f84c
+  - id: lint-rule-nested-cargo-fixture-lockfiles-manifest
+    type: lint-config
+    path: platform-standards/canon/lint-rules/nested-cargo-fixture-lockfiles/rule.yaml
+    description: >-
+      Rule package manifest for the nested cargo fixture lockfile audit.
+    sha256: cfd380fa3beacb3c255366a1bd379b012e408b39066f6a1a0e64a529358bc0ae
   - id: lint-rule-main-owned-codescene-coverage
     type: opa-policy
     path: >-

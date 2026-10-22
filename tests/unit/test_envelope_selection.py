@@ -40,6 +40,9 @@ from concordat.rules.envelope import (
 from concordat.rules.markdown_envelope import (
     ENVELOPE_KIND as MARKDOWN_ENVELOPE_KIND,
 )
+from concordat.rules.nested_cargo_lock_envelope import (
+    ENVELOPE_KIND as NESTED_CARGO_LOCK_ENVELOPE_KIND,
+)
 from concordat.rules.spelling_envelope import (
     ENVELOPE_KIND as SPELLING_ENVELOPE_KIND,
 )
@@ -120,6 +123,11 @@ class TestRegisteredPackages:
                 "rust-dev-build-footprint",
                 DEV_BUILD_ENVELOPE_KIND,
                 id="dev-build-footprint",
+            ),
+            pytest.param(
+                "nested-cargo-fixture-lockfiles",
+                NESTED_CARGO_LOCK_ENVELOPE_KIND,
+                id="nested-cargo-fixture-lockfiles",
             ),
             pytest.param(
                 "markdown-formatting-baseline",
@@ -393,6 +401,7 @@ class TestDeclaredInputKind:
             ("rust-makefile-baseline", ENVELOPE_KIND),
             ("rust-build-defaults", BUILD_DEFAULTS_ENVELOPE_KIND),
             ("rust-dev-build-footprint", DEV_BUILD_ENVELOPE_KIND),
+            ("nested-cargo-fixture-lockfiles", NESTED_CARGO_LOCK_ENVELOPE_KIND),
             ("markdown-formatting-baseline", MARKDOWN_ENVELOPE_KIND),
             ("main-owned-codescene-coverage", COVERAGE_ENVELOPE_KIND),
             ("dependabot-update-shape", DEPENDABOT_ENVELOPE_KIND),

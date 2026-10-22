@@ -654,6 +654,15 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   the native control covers all targets. Version 1 input is refused; other
   packages retain their envelope versions. The real Conftest and CLI tests run
   against synthetic files and recorded parser-checked envelopes.
+- `policy-input/nested-cargo-fixture-lockfiles` —
+  `nested_cargo_lock_envelope.build_nested_cargo_lock_envelope`. It reads the
+  root `Cargo.lock`, every fixture `Cargo.lock` and every fixture manifest with
+  dependencies, using the shared `nested_cargo` module for workspace-member
+  resolution (a member's lock is never read by Cargo), the fixture-path test
+  and the `origin` slug that the rule's exemptions are matched against. It
+  compares `(name, version)` of registry packages only and records the first
+  ten foreign ones. Anything it cannot read is a problem fact, which the policy
+  answers as indeterminate. It runs no Cargo and reads no network.
 - `policy-input/whitaker-provisioning` —
   `whitaker_provisioning_envelope.build_whitaker_provisioning_envelope`. It
   reuses the CV-005 workflow decoder for `.github/workflows`, decodes every

@@ -67,6 +67,9 @@ from .markdown_envelope import (
     with_action_pins,
 )
 from .markdown_envelope import ENVELOPE_KIND as MARKDOWN_ENVELOPE_KIND
+from .nested_cargo_registry import BY_KIND as NESTED_CARGO_BY_KIND
+from .nested_cargo_registry import BY_PACKAGE as NESTED_CARGO_BY_PACKAGE
+from .nested_cargo_registry import NestedCargoEnvelope
 from .spelling_envelope import (
     DEFAULT_VENDORED_PATTERNS,
     SpellingEnvelope,
@@ -105,6 +108,7 @@ type RuleEnvelope = (
     PolicyEnvelope
     | BuildDefaultsEnvelope
     | DevBuildEnvelope
+    | NestedCargoEnvelope
     | MarkdownEnvelope
     | CoverageEnvelope
     | DependabotEnvelope
@@ -552,6 +556,7 @@ PACKAGE_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     "rust-makefile-baseline": _makefile_envelope,
     "rust-build-defaults": _build_defaults_envelope,
     "rust-dev-build-footprint": build_dev_build_envelope,
+    **NESTED_CARGO_BY_PACKAGE,
     "main-owned-codescene-coverage": _coverage_envelope,
     "dependabot-update-shape": _dependabot_envelope,
     "dependency-family-contracts": _dependency_family_envelope,
@@ -570,6 +575,7 @@ INPUT_KIND_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     ENVELOPE_KIND: _makefile_envelope,
     BUILD_DEFAULTS_ENVELOPE_KIND: _build_defaults_envelope,
     DEV_BUILD_ENVELOPE_KIND: build_dev_build_envelope,
+    **NESTED_CARGO_BY_KIND,
     MARKDOWN_ENVELOPE_KIND: _markdown_envelope,
     COVERAGE_ENVELOPE_KIND: _coverage_envelope,
     DEPENDABOT_ENVELOPE_KIND: _dependabot_envelope,
