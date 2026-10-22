@@ -1,0 +1,50 @@
+schema_version: 1
+id: nested-cargo-nextest
+name: Nested cargo nextest configuration
+description: >-
+  Audits `.config/nextest.toml` for repositories whose Rust tests spawn
+  `cargo` (with a compiling subcommand) or `rustc`, so compiler work inside a
+  timed test is serialized and bounded instead of looking like a hang. When a
+  test source spawns a compiler, the configuration must define a serial test
+  group (`max-threads = 1`) that an override places tests in, set a
+  `slow-timeout` and set a `global-timeout` (NC-004), and a top-level
+  `tests/<stem>.rs` that spawns must be named, by binary or test function, in
+  a grouped override's filter (NC-005). The scan is textual and conservative:
+  only test sources count, `cargo metadata` and similar do not, and Python tests
+  are left to their own runner. A named exemption, with its repository, test
+  source and reason, takes a spawner out of both checks. A repository with no
+  such test is compliant. Audit-only: this rule declares no mutations.
+version: 0.1.0
+sensor:
+  type: conftest
+  input: policy-input/nested-cargo-nextest
+  policy: policy/
+  tests:
+    - policy/
+  data:
+    - fixtures/data.json
+parameters:
+  schema:
+    type: object
+    additionalProperties: false
+    properties:
+      exemptions:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [repository, path, reason]
+          properties:
+            repository:
+              type: string
+            path:
+              type: string
+            reason:
+              type: string
+        description: >-
+          Test sources the rule does not count as compiler-spawning, each with
+          its repository (`owner/name`, read from the `origin` remote), its
+          path relative to the root and the reason. A test that only runs a
+          prebuilt compiler fixture, bounded some other way, belongs here.
+  defaults:
+    exemptions: []
