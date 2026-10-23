@@ -48,6 +48,13 @@ artifacts:
       Canonical Clippy thresholds and disallowed ambient environment methods
       for Rust consumer repositories.
     sha256: 151c3724d66edabc110386887482e32c4fe9ba5262a420c9a268c977f3948308
+  - id: rust-dev-fast-config
+    type: build-template
+    path: platform-standards/canon/build/rust/dev-fast/config.toml
+    description: >
+      Explicitly selected Cargo development reference: Cranelift for the dev
+      profile and mold flags for Linux targets; consumer routing is separate.
+    sha256: a698fc556f2f7a95af8b6045660c5bede2f1bb162b60a87e5e68ea20a318f637
   - id: rust-dependabot-template
     type: dependency-template
     path: platform-standards/canon/dependabot/rust-dependabot.yml
@@ -59,9 +66,9 @@ artifacts:
     type: label-model
     path: platform-standards/canon/labels/repository-labels.yaml
     description: >
-      Dated GitHub label metadata snapshot for idempotent consumer
-      reconciliation without deleting unrelated labels.
-    sha256: f61251fd6225efef7fb397e3c1207185dc90d9b0083ec5a9e83301732af057d9
+      Approved 34-label policy projection with a separate historical
+      31-label API attestation; preserve unrelated consumer labels.
+    sha256: cf503ee2fa6262a002dcde7eff219a7f5ce48bfd0a443dbed5b6bab0b8db515d
   - id: make-include
     type: build-template
     path: platform-standards/canon/make/includes.mk

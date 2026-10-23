@@ -1391,6 +1391,42 @@ Cargo manifest parsing and packaged-rule checks use separate routes.
 
 [cargo-schema]: https://github.com/rust-lang/cargo/blob/344c4567c634a25837e3c3476aac08af84cf9203/crates/cargo-util-schemas/src/manifest/mod.rs
 
+### Explicit development acceleration reference
+
+The [canonical development fragment][dev-fast-canon] preserves the parsed TOML
+settings from [Netsuke's immutable source][dev-fast-source], with comments
+adapted to this standalone reference. Select a merged immutable Concordat
+revision, copy the fragment to a consumer-owned path such as
+`tools/dev-fast/config.toml`, and explicitly select it with
+`cargo --config tools/dev-fast/config.toml <command>`.
+
+The fragment is a reference artefact distinct from the `rust-build-defaults`
+audit package. Copying or explicitly selecting it does not satisfy the
+auto-discovered defaults or Make and CI routing requirements. The existing
+audit contract and adopting repositories' requirements remain in force.
+
+Only `profile.dev` is declared. Cargo's `profile.test` inherits from `dev`, so
+the absence of a test profile does not prove LLVM test execution. Each consumer
+owns its toolchain and must qualify the backend and command routes, configuring
+explicit overrides where required. Release, coverage, formal verification, and
+Whitaker routes must retain their required supported backend and isolation;
+check inherited profiles and effective command configuration, rather than
+assuming that omitting the fragment isolates a route.
+
+The `cfg(target_os = "linux")` table matches the compilation target, not the
+host. Consumers must provide and pin a suitable mold installation and linker
+route for Linux targets, including cross-compilation from a non-Linux host.
+Other targets retain their own linker configuration. The reference installs no
+toolchain, backend, linker, or Make targets and makes no universal platform
+compatibility claim.
+
+Cargo rustflags sources replace one another rather than automatically merging.
+Reconcile the complete effective flags with consumer Make, CI, environment, and
+target configuration before adoption, preserving other required flags.
+
+[dev-fast-canon]: ../platform-standards/canon/build/rust/dev-fast/config.toml
+[dev-fast-source]: https://github.com/leynos/netsuke/blob/924cb215d3841048dbf6649767a510d2a5dfb1b7/tools/dev-fast/config.toml
+
 ### The `OperationalRuleError` contract
 
 `OperationalRuleError` (`concordat/errors.py`) is raised whenever rule

@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-import datetime as dt
+import hashlib
+import json
 import re
 import typing as typ
 
-if typ.TYPE_CHECKING:
-    import collections.abc as cabc
+from tests.unit.rust_policy_label_expectations import (
+    ADDED_LABEL_NAMES,
+    APPROVED_LABELS,
+    PROJECTION_SHA256,
+)
 
 _SOURCE_FIELDS = {
     "repository",
@@ -15,6 +19,8 @@ _SOURCE_FIELDS = {
     "observed_at",
     "capture_command",
     "captured_json_sha256",
+    "captured_label_count",
+    "raw_json_verification",
     "approval_reference",
 }
 _EXPECTED_SOURCE_VALUES = {
@@ -23,104 +29,20 @@ _EXPECTED_SOURCE_VALUES = {
     "capture_command": "gh api repos/leynos/netsuke/labels --paginate",
     "approval_reference": "leynos/concordat#157",
 }
-_EXPECTED_LABEL_CONTENT: dict[str, tuple[str, str | None]] = {
-    "bug": ("d73a4a", "Something isn't working"),
-    "bun": ("ededed", "Dependabot channel for Bun dependency updates."),
-    "cargo": ("ededed", "Dependabot channel for Rust crate updates."),
-    "codex": ("ededed", None),
-    "concurrency": (
-        "5319e7",
-        (
-            "Concurrency, parallelism, and synchronization work, "
-            "including races and deadlocks."
-        ),
-    ),
-    "critical": (
-        "b60205",
-        (
-            "Blocker-level work such as active incidents or production outages. "
-            "Pre-empts all other work."
-        ),
-    ),
-    "dependencies": (
-        "0366d6",
-        "Dependency updates, applied to every Dependabot pull request.",
-    ),
-    "documentation": (
-        "0075ca",
-        "Improvements or additions to documentation",
-    ),
-    "duplicate": ("cfd3d7", "This issue or pull request already exists"),
-    "enhancement": ("a2eeef", "New feature or request"),
-    "epic": ("2da1a3", "Too much excitement for a little cat"),
-    "github-actions": (
-        "ededed",
-        (
-            "Dependabot channel for GitHub Actions updates, batched into one "
-            "pull request per run."
-        ),
-    ),
-    "go": ("ededed", "Dependabot channel for Go module updates."),
-    "good first issue": ("7057ff", "Good for newcomers"),
-    "help wanted": ("008672", "Extra attention is needed"),
-    "high": (
-        "d93f0b",
-        (
-            "Unblocks delivery within the current sprint or release window. "
-            "Reaction time is days, not hours."
-        ),
-    ),
-    "invalid": ("e4e669", "This doesn't seem right"),
-    "Issue": ("ededed", "A pull request originating from an issue"),
-    "low": (
-        "0e8a16",
-        (
-            "Backlog work, hygiene, or technical debt planned opportunistically, "
-            "without a strict deadline."
-        ),
-    ),
-    "medium": (
-        "fbca04",
-        (
-            "Roadmap items to schedule within the current quarter. Clear scope, "
-            "normal review cycles."
-        ),
-    ),
-    "opentofu": (
-        "ededed",
-        "Dependabot channel for OpenTofu provider and module updates.",
-    ),
-    "performance": (
-        "ededed",
-        (
-            "Bugs or prior decisions disproportionately impacting memory, time, "
-            "storage or CPU usage"
-        ),
-    ),
-    "pip": ("ededed", "Dependabot channel for Python dependency updates via pip."),
-    "question": ("d876e3", "Further information is requested"),
-    "refactor": (
-        "a2eeef",
-        "Behaviour-preserving restructuring that improves code health.",
-    ),
-    "Roadmap": ("ededed", "A pull request originating from a roadmap item"),
-    "rust-toolchain": (
-        "ededed",
-        "Dependabot channel for Rust toolchain pin updates.",
-    ),
-    "testing": (
-        "1d76db",
-        "Test coverage, test infrastructure, and verification tooling work.",
-    ),
-    "uv": ("ededed", "Dependabot channel for Python dependency updates via uv."),
-    "Windows": ("ededed", None),
-    "wontfix": ("ffffff", "This will not be worked on"),
-}
-_EXPECTED_LABEL_NAMES = frozenset(_EXPECTED_LABEL_CONTENT)
-_EXPECTED_CAPTURE_TIME = "2026-09-30T11:38:30Z"
+_EXPECTED_LABEL_NAMES = frozenset(APPROVED_LABELS)
+_EXPECTED_CAPTURE_TIME = "2026-09-08T10:47:29Z"
 _EXPECTED_CAPTURE_HASH = (
-    "dad7045b340d12e4393f7e94b61d7aea01073fe7faa17075368de29785f5103a"
+    "bdd8fa7d9da6e7ef6d2c46a1db2cddff0e803b95797bcae55cad26c18d513133"
 )
+_EXPECTED_POLICY = {
+    "approval_reference": (
+        "https://github.com/leynos/concordat/issues/157#issuecomment-6213191578"
+    ),
+    "snapshot_label_count": 31,
+    "added_labels": list(ADDED_LABEL_NAMES),
+    "projection_serialization": "json-sort-keys-compact-utf8",
+    "projection_sha256": PROJECTION_SHA256,
+}
 
 type Seed = dict[str, object]
 
@@ -137,33 +59,38 @@ def _label_seed_issues(seed: object) -> tuple[str, ...]:
     document = _as_mapping(seed)
     if document is None:
         return ("seed must be a mapping",)
-    if set(document) != {"schema_version", "source", "labels"}:
+    if set(document) != {"schema_version", "source", "policy", "labels"}:
         return ("label snapshot must use the published top-level shape",)
     if (
         type(document.get("schema_version")) is not int
-        or document.get("schema_version") != 1
+        or document.get("schema_version") != 2
     ):
-        return ("label snapshot schema_version must be 1",)
+        return ("label snapshot schema_version must be 2",)
 
     issues = _label_source_issues(document.get("source"))
-    labels_value = document.get("labels")
-    if not isinstance(labels_value, list):
-        issues.append("labels must be a list")
-        return tuple(issues)
-    issues.extend(_label_collection_issues(labels_value))
+    issues.extend(_label_policy_issues(document.get("policy")))
+    issues.extend(_label_records_issues(document.get("labels")))
     return tuple(issues)
 
 
-def _label_collection_issues(labels: cabc.Sequence[object]) -> list[str]:
-    """Validate label records and require the complete published name set."""
+def _label_records_issues(labels_value: object) -> list[str]:
+    """Check record bounds, approved values, completeness, and projection bytes."""
+    if not isinstance(labels_value, list):
+        return ["labels must be a list"]
     issues: list[str] = []
     names: list[str] = []
-    for label_value in labels:
+    valid_records: list[Seed] = []
+    for label_value in labels_value:
         record_issues, name = _label_record_issues(label_value)
         issues.extend(record_issues)
+        record = _as_mapping(label_value)
+        if not record_issues and record is not None:
+            valid_records.append(record)
         if name is not None:
             names.append(name)
     issues.extend(_label_snapshot_name_issues(names))
+    if len(valid_records) == len(labels_value):
+        issues.extend(_label_projection_issues(valid_records))
     return issues
 
 
@@ -178,6 +105,13 @@ def _label_source_issues(source_value: object) -> list[str]:
     issues = _label_source_identity_issues(source)
     issues.extend(_label_capture_time_issues(source.get("observed_at")))
     issues.extend(_label_capture_hash_issues(source.get("captured_json_sha256")))
+    if (
+        type(source.get("captured_label_count")) is not int
+        or source.get("captured_label_count") != 31
+    ):
+        issues.append("source captured_label_count must attest the 31-label capture")
+    if source.get("raw_json_verification") != "unavailable":
+        issues.append("raw API content verification must remain unavailable")
     return issues
 
 
@@ -191,33 +125,17 @@ def _label_source_identity_issues(source: Seed) -> list[str]:
 
 
 def _label_capture_time_issues(observed_at: object) -> list[str]:
-    """Require a valid UTC timestamp equal to the published capture time."""
-    parsed_time = None
-    if isinstance(observed_at, str):
-        try:
-            parsed_time = dt.datetime.fromisoformat(observed_at)
-        except ValueError:
-            parsed_time = None
-
-    issues: list[str] = []
-    if parsed_time is None or parsed_time.utcoffset() != dt.timedelta(0):
-        issues.append("source observed_at must be a UTC timestamp")
-    if observed_at != _EXPECTED_CAPTURE_TIME:
-        issues.append("source observed_at must match the approved snapshot")
-    return issues
+    """Require the exact approved UTC timestamp, rejecting other values."""
+    if not isinstance(observed_at, str) or observed_at != _EXPECTED_CAPTURE_TIME:
+        return ["source observed_at must match the approved snapshot"]
+    return []
 
 
 def _label_capture_hash_issues(captured_hash: object) -> list[str]:
-    """Require a lowercase SHA-256 matching the published snapshot."""
-    issues: list[str] = []
-    if (
-        not isinstance(captured_hash, str)
-        or re.fullmatch(r"[0-9a-f]{64}", captured_hash) is None
-    ):
-        issues.append("source captured_json_sha256 must be a lowercase SHA-256")
-    if captured_hash != _EXPECTED_CAPTURE_HASH:
-        issues.append("source captured_json_sha256 must match the approved snapshot")
-    return issues
+    """Require the exact approved lowercase SHA-256 attestation."""
+    if not isinstance(captured_hash, str) or captured_hash != _EXPECTED_CAPTURE_HASH:
+        return ["source captured_json_sha256 must match the approved snapshot"]
+    return []
 
 
 def _label_record_issues(label_value: object) -> tuple[list[str], str | None]:
@@ -237,18 +155,13 @@ def _label_record_issues(label_value: object) -> tuple[list[str], str | None]:
 
 
 def _label_content_issues(label: Seed, name: str) -> list[str]:
-    """Require known names to retain their captured colour and description."""
-    expected_content = _EXPECTED_LABEL_CONTENT.get(name)
+    """Compare known labels with their independently approved policy values."""
+    expected_content = APPROVED_LABELS.get(name)
     if expected_content is None:
         return []
-
-    expected_color, expected_description = expected_content
-    issues: list[str] = []
-    if label.get("color") != expected_color:
-        issues.append(f"label {name} colour must match the approved snapshot")
-    if label.get("description") != expected_description:
-        issues.append(f"label {name} description must match the approved snapshot")
-    return issues
+    if (label.get("color"), label.get("description")) != expected_content:
+        return ["label colours and descriptions must match the approved policy"]
+    return []
 
 
 def _label_name_field_issues(name_value: object) -> tuple[list[str], str | None]:
@@ -288,3 +201,24 @@ def _label_snapshot_name_issues(names: list[str]) -> list[str]:
     if set(names) != _EXPECTED_LABEL_NAMES:
         issues.append("label names must match the complete approved snapshot")
     return issues
+
+
+def _label_policy_issues(policy_value: object) -> list[str]:
+    """Keep approved additions separate from the historical API attestation."""
+    policy = _as_mapping(policy_value)
+    if policy is None or policy != _EXPECTED_POLICY:
+        return ["label policy must match its independent approval and projection"]
+    if type(policy.get("snapshot_label_count")) is not int:
+        return ["policy snapshot_label_count must be an integer"]
+    return []
+
+
+def _label_projection_issues(records: list[Seed]) -> list[str]:
+    """Verify projected policy bytes without claiming to verify raw API bytes."""
+    projection = sorted(records, key=lambda record: str(record["name"]))
+    payload = json.dumps(
+        projection, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
+    if hashlib.sha256(payload).hexdigest() != PROJECTION_SHA256:
+        return ["label projection must match its reproducible policy digest"]
+    return []

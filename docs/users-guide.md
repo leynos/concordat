@@ -246,14 +246,32 @@ Concordat ships a `platform-standards/` template tree. The canonical files under
 sha256 digest (a content-derived version).
 
 The Rust policy seeds include `lint/rust/clippy.toml`,
-`dependabot/rust-dependabot.yml`, and `labels/repository-labels.yaml`. Select a
-merged Concordat commit when adopting them; a source repository or an open pull
+`dependabot/rust-dependabot.yml`, `labels/repository-labels.yaml`, and
+`build/rust/dev-fast/config.toml` (manifest ID `rust-dev-fast-config`). Follow
+the
+[explicit-selection guidance](developers-guide.md#explicit-development-acceleration-reference)
+for the development reference. Copying it does not satisfy the auto-discovered
+defaults audit or existing consumer Make and CI requirements. Select a merged
+Concordat commit when adopting these seeds; a source repository or an open pull
 request is not a version. The Clippy method list and initial Dependabot shape
 were derived from Netsuke commit `924cb215d3841048dbf6649767a510d2a5dfb1b7`, as
 approved in Concordat issue #157. The Dependabot seed uses the current DB-005
 daily and minor-and-patch grouping contract, so it deliberately differs from
-that older Netsuke file's weekly entries. The label file records its live API
-observation time and response hash; it is a dated snapshot, not a claim about
+that older Netsuke file's weekly entries. The label file separates an approved
+34-label policy projection from a historical 31-label API attestation at
+`2026-09-08T10:47:29Z`. Labels are API state, independent of a Git revision.
+The attested raw JSON SHA-256 is
+`bdd8fa7d9da6e7ef6d2c46a1db2cddff0e803b95797bcae55cad26c18d513133`; the raw
+response is unavailable, so this hash cannot be verified from the YAML
+projection. The later `security`, `macos`, and `infra` additions are approved
+policy values and are not asserted to occur in that historical capture.
+
+The policy has a separate reproducible projection digest. Sort the records by
+case-sensitive name, retain only `name`, `color`, and `description`, serialize
+with `json.dumps(sort_keys=True, separators=(",", ":"), ensure_ascii=False)`,
+encode as UTF-8, and hash those bytes with SHA-256. The result is
+`19600e430c336d9d4a24acd880e83e31df8fe0d9bab9c3b3eec37b466eed968d`. This
+verifies the approved policy representation, not the missing raw response or
 future API state.
 
 Copy the Clippy configuration into each applicable Cargo root, then add only
