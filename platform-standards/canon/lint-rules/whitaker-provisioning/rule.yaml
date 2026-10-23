@@ -82,6 +82,7 @@ parameters:
   defaults:
     install_whitaker_roots:
       - "6dea5677a84fec60ca51b07202570e3af12ffdb4"
+      - "d5fded1107ee6822fdbf9539d81ff18ce6ce073a"
     compliant_install_whitaker_refs:
       - "6dea5677a84fec60ca51b07202570e3af12ffdb4"
       - "8a83824b29dfe8f861714b544dc85fb925ed010c"
@@ -151,6 +152,15 @@ parameters:
       - "2ddf19b3fd52c0f1089db0d57b015f859b80ab67"
       - "aea9c14c24b73042e99f0be8245a4f171b67c31a"
       - "e693d81d176d2305e2b736a0be0f9038085dec7f"
+      - "aaf2bbccebae2fe4e8eaf7dab949de60f4d30071"
+      - "a563db345cb3bd1f88548fc0f3403583fc45bb67"
+      - "81374b6f183e59f0570ad36217ded90d3240fda6"
+      - "3e4cba9ff5898f40723b95e09b8d5bae26c1b1f6"
+      - "5ac271baf94615e9a876ce1b77a4b266dd81f201"
+      - "126d02e32a07c2b049e8b68fff09298526e5971a"
+      - "d26e53630893c942af44eb3db7efd4fcbe0c8093"
+      - "2aed718022775671809f8c85a2c10547dfb1ae13"
+      - "d5fded1107ee6822fdbf9539d81ff18ce6ce073a"
     producer_repositories:
       - leynos/whitaker
     action_repository: leynos/shared-actions
