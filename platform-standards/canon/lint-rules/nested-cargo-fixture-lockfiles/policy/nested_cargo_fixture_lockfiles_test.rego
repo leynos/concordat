@@ -6,7 +6,8 @@ import rego.v1
 exemptions := [{
 	"repository": "leynos/example",
 	"path": "crates/a/tests/fixtures/minimal",
-	"reason": "separate lane owns this lock",
+	"rationale": "separate lane owns this lock",
+	"review_trigger": "review when the lane is retired",
 }]
 
 findings(fixture) := fs if {
@@ -49,7 +50,7 @@ test_an_exemption_does_not_travel if {
 }
 
 test_an_exemption_covers_only_its_directory if {
-	other := [{"repository": "leynos/example", "path": "elsewhere", "reason": "r"}]
+	other := [{"repository": "leynos/example", "path": "elsewhere", "rationale": "r", "review_trigger": "t"}]
 	fs := policy.deny with input as data.fixtures.drifted_lock with data.parameters as {"exemptions": other}
 	{f.rule_id | some f in fs} == {"NC-001"}
 }

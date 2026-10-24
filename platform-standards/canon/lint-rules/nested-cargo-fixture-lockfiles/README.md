@@ -18,8 +18,9 @@ fixed in leynos/netsuke#913).
 ## Checks
 
 - **NC-001** (error): a `Cargo.lock` in a fixture directory resolves a registry
-  package, by name and version, that the root `Cargo.lock` does not. Packages
-  with no `source` (path packages) are the fixture's own and never count.
+  package, by name, version and source, that the root `Cargo.lock` does not.
+  Packages with no `source` (path packages) are the fixture's own and never
+  count.
 - **NC-002** (error): a fixture manifest that declares dependencies has no
   `Cargo.lock` beside it, is outside every workspace's members, and has a
   `[package]`.
@@ -44,9 +45,10 @@ fixed in leynos/netsuke#913).
 A fixture that resolves outside the workspace on purpose is listed in the
 `exemptions` parameter with its `repository` (`owner/name`, read from the
 `origin` remote), its `path` (the directory, relative to the root) and a
-`reason` naming the lane that owns its lock. An exemption does not apply to
-another repository. The defaults carry rstest-bdd's three published-GPUI
-fixtures.
+`rationale` naming the lane that owns its lock and a `review_trigger` saying
+what event sends the exemption back for review (the shape of
+`dependencies.family_exceptions`). An exemption does not apply to another
+repository. The defaults carry rstest-bdd's three published-GPUI fixtures.
 
 ## What the rule declines to judge
 

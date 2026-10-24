@@ -631,8 +631,8 @@ own lock resolves. When the lock names a registry package the workspace
 never did and starts cold. The rule reports:
 
 - **NC-001**: a `Cargo.lock` in a fixture directory that resolves a registry
-  package (name and version) absent from the root `Cargo.lock`. Path packages
-  are the fixture's own and never count.
+  package (name, version and source) absent from the root `Cargo.lock`. Path
+  packages are the fixture's own and never count.
 - **NC-002**: a fixture manifest with dependencies and no `Cargo.lock` beside
   it, so Cargo resolves it afresh on every build.
 
@@ -646,8 +646,10 @@ lock and re-resolve it, or move the fixture into the workspace.
 
 A fixture that resolves outside the workspace on purpose is named in the rule's
 `exemptions` parameter, with its repository (`owner/name`, from the `origin`
-remote), its directory relative to the root and the reason, which should name
-the lane that owns its lock. An exemption does not travel to another repository.
+remote), its directory relative to the root, a rationale that should name the
+lane that owns its lock, and a review trigger, the event that sends the
+exemption back for review (the shape of `dependencies.family_exceptions`). An
+exemption does not travel to another repository.
 
 ### Auditing Rust development build storage
 

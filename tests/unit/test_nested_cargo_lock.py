@@ -176,7 +176,9 @@ def test_registry_packages_ignore_path_packages() -> None:
             {"name": "b", "version": "2", "source": "s"},
         ]
     }
-    assert registry_packages(typ.cast("dict[str, object]", document)) == {("b", "2")}
+    assert registry_packages(typ.cast("dict[str, object]", document)) == {
+        ("b", "2", "s")
+    }
 
 
 def _origin(root: pathlib.Path, url: str) -> None:
@@ -248,3 +250,29 @@ def test_unusual_workspace_member_entries_do_not_break_the_audit(
     put(tmp_path, "crates/member/Cargo.toml", MEMBER_MANIFEST)
     put(tmp_path, "Cargo.lock", lock(("serde", "1.0.0")))
     assert rule_ids(tmp_path) == set()
+
+
+def test_the_same_package_at_another_version_is_drift(tmp_path: pathlib.Path) -> None:
+    """Serde present in both locks, but 1.0.1 in the fixture: version drift counts."""
+    workspace(tmp_path, ("serde", "1.0.0"))
+    put(tmp_path, "tests/fixtures/a/Cargo.toml", FIXTURE_MANIFEST)
+    put(tmp_path, "tests/fixtures/a/Cargo.lock", lock(("serde", "1.0.1")))
+    result = runner.run_rule(RULE_ID, tmp_path)
+    assert {f.rule_id for f in result.findings} == {"NC-001"}
+    assert "serde 1.0.1" in result.findings[0].message
+
+
+def test_the_same_name_and_version_from_another_source_is_drift(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A git serde 1.0.0 is not the crates.io serde 1.0.0 the workspace compiled."""
+    workspace(tmp_path, ("serde", "1.0.0"))
+    git = 'source = "git+https://example.invalid/serde#abc"'
+    text = (
+        'version = 4\n\n[[package]]\nname = "serde"\nversion = "1.0.0"\n' + git + "\n"
+    )
+    put(tmp_path, "tests/fixtures/a/Cargo.toml", FIXTURE_MANIFEST)
+    put(tmp_path, "tests/fixtures/a/Cargo.lock", text)
+    (finding,) = runner.run_rule(RULE_ID, tmp_path).findings
+    assert finding.rule_id == "NC-001"
+    assert "serde 1.0.0 (git+https://example.invalid/serde#abc)" in finding.message

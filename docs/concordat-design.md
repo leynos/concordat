@@ -2761,8 +2761,10 @@ running cold in CI because a fixture lock resolved separately from the
 workspace lock: rstest-bdd's nested fixtures rebuilt crates the workspace had
 compiled, and netsuke's CLI configuration fixture resolved an unlocked graph.
 NC-001 holds a fixture lock to a subset of the workspace lock's registry
-packages, compared by name and version; NC-002 requires a lock beside a fixture
-manifest that declares dependencies, since Cargo otherwise resolves it afresh.
+packages, compared by name, version and source (the same version from git is a
+different unit, and version drift is the commonest way a fixture goes cold);
+NC-002 requires a lock beside a fixture manifest that declares dependencies,
+since Cargo otherwise resolves it afresh.
 
 Two boundaries keep the rule precise. A directory is a fixture by its path
 (`fixture`, `tests/`, `test_support`, `ui/`), because a source-text reference
@@ -2770,11 +2772,12 @@ test was tried against the estate and drew flags on fuzz targets and
 calibration tools that no nested build uses; products resolved on purpose
 elsewhere are outside the rule. A lock inside a workspace member's directory is
 ignored, because Cargo never reads it. Exemptions follow the
-`whitaker-provisioning` convention: rule parameters name a repository, a
-directory and a reason, matched against the `origin` slug, so an exemption does
-not travel. Remaining limits: a path dependency that Cargo adds to a workspace
-implicitly is not resolved as a member, and a fixture outside the fixture-like
-paths is not reached.
+`whitaker-provisioning` convention, with `dependencies.family_exceptions`'
+record of why and when to revisit: rule parameters name a repository, a
+directory, a rationale and a review trigger, matched against the `origin` slug,
+so an exemption does not travel. Remaining limits: a path dependency that Cargo
+adds to a workspace implicitly is not resolved as a member, and a fixture
+outside the fixture-like paths is not reached.
 
 #### 3.1.4 Verifying the reconciliation invariants
 

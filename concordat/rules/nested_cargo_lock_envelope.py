@@ -50,7 +50,7 @@ ENVELOPE_SCHEMA_VERSION: typ.Final = 1
 ENVELOPE_KIND: typ.Final = "policy-input/nested-cargo-fixture-lockfiles"
 FOREIGN_LIMIT: typ.Final = 10
 
-type Package = tuple[str, str]
+type Package = tuple[str, str, str]
 
 
 class RootLock(typ.TypedDict):
@@ -136,12 +136,26 @@ class NestedCargoLockEnvelope(typ.TypedDict):
 
 
 def registry_packages(document: Manifest) -> set[Package]:
-    """Return the `(name, version)` of every package that has a registry source."""
+    """Return the `(name, version, source)` of every package that has a source.
+
+    The source is part of the identity: the same name and version from a git
+    repository or another registry is a different unit from the crates.io one,
+    and a nested build that resolves it compiles something the workspace did not.
+
+    Returns
+    -------
+    set[Package]
+        The sourced packages; path packages (no source) are the fixture's own.
+    """
     found: set[Package] = set()
     for item in sequence(document.get("package")) or []:
         table = mapping(item) or {}
         if "source" in table and "name" in table and "version" in table:
-            found.add((str(table["name"]), str(table["version"])))
+            found.add((
+                str(table["name"]),
+                str(table["version"]),
+                str(table["source"]),
+            ))
     return found
 
 
@@ -168,6 +182,13 @@ def _root_lock(checkout: pathlib.Path) -> tuple[RootLock, set[Package]]:
     return {"state": "present", "error": None}, registry_packages(document)
 
 
+def _describe(package: Package) -> str:
+    """Return `name version`, with the source named when it is not crates.io."""
+    name, version, source = package
+    crates_io = source.startswith("registry+") and "crates.io" in source
+    return f"{name} {version}" if crates_io else f"{name} {version} ({source})"
+
+
 def _nested_lock(
     checkout: pathlib.Path, path: pathlib.Path, root: set[Package], problems: list[str]
 ) -> NestedLock | None:
@@ -178,7 +199,7 @@ def _nested_lock(
         problems.append(f"{relative} cannot be read: {error}")
         return None
     foreign = sorted(
-        f"{name} {version}" for name, version in registry_packages(document) - root
+        _describe(package) for package in registry_packages(document) - root
     )
     if not foreign:
         return None
