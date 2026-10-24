@@ -197,11 +197,12 @@ def _implicit_members(
         The implicit member directories, resolved.
     """
     inside, skip = root.resolve(), _excluded_paths(root, workspace)
+    by_directory = {path.parent.resolve(): doc for path, doc in manifests.items()}
     seen: set[pathlib.Path] = set()
     pending = [item.resolve() for item in start]
     while pending:
         directory = pending.pop()
-        document = manifests.get(directory / MANIFEST, {})
+        document = by_directory.get(directory, {})
         for target in _path_dependencies(directory, document):
             fresh = target not in seen and target != inside
             eligible = fresh and target.is_relative_to(inside)

@@ -9,6 +9,7 @@ before #895), an unlocked fixture crate with its own workspace (netsuke before
 from __future__ import annotations
 
 import dataclasses
+import pathlib
 import tomllib
 import typing as typ
 
@@ -21,9 +22,6 @@ from concordat.rules.nested_cargo_lock_envelope import (
     build_nested_cargo_lock_envelope,
     registry_packages,
 )
-
-if typ.TYPE_CHECKING:
-    import pathlib
 
 RULE_ID = "nested-cargo-fixture-lockfiles"
 ROOT_MANIFEST = '[workspace]\nmembers = ["crates/*"]\n'
@@ -420,3 +418,25 @@ def test_a_path_dependency_outside_the_workspace_is_not_a_member(
         tmp_path / "other/Cargo.toml": tomllib.loads(FIXTURE_MANIFEST),
     }
     assert workspace_member_directories(root, manifests) == {"crates/member"}
+
+
+def test_implicit_members_are_found_through_a_relative_checkout_path(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A relative checkout path keys the manifests relatively; lookups must resolve."""
+    path_dependency_layout(tmp_path / "repo")
+    put(tmp_path / "repo", "tests/demo/Cargo.lock", lock(("anyhow", "1.0.99")))
+    monkeypatch.chdir(tmp_path)
+    result = runner.run_rule(RULE_ID, pathlib.Path("repo"))
+    assert {finding.rule_id for finding in result.findings} == set()
+
+
+def test_implicit_members_are_found_through_a_symlinked_checkout(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A checkout reached through a symlink behaves like the real directory."""
+    path_dependency_layout(tmp_path / "real")
+    put(tmp_path / "real", "tests/demo/Cargo.lock", lock(("anyhow", "1.0.99")))
+    (tmp_path / "link").symlink_to(tmp_path / "real", target_is_directory=True)
+    result = runner.run_rule(RULE_ID, tmp_path / "link")
+    assert {finding.rule_id for finding in result.findings} == set()
