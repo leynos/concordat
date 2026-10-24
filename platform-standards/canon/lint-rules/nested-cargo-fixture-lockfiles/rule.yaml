@@ -1,0 +1,71 @@
+schema_version: 1
+id: nested-cargo-fixture-lockfiles
+name: Nested cargo fixture lockfiles
+description: >-
+  Audits the lockfiles of nested-build fixtures so a nested `cargo` run
+  compiles the same units as the workspace build instead of starting cold.
+  A fixture `Cargo.lock` (a lock below the root, outside any workspace member,
+  in a directory whose path names a fixture) may resolve only registry
+  packages the root `Cargo.lock` already resolves (NC-001), and a fixture
+  manifest with dependencies must have a lock beside it (NC-002). Path
+  packages are the fixture's own and never count. A named exemption, with its
+  repository, directory, rationale and review trigger, takes a fixture out of both checks. A
+  repository with no root `Cargo.lock` has no workspace graph and is
+  compliant. Audit-only: this rule declares no mutations.
+version: 0.1.0
+sensor:
+  type: conftest
+  input: policy-input/nested-cargo-fixture-lockfiles
+  policy: policy/
+  tests:
+    - policy/
+  data:
+    - fixtures/data.json
+parameters:
+  schema:
+    type: object
+    additionalProperties: false
+    properties:
+      exemptions:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [repository, path, rationale, review_trigger]
+          properties:
+            repository:
+              type: string
+            path:
+              type: string
+            rationale:
+              type: string
+            review_trigger:
+              type: string
+        description: >-
+          Fixture directories the rule does not audit, each with its repository
+          (`owner/name`, read from the `origin` remote), its directory relative
+          to the root, the rationale and the review trigger (the event after which
+          the exemption is revisited, as in `dependencies.family_exceptions`). A fixture that resolves outside the
+          workspace on purpose belongs here, with the lane that owns its lock.
+  defaults:
+    exemptions:
+      - repository: leynos/rstest-bdd
+        path: crates/rstest-bdd/tests/ui_lints
+        rationale: >-
+          Builds through its own CARGO_TARGET_DIR (trybuild_macros.rs) so lint
+          runs cannot pollute the shared target directory; isolated by
+          construction.
+        review_trigger: review when the ui_lints lane stops isolating its target directory
+      - repository: leynos/rstest-bdd
+        path: tests/fixtures/published-gpui-0-2-2
+        rationale: >-
+          Exists to resolve gpui from crates.io rather than the workspace's
+          vendored path dependency, the opposite of alignment. Its own
+          `make update-published-gpui-0-2-2-lock` target owns the lock.
+        review_trigger: review when published-gpui-0-2-2 is no longer needed to prove the crates.io resolution
+      - repository: leynos/rstest-bdd
+        path: tests/fixtures/published-gpui-e2e
+        rationale: >-
+          An independent workspace so gpui resolves from crates.io; its own
+          `make update-published-gpui-e2e-lock` target owns the lock.
+        review_trigger: review when published-gpui-e2e can resolve inside the workspace

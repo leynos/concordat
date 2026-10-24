@@ -1,0 +1,161 @@
+{
+  "fixtures": {
+    "compliant": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-fixture-lockfiles",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "root_lock": {
+        "state": "present",
+        "error": null
+      },
+      "nested_locks": [],
+      "unlocked_manifests": [],
+      "problems": []
+    },
+    "no_root_lock": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-fixture-lockfiles",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "root_lock": {
+        "state": "absent",
+        "error": null
+      },
+      "nested_locks": [],
+      "unlocked_manifests": [],
+      "problems": []
+    },
+    "drifted_lock": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-fixture-lockfiles",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "root_lock": {
+        "state": "present",
+        "error": null
+      },
+      "nested_locks": [
+        {
+          "path": "crates/a/tests/fixtures/minimal/Cargo.lock",
+          "directory": "crates/a/tests/fixtures/minimal",
+          "foreign_count": 2,
+          "foreign_packages": [
+            "anyhow 1.0.99",
+            "itoa 1.0.15"
+          ]
+        }
+      ],
+      "unlocked_manifests": [],
+      "problems": []
+    },
+    "unlocked_manifest": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-fixture-lockfiles",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "root_lock": {
+        "state": "present",
+        "error": null
+      },
+      "nested_locks": [],
+      "unlocked_manifests": [
+        {
+          "path": "tests/ui/cli_configuration_pass/Cargo.toml",
+          "directory": "tests/ui/cli_configuration_pass"
+        }
+      ],
+      "problems": []
+    },
+    "exempt_directory": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-fixture-lockfiles",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "root_lock": {
+        "state": "present",
+        "error": null
+      },
+      "nested_locks": [
+        {
+          "path": "crates/a/tests/fixtures/minimal/Cargo.lock",
+          "directory": "crates/a/tests/fixtures/minimal",
+          "foreign_count": 2,
+          "foreign_packages": [
+            "anyhow 1.0.99",
+            "itoa 1.0.15"
+          ]
+        }
+      ],
+      "unlocked_manifests": [],
+      "problems": []
+    },
+    "unreadable_root_lock": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-fixture-lockfiles",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "root_lock": {
+        "state": "unreadable",
+        "error": "permission denied"
+      },
+      "nested_locks": [],
+      "unlocked_manifests": [],
+      "problems": []
+    },
+    "unreadable_fixture": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-fixture-lockfiles",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "root_lock": {
+        "state": "present",
+        "error": null
+      },
+      "nested_locks": [],
+      "unlocked_manifests": [],
+      "problems": [
+        "tests/fixtures/x/Cargo.lock cannot be read: not valid TOML"
+      ]
+    },
+    "named_elsewhere": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-fixture-lockfiles",
+      "repository": {
+        "path": ".",
+        "name": "leynos/other"
+      },
+      "root_lock": {
+        "state": "present",
+        "error": null
+      },
+      "nested_locks": [
+        {
+          "path": "crates/a/tests/fixtures/minimal/Cargo.lock",
+          "directory": "crates/a/tests/fixtures/minimal",
+          "foreign_count": 2,
+          "foreign_packages": [
+            "anyhow 1.0.99",
+            "itoa 1.0.15"
+          ]
+        }
+      ],
+      "unlocked_manifests": [],
+      "problems": []
+    }
+  }
+}
