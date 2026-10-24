@@ -324,3 +324,30 @@ def test_target_specific_dependencies_make_an_unlocked_fixture(
     manifest = '[package]\nname = "fixture"\nversion = "0.0.0"\n' + table
     put(tmp_path, "tests/fixtures/demo/Cargo.toml", "[workspace]\n" + manifest)
     assert rule_ids(tmp_path) == {"NC-002"}
+
+
+def explicit_member_layout(root: pathlib.Path) -> None:
+    """Write a workspace that lists a member inside a directory it excludes."""
+    put(
+        root,
+        "Cargo.toml",
+        '[workspace]\nmembers = ["tests/fixtures/demo"]\n'
+        'exclude = ["tests/fixtures"]\n',
+    )
+    put(root, "Cargo.lock", lock(("serde", "1.0.0")))
+    put(root, "tests/fixtures/demo/Cargo.toml", FIXTURE_MANIFEST)
+
+
+def test_an_explicit_member_under_an_excluded_directory_needs_no_lock(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Cargo lets an explicit member override the exclusion, so there is no NC-002."""
+    explicit_member_layout(tmp_path)
+    assert rule_ids(tmp_path) == set()
+
+
+def test_an_explicit_members_own_lock_is_never_read(tmp_path: pathlib.Path) -> None:
+    """A drifting lock inside an explicit member is ignored, not NC-001."""
+    explicit_member_layout(tmp_path)
+    put(tmp_path, "tests/fixtures/demo/Cargo.lock", lock(("anyhow", "1.0.99")))
+    assert rule_ids(tmp_path) == set()

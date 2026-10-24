@@ -123,13 +123,6 @@ def _is_excluded(path: pathlib.Path, skip: set[pathlib.Path]) -> bool:
     return any(path == item or item in path.parents for item in skip)
 
 
-def _is_kept(
-    resolved: pathlib.Path, skip: set[pathlib.Path], base: pathlib.Path
-) -> bool:
-    """Report a member that is not excluded and lies inside the checkout."""
-    return not _is_excluded(resolved, skip) and resolved.is_relative_to(base)
-
-
 def _members_of(
     checkout: pathlib.Path, root: pathlib.Path, workspace: Manifest
 ) -> set[pathlib.Path]:
@@ -153,9 +146,13 @@ def _members_of(
     base = checkout.resolve()
     found: set[pathlib.Path] = set()
     for pattern in patterns if isinstance(patterns, list) else []:
+        # Cargo lets an explicitly listed member override an exclusion; only a
+        # glob-matched one respects it.
+        explicit = not any(char in str(pattern) for char in "*?[")
         for candidate in _candidates(root, str(pattern)):
             resolved = candidate.resolve()
-            if resolved.is_dir() and _is_kept(resolved, skip, base):
+            kept = explicit or not _is_excluded(resolved, skip)
+            if resolved.is_dir() and kept and resolved.is_relative_to(base):
                 found.add(candidate)
     return found
 
