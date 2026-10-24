@@ -49,6 +49,7 @@ if typ.TYPE_CHECKING:
 ENVELOPE_SCHEMA_VERSION: typ.Final = 1
 ENVELOPE_KIND: typ.Final = "policy-input/nested-cargo-fixture-lockfiles"
 FOREIGN_LIMIT: typ.Final = 10
+PACKAGE_KEYS: typ.Final = frozenset({"source", "name", "version"})
 
 type Package = tuple[str, str, str]
 
@@ -150,7 +151,7 @@ def registry_packages(document: Manifest) -> set[Package]:
     found: set[Package] = set()
     for item in sequence(document.get("package")) or []:
         table = mapping(item) or {}
-        if "source" in table and "name" in table and "version" in table:
+        if table.keys() >= PACKAGE_KEYS:
             found.add((
                 str(table["name"]),
                 str(table["version"]),
@@ -257,6 +258,12 @@ def _needs_lock(manifest: pathlib.Path, document: Manifest) -> bool:
     )
 
 
+def _is_fixture_root(directory: str, members: set[str], standalone: set[str]) -> bool:
+    """Report a fixture directory Cargo can build on its own, below the root."""
+    eligible = directory in standalone and directory not in members | {"."}
+    return eligible and is_fixture_directory(directory)
+
+
 def _unlocked(
     checkout: pathlib.Path,
     manifests: typ.Mapping[pathlib.Path, Manifest],
@@ -277,12 +284,8 @@ def _unlocked(
     found: list[UnlockedManifest] = []
     for path, document in sorted(manifests.items()):
         directory = path.parent.relative_to(checkout).as_posix()
-        if (
-            path.parent != checkout
-            and directory not in members
-            and directory in standalone
-            and is_fixture_directory(directory)
-            and _needs_lock(path, document)
+        if _is_fixture_root(directory, members, standalone) and _needs_lock(
+            path, document
         ):
             found.append({"path": f"{directory}/{MANIFEST}", "directory": directory})
     return found

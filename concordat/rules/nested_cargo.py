@@ -122,6 +122,13 @@ def _candidates(root: pathlib.Path, pattern: str) -> list[pathlib.Path]:
         return [root / pattern]
 
 
+def _is_kept(
+    resolved: pathlib.Path, skip: set[pathlib.Path], base: pathlib.Path
+) -> bool:
+    """Report a member that is not excluded and lies inside the checkout."""
+    return resolved not in skip and resolved.is_relative_to(base)
+
+
 def _members_of(
     checkout: pathlib.Path, root: pathlib.Path, workspace: Manifest
 ) -> set[pathlib.Path]:
@@ -147,11 +154,7 @@ def _members_of(
     for pattern in patterns if isinstance(patterns, list) else []:
         for candidate in _candidates(root, str(pattern)):
             resolved = candidate.resolve()
-            if (
-                resolved.is_dir()
-                and resolved not in skip
-                and resolved.is_relative_to(base)
-            ):
+            if resolved.is_dir() and _is_kept(resolved, skip, base):
                 found.add(candidate)
     return found
 
@@ -238,7 +241,8 @@ def standalone_directories(
         under_workspace = any(
             root != path.parent and root in path.parent.parents for root in roots
         )
-        if "workspace" in document or directory in excluded or not under_workspace:
+        owns_root = "workspace" in document or directory in excluded
+        if owns_root or not under_workspace:
             found.add(directory)
     return found
 
