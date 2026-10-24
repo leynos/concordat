@@ -37,11 +37,6 @@ if typ.TYPE_CHECKING:
 MANIFEST: typ.Final = "Cargo.toml"
 LOCKFILE: typ.Final = "Cargo.lock"
 FIXTURE_DIRECTORY: typ.Final = re.compile(r"fixture|(^|/)tests?/|test_support|(^|/)ui/")
-DEPENDENCY_TABLES: typ.Final = (
-    "dependencies",
-    "dev-dependencies",
-    "build-dependencies",
-)
 
 type Manifest = dict[str, object]
 
