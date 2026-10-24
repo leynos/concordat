@@ -28,6 +28,7 @@ import pygit2
 
 from concordat.platform_standards import parse_github_slug
 
+from .dependency_family_coverage import mapping
 from .dependency_family_discovery import cargo_tables, nested_files
 from .fs_probe import probe_file
 
@@ -157,6 +158,73 @@ def _pattern_members(
     return found
 
 
+def _excluded_paths(root: pathlib.Path, workspace: Manifest) -> set[pathlib.Path]:
+    """Return the resolved directories a workspace's `exclude` list names."""
+    return {(root / item).resolve() for item in _string_list(workspace.get("exclude"))}
+
+
+def _path_dependencies(
+    directory: pathlib.Path, document: Manifest
+) -> list[pathlib.Path]:
+    """Return the resolved `path` dependency targets a manifest declares."""
+    specs = (
+        mapping(spec)
+        for _, _, table in cargo_tables(document)
+        for spec in table.values()
+    )
+    return [
+        (directory / str(table["path"])).resolve()
+        for table in specs
+        if table is not None and "path" in table
+    ]
+
+
+def _implicit_members(
+    root: pathlib.Path,
+    workspace: Manifest,
+    start: set[pathlib.Path],
+    manifests: typ.Mapping[pathlib.Path, Manifest],
+) -> set[pathlib.Path]:
+    """Return the path dependencies Cargo adds to a workspace as members.
+
+    Cargo makes every `path` dependency of a member (or of the root package)
+    that lies inside the workspace root, and is not excluded, a member too, and
+    follows the new members' own path dependencies in turn.
+
+    Returns
+    -------
+    set[pathlib.Path]
+        The implicit member directories, resolved.
+    """
+    inside, skip = root.resolve(), _excluded_paths(root, workspace)
+    seen: set[pathlib.Path] = set()
+    pending = [item.resolve() for item in start]
+    while pending:
+        directory = pending.pop()
+        document = manifests.get(directory / MANIFEST, {})
+        for target in _path_dependencies(directory, document):
+            fresh = target not in seen and target != inside
+            eligible = fresh and target.is_relative_to(inside)
+            if eligible and not _is_excluded(target, skip):
+                seen.add(target)
+                pending.append(target)
+    return seen
+
+
+def _workspace_members(
+    checkout: pathlib.Path,
+    root: pathlib.Path,
+    workspace: Manifest,
+    manifests: typ.Mapping[pathlib.Path, Manifest],
+) -> set[pathlib.Path]:
+    """Return a workspace's explicit and implicit members as resolved paths."""
+    explicit = {item.resolve() for item in _members_of(checkout, root, workspace)}
+    start = explicit | (
+        {root.resolve()} if "package" in manifests[root / MANIFEST] else set()
+    )
+    return explicit | _implicit_members(root, workspace, start, manifests)
+
+
 def _members_of(
     checkout: pathlib.Path, root: pathlib.Path, workspace: Manifest
 ) -> set[pathlib.Path]:
@@ -170,7 +238,7 @@ def _members_of(
     set[pathlib.Path]
         The member directories, as paths under the workspace root.
     """
-    skip = {(root / item).resolve() for item in _string_list(workspace.get("exclude"))}
+    skip = _excluded_paths(root, workspace)
     base = checkout.resolve()
     found: set[pathlib.Path] = set()
     for pattern in _string_list(workspace.get("members")):
@@ -197,16 +265,17 @@ def workspace_member_directories(
         (a workspace root is not a member of itself).
     """
     members: set[str] = set()
+    base = checkout.resolve()
     for path, document in manifests.items():
         workspace = document.get("workspace")
         if not isinstance(workspace, dict):
             continue
+        root = path.parent.resolve()
+        found = _workspace_members(
+            checkout, path.parent, typ.cast("Manifest", workspace), manifests
+        )
         members.update(
-            member.relative_to(checkout).as_posix()
-            for member in _members_of(
-                checkout, path.parent, typ.cast("Manifest", workspace)
-            )
-            if member != path.parent
+            member.relative_to(base).as_posix() for member in found if member != root
         )
     return members
 

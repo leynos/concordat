@@ -54,5 +54,7 @@ repository. The defaults carry rstest-bdd's three published-GPUI fixtures.
 
 It compares lock contents, not what a test then does with the fixture. A
 fixture built with a private `CARGO_TARGET_DIR`, or a `cargo` spawned with no
-time bound, is outside this package. Path dependencies that Cargo adds to a
-workspace implicitly are not resolved as members.
+time bound, is outside this package. Path dependencies of a member (or of the
+root package) that lie inside the workspace root are members too, as in Cargo,
+unless excluded; a `path` entry in `[workspace.dependencies]` that a member
+inherits is not followed.

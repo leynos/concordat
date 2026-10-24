@@ -2775,9 +2775,10 @@ ignored, because Cargo never reads it. Exemptions follow the
 `whitaker-provisioning` convention, with `dependencies.family_exceptions`'
 record of why and when to revisit: rule parameters name a repository, a
 directory, a rationale and a review trigger, matched against the `origin` slug,
-so an exemption does not travel. Remaining limits: a path dependency that Cargo
-adds to a workspace implicitly is not resolved as a member, and a fixture
-outside the fixture-like paths is not reached.
+so an exemption does not travel. Path dependencies of a member that lie inside
+the workspace root are members too, as in Cargo, unless excluded. Remaining
+limits: a `path` entry in `[workspace.dependencies]` that a member inherits is
+not followed, and a fixture outside the fixture-like paths is not reached.
 
 #### 3.1.4 Verifying the reconciliation invariants
 

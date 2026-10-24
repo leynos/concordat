@@ -9,12 +9,14 @@ before #895), an unlocked fixture crate with its own workspace (netsuke before
 from __future__ import annotations
 
 import dataclasses
+import tomllib
 import typing as typ
 
 import pygit2
 import pytest
 
 from concordat.rules import runner
+from concordat.rules.nested_cargo import workspace_member_directories
 from concordat.rules.nested_cargo_lock_envelope import (
     build_nested_cargo_lock_envelope,
     registry_packages,
@@ -351,3 +353,70 @@ def test_an_explicit_members_own_lock_is_never_read(tmp_path: pathlib.Path) -> N
     explicit_member_layout(tmp_path)
     put(tmp_path, "tests/fixtures/demo/Cargo.lock", lock(("anyhow", "1.0.99")))
     assert rule_ids(tmp_path) == set()
+
+
+def path_dependency_layout(root: pathlib.Path, *, exclude: str = "") -> None:
+    """Write a workspace whose member depends by path on a fixture inside it."""
+    put(
+        root,
+        "Cargo.toml",
+        f'[workspace]\nmembers = ["crates/member"]\n{exclude}',
+    )
+    put(
+        root,
+        "crates/member/Cargo.toml",
+        MEMBER_MANIFEST + '[dev-dependencies]\ndemo = { path = "../../tests/demo" }\n',
+    )
+    put(root, "Cargo.lock", lock(("serde", "1.0.0")))
+    put(root, "tests/demo/Cargo.toml", FIXTURE_MANIFEST)
+
+
+def test_a_path_dependency_inside_the_workspace_is_an_implicit_member(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Cargo adds in-workspace path dependencies as members: no lock is read."""
+    path_dependency_layout(tmp_path)
+    put(tmp_path, "tests/demo/Cargo.lock", lock(("anyhow", "1.0.99")))
+    assert rule_ids(tmp_path) == set()
+
+
+def test_an_excluded_path_dependency_is_not_a_member(tmp_path: pathlib.Path) -> None:
+    """An excluded directory stays standalone, so a missing lock is NC-002."""
+    path_dependency_layout(tmp_path, exclude='exclude = ["tests/demo"]\n')
+    assert rule_ids(tmp_path) == {"NC-002"}
+
+
+def test_implicit_members_follow_path_dependencies_transitively(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A path dependency of an implicit member is a member as well."""
+    path_dependency_layout(tmp_path)
+    put(
+        tmp_path,
+        "tests/demo/Cargo.toml",
+        FIXTURE_MANIFEST + '[dev-dependencies]\ndeep = { path = "../deep" }\n',
+    )
+    put(tmp_path, "tests/deep/Cargo.toml", FIXTURE_MANIFEST)
+    assert rule_ids(tmp_path) == set()
+
+
+def test_a_path_dependency_outside_the_workspace_is_not_a_member(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A path dependency above the workspace root stays outside it."""
+    root = tmp_path / "repo"
+    put(root, "Cargo.toml", '[workspace]\nmembers = ["crates/member"]\n')
+    put(
+        root,
+        "crates/member/Cargo.toml",
+        MEMBER_MANIFEST + '[dependencies]\nother = { path = "../../../other" }\n',
+    )
+    put(tmp_path, "other/Cargo.toml", FIXTURE_MANIFEST)
+    manifests = {
+        root / "Cargo.toml": tomllib.loads((root / "Cargo.toml").read_text()),
+        root / "crates/member/Cargo.toml": tomllib.loads(
+            (root / "crates/member/Cargo.toml").read_text()
+        ),
+        tmp_path / "other/Cargo.toml": tomllib.loads(FIXTURE_MANIFEST),
+    }
+    assert workspace_member_directories(root, manifests) == {"crates/member"}
