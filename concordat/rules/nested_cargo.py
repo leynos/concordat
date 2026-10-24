@@ -179,6 +179,12 @@ def _path_dependencies(
     ]
 
 
+def _joins(target: pathlib.Path, inside: pathlib.Path, skip: set[pathlib.Path]) -> bool:
+    """Report a path dependency that lies in the workspace and is not excluded."""
+    within = target != inside and target.is_relative_to(inside)
+    return within and not _is_excluded(target, skip)
+
+
 def _implicit_members(
     root: pathlib.Path,
     workspace: Manifest,
@@ -204,9 +210,7 @@ def _implicit_members(
         directory = pending.pop()
         document = by_directory.get(directory, {})
         for target in _path_dependencies(directory, document):
-            fresh = target not in seen and target != inside
-            eligible = fresh and target.is_relative_to(inside)
-            if eligible and not _is_excluded(target, skip):
+            if target not in seen and _joins(target, inside, skip):
                 seen.add(target)
                 pending.append(target)
     return seen
