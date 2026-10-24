@@ -151,7 +151,8 @@ def _pattern_members(
     for candidate in _candidates(root, pattern):
         resolved = candidate.resolve()
         excluded = respects_exclusion and _is_excluded(resolved, skip)
-        if resolved.is_dir() and not excluded and resolved.is_relative_to(base):
+        inside = resolved.is_relative_to(base) and not excluded
+        if resolved.is_dir() and inside:
             found.add(candidate)
     return found
 
