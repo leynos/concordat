@@ -123,6 +123,39 @@ def _is_excluded(path: pathlib.Path, skip: set[pathlib.Path]) -> bool:
     return any(path == item or item in path.parents for item in skip)
 
 
+def _string_list(value: object) -> list[str]:
+    """Return a manifest value as a list of strings, or an empty list."""
+    return [str(item) for item in value] if isinstance(value, list) else []
+
+
+def _is_glob(pattern: str) -> bool:
+    """Report whether a `members` entry contains a glob metacharacter."""
+    return any(char in pattern for char in "*?[")
+
+
+def _pattern_members(
+    root: pathlib.Path, pattern: str, skip: set[pathlib.Path], base: pathlib.Path
+) -> set[pathlib.Path]:
+    """Return the directories one `members` entry names inside the checkout.
+
+    Cargo lets an explicitly listed member override an exclusion; only a
+    glob-matched one respects it.
+
+    Returns
+    -------
+    set[pathlib.Path]
+        The member directories, as paths under the workspace root.
+    """
+    respects_exclusion = _is_glob(pattern)
+    found: set[pathlib.Path] = set()
+    for candidate in _candidates(root, pattern):
+        resolved = candidate.resolve()
+        excluded = respects_exclusion and _is_excluded(resolved, skip)
+        if resolved.is_dir() and not excluded and resolved.is_relative_to(base):
+            found.add(candidate)
+    return found
+
+
 def _members_of(
     checkout: pathlib.Path, root: pathlib.Path, workspace: Manifest
 ) -> set[pathlib.Path]:
@@ -136,24 +169,11 @@ def _members_of(
     set[pathlib.Path]
         The member directories, as paths under the workspace root.
     """
-    patterns = workspace.get("members")
-    excluded = workspace.get("exclude")
-    skip = (
-        {(root / str(item)).resolve() for item in excluded}
-        if isinstance(excluded, list)
-        else set()
-    )
+    skip = {(root / item).resolve() for item in _string_list(workspace.get("exclude"))}
     base = checkout.resolve()
     found: set[pathlib.Path] = set()
-    for pattern in patterns if isinstance(patterns, list) else []:
-        # Cargo lets an explicitly listed member override an exclusion; only a
-        # glob-matched one respects it.
-        explicit = not any(char in str(pattern) for char in "*?[")
-        for candidate in _candidates(root, str(pattern)):
-            resolved = candidate.resolve()
-            kept = explicit or not _is_excluded(resolved, skip)
-            if resolved.is_dir() and kept and resolved.is_relative_to(base):
-                found.add(candidate)
+    for pattern in _string_list(workspace.get("members")):
+        found |= _pattern_members(root, pattern, skip, base)
     return found
 
 
@@ -212,6 +232,11 @@ def _excluded_directories(
     return excluded
 
 
+def _is_below_a_root(directory: pathlib.Path, roots: list[pathlib.Path]) -> bool:
+    """Report whether a workspace root, other than *directory*, lies above it."""
+    return any(root != directory and root in directory.parents for root in roots)
+
+
 def standalone_directories(
     checkout: pathlib.Path, manifests: typ.Mapping[pathlib.Path, Manifest]
 ) -> set[str]:
@@ -242,9 +267,7 @@ def standalone_directories(
     found: set[str] = set()
     for path, document in manifests.items():
         directory = path.parent.relative_to(checkout).as_posix()
-        under_workspace = any(
-            root != path.parent and root in path.parent.parents for root in roots
-        )
+        under_workspace = _is_below_a_root(path.parent, roots)
         owns_root = "workspace" in document or _is_excluded(
             path.parent.resolve(), excluded
         )
