@@ -28,7 +28,7 @@ import pygit2
 
 from concordat.platform_standards import parse_github_slug
 
-from .dependency_family_discovery import nested_files
+from .dependency_family_discovery import cargo_tables, nested_files
 from .fs_probe import probe_file
 
 if typ.TYPE_CHECKING:
@@ -100,9 +100,10 @@ def has_dependency(manifest: Manifest) -> bool:
     Returns
     -------
     bool
-        True when any dependency table is non-empty.
+        True when any dependency table is non-empty, target-specific tables
+        (`[target.'cfg(...)'.dependencies]`) included.
     """
-    return any(manifest.get(table) for table in DEPENDENCY_TABLES)
+    return any(table for _, _, table in cargo_tables(manifest))
 
 
 def _candidates(root: pathlib.Path, pattern: str) -> list[pathlib.Path]:
@@ -122,11 +123,16 @@ def _candidates(root: pathlib.Path, pattern: str) -> list[pathlib.Path]:
         return [root / pattern]
 
 
+def _is_excluded(path: pathlib.Path, skip: set[pathlib.Path]) -> bool:
+    """Report a path equal to, or below, an excluded directory (Cargo's rule)."""
+    return any(path == item or item in path.parents for item in skip)
+
+
 def _is_kept(
     resolved: pathlib.Path, skip: set[pathlib.Path], base: pathlib.Path
 ) -> bool:
     """Report a member that is not excluded and lies inside the checkout."""
-    return resolved not in skip and resolved.is_relative_to(base)
+    return not _is_excluded(resolved, skip) and resolved.is_relative_to(base)
 
 
 def _members_of(
@@ -193,18 +199,24 @@ def workspace_member_directories(
 
 
 def _excluded_directories(
-    checkout: pathlib.Path, manifests: typ.Mapping[pathlib.Path, Manifest]
-) -> set[str]:
-    """Return every directory a workspace root explicitly excludes."""
-    excluded: set[str] = set()
+    manifests: typ.Mapping[pathlib.Path, Manifest],
+) -> set[pathlib.Path]:
+    """Return every directory a workspace root explicitly excludes.
+
+    A directory below an excluded one is excluded too, which `_is_excluded`
+    applies.
+
+    Returns
+    -------
+    set[pathlib.Path]
+        The resolved excluded directories.
+    """
+    excluded: set[pathlib.Path] = set()
     for path, document in manifests.items():
         workspace = document.get("workspace")
         listed = workspace.get("exclude") if isinstance(workspace, dict) else None
         if isinstance(listed, list):
-            excluded.update(
-                (path.parent / str(item)).relative_to(checkout).as_posix()
-                for item in listed
-            )
+            excluded.update((path.parent / str(item)).resolve() for item in listed)
     return excluded
 
 
@@ -231,7 +243,7 @@ def standalone_directories(
     set[str]
         Root-relative POSIX directories of the buildable standalone manifests.
     """
-    excluded = _excluded_directories(checkout, manifests)
+    excluded = _excluded_directories(manifests)
     roots = [
         path.parent for path, document in manifests.items() if "workspace" in document
     ]
@@ -241,7 +253,9 @@ def standalone_directories(
         under_workspace = any(
             root != path.parent and root in path.parent.parents for root in roots
         )
-        owns_root = "workspace" in document or directory in excluded
+        owns_root = "workspace" in document or _is_excluded(
+            path.parent.resolve(), excluded
+        )
         if owns_root or not under_workspace:
             found.add(directory)
     return found

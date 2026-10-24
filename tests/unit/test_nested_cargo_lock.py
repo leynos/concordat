@@ -276,3 +276,51 @@ def test_the_same_name_and_version_from_another_source_is_drift(
     (finding,) = runner.run_rule(RULE_ID, tmp_path).findings
     assert finding.rule_id == "NC-001"
     assert "serde 1.0.0 (git+https://example.invalid/serde#abc)" in finding.message
+
+
+def test_a_fixture_below_an_excluded_directory_is_standalone(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`exclude = ["tests/fixtures"]` frees `tests/fixtures/demo` too, as in Cargo."""
+    put(
+        tmp_path,
+        "Cargo.toml",
+        '[workspace]\nmembers = ["crates/*"]\nexclude = ["tests/fixtures"]\n',
+    )
+    put(tmp_path, "crates/member/Cargo.toml", MEMBER_MANIFEST)
+    put(tmp_path, "Cargo.lock", lock(("serde", "1.0.0")))
+    put(tmp_path, "tests/fixtures/demo/Cargo.toml", FIXTURE_MANIFEST)
+    assert rule_ids(tmp_path) == {"NC-002"}
+
+
+def test_a_member_glob_does_not_reach_into_an_excluded_directory(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A glob match below an excluded directory is not a member, so its lock counts."""
+    put(
+        tmp_path,
+        "Cargo.toml",
+        '[workspace]\nmembers = ["tests/*/*"]\nexclude = ["tests/fixtures"]\n',
+    )
+    put(tmp_path, "Cargo.lock", lock(("serde", "1.0.0")))
+    put(tmp_path, "tests/fixtures/demo/Cargo.toml", FIXTURE_MANIFEST)
+    put(tmp_path, "tests/fixtures/demo/Cargo.lock", lock(("anyhow", "1.0.99")))
+    assert rule_ids(tmp_path) == {"NC-001"}
+
+
+@pytest.mark.parametrize(
+    "table",
+    [
+        "[target.'cfg(unix)'.dependencies]\nlibc = \"0.2\"\n",
+        "[target.'cfg(unix)'.dev-dependencies]\nlibc = \"0.2\"\n",
+        "[target.'cfg(unix)'.build-dependencies]\nlibc = \"0.2\"\n",
+    ],
+)
+def test_target_specific_dependencies_make_an_unlocked_fixture(
+    tmp_path: pathlib.Path, table: str
+) -> None:
+    """A fixture whose only dependencies are target-specific still resolves them."""
+    workspace(tmp_path, ("serde", "1.0.0"))
+    manifest = '[package]\nname = "fixture"\nversion = "0.0.0"\n' + table
+    put(tmp_path, "tests/fixtures/demo/Cargo.toml", "[workspace]\n" + manifest)
+    assert rule_ids(tmp_path) == {"NC-002"}

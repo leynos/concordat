@@ -660,9 +660,9 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   dependencies, using the shared `nested_cargo` module for workspace-member
   resolution (a member's lock is never read by Cargo), the fixture-path test
   and the `origin` slug that the rule's exemptions are matched against. It
-  compares `(name, version)` of registry packages only and records the first
-  ten foreign ones. Anything it cannot read is a problem fact, which the policy
-  answers as indeterminate. It runs no Cargo and reads no network.
+  compares `(name, version, source)` of packages that have a source and records
+  the first ten foreign ones. Anything it cannot read is a problem fact, which
+  the policy answers as indeterminate. It runs no Cargo and reads no network.
 - `policy-input/whitaker-provisioning` —
   `whitaker_provisioning_envelope.build_whitaker_provisioning_envelope`. It
   reuses the CV-005 workflow decoder for `.github/workflows`, decodes every
