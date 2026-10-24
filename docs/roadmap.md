@@ -535,6 +535,14 @@ actuators that remediate them. Each check ships as a lint rule package under
   fixtures for unrelated duplicate versions and a pure-Python template; and a
   pilot over cuprum, femtologging, tei-rapporteur and netsuke. Derived-input
   equality (DF-004) and bound relaxation (DF-005) are follow-on work.
+- [ ] Ship the nested-cargo guard rails (DF12-109): checks that keep nested and
+  fixture `cargo` builds on a warm, shared cache. The first, fixture lockfile
+  alignment (NC-001, NC-002, `nested-cargo-fixture-lockfiles`), is shipped: a
+  fixture lock resolves only registry packages the workspace lock resolves, and
+  a fixture manifest with dependencies is locked. Acceptance: the pinned corpus
+  (netsuke before and after #913, rstest-bdd before and after #895) gives the
+  expected result for every case. Fixture manifest coverage, nextest
+  configuration and CI wiring follow as separate packages.
 - [ ] Ship the Dependabot governance rule packages (DB-001 to DB-004):
   manifest-scan sensor diffing package roots against `dependabot.yml` entries,
   cooldown policy checks (tiered for semver ecosystems, `default-days` for
