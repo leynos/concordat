@@ -24,7 +24,6 @@ from .nested_cargo_source import RustSource, enclosing_block
 from .rust_source import scan_balanced, skip_trivia
 
 OFFLINE_VARIABLE: typ.Final = "CARGO_NET_OFFLINE"
-NON_RESOLVING: typ.Final = frozenset({"help"})
 # Flags that ask cargo, or the plugin it dispatches to, to identify itself.
 _PROBE_FLAGS: typ.Final = frozenset({"--version", "-V"})
 ARGUMENT_METHODS: typ.Final = frozenset({"arg", "args"})
