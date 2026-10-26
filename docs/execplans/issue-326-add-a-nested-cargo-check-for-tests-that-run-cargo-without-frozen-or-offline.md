@@ -92,12 +92,24 @@ workaround.
 
 ## Progress
 
-- [ ] (2026-10-25) Task 1: warning severity research recorded, failing tests
+- [x] (2026-10-25) Task 1: warning severity research recorded, failing tests
       written, `exit_code`/`blocking`/severity column implemented, docs
-      updated, gates green, committed.
-- [ ] Task 2: spawn reader, entry-point reader, envelope builder, registry.
+      updated, gates green, committed as
+      `ba9b7295e42bd0d14c0e894908183dbe68b6b735`.
+- [ ] (2026-10-26) Task 2: spawn reader (46 tests), entry-point reader
+      (52 tests), envelope builder (6 tests) and the registry entries are
+      written and green, and both readers have been replayed over the whitaker
+      and theoremc checkouts. Both readers first breached `pylint`'s 800-line
+      module ceiling (1214 and 1072 lines), so each was split by subject with no
+      body changes, verified by comparing every function body against the
+      pre-split source modulo the intended renames. Modules are now
+      `nested_cargo_source.py` (189), `nested_cargo_commands.py` (398),
+      `nested_cargo_spawns.py` (700), `nested_cargo_scripts.py` (348) and
+      `nested_cargo_entry_points.py` (763). Lint, format and typecheck clean;
+      commit gate and commit outstanding.
 - [ ] Task 3: canon package, policy, fixtures, Rego tests, unit and BDD tests,
-      manifest SHA-256, documentation.
+      manifest SHA-256, documentation, and the `test_envelope_selection.py`
+      entries deferred from Task 2.
 - [ ] Task 4: `--package` sweep plumbing, ledger resume key, report filters and
       distinct-repository counts, real-corpus comparison.
 - [ ] Delivery: draft PR with session reference.
@@ -115,6 +127,21 @@ workaround.
   corpus case must be synthetic or a patched checkout.
 - Observation: `~/docs/missing-frozen-survey-plan.md` does not exist on this
   host. Impact: the estate survey step cannot run here.
+- Observation: `makeutil` 0.1.2 is on `PATH`, but every checked-in fixture
+  envelope records `makeutil` 0.1.0, so six generator-drift tests fail. They
+  fail identically from a clean archive of
+  `ba9b7295e42bd0d14c0e894908183dbe68b6b735`, so they predate this branch.
+  Impact: the Task 2 gate must attribute those six failures, and regenerating
+  the envelopes is a separate change, not part of this issue.
+- Observation: whitaker's `test` target is one `set -eu; \` chain, and the
+  Makefile loader keeps each backslash-newline inside the recipe text. Impact:
+  the entry-point reader folds continuations before lexing, otherwise the
+  recipe's leading newline defeats the assignment matcher and the recipe reads
+  as uncertain for the wrong reason.
+- Observation: theoremc has no `.config/nextest.toml`, yet an early version of
+  the reader emitted a nextest fact pointing at line 1 of that non-existent
+  file. Impact: the nextest reader now distinguishes "no file" from "a file it
+  cannot read", and an absent file yields no configuration fact at all.
 
 ## Decision log
 
@@ -129,6 +156,36 @@ workaround.
   evidence it cannot prove. Rationale: a false `online` finding would push a
   reading of "fix the test" onto code that is already safe; `indeterminate`
   preserves the question without asserting it. Date/Author: 2026-10-25.
+- Decision: a selected nextest profile with setup scripts is itself an entry
+  point, reported at the line of its `[[profile.<name>.scripts]]` table, or of
+  its `[profile.<name>]` heading when there is no table. Rationale: the
+  prefetch a profile needs is the prefetch its setup scripts need, and the
+  policy has to be able to name the file and line a reader should fix; a
+  profile selected with `--profile` but configured only through `[profile]` is
+  still a place the checkout runs tests. Date/Author: 2026-10-26.
+- Decision: only the `all()` filter is treated as configuration the reader can
+  reason about; a profile whose setup scripts are scoped to a filter the reader
+  cannot prove selects the running test is `uncertain`. Rationale: `all()` is
+  the one filter every selected test satisfies, so ordering it before the test
+  command is provably a prefetch; anything narrower would let the reader claim
+  an ordering for tests the scripts never run for. Date/Author: 2026-10-26.
+- Decision: the shared walker in `dependency_family_discovery.py` grew a
+  `walk_files(checkout, problems, *, label=None)` primitive, and `nested_files`
+  became a filter over it. Rationale: the offline reader walks every file in
+  the checkout rather than hunting one name, and a second directory walker
+  would have had to re-derive the skip list and the unreadable directory
+  contract. `label` keeps the existing problem sentence unchanged for existing
+  callers. Date/Author: 2026-10-26.
+- Decision: `nested_cargo_offline_envelope.py` ignores its parameters rather
+  than passing them to a reader. Rationale: exemptions, severity and the
+  verdict belong to the policy, which already receives the whole manifest; a
+  builder that read the exemptions could disagree with the policy about which
+  facts exist. Date/Author: 2026-10-26.
+- Decision: `tests/unit/test_envelope_selection.py` gains its
+  `nested-cargo-offline-tests` rows in Task 3, not here. Rationale:
+  `rule_package_dir` raises `OperationalRuleError` when the canon package has no
+  `policy/` directory, so naming the package before Task 3 creates it fails
+  the suite. Date/Author: 2026-10-26.
 
 ## Outcomes & retrospective
 
@@ -204,7 +261,7 @@ Obligation `EP-SPAWN-1`: a spawn is `offline` only with proven offline
 evidence; any indeterminate argument or environment source without it is
 `unresolved`; a literal clean spawn is `online`.
 
-- Method: parameterized unit tests over hand-written Rust fixtures, plus
+- Method: parameterized unit tests over handwritten Rust fixtures, plus
   corpus tests over real whitaker and theoremc checkouts.
 - Rationale: the reader is a text-level approximation whose risky direction is
   false `online`; the partition covers each evidence form and each uncertainty
@@ -224,10 +281,31 @@ Obligation `EP-ENTRY-1`: `&&` and fail-fast sequencing prove prefetch order;
 loader; unresolved expansion, `.ONESHELL`, and recursive Make stay uncertain.
 
 - Method: parameterized unit tests for shell lexing, Make parsing, nextest
-  setup scripts, and workflow order.
+  setup scripts, and workflow order, plus a replay over the whitaker and
+  theoremc checkouts.
 - Artefact: `tests/unit/test_nested_cargo_entry_points.py`.
+- Evidence: 52 tests green. Whitaker yields three facts — `uncertain` for the
+  `test` target (its recipe names `$(if …)`, which the expander declines to
+  evaluate), `absent` for the `.config/nextest.toml` `default` profile on line
+  6, and `uncertain` for the `windows-compat` workflow job. Theoremc yields one
+  fact, `absent` for its `test` target on line 27. Both checkouts produce no
+  problems.
 - Non-vacuity: a `cargo test; cargo fetch --locked` case must stay uncertain,
-  which fails if `;` were treated as ordering.
+  which fails if `;` were treated as ordering. The whitaker replay is the
+  negative control for continuation folding: without it that same target reports
+  `uncertain` for a reason ("the test command is unreadable") that is false,
+  rather than for the reason the recipe actually gives.
+
+Obligation `EP-ENVELOPE-1`: the envelope carries schema version, kind, the
+origin slug or `null`, and every fact list from both readers, and never drops a
+reader's problem.
+
+- Method: unit tests over temporary checkouts.
+- Artefact: `tests/unit/test_nested_cargo_offline_envelope.py` (6 tests).
+- Evidence: green; an unparsable Makefile survives as a problem and produces
+  no entry point, and supplied parameters change nothing.
+- Non-vacuity: the four-list test fails if any reader's output is dropped, and
+  the problem test fails if a reader swallows its failure.
 
 Obligation `EP-POLICY-1`: the policy emits NC-007 for `online` spawns and
 NC-008 for absent entry-point prefetch only when spawn or trybuild evidence
