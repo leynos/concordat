@@ -334,19 +334,46 @@ def test_an_absolute_path_attribute_is_refused(tmp_path: pathlib.Path) -> None:
 
 
 def test_a_climbing_path_attribute_is_refused(tmp_path: pathlib.Path) -> None:
-    """`..` would let a module declaration read any file the process can."""
+    """`..` above the root would let a declaration read any file the process can."""
     outside = tmp_path.parent / "outside_climb.rs"
     outside.write_text(
         'fn run() {\n    Command::new("cargo").arg("build");\n}\n', encoding="utf-8"
     )
     put(
         tmp_path,
-        "src/lib.rs",
+        "lib.rs",
         '#[cfg(test)]\n#[path = "../outside_climb.rs"]\nmod tests;\n',
     )
     problems: list[str] = []
     assert evidence(tmp_path, problems).spawns == []
     assert any("climbs out of the checkout" in problem for problem in problems)
+
+
+def test_a_path_attribute_that_steps_back_inside_is_read(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Rust resolves `..` against the declaring file, so a step inside is legal.
+
+    whitaker declares `#[path = "../tests/behaviour.rs"]` from
+    `crates/x/src/driver/mod.rs`, which names `crates/x/src/tests/behaviour.rs`.
+    Refusing every `..` before folding it would leave that file unread and
+    report a problem about a declaration that resolves perfectly well.
+    """
+    put(
+        tmp_path,
+        "src/driver/mod.rs",
+        '#[cfg(test)]\n#[path = "../tests/behaviour.rs"]\nmod behaviour;\n',
+    )
+    put(
+        tmp_path,
+        "src/tests/behaviour.rs",
+        'fn run() {\n    Command::new("cargo").arg("build");\n}\n',
+    )
+    problems: list[str] = []
+    assert [
+        (fact["path"], fact["state"]) for fact in evidence(tmp_path, problems).spawns
+    ] == [("src/tests/behaviour.rs", "online")]
+    assert problems == []
 
 
 def test_a_path_attribute_that_symlinks_outside_is_refused(

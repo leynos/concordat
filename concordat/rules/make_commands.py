@@ -11,13 +11,14 @@ from __future__ import annotations
 import re
 import typing as typ
 
-from .interrogate_invocation import lex_segments
+from .interrogate_invocation import ENV_VALUE_OPTIONS, lex_segments
 from .makefile_expansion import UNRESOLVED_MARK
 from .rust_source import scan_balanced
 
 _ASSIGNMENT: typ.Final = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
 # Wrappers that run the next word as a command without changing which tool it is.
-_WRAPPERS: typ.Final = frozenset({"env", "time", "nice", "command", "exec"})
+# `env` is not one of these: its options take values, so it is walked separately.
+_WRAPPERS: typ.Final = frozenset({"time", "nice", "command", "exec"})
 
 
 def blank_references(text: str) -> str:
@@ -50,12 +51,45 @@ def blank_references(text: str) -> str:
     return "".join(out)
 
 
+def _skip_env(words: list[str], index: int) -> int:
+    """Return the index past an `env` command's options and assignments.
+
+    `env -u CARGO_NET_OFFLINE cargo fetch --locked` runs cargo, not `-u`.
+    Reading the option as the command word hides the fetch, which is exactly
+    the mitigation this audit exists to reward. Options that take a value are
+    skipped with it, and `--` ends the option list.
+
+    Returns
+    -------
+    int
+        The index of the word after the `env` prefix.
+    """
+    if index >= len(words) or words[index].lstrip("@-+") != "env":
+        return index
+    index += 1
+    while index < len(words):
+        word = words[index]
+        if word == "--":
+            return index + 1
+        if word.startswith("-"):
+            index += 2 if word in ENV_VALUE_OPTIONS else 1
+        elif _ASSIGNMENT.match(word):
+            index += 1
+        else:
+            break
+    return index
+
+
 def command_start(words: list[str]) -> int:
     """Return the index of the command word after assignments and wrappers."""
     index = 0
     while index < len(words):
         word = words[index].lstrip("@-+")
-        if _ASSIGNMENT.match(word) or word in _WRAPPERS:
+        if _ASSIGNMENT.match(word):
+            index += 1
+        elif word == "env":
+            index = _skip_env(words, index)
+        elif word in _WRAPPERS:
             index += 1
         elif word == "rustup" and words[index + 1 : index + 2] == ["run"]:
             index += 3

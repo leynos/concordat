@@ -115,6 +115,13 @@ workaround.
       workflow shell resolution with `runs-on` fallback, `#[path]` containment,
       envelope test isolation, and the ExecPlan corrections. Tests: 120 in the
       two reader files, all green.
+- [x] (2026-10-26) Task 2 reader follow-up: `#[path]` folding (repairs eight
+      spurious problems on the fixed whitaker checkout), `env` option
+      transparency, `cargo-nextest`/`ntr` recognition, and the `uncertain`
+      fallback for an unreadable `test` target. 11 new tests, red first. The
+      after-fix whitaker replay moves from a false `absent` to `uncertain` on
+      both the Makefile and its delegating workflow step; the concordat tree
+      still yields no facts. 173 reader and envelope tests green.
 - [ ] Task 3: canon package, policy, fixtures, Rego tests, unit and BDD tests,
       manifest SHA-256, documentation, and the `test_envelope_selection.py`
       entries deferred from Task 2.
@@ -177,6 +184,33 @@ workaround.
   and that stronger claim was overwritten with an empty attribute range list.
   Impact: `collect_rust_evidence` now preserves an existing whole-file scope
   when it rescans, which a containment test exposed.
+- Observation: `_refused_candidate` refused every `#[path]` declaration that
+  contained `..`, but Rust resolves the path against the declaring file's
+  directory, so `src/driver/../tests/behaviour.rs` stays inside the checkout.
+  Impact: the fixed whitaker checkout produced eight spurious problems. The
+  resolver now folds `.`/`..` before deciding, and only a path that climbs
+  above the root (or is absolute, missing, or resolves through a symlink out of
+  the checkout) is refused. A regression test declares from a root file, where
+  the escape is genuine, so it fails without the fold.
+- Observation: the after-fix whitaker checkout reported `absent` for its
+  `windows-compat` workflow step, which would have been a false NC-008 against
+  the repository that made the prefetch fix. Evidence: the `test` recipe's
+  runner is preceded by an unresolved `$(if ...)`, so no test command was
+  recognized and `_makefile_entry` returned no fact; `_inherited_state` then
+  read that missing fact as `absent`. Impact: an unreadable `test` target now
+  yields an `uncertain` fact with the reason, while a target that visibly runs
+  no test (`test:\n\tcargo build`) still yields none. The after-fix replay is
+  now `uncertain` at the Makefile and at the workflow step, and no `absent`.
+- Observation: two further blind spots made realistic recipes unreadable even
+  where the expansion settled. `command_start` treated `env` as a bare wrapper,
+  so `env -u CARGO_NET_OFFLINE cargo fetch --locked` — the exact mitigation
+  whitaker added — read `-u` as the command word; and `_classify` matched only
+  the word `cargo`, so a recipe binding `CARGO_NEXTEST ?= cargo-nextest` and
+  running `$(CARGO_NEXTEST) nextest run` named no test. Impact: `command_start`
+  now skips `env` options, their values, assignments and `--`, and the
+  classifier accepts the standalone `cargo-nextest` binary with its
+  `nextest run` / `ntr` subcommands. Probes against the installed binaries
+  confirmed both spellings.
 
 ## Decision log
 
@@ -224,6 +258,26 @@ workaround.
   `rule_package_dir` raises `OperationalRuleError` when the canon package has no
   `policy/` directory, so naming the package before Task 3 creates it fails
   the suite. Date/Author: 2026-10-26.
+- Decision: a `test` target that exists but whose command cannot be read is
+  itself an `uncertain` entry point, rather than no entry point. Rationale: no
+  entry point is indistinguishable from "this target runs no tests", and a
+  workflow step delegating to it inherits `absent`. That is a positive claim of
+  a cold cache from evidence the reader never saw. The distinction is kept
+  narrow: only a recursive `make`, an unreadable command, or `.ONESHELL`
+  produces the fallback, so `test:\n\tcargo build` still reports nothing.
+  Date/Author: 2026-10-26.
+- Decision: `env` is walked for its options rather than treated as a plain
+  wrapper, and the standalone `cargo-nextest` binary is recognized as a test
+  command. Rationale: both spellings appear in the corpus and both were being
+  misreported — the first hid the prefetch whitaker added, the second hid the
+  test itself. Recognizing them is a reader fix, not a policy change: the fact
+  set gets truer, and the policy's rules are unchanged. Date/Author: 2026-10-26.
+- Decision: a nextest profile selected by a Makefile `test` target whose state
+  is `uncertain` still yields no nextest fact, because the profile name was
+  never read. Rationale: guessing which profile a hidden command selects would
+  invent a fact; the Makefile fact already says the entry point is uncertain,
+  which is the honest report. This is recorded as a residual limit, not a
+  defect to fix in Task 3. Date/Author: 2026-10-26.
 
 ## Outcomes & retrospective
 
@@ -322,17 +376,23 @@ loader; unresolved expansion, `.ONESHELL`, and recursive Make stay uncertain.
   setup scripts, and workflow order, plus a replay over the whitaker and
   theoremc checkouts.
 - Artefact: `tests/unit/test_nested_cargo_entry_points.py`.
-- Evidence: 52 tests green. Whitaker yields three facts — `uncertain` for the
-  `test` target (its recipe names `$(if …)`, which the expander declines to
-  evaluate), `absent` for the `.config/nextest.toml` `default` profile on line
-  6, and `uncertain` for the `windows-compat` workflow job. Theoremc yields one
-  fact, `absent` for its `test` target on line 27. Both checkouts produce no
-  problems.
+- Evidence: 81 tests green. Whitaker **before** #518 yields three facts —
+  `uncertain` for the `test` target (its recipe names `$(if …)`, which the
+  expander declines to evaluate), `absent` for the `.config/nextest.toml`
+  `default` profile on line 6, and `uncertain` for the `windows-compat`
+  workflow job. Whitaker **after** #518 yields two — `uncertain` for the `test`
+  target at line 207 and `uncertain` for the `windows-compat` step at line 631
+  — because the fetched-and-then-hidden shape cannot be proven from text alone.
+  Theoremc yields one fact, `absent` for its `test` target on line 27. Every
+  checkout produces no problems.
 - Non-vacuity: a `cargo test; cargo fetch --locked` case must stay uncertain,
   which fails if `;` were treated as ordering. The whitaker replay is the
   negative control for continuation folding: without it that same target reports
   `uncertain` for a reason ("the test command is unreadable") that is false,
-  rather than for the reason the recipe actually gives.
+  rather than for the reason the recipe actually gives. The after-fix replay is
+  the negative control for the unreadable-target fallback: reporting no fact
+  there lets the workflow step inherit `absent` and manufactures an NC-008
+  against a repository that fixed the problem.
 
 Obligation `EP-ENVELOPE-1`: the envelope carries schema version, kind, the
 origin slug or `null`, and every fact list from both readers, and never drops a

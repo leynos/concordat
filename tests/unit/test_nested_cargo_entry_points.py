@@ -322,6 +322,77 @@ def test_a_continued_recipe_line_is_read_after_its_continuation(
     assert makefile_state(tmp_path) == [("test", "absent")]
 
 
+@pytest.mark.parametrize(
+    "prefix",
+    [
+        "env -u CARGO_NET_OFFLINE",
+        "env --unset CARGO_NET_OFFLINE",
+        "env -i",
+        "env -C .",
+        "env --",
+    ],
+)
+def test_an_env_prefixed_locked_fetch_is_proof(
+    prefix: str, tmp_path: pathlib.Path
+) -> None:
+    """`env` options do not decide which tool runs; the word after them does.
+
+    whitaker's `fetch` target runs `env -u CARGO_NET_OFFLINE $(CARGO) fetch
+    --locked`, which is the mitigation this check exists to reward. Reading the
+    option as the command word hides the fetch and reports a cold cache.
+    """
+    put(
+        tmp_path,
+        MAKEFILE,
+        f"test:\n\t{prefix} cargo fetch --locked\n\tcargo test\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "before")]
+
+
+def test_an_env_prefixed_test_command_is_still_a_test(tmp_path: pathlib.Path) -> None:
+    """The same transparency applies to the test command itself."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        "test:\n\tenv -u CARGO_NET_OFFLINE cargo test\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "absent")]
+
+
+def test_a_cargo_nextest_binary_selects_the_nextest_profile(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`cargo-nextest nextest run` is `cargo nextest run` under another name.
+
+    whitaker binds `TEST_RUNNER ?= $(CARGO_NEXTEST) nextest run` and its
+    `CARGO_NEXTEST` is the standalone binary, so the profile's setup scripts
+    are the only evidence that could prove the cache warm.
+    """
+    put(
+        tmp_path,
+        NEXTEST_CONFIG,
+        '[[profile.default.scripts]]\nfilter = "all()"\nsetup = "warm"\n'
+        '[scripts.setup.warm]\ncommand = "cargo fetch --locked"\n',
+    )
+    put(tmp_path, MAKEFILE, "test:\n\tcargo-nextest nextest run\n")
+    assert makefile_state(tmp_path) == [("test", "before")]
+
+
+@pytest.mark.parametrize("command", ["cargo ntr", "cargo-nextest ntr"])
+def test_the_ntr_shortcut_is_the_same_test_command(
+    command: str, tmp_path: pathlib.Path
+) -> None:
+    """`ntr` is nextest's own shortcut for `nextest run`."""
+    put(
+        tmp_path,
+        NEXTEST_CONFIG,
+        '[[profile.ci.scripts]]\nfilter = "all()"\nsetup = "warm"\n'
+        '[scripts.setup.warm]\ncommand = "cargo fetch --locked"\n',
+    )
+    put(tmp_path, MAKEFILE, f"test:\n\t{command} --profile ci\n")
+    assert makefile_state(tmp_path) == [("test", "before")]
+
+
 def test_a_recursive_make_prerequisite_is_uncertain(tmp_path: pathlib.Path) -> None:
     """`$(MAKE) fetch` may or may not run the prefetch before the recipe."""
     put(
@@ -354,6 +425,43 @@ def test_a_test_target_that_runs_no_test_command_reports_nothing(
     """A `test` target that only builds is not an entry point for tests."""
     put(tmp_path, MAKEFILE, "test:\n\tcargo build\n")
     assert makefile_state(tmp_path) == []
+
+
+def test_an_unreadable_test_command_is_uncertain_not_absent(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A `test` target whose command cannot be read is not a target with no test.
+
+    whitaker's `test` recipe puts an unresolved `$(if ...)` before its runner,
+    so the command word is unknown. Reporting no entry point lets a workflow
+    step that delegates to it inherit `absent`, which would be a false NC-008
+    against the very repository that added the prefetch. The honest answer is
+    that the target exists and its ordering cannot be read.
+    """
+    put(
+        tmp_path,
+        MAKEFILE,
+        "test:\n\t$(DYLINT_DRIVER_PATH_UNSET) $(TEST_RUNNER) --locked\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "uncertain")]
+
+
+def test_an_unreadable_test_target_names_its_reason(tmp_path: pathlib.Path) -> None:
+    """The fact carries the sentence a reviewer needs, not just the state."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        "test:\n\tset -eu; \\\n"
+        "\t$(DYLINT_DRIVER_PATH_UNSET) RUSTFLAGS=$(RUST_FLAGS) $(TEST_RUNNER); \\\n"
+        "\t$(MAKE) workflow-test\n",
+    )
+    problems: list[str] = []
+    facts = collect_entry_points(tmp_path, problems)
+    makefile = [fact for fact in facts if fact["kind"] == "makefile"]
+    assert [(fact["name"], fact["state"]) for fact in makefile] == [
+        ("test", "uncertain")
+    ]
+    assert makefile[0]["reason"]
 
 
 # --- nextest -----------------------------------------------------------------

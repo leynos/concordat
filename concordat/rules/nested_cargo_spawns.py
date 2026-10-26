@@ -309,18 +309,52 @@ def _module_files(
     return [base / f"{name}.rs", base / name / "mod.rs"]
 
 
+def _folded(candidate: pathlib.PurePosixPath) -> pathlib.PurePosixPath | None:
+    """Return *candidate* with `.` and `..` folded out, or `None` if it escapes.
+
+    Rust resolves a `#[path]` value against the declaring file's directory, so
+    a step back that stays inside the checkout is ordinary: whitaker declares
+    `#[path = "../tests/behaviour.rs"]` from `src/driver/mod.rs`, which names
+    `src/tests/behaviour.rs`. Folding first keeps that path readable and makes
+    the fact it produces name the file once, in canonical form, rather than
+    carrying `src/driver/../tests/...` into a report.
+
+    Folding is lexical, exactly as the module system treats it, so a symbolic
+    link is still resolved separately by the caller.
+
+    Returns
+    -------
+    pathlib.PurePosixPath | None
+        The folded path, or ``None`` when it climbs above the checkout root.
+    """
+    parts: list[str] = []
+    for part in candidate.parts:
+        if part in {"", "."}:
+            continue
+        if part == "..":
+            if not parts:
+                return None
+            parts.pop()
+            continue
+        parts.append(part)
+    return pathlib.PurePosixPath(*parts) if parts else pathlib.PurePosixPath()
+
+
 def _refused_candidate(
     checkout: pathlib.Path, root: pathlib.Path, candidate: pathlib.PurePosixPath
 ) -> str | None:
     """Return why a declared module path falls outside the checkout, if it does.
 
     A `#[path = "..."]` value is checkout-controlled text. An absolute value
-    replaces the base path entirely, a `..` component climbs out of it, and a
-    symbolic link can point anywhere. Reading such a file would carry its
-    spawn facts and its path into the envelope, so the candidate is refused
-    before the probe follows it. The sibling readers already refuse inputs
-    outside the checkout; a module declaration must not be the way around
-    them.
+    replaces the base path entirely, and a symbolic link can point anywhere.
+    Reading such a file would carry its spawn facts and its path into the
+    envelope, so the candidate is refused before the probe follows it. The
+    sibling readers already refuse inputs outside the checkout; a module
+    declaration must not be the way around them.
+
+    The caller folds `..` out first, since Rust resolves the value against the
+    declaring file and an intermediate step back can legitimately land inside
+    the checkout. What reaches here is therefore already normalised.
 
     Returns
     -------
@@ -329,8 +363,6 @@ def _refused_candidate(
     """
     if candidate.is_absolute():
         return "names an absolute path, which the checkout cannot supply"
-    if ".." in candidate.parts:
-        return "climbs out of the checkout with `..`"
     path = checkout / candidate.as_posix()
     if not probe_file(path).present:
         # Absence is the probe's answer, not a refusal; the caller reports it.
@@ -642,12 +674,28 @@ def _resolve_declarations(
     discovered: list[pathlib.PurePosixPath] = []
     for declaration in declarations:
         present: list[pathlib.PurePosixPath] = []
-        for candidate in _module_files(
+        for declared in _module_files(
             source.relative,
             declaration.chain,
             declaration.name,
             declaration.path,
         ):
+            named = declared.as_posix()
+            if declared.is_absolute():
+                problems.append(
+                    f"{source.relative.as_posix()}: a #[cfg(test)] mod "
+                    f"{declaration.name}; declaration names an absolute path, "
+                    f"which the checkout cannot supply ({named})"
+                )
+                continue
+            candidate = _folded(declared)
+            if candidate is None:
+                problems.append(
+                    f"{source.relative.as_posix()}: a #[cfg(test)] mod "
+                    f"{declaration.name}; declaration climbs out of the "
+                    f"checkout with `..` ({named})"
+                )
+                continue
             refused = _refused_candidate(checkout, root, candidate)
             if refused is not None:
                 problems.append(

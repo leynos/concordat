@@ -58,6 +58,11 @@ _SHELL_KEYWORDS: typ.Final = frozenset({
 
 _PROFILE_OPTIONS: typ.Final = frozenset({"--profile", "-P"})
 _RECURSIVE_MAKE: typ.Final = re.compile(r"\$[({]MAKE[)}]")
+# nextest's standalone binary accepts the same `nextest run` and `ntr`
+# subcommands as the cargo plugin, so `$(CARGO_NEXTEST) nextest run` is a test
+# command in a recipe whose `CARGO_NEXTEST` is `cargo-nextest`.
+_NEXTEST_BINARIES: typ.Final = frozenset({"cargo-nextest"})
+_NEXTEST_SUBCOMMANDS: typ.Final = frozenset({"nextest", "ntr"})
 # A backslash-newline is removed by the shell before it reads the command. The
 # Makefile loader keeps it, so every command after a `;`-continued line begins
 # with one, and a leading assignment or tool would otherwise be misread.
@@ -316,6 +321,8 @@ def _classify(text: str) -> CommandMeaning:
     name = command.rsplit("/", 1)[-1]
     if name == "cargo":
         return _cargo(words[1:])
+    if name in _NEXTEST_BINARIES:
+        return _nextest_binary(words[1:])
     if name == "make":
         return _make(command, words[1:])
     if _RECURSIVE_MAKE.search(text):
@@ -342,8 +349,44 @@ def _cargo(arguments: list[str]) -> CommandMeaning:
         return CommandMeaning(is_prefetch="--locked" in rest)
     if subcommand == "test":
         return CommandMeaning(test="test")
-    if subcommand == "nextest" and rest[:1] == ["run"]:
-        return CommandMeaning(test="nextest", profile=_profile(rest[1:]))
+    if subcommand in _NEXTEST_SUBCOMMANDS:
+        return _nextest(subcommand, rest)
+    return CommandMeaning()
+
+
+def _nextest(subcommand: str, arguments: list[str]) -> CommandMeaning:
+    """Classify a nextest subcommand reached through cargo.
+
+    `cargo nextest run` and the `cargo ntr` shortcut are the same test
+    command; anything else under those names is not a test run.
+
+    Returns
+    -------
+    CommandMeaning
+        The test kind and selected profile, or an empty meaning.
+    """
+    if subcommand == "nextest" and arguments[:1] == ["run"]:
+        return CommandMeaning(test="nextest", profile=_profile(arguments[1:]))
+    if subcommand == "ntr":
+        return CommandMeaning(test="nextest", profile=_profile(arguments))
+    return CommandMeaning()
+
+
+def _nextest_binary(arguments: list[str]) -> CommandMeaning:
+    """Classify a standalone `cargo-nextest` invocation.
+
+    The binary accepts the same `nextest run` and `ntr` subcommands as the
+    cargo plugin, so a recipe that binds `CARGO_NEXTEST ?= cargo-nextest` and
+    runs `$(CARGO_NEXTEST) nextest run` selects a profile exactly as
+    `cargo nextest run` does.
+
+    Returns
+    -------
+    CommandMeaning
+        The test kind and selected profile, or an empty meaning.
+    """
+    if arguments[:1]:
+        return _nextest(arguments[0], arguments[1:])
     return CommandMeaning()
 
 

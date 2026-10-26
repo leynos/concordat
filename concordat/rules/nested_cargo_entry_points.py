@@ -91,7 +91,14 @@ class EntryPointFact(typ.TypedDict):
 
 @dataclasses.dataclass(slots=True)
 class _TargetScan:
-    """What the `test` target says, accumulated line by line."""
+    """What the `test` target says, accumulated line by line.
+
+    ``uncertain_reason`` explains why a found test command's ordering is not
+    proven. ``hidden_reason`` explains why the target may hold a test command
+    the reader could not see at all, which is a different claim: a target that
+    only builds is not an entry point, but a target whose command is unknown
+    must not be reported as one that runs no tests.
+    """
 
     is_found: bool = False
     test: str | None = None
@@ -100,6 +107,7 @@ class _TargetScan:
     proven: bool = False
     proven_reason: str = ""
     uncertain_reason: str = ""
+    hidden_reason: str = ""
 
 
 def _rules_by_target(report: MakeutilReport) -> dict[str, list[MakeRule]]:
@@ -210,8 +218,10 @@ def _inspect_line(
             return True
         if command.meaning.is_recursive_make:
             scan.uncertain_reason = "the recipe delegates to another make target"
+            scan.hidden_reason = scan.hidden_reason or scan.uncertain_reason
         elif command.meaning.is_unreadable:
             scan.uncertain_reason = "a recipe command could not be read"
+            scan.hidden_reason = scan.hidden_reason or scan.uncertain_reason
     if (
         sequencing_holds
         and not recipe["ignore_errors"]
@@ -251,6 +261,25 @@ def _record_test(
         scan.uncertain_reason = "the test command names an unresolved variable"
 
 
+def _first_recipe_line(index: dict[str, list[MakeRule]]) -> int:
+    """Return the first recipe line of `test`, or the rule's own line.
+
+    A recipe that could not be read has no test command to point at, so the
+    first line of the recipe is where a reviewer would start.
+
+    Returns
+    -------
+    int
+        The 1-based line number.
+    """
+    for rule in index[TEST_TARGET]:
+        recipes = rule["recipes"]
+        if recipes:
+            return recipes[0]["location"]["start_line"]
+        return rule["location"]["start_line"]
+    return 1
+
+
 @dataclasses.dataclass(frozen=True, slots=True)
 class _MakefileEntry:
     """The Makefile's `test` entry point, and the nextest profiles it selects."""
@@ -278,7 +307,20 @@ def _makefile_entry(
         return _MakefileEntry(None, [])
     scan = _scan_target(index, values, sequencing_holds=ONESHELL_TARGET not in index)
     if not scan.is_found:
-        return _MakefileEntry(None, [])
+        if not scan.hidden_reason:
+            return _MakefileEntry(None, [])
+        # The target exists but its test command could not be read. Dropping
+        # the entry point would let a workflow step that delegates to it
+        # inherit `absent`, which claims a cold cache the reader cannot see.
+        fact = EntryPointFact(
+            kind="makefile",
+            path=MAKEFILE,
+            line=_first_recipe_line(index),
+            name=TEST_TARGET,
+            state=UNCERTAIN,
+            reason=scan.hidden_reason,
+        )
+        return _MakefileEntry(fact, [])
     profiles: list[str] = []
     state, reason = _makefile_state(scan, config, profiles)
     fact = EntryPointFact(
