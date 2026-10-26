@@ -110,6 +110,11 @@ workaround.
       `make markdownlint` and `make nixie` pass; `make test` reports only the
       six `makeutil` fixture-drift failures already recorded as pre-existing.
       Committed as 8200b23.
+- [x] (2026-10-26) Task 2 remediation (CodeRabbit round 1): redirection-aware
+      connector split, nextest name resolution through the definition table,
+      workflow shell resolution with `runs-on` fallback, `#[path]` containment,
+      envelope test isolation, and the ExecPlan corrections. Tests: 120 in the
+      two reader files, all green.
 - [ ] Task 3: canon package, policy, fixtures, Rego tests, unit and BDD tests,
       manifest SHA-256, documentation, and the `test_envelope_selection.py`
       entries deferred from Task 2.
@@ -145,6 +150,33 @@ workaround.
   the reader emitted a nextest fact pointing at line 1 of that non-existent
   file. Impact: the nextest reader now distinguishes "no file" from "a file it
   cannot read", and an absent file yields no configuration fact at all.
+- Observation: `split_commands` read `2>&1` as a background `&`, splitting one
+  command into `cargo fetch --locked 2>` and `1`. Impact: the splitter now
+  recognizes the redirection forms `2>&1`, `>&2`, `<&0`, `&>file` and
+  `&>>file`, and the regression is pinned by a parametrized test.
+- Observation: nextest separates a `[[profile.<name>.scripts]]` rule from the
+  command it names; `setup` holds a name, and the command lives in
+  `[scripts.setup.<name>].command`. Probe against `cargo-nextest 0.9.133`
+  confirmed that a rule without `filter` or `platform`, or a `setup` name
+  nothing defines, is a configuration nextest refuses. Impact: the reader
+  resolves names through the definition table and reports `uncertain` for a
+  name it cannot resolve, rather than reading the name as a command and calling
+  a correct configuration cold.
+- Observation: a multi-line `run` block only stops at a failed line under a
+  fail-fast shell. GitHub's defaults are `bash -e {0}` on Linux and macOS and
+  `pwsh` on Windows, and a custom template such as `bash {0}` does not stop.
+  Impact: the entry-point reader resolves the step, job and workflow `shell`
+  declarations and the `runs-on` default, and treats a line break as proof only
+  when that shell fails fast.
+- Observation: the first version of `_default_shell` read `defaults.run.shell`
+  from the wrong level, so every job and workflow default was ignored and the
+  runner default always won. Impact: caught by the precedence tests written for
+  the shell work; the helper now reads the outer block's `defaults` key.
+- Observation: a file reached by a `#[path]` declaration was marked whole-file
+  test scope, but if it was also in the initial walk it was scanned again later
+  and that stronger claim was overwritten with an empty attribute range list.
+  Impact: `collect_rust_evidence` now preserves an existing whole-file scope
+  when it rescans, which a containment test exposed.
 
 ## Decision log
 
@@ -167,11 +199,14 @@ workaround.
   profile selected with `--profile` but configured only through `[profile]` is
   still a place the checkout runs tests. Date/Author: 2026-10-26.
 - Decision: only the `all()` filter is treated as configuration the reader can
-  reason about; a profile whose setup scripts are scoped to a filter the reader
-  cannot prove selects the running test is `uncertain`. Rationale: `all()` is
-  the one filter every selected test satisfies, so ordering it before the test
-  command is provably a prefetch; anything narrower would let the reader claim
-  an ordering for tests the scripts never run for. Date/Author: 2026-10-26.
+  reason about; a profile whose setup scripts are all narrower than `all()` is
+  `absent`, not `uncertain`. Rationale: `all()` is the one filter every
+  selected test satisfies, so ordering it before the test command is provably a
+  prefetch. A narrower rule still leaves the tests outside it with a cold
+  cache, and that is what `absent` means; calling it `uncertain` would hide a
+  missing prefetch behind a reading that never becomes a finding. The reader
+  reserves `uncertain` for a configuration it cannot read at all. Date/Author:
+  2026-10-26, revised after review.
 - Decision: the shared walker in `dependency_family_discovery.py` grew a
   `walk_files(checkout, problems, *, label=None)` primitive, and `nested_files`
   became a filter over it. Rationale: the offline reader walks every file in
@@ -397,13 +432,27 @@ To be filled as evidence is captured.
 - `concordat/rules/runner.py`: `WARNING_SEVERITY`, `RuleRunResult.blocking`,
   revised `RuleRunResult.exit_code`, severity column in `render_table`.
 - `concordat/rules/nested_cargo_spawns.py`:
-  `collect_spawns(checkout, problems) -> list[SpawnFact]`.
+  `collect_rust_evidence(checkout, manifests, problems) -> RustEvidence`,
+  `collect_trybuild_manifests(checkout, manifests, fixtures)` and
+  `fixture_directories(checkout, manifests)`.
 - `concordat/rules/nested_cargo_entry_points.py`:
-  `collect_entry_points(checkout, problems) -> EntryPointEvidence`.
+  `collect_entry_points(checkout, problems) -> list[EntryPointFact]`.
+- `concordat/rules/nested_cargo_nextest.py`:
+  `read_nextest(checkout, problems) -> NextestConfig`, and the
+  `NextestConfig.state(name)` reader that turns a selected profile into
+  `before`, `absent` or `uncertain`.
+- `concordat/rules/nested_cargo_shells.py`:
+  `effective_shell(step, job, workflow, runs_on) -> ShellRule`, which resolves
+  the `shell` a `run` block shares and whether it stops at the first failing
+  line.
+- `concordat/rules/nested_cargo_scripts.py`:
+  `script_commands(text, *, newline_gates)` and
+  `split_commands(text, *, newline_gates)`, which let the caller say whether a
+  line break is proof that the earlier line succeeded.
 - `concordat/rules/nested_cargo_offline_envelope.py`:
   `ENVELOPE_KIND = "policy-input/nested-cargo-offline-tests"`,
   `ENVELOPE_SCHEMA_VERSION = 1`,
-  `build_nested_cargo_offline_envelope(checkout)`.
+  `build_nested_cargo_offline_envelope(checkout, parameters=None)`.
 - `concordat/rules/nested_cargo_registry.py`: registers package
   `nested-cargo-offline-tests` and the new kind.
 

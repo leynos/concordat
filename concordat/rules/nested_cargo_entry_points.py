@@ -22,18 +22,14 @@ fact says `uncertain` rather than guessing either way.
 
 from __future__ import annotations
 
-import collections.abc as cabc
 import dataclasses
 import re
-import tomllib
 import typing as typ
 
 from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
-from .fs_probe import probe_file
 from .makefile_expansion import (
-    UNRESOLVED_MARK,
     Expansion,
     expand,
     single_assignments,
@@ -44,6 +40,15 @@ from .markdown_envelope import (
     WORKFLOWS_DIRECTORY,
     within_checkout,
 )
+from .nested_cargo_nextest import (
+    ABSENT,
+    BEFORE,
+    DEFAULT_PROFILE,
+    NEXTEST_CONFIG,
+    UNCERTAIN,
+    NextestConfig,
+    read_nextest,
+)
 from .nested_cargo_scripts import (
     TEST_TARGET,
     CommandMeaning,
@@ -52,8 +57,10 @@ from .nested_cargo_scripts import (
     line_fetches,
     script_commands,
 )
+from .nested_cargo_shells import ShellRule, effective_shell
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import pathlib
 
     from .makefile_facts import MakeRecipe, MakeRule, MakeutilReport
@@ -61,15 +68,7 @@ if typ.TYPE_CHECKING:
 OPERATION_READ_WORKFLOW: typ.Final = "read-nested-cargo-workflow"
 
 MAKEFILE: typ.Final = "Makefile"
-NEXTEST_CONFIG: typ.Final = ".config/nextest.toml"
-DEFAULT_PROFILE: typ.Final = "default"
-ALL_FILTER: typ.Final = "all()"
 ONESHELL_TARGET: typ.Final = ".ONESHELL"
-
-# The three states a policy acts on.
-BEFORE: typ.Final = "before"
-ABSENT: typ.Final = "absent"
-UNCERTAIN: typ.Final = "uncertain"
 
 _EXPRESSION: typ.Final = re.compile(r"\$\{\{.*?\}\}", re.DOTALL)
 _YAML = YAML(typ="rt")
@@ -253,147 +252,6 @@ def _record_test(
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
-class _NextestProfile:
-    """One nextest profile: whether its setup scripts fetch, and where it starts."""
-
-    state: str
-    line: int
-
-
-@dataclasses.dataclass(frozen=True, slots=True)
-class _NextestConfig:
-    """The decoded `.config/nextest.toml`, or why it could not be decoded.
-
-    ``is_present`` says a configuration file is there to read. A repository
-    without one has no setup scripts and no profile rows; its nextest runs are
-    still test entry points, but the configuration is not one of them.
-    """
-
-    profiles: dict[str, _NextestProfile]
-    is_readable: bool
-    is_present: bool
-
-    def profile(self, name: str) -> _NextestProfile:
-        """Return what *name* declares, defaulting to an absent prefetch.
-
-        Returns
-        -------
-        _NextestProfile
-            The profile's state and the line its declaration starts on.
-        """
-        return self.profiles.get(name, _NextestProfile(state=ABSENT, line=1))
-
-    def state(self, name: str | None) -> str:
-        """Return the prefetch state of the selected profile.
-
-        No `--profile` flag selects nextest's own `default` profile, so a
-        missing name is an ordinary selection rather than an unknown one. A
-        name the expansion could not settle is the unknown case.
-
-        Returns
-        -------
-        str
-            One of `before`, `absent` or `uncertain`.
-        """
-        if not self.is_readable or (name is not None and UNRESOLVED_MARK in name):
-            return UNCERTAIN
-        return self.profile(name or DEFAULT_PROFILE).state
-
-
-def _setup_fetches(setup: object) -> bool:
-    """Return whether a nextest setup entry runs `cargo fetch --locked`."""
-    commands = [setup] if isinstance(setup, str) else setup
-    if not isinstance(commands, list):
-        return False
-    text = "\n".join(str(command) for command in commands)
-    return any(command.meaning.is_prefetch for command in script_commands(text))
-
-
-def _profile_state(body: cabc.Mapping[str, object]) -> str:
-    """Return whether a profile's setup scripts fetch before every test."""
-    scripts = body.get("scripts")
-    if not isinstance(scripts, list):
-        return ABSENT
-    for entry in scripts:
-        if not isinstance(entry, cabc.Mapping):
-            continue
-        # Only `all()` covers every test in the profile; a narrower filter
-        # leaves the tests outside it with a cold cache.
-        if str(entry.get("filter", "")).strip() != ALL_FILTER:
-            continue
-        if _setup_fetches(entry.get("setup")):
-            return BEFORE
-    return ABSENT
-
-
-def _script_line(text: str, profile: str) -> int:
-    """Return the 1-based line a profile's setup scripts are declared on.
-
-    The `scripts` array table is where a missing setup script would be added,
-    so that line is the one a reviewer needs. A profile that declares none
-    still appears as `[profile.<name>]`, and that heading is the next best
-    place to look; a profile named nowhere points at the file itself.
-
-    Returns
-    -------
-    int
-        The line number, or 1 when the profile is named nowhere.
-    """
-    headings = (f"[[profile.{profile}.scripts]]", f"[profile.{profile}]")
-    for heading in headings:
-        for number, line in enumerate(text.splitlines(), start=1):
-            if line.strip() == heading:
-                return number
-    return 1
-
-
-def _nextest_config(
-    profiles: dict[str, _NextestProfile], *, is_readable: bool, is_present: bool
-) -> _NextestConfig:
-    """Return a nextest configuration with every flag spelled out."""
-    return _NextestConfig(profiles, is_readable=is_readable, is_present=is_present)
-
-
-def _read_nextest(checkout: pathlib.Path, problems: list[str]) -> _NextestConfig:
-    """Decode `.config/nextest.toml`, recording a problem rather than guessing.
-
-    Returns
-    -------
-    _NextestConfig
-        Each profile's setup scripts, and whether the file was there and could
-        be read.
-    """
-    path = checkout / NEXTEST_CONFIG
-    probe = probe_file(path)
-    if probe.read_error is not None:
-        problems.append(f"{NEXTEST_CONFIG}: {probe.read_error}")
-        return _nextest_config({}, is_readable=False, is_present=True)
-    if not probe.present:
-        return _nextest_config({}, is_readable=True, is_present=False)
-    try:
-        text = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as error:
-        problems.append(f"cannot read {NEXTEST_CONFIG}: {error}")
-        return _nextest_config({}, is_readable=False, is_present=True)
-    try:
-        parsed: object = tomllib.loads(text)
-    except tomllib.TOMLDecodeError as error:
-        problems.append(f"cannot decode {NEXTEST_CONFIG}: {error}")
-        return _nextest_config({}, is_readable=False, is_present=True)
-    profiles_table = parsed.get("profile") if isinstance(parsed, dict) else None
-    if not isinstance(profiles_table, dict):
-        return _nextest_config({}, is_readable=True, is_present=True)
-    profiles = {
-        str(name): _NextestProfile(
-            state=_profile_state(body) if isinstance(body, dict) else ABSENT,
-            line=_script_line(text, str(name)),
-        )
-        for name, body in profiles_table.items()
-    }
-    return _nextest_config(profiles, is_readable=True, is_present=True)
-
-
-@dataclasses.dataclass(frozen=True, slots=True)
 class _MakefileEntry:
     """The Makefile's `test` entry point, and the nextest profiles it selects."""
 
@@ -402,7 +260,7 @@ class _MakefileEntry:
 
 
 def _makefile_entry(
-    checkout: pathlib.Path, problems: list[str], config: _NextestConfig
+    checkout: pathlib.Path, problems: list[str], config: NextestConfig
 ) -> _MakefileEntry:
     """Return the Makefile's `test` entry point, if it has a test command."""
     path = checkout / MAKEFILE
@@ -435,7 +293,7 @@ def _makefile_entry(
 
 
 def _makefile_state(
-    scan: _TargetScan, config: _NextestConfig, profiles: list[str]
+    scan: _TargetScan, config: NextestConfig, profiles: list[str]
 ) -> tuple[str, str]:
     """Return the state a `test` scan proves, with the reason a reviewer needs."""
     if scan.test == "nextest":
@@ -497,7 +355,7 @@ def _node_line(node: object, fallback: int) -> int:
 def _inherited_state(
     meaning: CommandMeaning,
     make_entry: EntryPointFact | None,
-    config: _NextestConfig,
+    config: NextestConfig,
     profiles: list[str],
 ) -> str:
     """Return what a delegated `make test` or `cargo nextest run` already proves."""
@@ -509,6 +367,17 @@ def _inherited_state(
     return ABSENT
 
 
+def _prefetch_precedes(commands: list[ScriptCommand], position: int) -> bool:
+    """Report whether a fetch appears before *position*, however it is chained.
+
+    Returns
+    -------
+    bool
+        True when an earlier command of this step is a locked fetch.
+    """
+    return any(command.meaning.is_prefetch for command in commands[:position])
+
+
 def _step_state(
     command: ScriptCommand,
     position: int,
@@ -516,8 +385,9 @@ def _step_state(
     *,
     has_expression: bool,
     gated: bool,
+    shell: ShellRule,
     make_entry: EntryPointFact | None,
-    config: _NextestConfig,
+    config: NextestConfig,
     profiles: list[str],
 ) -> tuple[str, str]:
     """Return the prefetch state and reason for one workflow test command."""
@@ -532,6 +402,10 @@ def _step_state(
         return UNCERTAIN, "part of the step's command is an expression"
     if inherited == UNCERTAIN:
         return UNCERTAIN, "the delegated test target could not be read"
+    if not shell.is_known and _prefetch_precedes(commands, position):
+        # The only thing standing between this fetch and the test is a line
+        # break, and whether that gates depends on a shell nobody named.
+        return UNCERTAIN, "the step's shell cannot be shown to stop at a failed fetch"
     return ABSENT, "no success-gated fetch precedes the test"
 
 
@@ -550,13 +424,14 @@ def _step_scan(
     run: str,
     *,
     gated: bool,
+    shell: ShellRule,
     make_entry: EntryPointFact | None,
-    config: _NextestConfig,
+    config: NextestConfig,
     profiles: list[str],
 ) -> _StepScan:
     """Classify one `run` step, returning its facts and whether it fetches first."""
     visible, has_expression = _visible(run)
-    commands = script_commands(visible)
+    commands = script_commands(visible, newline_gates=shell.fail_fast)
     fetches = line_fetches(commands, is_resolved=True) and not has_expression
     line = _node_line(step, 1)
     for position, command in enumerate(commands):
@@ -568,6 +443,7 @@ def _step_scan(
             commands,
             has_expression=has_expression,
             gated=gated,
+            shell=shell,
             make_entry=make_entry,
             config=config,
             profiles=profiles,
@@ -598,13 +474,14 @@ def _job_entries(
     relative: str,
     parsed: dict[str, object],
     make_entry: EntryPointFact | None,
-    config: _NextestConfig,
+    config: NextestConfig,
     profiles: list[str],
 ) -> list[EntryPointFact]:
     """Return the entry points of every job in one decoded workflow."""
     jobs = _mapping(parsed.get("jobs"))
     if jobs is None:
         return []
+    workflow = parsed.get("defaults")
     facts: list[EntryPointFact] = []
     for job_name, raw_job in jobs.items():
         job = _mapping(raw_job)
@@ -613,6 +490,7 @@ def _job_entries(
         steps = job.get("steps")
         if not isinstance(steps, list):
             continue
+        runs_on = job.get("runs-on")
         fetches = False
         for raw_step in steps:
             step = _mapping(raw_step)
@@ -627,6 +505,7 @@ def _job_entries(
                 step,
                 run,
                 gated=fetches and not _abandons_order(step),
+                shell=effective_shell(step, job, workflow, runs_on),
                 make_entry=make_entry,
                 config=config,
                 profiles=profiles,
@@ -667,7 +546,7 @@ def _workflow_entries(
     root: pathlib.Path,
     problems: list[str],
     make_entry: EntryPointFact | None,
-    config: _NextestConfig,
+    config: NextestConfig,
     profiles: list[str],
 ) -> list[EntryPointFact]:
     """Return one fact per test entry point across every workflow file."""
@@ -690,7 +569,22 @@ def _workflow_entries(
     return facts
 
 
-def _nextest_facts(config: _NextestConfig, profiles: list[str]) -> list[EntryPointFact]:
+def _reason_for(state: str) -> str:
+    """Return the sentence a reviewer needs for one profile's state.
+
+    Returns
+    -------
+    str
+        Why the selected profile does or does not prove the cache warm.
+    """
+    if state == UNCERTAIN:
+        return "the nextest setup scripts could not be read or resolved"
+    if state == BEFORE:
+        return "an all() setup script runs cargo fetch --locked"
+    return "no all() setup script runs cargo fetch --locked"
+
+
+def _nextest_facts(config: NextestConfig, profiles: list[str]) -> list[EntryPointFact]:
     """Return one fact per nextest profile a test command selected.
 
     A repository with no `.config/nextest.toml` has no setup scripts to
@@ -709,10 +603,7 @@ def _nextest_facts(config: _NextestConfig, profiles: list[str]) -> list[EntryPoi
     for profile in profiles:
         state = config.state(profile)
         found = config.profile(profile)
-        reason = {
-            BEFORE: "an all() setup script runs cargo fetch --locked",
-            UNCERTAIN: "the nextest configuration could not be read",
-        }.get(state, "no all() setup script runs cargo fetch --locked")
+        reason = _reason_for(state)
         facts.append(
             EntryPointFact(
                 kind="nextest",
@@ -752,7 +643,7 @@ def collect_entry_points(
         root = checkout.resolve(strict=True)
     except OSError:
         root = checkout
-    config = _read_nextest(checkout, problems)
+    config = read_nextest(checkout, problems)
     entry = _makefile_entry(checkout, problems, config)
     profiles: list[str] = list(entry.profiles)
     workflows = _workflow_entries(

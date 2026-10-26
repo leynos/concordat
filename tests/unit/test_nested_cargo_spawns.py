@@ -317,6 +317,75 @@ def test_an_unresolvable_out_of_line_module_is_a_problem(
     assert any("tests" in problem for problem in problems)
 
 
+def test_an_absolute_path_attribute_is_refused(tmp_path: pathlib.Path) -> None:
+    """A `#[path]` value is checkout-controlled text, not a name to trust."""
+    outside = tmp_path.parent / "outside_absolute.rs"
+    outside.write_text(
+        'fn run() {\n    Command::new("cargo").arg("build");\n}\n', encoding="utf-8"
+    )
+    put(
+        tmp_path,
+        "src/lib.rs",
+        f'#[cfg(test)]\n#[path = "{outside}"]\nmod tests;\n',
+    )
+    problems: list[str] = []
+    assert evidence(tmp_path, problems).spawns == []
+    assert any("absolute path" in problem for problem in problems)
+
+
+def test_a_climbing_path_attribute_is_refused(tmp_path: pathlib.Path) -> None:
+    """`..` would let a module declaration read any file the process can."""
+    outside = tmp_path.parent / "outside_climb.rs"
+    outside.write_text(
+        'fn run() {\n    Command::new("cargo").arg("build");\n}\n', encoding="utf-8"
+    )
+    put(
+        tmp_path,
+        "src/lib.rs",
+        '#[cfg(test)]\n#[path = "../outside_climb.rs"]\nmod tests;\n',
+    )
+    problems: list[str] = []
+    assert evidence(tmp_path, problems).spawns == []
+    assert any("climbs out of the checkout" in problem for problem in problems)
+
+
+def test_a_path_attribute_that_symlinks_outside_is_refused(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A symlink would otherwise carry an outside file's spawns into the report."""
+    outside = tmp_path.parent / "outside_linked.rs"
+    outside.write_text(
+        'fn run() {\n    Command::new("cargo").arg("build");\n}\n', encoding="utf-8"
+    )
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "linked.rs").symlink_to(outside)
+    put(
+        tmp_path,
+        "src/lib.rs",
+        '#[cfg(test)]\n#[path = "linked.rs"]\nmod tests;\n',
+    )
+    problems: list[str] = []
+    assert evidence(tmp_path, problems).spawns == []
+    assert any("outside the checkout" in problem for problem in problems)
+
+
+def test_a_path_attribute_inside_the_checkout_is_read(tmp_path: pathlib.Path) -> None:
+    """Containment refuses outside paths without refusing legitimate ones."""
+    put(
+        tmp_path,
+        "src/lib.rs",
+        '#[cfg(test)]\n#[path = "elsewhere/tests.rs"]\nmod tests;\n',
+    )
+    put(
+        tmp_path,
+        "src/elsewhere/tests.rs",
+        'fn run() {\n    Command::new("cargo").arg("build");\n}\n',
+    )
+    problems: list[str] = []
+    assert [fact["state"] for fact in evidence(tmp_path, problems).spawns] == ["online"]
+    assert problems == []
+
+
 def test_a_test_support_crate_is_test_scope(tmp_path: pathlib.Path) -> None:
     """Test-support crates exist only to serve tests."""
     put(

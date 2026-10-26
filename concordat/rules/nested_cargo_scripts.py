@@ -28,12 +28,15 @@ from .makefile_expansion import UNRESOLVED_MARK
 TEST_TARGET: typ.Final = "test"
 
 # Shell connectors. The two-character forms are matched first so `&&` is not
-# read as two background commands. A newline is a connector too: GitHub's
-# default `run` shell and Make's recipe shells both stop a script at its first
-# failing command, so a later line is reached only when the earlier succeeded.
+# read as two background commands. A newline is a connector too: Make's recipe
+# shells and a fail-fast `run` shell stop a script at its first failing
+# command, so a later line is reached only when the earlier succeeded. Whether
+# a particular shell fails fast is the caller's question, so `newline_gates`
+# says whether a newline counts as proof for the script being read.
 _TWO_CHARACTER_CONNECTORS: typ.Final = frozenset({"&&", "||", "|&"})
 _ONE_CHARACTER_CONNECTORS: typ.Final = frozenset({";", "|", "&"})
 _GATING_CONNECTORS: typ.Final = frozenset({"&&", "\n"})
+_REDIRECTION_OPERATORS: typ.Final = frozenset({">", "<"})
 
 # Shell keywords that introduce a command without being one, so a recipe line
 # such as `if [ x ]; then $(MAKE) fetch; fi` still names `make`.
@@ -74,7 +77,7 @@ class ShellCommand:
     gates_next: bool
 
 
-def split_commands(script: str) -> list[ShellCommand]:
+def split_commands(script: str, *, newline_gates: bool = True) -> list[ShellCommand]:
     """Split a shell script into commands while keeping the connectors.
 
     `lex_segments` drops connectors, so it cannot say whether one command's
@@ -85,6 +88,17 @@ def split_commands(script: str) -> list[ShellCommand]:
     scanned as units, so a connector inside them is text rather than a
     separator. A backslash-newline continues the current command rather than
     ending it.
+
+    Parameters
+    ----------
+    script:
+        The shell text to split.
+    newline_gates:
+        Whether a newline is proof that the next command ran only after this
+        one succeeded. It is for Make's recipe shells and for a fail-fast
+        `run` shell, and it is not for a shell that runs every line whatever
+        happened. Newlines always separate commands; this only says whether
+        they gate.
 
     Returns
     -------
@@ -137,12 +151,45 @@ def split_commands(script: str) -> list[ShellCommand]:
             continue
         connector, end = found
         _append_command(
-            commands, script[start:index], gates_next=connector in _GATING_CONNECTORS
+            commands,
+            script[start:index],
+            gates_next=_gates(connector, newline_gates=newline_gates),
         )
         start = end
         index = end
     _append_command(commands, script[start:], gates_next=False)
     return commands
+
+
+def _gates(connector: str, *, newline_gates: bool) -> bool:
+    """Return whether *connector* proves the next command waited for success.
+
+    Returns
+    -------
+    bool
+        True for `&&`, and for a newline only when the shell being read stops
+        at the first failing line.
+    """
+    if connector == "\n":
+        return newline_gates
+    return connector in _GATING_CONNECTORS
+
+
+def _is_redirection_ampersand(script: str, index: int) -> bool:
+    """Report whether the `&` at *index* belongs to a redirection.
+
+    `2>&1`, `>&2`, `<&0`, `&>file` and `&>>file` all put an `&` beside a
+    redirection operator. Read as a background connector, that `&` ends the
+    command early and the fetch appears to gate nothing.
+
+    Returns
+    -------
+    bool
+        True when the `&` is part of a redirection rather than a separator.
+    """
+    before = script[index - 1 : index] if index > 0 else ""
+    after = script[index + 1 : index + 2]
+    return before in _REDIRECTION_OPERATORS or after == ">"
 
 
 def _connector(script: str, index: int) -> tuple[str, int] | None:
@@ -151,6 +198,8 @@ def _connector(script: str, index: int) -> tuple[str, int] | None:
     if two in _TWO_CHARACTER_CONNECTORS:
         return two, index + 2
     character = script[index]
+    if character == "&" and _is_redirection_ampersand(script, index):
+        return None
     if character in _ONE_CHARACTER_CONNECTORS or character == "\n":
         return character, index + 1
     return None
@@ -192,11 +241,27 @@ class ScriptCommand:
     meaning: CommandMeaning
 
 
-def script_commands(text: str) -> list[ScriptCommand]:
-    """Split one script and classify each of its commands."""
+def script_commands(text: str, *, newline_gates: bool = True) -> list[ScriptCommand]:
+    """Split one script and classify each of its commands.
+
+    Parameters
+    ----------
+    text:
+        The script to split.
+    newline_gates:
+        Whether a line break proves the next command waited for this one's
+        success. That is true of Make's recipe shells and of a fail-fast
+        workflow shell, and false of a shell that runs every line whatever
+        happened.
+
+    Returns
+    -------
+    list[ScriptCommand]
+        Each command with its gating flag and meaning, in script order.
+    """
     return [
         ScriptCommand(command.text, command.gates_next, _classify(command.text))
-        for command in split_commands(text)
+        for command in split_commands(text, newline_gates=newline_gates)
     ]
 
 

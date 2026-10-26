@@ -309,6 +309,41 @@ def _module_files(
     return [base / f"{name}.rs", base / name / "mod.rs"]
 
 
+def _refused_candidate(
+    checkout: pathlib.Path, root: pathlib.Path, candidate: pathlib.PurePosixPath
+) -> str | None:
+    """Return why a declared module path falls outside the checkout, if it does.
+
+    A `#[path = "..."]` value is checkout-controlled text. An absolute value
+    replaces the base path entirely, a `..` component climbs out of it, and a
+    symbolic link can point anywhere. Reading such a file would carry its
+    spawn facts and its path into the envelope, so the candidate is refused
+    before the probe follows it. The sibling readers already refuse inputs
+    outside the checkout; a module declaration must not be the way around
+    them.
+
+    Returns
+    -------
+    str | None
+        The reason the candidate is refused, or ``None`` when it may be read.
+    """
+    if candidate.is_absolute():
+        return "names an absolute path, which the checkout cannot supply"
+    if ".." in candidate.parts:
+        return "climbs out of the checkout with `..`"
+    path = checkout / candidate.as_posix()
+    if not probe_file(path).present:
+        # Absence is the probe's answer, not a refusal; the caller reports it.
+        return None
+    try:
+        resolved = path.resolve(strict=True)
+    except OSError:
+        return None
+    if resolved != root and not resolved.is_relative_to(root):
+        return f"resolves to {resolved}, outside the checkout"
+    return None
+
+
 def _helper_names(source: RustSource) -> dict[str, tuple[int, int]]:
     """Return each cargo-command helper's body span, by function name.
 
@@ -603,18 +638,26 @@ def _resolve_declarations(
     list[pathlib.PurePosixPath]
         The newly discovered files, which the caller must read and scan.
     """
+    root = checkout.resolve()
     discovered: list[pathlib.PurePosixPath] = []
     for declaration in declarations:
-        present = [
-            candidate
-            for candidate in _module_files(
-                source.relative,
-                declaration.chain,
-                declaration.name,
-                declaration.path,
-            )
-            if probe_file(checkout / candidate.as_posix()).present
-        ]
+        present: list[pathlib.PurePosixPath] = []
+        for candidate in _module_files(
+            source.relative,
+            declaration.chain,
+            declaration.name,
+            declaration.path,
+        ):
+            refused = _refused_candidate(checkout, root, candidate)
+            if refused is not None:
+                problems.append(
+                    f"{source.relative.as_posix()}: a #[cfg(test)] mod "
+                    f"{declaration.name}; declaration {refused} "
+                    f"({candidate.as_posix()})"
+                )
+                continue
+            if probe_file(checkout / candidate.as_posix()).present:
+                present.append(candidate)
         if not present:
             named = (
                 declaration.path
@@ -668,7 +711,14 @@ def collect_rust_evidence(
     while pending:
         source = pending.pop()
         scope, declarations = _scan_scope(source, problems)
-        scopes[source.relative] = scope
+        known = scopes.get(source.relative)
+        if known is not None and known.whole_file:
+            # A module declaration already proved this whole file is test code.
+            # Rescanning it must not overwrite that stronger claim with the
+            # narrower attribute ranges this pass found.
+            known.ranges = scope.ranges
+        else:
+            scopes[source.relative] = scope
         for relative in _resolve_declarations(
             checkout, source, declarations, scopes, fixtures, problems
         ):

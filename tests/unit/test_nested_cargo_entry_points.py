@@ -111,6 +111,30 @@ def test_a_connector_inside_a_quote_is_not_a_connector() -> None:
     ]
 
 
+@pytest.mark.parametrize(
+    "script",
+    [
+        "cargo fetch --locked 2>&1 && cargo test",
+        "cargo fetch --locked >&2 && cargo test",
+        "cargo fetch --locked <&0 && cargo test",
+        "cargo fetch --locked &> fetch.log && cargo test",
+        "cargo fetch --locked &>> fetch.log && cargo test",
+    ],
+    ids=["both-streams", "to-stderr", "from-stdin", "append-both", "append-both-long"],
+)
+def test_a_redirection_ampersand_is_not_a_background_connector(script: str) -> None:
+    """A `&` next to a redirection belongs to the redirection, not a `&`.
+
+    Reading `2>&1` as a background command splits the fetch into fragments,
+    so the fetch appears to gate nothing and a correctly ordered line is
+    reported as an absent prefetch.
+    """
+    commands = gates(script)
+    assert len(commands) == 2, commands
+    assert commands[0][0].startswith("cargo fetch --locked"), commands
+    assert commands[0][1] is True, commands
+
+
 def test_newlines_are_fail_fast_sequencing() -> None:
     """Each line of a script completes before the next one starts."""
     assert gates("cargo fetch --locked\ncargo test") == [
@@ -340,11 +364,50 @@ def test_a_nextest_setup_script_proves_the_order(tmp_path: pathlib.Path) -> None
     put(
         tmp_path,
         NEXTEST_CONFIG,
-        '[[profile.default.scripts]]\nfilter = "all()"\n'
-        'setup = "cargo fetch --locked"\n',
+        '[[profile.default.scripts]]\nfilter = "all()"\nsetup = "warm"\n'
+        '[scripts.setup.warm]\ncommand = "cargo fetch --locked"\n',
     )
     put(tmp_path, MAKEFILE, "test:\n\tcargo nextest run\n")
     assert makefile_state(tmp_path) == [("test", "before")]
+
+
+def test_a_nextest_setup_command_may_be_a_list(tmp_path: pathlib.Path) -> None:
+    """Nextest accepts a setup command as an argument list as well as a string."""
+    put(
+        tmp_path,
+        NEXTEST_CONFIG,
+        '[[profile.default.scripts]]\nfilter = "all()"\nsetup = "warm"\n'
+        '[scripts.setup.warm]\ncommand = ["cargo", "fetch", "--locked"]\n',
+    )
+    put(tmp_path, MAKEFILE, "test:\n\tcargo nextest run\n")
+    assert makefile_state(tmp_path) == [("test", "before")]
+
+
+def test_a_named_setup_script_without_a_definition_is_uncertain(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A name nothing defines is a broken config, not a proven-cold cache."""
+    put(
+        tmp_path,
+        NEXTEST_CONFIG,
+        '[[profile.default.scripts]]\nfilter = "all()"\nsetup = "missing"\n',
+    )
+    put(tmp_path, MAKEFILE, "test:\n\tcargo nextest run\n")
+    assert makefile_state(tmp_path) == [("test", "uncertain")]
+
+
+def test_a_named_setup_script_that_does_not_fetch_is_absent(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A defined setup script that runs something else still proves no prefetch."""
+    put(
+        tmp_path,
+        NEXTEST_CONFIG,
+        '[[profile.default.scripts]]\nfilter = "all()"\nsetup = "touch"\n'
+        '[scripts.setup.touch]\ncommand = "touch marker"\n',
+    )
+    put(tmp_path, MAKEFILE, "test:\n\tcargo nextest run\n")
+    assert makefile_state(tmp_path) == [("test", "absent")]
 
 
 def test_a_nextest_script_with_another_filter_is_not_proof(
@@ -354,8 +417,8 @@ def test_a_nextest_script_with_another_filter_is_not_proof(
     put(
         tmp_path,
         NEXTEST_CONFIG,
-        '[[profile.default.scripts]]\nfilter = "package(foo)"\n'
-        'setup = "cargo fetch --locked"\n',
+        '[[profile.default.scripts]]\nfilter = "package(foo)"\nsetup = "warm"\n'
+        '[scripts.setup.warm]\ncommand = "cargo fetch --locked"\n',
     )
     put(tmp_path, MAKEFILE, "test:\n\tcargo nextest run\n")
     assert makefile_state(tmp_path) == [("test", "absent")]
@@ -368,7 +431,8 @@ def test_a_nextest_profile_selected_by_flag_is_honoured(
     put(
         tmp_path,
         NEXTEST_CONFIG,
-        '[[profile.ci.scripts]]\nfilter = "all()"\nsetup = "cargo fetch --locked"\n',
+        '[[profile.ci.scripts]]\nfilter = "all()"\nsetup = "warm"\n'
+        '[scripts.setup.warm]\ncommand = "cargo fetch --locked"\n',
     )
     put(tmp_path, MAKEFILE, "test:\n\tcargo nextest run --profile ci\n")
     assert makefile_state(tmp_path) == [("test", "before")]
@@ -381,7 +445,8 @@ def test_a_nextest_profile_selected_by_short_flag_is_honoured(
     put(
         tmp_path,
         NEXTEST_CONFIG,
-        '[[profile.ci.scripts]]\nfilter = "all()"\nsetup = "cargo fetch --locked"\n',
+        '[[profile.ci.scripts]]\nfilter = "all()"\nsetup = "warm"\n'
+        '[scripts.setup.warm]\ncommand = "cargo fetch --locked"\n',
     )
     put(tmp_path, MAKEFILE, "test:\n\tcargo nextest run -P ci\n")
     assert makefile_state(tmp_path) == [("test", "before")]
@@ -392,8 +457,8 @@ def test_a_used_nextest_profile_is_its_own_entry_point(tmp_path: pathlib.Path) -
     put(
         tmp_path,
         NEXTEST_CONFIG,
-        '[[profile.default.scripts]]\nfilter = "package(foo)"\n'
-        'setup = "cargo fetch --locked"\n',
+        '[[profile.default.scripts]]\nfilter = "package(foo)"\nsetup = "touch"\n'
+        '[scripts.setup.touch]\ncommand = "touch marker"\n',
     )
     put(tmp_path, MAKEFILE, "test:\n\tcargo nextest run\n")
     assert states(tmp_path) == [
@@ -409,8 +474,8 @@ def test_an_unused_nextest_profile_is_not_an_entry_point(
     put(
         tmp_path,
         NEXTEST_CONFIG,
-        '[[profile.default.scripts]]\nfilter = "all()"\n'
-        'setup = "cargo fetch --locked"\n',
+        '[[profile.default.scripts]]\nfilter = "all()"\nsetup = "warm"\n'
+        '[scripts.setup.warm]\ncommand = "cargo fetch --locked"\n',
     )
     put(tmp_path, MAKEFILE, "test:\n\tcargo test\n")
     assert makefile_state(tmp_path) == [("test", "absent")]
@@ -495,8 +560,135 @@ def test_a_prefetch_in_the_same_run_block_proves_the_order(
     put(
         tmp_path,
         WORKFLOW,
-        "jobs:\n  test:\n    steps:\n"
+        "jobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n"
         "      - run: |\n          cargo fetch --locked\n          cargo test\n",
+    )
+    assert states(tmp_path) == [("workflow", "test", "before")]
+
+
+def _multi_line(tmp_path: pathlib.Path, job_body: str) -> None:
+    """Write a workflow whose `test` job runs a fetch then a test on two lines."""
+    put(
+        tmp_path,
+        WORKFLOW,
+        f"jobs:\n  test:\n{job_body}"
+        "    steps:\n"
+        "      - run: |\n          cargo fetch --locked\n          cargo test\n",
+    )
+
+
+def test_a_multi_line_block_on_a_non_fail_fast_shell_is_absent(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`bash {0}` runs the test even when the fetch on the line above failed."""
+    _multi_line(
+        tmp_path,
+        "    runs-on: ubuntu-latest\n"
+        "    defaults:\n      run:\n        shell: bash {0}\n",
+    )
+    assert states(tmp_path) == [("workflow", "test", "absent")]
+
+
+def test_a_multi_line_block_on_a_fail_fast_template_proves_the_order(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`bash -e {0}` stops the script, so the next line saw a successful fetch."""
+    _multi_line(
+        tmp_path,
+        "    runs-on: ubuntu-latest\n"
+        "    defaults:\n      run:\n        shell: bash -e {0}\n",
+    )
+    assert states(tmp_path) == [("workflow", "test", "before")]
+
+
+def test_a_step_shell_overrides_the_job_default(tmp_path: pathlib.Path) -> None:
+    """The step is the most specific declaration, as GitHub resolves it."""
+    put(
+        tmp_path,
+        WORKFLOW,
+        "jobs:\n  test:\n    runs-on: ubuntu-latest\n"
+        "    defaults:\n      run:\n        shell: bash {0}\n"
+        "    steps:\n      - shell: bash -e {0}\n        run: |\n"
+        "          cargo fetch --locked\n          cargo test\n",
+    )
+    assert states(tmp_path) == [("workflow", "test", "before")]
+
+
+def test_a_job_default_overrides_the_workflow_default(tmp_path: pathlib.Path) -> None:
+    """A job's own default is more specific than the workflow's."""
+    put(
+        tmp_path,
+        WORKFLOW,
+        "defaults:\n  run:\n    shell: bash -e {0}\n"
+        "jobs:\n  test:\n    runs-on: ubuntu-latest\n"
+        "    defaults:\n      run:\n        shell: bash {0}\n"
+        "    steps:\n      - run: |\n"
+        "          cargo fetch --locked\n          cargo test\n",
+    )
+    assert states(tmp_path) == [("workflow", "test", "absent")]
+
+
+def test_a_workflow_default_is_used_when_the_job_declares_none(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The workflow's `defaults.run.shell` reaches every job that has none."""
+    put(
+        tmp_path,
+        WORKFLOW,
+        "defaults:\n  run:\n    shell: bash -e {0}\n"
+        "jobs:\n  test:\n    runs-on: ubuntu-latest\n"
+        "    steps:\n      - run: |\n"
+        "          cargo fetch --locked\n          cargo test\n",
+    )
+    assert states(tmp_path) == [("workflow", "test", "before")]
+
+
+def test_a_windows_runner_does_not_fail_fast(tmp_path: pathlib.Path) -> None:
+    """The Windows default is `pwsh`, which checks only the last native status."""
+    _multi_line(tmp_path, "    runs-on: windows-latest\n")
+    assert states(tmp_path) == [("workflow", "test", "absent")]
+
+
+def test_a_pwsh_shell_does_not_fail_fast(tmp_path: pathlib.Path) -> None:
+    """`pwsh` continues after a failed native command."""
+    _multi_line(
+        tmp_path,
+        "    runs-on: ubuntu-latest\n    defaults:\n      run:\n        shell: pwsh\n",
+    )
+    assert states(tmp_path) == [("workflow", "test", "absent")]
+
+
+def test_an_unresolvable_shell_with_a_preceding_fetch_is_uncertain(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`runs-on: ${{ matrix.os }}` leaves the shell unproven, and the fetch idle."""
+    _multi_line(tmp_path, "    runs-on: ${{ matrix.os }}\n")
+    assert states(tmp_path) == [("workflow", "test", "uncertain")]
+
+
+def test_an_unresolvable_shell_without_a_fetch_is_still_absent(
+    tmp_path: pathlib.Path,
+) -> None:
+    """An unknown shell cannot make an unfetched cache look warm."""
+    put(
+        tmp_path,
+        WORKFLOW,
+        "jobs:\n  test:\n    runs-on: ${{ matrix.os }}\n    steps:\n"
+        "      - run: |\n          cargo test\n",
+    )
+    assert states(tmp_path) == [("workflow", "test", "absent")]
+
+
+def test_a_prior_step_proves_the_order_whatever_the_shell(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Step sequencing does not depend on which shell the run blocks share."""
+    put(
+        tmp_path,
+        WORKFLOW,
+        "jobs:\n  test:\n    runs-on: ${{ matrix.os }}\n    steps:\n"
+        "      - run: cargo fetch --locked\n"
+        "      - run: |\n          cargo test\n",
     )
     assert states(tmp_path) == [("workflow", "test", "before")]
 
@@ -576,8 +768,8 @@ def test_a_nextest_step_inherits_the_nextest_state(tmp_path: pathlib.Path) -> No
     put(
         tmp_path,
         NEXTEST_CONFIG,
-        '[[profile.default.scripts]]\nfilter = "all()"\n'
-        'setup = "cargo fetch --locked"\n',
+        '[[profile.default.scripts]]\nfilter = "all()"\nsetup = "warm"\n'
+        '[scripts.setup.warm]\ncommand = "cargo fetch --locked"\n',
     )
     put(
         tmp_path,
@@ -625,8 +817,8 @@ def test_each_test_command_kind_is_recognised(
     put(
         tmp_path,
         NEXTEST_CONFIG,
-        '[[profile.default.scripts]]\nfilter = "package(foo)"\n'
-        'setup = "cargo fetch --locked"\n',
+        '[[profile.default.scripts]]\nfilter = "package(foo)"\nsetup = "touch"\n'
+        '[scripts.setup.touch]\ncommand = "touch marker"\n',
     )
     put(tmp_path, WORKFLOW, f"jobs:\n  test:\n    steps:\n      - run: {command}\n")
     assert states(tmp_path) == expected

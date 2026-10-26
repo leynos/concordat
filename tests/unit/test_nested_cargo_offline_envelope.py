@@ -10,7 +10,7 @@ as silence.
 
 from __future__ import annotations
 
-import pathlib
+import typing as typ
 
 import pygit2
 
@@ -19,6 +19,9 @@ from concordat.rules.nested_cargo_offline_envelope import (
     ENVELOPE_SCHEMA_VERSION,
     build_nested_cargo_offline_envelope,
 )
+
+if typ.TYPE_CHECKING:
+    import pathlib
 
 SPAWN = 'fn run() {\n    Command::new("cargo").arg("build").status();\n}\n'
 MAKEFILE = "Makefile"
@@ -32,9 +35,9 @@ def put(root: pathlib.Path, relative: str, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
-def test_the_envelope_names_itself_and_its_schema() -> None:
+def test_the_envelope_names_itself_and_its_schema(tmp_path: pathlib.Path) -> None:
     """The policy refuses a document whose kind or version it does not know."""
-    envelope = build_nested_cargo_offline_envelope(pathlib.Path())
+    envelope = build_nested_cargo_offline_envelope(tmp_path)
     assert envelope["kind"] == ENVELOPE_KIND
     assert envelope["schema_version"] == ENVELOPE_SCHEMA_VERSION
 
