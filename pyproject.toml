@@ -64,6 +64,11 @@ type = "variable"
 full_name = "scripts.canon_artifacts_tui.CanonArtifactsApp.BINDINGS"
 reason = "Textual reads the class binding table when it initialises the application."
 
+[[tool.skylos.dead_code.entrypoints]]
+type = "method"
+full_name = "scripts.parabellum_report._RuleTally.severity"
+reason = "Called by _rule_rows in the same module; Skylos records the call as a module-level `tally.severity` and so finds no reference to the method itself."
+
 [tool.ruff.lint]
 select = [
     "F",        # Pyflakes rules

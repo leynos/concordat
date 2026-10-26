@@ -50,6 +50,11 @@ _TEXTUAL_ACTIONS: typ.Final = frozenset({
 _TEXTUAL_BINDINGS: typ.Final = frozenset({
     "scripts.canon_artifacts_tui.CanonArtifactsApp.BINDINGS",
 })
+# Skylos models `tally.severity` inside `_rule_rows` as a module-level name, so
+# the method it resolves to at runtime has no recorded caller.
+_PARABELLUM_REPORT_METHODS: typ.Final = frozenset({
+    "scripts.parabellum_report._RuleTally.severity",
+})
 _DOCUMENTED_FALSE_POSITIVES: typ.Final = frozenset({
     "_format_outcome",
     "_refresh",
@@ -440,12 +445,13 @@ def test_skylos_configuration_models_runtime_and_documented_boundaries() -> None
     }
     assert entry_point_sets == {
         ("method", _TEXTUAL_ACTIONS),
+        ("method", _PARABELLUM_REPORT_METHODS),
         ("variable", _TEXTUAL_BINDINGS),
-    }, "Skylos entry-point contract must preserve typed Textual runtime callers"
+    }, "Skylos entry-point contract must preserve typed runtime callers"
     for entry_point in entry_points:
         reason = entry_point.get("reason")
         assert isinstance(reason, str), (
-            "Skylos entry-point contract must provide a textual runtime reason"
+            "Skylos entry-point contract must provide a runtime reason"
         )
         assert reason, "Skylos entry-point contract must provide a non-empty reason"
     whitelist = _mapping(skylos.get("whitelist"), subject="Skylos whitelist")

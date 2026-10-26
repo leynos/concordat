@@ -194,10 +194,132 @@ class TestSweepCommand:
         self._invoke(["--help"])
 
         rendered = capsys.readouterr().out
-        for name in ("only", "limit", "force", "estate", "ledger"):
+        for name in ("only", "limit", "force", "package", "estate", "ledger"):
             assert f"--{name}" in rendered, f"--{name} missing from:\n{rendered}"
             # A namespaced flag renders as `--<prefix>.<name>`; the default
             # paths in the help carry dots only before file extensions.
             assert f".{name}" not in rendered, (
                 f"--{name} should not be namespaced:\n{rendered}"
             )
+
+
+class TestPackageFlag:
+    """`--package` selects the rule package the sweep audits."""
+
+    @staticmethod
+    def _capture(monkeypatch: pytest.MonkeyPatch) -> list[sweep.SweepOptions]:
+        """Patch `run_sweep`, returning the options each call is handed."""
+        seen: list[sweep.SweepOptions] = []
+
+        def fake_run_sweep(
+            *,
+            estate_path: pathlib.Path,
+            ledger_path: pathlib.Path,
+            options: sweep.SweepOptions,
+        ) -> sweep.Ledger:
+            del estate_path, ledger_path
+            seen.append(options)
+            return []
+
+        monkeypatch.setattr(sweep, "run_sweep", fake_run_sweep)
+        return seen
+
+    def test_the_package_flag_reaches_the_sweep_options(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The flag is parsed and carried into `SweepOptions` unchanged."""
+        seen = self._capture(monkeypatch)
+
+        TestSweepCommand._invoke(["--package", "nested-cargo-offline-tests"])
+
+        assert [options.package for options in seen] == [
+            "nested-cargo-offline-tests"
+        ], seen
+
+    def test_the_default_is_the_baseline_package(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Without the flag the sweep audits the campaign package."""
+        seen = self._capture(monkeypatch)
+
+        TestSweepCommand._invoke([])
+
+        assert [options.package for options in seen] == [sweep.RULE_PACKAGE], seen
+
+
+class TestReportCommandPackageFlag:
+    """`report --package` narrows the rendered report to one package."""
+
+    @staticmethod
+    def _invoke(
+        tokens: list[str],
+        *,
+        ledger: pathlib.Path,
+        output: pathlib.Path,
+    ) -> int:
+        """Run the app with the report's paths filled in, returning its code."""
+        try:
+            sweep.app([
+                *tokens,
+                "--ledger",
+                str(ledger),
+                "--output",
+                str(output),
+            ])
+        except SystemExit as exc:
+            return 0 if exc.code is None else int(exc.code)
+        return 0
+
+    def test_the_package_reaches_render_report(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: pathlib.Path,
+    ) -> None:
+        """The report command forwards its package selection to the renderer."""
+        seen: list[str] = []
+
+        def fake_render(
+            _ledger_path: pathlib.Path, package: str = sweep.RULE_PACKAGE
+        ) -> str:
+            seen.append(package)
+            return "report\n"
+
+        monkeypatch.setattr(sweep, "render_report", fake_render)
+        output_path = tmp_path / "report.md"
+
+        status = self._invoke(
+            ["report", "--package", "nested-cargo-offline-tests"],
+            ledger=tmp_path / "ledger.jsonl",
+            output=output_path,
+        )
+
+        assert status == 0, status
+        assert seen == ["nested-cargo-offline-tests"], seen
+        assert output_path.read_text(encoding="utf-8") == "report\n"
+
+    def test_the_report_defaults_to_the_campaign_package(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: pathlib.Path,
+    ) -> None:
+        """Without a package the renderer is asked for the baseline campaign."""
+        seen: list[str] = []
+
+        def fake_render(
+            _ledger_path: pathlib.Path, package: str = sweep.RULE_PACKAGE
+        ) -> str:
+            seen.append(package)
+            return "report\n"
+
+        monkeypatch.setattr(sweep, "render_report", fake_render)
+
+        status = self._invoke(
+            ["report"],
+            ledger=tmp_path / "ledger.jsonl",
+            output=tmp_path / "report.md",
+        )
+
+        assert status == 0, status
+        assert seen == [sweep.RULE_PACKAGE], seen

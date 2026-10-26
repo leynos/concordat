@@ -150,8 +150,31 @@ workaround.
       `NON_RESOLVING` in `concordat/rules/nested_cargo_commands.py`, left behind
       by `935acee` when `_is_probe` replaced its only reader. The constant is
       removed; 172 reader tests and 28 nested-cargo package tests remain green.
-- [ ] Task 4: `--package` sweep plumbing, ledger resume key, report filters and
-      distinct-repository counts, real-corpus comparison.
+- [x] (2026-10-27) Task 4 tooling: `--package` on both `parabellum_sweep`
+      subcommands, threaded through `clone_and_audit` to `run_rule` and stored
+      on every record; the resume key in `_already_ledgered` is now repository,
+      commit, package and package version; `render_report` filters by package
+      before selecting each repository's latest record, keeps the occurrence
+      counts, and adds a captioned `## Repositories by rule` table of
+      distinct-repository counts. Red first: 27 focused failures, all missing
+      API or missing table. Two test-harness bugs surfaced in the green phase —
+      `TestCloneAndAuditPackage`'s fake git inspected `argv[:1]` after `_git`
+      had already prepended the binary, and `TestPackageSelection` had no
+      audit-boundary fixture, so it attempted a real clone and timed out at
+      30 seconds. Both fixed; 116 focused tests green. The first full gate run
+      then failed on one Skylos `SKY-U001` for `_RuleTally.severity`; the
+      analyser's own JSON shows it resolves `tally.severity()` inside
+      `_rule_rows` to a module-level `tally.severity`, so the method records no
+      static caller. Recorded as a typed entry point for that single
+      fully-qualified method (Decision log), with the contract test's
+      expected-symbol set updated; the targeted Skylos gate and the six Skylos
+      contract tests are green.
+- [ ] Task 4 survey: run `--package nested-cargo-offline-tests` per
+      `~/docs/missing-frozen-survey-plan.md` on the SRE host, compare NC-007
+      and NC-008 repository counts against the 24 October survey (~20 direct
+      spawns, ~30 trybuild) and investigate differences. **Blocked on this
+      host:** the plan file does not exist here (recorded in Surprises &
+      discoveries), so no survey figures are claimed.
 - [ ] Delivery: draft PR with session reference.
 
 ## Surprises & discoveries
@@ -166,7 +189,9 @@ workaround.
   `--frozen`/`--offline`/`CARGO_NET_OFFLINE` anywhere. Impact: the "after"
   corpus case must be synthetic or a patched checkout.
 - Observation: `~/docs/missing-frozen-survey-plan.md` does not exist on this
-  host. Impact: the estate survey step cannot run here.
+  host. Impact: the estate survey step cannot run here. The Task 4 survey and
+  its NC-007/NC-008 comparison are therefore left open in Progress and reported
+  as blocked in the PR, rather than being inferred from the checked-in fixtures.
 - Observation: `makeutil` 0.1.2 is on `PATH`, but every checked-in fixture
   envelope records `makeutil` 0.1.0, so six generator-drift tests fail. They
   fail identically from a clean archive of
@@ -353,6 +378,47 @@ workaround.
   cargo probe, and `help` stays a first-word-only probe because
   `cargo run help` builds and runs the program. Every branch was probed against
   the installed cargo, wrapper included. Date/Author: 2026-10-26.
+- Decision: the report's package filter runs before the latest-record
+  selection, not after, and its default is `RULE_PACKAGE` rather than "all
+  packages". Rationale: the ledger is shared by campaigns, so selecting the
+  latest record first would let a later survey record hide the baseline's
+  earlier verdict for the same repository and the baseline report would
+  silently lose a repository it audited. Defaulting to `RULE_PACKAGE` keeps
+  `docs/parabellum/baseline-report.md` meaning the baseline campaign; an "all
+  packages" default would mix two campaigns into a file titled after one of
+  them. A survey report is requested explicitly with `--package`. Date/Author:
+  2026-10-27.
+- Decision: `rule_version` is read from the package manifest at audit time and
+  the `RULE_VERSION` constant is deleted. Rationale: the constant had drifted to
+  `0.2.0` while `rust-makefile-baseline/rule.yaml` declared `0.3.2`, so every
+  new record would have named a policy version that never judged it — and the
+  version is now part of the resume key, so a stale constant would also have
+  suppressed legitimate re-audits. The regenerated baseline report moves from
+  `v0.2.0` to `v0.3.2` accordingly. Date/Author: 2026-10-27.
+- Decision: "would fail" counts any repository with noncompliant or
+  indeterminate-only evidence for a rule, whatever the finding's current
+  severity. Rationale: a `warning`-severity noncompliant finding does not block
+  today, which is exactly why the survey exists — it is the evidence a
+  promotion-to-error decision is made on. Counting only `error`-severity
+  findings would report zero for the survey that the promotion decision depends
+  on. Date/Author: 2026-10-27.
+- Decision: `would_fail` is the union of the noncompliant and
+  indeterminate-only repository sets rather than a separate counter. Rationale:
+  a repository with both kinds of evidence for one rule must be counted once;
+  deriving the number from the two displayed sets also means the "would fail"
+  column can never disagree with the columns beside it. Date/Author: 2026-10-27.
+- Decision: `_RuleTally.severity` is recorded as a typed Skylos entry point,
+  not as a named whitelist exception and not by inlining the method. Rationale:
+  the method has a real runtime caller — `_rule_rows` calls `tally.severity()`
+  at `scripts/parabellum_report.py:194`, and its value reaches the checked-in
+  report and snapshot — but Skylos 4.33.2's own JSON records that call as the
+  module-level name `tally.severity`, so the method itself has empty
+  `called_by`. A one-symbol, correctly typed entry point describes that
+  analyser limitation precisely; a whitelist entry is the last resort for a
+  false positive no entry point can describe, and inlining would delete a
+  cohesive method to satisfy a scanner. The contract test's expected
+  entry-point set is extended with the same symbol so the exemption cannot
+  widen silently. Date/Author: 2026-10-27.
 
 ## Outcomes & retrospective
 

@@ -26,6 +26,9 @@ class TestReport:
         *,
         audited_at: str = "2026-07-19T16:00:00Z",
         detail: sweep.LedgerOptionalFields | None = None,
+        package: str = sweep.RULE_PACKAGE,
+        version: str = "0.1.0",
+        findings: list[sweep.FindingRecord] | None = None,
     ) -> sweep.LedgerRecord:
         """Build one ledger record, optionally carrying an excluded/error detail.
 
@@ -33,6 +36,9 @@ class TestReport:
         introduce a key the ledger schema does not define. `audited_at` is a
         *required* field and gets its own parameter: the latest-record test
         varies it, which is not the same thing as supplying an optional detail.
+        `package` and `version` choose which campaign the record belongs to;
+        `findings` replaces the default single-finding list where a test needs
+        a different shape.
 
         Returns
         -------
@@ -47,16 +53,18 @@ class TestReport:
             "line": 1,
             "message": "gate-critical variable uses ?=",
         }
+        if findings is None:
+            findings = [finding] if verdict == "noncompliant" else []
         record: sweep.LedgerRecord = {
             "schema_version": 1,
             "repository": repository,
             "commit_sha": "b" * 40,
             "audited_at": audited_at,
-            "rule_package": "rust-makefile-baseline",
-            "rule_version": "0.1.0",
+            "rule_package": package,
+            "rule_version": version,
             "makeutil_rev": sweep.MAKEUTIL_REV,
             "verdict": verdict,
-            "findings": [finding] if verdict == "noncompliant" else [],
+            "findings": findings,
         }
         # Keyed explicitly rather than by update: `is not None` keeps a blank
         # detail distinct from an absent one, which is exactly what the
@@ -431,12 +439,37 @@ class TestReport:
         ]
         ledger_path.write_text("".join(json.dumps(record) + "\n" for record in records))
         report = sweep.render_report(ledger_path)
-        table = [line for line in report.splitlines() if line.startswith("|")]
-        assert len({len(line) for line in table}) == 1, table
-        header, delimiter = table[0], table[1]
-        for cell, dashes in zip(header.split("|"), delimiter.split("|"), strict=True):
-            assert len(cell) == len(dashes), (header, delimiter)
-            assert set(dashes.strip()) <= {"-"}, delimiter
+        # Each table is aligned on its own, so the assertion is per contiguous
+        # block: two tables in one report need not share a line length.
+        for table in self._table_blocks(report):
+            assert len({len(line) for line in table}) == 1, table
+            header, delimiter = table[0], table[1]
+            for cell, dashes in zip(
+                header.split("|"), delimiter.split("|"), strict=True
+            ):
+                assert len(cell) == len(dashes), (header, delimiter)
+                assert set(dashes.strip()) <= {"-"}, delimiter
+
+    @staticmethod
+    def _table_blocks(report: str) -> list[list[str]]:
+        """Return each contiguous run of table lines in *report*.
+
+        Returns
+        -------
+        list[list[str]]
+            One list of table lines per table in the report.
+        """
+        blocks: list[list[str]] = []
+        current: list[str] = []
+        for line in report.splitlines():
+            if line.startswith("|"):
+                current.append(line)
+            elif current:
+                blocks.append(current)
+                current = []
+        if current:
+            blocks.append(current)
+        return blocks
 
     def test_report_uses_latest_record_per_repository(
         self,
@@ -476,6 +509,355 @@ class TestReport:
         )
         assert "excluded: 1" in report, (
             "the summary should count one excluded repository"
+        )
+
+
+SURVEY_PACKAGE = "nested-cargo-offline-tests"
+
+
+def _finding(
+    rule_id: str,
+    *,
+    severity: str = "warning",
+    verdict: str = "noncompliant",
+    message: str = "spawns cargo without offline evidence",
+) -> sweep.FindingRecord:
+    """Return one finding record for a report fixture."""
+    return {
+        "rule_id": rule_id,
+        "severity": severity,
+        "verdict": verdict,
+        "path": "tests/spawn.rs",
+        "line": 4,
+        "message": message,
+    }
+
+
+class TestPackageFiltering:
+    """The report can be narrowed to one rule package's records."""
+
+    @staticmethod
+    def _rule_cells(report: str, rule_id: str) -> list[str]:
+        """Return the data cells of *rule_id*'s row in the per-rule table."""
+        row = next(
+            line for line in report.splitlines() if line.startswith(f"| {rule_id} ")
+        )
+        return [cell.strip() for cell in row.strip().strip("|").split("|")]
+
+    def test_the_filter_applies_before_latest_record_selection(
+        self,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """Each package keeps its own latest record.
+
+        Selecting the latest record first would let a later survey record hide
+        the baseline's earlier verdict for the same repository, and the
+        baseline report would silently lose a repository it audited.
+        """
+        baseline_bad = TestReport()._record("leynos/alpha", "noncompliant")
+        survey_good = TestReport()._record(
+            "leynos/alpha",
+            "compliant",
+            package=SURVEY_PACKAGE,
+            audited_at="2026-07-19T17:00:00Z",
+        )
+        ledger_path.write_text(
+            json.dumps(baseline_bad) + "\n" + json.dumps(survey_good) + "\n",
+            encoding="utf-8",
+        )
+
+        baseline = sweep.render_report(ledger_path, package=sweep.RULE_PACKAGE)
+        survey = sweep.render_report(ledger_path, package=SURVEY_PACKAGE)
+
+        assert TestReport._row_cells(baseline, "leynos/alpha")[1] == "noncompliant", (
+            "the baseline report should keep its own latest record"
+        )
+        assert TestReport._row_cells(survey, "leynos/alpha")[1] == "compliant", (
+            "the survey report should keep its own latest record"
+        )
+
+    def test_a_mixed_ledger_reports_only_the_selected_package(
+        self,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """Records from another package do not appear in rows or summary counts."""
+        records = [
+            TestReport()._record("leynos/alpha", "noncompliant"),
+            TestReport()._record("leynos/beta", "compliant"),
+            TestReport()._record(
+                "leynos/gamma",
+                "noncompliant",
+                package=SURVEY_PACKAGE,
+                findings=[_finding("NC-007")],
+            ),
+        ]
+        ledger_path.write_text(
+            "".join(json.dumps(record) + "\n" for record in records),
+            encoding="utf-8",
+        )
+
+        report = sweep.render_report(ledger_path, package=SURVEY_PACKAGE)
+
+        assert "leynos/alpha" not in report, report
+        assert "leynos/beta" not in report, report
+        assert "leynos/gamma" in report, report
+        assert "- noncompliant: 1" in report, report
+        assert "QG-001" not in report, (
+            f"another package's rule should not be counted: {report}"
+        )
+
+    def test_the_default_selection_is_the_campaign_package(
+        self,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """The checked-in baseline report keeps meaning the baseline campaign.
+
+        Survey records share the ledger, so an unfiltered default would mix
+        both campaigns into a file titled after one of them.
+        """
+        records = [
+            TestReport()._record("leynos/alpha", "compliant"),
+            TestReport()._record(
+                "leynos/gamma",
+                "noncompliant",
+                package=SURVEY_PACKAGE,
+                findings=[_finding("NC-007")],
+            ),
+        ]
+        ledger_path.write_text(
+            "".join(json.dumps(record) + "\n" for record in records),
+            encoding="utf-8",
+        )
+
+        report = sweep.render_report(ledger_path)
+
+        assert "leynos/alpha" in report, report
+        assert "leynos/gamma" not in report, report
+
+    def test_the_header_names_the_selected_package(
+        self,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """The header names the package whose records are rendered."""
+        ledger_path.write_text(
+            json.dumps(
+                TestReport()._record(
+                    "leynos/gamma", "compliant", package=SURVEY_PACKAGE
+                )
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        report = sweep.render_report(ledger_path, package=SURVEY_PACKAGE)
+
+        assert f"Rule package: `{SURVEY_PACKAGE}` v0.1.0" in report, report
+        assert sweep.RULE_PACKAGE not in report, report
+
+    def test_an_empty_selection_renders_without_a_finding_table(
+        self,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """A package with no records yet renders a readable empty report.
+
+        The survey's first run happens before any record exists, so the
+        renderer must not assume a table has rows.
+        """
+        ledger_path.write_text(
+            json.dumps(TestReport()._record("leynos/alpha", "compliant")) + "\n",
+            encoding="utf-8",
+        )
+
+        report = sweep.render_report(ledger_path, package=SURVEY_PACKAGE)
+
+        assert "leynos/alpha" not in report, report
+        assert "Table 2" not in report, (
+            f"an empty table should not be captioned: {report}"
+        )
+        assert not any(line.startswith("| Rule ") for line in report.splitlines()), (
+            report
+        )
+
+
+class TestDistinctRepositoryCounts:
+    """Per-rule counts deduplicate repositories and carry severity."""
+
+    @staticmethod
+    def _rule_cells(report: str, rule_id: str) -> list[str]:
+        """Return the data cells of *rule_id*'s row in the per-rule table."""
+        row = next(
+            line for line in report.splitlines() if line.startswith(f"| {rule_id} ")
+        )
+        return [cell.strip() for cell in row.strip().strip("|").split("|")]
+
+    def test_the_caption_precedes_the_per_rule_table(
+        self,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """The second table is captioned like the first, before its header."""
+        ledger_path.write_text(
+            json.dumps(
+                TestReport()._record(
+                    "leynos/gamma",
+                    "noncompliant",
+                    package=SURVEY_PACKAGE,
+                    findings=[_finding("NC-007")],
+                )
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        lines = sweep.render_report(ledger_path, package=SURVEY_PACKAGE).splitlines()
+        heading = lines.index("## Repositories by rule")
+        header = next(i for i, line in enumerate(lines) if line.startswith("| Rule "))
+
+        assert lines[heading + 2].startswith("Table 2:"), lines[heading : header + 1]
+        assert header == heading + 4, lines[heading : header + 1]
+
+    def test_one_repository_counts_once_however_many_findings_it_has(
+        self,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """Distinct-repository counts deduplicate; occurrence counts do not."""
+        ledger_path.write_text(
+            json.dumps(
+                TestReport()._record(
+                    "leynos/gamma",
+                    "noncompliant",
+                    package=SURVEY_PACKAGE,
+                    findings=[
+                        _finding("NC-007", message="first spawn"),
+                        _finding("NC-007", message="second spawn"),
+                    ],
+                )
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        report = sweep.render_report(ledger_path, package=SURVEY_PACKAGE)
+        cells = self._rule_cells(report, "NC-007")
+
+        assert cells[2] == "1", f"one repository should count once: {cells}"
+        assert "- NC-007: 2" in report, (
+            f"both occurrences should still be counted: {report}"
+        )
+
+    def test_a_warning_noncompliant_finding_counts_as_would_fail(
+        self,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """Warning-phase evidence is exactly the promotion decision's input.
+
+        A `warning` noncompliant finding does not block today, but promoting
+        the package to `error` is what the survey exists to justify, so the
+        repository must be counted as one that would fail.
+        """
+        ledger_path.write_text(
+            json.dumps(
+                TestReport()._record(
+                    "leynos/gamma",
+                    "noncompliant",
+                    package=SURVEY_PACKAGE,
+                    findings=[_finding("NC-008", severity="warning")],
+                )
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        report = sweep.render_report(ledger_path, package=SURVEY_PACKAGE)
+        cells = self._rule_cells(report, "NC-008")
+
+        assert cells[1] == "warning", f"the severity should be shown: {cells}"
+        assert cells[2] == "1", f"the repository is noncompliant: {cells}"
+        assert cells[4] == "1", f"it would fail once promoted: {cells}"
+
+    def test_indeterminate_only_evidence_is_counted_separately(
+        self,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """Unresolved evidence is reported apart from a noncompliance.
+
+        A repository whose only evidence for a rule is indeterminate is not
+        the same finding as one that provably violates it; both would block
+        after promotion, but only the second is a defect to fix.
+        """
+        records = [
+            TestReport()._record(
+                "leynos/gamma",
+                "noncompliant",
+                findings=[_finding("NC-007")],
+            ),
+            TestReport()._record(
+                "leynos/delta",
+                "indeterminate",
+                findings=[_finding("NC-007", verdict="indeterminate")],
+            ),
+        ]
+        ledger_path.write_text(
+            "".join(json.dumps(record) + "\n" for record in records),
+            encoding="utf-8",
+        )
+
+        report = sweep.render_report(ledger_path, package=sweep.RULE_PACKAGE)
+        cells = self._rule_cells(report, "NC-007")
+
+        assert cells[2] == "1", f"gamma is noncompliant: {cells}"
+        assert cells[3] == "1", f"delta is indeterminate-only: {cells}"
+        assert cells[4] == "2", f"both would block after promotion: {cells}"
+
+    def test_a_compliant_finding_is_not_counted(
+        self,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """Only noncompliant and indeterminate evidence reaches the counts."""
+        ledger_path.write_text(
+            json.dumps(
+                TestReport()._record(
+                    "leynos/alpha",
+                    "compliant",
+                    findings=[_finding("QG-001", verdict="compliant")],
+                )
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        report = sweep.render_report(ledger_path, package=sweep.RULE_PACKAGE)
+
+        assert not any(line.startswith("| QG-001 ") for line in report.splitlines()), (
+            report
+        )
+
+    def test_counts_use_each_repositorys_latest_record(
+        self,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """A fixed repository is not still counted from its earlier record."""
+        records = [
+            TestReport()._record(
+                "leynos/gamma",
+                "noncompliant",
+                findings=[_finding("NC-007")],
+            ),
+            TestReport()._record(
+                "leynos/gamma",
+                "compliant",
+                audited_at="2026-07-19T17:00:00Z",
+                findings=[],
+            ),
+        ]
+        ledger_path.write_text(
+            "".join(json.dumps(record) + "\n" for record in records),
+            encoding="utf-8",
+        )
+
+        report = sweep.render_report(ledger_path, package=sweep.RULE_PACKAGE)
+
+        assert not any(line.startswith("| NC-007 ") for line in report.splitlines()), (
+            f"the fixed repository should no longer be counted: {report}"
         )
 
 

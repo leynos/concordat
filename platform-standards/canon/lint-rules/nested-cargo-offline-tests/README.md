@@ -51,7 +51,7 @@ the one-line parameter change recorded in `docs/roadmap.md` (DF12-109).
   anywhere in the checkout, whole-file test modules, `#[cfg(test)]` modules and
   their inline children, and files reached from them by `#[path]`.
 - **Fixture package sources are excluded.** A package the existing fixture
-  selectors recognise is input to a nested build, not the code that starts one;
+  selectors recognize is input to a nested build, not the code that starts one;
   a `cargo` spawn inside it is the build under test. Fixture *manifests* and
   locks are NC-001/NC-002's business, not this rule's.
 - **Offline evidence is read from the command itself**: `--frozen`, or

@@ -1591,13 +1591,52 @@ because auditing the whole estate takes many minutes and clones over the
 network; an interrupted sweep resumes from where the ledger left off rather
 than restarting.
 
-**Idempotency rule:** a repository is skipped, rather than re-audited, when the
+**Idempotency rule:** the resume key is repository, commit, package, and
+package version. A repository is skipped, rather than re-audited, when the
 ledger already holds a record for that repository at the same `commit_sha`
-(`_already_ledgered`). Excluded entries use a variant of this rule keyed on
-`verdict == "excluded"` instead of a commit, since an exclusion has no commit
-to compare against. `--force` bypasses the commit-based skip (but not the
+under the same `rule_package` and `rule_version` (`_already_ledgered`). The
+ledger is shared by several campaigns, so a record only answers for the package
+that wrote it, and a manifest version bump re-opens the repositories it had
+covered — the same commit under a changed policy is not the same evidence.
+`rule_version` is read from the package manifest at audit time by
+`rule_version(package)`; a hand-kept constant in `parabellum_ledger.py` had
+already drifted from `rust-makefile-baseline`'s declared version, which would
+have stamped false provenance on every new record.
+
+Excluded entries use a variant of this rule keyed on `verdict == "excluded"`
+and the package instead of a commit, since an exclusion has no commit to
+compare against. `--force` bypasses the commit-based skip (but not the
 exclusion skip, which unconditionally prevents duplicate exclusion records for
-the same repository).
+the same repository and package).
+
+### Report rendering and package filtering
+
+`scripts/parabellum_report.py` renders the Markdown report. `render_report`
+takes a `package` argument defaulting to `RULE_PACKAGE` and filters the ledger
+by `rule_package` **before** `_latest_records` selects one record per
+repository. That order matters: choosing the latest record first would let a
+later survey record hide the baseline's earlier verdict for the same
+repository, silently dropping a repository the baseline audited.
+
+The report has three sections:
+
+- `## Summary` — one bullet per verdict, plus the occurrence count of each
+  finding by rule.
+- `## Repositories` (Table 1) — the latest verdict, commit, and findings per
+  repository.
+- `## Repositories by rule` (Table 2) — distinct-repository counts per rule,
+  with the rule's severity beside them. It omits rules whose only evidence is
+  compliant findings, and the whole section is skipped when there is nothing to
+  tabulate, so a new campaign's first report does not carry a caption over an
+  empty table.
+
+Table 2's "would fail" column counts repositories whose evidence for the rule
+is noncompliant or indeterminate-only. A `warning`-severity noncompliant
+finding does not block today, but it is precisely the evidence a
+promotion-to-error decision rests on, so it is counted as a repository that
+would fail. `_RuleTally.would_fail()` is the union of the noncompliant and
+indeterminate-only sets, which keeps each repository counted once however many
+findings it has for the rule.
 
 ### The git boundary
 
@@ -1611,11 +1650,17 @@ times out, or exits non-zero. Two call sites build on `_git`:
   default-branch head SHA **without cloning** — used to decide, cheaply,
   whether a repository has already been ledgered at its current head before
   paying for a clone.
-- `clone_and_audit(owner, name)` performs a shallow, single-branch clone
-  (`git clone --depth 1 --quiet`) into a temporary directory, resolves `HEAD`
-  there with `git rev-parse HEAD`, and hands the checkout to
-  `concordat.rules.run_rule` for the `rust-makefile-baseline` audit. The sweep
+- `clone_and_audit(owner, name, package=RULE_PACKAGE)` performs a shallow,
+  single-branch clone (`git clone --depth 1 --quiet`) into a temporary
+  directory, resolves `HEAD` there with `git rev-parse HEAD`, and hands the
+  checkout, with the selected package, to `concordat.rules.run_rule`. The sweep
   is audit-only: nothing here ever writes to an estate repository.
+
+`run_sweep` resolves `rule_version(options.package)` before the first clone.
+That call also validates the package identifier (through
+`packages.rule_package_dir`), so a mistyped `--package` fails in a second
+rather than after an estate's worth of cloning, and a mid-run manifest edit
+cannot stamp two different versions on records from one invocation.
 
 ## Property tests and the bounded reachability contract
 

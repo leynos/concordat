@@ -7,6 +7,7 @@ import typing as typ
 
 import pytest
 
+from concordat.rules import packages
 from scripts import parabellum_sweep as sweep
 
 if typ.TYPE_CHECKING:
@@ -19,9 +20,16 @@ def _ledger_lines(path: pathlib.Path) -> list[dict[str, typ.Any]]:
     return [json.loads(line) for line in path.read_text().splitlines() if line]
 
 
-def _fake_result(verdict: str) -> sweep.RuleRunResult:
+# A package that is not the campaign default, so package selection is
+# exercised against a real manifest rather than a made-up identifier.
+SURVEY_PACKAGE = "nested-cargo-offline-tests"
+
+
+def _fake_result(
+    verdict: str, package: str = sweep.RULE_PACKAGE
+) -> sweep.RuleRunResult:
     return sweep.RuleRunResult(
-        rule_package="rust-makefile-baseline",
+        rule_package=package,
         verdict=verdict,
         findings=(),
     )
@@ -37,7 +45,7 @@ class TestSweep:
         monkeypatch.setattr(
             sweep,
             "clone_and_audit",
-            lambda owner, name: ("a" * 40, _fake_result("compliant")),
+            lambda owner, name, **_kwargs: ("a" * 40, _fake_result("compliant")),
         )
 
     def test_records_one_line_per_repository(
@@ -98,7 +106,7 @@ class TestSweep:
         calls: list[tuple[str, str]] = []
 
         def fake_clone_and_audit(
-            owner: str, name: str
+            owner: str, name: str, **_kwargs: object
         ) -> tuple[str, sweep.RuleRunResult]:
             calls.append((owner, name))
             return head, _fake_result("compliant")
@@ -296,7 +304,7 @@ class TestSweep:
                 resource=f"{owner}/{name}",
             )
 
-        def fail_if_audited(owner: str, name: str) -> typ.NoReturn:
+        def fail_if_audited(owner: str, name: str, **_kwargs: object) -> typ.NoReturn:
             message = "clone_and_audit must not run on head failure"
             raise AssertionError(message)
 
@@ -356,7 +364,7 @@ class TestSweep:
     ) -> None:
         """An audit failure is ledgered as an error record, not raised."""
 
-        def raise_operational(owner: str, name: str) -> typ.NoReturn:
+        def raise_operational(owner: str, name: str, **_kwargs: object) -> typ.NoReturn:
             message = "conftest is required"
             raise sweep.OperationalRuleError(
                 message,
@@ -377,6 +385,210 @@ class TestSweep:
         )
         assert "conftest" in appended[0]["error_detail"], (
             "the error detail should carry the clone/audit failure message"
+        )
+
+
+class TestPackageSelection:
+    """The sweep audits one selectable package and keys records on it.
+
+    The campaign ledger is shared by several rule packages — the baseline
+    campaign and, later, the nested-cargo survey. A record therefore only
+    resumes the run it belongs to when the package and the package version
+    also match; anything else is evidence collected under a different question.
+    """
+
+    @pytest.fixture(autouse=True)
+    def patch_externals(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Replace network and audit boundaries with deterministic fakes.
+
+        The fakes honour the package they are handed so a record's provenance
+        comes from the same path the real audit takes, without a clone.
+        """
+        monkeypatch.setattr(sweep, "resolve_head", lambda owner, name: "a" * 40)
+        monkeypatch.setattr(
+            sweep,
+            "clone_and_audit",
+            lambda owner, name, package=sweep.RULE_PACKAGE: (
+                "a" * 40,
+                _fake_result("compliant", package),
+            ),
+        )
+
+    def test_the_baseline_package_is_the_default(self) -> None:
+        """Both option objects default to the campaign package."""
+        assert sweep.SweepOptions().package == sweep.RULE_PACKAGE
+        assert sweep.SweepCommandOptions().package == sweep.RULE_PACKAGE
+
+    def test_the_selected_package_reaches_the_audit(
+        self,
+        estate_path: pathlib.Path,
+        ledger_path: pathlib.Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """`--package` is forwarded to `clone_and_audit`, which runs the rule."""
+        audited: list[str] = []
+
+        def fake_clone_and_audit(
+            owner: str,
+            name: str,
+            package: str = sweep.RULE_PACKAGE,
+        ) -> tuple[str, sweep.RuleRunResult]:
+            audited.append(package)
+            return "a" * 40, _fake_result("compliant", package)
+
+        monkeypatch.setattr(sweep, "resolve_head", lambda owner, name: "a" * 40)
+        monkeypatch.setattr(sweep, "clone_and_audit", fake_clone_and_audit)
+
+        sweep.run_sweep(
+            estate_path=estate_path,
+            ledger_path=ledger_path,
+            options=sweep.SweepOptions(
+                package=SURVEY_PACKAGE,
+                only=frozenset({"statelet"}),
+            ),
+        )
+
+        assert audited == [SURVEY_PACKAGE], (
+            f"the survey package should reach the audit, got {audited}"
+        )
+
+    def test_each_record_names_the_package_and_its_manifest_version(
+        self,
+        estate_path: pathlib.Path,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """A record stores the package it audited and that package's version.
+
+        Reading the version from the manifest rather than a hand-kept constant
+        is what keeps a record truthful after a policy edit.
+        """
+        appended = sweep.run_sweep(
+            estate_path=estate_path,
+            ledger_path=ledger_path,
+            options=sweep.SweepOptions(package=SURVEY_PACKAGE),
+        )
+        manifest = packages.rule_manifest(packages.rule_package_dir(SURVEY_PACKAGE))
+
+        assert {record["rule_package"] for record in appended} == {SURVEY_PACKAGE}
+        assert {record["rule_version"] for record in appended} == {manifest["version"]}
+
+    def test_a_baseline_record_does_not_satisfy_a_survey_run(
+        self,
+        estate_path: pathlib.Path,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """Baseline isolation: each package audits every repository itself."""
+        baseline = sweep.run_sweep(estate_path=estate_path, ledger_path=ledger_path)
+
+        survey = sweep.run_sweep(
+            estate_path=estate_path,
+            ledger_path=ledger_path,
+            options=sweep.SweepOptions(package=SURVEY_PACKAGE),
+        )
+
+        auditable = {
+            record["repository"] for record in baseline if record["commit_sha"]
+        }
+        assert {record["repository"] for record in survey} >= auditable, (
+            "a baseline record must not suppress the same commit under another "
+            f"package, got {survey}"
+        )
+
+    def test_a_survey_record_does_not_satisfy_a_baseline_run(
+        self,
+        estate_path: pathlib.Path,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """The isolation is symmetric: neither package resumes the other's run."""
+        sweep.run_sweep(
+            estate_path=estate_path,
+            ledger_path=ledger_path,
+            options=sweep.SweepOptions(package=SURVEY_PACKAGE),
+        )
+
+        baseline = sweep.run_sweep(estate_path=estate_path, ledger_path=ledger_path)
+
+        assert [record["repository"] for record in baseline] == [
+            "leynos/wireframe",
+            "leynos/gauss",
+            "leynos/statelet",
+        ], f"the baseline sweep should start fresh, got {baseline}"
+
+    def test_an_older_package_version_is_re_audited(
+        self,
+        estate_path: pathlib.Path,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """A policy change re-opens the repositories it already covered.
+
+        The same commit under the same package is not the same evidence when
+        the policy that judged it has moved, so the version belongs in the
+        resume key.
+        """
+        stale = sweep._base_record("leynos/statelet")
+        stale["commit_sha"] = "a" * 40
+        stale["verdict"] = "compliant"
+        stale["rule_version"] = "0.0.1"
+        ledger_path.write_text(json.dumps(stale) + "\n", encoding="utf-8")
+
+        appended = sweep.run_sweep(
+            estate_path=estate_path,
+            ledger_path=ledger_path,
+            options=sweep.SweepOptions(only=frozenset({"statelet"})),
+        )
+
+        assert [record["repository"] for record in appended] == ["leynos/statelet"], (
+            "a record from an older package version should not satisfy the run"
+        )
+        assert appended[0]["rule_version"] == sweep.rule_version(sweep.RULE_PACKAGE), (
+            "the re-audit should record the current package version"
+        )
+        assert len(_ledger_lines(ledger_path)) == 2, (
+            "the stale record should stay in the append-only ledger"
+        )
+
+    def test_an_unknown_package_is_refused_before_any_audit(
+        self,
+        estate_path: pathlib.Path,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """A bad package name fails the run instead of becoming a record.
+
+        The package identifier is joined to a path and handed to the runner,
+        so it is validated by the same code that loads it, before the sweep
+        clones anything or writes a ledger line.
+        """
+        with pytest.raises(sweep.OperationalRuleError, match="invalid rule package"):
+            sweep.run_sweep(
+                estate_path=estate_path,
+                ledger_path=ledger_path,
+                options=sweep.SweepOptions(package="../escape"),
+            )
+
+        assert not ledger_path.exists(), "a refused package must not write a ledger"
+
+    def test_an_exclusion_is_scoped_to_its_package(
+        self,
+        tmp_path: pathlib.Path,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """A survey run records its own exclusion rather than inheriting one."""
+        estate_path = tmp_path / "estate.yaml"
+        estate_path.write_text(
+            "schema_version: 1\nowner: leynos\nrepositories:\n"
+            "  - name: gauss\n    excluded: migration in flight\n",
+            encoding="utf-8",
+        )
+
+        sweep.run_sweep(estate_path=estate_path, ledger_path=ledger_path)
+        survey = sweep.run_sweep(
+            estate_path=estate_path,
+            ledger_path=ledger_path,
+            options=sweep.SweepOptions(package=SURVEY_PACKAGE),
+        )
+
+        assert [record["rule_package"] for record in survey] == [SURVEY_PACKAGE], (
+            f"the survey run should record its own exclusion, got {survey}"
         )
 
 

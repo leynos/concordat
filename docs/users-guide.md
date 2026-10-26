@@ -1257,14 +1257,33 @@ concordat artefact rule run markdown-formatting-baseline --repo .
 append-only campaign ledger `docs/parabellum/ledger.jsonl`:
 
 ```shell
-uv run python -m scripts.parabellum_sweep [--only a,b] [--limit N] [--force]
-uv run python -m scripts.parabellum_sweep report
+uv run python -m scripts.parabellum_sweep \
+  [--only a,b] [--limit N] [--force] [--package PACKAGE]
+uv run python -m scripts.parabellum_sweep report [--package PACKAGE]
 ```
 
-A repository already ledgered at its current head commit is skipped unless
-`--force` is given, so an interrupted sweep resumes by re-running the same
-command. The `report` subcommand regenerates
-`docs/parabellum/baseline-report.md` from the ledger.
+`--package` selects the rule package to audit and defaults to
+`rust-makefile-baseline`. Any installed package works, which is how a survey
+campaign shares the ledger with the baseline without disturbing it:
+
+```shell
+uv run python -m scripts.parabellum_sweep \
+  --package nested-cargo-offline-tests --limit 5
+uv run python -m scripts.parabellum_sweep report \
+  --package nested-cargo-offline-tests
+```
+
+A repository already ledgered at its current head commit **under the same
+package and package version** is skipped unless `--force` is given, so an
+interrupted sweep resumes by re-running the same command. Records written by
+another package never satisfy the check, and bumping a package's manifest
+version re-opens every repository it had covered, because a policy change can
+change the verdict for the same commit. The `report` subcommand regenerates
+`docs/parabellum/baseline-report.md` from the ledger, filtering to the selected
+package before choosing each repository's latest record. It reports both
+occurrence counts and, per rule, the number of distinct repositories with
+noncompliant evidence, the number with indeterminate-only evidence, and how
+many would fail if the package's findings were promoted to error severity.
 
 ## Previewing and applying estate changes
 

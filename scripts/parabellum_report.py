@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import itertools as it
 import typing as typ
 import unicodedata as ud
@@ -9,11 +10,11 @@ import unicodedata as ud
 from scripts.parabellum_ledger import (
     MAKEUTIL_REV,
     RULE_PACKAGE,
-    RULE_VERSION,
     FindingRecord,
     Ledger,
     LedgerRecord,
     _load_ledger,
+    rule_version,
 )
 from scripts.parabellum_paths import DEFAULT_LEDGER_PATH
 
@@ -42,6 +43,22 @@ def _latest_records(
     for record in ledger:
         latest[record["repository"]] = record
     return latest
+
+
+def _records_for_package(ledger: Ledger, package: str) -> Ledger:
+    """Return only the records *package* wrote.
+
+    The filter runs before the latest-record selection: picking the latest
+    record first would let a later survey record hide the baseline's verdict
+    for the same repository, and the baseline report would silently lose a
+    repository it had audited.
+
+    Returns
+    -------
+    Ledger
+        The records *package* wrote, in ledger order.
+    """
+    return [record for record in ledger if record["rule_package"] == package]
 
 
 # A table cell ends at an unescaped `|`, and a newline ends the row. Ledger
@@ -82,7 +99,110 @@ def _finding_summary(record: LedgerRecord) -> str:
     return _findings_summary(record["findings"])
 
 
-def render_report(ledger_path: pathlib.Path = DEFAULT_LEDGER_PATH) -> str:
+# Severity labels in descending order of weight. A rule can be reached through
+# several records with different labels, and the row must not understate it.
+_SEVERITY_ORDER: typ.Final = ("error", "warning", "info")
+
+
+@dataclasses.dataclass(slots=True)
+class _RuleTally:
+    """Distinct-repository evidence for one rule across the selected records.
+
+    Occurrence counts say how often a rule fired; these say how many
+    repositories it reaches, which is the number a survey reports and the
+    number a promotion decision is made on.
+    """
+
+    severities: set[str] = dataclasses.field(default_factory=set)
+    noncompliant: set[str] = dataclasses.field(default_factory=set)
+    indeterminate_only: set[str] = dataclasses.field(default_factory=set)
+
+    def severity(self) -> str:
+        """Return the highest severity recorded for this rule.
+
+        Returns
+        -------
+        str
+            The weightiest recorded severity, or ``"error"`` if none was
+            recorded — the severities are filled from the same findings that
+            create the tally, so this branch is defensive only.
+        """
+        for severity in _SEVERITY_ORDER:
+            if severity in self.severities:
+                return severity
+        return _SEVERITY_ORDER[0]
+
+    def would_fail(self) -> set[str]:
+        """Return the repositories promotion to error would block.
+
+        Any non-compliant or unresolved evidence blocks once the package's
+        findings carry error severity, whether the finding is labelled
+        ``warning`` today or not. A repository appears once however many
+        findings it has for the rule.
+
+        Returns
+        -------
+        set[str]
+            The distinct affected repositories.
+        """
+        return self.noncompliant | self.indeterminate_only
+
+
+def _tally_rules(latest: dict[str, LedgerRecord]) -> dict[str, _RuleTally]:
+    """Count distinct repositories per rule, ignoring compliant evidence."""
+    tallies: dict[str, _RuleTally] = {}
+    for repository, record in latest.items():
+        noncompliant_rules: set[str] = set()
+        indeterminate_rules: set[str] = set()
+        # A repository can report more than one finding for the same rule —
+        # two cargo spawns in two files — so the sets deduplicate it.
+        for finding in record["findings"]:
+            if finding["verdict"] not in ("noncompliant", "indeterminate"):
+                continue
+            rule_id = finding["rule_id"]
+            tally = tallies.setdefault(rule_id, _RuleTally())
+            tally.severities.add(finding["severity"])
+            if finding["verdict"] == "noncompliant":
+                tally.noncompliant.add(repository)
+                noncompliant_rules.add(rule_id)
+            else:
+                indeterminate_rules.add(rule_id)
+        # A repository is "indeterminate-only" for a rule when that is its
+        # strongest evidence: a proven violation is not also unresolved.
+        for rule_id in indeterminate_rules - noncompliant_rules:
+            tallies[rule_id].indeterminate_only.add(repository)
+    return tallies
+
+
+def _rule_rows(tallies: dict[str, _RuleTally]) -> list[tuple[str, ...]]:
+    """Render one table row per rule that has any blocking evidence."""
+    rows = [
+        (
+            "Rule",
+            "Severity",
+            "Noncompliant repositories",
+            "Indeterminate-only repositories",
+            "Would fail",
+        )
+    ]
+    for rule_id in sorted(tallies):
+        tally = tallies[rule_id]
+        if not tally.noncompliant and not tally.indeterminate_only:
+            continue
+        rows.append((
+            _cell(rule_id),
+            _cell(tally.severity()),
+            str(len(tally.noncompliant)),
+            str(len(tally.indeterminate_only)),
+            str(len(tally.would_fail())),
+        ))
+    return rows
+
+
+def render_report(
+    ledger_path: pathlib.Path = DEFAULT_LEDGER_PATH,
+    package: str = RULE_PACKAGE,
+) -> str:
     """Render the campaign baseline report from the ledger.
 
     Parameters
@@ -90,15 +210,19 @@ def render_report(ledger_path: pathlib.Path = DEFAULT_LEDGER_PATH) -> str:
     ledger_path:
         Path to the append-only ledger file. Defaults to
         ``DEFAULT_LEDGER_PATH``.
+    package:
+        Rule package to report on. Records written by other packages are
+        filtered out before the latest record per repository is chosen, so
+        campaigns sharing the ledger do not overwrite each other's reports.
 
     Returns
     -------
     str
         The rendered Markdown report. Where a repository has more than
-        one ledger record, the latest one wins.
+        one ledger record for *package*, the latest one wins.
 
     """
-    latest = _latest_records(_load_ledger(ledger_path))
+    latest = _latest_records(_records_for_package(_load_ledger(ledger_path), package))
     counts: dict[str, int] = {}
     rule_counts: dict[str, int] = {}
     for record in latest.values():
@@ -114,7 +238,7 @@ def render_report(ledger_path: pathlib.Path = DEFAULT_LEDGER_PATH) -> str:
         "`python -m scripts.parabellum_sweep report`. Do not edit by hand.",
         "",
         (
-            f"Rule package: `{RULE_PACKAGE}` v{RULE_VERSION}; "
+            f"Rule package: `{package}` v{rule_version(package)}; "
             f"makeutil `{MAKEUTIL_REV[:12]}`."
         ),
         "",
@@ -153,6 +277,20 @@ def render_report(ledger_path: pathlib.Path = DEFAULT_LEDGER_PATH) -> str:
         ))
     lines.extend(_aligned_table(rows))
     lines.append("")
+
+    rule_rows = _rule_rows(_tally_rules(latest))
+    if len(rule_rows) > 1:
+        # An empty selection has no table to caption: a caption above nothing
+        # reads as a rendering bug, and the first run of a new campaign has no
+        # findings to tabulate.
+        lines.extend([
+            "## Repositories by rule",
+            "",
+            "Table 2: Distinct repositories with blocking evidence per rule.",
+            "",
+            *_aligned_table(rule_rows),
+            "",
+        ])
     return "\n".join(lines)
 
 
@@ -177,7 +315,16 @@ def _pad(text: str, width: int) -> str:
 
 
 def _aligned_table(rows: cabc.Sequence[tuple[str, ...]]) -> list[str]:
-    """Render *rows* (header first) as a column-aligned Markdown table."""
+    """Render *rows* (header first) as a column-aligned Markdown table.
+
+    Returns
+    -------
+    list[str]
+        The table's lines, or an empty list when there are no rows: an empty
+        selection has nothing to caption or head.
+    """
+    if not rows:
+        return []
     # Columns are padded to their widest cell, in the shape `mdtablefix`
     # produces, so the generated report already satisfies `make check-fmt`
     # and the checked-in snapshot is not rewritten by the formatter.

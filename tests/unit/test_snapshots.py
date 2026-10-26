@@ -164,6 +164,18 @@ class TestReportRendering:
         report = sweep.render_report(ledger_path)
         assert f"makeutil `{sweep.MAKEUTIL_REV[:12]}`" in report, report
 
+    def test_report_names_the_current_package_version(
+        self, ledger_path: pathlib.Path
+    ) -> None:
+        """Semantics: the header names the package the report is about.
+
+        The version comes from the package manifest, not a constant, so a
+        policy edit cannot leave the report claiming an older version.
+        """
+        report = sweep.render_report(ledger_path)
+        version = sweep.rule_version(sweep.RULE_PACKAGE)
+        assert f"v{version}" in report, report
+
     def test_report_counts_each_verdict(self, ledger_path: pathlib.Path) -> None:
         """Semantics: every repository is summarized under its verdict."""
         report = sweep.render_report(ledger_path)
