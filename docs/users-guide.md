@@ -524,9 +524,17 @@ Verdicts are three-valued. `compliant` means the finding set is empty;
 policy could not prove compliance and fails closed (for example, the `Makefile`
 includes other files, or the parse had to recover from syntax errors).
 
-Exit codes: `0` compliant; `1` at least one finding, including indeterminate
-verdicts; `2` operational failure (for example, the pinned `makeutil` or
-`conftest` executable is missing), reported on standard error.
+Each finding also carries a `severity`, shown on every row of the table.
+Severity is the enforcement dial; the verdict is evidence. Exit codes: `0`
+compliant or every finding is an advisory `warning`; `1` at least one
+non-warning finding, including indeterminate verdicts, which fail closed; `2`
+operational failure (for example, the pinned `makeutil` or `conftest`
+executable is missing), reported on standard error.
+
+A warning-only result therefore exits `0` but still prints its findings and
+reports its verdict, and `--format json` carries both the verdict and the
+severity of every finding. This is what lets a newly introduced rule survey an
+estate before it is promoted to `error` and starts blocking lanes.
 
 An unreadable file is not an absent one. If the root `Cargo.toml` or the root
 `Makefile` exists but cannot be inspected, because of permissions or any other

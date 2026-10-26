@@ -1,0 +1,331 @@
+# Add a nested-cargo offline check and make warning findings advisory (#326)
+
+This ExecPlan (execution plan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision log`,
+`Outcomes & retrospective`, `Conformance basis`, and `Verification plan` must
+be kept up to date as work proceeds.
+
+Status: DRAFT
+
+## Purpose / big picture
+
+Tests that start their own `cargo` process — nested builds, `cargo package`,
+`cargo publish`, `cargo dylint`, trybuild — resolve dependencies and update the
+crates.io index while holding the shared Cargo package-cache lock. On a host
+where many agents share one `$CARGO_HOME`, every later build queues behind that
+work; a 19-minute wait was observed in `leynos/whitaker` and the pattern is
+documented in `leynos/whitaker#518`. After this change,
+`concordat artefact rule run nested-cargo-offline-tests --repo <checkout>`
+reports, without running Cargo or touching the network, every Cargo-command
+spawn below `tests/`/`test_support/` that can reach the network, and every
+entry point (`Makefile` target, nextest setup script, CI workflow step) whose
+test ramp starts Cargo before it has prefetched the graph offline. The report
+is advisory by default (`warning` severity) so the estate can be surveyed
+before the rule is promoted to blocking, and a warning finding must no longer
+fail a gate — that is the first task, and it is what lets the survey run safely.
+
+## Constraints
+
+This plan may not modify the following, except where a task explicitly names
+them. These are hard invariants; violating one requires escalation, not a
+workaround.
+
+- `concordat/rules/packages.py` and
+  `concordat/rules/nested_cargo_lock_envelope.py` stay unchanged. New packages
+  register through `concordat/rules/nested_cargo_registry.py` only.
+- `RuleRunResult.verdict`, `_overall_verdict`, and `render_json` keep their
+  current semantics and shape. JSON consumers already depend on
+  `{"rule_package", "verdict", "findings"}`.
+- Exit code `2` for operational failure is unchanged.
+- Existing committed snapshots under `tests/unit/snapshots/` are updated only
+  where this plan says so, and every update is justified in `Decision log`.
+- `typos.toml` is generated and must never be hand-edited; new vocabulary goes
+  in `typos.local.toml` as narrow patterns.
+- `NC-001`/`NC-002` behaviour and fixtures keep passing unchanged.
+- The branch must not be `main`; commits follow the repository's quality
+  gates, run through the `scrutineer` gate-runner.
+- No new runtime dependency without escalation.
+
+## Tolerances (exception triggers)
+
+- Scope: if any single task needs more than 1,500 net lines across more than
+  12 files, stop and escalate with the file list.
+- Interface: if a public Python signature outside the new modules must change
+  (other than `runner.RuleRunResult` gaining `blocking` and a new exit rule,
+  both mandated), stop and escalate.
+- Dependencies: any new Python or Rust dependency stops the work.
+- Iterations: if a gate still fails after three distinct fixes, stop and
+  report the failing log path.
+- Ambiguity: if the issue text and a discovered corpus shape disagree about
+  what counts as safe, record both readings in `Decision log` and take the
+  conservative one (report `unresolved`, never `offline`); escalate only if the
+  conservative reading would contradict an explicit requirement.
+- Survey data: if `~/docs/missing-frozen-survey-plan.md` is absent on this
+  host, do not fabricate survey numbers. Run the local corpus comparison the
+  task defines, record the block in `Decision log`, and state it in the PR.
+
+## Risks
+
+- Risk: the `exit_code` change silently unblocks an estate gate that relies on
+  a warning-severity finding failing. Severity: medium Likelihood: low.
+  Mitigation: only RT-025 uses `warning` in shipped canon, and the design
+  document already treats severity as the promotion dial
+  (`docs/concordat-design.md:357`); record the decision and cover mixed
+  severities with tests.
+- Risk: a text-level Rust reader misclassifies a spawn, producing false
+  `online` findings. Severity: high Likelihood: medium. Mitigation:
+  conservative classification — anything the reader cannot resolve is
+  `unresolved`, never `online`, and `--version`/help are excluded; corpus tests
+  over real whitaker and theoremc checkouts pin the outcome.
+- Risk: `NC-007`/`NC-008` collide with identifiers used elsewhere in the
+  estate. Severity: low Likelihood: low. Mitigation: grep this repository and
+  record the check; confirm against the upstream design table before merge.
+- Risk: the survey (Task 4) cannot be run because the referenced plan file is
+  missing. Severity: medium Likelihood: high (already observed absent).
+  Mitigation: keep survey code and tests complete, run the local corpus
+  comparison, and report the missing artefact in the PR rather than inventing
+  counts.
+- Risk: `pylint` `max-module-lines = 800` is exceeded by the reader modules.
+  Severity: low Likelihood: medium. Mitigation: split the reader by concern
+  from the start (`nested_cargo_spawns.py`, `nested_cargo_entry_points.py`,
+  `nested_cargo_offline_envelope.py`).
+
+## Progress
+
+- [ ] (2026-10-25) Task 1: warning severity research recorded, failing tests
+      written, `exit_code`/`blocking`/severity column implemented, docs
+      updated, gates green, committed.
+- [ ] Task 2: spawn reader, entry-point reader, envelope builder, registry.
+- [ ] Task 3: canon package, policy, fixtures, Rego tests, unit and BDD tests,
+      manifest SHA-256, documentation.
+- [ ] Task 4: `--package` sweep plumbing, ledger resume key, report filters and
+      distinct-repository counts, real-corpus comparison.
+- [ ] Delivery: draft PR with session reference.
+
+## Surprises & discoveries
+
+- Observation: 87 `finding(...)` calls appear to pass `"indeterminate"` as
+  the severity. Evidence: they use the four-argument helper
+  `finding(id, verdict, path, msg)` whose second argument is the verdict, not
+  the severity; only `rust-toolchain-policy` and this repository's NC policy
+  use five/`error`-fixed forms. Impact: the severity scan must be done
+  per-helper, not by grepping the second string argument.
+- Observation: `leynos/whitaker#518` is still open, so whitaker `main` has no
+  `--frozen`/`--offline`/`CARGO_NET_OFFLINE` anywhere. Impact: the "after"
+  corpus case must be synthetic or a patched checkout.
+- Observation: `~/docs/missing-frozen-survey-plan.md` does not exist on this
+  host. Impact: the estate survey step cannot run here.
+
+## Decision log
+
+- Decision: warning-severity findings are advisory and no longer block a
+  gate; `exit_code` is `0` when the verdict is compliant or every finding is
+  `warning`, otherwise `1`. Rationale: severity is the documented enforcement
+  dial (`docs/concordat-design.md:357`), RT-025 is the only warning producer,
+  and the new package must ship as a survey-mode warning. Verdict and JSON keep
+  their meaning, so evidence is preserved while enforcement changes.
+  Date/Author: 2026-10-25, Claude Code on behalf of leynos.
+- Decision: the Rust reader reports `unresolved` for anything whose offline
+  evidence it cannot prove. Rationale: a false `online` finding would push a
+  reading of "fix the test" onto code that is already safe; `indeterminate`
+  preserves the question without asserting it. Date/Author: 2026-10-25.
+
+## Outcomes & retrospective
+
+Not yet started.
+
+## Context and orientation
+
+`concordat` is a Python policy platform.
+`concordat artefact rule run <id> --repo <path>` builds a JSON envelope in
+Python (`concordat/rules/*.py`), runs Conftest over a Rego policy in
+`platform-standards/canon/lint-rules/<id>/policy/`, and renders findings.
+`concordat/rules/runner.py` owns evaluation, the `Finding` and `RuleRunResult`
+types, `exit_code`, and the table/JSON renderers.
+`concordat/rules/nested_cargo.py` holds shared helpers for the nested-cargo
+family, and `concordat/rules/nested_cargo_lock_envelope.py` plus
+`nested_cargo_registry.py` are the template for a new package in that family.
+
+The existing sibling rule `nested-cargo-fixture-lockfiles` (NC-001/NC-002)
+keeps a fixture's lockfile aligned with the workspace graph. This plan adds its
+complement: a check on test-time `cargo` invocations and on the entry points
+that start them, so a nested build either runs offline against the shared cache
+or is reported.
+
+Terms used below. A *spawn* is a literal `Command::new("cargo")` (or an
+`env!`/`option_env!`-derived Cargo path) in test-scope Rust. *Offline evidence*
+is `--frozen`, or both `--offline` and `--locked`, or a command-local
+`CARGO_NET_OFFLINE="true"`. An *entry point* is a Make target, a nextest
+setup-script, or a workflow step that ramps a test command.
+
+## Conformance basis
+
+The governing artefacts are the GitHub issue `leynos/concordat#326`, the
+whitaker pattern fix `leynos/whitaker#518`, the existing NC package
+(`platform-standards/canon/lint-rules/nested-cargo-fixture-lockfiles/`), and
+`docs/concordat-design.md` (DF12-109 entry at `docs/roadmap.md:538`). No
+separate Terms of Reference or ADR exists for this repository; the design
+document and the issue text are the contract.
+
+Trace chain:
+
+```plaintext
+ISSUE-326-T1 -> EP-M1 -> tests/unit/test_rule_exit_contract.py
+ISSUE-326-T2 -> EP-M2 -> tests/unit/test_nested_cargo_spawns.py, test_nested_cargo_offline_envelope.py
+ISSUE-326-T3 -> EP-M3 -> tests/unit/test_nested_cargo_offline_rule.py, tests/bdd/features/nested_cargo_offline_tests_rule_run.feature
+ISSUE-326-T4 -> EP-M4 -> scripts/tests/test_parabellum_sweep.py, scripts/tests/test_parabellum_report.py
+```
+
+## Verification plan
+
+Obligation `EP-EXIT-1`: for every result, `exit_code == 0` iff the verdict is
+compliant or every finding carries severity `warning`; otherwise `1`.
+
+- Method: parameterized unit tests over a finite partition.
+- Rationale: the input space is a small product of verdicts and severity
+  multisets, so enumeration is exhaustive for the contract.
+- Domain: no findings; all-error; all-warning; mixed error+warning across
+  noncompliant and indeterminate; a finding with an unknown severity label.
+- Artefact: `tests/unit/test_rule_exit_contract.py`.
+- Evidence: new tests fail against the current `exit_code` before the change
+  and pass after.
+- Non-vacuity: each partition has a witness; the all-warning noncompliant case
+  currently exits `1`, so it fails for the intended reason.
+
+Obligation `EP-EXIT-2`: `blocking` is `True` exactly when `exit_code != 0`, and
+`render_table` shows each finding's severity without changing `render_json`.
+
+- Method: unit tests plus the existing snapshot test.
+- Artefact: `tests/unit/test_rule_exit_contract.py`,
+  `tests/unit/test_snapshots.py` (snapshot updated for the new column only).
+- Non-vacuity: a mixed-severity table must show both `error` and `warning`.
+
+Obligation `EP-SPAWN-1`: a spawn is `offline` only with proven offline
+evidence; any indeterminate argument or environment source without it is
+`unresolved`; a literal clean spawn is `online`.
+
+- Method: parameterized unit tests over hand-written Rust fixtures, plus
+  corpus tests over real whitaker and theoremc checkouts.
+- Rationale: the reader is a text-level approximation whose risky direction is
+  false `online`; the partition covers each evidence form and each uncertainty
+  form, and the corpus test anchors it to real code.
+- Domain: `--frozen`; `--offline --locked`; `--offline` alone;
+  `CARGO_NET_OFFLINE` command-local and inherited; `--version`/`-V`/`help`;
+  `env!("CARGO")`; non-literal `.arg`; helper functions and call sites;
+  trybuild dependency tables; out-of-line `#[cfg(test)]` modules.
+- Artefact: `tests/unit/test_nested_cargo_spawns.py`.
+- Evidence: red first; then green; corpus cases pin whitaker's four direct
+  spawns as `online` and theoremc's helpers as spawns.
+- Non-vacuity: the "inherited env does not count" case must still report
+  `online`, proving the exclusion is exercised.
+
+Obligation `EP-ENTRY-1`: `&&` and fail-fast sequencing prove prefetch order;
+`;` does not; Make prerequisite and recipe order is read with the existing
+loader; unresolved expansion, `.ONESHELL`, and recursive Make stay uncertain.
+
+- Method: parameterized unit tests for shell lexing, Make parsing, nextest
+  setup scripts, and workflow order.
+- Artefact: `tests/unit/test_nested_cargo_entry_points.py`.
+- Non-vacuity: a `cargo test; cargo fetch --locked` case must stay uncertain,
+  which fails if `;` were treated as ordering.
+
+Obligation `EP-POLICY-1`: the policy emits NC-007 for `online` spawns and
+NC-008 for absent entry-point prefetch only when spawn or trybuild evidence
+exists; every unresolved/uncertain/problem fact is EN-001 indeterminate; an
+envelope defect is an error-severity EN-001.
+
+- Method: Rego unit tests over `fixtures/data.json`, plus the real runner.
+- Artefact: `policy/nested_cargo_offline_tests_test.rego`,
+  `tests/unit/test_nested_cargo_offline_rule.py`.
+- Non-vacuity: an exemption suppresses NC-007/NC-008 for one directory and not
+  another; a fixture-lock-only checkout produces no offline facts.
+
+Axioms: Conftest 0.68.2 semantics for `deny`/`data.parameters`; Cargo's meaning
+of `--frozen`, `--offline`, `--locked`; nextest's setup-script execution order;
+GitHub Actions step ordering. Third-party internals are not verified; the
+repository-owned readers and policy are.
+
+## Plan of work
+
+Stage A (done): research warning severities and corpus shapes.
+
+Stage B (Task 1, red): add `tests/unit/test_rule_exit_contract.py` covering
+EP-EXIT-1/2, run it, confirm failures on the all-warning cases.
+
+Stage C (Task 1, green): in `concordat/rules/runner.py` add `WARNING_SEVERITY`,
+a `blocking` property, the new `exit_code`, and a severity column in
+`render_table`; update the table snapshot; update `docs/developers-guide.md`
+"Verdicts and exit codes" and `docs/concordat-design.md` with the decision;
+update the CLI docstring in `concordat/cli.py`. Gate and commit.
+
+Stage D (Task 2): write failing tests for the spawn reader, entry-point reader,
+and envelope; implement the three modules; register in
+`nested_cargo_registry.py`; extend `tests/unit/test_envelope_selection.py`;
+gate and commit.
+
+Stage E (Task 3): write failing Rego tests and unit/BDD tests; build the canon
+package; register both artefacts with SHA-256 in
+`platform-standards/canon/manifest.yaml`; write README and documentation; gate
+and commit.
+
+Stage F (Task 4): write failing sweep/report tests; implement `--package`, the
+ledger resume key, report filters and counts; run the local corpus comparison;
+gate and commit.
+
+Stage G: CodeRabbit review, gate re-run, draft PR.
+
+## Concrete steps
+
+All commands run from the worktree root.
+
+```plaintext
+uv run pytest tests/unit/test_rule_exit_contract.py -v
+make check-fmt
+make lint
+make typecheck
+make test
+```
+
+Commit gate runs are delegated to `scrutineer` with logs under `/tmp`.
+
+## Validation and acceptance
+
+- `uv run pytest tests/unit/test_rule_exit_contract.py` fails before the
+  `exit_code` change on the all-warning cases and passes after.
+- `concordat artefact rule run nested-cargo-offline-tests --repo <fixture>`
+  prints a table whose rows carry severity, and exits `0` when every finding is
+  a warning.
+- The BDD feature `nested_cargo_offline_tests_rule_run.feature` passes for
+  offline-safe, warning NC-007, missing-prefetch NC-008, and unreadable
+  evidence.
+- `make check-fmt`, `make lint`, `make typecheck`, `make test`,
+  `make markdownlint`, and `make nixie` pass.
+
+## Idempotence and recovery
+
+Every step is a normal edit plus a gate run. A failed gate is retried after a
+fix; commits are small so a bad change can be reverted with `git revert`. No
+destructive commands are planned.
+
+## Artefacts and notes
+
+To be filled as evidence is captured.
+
+## Interfaces and dependencies
+
+- `concordat/rules/runner.py`: `WARNING_SEVERITY`, `RuleRunResult.blocking`,
+  revised `RuleRunResult.exit_code`, severity column in `render_table`.
+- `concordat/rules/nested_cargo_spawns.py`:
+  `collect_spawns(checkout, problems) -> list[SpawnFact]`.
+- `concordat/rules/nested_cargo_entry_points.py`:
+  `collect_entry_points(checkout, problems) -> EntryPointEvidence`.
+- `concordat/rules/nested_cargo_offline_envelope.py`:
+  `ENVELOPE_KIND = "policy-input/nested-cargo-offline-tests"`,
+  `ENVELOPE_SCHEMA_VERSION = 1`,
+  `build_nested_cargo_offline_envelope(checkout)`.
+- `concordat/rules/nested_cargo_registry.py`: registers package
+  `nested-cargo-offline-tests` and the new kind.
+
+## Revision note
+
+Initial draft, 2026-10-25.

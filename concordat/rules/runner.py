@@ -50,6 +50,11 @@ VERDICT_COMPLIANT: typ.Final = "compliant"
 VERDICT_NONCOMPLIANT: typ.Final = "noncompliant"
 VERDICT_INDETERMINATE: typ.Final = "indeterminate"
 
+# The only advisory severity. Every other label — including a misspelt one, a
+# future level, or an absent value defaulted to `error` — blocks, so a policy
+# cannot weaken a gate by inventing a spelling.
+WARNING_SEVERITY: typ.Final = "warning"
+
 
 class _ConftestMetadata(typ.TypedDict, total=False):
     """The finding metadata a policy rule attaches to a Conftest failure."""
@@ -125,15 +130,34 @@ class RuleRunResult:
     findings: tuple[Finding, ...]
 
     @property
+    def blocking(self) -> bool:
+        """Whether these findings should stop a gate.
+
+        A result blocks unless it is clean or every finding is advisory. The
+        verdict deliberately plays no part: an all-warning ``noncompliant``
+        result still records noncompliance, it just does not enforce it.
+
+        Returns
+        -------
+        bool
+            ``True`` unless every finding carries the ``warning`` severity.
+        """
+        return any(finding.severity != WARNING_SEVERITY for finding in self.findings)
+
+    @property
     def exit_code(self) -> int:
-        """Process exit code: 0 when compliant, otherwise 1 (fail closed).
+        """Process exit code: 0 when the result does not block, else 1.
+
+        Missing evidence still fails closed: an ``indeterminate`` finding
+        whose severity is anything but ``warning`` exits ``1``. Operational
+        failure is exit ``2`` and never reaches this property.
 
         Returns
         -------
         int
-            ``0`` when compliant; otherwise ``1``.
+            ``0`` when compliant or every finding is advisory; otherwise ``1``.
         """
-        return 0 if self.verdict == VERDICT_COMPLIANT else 1
+        return 1 if self.blocking else 0
 
 
 def _policy_namespace(rule_id: str) -> str:
@@ -519,7 +543,9 @@ def render_table(result: RuleRunResult) -> str:
     Returns
     -------
     str
-        A header line, followed by one aligned row per finding.
+        A header line, followed by one aligned row per finding. Each row names
+        the severity, so a reader can tell advisory evidence from blocking
+        evidence without decoding the JSON document.
 
     """
     header = f"{result.rule_package}: {result.verdict}"
@@ -529,19 +555,21 @@ def render_table(result: RuleRunResult) -> str:
         (
             finding.rule_id,
             finding.verdict,
+            finding.severity,
             f"{finding.path}:{finding.line}",
             finding.message,
         )
         for finding in result.findings
     ]
-    widths = [max(len(row[column]) for row in rows) for column in range(3)]
+    widths = [max(len(row[column]) for row in rows) for column in range(4)]
     lines = [header]
     lines.extend(
         "  ".join((
             row[0].ljust(widths[0]),
             row[1].ljust(widths[1]),
             row[2].ljust(widths[2]),
-            row[3],
+            row[3].ljust(widths[3]),
+            row[4],
         ))
         for row in rows
     )

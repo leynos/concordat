@@ -1424,12 +1424,29 @@ findings by `_overall_verdict`:
 - `indeterminate` — findings exist, but none is `noncompliant` (the policy
   could not prove compliance, and fails closed rather than passing).
 
-The `rule_run` CLI command maps these, plus operational failure, onto three
-exit codes: `0` compliant, `1` at least one finding (including indeterminate,
-which fails closed), `2` operational failure — an uncaught
-`OperationalRuleError` is caught in `concordat.cli.main` and converted to exit
-code 2, printed to standard error, distinct from the `1` that `ConcordatError`
-maps to.
+The verdict is evidence, not enforcement. `RuleRunResult.blocking` decides
+whether a caller should stop, and `exit_code` maps it to a status:
+
+- `0` — compliant, or every finding carries the advisory `warning` severity.
+- `1` — at least one finding of any other severity, including
+  `indeterminate` (which fails closed).
+- `2` — operational failure; an uncaught `OperationalRuleError` is caught in
+  `concordat.cli.main` and converted to exit code 2, printed to standard error,
+  distinct from the `1` that `ConcordatError` maps to.
+
+Severity is matched exactly: only the literal `warning` is advisory. A misspelt
+or unknown label blocks, so a policy cannot weaken a gate by inventing a
+spelling, and a finding whose metadata omits `severity` still defaults to
+`error`. `blocking` and `exit_code` are the same fact in two forms, so a
+warning-only `noncompliant` result exits `0` while its verdict and JSON
+document keep reporting `noncompliant`. The table renderer prints the severity
+on every finding row for exactly that reason: the status can say "not blocking"
+while the output still says what was found.
+
+The rules that ship this way use the severity as the promotion dial. A rule
+introduced to survey an estate starts at `warning`, is fixed repository by
+repository, and is promoted to `error` in a separate policy change once the
+survey shows the estate clean.
 
 ### Rule package identifier validation
 

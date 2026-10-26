@@ -1406,13 +1406,46 @@ Table 3 is a proposal for the general `artefact` command family and does not
 describe what ships today. The one `artefact` subcommand that is implemented,
 `concordat artefact rule run`, ships a narrower, already-fixed scheme instead:
 
-- `0` — compliant.
-- `1` — policy findings, including `indeterminate` (which fails closed).
+- `0` — compliant, or every finding carries the advisory `warning` severity.
+- `1` — at least one non-advisory policy finding, including `indeterminate`
+  (which fails closed).
 - `2` — operational failure.
 
 See
 [`docs/developers-guide.md`, "Verdicts and exit codes"](developers-guide.md#verdicts-and-exit-codes)
 for the mapping from verdict to exit code.
+
+##### Severity: evidence versus enforcement
+
+A finding's `severity` is the enforcement dial, and the verdict is evidence.
+`RuleRunResult.verdict` and the JSON document always report what the policy
+proved; `RuleRunResult.blocking` and `exit_code` decide only whether a caller
+stops. A result is non-blocking when it is compliant or when every finding
+carries `severity: "warning"`. Every other label blocks, including a misspelt
+one, so a policy cannot weaken a gate by inventing a spelling.
+
+This separation exists because the estate needs to be surveyed before it can be
+fixed. A rule introduced across dozens of repositories would otherwise have to
+choose between shipping at `error` and breaking every lane before anyone has
+seen the findings, or not shipping at all. Shipping at `warning` lets the
+survey run, lets each repository fix its own findings in its own time, and
+keeps the evidence in the ledger and the report. Promotion to `error` is then a
+one-line policy change made once the survey shows the estate clean — the same
+two-phase shape this design already describes for the Auditor rules (see
+"Active enforcement" above) and the same shape the rule tables use when they
+record a warning severity alongside a planned error promotion.
+
+The shipped policies respect the contract today: every `finding(...)` call is
+`error` except `RT-025` in `rust-toolchain-policy`, which is `warning` for both
+its noncompliant and indeterminate branches. That is the precedent, not an
+accident, and it is why the change to `exit_code` does not need a policy
+migration: an all-`error` result behaves exactly as it did before, and RT-025
+becomes advisory as its name always implied.
+
+The table renderer prints the severity on each finding row so that an exit
+status of `0` is never mistaken for "nothing found". The JSON document is
+unchanged in shape: consumers that read `severity`, `verdict`, and `findings`
+already have everything they need.
 
 ##### Configuration and locking
 
