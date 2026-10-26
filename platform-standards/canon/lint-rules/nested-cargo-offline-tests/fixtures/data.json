@@ -1,0 +1,333 @@
+{
+  "fixtures": {
+    "compliant": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-offline-tests",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "spawns": [
+        {
+          "path": "tests/support.rs",
+          "line": 12,
+          "form": "command_new",
+          "state": "offline",
+          "flags": ["--frozen", "build"],
+          "environment": []
+        }
+      ],
+      "trybuild": [],
+      "entry_points": [],
+      "problems": []
+    },
+    "online_spawn": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-offline-tests",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "spawns": [
+        {
+          "path": "tests/build_discovery_bdd.rs",
+          "line": 80,
+          "form": "command_new",
+          "state": "online",
+          "flags": ["-vv", "--color"],
+          "environment": []
+        },
+        {
+          "path": "tests/support.rs",
+          "line": 12,
+          "form": "command_new",
+          "state": "offline",
+          "flags": ["--frozen", "build"],
+          "environment": []
+        }
+      ],
+      "trybuild": [],
+      "entry_points": [],
+      "problems": []
+    },
+    "online_cargo_net_offline": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-offline-tests",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "spawns": [
+        {
+          "path": "tests/offline.rs",
+          "line": 20,
+          "form": "command_new",
+          "state": "offline",
+          "flags": ["build"],
+          "environment": ["CARGO_NET_OFFLINE"]
+        }
+      ],
+      "trybuild": [],
+      "entry_points": [],
+      "problems": []
+    },
+    "unresolved_spawn": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-offline-tests",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "spawns": [
+        {
+          "path": "tests/forwarded_args.rs",
+          "line": 44,
+          "form": "command_new",
+          "state": "unresolved",
+          "flags": [],
+          "environment": []
+        }
+      ],
+      "trybuild": [],
+      "entry_points": [],
+      "problems": []
+    },
+    "absent_prefetch": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-offline-tests",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "spawns": [
+        {
+          "path": "tests/build_suite_bdd.rs",
+          "line": 96,
+          "form": "command_new",
+          "state": "offline",
+          "flags": ["--frozen", "build"],
+          "environment": []
+        }
+      ],
+      "trybuild": [],
+      "entry_points": [
+        {
+          "kind": "makefile",
+          "path": "Makefile",
+          "line": 27,
+          "name": "test",
+          "state": "absent",
+          "reason": "no success-gated fetch precedes the test command"
+        }
+      ],
+      "problems": []
+    },
+    "uncertain_prefetch": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-offline-tests",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "spawns": [
+        {
+          "path": "tests/build_suite_bdd.rs",
+          "line": 96,
+          "form": "command_new",
+          "state": "online",
+          "flags": [],
+          "environment": []
+        }
+      ],
+      "trybuild": [],
+      "entry_points": [
+        {
+          "kind": "makefile",
+          "path": "Makefile",
+          "line": 191,
+          "name": "test",
+          "state": "uncertain",
+          "reason": "the test command names an unresolved variable"
+        }
+      ],
+      "problems": []
+    },
+    "prefetch_before": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-offline-tests",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "spawns": [
+        {
+          "path": "tests/build_suite_bdd.rs",
+          "line": 96,
+          "form": "command_new",
+          "state": "offline",
+          "flags": ["--frozen", "build"],
+          "environment": []
+        }
+      ],
+      "trybuild": [],
+      "entry_points": [
+        {
+          "kind": "makefile",
+          "path": "Makefile",
+          "line": 30,
+          "name": "test",
+          "state": "before",
+          "reason": "cargo fetch --locked runs before the test command"
+        }
+      ],
+      "problems": []
+    },
+    "no_spawn_or_trybuild": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-offline-tests",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "spawns": [],
+      "trybuild": [],
+      "entry_points": [
+        {
+          "kind": "makefile",
+          "path": "Makefile",
+          "line": 27,
+          "name": "test",
+          "state": "absent",
+          "reason": "no success-gated fetch precedes the test command"
+        }
+      ],
+      "problems": []
+    },
+    "absent_with_trybuild": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-offline-tests",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "spawns": [],
+      "trybuild": [
+        {"path": "Cargo.toml", "line": 1, "form": "manifest"}
+      ],
+      "entry_points": [
+        {
+          "kind": "workflow",
+          "path": ".github/workflows/ci.yml",
+          "line": 625,
+          "name": "build",
+          "state": "absent",
+          "reason": "no fetch step precedes the test step"
+        }
+      ],
+      "problems": []
+    },
+    "exempt_spawn": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-offline-tests",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "spawns": [
+        {
+          "path": "installer/src/builder.rs",
+          "line": 76,
+          "form": "command_new",
+          "state": "online",
+          "flags": ["install", "--force"],
+          "environment": []
+        },
+        {
+          "path": "tests/build_discovery_bdd.rs",
+          "line": 80,
+          "form": "command_new",
+          "state": "online",
+          "flags": ["-vv", "--color"],
+          "environment": []
+        }
+      ],
+      "trybuild": [],
+      "entry_points": [
+        {
+          "kind": "makefile",
+          "path": "Makefile",
+          "line": 27,
+          "name": "test",
+          "state": "absent",
+          "reason": "no success-gated fetch precedes the test command"
+        }
+      ],
+      "problems": []
+    },
+    "exempt_entry_point": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-offline-tests",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "spawns": [
+        {
+          "path": "tests/build_discovery_bdd.rs",
+          "line": 80,
+          "form": "command_new",
+          "state": "offline",
+          "flags": ["--frozen", "build"],
+          "environment": []
+        }
+      ],
+      "trybuild": [],
+      "entry_points": [
+        {
+          "kind": "makefile",
+          "path": "Makefile",
+          "line": 27,
+          "name": "test",
+          "state": "absent",
+          "reason": "no success-gated fetch precedes the test command"
+        }
+      ],
+      "problems": []
+    },
+    "named_elsewhere": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-offline-tests",
+      "repository": {
+        "path": ".",
+        "name": "leynos/other"
+      },
+      "spawns": [
+        {
+          "path": "installer/src/builder.rs",
+          "line": 76,
+          "form": "command_new",
+          "state": "online",
+          "flags": ["install", "--force"],
+          "environment": []
+        }
+      ],
+      "trybuild": [],
+      "entry_points": [],
+      "problems": []
+    },
+    "unreadable_evidence": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-offline-tests",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "spawns": [],
+      "trybuild": [],
+      "entry_points": [],
+      "problems": [
+        "tests/broken.rs cannot be decoded as UTF-8"
+      ]
+    }
+  }
+}

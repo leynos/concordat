@@ -102,3 +102,23 @@ def test_parameters_are_ignored(tmp_path: pathlib.Path) -> None:
     envelope = build_nested_cargo_offline_envelope(tmp_path, parameters)
     assert envelope["spawns"] == []
     assert envelope["repository"]["path"] == "."
+
+
+def test_the_envelope_carries_no_fixture_lock_facts(tmp_path: pathlib.Path) -> None:
+    """The lock rule's facts stay in its own package, not in this one.
+
+    Both packages read the same checkout and both are registered for it, so an
+    envelope that grew a `nested_locks` or `root_lock` key would let one
+    package's policy answer from the other's evidence — the exact confusion the
+    resolver refuses.
+    """
+    envelope = build_nested_cargo_offline_envelope(tmp_path)
+    assert set(envelope) == {
+        "schema_version",
+        "kind",
+        "repository",
+        "spawns",
+        "trybuild",
+        "entry_points",
+        "problems",
+    }, f"the envelope gained a foreign fact: {sorted(envelope)}"

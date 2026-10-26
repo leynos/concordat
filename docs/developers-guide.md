@@ -663,6 +663,23 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   compares `(name, version, source)` of packages that have a source and records
   the first ten foreign ones. Anything it cannot read is a problem fact, which
   the policy answers as indeterminate. It runs no Cargo and reads no network.
+- `policy-input/nested-cargo-offline-tests` —
+  `nested_cargo_offline_envelope.build_nested_cargo_offline_envelope`. It joins
+  three readers: `nested_cargo_spawns` classifies every `cargo` a test scope
+  starts as `offline`, `online` or `unresolved` and collects the trybuild uses
+  that give an entry point something to protect; `nested_cargo_entry_points`
+  resolves the Makefile `test` target, each selected nextest profile's setup
+  script and each workflow job that runs tests, as `before`, `absent` or
+  `uncertain`. Offline evidence is read from the command itself — `--frozen`,
+  `--offline` with `--locked`, or a command-local `CARGO_NET_OFFLINE="true"` —
+  so an inherited environment never counts as proof. A version or help probe
+  (`cargo --version`, `cargo kani --version`, `cargo build --help`) is not a
+  spawn; a version flag carrying a value is. Fixture package sources are
+  excluded, because a `cargo` inside one is the build under audit rather than
+  the code that starts it. A prefetch counts only when it is success-gated
+  (`&&` or a fail-fast line sequence). The builder ignores its parameters:
+  exemptions and severity are the policy's to apply. It runs no Cargo and reads
+  no network.
 - `policy-input/whitaker-provisioning` —
   `whitaker_provisioning_envelope.build_whitaker_provisioning_envelope`. It
   reuses the CV-005 workflow decoder for `.github/workflows`, decodes every

@@ -1435,12 +1435,15 @@ two-phase shape this design already describes for the Auditor rules (see
 "Active enforcement" above) and the same shape the rule tables use when they
 record a warning severity alongside a planned error promotion.
 
-The shipped policies respect the contract today: every `finding(...)` call is
-`error` except `RT-025` in `rust-toolchain-policy`, which is `warning` for both
-its noncompliant and indeterminate branches. That is the precedent, not an
-accident, and it is why the change to `exit_code` does not need a policy
-migration: an all-`error` result behaves exactly as it did before, and RT-025
-becomes advisory as its name always implied.
+The shipped policies respect the contract today: the 4- and 5-arity
+`finding(...)` helpers hard-code `error`, and the packages that need another
+severity pass it explicitly. `RT-025` in `rust-toolchain-policy` is `warning`
+for both its noncompliant and indeterminate branches, and every finding in
+`nested-cargo-offline-tests` but its envelope defect takes the package's
+`severity` parameter, which defaults to `warning`. That is the precedent, not
+an accident, and it is why the change to `exit_code` does not need a policy
+migration: an all-`error` result behaves exactly as it did before, and the
+advisory findings become non-blocking as their names implied.
 
 The table renderer prints the severity on each finding row so that an exit
 status of `0` is never mistaken for "nothing found". The JSON document is
@@ -2812,6 +2815,55 @@ so an exemption does not travel. Path dependencies of a member that lie inside
 the workspace root are members too, as in Cargo, unless excluded. Remaining
 limits: a `path` entry in `[workspace.dependencies]` that a member inherits is
 not followed, and a fixture outside the fixture-like paths is not reached.
+
+##### Nested cargo offline tests
+
+The audit-only `nested-cargo-offline-tests` package owns NC-007 and NC-008. It
+answers the other half of the same problem the fixture-lock package addresses:
+the fixture lock decides whether a nested build compiles the workspace graph,
+and this rule decides whether it can reach the network at all. A test that
+starts its own `cargo` resolves dependencies and may update the crates.io index
+while holding the package-cache lock every repository on the host shares, so
+one repository's test can leave another repository's gate waiting for many
+minutes (leynos/whitaker#518 measured nineteen). NC-007 reports a cargo spawn
+in test scope that carries no command-local offline evidence: `--frozen`, or
+both `--offline` and `--locked`, or `CARGO_NET_OFFLINE="true"` set on the
+command. NC-008 reports a test entry point with no success-gated
+`cargo fetch --locked` before it, and only when a spawn or trybuild use gives
+the prefetch something to protect. Both are `warning` in the shipped
+parameters, so the estate is surveyed before the rule blocks; a `severity`
+parameter raises them to `error` without a policy edit, and an envelope defect
+stays `error` because it says the rule could not run rather than that the
+repository is unsafe.
+
+The evidence comes from two readers behind one envelope. The spawn reader
+classifies each literal `Command::new("cargo")`, `env!("CARGO")` and
+call-site-resolved helper as `offline`, `online` or `unresolved`; a non-literal
+argument list or a non-literal value for `CARGO_NET_OFFLINE` makes the spawn
+unresolved rather than being rounded down to a pass. A version or help probe
+reads no manifest and is not a spawn, while a version flag carrying a value
+(`cargo install --version 1.2.3`) is real work. Fixture package sources are
+excluded — a cargo spawn inside one is the build under audit, matching the
+fixture-lock rule's fixture set. The entry-point reader resolves the Makefile
+`test` target through prerequisites and recipes, each selected nextest profile's
+`setup` script, and each workflow step that runs tests, keeping shell
+connectors: only `&&` and a fail-fast line sequence prove that a fetch runs
+first, because `;`, `||`, a pipeline, a background command and an ignored error
+do not stop the tests when the fetch fails. A command whose expansion cannot be
+resolved, a `.ONESHELL` recipe or a recursive `make` makes the entry point
+`uncertain` with its reason rather than inventing an ordering.
+
+Exemptions keep the `whitaker-provisioning` convention of a repository, a path,
+a rationale and a review trigger, and differ from the fixture-lock rule in two
+ways: the path is an exact **file**, because a spawn is a property of the line
+that starts it, and the exemption suppresses NC-007 and NC-008 only. Evidence
+the reader could not establish stays reported, so an exempt file cannot hide
+the rule's own uncertainty. Both text fields must be non-blank in the policy
+itself, not merely in the schema, because an exemption nobody must revisit is
+not a record. Remaining limits: a spawn reached through a macro, a function
+pointer or a value assembled at run time is invisible, and a hidden command in
+a Makefile or workflow leaves the entry point `uncertain` rather than proved
+either way.
 
 #### 3.1.4 Verifying the reconciliation invariants
 

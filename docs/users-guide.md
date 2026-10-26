@@ -659,6 +659,61 @@ lane that owns its lock, and a review trigger, the event that sends the
 exemption back for review (the shape of `dependencies.family_exceptions`). An
 exemption does not travel to another repository.
 
+### Auditing a test's own cargo runs
+
+The `nested-cargo-offline-tests` rule keeps a test's nested build from holding
+the shared package-cache lock:
+
+```shell
+concordat artefact rule run nested-cargo-offline-tests --repo /path/to/checkout
+```
+
+A test that starts its own `cargo` — a nested build, `cargo package`,
+`cargo publish --dry-run`, `cargo dylint`, a trybuild case — resolves
+dependencies and may update the crates.io index. It does that while holding the
+package-cache lock every repository on the host shares, so on a machine where
+several agents build at once one repository can wait many minutes behind
+another's test (leynos/whitaker#518 measured nineteen). The rule reports:
+
+- **NC-007**: a `cargo` spawn in test scope that can reach the network — no
+  `--frozen`, not both `--offline` and `--locked`, and no command-local
+  `CARGO_NET_OFFLINE="true"`. Offline evidence is read from the command itself;
+  an inherited environment is not proof, because the gate's environment is not
+  the test's.
+- **NC-008**: a test entry point (the Makefile `test` target, a selected
+  nextest profile's setup script, or a workflow step that runs tests) with no
+  success-gated `cargo fetch --locked` before it. The finding is reported only
+  when the checkout has a spawn or trybuild use for the prefetch to protect. A
+  fetch counts only when its failure stops the run: `&&` or a fail-fast line
+  sequence, not `;`, `||`, a pipeline or an ignored error.
+- **EN-001** (indeterminate): a spawn whose arguments or environment the reader
+  cannot see, an entry point whose ordering it cannot read, a file it cannot
+  decode, or an input that is not this rule's envelope. The rule says it does
+  not know rather than guessing either way.
+
+A version or help probe is not a spawn: `cargo --version`,
+`cargo kani --version`, `cargo help` and `cargo build --help` read no manifest
+and touch no network, while `cargo install --version 1.2.3` carries a value and
+is real work. Fixture package sources are excluded — a `cargo` inside one is
+the build under audit, not the code that starts it; fixture *locks* are
+`nested-cargo-fixture-lockfiles`' business. This rule therefore reports NC-007
+and NC-008 only, and never NC-001 or NC-002.
+
+The rule ships at `warning` severity, so a finding is reported and the gate
+continues. That lets the estate be surveyed and each repository fix its own
+findings in its own order; set the `severity` parameter to `error` to block,
+which is the intended end state. An envelope defect stays `error` whatever the
+parameter says, because it means the rule could not run rather than that the
+repository is unsafe.
+
+A file that must reach the network is named in the `exemptions` parameter, with
+its repository (`owner/name`, from the `origin` remote), the exact
+repository-relative **file** path, a rationale and a review trigger. Both text
+fields must be non-blank, and an exemption suppresses NC-007 and NC-008 only:
+evidence the reader could not establish stays reported. The shipped defaults
+record leynos/whitaker's `installer/src/builder.rs`, which builds its own copy
+of the crate from crates.io — the behaviour the installer exists to prove.
+
 ### Auditing Rust development build storage
 
 The `rust-dev-build-footprint` rule keeps default development builds small:

@@ -199,6 +199,20 @@ artifacts:
     description: >-
       Rule package manifest for the nested cargo fixture lockfile audit.
     sha256: 7efe178708acf254b5a0393a054d1a00e469efd93e384aec5c98a69fa3b4aef4
+  - id: lint-rule-nested-cargo-offline-tests
+    type: opa-policy
+    path: platform-standards/canon/lint-rules/nested-cargo-offline-tests/policy/nested_cargo_offline_tests.rego
+    description: >-
+      Sensor requiring a test's own cargo run to be offline, and the test
+      entry point to warm the cache before it whenever there is a nested
+      build for the prefetch to protect.
+    sha256: a7e4247bd092fd912fb236740d5ca86d414151c86be80c1daea7c65956231b29
+  - id: lint-rule-nested-cargo-offline-tests-manifest
+    type: lint-config
+    path: platform-standards/canon/lint-rules/nested-cargo-offline-tests/rule.yaml
+    description: >-
+      Rule package manifest for the nested cargo offline test audit.
+    sha256: 24fa0c1172f43aaecc39e0a1059463dad3185c126553c3c43590a97011491178
   - id: lint-rule-main-owned-codescene-coverage
     type: opa-policy
     path: >-

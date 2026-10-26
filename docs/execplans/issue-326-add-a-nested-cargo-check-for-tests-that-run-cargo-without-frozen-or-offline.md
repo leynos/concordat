@@ -126,9 +126,30 @@ workaround.
       plugin version probes (`cargo kani --version`) and treats a value-carrying
       `--version` as real work. Five cases added, red first; theoremc's replay
       drops from four spawns to three, whitaker's is unchanged.
-- [ ] Task 3: canon package, policy, fixtures, Rego tests, unit and BDD tests,
-      manifest SHA-256, documentation, and the `test_envelope_selection.py`
-      entries deferred from Task 2.
+- [x] (2026-10-26) Task 3: canon package `nested-cargo-offline-tests` created
+      with `rule.yaml` (schema 1, version 0.1.0, default severity `warning`, a
+      shipped exemption for whitaker's installer), the six-argument `finding`
+      helper carrying `line`, 13 fixtures and 23 Rego tests. The Rego suite was
+      run red against a missing policy (23 failures) and then green. Both
+      canon artefacts are registered with recomputed SHA-256; the deferred
+      `test_envelope_selection.py` rows are added; `test_nested_cargo_offline_rule.py`
+      (16 tests) pins the whitaker before/after pair, theoremc's forwarded
+      arguments and plugin probe, the survey-mode exit status, severity
+      promotion, exemption isolation in both directions, and the namespace. A
+      five-scenario BDD feature drives the real CLI. Developer, user, design
+      and roadmap documents are updated; the design note that "every
+      `finding(...)` call is `error` except RT-025" is corrected.
+- [x] (2026-10-26) Task 3 gates: `make check-fmt`, `make lint` (all six stages,
+      Skylos included), `make typecheck`, `make markdownlint` and `make nixie`
+      pass. `make test` is red only on the seven pre-existing failures recorded
+      in Surprises & discoveries: six `makeutil` fixture-drift tests and the
+      `main-owned-codescene-coverage` conftest deadline flake. The gate surfaced
+      two Ruff docstring findings in the new unit test (fixed), two spelling
+      errors from an abbreviated commit SHA in this plan's prose (fixed by
+      writing the full SHA), and a genuinely dead constant,
+      `NON_RESOLVING` in `concordat/rules/nested_cargo_commands.py`, left behind
+      by `935acee` when `_is_probe` replaced its only reader. The constant is
+      removed; 172 reader tests and 28 nested-cargo package tests remain green.
 - [ ] Task 4: `--package` sweep plumbing, ledger resume key, report filters and
       distinct-repository counts, real-corpus comparison.
 - [ ] Delivery: draft PR with session reference.
@@ -216,13 +237,13 @@ workaround.
   `cargo --version`, `cargo help`, `cargo build --help`, `cargo -vV` and
   `cargo tree --version` all exit 0 with no network. Impact: the exclusion now
   scans the flags before `--` for `--version`/`-V`, and only those, because a
-  version flag that carries a value is real work: `cargo install --version
-  1.2.3` and `cargo add --version 1.2.3` consume the value and reach the
-  registry. `help` remains a probe only as the first word, since `cargo run
-  help` passes `help` to the binary under test after building it. Four new
-  cases pin the behaviour (plugin version, plugin short version, `cargo run
-  help`, `cargo test -- --version`) plus the value-carrying form; theoremc's
-  spawn count drops from four to three and whitaker's is unchanged.
+  version flag that carries a value is real work:
+  `cargo install --version 1.2.3` and `cargo add --version 1.2.3` consume the
+  value and reach the registry. `help` remains a probe only as the first word,
+  since `cargo run help` passes `help` to the binary under test after building
+  it. Four new cases pin the behaviour (plugin version, plugin short version,
+  `cargo run help`, `cargo test -- --version`) plus the value-carrying form;
+  theoremc's spawn count drops from four to three and whitaker's is unchanged.
 - Observation: two further blind spots made realistic recipes unreadable even
   where the expansion settled. `command_start` treated `env` as a bare wrapper,
   so `env -u CARGO_NET_OFFLINE cargo fetch --locked` — the exact mitigation
@@ -233,6 +254,27 @@ workaround.
   classifier accepts the standalone `cargo-nextest` binary with its
   `nextest run` / `ntr` subcommands. Probes against the installed binaries
   confirmed both spellings.
+- Observation:
+  `tests/unit/test_lint_rule_policies.py::test_the_package_policy_suite_passes[main-owned-codescene-coverage]`
+  failed under `make test` with
+  `Error: running verification: run test: eval_cancel_error: context deadline exceeded`,
+  and the identical failure reproduces when `conftest verify` is run by hand.
+  Evidence: the package's files are byte-identical to the base commit
+  `ba9b7295e42bd0d14c0e894908183dbe68b6b735` (`git diff HEAD --` is empty and a
+  `git archive` copy `diff -r`s clean), and the extraction of that archive from
+  the base commit passes 98/98 while two consecutive hand runs against the
+  worktree also pass 98/98. Impact: the failure tracks machine load, not the
+  branch — OPA cancels an evaluation that overruns its deadline when the host
+  is busy — so it is recorded as an environmental flake in an untouched
+  package, and the gate is re-run rather than the policy changed.
+- Observation: the Skylos dead-code stage reported `SKY-U003` for
+  `NON_RESOLVING` in `concordat/rules/nested_cargo_commands.py`. Evidence:
+  `git log -S` shows the constant entering at `8200b23` guarding the first-word
+  probe check, and `935acee` replacing every reference to it with the
+  `_is_probe` helper while leaving the declaration behind; a tree-wide search
+  finds no reader. Impact: the constant is removed rather than allowed, since
+  it is genuinely dead rather than a runtime entry point, and the removal was
+  confirmed against all 172 reader tests and the 28 package tests.
 
 ## Decision log
 
@@ -301,16 +343,16 @@ workaround.
   which is the honest report. This is recorded as a residual limit, not a
   defect to fix in Task 3. Date/Author: 2026-10-26.
 - Decision: a version or help probe is excluded by scanning the flags before
-  `--` for `--version`/`-V`, not by looking at the first word, and a flag with a
-  non-flag word after it is not a probe. Rationale: the first-word rule missed
-  plugin probes such as theoremc's `cargo kani --version`, which was reported
-  `online` and would have become a false NC-007 in the Task 4 corpus
-  comparison. The value rule keeps `cargo install --version 1.2.3` and `cargo
-  add --version 1.2.3`, which are real registry work, out of the exclusion; the
-  `--` rule keeps `cargo test -- --version` from being read as a cargo probe,
-  and `help` stays a first-word-only probe because `cargo run help` builds and
-  runs the program. Every branch was probed against the installed cargo,
-  wrapper included. Date/Author: 2026-10-26.
+  `--` for `--version`/`-V`, not by looking at the first word, and a flag with
+  a non-flag word after it is not a probe. Rationale: the first-word rule
+  missed plugin probes such as theoremc's `cargo kani --version`, which was
+  reported `online` and would have become a false NC-007 in the Task 4 corpus
+  comparison. The value rule keeps `cargo install --version 1.2.3` and
+  `cargo add --version 1.2.3`, which are real registry work, out of the
+  exclusion; the `--` rule keeps `cargo test -- --version` from being read as a
+  cargo probe, and `help` stays a first-word-only probe because
+  `cargo run help` builds and runs the program. Every branch was probed against
+  the installed cargo, wrapper included. Date/Author: 2026-10-26.
 
 ## Outcomes & retrospective
 

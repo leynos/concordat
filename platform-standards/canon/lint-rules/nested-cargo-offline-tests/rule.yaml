@@ -1,0 +1,78 @@
+schema_version: 1
+id: nested-cargo-offline-tests
+name: Nested cargo offline tests
+description: >-
+  Audits the `cargo` a repository's own tests start, and the test entry point
+  that runs them. A test-scope spawn that can reach the network (NC-007) and a
+  test entry point with no success-gated `cargo fetch --locked` before it
+  (NC-008) both resolve dependencies or update the crates.io index while
+  holding the package-cache lock every repository on the host shares. Exemptions
+  name a repository and an exact file path, suppress only NC-007 and NC-008, and
+  must carry a rationale and a review trigger. The rule ships at `warning`
+  severity so the estate can be surveyed before it blocks; the `severity`
+  parameter raises it to `error` without a code change. Audit-only: this rule
+  declares no mutations. NC-001 and NC-002 stay with
+  `nested-cargo-fixture-lockfiles`.
+version: 0.1.0
+sensor:
+  type: conftest
+  input: policy-input/nested-cargo-offline-tests
+  policy: policy/
+  tests:
+    - policy/
+  data:
+    - fixtures/data.json
+parameters:
+  schema:
+    type: object
+    additionalProperties: false
+    properties:
+      severity:
+        type: string
+        enum: [warning, error]
+        description: >-
+          The severity of every NC-007 and NC-008 finding, and of the
+          indeterminate findings that report evidence the reader could not
+          establish. An envelope defect is always `error`: it says the rule
+          could not run, not that the repository is unsafe. A `warning` finding
+          is reported but does not block; promotion to `error` is the intended
+          end state once the estate survey is clean.
+      exemptions:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [repository, path, rationale, review_trigger]
+          properties:
+            repository:
+              type: string
+            path:
+              type: string
+            rationale:
+              type: string
+              minLength: 1
+            review_trigger:
+              type: string
+              minLength: 1
+        description: >-
+          Files the rule does not audit, each with its repository
+          (`owner/name`, read from the `origin` remote), the exact repository-
+          relative file path, the rationale and the review trigger. Both text
+          fields must be non-blank; the policy ignores an entry that leaves
+          either blank, because an exemption nobody must revisit is not a
+          record. An exemption suppresses NC-007 and NC-008 only: evidence the
+          reader could not establish stays reported.
+  defaults:
+    severity: warning
+    exemptions:
+      - repository: leynos/whitaker
+        path: installer/src/builder.rs
+        rationale: >-
+          The installer builds its own copy of the crate from crates.io, which
+          is the behaviour the installer exists to prove; it cannot run
+          offline. The file is not in the rule's test scope today, so this
+          entry records the decision and keeps the file exempt if that scope
+          ever widens.
+        review_trigger: >-
+          review when the installer stops installing a published crate, or when
+          the rule starts reading non-test sources
