@@ -96,7 +96,7 @@ workaround.
       written, `exit_code`/`blocking`/severity column implemented, docs
       updated, gates green, committed as
       `ba9b7295e42bd0d14c0e894908183dbe68b6b735`.
-- [ ] (2026-10-26) Task 2: spawn reader (46 tests), entry-point reader
+- [x] (2026-10-26) Task 2: spawn reader (46 tests), entry-point reader
       (52 tests), envelope builder (6 tests) and the registry entries are
       written and green, and both readers have been replayed over the whitaker
       and theoremc checkouts. Both readers first breached `pylint`'s 800-line
@@ -105,8 +105,11 @@ workaround.
       pre-split source modulo the intended renames. Modules are now
       `nested_cargo_source.py` (189), `nested_cargo_commands.py` (398),
       `nested_cargo_spawns.py` (700), `nested_cargo_scripts.py` (348) and
-      `nested_cargo_entry_points.py` (763). Lint, format and typecheck clean;
-      commit gate and commit outstanding.
+      `nested_cargo_entry_points.py` (763). `make check-fmt`, `make lint`
+      (including the df12 `R9110` clean run), `make typecheck`,
+      `make markdownlint` and `make nixie` pass; `make test` reports only the
+      six `makeutil` fixture-drift failures already recorded as pre-existing.
+      Committed as 8200b23.
 - [ ] Task 3: canon package, policy, fixtures, Rego tests, unit and BDD tests,
       manifest SHA-256, documentation, and the `test_envelope_selection.py`
       entries deferred from Task 2.
