@@ -24,7 +24,9 @@ from .nested_cargo_source import RustSource, enclosing_block
 from .rust_source import scan_balanced, skip_trivia
 
 OFFLINE_VARIABLE: typ.Final = "CARGO_NET_OFFLINE"
-NON_RESOLVING: typ.Final = frozenset({"--version", "-V", "help"})
+NON_RESOLVING: typ.Final = frozenset({"help"})
+# Flags that ask cargo, or the plugin it dispatches to, to identify itself.
+_PROBE_FLAGS: typ.Final = frozenset({"--version", "-V"})
 ARGUMENT_METHODS: typ.Final = frozenset({"arg", "args"})
 ENVIRONMENT_METHODS: typ.Final = frozenset({"env", "envs"})
 _PUNCTUATION: typ.Final = frozenset(" \t\r\n,[]()&")
@@ -367,17 +369,54 @@ def command_state(command: CargoCommand) -> str | None:
     Returns
     -------
     str | None
-        `offline`, `online`, `unresolved`, or None for `--version`/help.
+        `offline`, `online`, `unresolved`, or None for a version/help probe.
     """
     known = [word for word in command.words if isinstance(word, str)]
-    first = command.words[0] if command.words else None
-    if isinstance(first, str) and first in NON_RESOLVING:
+    if len(known) == len(command.words) and _is_probe(known):
         return None
     if command.is_offline or _offline_flags(known):
         return "offline"
     if command.is_uncertain or len(known) != len(command.words):
         return "unresolved"
     return "online"
+
+
+def _is_probe(words: list[str]) -> bool:
+    """Report whether a fully literal argument list only asks for version or help.
+
+    Cargo prints its own version and exits for `cargo --version`. A subcommand
+    it does not own is dispatched to a `cargo-<name>` plugin, which prints its
+    own version for `cargo <name> --version`; theoremc probes for cargo-kani
+    exactly that way. A built-in subcommand given `--version` rejects the flag
+    and exits. None of these reads a manifest, a lock file or the network, so
+    the probe is not a spawn the rule can judge.
+
+    A version flag that carries a value is the exception: `cargo install
+    --version 1.2.3` and `cargo add --version 1.2.3` are real work that reaches
+    the registry, and excluding them would hide exactly the spawns this audit
+    exists to find.
+
+    `help` counts only as the first word. `cargo help` is cargo's own help,
+    but `cargo run help` hands `help` to the binary under test and builds it
+    first.
+
+    Returns
+    -------
+    bool
+        True when the command only asks cargo or a plugin who it is.
+    """
+    if words[:1] == ["help"]:
+        return True
+    # `help` anywhere else is an argument to the program cargo was asked to
+    # run, so only the flags are worth scanning. A probe flag carries a value
+    # only as the last word of its own option, so a following word that is not
+    # another flag is that value and the command is real work.
+    flags = words[: words.index("--")] if "--" in words else words
+    return any(
+        word in _PROBE_FLAGS
+        and (index + 1 == len(flags) or flags[index + 1].startswith("-"))
+        for index, word in enumerate(flags)
+    )
 
 
 def _offline_flags(known: list[str]) -> bool:

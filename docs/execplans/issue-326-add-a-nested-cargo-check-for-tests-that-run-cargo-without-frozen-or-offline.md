@@ -122,6 +122,10 @@ workaround.
       after-fix whitaker replay moves from a false `absent` to `uncertain` on
       both the Makefile and its delegating workflow step; the concordat tree
       still yields no facts. 173 reader and envelope tests green.
+- [x] (2026-10-26) Task 2 probe-style follow-up: `command_state` now excludes
+      plugin version probes (`cargo kani --version`) and treats a value-carrying
+      `--version` as real work. Five cases added, red first; theoremc's replay
+      drops from four spawns to three, whitaker's is unchanged.
 - [ ] Task 3: canon package, policy, fixtures, Rego tests, unit and BDD tests,
       manifest SHA-256, documentation, and the `test_envelope_selection.py`
       entries deferred from Task 2.
@@ -201,6 +205,24 @@ workaround.
   yields an `uncertain` fact with the reason, while a target that visibly runs
   no test (`test:\n\tcargo build`) still yields none. The after-fix replay is
   now `uncertain` at the Makefile and at the workflow step, and no `absent`.
+- Observation: `command_state` excluded a spawn only when `words[0]` was
+  `--version`, `-V` or `help`, so theoremc's
+  `Command::new("cargo").args(["kani", "--version"])` at
+  `tests/theorem_file_macro_bdd/cargo_runner.rs:114` was reported `online`.
+  Evidence: running `cargo kani --version` in an empty directory with no
+  manifest prints `cargo-kani 0.67.0`, exits 0 and makes zero network syscalls
+  under `strace -e trace=network`; a built-in subcommand given `--version` (for
+  example `cargo build --version`) exits 1 without reading a manifest, and
+  `cargo --version`, `cargo help`, `cargo build --help`, `cargo -vV` and
+  `cargo tree --version` all exit 0 with no network. Impact: the exclusion now
+  scans the flags before `--` for `--version`/`-V`, and only those, because a
+  version flag that carries a value is real work: `cargo install --version
+  1.2.3` and `cargo add --version 1.2.3` consume the value and reach the
+  registry. `help` remains a probe only as the first word, since `cargo run
+  help` passes `help` to the binary under test after building it. Four new
+  cases pin the behaviour (plugin version, plugin short version, `cargo run
+  help`, `cargo test -- --version`) plus the value-carrying form; theoremc's
+  spawn count drops from four to three and whitaker's is unchanged.
 - Observation: two further blind spots made realistic recipes unreadable even
   where the expansion settled. `command_start` treated `env` as a bare wrapper,
   so `env -u CARGO_NET_OFFLINE cargo fetch --locked` — the exact mitigation
@@ -278,6 +300,17 @@ workaround.
   invent a fact; the Makefile fact already says the entry point is uncertain,
   which is the honest report. This is recorded as a residual limit, not a
   defect to fix in Task 3. Date/Author: 2026-10-26.
+- Decision: a version or help probe is excluded by scanning the flags before
+  `--` for `--version`/`-V`, not by looking at the first word, and a flag with a
+  non-flag word after it is not a probe. Rationale: the first-word rule missed
+  plugin probes such as theoremc's `cargo kani --version`, which was reported
+  `online` and would have become a false NC-007 in the Task 4 corpus
+  comparison. The value rule keeps `cargo install --version 1.2.3` and `cargo
+  add --version 1.2.3`, which are real registry work, out of the exclusion; the
+  `--` rule keeps `cargo test -- --version` from being read as a cargo probe,
+  and `help` stays a first-word-only probe because `cargo run help` builds and
+  runs the program. Every branch was probed against the installed cargo,
+  wrapper included. Date/Author: 2026-10-26.
 
 ## Outcomes & retrospective
 

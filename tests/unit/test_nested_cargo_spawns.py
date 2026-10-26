@@ -143,6 +143,35 @@ CASES: dict[str, Case] = {
         'fn run() {\n    Command::new("cargo").args(["help"]);\n}\n',
         (),
     ),
+    # theoremc probes for a cargo plugin with `cargo kani --version`. cargo
+    # dispatches to the plugin, which prints its version without touching a
+    # manifest, a lock or the network, so the probe cannot resolve anything.
+    "plugin-version": Case(
+        'fn run() {\n    Command::new("cargo").args(["kani", "--version"]);\n}\n',
+        (),
+    ),
+    "plugin-short-version": Case(
+        'fn run() {\n    Command::new("cargo").args(["nextest", "-V"]);\n}\n',
+        (),
+    ),
+    # `cargo run help` hands `help` to the binary under test, and
+    # `cargo test -- --version` hands the flag to the test binary. Both really
+    # build, and neither is a cargo help or version probe.
+    "help-after-run": Case(
+        'fn run() {\n    Command::new("cargo").args(["run", "help"]);\n}\n',
+        (("command_new", "online"),),
+    ),
+    "version-after-separator": Case(
+        'fn run() {\n    Command::new("cargo").args(["test", "--", "--version"]);\n}\n',
+        (("command_new", "online"),),
+    ),
+    # `cargo install --version 1.2.3` reads `--version` as the crate version to
+    # install and reaches the registry. Excluding it would hide the spawn.
+    "version-with-value": Case(
+        'fn run() {\n    Command::new("cargo")\n'
+        '        .args(["install", "--version", "1.2.3"]);\n}\n',
+        (("command_new", "online"),),
+    ),
     "mentions-only": Case(
         '// Command::new("cargo").arg("build")\n'
         'const TEXT: &str = "Command::new(\\"cargo\\")";\n',
