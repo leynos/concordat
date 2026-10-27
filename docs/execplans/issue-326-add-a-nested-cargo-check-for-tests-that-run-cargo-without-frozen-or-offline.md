@@ -256,8 +256,24 @@ workaround.
       miscount; and one ExecPlan decision that contradicted a later one. Each
       fix landed red first, and the Rego fix recomputed the manifest digest for
       `lint-rule-nested-cargo-offline-tests`.
-- [ ] (2026-10-27) Remaining for delivery: re-gate the fixed tree, commit, push
-      over SSH, and re-review.
+- [x] (2026-10-27) Second full sequential gate on the fixed tree. Six of seven
+      green: `make fmt` (no tracked file rewritten), `make check-fmt`,
+      `make typecheck`, `make markdownlint` (0 issues, spelling green) and
+      `make nixie`. `make lint` failed once on a `docstring-missing-returns`
+      the new `_offline_flags` docstring introduced — Ruff aborts the pipeline
+      there, so Pylint, df12, ambrleaks, spelling and Skylos never ran — and
+      passed on re-run with the `Returns` section added: Ruff clean against
+      387 files, pylint 10.00/10 on both the plain and the df12 run, typos
+      gate green, Skylos clean. `make test` reported 7 failed, 2813 passed,
+      1 skipped: the six `makeutil` fixture-drift failures, plus the
+      already-recorded `main-owned-codescene-coverage` OPA deadline flake in
+      an untouched package. A Hypothesis `too_slow` health check on
+      `test_properties.py::TestLedgerSelection::test_latest_record_is_the_last_appended`
+      failed in the first run and cleared in the second; the test passes alone
+      in 4.5 s and with its module under `-n auto`, and the host was
+      saturated (four compile slots held, 48 requests waiting) during both
+      runs.
+- [ ] (2026-10-27) Remaining for delivery: push over SSH and re-review.
 
 ## Surprises & discoveries
 
