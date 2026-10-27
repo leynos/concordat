@@ -24,8 +24,10 @@ from .nested_cargo_source import RustSource, enclosing_block
 from .rust_source import scan_balanced, skip_trivia
 
 OFFLINE_VARIABLE: typ.Final = "CARGO_NET_OFFLINE"
-# Flags that ask cargo, or the plugin it dispatches to, to identify itself.
-_PROBE_FLAGS: typ.Final = frozenset({"--version", "-V"})
+# Flags that ask cargo, or the plugin it dispatches to, to identify itself or
+# to print help. Both print and exit; neither builds anything, so neither can
+# take the package-cache lock the rule exists to protect.
+_PROBE_FLAGS: typ.Final = frozenset({"--version", "-V", "--help", "-h"})
 ARGUMENT_METHODS: typ.Final = frozenset({"arg", "args"})
 ENVIRONMENT_METHODS: typ.Final = frozenset({"env", "envs"})
 _PUNCTUATION: typ.Final = frozenset(" \t\r\n,[]()&")
@@ -39,6 +41,17 @@ _FIRST_STRING: typ.Final = re.compile(r'"((?:[^"\\]|\\.)*)"')
 _LET_BINDING: typ.Final = re.compile(
     r"\blet\s+(?:mut\s+)?(?P<name>[A-Za-z_]\w*)\s*(?::[^=;]*)?=\s*$"
 )
+
+
+def _rebinding(name: str) -> re.Pattern[str]:
+    """Return a pattern matching a later `let` that replaces *name*'s value.
+
+    Returns
+    -------
+    re.Pattern[str]
+        The pattern, anchored on the binding rather than on a line end.
+    """
+    return re.compile(rf"\blet\s+(?:mut\s+)?{re.escape(name)}\s*(?::[^=;]*)?=")
 
 
 @dataclasses.dataclass(slots=True)
@@ -298,7 +311,16 @@ def bound_name(masked: str, offset: int) -> str | None:
 def collect_variable(
     source: RustSource, command: CargoCommand, name: str, start: int, end: int
 ) -> None:
-    """Collect the calls a bound variable receives between *start* and *end*."""
+    """Collect the calls a bound variable receives before it is rebound.
+
+    A second `let` of the same name starts a new value, so a call after it
+    belongs to that value rather than this one. Reading past the rebinding
+    would credit this command with a flag set on another one — here, an
+    offline flag on a command that is not cargo at all.
+    """
+    rebinding = _rebinding(name).search(source.masked, start, end)
+    if rebinding is not None:
+        end = rebinding.start()
     pattern = re.compile(rf"\b{re.escape(name)}\s*\.")
     for match in pattern.finditer(source.masked, start, end):
         follow_chain(source, command, match.end() - 1)

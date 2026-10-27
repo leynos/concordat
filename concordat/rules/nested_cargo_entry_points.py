@@ -282,10 +282,17 @@ def _first_recipe_line(index: dict[str, list[MakeRule]]) -> int:
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class _MakefileEntry:
-    """The Makefile's `test` entry point, and the nextest profiles it selects."""
+    """The Makefile's `test` entry point, and the nextest profiles it selects.
+
+    ``refused`` records a Makefile the loader could not parse. It contributes
+    no fact of its own — the reader never saw the target it might contain —
+    but a workflow step that delegates to `make test` inherits the refusal
+    rather than a clean `absent`.
+    """
 
     fact: EntryPointFact | None
     profiles: list[str]
+    refused: bool = False
 
 
 def _makefile_entry(
@@ -299,7 +306,7 @@ def _makefile_entry(
         facts = inspect_makefile(path)
     except MakefileRefusedError as error:
         problems.append(f"cannot parse {MAKEFILE}: {error}")
-        return _MakefileEntry(None, [])
+        return _MakefileEntry(None, [], refused=True)
     report = facts.report
     values = single_assignments(report["variables"])
     index = _rules_by_target(report)
@@ -387,6 +394,25 @@ def _abandons_order(step: dict[str, object]) -> bool:
     return any(marker in joined for marker in ("always()", "failure()", "cancelled()"))
 
 
+def _condition_proves_order(step: dict[str, object]) -> bool:
+    """Return whether a step's `if:` leaves it running on every run.
+
+    A step guarded by `runner.os == 'Linux'` skips entirely elsewhere, and the
+    test step that follows then starts against a cold cache. GitHub's own
+    default is `success()`, so an explicit `success()` is the one spelling
+    that still proves the order; anything else the reader cannot evaluate.
+
+    Returns
+    -------
+    bool
+        True when the step carries no `if:`, or carries exactly `success()`.
+    """
+    condition = step.get("if")
+    if condition is None:
+        return True
+    return isinstance(condition, str) and condition.strip() == "success()"
+
+
 def _node_line(node: object, fallback: int) -> int:
     """Return the 1-based source line of a YAML node, or *fallback*."""
     location = getattr(node, "lc", None)
@@ -396,13 +422,15 @@ def _node_line(node: object, fallback: int) -> int:
 
 def _inherited_state(
     meaning: CommandMeaning,
-    make_entry: EntryPointFact | None,
+    make_entry: _MakefileEntry,
     config: NextestConfig,
     profiles: list[str],
 ) -> str:
     """Return what a delegated `make test` or `cargo nextest run` already proves."""
     if meaning.test == "make":
-        return ABSENT if make_entry is None else make_entry["state"]
+        if make_entry.fact is None:
+            return UNCERTAIN if make_entry.refused else ABSENT
+        return make_entry.fact["state"]
     if meaning.test == "nextest":
         profiles.append(meaning.profile or DEFAULT_PROFILE)
         return config.state(meaning.profile)
@@ -428,7 +456,7 @@ def _step_state(
     has_expression: bool,
     gated: bool,
     shell: ShellRule,
-    make_entry: EntryPointFact | None,
+    make_entry: _MakefileEntry,
     config: NextestConfig,
     profiles: list[str],
 ) -> tuple[str, str]:
@@ -467,7 +495,7 @@ def _step_scan(
     *,
     gated: bool,
     shell: ShellRule,
-    make_entry: EntryPointFact | None,
+    make_entry: _MakefileEntry,
     config: NextestConfig,
     profiles: list[str],
 ) -> _StepScan:
@@ -515,7 +543,7 @@ def _step_scan(
 def _job_entries(
     relative: str,
     parsed: dict[str, object],
-    make_entry: EntryPointFact | None,
+    make_entry: _MakefileEntry,
     config: NextestConfig,
     profiles: list[str],
 ) -> list[EntryPointFact]:
@@ -553,7 +581,11 @@ def _job_entries(
                 profiles=profiles,
             )
             facts.extend(scan.facts)
-            if scan.fetches and not _allows_failure(step):
+            if (
+                scan.fetches
+                and not _allows_failure(step)
+                and _condition_proves_order(step)
+            ):
                 fetches = True
     return facts
 
@@ -587,7 +619,7 @@ def _workflow_entries(
     checkout: pathlib.Path,
     root: pathlib.Path,
     problems: list[str],
-    make_entry: EntryPointFact | None,
+    make_entry: _MakefileEntry,
     config: NextestConfig,
     profiles: list[str],
 ) -> list[EntryPointFact]:
@@ -688,9 +720,7 @@ def collect_entry_points(
     config = read_nextest(checkout, problems)
     entry = _makefile_entry(checkout, problems, config)
     profiles: list[str] = list(entry.profiles)
-    workflows = _workflow_entries(
-        checkout, root, problems, entry.fact, config, profiles
-    )
+    workflows = _workflow_entries(checkout, root, problems, entry, config, profiles)
     facts = [] if entry.fact is None else [entry.fact]
     selected = list(dict.fromkeys(profiles))
     return facts + _nextest_facts(config, selected) + workflows

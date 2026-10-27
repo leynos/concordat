@@ -49,6 +49,7 @@ class NextestProfile:
 
     state: str
     line: int
+    parent: str | None = None
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -88,7 +89,43 @@ class NextestConfig:
         """
         if not self.is_readable or (name is not None and UNRESOLVED_MARK in name):
             return UNCERTAIN
-        return self.profile(name or DEFAULT_PROFILE).state
+        return self._chain_state(name or DEFAULT_PROFILE)
+
+    def _chain_state(self, name: str) -> str:
+        """Return what every profile in *name*'s inheritance chain proves.
+
+        Nextest resolves a profile through its `inherits` chain up to
+        `default`, and merges each ancestor's setup scripts into the result.
+        A fetch anywhere in the chain therefore warms the cache for the
+        selected profile, while a profile whose parent cannot be resolved is
+        a configuration nextest itself refuses.
+
+        Returns
+        -------
+        str
+            `before` when any profile in the chain fetches, `uncertain` when
+            the chain is broken or cyclic, and `absent` otherwise.
+        """
+        state = ABSENT
+        seen: set[str] = set()
+        current: str | None = name
+        while current is not None:
+            if current in seen:
+                # Nextest refuses a cycle, so nothing in it can be shown to run.
+                return UNCERTAIN
+            seen.add(current)
+            found = self.profiles.get(current)
+            if found is None:
+                # `default` is nextest's own built-in profile and exists
+                # whether or not the file declares it. Any other missing name
+                # is a parent nextest cannot resolve.
+                return state if current == DEFAULT_PROFILE else UNCERTAIN
+            if found.state == UNCERTAIN:
+                return UNCERTAIN
+            if found.state == BEFORE:
+                state = BEFORE
+            current = found.parent
+        return state
 
 
 def _mapping(value: object) -> dict[str, object] | None:
@@ -178,12 +215,18 @@ def _setup_state(setup: object, defined: cabc.Mapping[str, object]) -> str:
     A name nothing defines is a configuration nextest refuses, so the reader
     cannot say what would run: that is `uncertain`, not a proven-cold cache.
 
+    Nextest splits the `command` string into words and executes them directly,
+    with no shell in between. `cargo fetch --locked && cargo test` therefore
+    runs `cargo` with `fetch`, `--locked`, `&&`, `cargo`, `test` as arguments:
+    a fetch of nothing useful, not a fetch followed by a test. Reading the
+    string as shell text would credit a prefetch that never happens.
+
     Returns
     -------
     str
-        `before` when a named script fetches, `uncertain` when the rule or a
-        definition cannot be read, and `absent` when every named script is
-        readable and none fetches.
+        `before` when a script fetches, `uncertain` when the rule or a
+        definition cannot be read or names more than one command, and
+        `absent` when every named script runs one command that does not fetch.
     """
     names = _setup_names(setup)
     if names is None:
@@ -194,12 +237,30 @@ def _setup_state(setup: object, defined: cabc.Mapping[str, object]) -> str:
         if command is None:
             state = UNCERTAIN
             continue
-        commands = script_commands(command)
-        if any(found.meaning.is_prefetch for found in commands):
+        found = _setup_command_state(command)
+        if found == BEFORE:
             return BEFORE
-        if any(found.meaning.is_unreadable for found in commands):
+        if found == UNCERTAIN:
             state = UNCERTAIN
     return state
+
+
+def _setup_command_state(command: str) -> str:
+    """Return what one setup command proves about the cache.
+
+    Returns
+    -------
+    str
+        `before` for a single fetching command, `uncertain` for anything the
+        reader cannot reduce to one readable command, and `absent` otherwise.
+    """
+    commands = script_commands(command)
+    if len(commands) != 1:
+        return UNCERTAIN
+    only = commands[0].meaning
+    if only.is_prefetch:
+        return BEFORE
+    return UNCERTAIN if only.is_unreadable else ABSENT
 
 
 def _covers_every_test(entry: cabc.Mapping[str, object]) -> bool:
@@ -307,10 +368,39 @@ def _decode_profiles(text: str) -> dict[str, NextestProfile]:
         name = str(key)
         table = _mapping(body)
         profiles[name] = NextestProfile(
-            state=ABSENT if table is None else _profile_state(table, defined),
+            state=UNCERTAIN
+            if table is None
+            else _profile_state(table, defined),
             line=_script_line(text, name),
+            parent=_profile_parent(name, table),
         )
     return profiles
+
+
+def _profile_parent(
+    name: str, table: dict[str, object] | None
+) -> str | None:
+    """Return the profile *name* inherits, as nextest would resolve it.
+
+    A custom profile that names no `inherits` still inherits `default`, so an
+    absent key is different from a key naming `default`. A profile whose
+    parent is not a literal name is a configuration nextest refuses.
+
+    Returns
+    -------
+    str | None
+        The parent's name, or ``None`` when the chain ends here.
+    """
+    if name == DEFAULT_PROFILE:
+        return None
+    if table is None:
+        return DEFAULT_PROFILE
+    match table.get("inherits"):
+        case None:
+            return DEFAULT_PROFILE
+        case str() as parent:
+            return parent
+    return UNRESOLVED_MARK
 
 
 def read_nextest(checkout: pathlib.Path, problems: list[str]) -> NextestConfig:

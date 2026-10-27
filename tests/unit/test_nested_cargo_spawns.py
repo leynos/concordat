@@ -143,6 +143,21 @@ CASES: dict[str, Case] = {
         'fn run() {\n    Command::new("cargo").args(["help"]);\n}\n',
         (),
     ),
+    # `cargo build --help` and `cargo build -h` print cargo's own help, read no
+    # manifest and exit 0. The rule documents them as probes, so the reader
+    # must classify them as one rather than reporting a build that never runs.
+    "help-flag": Case(
+        'fn run() {\n    Command::new("cargo").args(["build", "--help"]);\n}\n',
+        (),
+    ),
+    "short-help-flag": Case(
+        'fn run() {\n    Command::new("cargo").args(["build", "-h"]);\n}\n',
+        (),
+    ),
+    "global-short-help": Case(
+        'fn run() {\n    Command::new("cargo").arg("-h");\n}\n',
+        (),
+    ),
     # theoremc probes for a cargo plugin with `cargo kani --version`. cargo
     # dispatches to the plugin, which prints its version without touching a
     # manifest, a lock or the network, so the probe cannot resolve anything.
@@ -186,6 +201,17 @@ CASES: dict[str, Case] = {
         'fn run() {\n    let mut command = Command::new("cargo");\n'
         '    command.arg("build");\n    command.arg("--frozen");\n}\n',
         (("command_new", "offline"),),
+    ),
+    # A second `let` of the same name is a different command. Carrying its
+    # flags onto the first one would report a non-cargo build as offline.
+    "shadowed-binding": Case(
+        "fn run() {\n"
+        '    let mut command = Command::new("cargo");\n'
+        '    command.arg("build");\n'
+        '    let mut command = Command::new("echo");\n'
+        '    command.arg("--frozen");\n'
+        "}\n",
+        (("command_new", "online"),),
     ),
     "helper-online": Case(
         'fn cargo() -> Command {\n    Command::new("cargo")\n}\n\n'

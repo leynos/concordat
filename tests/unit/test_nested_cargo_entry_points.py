@@ -267,6 +267,66 @@ def test_a_manifest_path_fetch_is_proof(tmp_path: pathlib.Path) -> None:
     assert makefile_state(tmp_path) == [("test", "before")]
 
 
+def test_a_global_option_before_the_subcommand_hides_neither_command(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`cargo -q fetch` is still a fetch, and `cargo -q test` is still a test.
+
+    Cargo accepts its global options in front of the subcommand. Reading the
+    first non-toolchain word as the subcommand would miss both commands: the
+    hidden fetch reports `absent` (a false NC-008), and the hidden test command
+    removes the entry point entirely.
+    """
+    put(
+        tmp_path,
+        MAKEFILE,
+        "test:\n\tcargo -q fetch --locked\n\tcargo -q test\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "before")]
+
+
+def test_a_global_locked_option_proves_the_fetch_is_locked(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`cargo --locked fetch` is the same locked fetch as `cargo fetch --locked`."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        "test:\n\tcargo --locked fetch\n\tcargo test\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "before")]
+
+
+def test_a_value_carrying_global_option_does_not_become_the_subcommand(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`cargo --config KEY=VALUE fetch` names `fetch`, not the config value."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        "test:\n\tcargo --config net.offline=true fetch --locked\n\tcargo test\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "before")]
+
+
+def test_a_global_option_before_nextest_keeps_the_run_subcommand(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`cargo --color=always nextest run` still selects the nextest profile."""
+    put(
+        tmp_path,
+        NEXTEST_CONFIG,
+        '[[profile.ci.scripts]]\nfilter = "all()"\nsetup = "warm"\n'
+        '[scripts.setup.warm]\ncommand = "cargo fetch --locked"\n',
+    )
+    put(
+        tmp_path,
+        MAKEFILE,
+        "test:\n\tcargo --color=always nextest run --profile ci\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "before")]
+
+
 def test_a_cargo_variable_prefetch_is_proof_when_it_resolves(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -464,6 +524,26 @@ def test_an_unreadable_test_target_names_its_reason(tmp_path: pathlib.Path) -> N
     assert makefile[0]["reason"]
 
 
+def test_a_refused_makefile_leaves_a_delegating_step_uncertain(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A Makefile the loader refuses is not a Makefile that runs nothing.
+
+    `make test` in a workflow inherits the Makefile's state. Treating a refused
+    Makefile as an absent one reports the step as a cold entry point, and the
+    policy then reports NC-008 from a Makefile the reader never saw. The
+    Makefile itself still contributes no fact, so an unparseable file is not
+    reported as an entry point it might not contain.
+    """
+    put(tmp_path, MAKEFILE, "test:\n\tcargo test\nendif\n")
+    put(
+        tmp_path,
+        WORKFLOW,
+        "jobs:\n  test:\n    steps:\n      - run: make test\n",
+    )
+    assert states(tmp_path) == [("workflow", "test", "uncertain")]
+
+
 # --- nextest -----------------------------------------------------------------
 
 
@@ -489,6 +569,39 @@ def test_a_nextest_setup_command_may_be_a_list(tmp_path: pathlib.Path) -> None:
     )
     put(tmp_path, MAKEFILE, "test:\n\tcargo nextest run\n")
     assert makefile_state(tmp_path) == [("test", "before")]
+
+
+def test_a_setup_command_is_one_argv_not_a_shell_script(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Nextest executes the setup `command` directly, without a shell.
+
+    `echo hi && cargo fetch --locked` runs `echo` with the remaining words as
+    its arguments. No fetch happens, so reporting `before` would claim a warm
+    cache from a command that cannot warm one.
+    """
+    put(
+        tmp_path,
+        NEXTEST_CONFIG,
+        '[[profile.default.scripts]]\nfilter = "all()"\nsetup = "warm"\n'
+        '[scripts.setup.warm]\ncommand = "echo hi && cargo fetch --locked"\n',
+    )
+    put(tmp_path, MAKEFILE, "test:\n\tcargo nextest run\n")
+    assert makefile_state(tmp_path) == [("test", "uncertain")]
+
+
+def test_a_setup_command_with_a_semicolon_is_not_a_fetch(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A `;` is a literal argument to the first word, not a separator."""
+    put(
+        tmp_path,
+        NEXTEST_CONFIG,
+        '[[profile.default.scripts]]\nfilter = "all()"\nsetup = "warm"\n'
+        '[scripts.setup.warm]\ncommand = "cargo fetch --locked ; touch marker"\n',
+    )
+    put(tmp_path, MAKEFILE, "test:\n\tcargo nextest run\n")
+    assert makefile_state(tmp_path) == [("test", "uncertain")]
 
 
 def test_a_named_setup_script_without_a_definition_is_uncertain(
@@ -544,6 +657,71 @@ def test_a_nextest_profile_selected_by_flag_is_honoured(
     )
     put(tmp_path, MAKEFILE, "test:\n\tcargo nextest run --profile ci\n")
     assert makefile_state(tmp_path) == [("test", "before")]
+
+
+def test_a_custom_profile_inherits_the_default_setup_scripts(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A custom profile inherits `default`, so `--profile ci` sees its fetch.
+
+    Cargo-nextest resolves a custom profile's configuration through its
+    `inherits` chain and, when it names no parent, through `default`. Reading
+    only the selected profile's own `scripts` misses a fetch declared on
+    `default` and reports a false cold cache.
+    """
+    put(
+        tmp_path,
+        NEXTEST_CONFIG,
+        '[[profile.default.scripts]]\nfilter = "all()"\nsetup = "warm"\n'
+        '[scripts.setup.warm]\ncommand = "cargo fetch --locked"\n'
+        "[profile.ci]\nretries = 2\n",
+    )
+    put(tmp_path, MAKEFILE, "test:\n\tcargo nextest run --profile ci\n")
+    assert makefile_state(tmp_path) == [("test", "before")]
+
+
+def test_a_profile_resolves_its_named_parent_chain(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`inherits` selects the parent, and the parent's parent is read too."""
+    put(
+        tmp_path,
+        NEXTEST_CONFIG,
+        '[[profile.default.scripts]]\nfilter = "all()"\nsetup = "warm"\n'
+        '[scripts.setup.warm]\ncommand = "cargo fetch --locked"\n'
+        '[profile.base]\ninherits = "default"\n'
+        '[profile.ci]\ninherits = "base"\n',
+    )
+    put(tmp_path, MAKEFILE, "test:\n\tcargo nextest run --profile ci\n")
+    assert makefile_state(tmp_path) == [("test", "before")]
+
+
+def test_a_profile_with_its_own_script_and_a_parent_script_is_before(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The chain's scripts are cumulative, and one fetch anywhere is enough."""
+    put(
+        tmp_path,
+        NEXTEST_CONFIG,
+        '[[profile.default.scripts]]\nfilter = "all()"\nsetup = "warm"\n'
+        '[scripts.setup.warm]\ncommand = "cargo fetch --locked"\n'
+        '[[profile.ci.scripts]]\nfilter = "package(foo)"\nsetup = "warm"\n',
+    )
+    put(tmp_path, MAKEFILE, "test:\n\tcargo nextest run --profile ci\n")
+    assert makefile_state(tmp_path) == [("test", "before")]
+
+
+def test_a_profile_whose_parent_is_unknown_is_uncertain(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A parent nextest cannot resolve is a configuration it refuses."""
+    put(
+        tmp_path,
+        NEXTEST_CONFIG,
+        '[profile.ci]\ninherits = "missing"\n',
+    )
+    put(tmp_path, MAKEFILE, "test:\n\tcargo nextest run --profile ci\n")
+    assert makefile_state(tmp_path) == [("test", "uncertain")]
 
 
 def test_a_nextest_profile_selected_by_short_flag_is_honoured(
@@ -635,6 +813,37 @@ def test_a_continue_on_error_prefetch_is_not_proof(tmp_path: pathlib.Path) -> No
         "      - run: cargo test\n",
     )
     assert states(tmp_path) == [("workflow", "test", "absent")]
+
+
+def test_a_conditional_fetch_step_is_not_proof(tmp_path: pathlib.Path) -> None:
+    """A fetch step that runs only on some runs warms nothing on the others.
+
+    `if: runner.os == 'Linux'` skips the fetch entirely on the other runners,
+    and the test step that follows then starts against a cold cache. Reading
+    the step as proof reports `before` from a fetch that never ran.
+    """
+    put(
+        tmp_path,
+        WORKFLOW,
+        "jobs:\n  test:\n    steps:\n"
+        "      - run: cargo fetch --locked\n"
+        "        if: runner.os == 'Linux'\n"
+        "      - run: cargo test\n",
+    )
+    assert states(tmp_path) == [("workflow", "test", "absent")]
+
+
+def test_an_explicit_success_fetch_step_is_proof(tmp_path: pathlib.Path) -> None:
+    """`if: success()` is GitHub's own default, so it still proves the order."""
+    put(
+        tmp_path,
+        WORKFLOW,
+        "jobs:\n  test:\n    steps:\n"
+        "      - run: cargo fetch --locked\n"
+        "        if: success()\n"
+        "      - run: cargo test\n",
+    )
+    assert states(tmp_path) == [("workflow", "test", "before")]
 
 
 def test_an_always_step_is_not_proof(tmp_path: pathlib.Path) -> None:
@@ -755,6 +964,27 @@ def test_a_windows_runner_does_not_fail_fast(tmp_path: pathlib.Path) -> None:
     """The Windows default is `pwsh`, which checks only the last native status."""
     _multi_line(tmp_path, "    runs-on: windows-latest\n")
     assert states(tmp_path) == [("workflow", "test", "absent")]
+
+
+def test_an_unrecognised_string_runner_label_is_unknown(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`runs-on: my-build-box` names no platform, so its default shell is unknown.
+
+    A self-hosted Windows runner with a custom label defaults to `pwsh`, which
+    does not stop at a failed fetch. Reading the label as a POSIX runner would
+    report the multi-line block as `before`, a false pass.
+    """
+    _multi_line(tmp_path, "    runs-on: my-build-box\n")
+    assert states(tmp_path) == [("workflow", "test", "uncertain")]
+
+
+def test_a_self_hosted_string_runner_label_is_unknown(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`runs-on: self-hosted` is not a platform label either."""
+    _multi_line(tmp_path, "    runs-on: self-hosted\n")
+    assert states(tmp_path) == [("workflow", "test", "uncertain")]
 
 
 def test_a_pwsh_shell_does_not_fail_fast(tmp_path: pathlib.Path) -> None:

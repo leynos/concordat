@@ -57,6 +57,28 @@ _SHELL_KEYWORDS: typ.Final = frozenset({
 })
 
 _PROFILE_OPTIONS: typ.Final = frozenset({"--profile", "-P"})
+
+# Cargo accepts its global options in front of the subcommand, so
+# `cargo -q fetch` and `cargo --locked fetch` name `fetch` just as
+# `cargo fetch --locked` does. The value-taking ones consume the next word:
+# without that, `cargo --config net.offline=true fetch` would read the config
+# value as the subcommand and miss both commands.
+_CARGO_VALUE_GLOBALS: typ.Final = frozenset({"--color", "-C", "--config", "-Z"})
+_CARGO_GLOBALS: typ.Final = frozenset({
+    "--version",
+    "-V",
+    "--list",
+    "--explain",
+    "--verbose",
+    "-v",
+    "--quiet",
+    "-q",
+    "--locked",
+    "--offline",
+    "--frozen",
+    "--help",
+    "-h",
+}) | _CARGO_VALUE_GLOBALS
 _RECURSIVE_MAKE: typ.Final = re.compile(r"\$[({]MAKE[)}]")
 # nextest's standalone binary accepts the same `nextest run` and `ntr`
 # subcommands as the cargo plugin, so `$(CARGO_NEXTEST) nextest run` is a test
@@ -335,23 +357,100 @@ def _classify(text: str) -> CommandMeaning:
 
 
 def _cargo(arguments: list[str]) -> CommandMeaning:
-    """Classify a cargo invocation's subcommand and options."""
+    """Classify a cargo invocation's subcommand and options.
+
+    Global options may appear before the subcommand, so they are skipped
+    before the subcommand is read. They still reach the classifier: a global
+    `--locked` is the same lock as the subcommand-level one, and `-C` or a
+    long global can hide a `nextest` selection just as easily.
+
+    Returns
+    -------
+    CommandMeaning
+        What the invocation does, with its prefetch and test meaning.
+    """
     index = 0
     while index < len(arguments) and arguments[index].startswith("+"):
         index += 1
+    globals_seen: list[str] = []
+    while index < len(arguments) and _is_global(arguments[index]):
+        width = _global_width(arguments, index)
+        # The value goes with its option, so `_flag_words` pairs them up again
+        # and does not read the value as an option of its own.
+        globals_seen.extend(arguments[index : index + width])
+        index += width
     if index >= len(arguments):
         return CommandMeaning()
     subcommand = arguments[index]
-    rest = arguments[index + 1 :]
+    after = arguments[index + 1 :]
     if UNRESOLVED_MARK in subcommand:
         return CommandMeaning(is_unreadable=True)
     if subcommand == "fetch":
-        return CommandMeaning(is_prefetch="--locked" in rest)
+        return CommandMeaning(is_prefetch="--locked" in _flag_words(globals_seen + after))
     if subcommand == "test":
         return CommandMeaning(test="test")
     if subcommand in _NEXTEST_SUBCOMMANDS:
-        return _nextest(subcommand, rest)
+        # Everything after `nextest` is the plugin's own argument list; a
+        # cargo global in front of it is cargo's, not a nextest option.
+        return _nextest(subcommand, after)
     return CommandMeaning()
+
+
+def _is_global(word: str) -> bool:
+    """Report whether *word* is a cargo global option.
+
+    Returns
+    -------
+    bool
+        True for a bare global, or for one that carries its value in the same
+        word, as `--config=KEY=VALUE`, `-Zunstable-options` and `-C/path` do.
+    """
+    if word in _CARGO_GLOBALS:
+        return True
+    name, separator, _ = word.partition("=")
+    if separator and name in _CARGO_VALUE_GLOBALS:
+        return True
+    return len(word) > 2 and word[:2] in {"-Z", "-C"}
+
+
+def _global_width(arguments: list[str], index: int) -> int:
+    """Return how many words a global option occupies.
+
+    Returns
+    -------
+    int
+        Two for a value-taking option written as two words, otherwise one.
+    """
+    word = arguments[index]
+    if word in _CARGO_VALUE_GLOBALS and index + 1 < len(arguments):
+        return 2
+    return 1
+
+
+def _flag_words(words: list[str]) -> list[str]:
+    """Return the words that are options rather than another option's value.
+
+    Returns
+    -------
+    list[str]
+        Every `-`-prefixed word, except a value consumed by a value-taking
+        option in front of it.
+    """
+    flags: list[str] = []
+    index = 0
+    while index < len(words):
+        word = words[index]
+        if word in _CARGO_VALUE_GLOBALS:
+            index += 2
+            continue
+        name, separator, _ = word.partition("=")
+        if separator and name in _CARGO_VALUE_GLOBALS:
+            index += 1
+            continue
+        if word.startswith("-"):
+            flags.append(word)
+        index += 1
+    return flags
 
 
 def _nextest(subcommand: str, arguments: list[str]) -> CommandMeaning:

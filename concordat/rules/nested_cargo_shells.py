@@ -90,12 +90,11 @@ def _runner_rule(runs_on: object) -> ShellRule:
     """
     match runs_on:
         case str():
-            if not runs_on.strip() or _EXPRESSION.search(runs_on):
-                return UNKNOWN_SHELL
-            return ShellRule(
-                fail_fast=not runs_on.strip().lower().startswith(_WINDOWS_LABEL),
-                is_known=True,
-            )
+            # A single label is classified exactly as a one-item list. A
+            # custom label such as `my-build-box` names no platform GitHub
+            # documents a default for, and a self-hosted Windows runner uses
+            # one; guessing POSIX would read a `pwsh` block as fail-fast.
+            return _label_rule([runs_on])
         case list():
             return _label_rule(runs_on)
     return UNKNOWN_SHELL
