@@ -959,6 +959,39 @@ def test_a_multi_line_block_on_a_fail_fast_template_proves_the_order(
     assert states(tmp_path) == [("workflow", "test", "before")]
 
 
+def test_errexit_spelled_as_a_long_option_is_still_fail_fast(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`-o errexit` is the long spelling of `-e` and stops the script too.
+
+    Scanning only for the letter `e` in a short option misses it, so a
+    workflow written this way would be read as running the test after a
+    failed fetch and reported absent when it is in fact gated.
+    """
+    _multi_line(
+        tmp_path,
+        "    runs-on: ubuntu-latest\n"
+        "    defaults:\n      run:\n        shell: bash -o errexit {0}\n",
+    )
+    assert states(tmp_path) == [("workflow", "test", "before")]
+
+
+def test_another_long_option_is_not_read_as_errexit(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`-o pipefail` sets an option by long name but not the one that stops.
+
+    Without this case, treating any `-o` as fail-fast would pass the test
+    above while wrongly claiming the fetch gates the test here.
+    """
+    _multi_line(
+        tmp_path,
+        "    runs-on: ubuntu-latest\n"
+        "    defaults:\n      run:\n        shell: bash -o pipefail {0}\n",
+    )
+    assert states(tmp_path) == [("workflow", "test", "absent")]
+
+
 def test_a_step_shell_overrides_the_job_default(tmp_path: pathlib.Path) -> None:
     """The step is the most specific declaration, as GitHub resolves it."""
     put(

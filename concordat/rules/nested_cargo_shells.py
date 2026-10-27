@@ -126,18 +126,29 @@ def _label_rule(labels: cabc.Sequence[object]) -> ShellRule:
 def _requests_errexit(words: list[str]) -> bool:
     """Report whether a shell command line asks for errexit.
 
-    `-e`, `-eu` and `-eo pipefail` all do; `-c` does not, and a long option is
-    never errexit under any of these shells.
+    `-e`, `-eu` and `-eo pipefail` all turn it on, and so does `-o errexit`:
+    the long name given to `-o` names the same option the letter `e` selects,
+    so a template written that way is just as fail-fast. `-c` does not, and no
+    long option does — `bash --errexit` is rejected outright.
+
+    Only `-` words count. `+o errexit` *unsets* the option, and the word after
+    a short option ending in `o` is that option's name, which is why `-eo
+    pipefail` stays fail-fast on its `e` while `-o pipefail` does not.
 
     Returns
     -------
     bool
-        True when an option letter `e` is requested.
+        True when the line turns errexit on.
     """
-    return any(
-        word.startswith("-") and not word.startswith("--") and "e" in word[1:]
-        for word in words
-    )
+    for index, word in enumerate(words):
+        if not word.startswith("-") or word.startswith("--"):
+            continue
+        if "e" in word[1:]:
+            return True
+        following = words[index + 1] if index + 1 < len(words) else None
+        if word.endswith("o") and following == "errexit":
+            return True
+    return False
 
 
 def _shell_rule(value: object) -> ShellRule:
