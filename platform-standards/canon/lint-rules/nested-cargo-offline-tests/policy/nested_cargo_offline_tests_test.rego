@@ -226,17 +226,20 @@ test_an_exemption_does_not_travel if {
 }
 
 # An exemption with no rationale or no review trigger asks nobody to revisit
-# it, so it is not a record and must not suppress anything.
+# it, so it is not a record and must not suppress anything. Both tests use the
+# fixture whose repository the exemption names, and assert the finding for the
+# file it names: a fixture from another repository would pass whatever the
+# blank field were compared against, so it would test nothing.
 test_an_empty_rationale_is_not_an_exemption if {
 	empty := [{"repository": "leynos/example", "path": "installer/src/builder.rs", "rationale": "", "review_trigger": "t"}]
-	fs := policy.deny with input as data.fixtures.named_elsewhere with data.parameters as {"exemptions": empty}
-	{f.rule_id | some f in fs} == {"NC-007"}
+	fs := policy.deny with input as data.fixtures.exempt_spawn with data.parameters as {"exemptions": empty}
+	["NC-007", "installer/src/builder.rs"] in {[f.rule_id, f.path] | some f in fs}
 }
 
 test_an_empty_review_trigger_is_not_an_exemption if {
 	empty := [{"repository": "leynos/example", "path": "installer/src/builder.rs", "rationale": "r", "review_trigger": "  "}]
 	fs := policy.deny with input as data.fixtures.exempt_spawn with data.parameters as {"exemptions": empty}
-	{f.rule_id | some f in fs} == {"NC-007", "NC-008"}
+	["NC-007", "installer/src/builder.rs"] in {[f.rule_id, f.path] | some f in fs}
 }
 
 # Suppression covers NC-007 and NC-008 only: evidence the reader could not
@@ -247,11 +250,16 @@ test_an_exemption_does_not_suppress_indeterminate_evidence if {
 	{f.rule_id | some f in fs} == {"EN-001"}
 }
 
-# A path-only match would hide a finding elsewhere; matching is exact.
+# A path-only match would hide a finding elsewhere; matching is exact. The
+# exemption names a file the checkout reports nothing about, so every finding
+# must survive. The assertion lists paths rather than rule IDs alone: two of
+# the three findings are NC-007, so a rule-ID-only check would still pass with
+# one of them wrongly suppressed.
 test_an_exemption_covers_only_its_file if {
 	other := [{"repository": "leynos/example", "path": "installer/src/other.rs", "rationale": "r", "review_trigger": "t"}]
-	fs := policy.deny with input as data.fixtures.named_elsewhere with data.parameters as {"exemptions": other}
-	{f.rule_id | some f in fs} == {"NC-007"}
+	fs := policy.deny with input as data.fixtures.exempt_spawn with data.parameters as {"exemptions": other}
+	profile := {[f.rule_id, f.path] | some f in fs}
+	profile == {["NC-007", "installer/src/builder.rs"], ["NC-007", "tests/build_discovery_bdd.rs"], ["NC-008", "Makefile"]}
 }
 
 test_a_noncompliant_finding_names_the_command_and_the_remedy if {

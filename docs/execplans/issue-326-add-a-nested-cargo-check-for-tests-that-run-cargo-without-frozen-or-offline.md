@@ -771,9 +771,27 @@ workaround.
       `make nixie` all exit 0, and `make test` reports 2915 passed, 1 skipped
       and the same six known `makeutil` fixture-drift failures. That is eight
       more passes than round 14, matching the round's eight new tests.
-- [ ] (2026-10-27) Remaining for delivery: this round's commit, the SSH push,
-      the PR body update, the sixteenth CodeRabbit pass, then marking the PR
-      ready for review.
+- [x] (2026-10-27) Round 14 was committed as `2d32b95`, pushed and verified;
+      the fifteenth CodeRabbit pass then returned four findings, and round 15
+      implemented them, ran the full gate sequence green (after one Ruff FBT
+      fix), and committed as `a56e89a`. The sixteenth pass returned one
+      finding.
+- [x] (2026-10-27) Round 16's finding is implemented: the three exemption tests
+      in `nested_cargo_offline_tests_test.rego` now exercise the property they
+      name. Two used `named_elsewhere`, whose repository is `leynos/other`,
+      while their exemptions named `leynos/example` — so the exemption could
+      not match whatever the blank field were compared against, and both tests
+      would pass with the rationale and review-trigger checks deleted. The
+      file-scope test also compared only rule IDs, and two of the fixture's
+      three findings are NC-007, so a path-blind match would still satisfy it.
+      All three now use `exempt_spawn` (repository `leynos/example`) and assert
+      `[rule_id, path]` pairs. Verified by mutation: with both blank-field
+      checks removed, the old tests pass 38/38 and the new ones fail exactly
+      the two; with `exemption.path == path` removed, only the new file-scope
+      test fails alongside the pre-existing named-exemption test.
+- [ ] (2026-10-27) Remaining for delivery: this round's gate sequence, commit,
+      SSH push, PR body note, the seventeenth CodeRabbit pass, then marking the
+      PR ready for review.
 
 ## Surprises & discoveries
 
@@ -1091,6 +1109,19 @@ workaround.
   branch needs the same scope test as the findings it feeds; the guard is
   `scope.contains(definition.start)`, and it is the definition's location, not
   the call site's, that decides.
+- Observation: an exemption test can pass without comparing the field it
+  names, because the repository comparison rejects the entry first. Evidence:
+  two of the three exemption tests used the `named_elsewhere` fixture, whose
+  repository is `leynos/other`, and paired it with an exemption naming
+  `leynos/example`. Deleting both the rationale and the review-trigger checks
+  from `is_exempt` left all 38 tests passing. The third test compared only rule
+  IDs, and two of `exempt_spawn`'s three findings are NC-007, so a match that
+  ignored the path still satisfied it; deleting `exemption.path == path` failed
+  only the pre-existing named-exemption test. Impact: a fixture and the
+  exemption under test have to agree on every field that is not the subject of
+  the test, and the assertion has to name the finding's path as well as its
+  rule ID. Re-run against the `exempt_spawn` fixture, the same two mutants fail
+  exactly the tests written for them.
 
 ## Decision log
 
@@ -1440,6 +1471,16 @@ workaround.
   sites are visible where they are made. Reporting it would put an
   unsuppressable EN-001 on a file the rule says it leaves alone. Date/Author:
   2026-10-27, Claude Code on behalf of leynos.
+- Decision: the three exemption tests move from the `named_elsewhere` fixture
+  to `exempt_spawn` and assert `[rule_id, path]` pairs rather than rule IDs.
+  Rationale: an exemption test only exercises the field it varies if the
+  fixture's repository and path already agree with the exemption's. With
+  `named_elsewhere` (repository `leynos/other`) and an exemption naming
+  `leynos/example`, the repository comparison rejected the entry first, so the
+  blank rationale and blank review trigger were never reached; mutation of
+  `is_exempt` left all 38 tests green. The path component in the assertion is
+  needed because two of the fixture's three findings share rule NC-007.
+  Date/Author: 2026-10-27, Claude Code on behalf of leynos.
 
 ## Outcomes & retrospective
 
