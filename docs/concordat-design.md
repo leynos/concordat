@@ -2844,7 +2844,21 @@ unresolved rather than being rounded down to a pass. A version or help probe
 reads no manifest and is not a spawn, while a version flag carrying a value
 (`cargo install --version 1.2.3`) is real work. Fixture package sources are
 excluded — a cargo spawn inside one is the build under audit, matching the
-fixture-lock rule's fixture set. The entry-point reader resolves the Makefile
+fixture-lock rule's fixture set. Test scope follows the compiler through two
+paths, both in `nested_cargo_modules.py`: a `#[cfg(test)]` item covers its own
+span, and a `mod name;` declaration covered by test scope names a file that is
+test code throughout, whether the declaration carries the attribute or sits
+inside a test-scope inline module — `#[cfg(test)] mod checks { mod helpers; }`
+compiles `src/checks/helpers.rs` into the test target, so the inherited form
+must be followed or its spawns disappear silently. A declaration gated by any
+`cfg` other than a test-requiring one is left to the reader's uncertainty
+rather than guessed at. The trybuild reader resolves dependency renames, so a
+manifest that pulls the crate in as `tb = { package = "trybuild" }` is a fact
+and its `tb::TestCases` references are facts, with each manifest's declared
+names applied only to the sources that manifest governs. Both matter beyond
+their own findings: the policy's `has_nested_build` guard suppresses NC-008 and
+the entry-point EN-001 when no nested build is visible, so missing evidence
+fails silent. The entry-point reader resolves the Makefile
 `test` target through prerequisites and recipes, each selected nextest profile's
 `setup` script, and each workflow step that runs tests, keeping shell
 connectors: only `&&` and a fail-fast line sequence prove that a fetch runs

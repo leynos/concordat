@@ -701,6 +701,21 @@ carries a value and is real work. Fixture package sources are excluded — a
 fixture *locks* are `nested-cargo-fixture-lockfiles`' business. This rule
 therefore reports NC-007 and NC-008 only, and never NC-001 or NC-002.
 
+Trybuild use counts under whatever name the manifest gives the crate. Cargo
+renames a dependency with `key = { package = "name" }`, so
+`tb = { package = "trybuild", version = "1" }` declares trybuild as `tb`; both
+the manifest fact and a `tb::TestCases` reference in that package's test scope
+are recognized. A `TestCases` path through a name the governing manifest does
+not declare belongs to some other crate and is not evidence. The trybuild
+package's plain name always counts, so a reference in a file whose manifest is a
+virtual workspace root is still read.
+
+Test scope follows the compiler, not just the attribute. `#[cfg(test)] mod
+checks { mod helpers; }` builds `src/checks/helpers.rs` into the test target
+although `mod helpers;` carries no attribute of its own, so a cargo spawn there
+is reported too. A declaration gated by any other `cfg` is outside this rule's
+judgement, because the reader cannot decide what that gate compiles.
+
 Two details decide whether a prefetch counts. Cargo accepts its global options
 before the subcommand, so `cargo --locked fetch` and `cargo -q test` are read
 as the commands they name rather than as unknown invocations. A nextest setup

@@ -52,7 +52,17 @@ the one-line parameter change recorded in `docs/roadmap.md` (DF12-109).
 
 - **Test scope** is `tests` and `test_support`/`test-support` directories
   anywhere in the checkout, whole-file test modules, `#[cfg(test)]` modules and
-  their inline children, and files reached from them by `#[path]`.
+  their inline children, and files reached from them by `mod name;` or
+  `#[path]`. A declaration inherits scope from an enclosing `#[cfg(test)]`
+  module, so `#[cfg(test)] mod checks { mod helpers; }` puts
+  `src/checks/helpers.rs` in scope although the inner declaration carries no
+  attribute of its own. A declaration gated by any other `cfg` is left alone,
+  because the reader cannot decide what that gate compiles.
+- **Trybuild evidence** is a manifest dependency on the `trybuild` package —
+  under any name the manifest gives it, so `tb = { package = "trybuild" }`
+  counts — or a `TestCases` reference in test scope through one of those names.
+  A reference through a name the governing manifest does not declare belongs to
+  another crate and is not evidence.
 - **Fixture package sources are excluded.** A package the existing fixture
   selectors recognize is input to a nested build, not the code that starts one;
   a `cargo` spawn inside it is the build under test. Fixture *manifests* and
