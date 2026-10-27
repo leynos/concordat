@@ -275,6 +275,18 @@ CASES: dict[str, Case] = {
         "}\n",
         (("command_new", "offline"),),
     ),
+    # A list followed by more expression is not the list the reader read. The
+    # trailing words may append a pair — `.chain(extra)` above — and the
+    # appended pair runs after the visible one, so recording `"true"` would
+    # report offline on a guess. The whole argument is unreadable instead.
+    "envs-list-with-trailing-expression": Case(
+        "fn run(extra: Vec<(&'static str, &'static str)>) {\n"
+        '    Command::new("cargo")\n'
+        '        .envs([("CARGO_NET_OFFLINE", "true")].into_iter().chain(extra))\n'
+        '        .arg("build");\n'
+        "}\n",
+        (("command_new", "unresolved"),),
+    ),
     # Within one `envs` list the pairs are applied in order, so the same
     # last-write-wins reading applies.
     "literal-envs-last-pair-wins": Case(

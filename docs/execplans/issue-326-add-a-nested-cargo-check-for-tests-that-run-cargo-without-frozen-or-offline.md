@@ -789,8 +789,20 @@ workaround.
       checks removed, the old tests pass 38/38 and the new ones fail exactly
       the two; with `exemption.path == path` removed, only the new file-scope
       test fails alongside the pre-existing named-exemption test.
+- [x] (2026-10-27) Round 16 was gated green (five gates clean, `make test` at
+      the 2915 baseline), committed as `f7d461d`, pushed and verified, and the
+      PR body updated. The seventeenth CodeRabbit pass returned one finding.
+- [x] (2026-10-27) Round 17's finding is implemented: `_top_level_groups`
+      ignores text after the closing bracket, where `_unwrap` already rejects
+      it. `.envs([("CARGO_NET_OFFLINE", "true")].into_iter().chain(extra))`
+      read as a literal list and reported `offline`, though `extra`'s pairs run
+      after the visible one and may set the variable back. Probing
+      `_environment_pairs` confirmed the reading before the fix and `None`
+      after it; trailing whitespace still reads. The new case
+      `envs-list-with-trailing-expression` failed first, then passed, and the
+      spawn suite is 106/106. Four documents name the shape.
 - [ ] (2026-10-27) Remaining for delivery: this round's gate sequence, commit,
-      SSH push, PR body note, the seventeenth CodeRabbit pass, then marking the
+      SSH push, PR body note, the eighteenth CodeRabbit pass, then marking the
       PR ready for review.
 
 ## Surprises & discoveries
@@ -1122,6 +1134,15 @@ workaround.
   the test, and the assertion has to name the finding's path as well as its
   rule ID. Re-run against the `exempt_spawn` fixture, the same two mutants fail
   exactly the tests written for them.
+- Observation: a helper can reject trailing text while the function that
+  replaces it forgets to. Evidence: `_unwrap` returns its input unchanged when
+  anything follows the closing bracket, and its docstring says so; that is
+  exactly why `_top_level_groups` had to make the same check, and it did not.
+  `_environment_pairs('[("CARGO_NET_OFFLINE", "true")].into_iter().chain(extra)')`
+  returned `[('CARGO_NET_OFFLINE', 'true')]`, so `command_state` answered
+  `offline` for a list whose appended pairs run afterwards. Impact: two
+  functions reading the same bracket shape need the same rejection rule, and
+  the second one is the one that decides whether a *list* is readable at all.
 
 ## Decision log
 
@@ -1481,6 +1502,15 @@ workaround.
   `is_exempt` left all 38 tests green. The path component in the assertion is
   needed because two of the fixture's three findings share rule NC-007.
   Date/Author: 2026-10-27, Claude Code on behalf of leynos.
+- Decision: `_top_level_groups` treats an `envs` list followed by any
+  non-whitespace as unreadable, rather than reading the literal list and
+  ignoring the rest. Rationale: the trailing expression is evaluated by Rust
+  and its pairs are applied after the literal ones, so a visible `"true"`
+  followed by `.chain(extra)` does not establish what cargo reads. This is the
+  same rejection `_unwrap` already applies to a bracketed group, and it keeps
+  the module's promise never to report `offline` on a guess. Trailing
+  whitespace is still accepted, because rustfmt leaves the closing bracket at
+  the end of a line. Date/Author: 2026-10-27, Claude Code on behalf of leynos.
 
 ## Outcomes & retrospective
 

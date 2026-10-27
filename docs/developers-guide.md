@@ -683,17 +683,20 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   both leave the command `online`, and an operation the reader cannot see — an
   unreadable `envs(..)` list, an unreadable removal name, an unreadable value —
   records "unknown" and makes the command `unresolved` rather than letting an
-  earlier visible assignment stand. `--frozen` is not revocable this way, so a
-  command carrying it stays offline whatever the environment says. A version or
-  help probe (`cargo --version`, `cargo kani --version`, `cargo build --help`)
-  is not a spawn; a version flag carrying a value is. A helper defined in test
-  scope but never called from its own file — a cross-file call, or no call at
-  all — is reported at its definition as `unresolved` rather than dropped: the
-  reader cannot see what another file's call adds, and never reports `online`
-  on a guess. A helper defined outside test scope is not reported, because its
-  call sites are visible and library code is not what this rule judges. Fixture
-  package sources are excluded, because a `cargo` inside one is the build under
-  audit rather than the code that starts it. A prefetch counts only when it is
+  earlier visible assignment stand. A list followed by more expression, as in
+  `.envs([(..)].into_iter().chain(extra))`, is an unreadable list: the trailing
+  words may append a pair that runs after the visible one. `--frozen` is not
+  revocable this way, so a command carrying it stays offline whatever the
+  environment says. A version or help probe (`cargo --version`,
+  `cargo kani --version`, `cargo build --help`) is not a spawn; a version flag
+  carrying a value is. A helper defined in test scope but never called from its
+  own file — a cross-file call, or no call at all — is reported at its
+  definition as `unresolved` rather than dropped: the reader cannot see what
+  another file's call adds, and never reports `online` on a guess. A helper
+  defined outside test scope is not reported, because its call sites are
+  visible and library code is not what this rule judges. Fixture package
+  sources are excluded, because a `cargo` inside one is the build under audit
+  rather than the code that starts it. A prefetch counts only when it is
   success-gated (`&&` or a fail-fast line sequence), and a workflow step whose
   command carries an `${{ }}` expression proves no order at all: the expression
   can supply the `|| true` that hides a failed fetch. The workflow reader asks

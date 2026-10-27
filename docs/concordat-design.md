@@ -2850,7 +2850,10 @@ the spawn `unresolved` rather than letting the earlier pair speak for it.
 `env_remove` and `env_clear` are operations on that ledger rather than
 assignments: both take the variable away, so both leave the spawn `online`,
 while an unreadable removal name or an unreadable `envs(..)` list records
-"unknown" because either may name the offline variable or set it back.
+"unknown" because either may name the offline variable or set it back. A list
+followed by more expression — `.envs([(..)].into_iter().chain(extra))` — is
+such a list: the trailing words may append a pair that overrides the visible
+one, so reading the literal alone would report `offline` on a guess.
 `--frozen`, by contrast, is not revocable by any argument or environment
 variable, so a command carrying it stays `offline` whatever the environment
 says. A helper that starts cargo, is defined in test scope, and has no call

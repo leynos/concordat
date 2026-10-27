@@ -119,7 +119,10 @@ the one-line parameter change recorded in `docs/roadmap.md` (DF12-109).
   reader cannot read in full, because either may name the offline variable or
   set it back after a visible `"true"`. An operation the reader cannot see
   still counts as the latest one; it is not discarded in favour of an earlier
-  visible assignment.
+  visible assignment. A list followed by more expression — an `envs` argument
+  shaped `.envs(list.into_iter().chain(extra))` — is not read in full: the
+  trailing words may append a pair that runs after the visible one, so the
+  whole argument is unreadable rather than the literal list alone.
 - **`--frozen` is not revocable.** No argument and no environment variable turns
   it off, so a command carrying `--frozen` stays offline whatever an
   environment assignment says. Only the environment is last-write-wins; the

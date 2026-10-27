@@ -306,7 +306,8 @@ def _top_level_groups(text: str) -> list[str] | None:
     Returns
     -------
     list[str] | None
-        The groups, or None when the bracket structure does not balance.
+        The groups, or None when the bracket structure does not balance or the
+        list is followed by more expression.
     """
     stripped = text.strip().removeprefix("&").strip()
     if not stripped:
@@ -315,6 +316,13 @@ def _top_level_groups(text: str) -> list[str] | None:
         return [stripped]
     close = scan_balanced(stripped, 0)
     if close is None:
+        return None
+    # Text after the closing bracket may add pairs the reader cannot see:
+    # `.envs([("CARGO_NET_OFFLINE", "true")].into_iter().chain(extra))` runs
+    # `extra`'s pairs after the visible one, and one of them may set the
+    # variable back. Reading only the literal list would report `offline` on a
+    # guess, so the whole argument is unreadable.
+    if stripped[close:].strip():
         return None
     return [
         group for group in split_top_level(stripped[1 : close - 1]) if group.strip()

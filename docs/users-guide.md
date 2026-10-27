@@ -685,9 +685,11 @@ another's test (leynos/whitaker#518 measured nineteen). The rule reports:
   spawn `online`. Removing the variable counts as an operation too:
   `env_remove("CARGO_NET_OFFLINE")` and `env_clear()` both leave the spawn
   `online`, and an environment operation the reader cannot see makes it
-  `unresolved` rather than letting an earlier visible assignment stand.
-  `--frozen` is not revocable this way: no argument and no environment variable
-  turns it off.
+  `unresolved` rather than letting an earlier visible assignment stand. An
+  `envs` list followed by more expression, such as
+  `.envs([(..)].into_iter().chain(extra))`, counts as unseen: the trailing
+  words may append a pair that overrides the visible one. `--frozen` is not
+  revocable this way: no argument and no environment variable turns it off.
 - **NC-008**: a test entry point (the Makefile `test` target, a selected
   nextest profile's setup script, or a workflow step that runs tests) with no
   success-gated `cargo fetch --locked` before it. The finding is reported only
