@@ -273,7 +273,18 @@ workaround.
       in 4.5 s and with its module under `-n auto`, and the host was
       saturated (four compile slots held, 48 requests waiting) during both
       runs.
-- [ ] (2026-10-27) Remaining for delivery: push over SSH and re-review.
+- [x] (2026-10-27) Third CodeRabbit round: two findings, both verified before
+      being fixed. `_requests_errexit` scanned only for the letter `e`, so
+      `bash -o errexit {0}` read as not fail-fast and a gated fetch was
+      reported `absent`; probed against bash, `-o errexit` stops the script,
+      `+o errexit` unsets it, `-O errexit` is rejected, and `--errexit` is not
+      a bash option, so only `-` words followed by the exact name count. The
+      Rego indeterminate paths read `entry.reason`, `spawn.flags` and
+      `spawn.environment` directly, so an incomplete fact left the rule body
+      undefined and dropped its EN-001; `object.get` defaults now report the
+      absence. Both landed red first, and the policy digest was recomputed.
+- [ ] (2026-10-27) Remaining for delivery: third full gate, push over SSH and
+      re-review.
 
 ## Surprises & discoveries
 
@@ -629,6 +640,21 @@ workaround.
   fact would have been reported clean. The sentinel is read with `object.get`
   behind an `is_object` guard, because `object.get` on a non-object is a hard
   type error that aborts the whole query. Date/Author: 2026-10-27.
+- Decision: errexit is recognised from the letter `e` in a short option *and*
+  from a short option ending in `o` followed by the word `errexit`. Rationale:
+  `-o errexit` is the long spelling of `-e` and stops the script, so a template
+  written that way is fail-fast and a fetch-first block under it gates the test.
+  Only `-` words are considered because `+o errexit` unsets the option,
+  `-O errexit` is rejected by bash, and `--errexit` is not an option at all;
+  all three were checked against the installed bash rather than assumed.
+  Date/Author: 2026-10-27.
+- Decision: every fact field an indeterminate message quotes is read through
+  `object.get` with a default. Rationale: the earlier fail-closed fix covered a
+  missing `state`, but the message itself still read `entry.reason`,
+  `spawn.flags` and `spawn.environment` directly, so a fact missing one of
+  those left the rule body undefined and dropped the EN-001 it had just been
+  made to report. Fail-closed has to reach the whole message, not only the key
+  that selects the rule. Date/Author: 2026-10-27.
 
 ## Outcomes & retrospective
 
