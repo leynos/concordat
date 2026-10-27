@@ -1120,8 +1120,8 @@ or is reported.
 Terms used below. A *spawn* is a literal `Command::new("cargo")` (or an
 `env!`/`option_env!`-derived Cargo path) in test-scope Rust. *Offline evidence*
 is `--frozen`, or both `--offline` and `--locked`, or a command-local
-`CARGO_NET_OFFLINE="true"`. An *entry point* is a Make target, a nextest
-setup-script, or a workflow step that ramps a test command.
+`CARGO_NET_OFFLINE` set to `"true"` or `"1"`. An *entry point* is a Make
+target, a nextest setup-script, or a workflow step that ramps a test command.
 
 ## Conformance basis
 

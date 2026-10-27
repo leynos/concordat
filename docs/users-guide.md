@@ -677,9 +677,9 @@ another's test (leynos/whitaker#518 measured nineteen). The rule reports:
 
 - **NC-007**: a `cargo` spawn in test scope that can reach the network — no
   `--frozen`, not both `--offline` and `--locked`, and no command-local
-  `CARGO_NET_OFFLINE="true"`. Offline evidence is read from the command itself;
-  an inherited environment is not proof, because the gate's environment is not
-  the test's.
+  `CARGO_NET_OFFLINE` set to `"true"` or `"1"`, the two values Cargo reads as
+  offline. Offline evidence is read from the command itself; an inherited
+  environment is not proof, because the gate's environment is not the test's.
 - **NC-008**: a test entry point (the Makefile `test` target, a selected
   nextest profile's setup script, or a workflow step that runs tests) with no
   success-gated `cargo fetch --locked` before it. The finding is reported only

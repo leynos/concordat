@@ -2827,14 +2827,14 @@ while holding the package-cache lock every repository on the host shares, so
 one repository's test can leave another repository's gate waiting for many
 minutes (leynos/whitaker#518 measured nineteen). NC-007 reports a cargo spawn
 in test scope that carries no command-local offline evidence: `--frozen`, or
-both `--offline` and `--locked`, or `CARGO_NET_OFFLINE="true"` set on the
-command. NC-008 reports a test entry point with no success-gated
-`cargo fetch --locked` before it, and only when a spawn or trybuild use gives
-the prefetch something to protect. Both are `warning` in the shipped
-parameters, so the estate is surveyed before the rule blocks; a `severity`
-parameter raises them to `error` without a policy edit, and an envelope defect
-stays `error` because it says the rule could not run rather than that the
-repository is unsafe.
+both `--offline` and `--locked`, or `CARGO_NET_OFFLINE` set to `"true"` or
+`"1"` on the command, the two values Cargo's boolean parser reads as offline.
+NC-008 reports a test entry point with no success-gated `cargo fetch --locked`
+before it, and only when a spawn or trybuild use gives the prefetch something
+to protect. Both are `warning` in the shipped parameters, so the estate is
+surveyed before the rule blocks; a `severity` parameter raises them to `error`
+without a policy edit, and an envelope defect stays `error` because it says the
+rule could not run rather than that the repository is unsafe.
 
 The evidence comes from two readers behind one envelope. The spawn reader
 classifies each literal `Command::new("cargo")`, `env!("CARGO")` and

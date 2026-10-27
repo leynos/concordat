@@ -674,8 +674,9 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   `nested_cargo_scripts` serve the entry-point reader rather than reading the
   checkout themselves. Offline evidence is read from the command itself —
   `--frozen`, `--offline` with `--locked`, or a command-local
-  `CARGO_NET_OFFLINE="true"` — so an inherited environment never counts as
-  proof. A version or help probe (`cargo --version`, `cargo kani --version`,
+  `CARGO_NET_OFFLINE="true"` or `"1"`, the two values Cargo's boolean parser
+  reads as offline — so an inherited environment never counts as proof. A
+  version or help probe (`cargo --version`, `cargo kani --version`,
   `cargo build --help`) is not a spawn; a version flag carrying a value is.
   Fixture package sources are excluded, because a `cargo` inside one is the
   build under audit rather than the code that starts it. A prefetch counts only

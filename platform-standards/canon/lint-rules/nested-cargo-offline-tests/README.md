@@ -26,9 +26,9 @@ the one-line parameter change recorded in `docs/roadmap.md` (DF12-109).
 
 - **NC-007** (severity from the `severity` parameter, `warning` by default): a
   cargo spawn in test scope is `online` — it carries no `--frozen`, does not
-  carry both `--offline` and `--locked`, and does not set
-  `CARGO_NET_OFFLINE="true"` on the command itself. The finding is reported at
-  the file and line of the spawn.
+  carry both `--offline` and `--locked`, and does not set `CARGO_NET_OFFLINE` to
+  `"true"` or `"1"` on the command itself. The finding is reported at the file
+  and line of the spawn.
 - **NC-008** (same severity): a test entry point is `absent` — no
   success-gated `cargo fetch --locked` runs before the test command — *and* the
   checkout has at least one spawn or trybuild fact, so there is a nested build
@@ -89,8 +89,10 @@ the one-line parameter change recorded in `docs/roadmap.md` (DF12-109).
   locks are NC-001/NC-002's business, not this rule's.
 - **Offline evidence is read from the command itself**: `--frozen`, or
   `--offline` together with `--locked`, or `CARGO_NET_OFFLINE` set to `"true"`
-  on that command. An inherited environment is not evidence: the gate's
-  environment is not the test's.
+  or `"1"` on that command. Both values are offline to Cargo, which prints its
+  offline-mode note for each and leaves the network reachable for `"0"`,
+  `"yes"`, `"on"` and the empty string. An inherited environment is not
+  evidence: the gate's environment is not the test's.
 - **A version or help probe is not a spawn.** `cargo --version`,
   `cargo kani --version`, `cargo help` and `cargo build --help` read no
   manifest and touch no network, so they draw no finding. A version flag that
