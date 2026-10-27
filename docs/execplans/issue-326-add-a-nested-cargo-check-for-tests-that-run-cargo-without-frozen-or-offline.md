@@ -348,21 +348,25 @@ workaround.
       wording (`+2 -2`) and `make fmt` re-wrapped it; `make check-fmt` and
       `make markdownlint` then both returned 0.
 - [x] (2026-10-27) Post-review re-measurement of the PR body's figures, because
-      the survey had last run at 03:07 and rounds three, four and six all
-      changed the reader afterwards. Both survey halves were re-run over the
-      same 106 mirrors: the envelope pass first, then the real rule path. The
-      envelope diff against the recorded run is exactly one repository —
-      `wireframe`, whose `test` target now reads as an unresolved `DEV_FAST`
-      variable — and it was already indeterminate on another fact, so the rule
-      results are identical: 106 records, 0 errors, 86 compliant, 16
+      the survey that produced them ran at 03:06–03:07 (reader as of
+      `2f1c424`) and four later rounds changed the reader again. Both survey
+      halves were re-run over the same 106 mirrors at current HEAD, and the
+      rule path is **element-wise identical** to the 03:06 run: same commits,
+      same verdicts, same findings list per repository. So the published
+      figures stand unchanged — 106 records, 0 errors, 86 compliant, 16
       noncompliant, 4 indeterminate, 90 findings (16 NC-007, 26 NC-008, 48
       EN-001), 6 NC-007 and 15 NC-008 repositories, 19 EN-001 repositories and
-      the same 20-repository would-fail union. The three pinned real-checkout
-      snapshots were re-audited too and reproduce their recorded findings line
-      for line. The stale figures were test counts and the review tally, not
-      the survey: `24 Rego tests` was 29, `60`/`96` reader tests were 64/106,
-      `43` report tests were 44, `16 policy` was 16, and the review paragraph
-      described one round when there were seven.
+      the same 20-repository would-fail union. The envelope-level diff was
+      taken against the older 01:08 corpus instead, which predates the
+      round-one lexer fixes as well; it shows exactly one repository —
+      `wireframe`, whose `test` target now reads as an unresolved `DEV_FAST`
+      variable — which is that round's known change and was already
+      indeterminate on another fact. Neither baseline moves a count. The three
+      pinned real-checkout snapshots were re-audited at current HEAD and
+      reproduce their recorded findings line for line. The figures that *were*
+      stale were test counts and the review tally, not the survey: `24 Rego
+      tests` was 29, `60`/`96` reader tests were 64/106, `43` report tests were
+      44, and the review paragraph described one round when there were seven.
 - [ ] (2026-10-27) Remaining for delivery: push over SSH and re-review.
 
 ## Surprises & discoveries
@@ -760,15 +764,15 @@ mirror fleet is a usable sample but not a census; reporting its 106-of-180
 coverage beside every count is what keeps a floor from being read as a total.
 
 The survey was re-run once more after the last four review fixes, and the
-figures held: 90 findings, 20 would-fail repositories, and exactly one
-repository whose facts moved (`wireframe`). That is worth recording because it
-distinguishes two kinds of review finding. A fix that changes a verdict on real
-checkouts is a measurement correction and invalidates the published counts; a
-fix that needs a construct the corpus does not contain is a latent defect that
-the fixtures — not the survey — have to guard. Four of the six reader defects
-found after the first survey were of the second kind, which is the argument for
-keeping both the fixture corpus and the estate sweep rather than treating
-either as sufficient.
+figures held: the rule path is element-wise identical to the run the PR body
+quotes, so 90 findings and 20 would-fail repositories are unchanged. That is
+worth recording because it distinguishes two kinds of review finding. A fix
+that changes a verdict on real checkouts is a measurement correction and
+invalidates the published counts; a fix that needs a construct the corpus does
+not contain is a latent defect that the fixtures — not the survey — have to
+guard. Four of the six reader defects found after the first survey were of the
+second kind, which is the argument for keeping both the fixture corpus and the
+estate sweep rather than treating either as sufficient.
 
 ## Context and orientation
 
