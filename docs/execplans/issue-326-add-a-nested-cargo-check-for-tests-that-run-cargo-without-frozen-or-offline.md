@@ -313,7 +313,14 @@ workaround.
       pass count reconciles exactly: 2815 before, plus the new
       `path-qualified-binding` case, plus the codescene test that had been
       flaking.
-- [ ] (2026-10-27) Remaining for delivery: push over SSH and re-review.
+- [x] (2026-10-27) Fifth CodeRabbit round, on the pushed `ca5269a`: one
+      finding, the same `indeterminate` exit-code ambiguity the developer's
+      guide carried, repeated in `docs/concordat-design.md` — which also
+      contradicted its own "Evidence versus enforcement" section a few lines
+      below. Fixed there too, and a search confirms no other document repeats
+      the wording.
+- [ ] (2026-10-27) Remaining for delivery: Markdown gate re-run, push over SSH
+      and re-review.
 
 ## Surprises & discoveries
 
