@@ -37,9 +37,12 @@ the one-line parameter change recorded in `docs/roadmap.md` (DF12-109).
   setup script, or a workflow step.
 - **EN-001** (same severity, indeterminate): a spawn is `unresolved` (its
   arguments or environment came from a source the reader cannot see), an entry
-  point is `uncertain` (its ordering could not be read), or the envelope
-  carries a problem fact. The rule says it does not know rather than guessing
-  either way.
+  point is `uncertain` (its ordering could not be read) *and* the checkout has
+  at least one spawn or trybuild fact, or the envelope carries a problem fact.
+  The nested-build gate on the entry-point case is the same one NC-008
+  carries: with nothing for a prefetch to protect, an unreadable recipe is not
+  evidence against the repository. The rule says it does not know rather than
+  guessing either way.
 - **EN-001** (always `error`, indeterminate): the input is not a schema-1
   `policy-input/nested-cargo-offline-tests` envelope, or a fact carries a state
   this policy does not know. This says the rule could not run, not that the
@@ -78,7 +81,8 @@ must revisit is not a record.
 
 An exemption suppresses **NC-007 and NC-008 only**. Evidence the reader could
 not establish (an `unresolved` spawn, an `uncertain` entry point, a problem
-fact) stays reported, so an exempt file cannot hide the rule's own uncertainty.
+fact) stays reported wherever the rule judges it, so an exempt file cannot
+hide the rule's own uncertainty.
 
 The defaults record whitaker's installer, which builds its own copy of the
 crate from crates.io and cannot run offline.

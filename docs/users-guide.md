@@ -688,8 +688,10 @@ another's test (leynos/whitaker#518 measured nineteen). The rule reports:
   sequence, not `;`, `||`, a pipeline or an ignored error.
 - **EN-001** (indeterminate): a spawn whose arguments or environment the reader
   cannot see, an entry point whose ordering it cannot read, a file it cannot
-  decode, or an input that is not this rule's envelope. The rule says it does
-  not know rather than guessing either way.
+  decode, or an input that is not this rule's envelope. An unreadable entry
+  point is reported only when the checkout has a spawn or trybuild use, for the
+  same reason NC-008 is: there is otherwise nothing for a prefetch to protect.
+  The rule says it does not know rather than guessing either way.
 
 A version or help probe is not a spawn: `cargo --version`,
 `cargo kani --version`, `cargo help` and `cargo build --help` read no manifest

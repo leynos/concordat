@@ -13,7 +13,10 @@
           "line": 12,
           "form": "command_new",
           "state": "offline",
-          "flags": ["--frozen", "build"],
+          "flags": [
+            "--frozen",
+            "build"
+          ],
           "environment": []
         }
       ],
@@ -34,7 +37,10 @@
           "line": 80,
           "form": "command_new",
           "state": "online",
-          "flags": ["-vv", "--color"],
+          "flags": [
+            "-vv",
+            "--color"
+          ],
           "environment": []
         },
         {
@@ -42,7 +48,10 @@
           "line": 12,
           "form": "command_new",
           "state": "offline",
-          "flags": ["--frozen", "build"],
+          "flags": [
+            "--frozen",
+            "build"
+          ],
           "environment": []
         }
       ],
@@ -63,8 +72,12 @@
           "line": 20,
           "form": "command_new",
           "state": "offline",
-          "flags": ["build"],
-          "environment": ["CARGO_NET_OFFLINE"]
+          "flags": [
+            "build"
+          ],
+          "environment": [
+            "CARGO_NET_OFFLINE"
+          ]
         }
       ],
       "trybuild": [],
@@ -105,7 +118,10 @@
           "line": 96,
           "form": "command_new",
           "state": "offline",
-          "flags": ["--frozen", "build"],
+          "flags": [
+            "--frozen",
+            "build"
+          ],
           "environment": []
         }
       ],
@@ -165,7 +181,10 @@
           "line": 96,
           "form": "command_new",
           "state": "offline",
-          "flags": ["--frozen", "build"],
+          "flags": [
+            "--frozen",
+            "build"
+          ],
           "environment": []
         }
       ],
@@ -212,7 +231,11 @@
       },
       "spawns": [],
       "trybuild": [
-        {"path": "Cargo.toml", "line": 1, "form": "manifest"}
+        {
+          "path": "Cargo.toml",
+          "line": 1,
+          "form": "manifest"
+        }
       ],
       "entry_points": [
         {
@@ -239,7 +262,10 @@
           "line": 76,
           "form": "command_new",
           "state": "online",
-          "flags": ["install", "--force"],
+          "flags": [
+            "install",
+            "--force"
+          ],
           "environment": []
         },
         {
@@ -247,7 +273,10 @@
           "line": 80,
           "form": "command_new",
           "state": "online",
-          "flags": ["-vv", "--color"],
+          "flags": [
+            "-vv",
+            "--color"
+          ],
           "environment": []
         }
       ],
@@ -277,7 +306,10 @@
           "line": 80,
           "form": "command_new",
           "state": "offline",
-          "flags": ["--frozen", "build"],
+          "flags": [
+            "--frozen",
+            "build"
+          ],
           "environment": []
         }
       ],
@@ -307,7 +339,10 @@
           "line": 76,
           "form": "command_new",
           "state": "online",
-          "flags": ["install", "--force"],
+          "flags": [
+            "install",
+            "--force"
+          ],
           "environment": []
         }
       ],
@@ -328,6 +363,27 @@
       "problems": [
         "tests/broken.rs cannot be decoded as UTF-8"
       ]
+    },
+    "uncertain_entry_without_nested_build": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-offline-tests",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "spawns": [],
+      "trybuild": [],
+      "entry_points": [
+        {
+          "kind": "makefile",
+          "path": "Makefile",
+          "line": 27,
+          "name": "test",
+          "state": "uncertain",
+          "reason": "a recipe command could not be read"
+        }
+      ],
+      "problems": []
     }
   }
 }

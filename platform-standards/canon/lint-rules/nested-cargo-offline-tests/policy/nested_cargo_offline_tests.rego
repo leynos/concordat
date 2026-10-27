@@ -113,8 +113,13 @@ deny contains finding("NC-008", severity, "noncompliant", entry.path, entry.line
 	)
 }
 
+# An unreadable entry point only counts where a nested build exists for a
+# prefetch to protect. Without one, the missing (or unreadable) prefetch warms
+# nothing, and reporting it would fail a repository that has no problem this
+# rule can fix. NC-008 carries the same gate for the same reason.
 deny contains finding("EN-001", severity, "indeterminate", entry.path, entry.line, msg) if {
 	envelope_ok
+	has_nested_build
 	some entry in input.entry_points
 	entry.state == "uncertain"
 	msg := sprintf(

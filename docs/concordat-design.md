@@ -2860,10 +2860,13 @@ that starts it, and the exemption suppresses NC-007 and NC-008 only. Evidence
 the reader could not establish stays reported, so an exempt file cannot hide
 the rule's own uncertainty. Both text fields must be non-blank in the policy
 itself, not merely in the schema, because an exemption nobody must revisit is
-not a record. Remaining limits: a spawn reached through a macro, a function
-pointer or a value assembled at run time is invisible, and a hidden command in
-a Makefile or workflow leaves the entry point `uncertain` rather than proved
-either way.
+not a record. Both entry-point findings are gated on the checkout having at
+least one spawn or trybuild fact: an unreadable recipe in a repository that
+starts no cargo has nothing for a prefetch to protect, so it is not evidence
+against that repository. Remaining limits: a spawn reached through a macro, a
+function pointer or a value assembled at run time is invisible, and a hidden
+command in a Makefile or workflow leaves the entry point `uncertain` rather
+than proved either way.
 
 #### 3.1.4 Verifying the reconciliation invariants
 

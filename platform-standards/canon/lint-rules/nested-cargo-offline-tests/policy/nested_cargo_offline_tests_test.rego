@@ -66,6 +66,14 @@ test_an_uncertain_entry_point_is_indeterminate if {
 	}
 }
 
+# An entry point only matters when there is a nested build for a prefetch to
+# protect. A repository that spawns no cargo and uses no trybuild has nothing
+# the missing prefetch could warm, so an unreadable recipe there is not
+# evidence against it — the same gate NC-008 already carries.
+test_an_uncertain_entry_point_without_a_nested_build_is_not_judged if {
+	count(findings(data.fixtures.uncertain_entry_without_nested_build)) == 0
+}
+
 test_unreadable_evidence_is_indeterminate if {
 	profile(data.fixtures.unreadable_evidence) == {["EN-001", "indeterminate", ""]}
 }
