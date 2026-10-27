@@ -61,6 +61,34 @@ def _records_for_package(ledger: Ledger, package: str) -> Ledger:
     return [record for record in ledger if record["rule_package"] == package]
 
 
+def _versions(records: dict[str, LedgerRecord], package: str) -> str:
+    """Return the package version or versions the rendered records carry.
+
+    The ledger is append-only, so a report can cover records written by more
+    than one version: a campaign re-runs an updated package and only the
+    repositories it reached are re-stamped. Naming the current manifest alone
+    would then describe records the report is not showing, which is how the
+    checked-in report came to claim a version no record in the ledger held.
+
+    Parameters
+    ----------
+    records:
+        The latest record per repository, already filtered to *package*.
+    package:
+        The package those records belong to.
+
+    Returns
+    -------
+    str
+        `vX` for one version, `vX, vY` for several, and the current manifest
+        version when the selection is empty and there is no record to read.
+    """
+    versions = sorted({record["rule_version"] for record in records.values()})
+    if not versions:
+        return f"v{rule_version(package)}"
+    return ", ".join(f"v{version}" for version in versions)
+
+
 # A table cell ends at an unescaped `|`, and a newline ends the row. Ledger
 # prose — an exclusion reason from the manifest, an error detail from a tool,
 # a finding message from the policy — is free text that may contain either.
@@ -238,7 +266,7 @@ def render_report(
         "`python -m scripts.parabellum_sweep report`. Do not edit by hand.",
         "",
         (
-            f"Rule package: `{package}` v{rule_version(package)}; "
+            f"Rule package: `{package}` {_versions(latest, package)}; "
             f"makeutil `{MAKEUTIL_REV[:12]}`."
         ),
         "",

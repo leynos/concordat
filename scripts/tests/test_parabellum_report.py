@@ -638,11 +638,19 @@ class TestPackageFiltering:
         self,
         ledger_path: pathlib.Path,
     ) -> None:
-        """The header names the package whose records are rendered."""
+        """The header names the package whose records are rendered.
+
+        The version is deliberately not the manifest's: naming the manifest
+        would let a record the report does not show supply the header's
+        version, and the assertion would pass without reading the ledger.
+        """
         ledger_path.write_text(
             json.dumps(
                 TestReport()._record(
-                    "leynos/gamma", "compliant", package=SURVEY_PACKAGE
+                    "leynos/gamma",
+                    "compliant",
+                    package=SURVEY_PACKAGE,
+                    version="9.9.9",
                 )
             )
             + "\n",
@@ -651,8 +659,53 @@ class TestPackageFiltering:
 
         report = sweep.render_report(ledger_path, package=SURVEY_PACKAGE)
 
-        assert f"Rule package: `{SURVEY_PACKAGE}` v0.1.0" in report, report
+        assert f"Rule package: `{SURVEY_PACKAGE}` v9.9.9" in report, report
         assert sweep.RULE_PACKAGE not in report, report
+
+    def test_the_header_names_the_versions_the_records_carry(
+        self,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """A report spanning two versions names both, not the manifest's.
+
+        The ledger is append-only and a campaign re-runs an updated package
+        over part of the estate, so the records the report renders can be
+        stamped by two versions at once. Claiming the current manifest
+        version would describe versions the report does not show.
+        """
+        ledger_path.write_text(
+            "".join(
+                json.dumps(record) + "\n"
+                for record in (
+                    TestReport()._record(
+                        "leynos/alpha", "compliant", version="0.1.0"
+                    ),
+                    TestReport()._record(
+                        "leynos/beta", "noncompliant", version="0.2.0"
+                    ),
+                )
+            ),
+            encoding="utf-8",
+        )
+
+        report = sweep.render_report(ledger_path)
+
+        assert (
+            f"Rule package: `{sweep.RULE_PACKAGE}` v0.1.0, v0.2.0" in report
+        ), report
+        assert f"v{sweep.rule_version(sweep.RULE_PACKAGE)}" not in report, report
+
+    def test_the_header_falls_back_to_the_manifest_without_records(
+        self,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """An empty ledger has no record to name, so the manifest supplies one."""
+        ledger_path.write_text("", encoding="utf-8")
+
+        report = sweep.render_report(ledger_path)
+
+        version = sweep.rule_version(sweep.RULE_PACKAGE)
+        assert f"Rule package: `{sweep.RULE_PACKAGE}` v{version}" in report, report
 
     def test_an_empty_selection_renders_without_a_finding_table(
         self,
