@@ -574,7 +574,14 @@ workaround.
       round: the code narrowed the offline value set to `"true"` and `"1"`
       while five prose descriptions still named `"true"` alone. Both fixed,
       with the README now stating which spellings leave the network reachable.
-- [ ] (2026-10-27) Remaining for delivery: push over SSH and re-review.
+- [x] (2026-10-27) The round's commits pushed over SSH as `00ec18a`, with
+      `/usr/bin/gh api user` confirming `leynos` and a `git ls-remote`
+      matching `git rev-parse HEAD`; the local tracking ref was refreshed with
+      a leading-`+` refspec and the branch's upstream set to `origin` by name.
+      The PR body was rewritten from `/tmp/pr-body.md` and every count in it
+      recomputed from the survey data rather than carried forward.
+- [ ] (2026-10-27) Remaining for delivery: the twelfth review round over the
+      pushed fixes, then marking the PR ready for review.
 
 ## Surprises & discoveries
 
