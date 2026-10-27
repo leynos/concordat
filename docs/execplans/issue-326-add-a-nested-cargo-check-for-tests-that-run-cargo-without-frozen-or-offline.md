@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & retrospective`, `Conformance basis`, and `Verification plan` must
 be kept up to date as work proceeds.
 
-Status: DRAFT
+Status: IMPLEMENTED, awaiting review
 
 ## Purpose / big picture
 
@@ -84,7 +84,8 @@ workaround.
   missing. Severity: medium Likelihood: high (already observed absent).
   Mitigation: keep survey code and tests complete, run the local corpus
   comparison, and report the missing artefact in the PR rather than inventing
-  counts.
+  counts. Outcome: triggered, and mitigated as planned — the local-mirror
+  survey ran over 106 repositories with zero operational errors.
 - Risk: `pylint` `max-module-lines = 800` is exceeded by the reader modules.
   Severity: low Likelihood: medium. Mitigation: split the reader by concern
   from the start (`nested_cargo_spawns.py`, `nested_cargo_entry_points.py`,
@@ -169,12 +170,35 @@ workaround.
       fully-qualified method (Decision log), with the contract test's
       expected-symbol set updated; the targeted Skylos gate and the six Skylos
       contract tests are green.
-- [ ] Task 4 survey: run `--package nested-cargo-offline-tests` per
-      `~/docs/missing-frozen-survey-plan.md` on the SRE host, compare NC-007
-      and NC-008 repository counts against the 24 October survey (~20 direct
-      spawns, ~30 trybuild) and investigate differences. **Blocked on this
-      host:** the plan file does not exist here (recorded in Surprises &
-      discoveries), so no survey figures are claimed.
+- [x] (2026-10-27) Task 4 survey, run locally because the SRE plan file is
+      absent (Decision log). The real runner audited all 106 locally mirrored
+      bare repositories: 53 compliant, 37 indeterminate, 16 noncompliant, zero
+      operational errors, and every one of the 144 findings carried severity
+      `warning`, so all 106 runs exited `0` — the survey mode works end to
+      end. Per rule: NC-007 reached 6 repositories in 16 occurrences, NC-008
+      15 repositories in 26 occurrences, EN-001 52 indeterminate-only
+      repositories in 102 occurrences. Promotion to `error` would fail 53 of
+      the 106 audited repositories (the union of the three rule sets, which
+      equals the 16 + 37 non-compliant verdicts). A mixed-package ledger
+      renders the same table through the new filter, with only the selected
+      package's records counted.
+- [x] (2026-10-27) Task 4 real-checkout validation. whitaker `f7a5a93` (main
+      before #518) is `noncompliant`: NC-007 on `common/tests/i18n_packaging.rs:58`
+      and `crates/no_std_fs_operations/tests/integration_exclusion.rs:166`,
+      NC-008 on `.config/nextest.toml:6`, seven EN-001 facts. The `#518` head
+      `a108b29` is `indeterminate`: both NC-007s are gone (`--frozen` added)
+      and the NC-008 is gone (a new `fetch` prerequisite), leaving five EN-001
+      facts. theoremc `8f48abb` is `noncompliant`: NC-007 twice, NC-008 once,
+      one EN-001.
+- [x] (2026-10-27) Task 4 comparison with the 24 October survey. The two
+      figures are repository counts of *any* nested-cargo evidence, not of
+      NC-007/NC-008 findings. On the same 106 mirrors the raw greps find 10
+      repositories with test-scope cargo spawns and 17 with trybuild, and the
+      local mirrors cover 106 of the 180 non-fork, non-archived repositories;
+      scaled by that coverage the counts become about 17 direct-spawn
+      repositories and about 29 trybuild repositories, against the recorded
+      about 20 and about 30. The difference is coverage, not disagreement;
+      the rule's counts are a floor.
 - [ ] Delivery: draft PR with session reference.
 
 ## Surprises & discoveries
@@ -185,9 +209,49 @@ workaround.
   the severity; only `rust-toolchain-policy` and this repository's NC policy
   use five/`error`-fixed forms. Impact: the severity scan must be done
   per-helper, not by grepping the second string argument.
-- Observation: `leynos/whitaker#518` is still open, so whitaker `main` has no
-  `--frozen`/`--offline`/`CARGO_NET_OFFLINE` anywhere. Impact: the "after"
-  corpus case must be synthetic or a patched checkout.
+- Observation: `leynos/whitaker#518` is an open issue, not a pull request, but
+  its branch
+  `issue-518-fetch-once-then-run-nested-cargo-calls-frozen-so-tests-never-wait-on-the-package-cache-lock`
+  exists at `a108b29bebb4f6657748173378589d7b07f2d32c` and its merge base with
+  `main` is `f7a5a93132e989490021cbacbb9cc865e40a467f`, so the branch head and
+  current `main` form a genuine before/after pair rather than a synthetic one.
+  The fix is not merged: a fresh fetch of `origin/main` still reports both
+  NC-007s and the NC-008. Impact: the Task 4 validation uses the real pair, and
+  the local state of whitaker `main` remains the known-bad case.
+- Observation: three runner probes disagree with a naive reading of the survey,
+  and each was traced to its cause rather than assumed. Impact: (a) `netsuke`
+  has no literal `Command::new("cargo")` yet is NC-008, because it spawns
+  `Command::new(cargo())` through a helper at
+  `tests/build_module_slice_ui_tests.rs:102` and
+  `tests/command_env_ui_tests.rs:75`/`:178` — two `unresolved` spawns and an
+  `absent` workflow entry point, which is a true positive; (b) `wildside` is
+  the one repository in the 53-repository union that carries no EN-001, because
+  its trybuild evidence produces NC-008 alone; (c) `theoremc` `origin/main` has
+  moved from `8f48abb` to `70926a18`, where the fixture-crate spawn at
+  `tests/common/fixture_crate.rs:224` is a new NC-007 — the survey snapshot is
+  a floor, not a current total.
+- Observation: an early raw-grep pass reported "0 repositories with test-scope
+  cargo spawns", which was a regular-expression artefact rather than a finding.
+  `git grep -E` is POSIX ERE: `\s` is not reliably a class and `(?:...)` is not
+  a group, and the pattern silently matched nothing. Impact: every corpus grep
+  was rewritten with `[[:space:]]` and `(...)?`; the corrected pattern finds
+  test-scope cargo spawns in 10 repositories, 20 occurrences, and trybuild in
+  17. A zero from a POSIX-ERE pattern must be confirmed, never trusted.
+- Observation: the local mirror fleet holds 106 of the 180 non-fork,
+  non-archived `leynos` repositories (`gh repo list` reports 210 in total), and
+  the checked-in estate manifest names 52. Impact: the survey counts are a
+  floor over about 59 per cent of the eligible estate and must be presented as
+  such; they are not an estate total, and the PR says so.
+- Observation: the whitaker `#518` recipe is a long `set -eu; …` chain with
+  `$(if …)` conditionals, so the entry-point reader recognizes no test command
+  in it and reports the `test` target `uncertain` ("a recipe command could not
+  be read") rather than `before`, even though its new `fetch` prerequisite
+  proves a success-gated `cargo fetch --locked`. This is a reader limitation,
+  not a repository defect: the checkout is genuinely fixed, and the residual
+  fact is `indeterminate`, which is the conservative reading the Constraints
+  require. Impact: recorded as a residual limit; the after-fix validation is
+  still decisive because the NC-007 and NC-008 findings it was written to
+  observe both disappear.
 - Observation: `~/docs/missing-frozen-survey-plan.md` does not exist on this
   host. Impact: the estate survey step cannot run here. The Task 4 survey and
   its NC-007/NC-008 comparison are therefore left open in Progress and reported
@@ -419,10 +483,51 @@ workaround.
   cohesive method to satisfy a scanner. The contract test's expected
   entry-point set is extended with the same symbol so the exemption cannot
   widen silently. Date/Author: 2026-10-27.
+- Decision: the Task 4 survey is run locally over the 106 mirrored
+  repositories, not from `~/docs/missing-frozen-survey-plan.md` on the SRE
+  host, because that file does not exist on this host (Surprises & discoveries)
+  and the Tolerances forbid inventing its numbers. Rationale: the task's
+  comparison needs real rule output over real checkouts, and the mirrors supply
+  both. The substitute is stated plainly wherever the counts appear, including
+  the PR, so no reader mistakes it for the SRE sweep. Date/Author: 2026-10-27.
+- Decision: the 24 October survey figures ("about 20 with direct spawns and
+  about 30 with trybuild") are read as repository counts of any nested-cargo
+  evidence, not as NC-007/NC-008 finding counts, and the comparison is made
+  against the raw greps rather than against the rule's tallies. Rationale: the
+  rule reports *unsafe* spawns and *missing* prefetch, so its NC-007 count of 6
+  and NC-008 count of 15 answer a narrower question than "which repositories
+  have a nested cargo build at all"; comparing them directly would read a
+  correct narrowing as a 70 per cent regression. The raw greps on the same 106
+  mirrors give 10 direct-spawn and 17 trybuild repositories, which at the
+  106-of-180 coverage becomes about 17 and about 29 — consistent with the
+  recorded about 20 and about 30 within the coverage bound. Date/Author:
+  2026-10-27.
+- Decision: the survey evidence is reported as a floor with its coverage
+  stated, not as an estate total. Rationale: 106 of the 180 eligible
+  repositories are mirrored locally, and a count presented without that bound
+  would be read as complete and would understate the promotion-to-error impact.
+  Date/Author: 2026-10-27.
 
 ## Outcomes & retrospective
 
-Not yet started.
+The four planned tasks are implemented and validated. The runner no longer
+fails a gate on a warning finding; the new package reports every test-scope
+cargo spawn and every test entry point a checkout has, and ships as a survey.
+The real runner over 106 mirrored repositories finds 16 repositories with an
+unsafe nested cargo run or a cold test entry point and a further 37 where the
+reader could not prove either way, which is the evidence a promotion decision
+needs and is more than the checked-in fixtures could have shown.
+
+Three lessons are worth carrying forward. First, a survey of a text-level
+reader is only as good as its negative controls: three of the four probes that
+looked wrong (the POSIX-ERE grep, the `cargo()` helper in `netsuke`, and
+`theoremc`'s moved `main`) were mistakes in the *measurement*, not in the rule,
+and each was settled by reading the checkout rather than by adjusting the
+count. Second, a reader that cannot read a recipe must say so: the whitaker
+`#518` target is genuinely fixed, but its rewritten recipe is unreadable to the
+Make lexer, and the honest output there is `indeterminate`. Third, a local
+mirror fleet is a usable sample but not a census; reporting its 106-of-180
+coverage beside every count is what keeps a floor from being read as a total.
 
 ## Context and orientation
 
@@ -626,7 +731,36 @@ destructive commands are planned.
 
 ## Artefacts and notes
 
-To be filled as evidence is captured.
+Survey scratch, kept under `/tmp` and not committed: the envelope survey
+(`/tmp/corpus-survey/survey.py`, `results.jsonl`), the rule survey
+(`/tmp/corpus-survey/run_rule_survey.py`, `rule-results.jsonl`, 106 records and
+zero errors in 103 seconds), the raw-grep baseline (`raw_counts.tsv`), the
+mixed-package ledger used to exercise the report filter
+(`/tmp/corpus-survey/ledger.jsonl`) and the rendered reports
+(`survey-report.md`, `survey-report-full.md`). The checkout snapshots are
+`/tmp/nc-audit-whitaker-before`, `/tmp/nc-audit-whitaker-after`,
+`/tmp/nc-audit-theoremc`, `/tmp/nc-main-whitaker` and `/tmp/nc-main-theoremc`.
+
+Survey tallies over the 106 mirrored repositories, with every finding at
+severity `warning`:
+
+| Rule   | Noncompliant repositories | Indeterminate-only repositories | Would fail |
+| ------ | ------------------------- | ------------------------------- | ---------- |
+| EN-001 | 0                         | 52                              | 52         |
+| NC-007 | 6                         | 0                               | 6          |
+| NC-008 | 15                        | 0                               | 15         |
+
+The three sets are not disjoint; their union is 53 repositories, and every one
+of those is a repository whose overall verdict is noncompliant or
+indeterminate. Occurrence counts are 16 NC-007, 26 NC-008 and 102 EN-001.
+
+Real-checkout validation, from the shipped CLI:
+
+```plaintext
+whitaker f7a5a93  noncompliant  NC-007 x2, NC-008 x1, EN-001 x7
+whitaker a108b29  indeterminate              EN-001 x5
+theoremc 8f48abb  noncompliant  NC-007 x2, NC-008 x1, EN-001 x1
+```
 
 ## Interfaces and dependencies
 
