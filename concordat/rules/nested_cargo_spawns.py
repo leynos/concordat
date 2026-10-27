@@ -29,6 +29,7 @@ import pathlib
 import re
 import typing as typ
 
+from .dependency_family_coverage import mapping
 from .dependency_family_discovery import cargo_tables
 from .nested_cargo import is_fixture_directory, standalone_directories
 from .nested_cargo_commands import (
@@ -121,36 +122,13 @@ class RustEvidence:
     trybuild: list[TrybuildFact]
 
 
-CRATE_ROOT_STEMS: typ.Final = frozenset({"lib", "main", "mod"})
+# The package a test uses to compile its UI cases. It is named here rather than
+# inline because the manifest reader resolves renames against it and the source
+# reader falls back to it when no manifest declares one.
+TRYBUILD_PACKAGE: typ.Final = "trybuild"
 
-_ATTRIBUTE: typ.Final = re.compile(r"#\[")
 _HELPER: typ.Final = re.compile(r"\bfn\s+(?P<name>[A-Za-z_]\w*)\s*\(")
-_MODULE: typ.Final = re.compile(r"mod\s+(?P<name>[A-Za-z_]\w*)")
-_MODIFIERS: typ.Final = re.compile(r"(?:pub(?:\s*\([^)]*\))?\s+)*")
-_ENCLOSING_MODULE: typ.Final = re.compile(r"\bmod\s+([A-Za-z_]\w*)\s*$")
-_TEST_LITERAL: typ.Final = re.compile(r"trybuild\s*::\s*TestCases")
 _DECLARATION: typ.Final = re.compile(r"\bfn\s*$")
-_CFG_PREDICATE: typ.Final = re.compile(r"cfg\s*\((.*)\)\s*$", re.DOTALL)
-_PATH_ATTRIBUTE: typ.Final = re.compile(r"\bpath\s*=\s*\"[^\"]*\"")
-
-
-@dataclasses.dataclass(frozen=True, slots=True)
-class _Declaration:
-    """One `#[cfg(test)] mod name;` declaration and where Rust looks for it.
-
-    Attributes
-    ----------
-    chain:
-        The inline modules enclosing the declaration, outermost first.
-    name:
-        The module name, which names the file when no `path` is given.
-    path:
-        The literal `#[path = "..."]` override, if the declaration has one.
-    """
-
-    chain: tuple[str, ...]
-    name: str
-    path: str | None
 
 
 def _fact(source: RustSource, command: CargoCommand, state: str) -> SpawnFact:
@@ -324,13 +302,121 @@ def _absorbed(site: CargoCommand, definition: CargoCommand) -> bool:
     return command_state(site) == "offline"
 
 
-def _trybuild_facts(source: RustSource, scope: TestScope) -> list[TrybuildFact]:
+def _test_literal(aliases: frozenset[str]) -> re.Pattern[str]:
+    """Return the pattern matching a trybuild `TestCases` reference.
+
+    Cargo lets a dependency rename the package it pulls in, so the crate may
+    be in scope as `tb` rather than `trybuild`. Only the names the workspace
+    actually declares are matched: a `TestCases` path through any other name
+    belongs to some other crate.
+
+    Returns
+    -------
+    re.Pattern[str]
+        The pattern for a reference through one of *aliases*.
+    """
+    # Longest first, so an alias that is a prefix of another cannot shadow it.
+    joined = "|".join(
+        re.escape(name) for name in sorted(aliases, key=len, reverse=True)
+    )
+    return re.compile(rf"\b(?:{joined})\s*::\s*TestCases")
+
+
+def _dependency_package(key: str, spec: object) -> str:
+    """Return the package a dependency entry pulls in.
+
+    A rename is written as `key = { package = "name", ... }`, and the key is
+    then the local name, not the package. A bare version string leaves the key
+    as the package name.
+
+    Returns
+    -------
+    str
+        The declared package name.
+    """
+    renamed = mapping(spec)
+    if renamed is not None:
+        declared = renamed.get("package")
+        if isinstance(declared, str):
+            return declared
+    return key
+
+
+def _aliases_by_directory(
+    checkout: pathlib.Path, manifests: typ.Mapping[pathlib.Path, Manifest]
+) -> dict[pathlib.PurePosixPath, frozenset[str]]:
+    """Return the local names each manifest gives the trybuild dependency.
+
+    A manifest governs the files at and below its own directory, so the
+    directory is the key: a source file is read with the names its own package
+    declares, not with another package's.
+
+    The plain package name is always included. `trybuild::TestCases` names the
+    crate however the dependency was declared, so matching it needs no
+    manifest, and requiring one would drop a real reference from a file whose
+    manifest is a virtual workspace root that declares no dependencies at all.
+
+    Returns
+    -------
+    dict[pathlib.PurePosixPath, frozenset[str]]
+        Trybuild's local names, by the manifest's root-relative directory.
+    """
+    aliases: dict[pathlib.PurePosixPath, frozenset[str]] = {}
+    for path, document in manifests.items():
+        relative = pathlib.PurePosixPath(path.relative_to(checkout).as_posix())
+        aliases[relative.parent] = frozenset(
+            {TRYBUILD_PACKAGE}
+            | {
+                key
+                for _section, _target, table in cargo_tables(document)
+                for key, spec in table.items()
+                if _dependency_package(key, spec) == TRYBUILD_PACKAGE
+            }
+        )
+    return aliases
+
+
+def _owning_aliases(
+    relative: pathlib.PurePosixPath,
+    aliases: typ.Mapping[pathlib.PurePosixPath, frozenset[str]],
+) -> frozenset[str]:
+    """Return the trybuild aliases in scope for one source file.
+
+    The nearest manifest at or above the file governs it, exactly as Cargo
+    decides which package a target belongs to, so one package's rename cannot
+    be read into another package's source. A file no manifest governs matches
+    the plain name alone, which is the one reading that needs no manifest.
+
+    Returns
+    -------
+    frozenset[str]
+        The local names trybuild is in scope under.
+    """
+    for parent in relative.parents:
+        found = aliases.get(parent)
+        if found is not None:
+            return found
+    return frozenset({TRYBUILD_PACKAGE})
+
+
+def _trybuild_facts(
+    source: RustSource, scope: TestScope, literal: re.Pattern[str]
+) -> list[TrybuildFact]:
     """Return the trybuild source references in one file.
+
+    Parameters
+    ----------
+    source:
+        The decoded file.
+    scope:
+        The offsets in it that count as test code.
+    literal:
+        The pattern matching a reference through any alias in scope here.
 
     Returns
     -------
     list[TrybuildFact]
-        One fact per test-scope `trybuild::TestCases` reference.
+        One fact per test-scope `TestCases` reference reached by an alias.
     """
     return [
         {
@@ -338,7 +424,7 @@ def _trybuild_facts(source: RustSource, scope: TestScope) -> list[TrybuildFact]:
             "line": line_of(source.text, match.start()),
             "form": "source",
         }
-        for match in _TEST_LITERAL.finditer(source.masked)
+        for match in literal.finditer(source.masked)
         if scope.contains(match.start())
     ]
 
@@ -372,6 +458,11 @@ def collect_trybuild_manifests(
 ) -> list[TrybuildFact]:
     """Return the non-fixture manifests that declare a trybuild dependency.
 
+    A dependency may rename the package it pulls in, so the key is not always
+    the package name. Each entry is resolved through its own `package` field
+    before the comparison; reading only the keys misses
+    `tb = { package = "trybuild", version = "1" }`.
+
     Returns
     -------
     list[TrybuildFact]
@@ -383,7 +474,9 @@ def collect_trybuild_manifests(
         if in_fixture(relative, fixtures):
             continue
         if any(
-            "trybuild" in table for _section, _target, table in cargo_tables(document)
+            _dependency_package(key, spec) == TRYBUILD_PACKAGE
+            for _section, _target, table in cargo_tables(document)
+            for key, spec in table.items()
         ):
             found.append({"path": relative.as_posix(), "line": 1, "form": "manifest"})
     return found
@@ -442,12 +535,17 @@ def collect_rust_evidence(
         for source in sources
         for fact in _source_facts(source, scopes[source.relative])
     ]
+    aliases = _aliases_by_directory(checkout, manifests)
     trybuild = [
         *collect_trybuild_manifests(checkout, manifests, fixtures),
         *(
             fact
             for source in sources
-            for fact in _trybuild_facts(source, scopes[source.relative])
+            for fact in _trybuild_facts(
+                source,
+                scopes[source.relative],
+                _test_literal(_owning_aliases(source.relative, aliases)),
+            )
         ),
     ]
     return RustEvidence(

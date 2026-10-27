@@ -743,6 +743,154 @@ def test_a_fixture_manifest_is_not_trybuild_evidence(tmp_path: pathlib.Path) -> 
     )
 
 
+def test_a_renamed_trybuild_dependency_is_recorded_from_a_manifest(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A dependency may rename the package it pulls in.
+
+    `tb = { package = "trybuild", version = "1" }` makes the crate available
+    as `tb`, so the manifest declares trybuild while no dependency key says
+    so. Reading only the keys dropped the fact, and with no direct spawn
+    NC-008 then reported nothing for an entry point that does start a nested
+    build.
+    """
+    manifest: Manifest = {
+        "package": {"name": "member"},
+        "dev-dependencies": {"tb": {"package": "trybuild", "version": "1"}},
+    }
+    manifests = {tmp_path / "member/Cargo.toml": manifest}
+    facts = collect_trybuild_manifests(tmp_path, manifests, frozenset())
+    assert [(fact["path"], fact["form"]) for fact in facts] == [
+        ("member/Cargo.toml", "manifest")
+    ]
+
+
+def test_a_dependency_on_another_package_is_not_trybuild_evidence(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A rename is evidence only when it names trybuild.
+
+    `tb = { package = "tempfile", version = "3" }` puts a crate named `tb` in
+    scope without any trybuild dependency, so reporting it would claim a
+    nested build the checkout does not have.
+    """
+    manifest: Manifest = {
+        "package": {"name": "member"},
+        "dev-dependencies": {"tb": {"package": "tempfile", "version": "3"}},
+    }
+    manifests = {tmp_path / "member/Cargo.toml": manifest}
+    assert collect_trybuild_manifests(tmp_path, manifests, frozenset()) == []
+
+
+def test_a_renamed_trybuild_reference_is_recorded_from_source(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Tests reach a renamed trybuild by its local name.
+
+    The call is `tb::TestCases`, not `trybuild::TestCases`, so matching the
+    package name alone still missed it. The alias has to be resolved back to
+    the package it names before the source reference can be recognised.
+    """
+    put(tmp_path, "Cargo.toml", '[workspace]\nmembers = ["member"]\n')
+    put(
+        tmp_path,
+        "member/Cargo.toml",
+        '[package]\nname = "member"\n\n'
+        '[dev-dependencies]\ntb = { package = "trybuild", version = "1" }\n',
+    )
+    put(
+        tmp_path,
+        "member/tests/ui.rs",
+        "fn main() {\n    let cases = tb::TestCases::new();\n}\n",
+    )
+    facts = evidence(tmp_path).trybuild
+    assert [(fact["path"], fact["line"], fact["form"]) for fact in facts] == [
+        ("member/Cargo.toml", 1, "manifest"),
+        ("member/tests/ui.rs", 2, "source"),
+    ]
+
+
+def test_an_alias_does_not_reach_a_sibling_package(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A rename belongs to the package that declared it.
+
+    Only `member` renames trybuild to `tb`; `other` does not depend on it at
+    all, so `tb::TestCases` in `other`'s tests names something else. Reading
+    every alias against every file would report a nested build that package
+    does not have, and the survey's repository counts would move for a reason
+    the repository cannot fix.
+    """
+    put(tmp_path, "Cargo.toml", '[workspace]\nmembers = ["member", "other"]\n')
+    put(
+        tmp_path,
+        "member/Cargo.toml",
+        '[package]\nname = "member"\n\n'
+        '[dev-dependencies]\ntb = { package = "trybuild", version = "1" }\n',
+    )
+    put(tmp_path, "other/Cargo.toml", '[package]\nname = "other"\n')
+    put(
+        tmp_path,
+        "other/tests/ui.rs",
+        "fn main() {\n    let cases = tb::TestCases::new();\n}\n",
+    )
+
+    facts = evidence(tmp_path).trybuild
+
+    assert [(fact["path"], fact["form"]) for fact in facts] == [
+        ("member/Cargo.toml", "manifest")
+    ]
+
+
+def test_a_plain_reference_is_recorded_under_a_virtual_workspace_manifest(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A virtual workspace root declares no dependencies of its own.
+
+    Its `Cargo.toml` is the nearest manifest above `crates/member` until that
+    package's own file is consulted, so requiring the governing manifest to
+    name trybuild would drop a plain `trybuild::TestCases` reference. The
+    package name names the crate whatever the declaring manifest says.
+    """
+    put(tmp_path, "Cargo.toml", '[workspace]\nmembers = ["crates/*"]\n')
+    put(tmp_path, "crates/member/Cargo.toml", '[package]\nname = "member"\n')
+    put(
+        tmp_path,
+        "crates/member/tests/ui.rs",
+        "fn main() {\n    let cases = trybuild::TestCases::new();\n}\n",
+    )
+
+    facts = evidence(tmp_path).trybuild
+
+    assert [(fact["path"], fact["form"]) for fact in facts] == [
+        ("crates/member/tests/ui.rs", "source")
+    ]
+
+
+def test_a_reference_through_an_unrelated_alias_is_not_recorded(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A local name that does not name trybuild proves nothing.
+
+    `rb::TestCases` could be any crate's type, so treating every `TestCases`
+    path as trybuild evidence would report a nested build for code that has
+    none.
+    """
+    put(tmp_path, "Cargo.toml", '[workspace]\nmembers = ["member"]\n')
+    put(
+        tmp_path,
+        "member/Cargo.toml",
+        '[package]\nname = "member"\n\n'
+        '[dev-dependencies]\nrb = { package = "rstest-bdd", version = "0" }\n',
+    )
+    put(
+        tmp_path,
+        "member/tests/ui.rs",
+        "fn main() {\n    let cases = rb::TestCases::new();\n}\n",
+    )
+    assert evidence(tmp_path).trybuild == []
+
+
 def test_fixture_directories_need_both_selectors(tmp_path: pathlib.Path) -> None:
     """A `tests/` path is not a fixture package unless Cargo can build it alone."""
     put(tmp_path, "Cargo.toml", '[workspace]\nmembers = ["crates/*"]\n')
