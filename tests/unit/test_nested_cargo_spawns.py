@@ -512,6 +512,144 @@ def test_a_config_gated_nested_declaration_is_not_test_scope(
     assert evidence(tmp_path).spawns == []
 
 
+def test_a_module_reached_through_a_test_module_is_test_scope(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Test scope follows a declaration out of one file and into the next.
+
+    `#[cfg(test)] mod checks;` in `src/lib.rs` puts `src/checks.rs` in test
+    scope; a `mod helpers;` in that file then reaches `src/checks/helpers.rs`,
+    which the compiler builds into the test target too. Reading only the first
+    hop left the second file out of scope, so a cargo spawn there produced no
+    NC-007. The estate has 154 such chains.
+    """
+    put(tmp_path, "src/lib.rs", "#[cfg(test)]\nmod checks;\n")
+    put(tmp_path, "src/checks.rs", "mod helpers;\n")
+    put(
+        tmp_path,
+        "src/checks/helpers.rs",
+        'fn run() {\n    Command::new("cargo").arg("build");\n}\n',
+    )
+    facts = evidence(tmp_path).spawns
+    assert [(fact["path"], fact["state"]) for fact in facts] == [
+        ("src/checks/helpers.rs", "online")
+    ]
+
+
+def test_a_path_attribute_reaches_out_of_a_whole_file_test_module(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`#[path = "../support.rs"] mod support;` names a file outside `tests/`.
+
+    The value is resolved against the declaring file's directory, so an
+    integration test can pull a support module in from beside `tests/`. The
+    declaring file is a whole-file test module, which the reader never scanned
+    for declarations, so the file it names stayed out of scope.
+    """
+    put(tmp_path, "tests/it.rs", '#[path = "../src/support.rs"]\nmod support;\n')
+    put(
+        tmp_path,
+        "src/support.rs",
+        'fn run() {\n    Command::new("cargo").arg("build");\n}\n',
+    )
+    facts = evidence(tmp_path).spawns
+    assert [(fact["path"], fact["state"]) for fact in facts] == [
+        ("src/support.rs", "online")
+    ]
+
+
+def test_a_whole_file_test_module_resolves_its_modules_as_a_crate_root(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`tests/it.rs` is a crate root, so `mod helpers;` names `tests/helpers.rs`.
+
+    The compiler resolves a crate root's declarations against the directory it
+    sits in and rejects `tests/it/helpers.rs`. Once a `tests/` file is scanned
+    for declarations, reading its stem as a directory would report
+    "names no file" against every such declaration and turn a clean repository
+    into an EN-001.
+    """
+    put(tmp_path, "tests/it.rs", "mod helpers;\n")
+    put(tmp_path, "tests/helpers.rs", "pub const VALUE: u8 = 1;\n")
+    problems: list[str] = []
+    evidence(tmp_path, problems)
+    assert problems == []
+
+
+def test_a_module_of_a_module_is_read_after_a_late_promotion(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A file read before another declaration promotes it must be read again.
+
+    Files are scanned in reverse path order, so `src/zebra.rs` is read before
+    `src/lib.rs` promotes it to whole-file test scope. The promotion alone
+    never revisits `src/zebra.rs`, so its `mod helpers;` — invisible while the
+    file was read as ordinary library code — stayed unresolved and
+    `src/zebra/helpers.rs` drew no finding.
+    """
+    put(tmp_path, "src/lib.rs", "#[cfg(test)]\nmod zebra;\n")
+    put(tmp_path, "src/zebra.rs", "mod helpers;\n")
+    put(
+        tmp_path,
+        "src/zebra/helpers.rs",
+        'fn run() {\n    Command::new("cargo").arg("build");\n}\n',
+    )
+    facts = evidence(tmp_path).spawns
+    assert [(fact["path"], fact["state"]) for fact in facts] == [
+        ("src/zebra/helpers.rs", "online")
+    ]
+
+
+def test_a_path_reached_example_is_a_crate_root(tmp_path: pathlib.Path) -> None:
+    """A file `#[path]` pulls in from `examples/` is a crate root as well.
+
+    `tests/it.rs` can reach `examples/probe.rs`, and the compiler then resolves
+    that file's own `mod helpers;` against `examples/`. Reading it as a
+    non-root would look in `examples/probe/helpers.rs` and find nothing.
+    """
+    put(
+        tmp_path,
+        "tests/it.rs",
+        '#[path = "../examples/probe.rs"]\nmod probe;\n',
+    )
+    put(tmp_path, "examples/probe.rs", "mod helpers;\n")
+    put(
+        tmp_path,
+        "examples/helpers.rs",
+        'fn run() {\n    Command::new("cargo").arg("build");\n}\n',
+    )
+    facts = evidence(tmp_path).spawns
+    assert [(fact["path"], fact["state"]) for fact in facts] == [
+        ("examples/helpers.rs", "online")
+    ]
+
+
+def test_a_path_reached_file_resolves_its_children_beside_it(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A `#[path]`-reached file keeps its children beside it, not under its stem.
+
+    The compiler rejects `tests/support/probe/helpers.rs` here with E0583 and
+    asks for `tests/support/helpers.rs`. Offering the stem directory as well
+    is harmless — only a file that exists is read — but offering *only* the
+    stem directory would both miss this file and, once the declaration is
+    scanned, report it as naming nothing.
+    """
+    put(tmp_path, "tests/it.rs", '#[path = "support/probe.rs"]\nmod probe;\n')
+    put(tmp_path, "tests/support/probe.rs", "mod helpers;\n")
+    put(
+        tmp_path,
+        "tests/support/helpers.rs",
+        'fn run() {\n    Command::new("cargo").arg("build");\n}\n',
+    )
+    problems: list[str] = []
+    facts = evidence(tmp_path, problems).spawns
+    assert [(fact["path"], fact["state"]) for fact in facts] == [
+        ("tests/support/helpers.rs", "online")
+    ]
+    assert problems == []
+
+
 def test_a_file_with_a_char_literal_quote_is_readable(tmp_path: pathlib.Path) -> None:
     """`trim_matches('"')` is a char literal, not the start of a string."""
     put(

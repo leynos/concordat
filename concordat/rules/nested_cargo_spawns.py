@@ -43,7 +43,12 @@ from .nested_cargo_commands import (
     has_cargo_construction,
     helper_body,
 )
-from .nested_cargo_modules import resolve_declarations, scan_scope
+from .nested_cargo_modules import (
+    Reach,
+    is_crate_root,
+    resolve_declarations,
+    scan_scope,
+)
 from .nested_cargo_source import (
     RustSource,
     TestScope,
@@ -482,6 +487,125 @@ def collect_trybuild_manifests(
     return found
 
 
+def _scan_source(
+    checkout: pathlib.Path,
+    fixtures: frozenset[str],
+    source: RustSource,
+    scopes: dict[pathlib.PurePosixPath, TestScope],
+    reaches: dict[pathlib.PurePosixPath, Reach],
+) -> tuple[list[str], list[pathlib.PurePosixPath]]:
+    """Scan one file in place, reporting its problems and the files it moved.
+
+    The scope map is updated with what this scan found, and the reach map with
+    how each file this file declares was reached. Both are shared state the
+    discovery loop reads back on its next pass.
+
+    Returns
+    -------
+    tuple[list[str], list[pathlib.PurePosixPath]]
+        The problems found in this scan, and the files whose scope or reach it
+        changed.
+    """
+    known = scopes[source.relative]
+    found_problems: list[str] = []
+    scope, declarations = scan_scope(source, found_problems, known)
+    if known.whole_file:
+        # A module declaration already proved this whole file is test code.
+        # Rescanning it must not overwrite that stronger claim with the
+        # narrower attribute ranges this pass found.
+        known.ranges = scope.ranges
+    else:
+        scopes[source.relative] = scope
+    found = resolve_declarations(
+        checkout,
+        source,
+        declarations,
+        scopes,
+        reaches,
+        fixtures,
+        found_problems,
+    )
+    return found_problems, [*found.fresh, *found.touched]
+
+
+def _discover_scope(
+    checkout: pathlib.Path,
+    fixtures: frozenset[str],
+    sources: list[RustSource],
+    problems: list[str],
+) -> dict[pathlib.PurePosixPath, TestScope]:
+    """Return the scope of every file the checkout's compiler builds as test code.
+
+    A file's scope and reach are both inputs to its own scan: a declaration
+    pulled into test scope is test code throughout, and a file reached by
+    `#[path]` resolves its own declarations beside it rather than under a stem
+    directory. Each of those answers can arrive after the file was first read,
+    so the scan repeats until neither moves — and a declaration that names a
+    file nothing declares in an early pass is only reported once the pass that
+    settles its owner has run.
+
+    Files are appended to *sources* as declarations reach them, so the caller
+    keeps the complete set to report from.
+
+    Returns
+    -------
+    dict[pathlib.PurePosixPath, TestScope]
+        The scope of every source read, keyed by its root-relative path.
+    """
+    scopes = {
+        source.relative: TestScope(whole_file_scope(source.relative))
+        for source in sources
+    }
+    reaches: dict[pathlib.PurePosixPath, Reach] = {}
+    by_relative = {source.relative: source for source in sources}
+    # The scope and reach each file was scanned under. A file's declarations
+    # resolve differently once either moves, so the pair is what decides
+    # whether an earlier scan is still current.
+    scanned: dict[pathlib.PurePosixPath, tuple[bool, Reach]] = {}
+    # A declaration can name no file in an early pass and resolve once the
+    # reach of its own file is known, so each scan's findings replace the last
+    # and only the final set for each file is reported.
+    reported: dict[pathlib.PurePosixPath, list[str]] = {}
+    # A file's `mod` declarations only bind if the compiler builds the file.
+    # Ordinary library code is scanned so its `#[cfg(test)]` items are found.
+    # A whole-file test source is scanned only when Cargo builds it as a
+    # target: the rest are text that no compiler reaches — a trybuild case, or
+    # a file another test `include!`s — and their `mod` lines name files that
+    # nothing declares, which would invent a finding rather than report one.
+    pending = [
+        source
+        for source in sources
+        if not scopes[source.relative].whole_file or is_crate_root(source.relative)
+    ]
+    while pending:
+        source = pending.pop()
+        scanned[source.relative] = (
+            scopes[source.relative].whole_file,
+            reaches.get(source.relative, Reach()),
+        )
+        found_problems, moved = _scan_source(
+            checkout, fixtures, source, scopes, reaches
+        )
+        reported[source.relative] = found_problems
+        for relative in moved:
+            state = (scopes[relative].whole_file, reaches.get(relative, Reach()))
+            if scanned.get(relative) == state:
+                continue
+            known_source = by_relative.get(relative)
+            if known_source is None:
+                known_source, error = read_source(checkout, relative)
+                if error is not None:
+                    problems.append(error)
+                if known_source is None:
+                    continue
+                sources.append(known_source)
+                by_relative[relative] = known_source
+            pending.append(known_source)
+    for source in sources:
+        problems.extend(reported.get(source.relative, ()))
+    return scopes
+
+
 def collect_rust_evidence(
     checkout: pathlib.Path,
     manifests: typ.Mapping[pathlib.Path, Manifest],
@@ -505,31 +629,7 @@ def collect_rust_evidence(
     """
     fixtures = fixture_directories(checkout, manifests)
     sources = read_sources(checkout, fixtures, problems)
-    scopes = {
-        source.relative: TestScope(whole_file_scope(source.relative))
-        for source in sources
-    }
-    pending = [source for source in sources if not scopes[source.relative].whole_file]
-    while pending:
-        source = pending.pop()
-        scope, declarations = scan_scope(source, problems)
-        known = scopes.get(source.relative)
-        if known is not None and known.whole_file:
-            # A module declaration already proved this whole file is test code.
-            # Rescanning it must not overwrite that stronger claim with the
-            # narrower attribute ranges this pass found.
-            known.ranges = scope.ranges
-        else:
-            scopes[source.relative] = scope
-        for relative in resolve_declarations(
-            checkout, source, declarations, scopes, fixtures, problems
-        ):
-            found, error = read_source(checkout, relative)
-            if error is not None:
-                problems.append(error)
-            if found is not None:
-                sources.append(found)
-                pending.append(found)
+    scopes = _discover_scope(checkout, fixtures, sources, problems)
     spawns = [
         fact
         for source in sources

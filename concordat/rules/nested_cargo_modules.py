@@ -39,12 +39,50 @@ from .rust_source import scan_balanced, skip_trivia
 
 CRATE_ROOT_STEMS: typ.Final = frozenset({"lib", "main", "mod"})
 
+# Cargo builds every `.rs` file directly inside one of these directories as a
+# target of its own, so such a file is also a crate root.
+CRATE_ROOT_DIRECTORIES: typ.Final = frozenset({"tests", "benches", "examples"})
+
 _ATTRIBUTE: typ.Final = re.compile(r"#\[")
 _MODULE: typ.Final = re.compile(r"mod\s+(?P<name>[A-Za-z_]\w*)")
 _MODIFIERS: typ.Final = re.compile(r"(?:pub(?:\s*\([^)]*\))?\s+)*")
 _ENCLOSING_MODULE: typ.Final = re.compile(r"\bmod\s+([A-Za-z_]\w*)\s*$")
 _CFG_PREDICATE: typ.Final = re.compile(r"cfg\s*\((.*)\)\s*$", re.DOTALL)
 _PATH_ATTRIBUTE: typ.Final = re.compile(r"\bpath\s*=\s*\"[^\"]*\"")
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class Reach:
+    """How the compiler was seen reaching one source file.
+
+    A file can be reached in both ways at once — `tests/it.rs` is a target
+    Cargo builds on its own, and is also a file another test's `mod it;` may
+    name — so each flag records evidence rather than a single verdict.
+
+    Attributes
+    ----------
+    by_name:
+        Declared by a plain `mod name;`, which makes the file a module whose
+        own children live in a directory named after it.
+    by_path:
+        Named by `#[path = "..."]`, which keeps the file's children beside it.
+    """
+
+    by_name: bool = False
+    by_path: bool = False
+
+    def merged(self, other: Reach) -> Reach:
+        """Return the reach that has everything either of these recorded.
+
+        Returns
+        -------
+        Reach
+            The union of both observations.
+        """
+        return Reach(
+            by_name=self.by_name or other.by_name,
+            by_path=self.by_path or other.by_path,
+        )
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -162,24 +200,66 @@ def _module_chain(
     return tuple(reversed(chain))
 
 
-def _module_base(
-    relative: pathlib.PurePosixPath, chain: tuple[str, ...]
-) -> pathlib.PurePosixPath:
-    """Return the directory a nested module declaration is resolved against.
+def is_crate_root(relative: pathlib.PurePosixPath) -> bool:
+    """Report whether Cargo builds this file as a target of its own.
 
-    A root module (`lib.rs`, `main.rs`, `mod.rs`) owns its own directory, and
-    any other file owns a directory named after it. Inline modules below it add
-    one directory component each, which is what Rust's own module resolution
-    does for a file that is not itself a root module.
+    A crate root resolves its declarations against its own directory, exactly
+    as `mod.rs` does. Cargo treats `lib.rs` and `main.rs` as roots, and also
+    every `.rs` file directly inside `tests/`, `benches/`, `examples/` or
+    `src/bin/`, because it discovers those as targets without a manifest entry.
 
     Returns
     -------
-    pathlib.PurePosixPath
-        The directory the declaration's files live in.
+    bool
+        True when the file is a crate root by Cargo's target discovery.
+    """
+    if relative.stem in CRATE_ROOT_STEMS:
+        return True
+    parent = relative.parent
+    if parent.name in CRATE_ROOT_DIRECTORIES:
+        return True
+    return parent.name == "bin" and parent.parent.name == "src"
+
+
+def _own_directories(
+    relative: pathlib.PurePosixPath,
+    chain: tuple[str, ...],
+    reach: Reach,
+) -> tuple[pathlib.PurePosixPath, ...]:
+    """Return the directories this file's declarations may be based in.
+
+    A file reached by `#[path = "..."]` keeps its children beside it: the
+    compiler resolves `mod helpers;` in `tests/support/probe.rs`, pulled in by
+    `#[path]`, against `tests/support/`, not against a `probe/` directory, and
+    rejects `tests/support/probe/helpers.rs` with E0583.
+
+    A file reached by a plain `mod name;` declaration is instead a module of
+    the file that declares it, so its own declarations resolve against a
+    directory named after it. A crate root is a third case: Cargo builds it as
+    a target of its own and resolves its declarations against its own
+    directory. `tests/it.rs` can be all three at once — a target, a module of
+    another test file, and the target of a `#[path]` declaration — and every
+    reading is compiled, so every base is offered and the caller keeps
+    whichever resolves on disk.
+
+    A file that no scan reached keeps the stem-directory reading, which is the
+    only one available without knowing how the compiler got there.
+
+    Returns
+    -------
+    tuple[pathlib.PurePosixPath, ...]
+        The candidate directories, most likely first.
     """
     parent = relative.parent
-    owner = parent if relative.stem in CRATE_ROOT_STEMS else parent / relative.stem
-    return owner.joinpath(*chain)
+    is_root = is_crate_root(relative)
+    bases: list[pathlib.PurePosixPath] = []
+    if reach.by_path or is_root:
+        bases.append(parent)
+    if reach.by_name or not (is_root or reach.by_path):
+        stem = parent / relative.stem
+        if stem not in bases:
+            bases.append(stem)
+    return tuple(base.joinpath(*chain) for base in bases)
 
 
 def _module_files(
@@ -187,27 +267,32 @@ def _module_files(
     chain: tuple[str, ...],
     name: str,
     path_attribute: str | None,
+    reach: Reach,
 ) -> list[pathlib.PurePosixPath]:
     """Return the paths an out-of-line module declaration may name.
 
     `#[path = "..."]` overrides the name entirely. Rust resolves it against
     the declaring file's own directory when the declaration is at the top
     level, and against the module's directory when it sits inside an inline
-    module block; the second case is what `_module_base` already returns.
+    module block.
 
     Returns
     -------
     list[pathlib.PurePosixPath]
-        Every file the declaration may name, most specific first.
+        Every file the declaration may name, most likely first.
     """
     if path_attribute is not None:
-        return [
-            relative.parent / path_attribute
+        owner = (
+            relative.parent
             if not chain
-            else _module_base(relative, chain) / path_attribute
-        ]
-    base = _module_base(relative, chain)
-    return [base / f"{name}.rs", base / name / "mod.rs"]
+            else _own_directories(relative, chain, reach)[0]
+        )
+        return [owner / path_attribute]
+    return [
+        candidate
+        for base in _own_directories(relative, chain, reach)
+        for candidate in (base / f"{name}.rs", base / name / "mod.rs")
+    ]
 
 
 def _folded(candidate: pathlib.PurePosixPath) -> pathlib.PurePosixPath | None:
@@ -379,9 +464,21 @@ def _path_attribute(source: RustSource, run: tuple[int, int]) -> str | None:
 
 
 def scan_scope(
-    source: RustSource, problems: list[str]
+    source: RustSource, problems: list[str], known: TestScope | None = None
 ) -> tuple[TestScope, list[_Declaration]]:
     """Return the test spans of one file and the modules it declares out of line.
+
+    Parameters
+    ----------
+    source:
+        The file to scan.
+    problems:
+        The fact list; an item that never closes appends one sentence.
+    known:
+        The scope already established for this file. A file a declaration
+        pulled into test scope is test code throughout, and its own
+        declarations must then be read as test code too — otherwise the
+        second hop of `lib.rs -> checks.rs -> checks/helpers.rs` is lost.
 
     Returns
     -------
@@ -389,7 +486,7 @@ def scan_scope(
         The spans already known to be test scope, and each `mod name;`
         declaration in test scope with the file it names.
     """
-    scope = TestScope(whole_file=False)
+    scope = TestScope(whole_file=known is not None and known.whole_file)
     declarations: list[_Declaration] = []
     pairs = brace_pairs(source.masked)
     for match in _ATTRIBUTE.finditer(source.masked):
@@ -442,23 +539,47 @@ def _declaration_problem(
     )
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
+class Discovered:
+    """The files one scan found, split by what the caller must do with them.
+
+    Attributes
+    ----------
+    fresh:
+        Files not seen before, which the caller must read and scan.
+    touched:
+        Files whose scope or reach this scan changed. A file already scanned
+        may have been read before the evidence existed — as ordinary library
+        code, or before its `#[path]` declaration was reached — so its earlier
+        scan could not see the declarations it now holds. The caller compares
+        each one against the state it was last scanned in and rescans only
+        when that state has moved.
+    """
+
+    fresh: tuple[pathlib.PurePosixPath, ...]
+    touched: tuple[pathlib.PurePosixPath, ...]
+
+
 def resolve_declarations(
     checkout: pathlib.Path,
     source: RustSource,
     declarations: list[_Declaration],
     scopes: dict[pathlib.PurePosixPath, TestScope],
+    reaches: dict[pathlib.PurePosixPath, Reach],
     fixtures: frozenset[str],
     problems: list[str],
-) -> list[pathlib.PurePosixPath]:
+) -> Discovered:
     """Record whole-file test scope for each file a declaration names.
 
     Returns
     -------
-    list[pathlib.PurePosixPath]
-        The newly discovered files, which the caller must read and scan.
+    Discovered
+        The files to read for the first time, and the ones whose state moved.
     """
     root = checkout.resolve()
     discovered: list[pathlib.PurePosixPath] = []
+    touched: list[pathlib.PurePosixPath] = []
+    reach = reaches.get(source.relative, Reach())
     for declaration in declarations:
         present: list[pathlib.PurePosixPath] = []
         for declared in _module_files(
@@ -466,6 +587,7 @@ def resolve_declarations(
             declaration.chain,
             declaration.name,
             declaration.path,
+            reach,
         ):
             named = declared.as_posix()
             if declared.is_absolute():
@@ -509,13 +631,25 @@ def resolve_declarations(
                 _declaration_problem(source, declaration, f"names no file ({named})")
             )
             continue
+        observed = Reach(
+            by_path=declaration.path is not None, by_name=declaration.path is None
+        )
         for candidate in present:
             if in_fixture(candidate, fixtures):
                 continue
+            before = reaches.get(candidate, Reach())
+            reaches[candidate] = before.merged(observed)
             known = scopes.get(candidate)
-            if known is not None:
+            if known is None:
+                scopes[candidate] = TestScope(whole_file=True)
+                discovered.append(candidate)
+            elif not known.whole_file:
+                # Read as ordinary library code, whose scan cannot see the
+                # declarations only test code holds.
                 known.whole_file = True
-                continue
-            scopes[candidate] = TestScope(whole_file=True)
-            discovered.append(candidate)
-    return discovered
+                touched.append(candidate)
+            elif before != reaches[candidate]:
+                # Already test code, but reached in a way it was not before, so
+                # its own declarations may now resolve elsewhere.
+                touched.append(candidate)
+    return Discovered(fresh=tuple(discovered), touched=tuple(touched))
