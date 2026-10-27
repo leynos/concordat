@@ -292,7 +292,19 @@ workaround.
       `main-owned-codescene-coverage` OPA deadline flake, with no new failure.
       The pass count rose from 2813 to 2815, which is the two new errexit
       tests; the Hypothesis `too_slow` health check did not recur.
-- [ ] (2026-10-27) Remaining for delivery: push over SSH and re-review.
+- [x] (2026-10-27) Fourth CodeRabbit round, on the pushed `2cc856e`: two
+      findings, both verified before being fixed. `_LET_BINDING` required
+      whitespace directly after the `=`, so a path-qualified
+      `std::process::Command::new` binding was missed, its later `.arg` calls
+      were never collected, and a command carrying `--frozen` was reported
+      `online` — a false NC-007, confirmed by a new `path-qualified-binding`
+      case that returned `online` before the fix and `offline` after. The
+      developer's guide listed `indeterminate` as an example of a blocking
+      severity, which contradicts `RuleRunResult.exit_code`; the bullet now
+      says an indeterminate finding blocks only when its severity is not
+      `warning`.
+- [ ] (2026-10-27) Remaining for delivery: fourth full gate, push over SSH and
+      re-review.
 
 ## Surprises & discoveries
 
