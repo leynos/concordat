@@ -124,7 +124,7 @@ deny contains finding("EN-001", severity, "indeterminate", entry.path, entry.lin
 	entry.state == "uncertain"
 	msg := sprintf(
 		"%s:%d may run the tests (%s), but its ordering could not be read: %s",
-		[entry.path, entry.line, entry.name, entry.reason],
+		[entry.path, entry.line, entry.name, object.get(entry, "reason", "no reason recorded")],
 	)
 }
 
@@ -182,7 +182,10 @@ _unknown_entry(entry) := msg if {
 	msg := sprintf("an entry-point fact is not an object: %v", [entry])
 }
 
+# The description of an unresolved spawn is read from a fact that may be
+# incomplete, so both fields are defaulted: reading them directly would leave
+# this helper undefined and drop the EN-001 finding that refers to it.
 _describe(spawn) := description if {
-	environment := concat(",", spawn.environment)
-	description := sprintf("flags %v, environment %v", [spawn.flags, environment])
+	environment := concat(",", object.get(spawn, "environment", []))
+	description := sprintf("flags %v, environment %v", [object.get(spawn, "flags", []), environment])
 }

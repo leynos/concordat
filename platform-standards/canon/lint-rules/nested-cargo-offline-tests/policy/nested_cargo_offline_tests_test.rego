@@ -122,6 +122,25 @@ test_a_spawn_fact_that_is_not_an_object_is_indeterminate if {
 	{[f.rule_id, f.severity, f.verdict] | some f in fs} == {["EN-001", "error", "indeterminate"]}
 }
 
+# An indeterminate fact still has to be reported when it is *incomplete*. The
+# message names the reason the ordering could not be read and describes the
+# flags and environment of the spawn; reading either key directly makes the
+# rule undefined when the reader omitted it, and the finding is silently
+# dropped. A fact nobody could finish describing is the last one that may be
+# reported clean.
+test_an_uncertain_entry_point_without_a_reason_still_reports if {
+	entry := object.remove(data.fixtures.uncertain_prefetch.entry_points[0], ["reason"])
+	spawn := {"path": "a.rs", "line": 1, "form": "command_new", "state": "offline", "flags": [], "environment": []}
+	fs := policy.deny with input as object.union(data.fixtures.uncertain_prefetch, {"spawns": [spawn], "entry_points": [entry]}) with data.parameters as {"exemptions": [], "severity": "warning"}
+	{[f.rule_id, f.severity, f.verdict] | some f in fs} == {["EN-001", "warning", "indeterminate"]}
+}
+
+test_an_unresolved_spawn_without_a_description_still_reports if {
+	spawn := object.remove(data.fixtures.unresolved_spawn.spawns[0], ["flags", "environment"])
+	fs := policy.deny with input as object.union(data.fixtures.unresolved_spawn, {"spawns": [spawn]}) with data.parameters as {"exemptions": [], "severity": "warning"}
+	{[f.rule_id, f.severity, f.verdict] | some f in fs} == {["EN-001", "warning", "indeterminate"]}
+}
+
 test_a_named_exemption_suppresses_the_spawn_finding if {
 	fs := policy.deny with input as data.fixtures.exempt_spawn with data.parameters as {"exemptions": exemptions}
 	profile := {[f.rule_id, f.path] | some f in fs}
