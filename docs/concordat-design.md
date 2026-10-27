@@ -1407,8 +1407,8 @@ describe what ships today. The one `artefact` subcommand that is implemented,
 `concordat artefact rule run`, ships a narrower, already-fixed scheme instead:
 
 - `0` — compliant, or every finding carries the advisory `warning` severity.
-- `1` — at least one non-advisory policy finding, including `indeterminate`
-  (which fails closed).
+- `1` — at least one finding of any other severity. An `indeterminate`
+  finding fails closed only when its severity is not `warning`.
 - `2` — operational failure.
 
 See
