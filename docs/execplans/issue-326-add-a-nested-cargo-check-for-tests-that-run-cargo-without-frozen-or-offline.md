@@ -501,8 +501,60 @@ workaround.
       restriction, the crate-root and `#[path]` child rules, and the one
       compiler rule deliberately left unimplemented (`#[path]` on an inline
       module, three estate occurrences, none in test scope).
-- [ ] (2026-10-27) Remaining for delivery: run the gates on the round's
-      commits, push over SSH and re-review.
+- [x] (2026-10-27) Markdown gates on the round's documentation, run in the
+      order the plan's own lesson prescribes: `make fmt` first, because
+      `mdtablefix` wraps prose at its own computed width rather than at 80
+      columns, then `make check-fmt`, `make markdownlint` and `make nixie`.
+      `make markdownlint` first failed on spelling: the new progress entry used
+      the British `-ise` form of `parametrized`, which the shared en-GB-oxendict
+      gate rejects in favour of `-ize`, the form the plan already uses
+      elsewhere. A ragged line the reflow left in the Task 4 entry was rejoined
+      and the file reflowed again. All four gates then passed.
+- [x] (2026-10-27) The three pinned real-checkout snapshots re-audited with
+      the final reader, through the shipped CLI rather than through the
+      survey driver: whitaker `f7a5a93` noncompliant (NC-007 twice, NC-008
+      once, seven EN-001), whitaker `a108b29` indeterminate (five EN-001),
+      theoremc `8f48abb` noncompliant (NC-007 twice, NC-008 once, one
+      EN-001) — the recorded findings, line for line, unchanged by the
+      fixed-point rewrite.
+- [x] (2026-10-27) The full estate survey re-run after the documentation
+      commit: 106 records, 0 errors, 86 compliant / 16 noncompliant / 4
+      indeterminate, 90 findings (16 NC-007, 26 NC-008, 48 EN-001). One
+      repository differs from the 03:06 baseline and only in wording: netsuke
+      carries nine findings on both runs, and one EN-001 problem sentence
+      reads "the mod tests; declaration names no file" where the baseline
+      reads "a #[cfg(test)] mod tests; declaration names no file". That
+      rewording is from `ed39787`, already committed before the baseline was
+      taken; no verdict, count or finding identity moved.
+- [x] (2026-10-27) `make lint` failed on the fixed-point code, which had been
+      gated for Pylint but never for Skylos: `Reach.merged` was reported
+      `SKY-U001` with `references: 0` and `called_by: []`. The call is real
+      and static — `nested_cargo_modules.py:641`, `before.merged(observed)` —
+      and Skylos records it under the receiver expression instead:
+      `concordat.rules.nested_cargo_modules.reaches.get.merged`, because
+      `before` is bound from a `dict.get` call it cannot type. Bisected on a
+      scratch copy of the module: scanning the file alone reports nothing,
+      scanning the package reports the method, and rewriting the receiver as
+      an explicit `None` check changes nothing, so the trigger is the
+      cross-module reference pass rather than the call's shape. Recorded as a
+      typed `method` entry point for the one symbol, naming the call site and
+      the mutation that proves it live; a control run with the record removed
+      reports this method and a deliberately planted dead sibling, and reports
+      nothing else, so the entry is narrow rather than a class-wide
+      suppression.
+- [x] (2026-10-27) The seeded-fault control turned up a real gap in the
+      round's own tests: reducing `Reach.merged` from a union to the last
+      observation left all 84 spawn-reader tests green. No test exercised a
+      file reached both by `mod name;` and by `#[path]` at once, which is the
+      only case where the union matters.
+      `test_a_file_reached_both_ways_keeps_every_base` was written first
+      against the mutant, failed with no spawn where it expects
+      `src/checks/inner.rs`, and passed once the union was restored.
+      `test_skylos_lint_contract.py` asserted an exact entry-point set and was
+      updated to carry the new typed record, keeping the set independently
+      maintained rather than derived from the configuration under test.
+- [ ] (2026-10-27) Remaining for delivery: run the full commit gates on the
+      round's commits, push over SSH and re-review.
 
 ## Surprises & discoveries
 
@@ -710,6 +762,28 @@ workaround.
   after the full test suite passed *and* the estate survey reproduced the
   baseline exactly, which is the check that would have caught any semantic
   drift.
+- Observation: a recovered tree can pass every test it was written with and
+  still be untested at the seam the recovery put back. Evidence: the
+  fixed-point code was recovered, then extended, and all 84 spawn-reader tests
+  passed with `Reach.merged` silently reduced to its second argument. Only a
+  seeded mutation found that; no test had ever reached a file both ways.
+  Impact: a mutation is the only thing that distinguishes "the suite covers
+  this code" from "the suite exercises this code". The both-ways test now
+  carries it, and the merge's two flags are each held by a case that fails when
+  that flag is dropped.
+- Observation: Skylos resolves a method call through the receiver expression,
+  not through the receiver's type, so a method called on the result of a
+  `dict.get` gets no reference at all. Evidence: `before = reaches.get(...)`
+  followed by `before.merged(observed)` is recorded as
+  `concordat.rules.nested_cargo_modules.reaches.get.merged` with
+  `references: 0`, while `Reach.merged` itself is reported `SKY-U001`. The
+  repository already carries the same shape as a recorded entry point for
+  `_RuleTally.severity`, called as `tally.severity` from `_rule_rows`. Impact:
+  the call was rewritten in a probe to an explicit `None` check — the shape the
+  router's own guidance prefers — and the finding did not change, so no
+  receiver rewrite clears it. The method is reached only through that one
+  expression, so a typed entry point for the one symbol is the narrow honest
+  record, and the contract test carries it alongside the `_RuleTally` one.
 
 ## Decision log
 
@@ -942,6 +1016,18 @@ workaround.
   children as inline and reports nothing rather than resolving a directory it
   does not model. The README states the limitation so a future occurrence is a
   known gap rather than a silent wrong answer. Date/Author: 2026-10-27.
+- Decision: `Reach.merged` is recorded as a typed method entry point rather
+  than rewritten to avoid the false positive. Rationale: the method is live — a
+  mutation of its union fails a test — so deleting it or inlining it would be
+  shaping production code around a scanner's limitation, which the router
+  forbids. Rewriting the receiver does not help either; a probe shows an
+  explicit `None` check before the call leaves the finding unchanged. The
+  record names the call site it hides behind (`reaches.get.merged`) and the
+  mutation that proves the method runs, which is what the repository already
+  asks of its other two Skylos entry points. The alternative — a bare `merged`
+  whitelist entry — would have suppressed any future `merged` method in the
+  package; the control run confirms this one suppresses exactly the one symbol
+  while a planted dead sibling is still reported. Date/Author: 2026-10-27.
 
 ## Outcomes & retrospective
 
@@ -1001,6 +1087,17 @@ reports "90 findings, unchanged" cannot distinguish a correct fix from a
 missing one, and the fixture tests are what carry the guarantee. The
 matched-pair argument case and the compiler probes exist precisely because the
 corpus is silent here.
+
+Delivery then produced the sharpest lesson of the plan, about the tests rather
+than the rule. A mutation that reduced `Reach.merged` to its second argument —
+discarding the first entirely — left all 84 spawn-reader tests green. Every
+test that reached a file at all reached it one way, so the union had never been
+exercised; the corpus cannot catch it either, because no surveyed repository
+reaches one file by both a plain `mod` and a `#[path]`. The suite was green and
+the code was wrong, and only a seeded fault told them apart. This is why the
+plan's verification obligations ask for a negative control beside each
+guarantee: a passing suite is evidence that the code runs, not that it is
+right, and the two are easy to confuse when the fixture corpus is quiet.
 
 ## Context and orientation
 
@@ -1102,7 +1199,7 @@ for an ordinary file — and no base outside the checkout is ever read.
 - Method: unit tests over temporary checkouts, one per compiler rule, each
   named for the rule it pins; a compiler probe for each resolution claim; and
   the estate survey as the wide regression control.
-- Artefact: `tests/unit/test_nested_cargo_spawns.py` (seven scope tests) and
+- Artefact: `tests/unit/test_nested_cargo_spawns.py` (eight scope tests) and
   the probe packages under `/tmp/rustpath-*`.
 - Evidence: green. The compiler probe compiles
   `#[path = "support/probe.rs"] mod probe;` with the child at
@@ -1118,7 +1215,12 @@ for an ordinary file — and no base outside the checkout is ever read.
   resolved against a stem directory. The scanner-set test — a spawn in an
   unbuilt `tests/ui/foo.rs` is read, its `mod helpers;` is not — fails in both
   directions: dropping the whole file loses the spawn, and scanning its
-  declarations invents a problem.
+  declarations invents a problem. The both-ways test (`mod checks;` plus
+  `#[path = "checks.rs"] mod alias;` from one file) fails if `Reach.merged`
+  replaces its flags instead of unioning them, which is the seeded fault that
+  proved the merge live: with the union reduced to the last observation,
+  `src/checks/inner.rs` loses its base and the test reports no spawn where it
+  expects one.
 - Residual gap: `#[path]` on an inline module changes its children's base
   directory, and the reader does not model that. Three estate occurrences
   exist, all outside test scope. This is a stated limitation, not a claimed
