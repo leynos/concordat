@@ -337,6 +337,16 @@ workaround.
       2817 → 2818, exactly the new `comma-inside-an-env-value` case, and the
       three callers of `split_top_level` are covered by suites that stayed
       green.
+- [x] (2026-10-27) Seventh CodeRabbit round, on the pushed `10bdf1f`: two
+      findings, both on the same line and verified before fixing. The
+      `EP-POLICY-1` obligation said every uncertain fact is EN-001, which is
+      not what the policy does and not what the Decision log records: the
+      uncertain-entry finding is gated on `has_nested_build`, and
+      `test_an_uncertain_entry_point_without_a_nested_build_is_not_judged`
+      already pins that. The obligation now states the condition and separates
+      the four cases it had run together. `make check-fmt` rejected the first
+      wording (`+2 -2`) and `make fmt` re-wrapped it; `make check-fmt` and
+      `make markdownlint` then both returned 0.
 - [ ] (2026-10-27) Remaining for delivery: push over SSH and re-review.
 
 ## Surprises & discoveries
