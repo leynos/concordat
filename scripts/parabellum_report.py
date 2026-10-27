@@ -89,6 +89,31 @@ def _versions(records: dict[str, LedgerRecord], package: str) -> str:
     return ", ".join(f"v{version}" for version in versions)
 
 
+def _makeutil_revisions(records: dict[str, LedgerRecord]) -> str:
+    """Return the `makeutil` revisions the rendered records were read with.
+
+    The same append-only reasoning as `_versions`: an audit stamped by another
+    worktree, or run before the submodule moved, keeps the revision it really
+    used. Naming the checked-out constant would credit every finding to a
+    revision that never judged it.
+
+    Parameters
+    ----------
+    records:
+        The latest record per repository, already filtered to the package.
+
+    Returns
+    -------
+    str
+        The distinct revisions, abbreviated, in sorted order; the constant
+        when the selection is empty and there is no record to read.
+    """
+    revisions = sorted({record["makeutil_rev"] for record in records.values()})
+    if not revisions:
+        return MAKEUTIL_REV[:12]
+    return ", ".join(revision[:12] for revision in revisions)
+
+
 # A table cell ends at an unescaped `|`, and a newline ends the row. Ledger
 # prose — an exclusion reason from the manifest, an error detail from a tool,
 # a finding message from the policy — is free text that may contain either.
@@ -267,7 +292,7 @@ def render_report(
         "",
         (
             f"Rule package: `{package}` {_versions(latest, package)}; "
-            f"makeutil `{MAKEUTIL_REV[:12]}`."
+            f"makeutil `{_makeutil_revisions(latest)}`."
         ),
         "",
         "## Summary",

@@ -691,6 +691,31 @@ class TestPackageFiltering:
         assert f"Rule package: `{sweep.RULE_PACKAGE}` v0.1.0, v0.2.0" in report, report
         assert f"v{sweep.rule_version(sweep.RULE_PACKAGE)}" not in report, report
 
+    def test_the_header_names_the_makeutil_revisions_the_records_carry(
+        self,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """The header names the revisions that judged the records it shows.
+
+        The constant records the revision this checkout would stamp on a new
+        audit. A ledger written elsewhere — by another worktree, or before a
+        submodule update — carries its own, and naming the constant instead
+        would credit the findings to a version of `makeutil` that never ran.
+        """
+        first = TestReport()._record("leynos/alpha", "compliant")
+        second = TestReport()._record("leynos/beta", "compliant")
+        first["makeutil_rev"] = "1" * 40
+        second["makeutil_rev"] = "2" * 40
+        ledger_path.write_text(
+            "".join(json.dumps(record) + "\n" for record in (first, second)),
+            encoding="utf-8",
+        )
+
+        report = sweep.render_report(ledger_path)
+
+        assert "makeutil `111111111111, 222222222222`" in report, report
+        assert sweep.MAKEUTIL_REV[:12] not in report, report
+
     def test_the_header_falls_back_to_the_manifest_without_records(
         self,
         ledger_path: pathlib.Path,
