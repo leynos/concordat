@@ -1234,7 +1234,7 @@ loader; unresolved expansion, `.ONESHELL`, and recursive Make stay uncertain.
   setup scripts, and workflow order, plus a replay over the whitaker and
   theoremc checkouts.
 - Artefact: `tests/unit/test_nested_cargo_entry_points.py`.
-- Evidence: 81 tests green. Whitaker **before** #518 yields three facts —
+- Evidence: 106 tests green. Whitaker **before** #518 yields three facts —
   `uncertain` for the `test` target (its recipe names `$(if …)`, which the
   expander declines to evaluate), `absent` for the `.config/nextest.toml`
   `default` profile on line 6, and `uncertain` for the `windows-compat`
@@ -1257,7 +1257,7 @@ origin slug or `null`, and every fact list from both readers, and never drops a
 reader's problem.
 
 - Method: unit tests over temporary checkouts.
-- Artefact: `tests/unit/test_nested_cargo_offline_envelope.py` (6 tests).
+- Artefact: `tests/unit/test_nested_cargo_offline_envelope.py` (7 tests).
 - Evidence: green; an unparsable Makefile survives as a problem and produces
   no entry point, and supplied parameters change nothing.
 - Non-vacuity: the four-list test fails if any reader's output is dropped, and
