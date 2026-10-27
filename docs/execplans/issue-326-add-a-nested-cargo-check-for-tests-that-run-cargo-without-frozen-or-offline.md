@@ -244,7 +244,19 @@ workaround.
       `nested_cargo_scripts.py`, `nested_cargo_nextest.py` and
       `test_parabellum_report.py`, prose reflow in the rule README) and the
       reformatted ExecPlan, so the gate validated the formatted tree.
-- [ ] (2026-10-27) Remaining for delivery: commit the formatter rewrites, push
+- [x] (2026-10-27) The formatter rewrites were committed as `4355bf8` and the
+      gate record as `49328f7`, both pushed and verified against the remote
+      head. A second `coderabbit review --agent --committed --base origin/main`
+      returned seven unique findings, each reproduced before being fixed: a
+      `#` in a shell script read as a live command; a `--` separator ignored by
+      `_offline_flags`; the workflow `defaults` block passed one level too
+      shallow to `effective_shell`; the report header naming the checked-out
+      `MAKEUTIL_REV` rather than the revisions its records carry; two Rego
+      rules that failed open on a fact with no `state` key; one design-doc
+      miscount; and one ExecPlan decision that contradicted a later one. Each
+      fix landed red first, and the Rego fix recomputed the manifest digest for
+      `lint-rule-nested-cargo-offline-tests`.
+- [ ] (2026-10-27) Remaining for delivery: re-gate the fixed tree, commit, push
       over SSH, and re-review.
 
 ## Surprises & discoveries
@@ -509,8 +521,11 @@ workaround.
   `0.2.0` while `rust-makefile-baseline/rule.yaml` declared `0.3.2`, so every
   new record would have named a policy version that never judged it — and the
   version is now part of the resume key, so a stale constant would also have
-  suppressed legitimate re-audits. The regenerated baseline report moves from
-  `v0.2.0` to `v0.3.2` accordingly. Date/Author: 2026-10-27.
+  suppressed legitimate re-audits. What the regenerated report then claims is
+  settled by the later header decision: it names the versions its records
+  carry, so it keeps reading `v0.2.0` — the version of the latest record per
+  repository — until a re-audit writes records stamped by a newer manifest.
+  Date/Author: 2026-10-27.
 - Decision: "would fail" counts any repository with noncompliant or
   indeterminate-only evidence for a rule, whatever the finding's current
   severity. Rationale: a `warning`-severity noncompliant finding does not block
@@ -583,6 +598,21 @@ workaround.
   already drifted to claiming `v0.3.2` while its records held `0.1.0` and
   `0.2.0`. Naming the manifest described records the report was not showing.
   Date/Author: 2026-10-27.
+- Decision: the header names the `makeutil` revisions its records carry too,
+  on the same reasoning and through a `_makeutil_revisions` helper beside
+  `_versions`. Rationale: `MAKEUTIL_REV` is the revision this checkout would
+  stamp on a new audit, so a ledger written by another worktree or before a
+  submodule update carries a different one — all 104 records hold
+  `29fc5a1634ff` while the header claimed the constant's `d33acd3ecb8d`. The
+  checked-in `docs/parabellum/baseline-report.md` was regenerated and now
+  matches. Date/Author: 2026-10-27.
+- Decision: a fact with no `state` key, or one that is not an object at all, is
+  reported as an envelope defect rather than skipped. Rationale: Rego leaves
+  `not spawn.state in {...}` undefined when the key is absent, so the original
+  rules failed open and a repository whose envelope carried an unclassified
+  fact would have been reported clean. The sentinel is read with `object.get`
+  behind an `is_object` guard, because `object.get` on a non-object is a hard
+  type error that aborts the whole query. Date/Author: 2026-10-27.
 
 ## Outcomes & retrospective
 
