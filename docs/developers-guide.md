@@ -1447,8 +1447,8 @@ The verdict is evidence, not enforcement. `RuleRunResult.blocking` decides
 whether a caller should stop, and `exit_code` maps it to a status:
 
 - `0` — compliant, or every finding carries the advisory `warning` severity.
-- `1` — at least one finding of any other severity, including
-  `indeterminate` (which fails closed).
+- `1` — at least one finding of any other severity. An `indeterminate`
+  finding fails closed only when its severity is not `warning`.
 - `2` — operational failure; an uncaught `OperationalRuleError` is caught in
   `concordat.cli.main` and converted to exit code 2, printed to standard error,
   distinct from the `1` that `ConcordatError` maps to.
