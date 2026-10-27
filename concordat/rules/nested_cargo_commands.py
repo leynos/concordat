@@ -38,8 +38,14 @@ _IDENTIFIER: typ.Final = re.compile(r"[A-Za-z_]\w*")
 _ENV_MACRO: typ.Final = re.compile(r"(?:option_)?env!\s*\(")
 _ENV_LOOKUP: typ.Final = re.compile(r"(?:(?:std\s*::\s*)?env\s*::\s*)?var(?:_os)?\s*\(")
 _FIRST_STRING: typ.Final = re.compile(r'"((?:[^"\\]|\\.)*)"')
+# The window ends at the `Command::new` call, so a path-qualified
+# construction leaves `std::process::` between the `=` and the window's end.
+# Accepting only whitespace there would miss the binding, and the `cmd.arg`
+# calls collected through the name would be lost: a command that does carry
+# `--frozen` would be read as online.
 _LET_BINDING: typ.Final = re.compile(
-    r"\blet\s+(?:mut\s+)?(?P<name>[A-Za-z_]\w*)\s*(?::[^=;]*)?=\s*$"
+    r"\blet\s+(?:mut\s+)?(?P<name>[A-Za-z_]\w*)\s*(?::[^=;]*)?=\s*"
+    r"(?:::)?\s*(?:[A-Za-z_]\w*\s*::\s*)*$"
 )
 
 

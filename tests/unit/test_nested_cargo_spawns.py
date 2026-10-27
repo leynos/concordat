@@ -87,6 +87,18 @@ CASES: dict[str, Case] = {
         'fn run() {\n    Command::new("cargo").args(["run", "--", "--frozen"]);\n}\n',
         (("command_new", "online"),),
     ),
+    # `let mut cmd = std::process::Command::new("cargo")` binds the same value
+    # as the unqualified form, so a later `cmd.arg("--frozen")` is that same
+    # command's flag. Reading only the unqualified spelling leaves the binding
+    # uncollected and calls an offline spawn online.
+    "path-qualified-binding": Case(
+        "fn run() {\n"
+        '    let mut cmd = std::process::Command::new("cargo");\n'
+        '    cmd.arg("--frozen");\n'
+        "    cmd\n"
+        "}\n",
+        (("command_new", "offline"),),
+    ),
     "command-local-env": Case(
         "fn run() {\n"
         '    Command::new("cargo")\n'
