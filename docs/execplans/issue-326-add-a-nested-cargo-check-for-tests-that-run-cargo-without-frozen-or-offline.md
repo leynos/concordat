@@ -399,7 +399,42 @@ workaround.
       `tests/unit/test_snapshots.py` and `tests/unit/test_nested_cargo_spawns.py`
       now run 232 passed and 298 passed in the two runs above it; `make
       typecheck` and `ruff check`/`ruff format --check` pass.
-- [ ] (2026-10-27) Remaining for delivery: push over SSH and re-review.
+- [x] (2026-10-27) Ninth CodeRabbit round, on the pushed `57789cf`: two
+      findings, both verified against the code before fixing, and both share
+      the same failure mode — a nested build that produces no evidence at all,
+      so no finding is emitted rather than a wrong one.
+      The first: `#[cfg(test)] mod checks { mod helpers; }` makes the compiler
+      build `src/checks/helpers.rs` into the test target, but only
+      out-of-line declarations carrying a `#[cfg(test)]` attribute of their own
+      were followed. A cargo spawn in the inherited file produced no NC-007.
+      The fix adds a second pass over the whole file's now-known scope; a
+      declaration whose own attribute run carries any `cfg` is still left to
+      the attributed pass, because the reader cannot decide what a non-test
+      gate compiles. Red: `assert [] == [('src/checks...s', 'online')]`; the
+      two negative controls (module outside test scope, config-gated
+      declaration) stayed green.
+      The second: cargo renames a dependency with `key = { package = "name" }`,
+      so `tb = { package = "trybuild", version = "1" }` declares trybuild under
+      the key `tb`. Both readers compared the key directly, so a renamed
+      dependency produced no manifest fact and its `tb::TestCases` references
+      produced no source fact — and missing trybuild evidence suppresses both
+      NC-008 and EN-001 through the policy's `has_nested_build` guard. Each
+      entry now resolves through its own `package` field, and a manifest's
+      declared names are applied to the sources it governs. Red:
+      `assert [] == [('member/Car..., 'manifest')]` and the same for the
+      source reference and the sibling-package control.
+      Neither fix fits inside pylint's 800-line module cap, so the scope
+      machinery moved to `concordat/rules/nested_cargo_modules.py` first, as a
+      pure extraction (`e53a314`) with the suites passing unchanged: 179
+      passed at that commit, 183 after the scope fix, 189 after the trybuild
+      fix. Final red-green per commit: `e53a314` 179 passed, `ed39787` 2
+      failed then 70 passed, `bb83e50` 3 failed then 76 passed; the three
+      nested-cargo suites run 189 passed and pylint, `ruff check`,
+      `ruff format --check` and `ty` all pass.
+- [ ] (2026-10-27) Remaining for delivery: update the users' guide, design
+      document and package README for the widened trybuild evidence and
+      inherited module scope, run the Markdown gates, hand the tree to
+      `scrutineer`, then push over SSH and re-review.
 
 ## Surprises & discoveries
 
