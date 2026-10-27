@@ -99,6 +99,18 @@ CASES: dict[str, Case] = {
         "}\n",
         (("command_new", "offline"),),
     ),
+    # A comma inside an environment value is data, not a separator. Splitting
+    # on it makes one name-value pair look like three slots, which the reader
+    # cannot parse as pairs — so a command it could have settled is reported
+    # unresolved and its real NC-007 finding is hidden.
+    "comma-inside-an-env-value": Case(
+        "fn run() {\n"
+        '    Command::new("cargo")\n'
+        '        .env("RUST_LOG", "info,foo=debug")\n'
+        '        .arg("build");\n'
+        "}\n",
+        (("command_new", "online"),),
+    ),
     "command-local-env": Case(
         "fn run() {\n"
         '    Command::new("cargo")\n'
