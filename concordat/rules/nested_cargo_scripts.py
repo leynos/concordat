@@ -64,21 +64,24 @@ _PROFILE_OPTIONS: typ.Final = frozenset({"--profile", "-P"})
 # without that, `cargo --config net.offline=true fetch` would read the config
 # value as the subcommand and miss both commands.
 _CARGO_VALUE_GLOBALS: typ.Final = frozenset({"--color", "-C", "--config", "-Z"})
-_CARGO_GLOBALS: typ.Final = frozenset({
-    "--version",
-    "-V",
-    "--list",
-    "--explain",
-    "--verbose",
-    "-v",
-    "--quiet",
-    "-q",
-    "--locked",
-    "--offline",
-    "--frozen",
-    "--help",
-    "-h",
-}) | _CARGO_VALUE_GLOBALS
+_CARGO_GLOBALS: typ.Final = (
+    frozenset({
+        "--version",
+        "-V",
+        "--list",
+        "--explain",
+        "--verbose",
+        "-v",
+        "--quiet",
+        "-q",
+        "--locked",
+        "--offline",
+        "--frozen",
+        "--help",
+        "-h",
+    })
+    | _CARGO_VALUE_GLOBALS
+)
 _RECURSIVE_MAKE: typ.Final = re.compile(r"\$[({]MAKE[)}]")
 # nextest's standalone binary accepts the same `nextest run` and `ntr`
 # subcommands as the cargo plugin, so `$(CARGO_NEXTEST) nextest run` is a test
@@ -386,7 +389,9 @@ def _cargo(arguments: list[str]) -> CommandMeaning:
     if UNRESOLVED_MARK in subcommand:
         return CommandMeaning(is_unreadable=True)
     if subcommand == "fetch":
-        return CommandMeaning(is_prefetch="--locked" in _flag_words(globals_seen + after))
+        return CommandMeaning(
+            is_prefetch="--locked" in _flag_words(globals_seen + after)
+        )
     if subcommand == "test":
         return CommandMeaning(test="test")
     if subcommand in _NEXTEST_SUBCOMMANDS:

@@ -368,18 +368,14 @@ def _decode_profiles(text: str) -> dict[str, NextestProfile]:
         name = str(key)
         table = _mapping(body)
         profiles[name] = NextestProfile(
-            state=UNCERTAIN
-            if table is None
-            else _profile_state(table, defined),
+            state=UNCERTAIN if table is None else _profile_state(table, defined),
             line=_script_line(text, name),
             parent=_profile_parent(name, table),
         )
     return profiles
 
 
-def _profile_parent(
-    name: str, table: dict[str, object] | None
-) -> str | None:
+def _profile_parent(name: str, table: dict[str, object] | None) -> str | None:
     """Return the profile *name* inherits, as nextest would resolve it.
 
     A custom profile that names no `inherits` still inherits `default`, so an

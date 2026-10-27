@@ -677,9 +677,7 @@ class TestPackageFiltering:
             "".join(
                 json.dumps(record) + "\n"
                 for record in (
-                    TestReport()._record(
-                        "leynos/alpha", "compliant", version="0.1.0"
-                    ),
+                    TestReport()._record("leynos/alpha", "compliant", version="0.1.0"),
                     TestReport()._record(
                         "leynos/beta", "noncompliant", version="0.2.0"
                     ),
@@ -690,9 +688,7 @@ class TestPackageFiltering:
 
         report = sweep.render_report(ledger_path)
 
-        assert (
-            f"Rule package: `{sweep.RULE_PACKAGE}` v0.1.0, v0.2.0" in report
-        ), report
+        assert f"Rule package: `{sweep.RULE_PACKAGE}` v0.1.0, v0.2.0" in report, report
         assert f"v{sweep.rule_version(sweep.RULE_PACKAGE)}" not in report, report
 
     def test_the_header_falls_back_to_the_manifest_without_records(
