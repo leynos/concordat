@@ -10,8 +10,10 @@ whole-file test scope; this module supplies the rest of the scope — the
 those declarations name — and reports the facts the policy acts on.
 
 Scope follows the rule's terms. A `#[cfg(test)]` item is test code only for the
-span of that item, and a `#[cfg(test)] mod name;` is resolved to the sibling
-file it names. A fixture package's sources are nested-build input rather than
+span of that item, and a `mod name;` declaration in test scope is resolved to
+the file it names — whether the declaration carries the attribute itself or
+sits inside a `#[cfg(test)]` module, which a test build compiles just the same.
+A fixture package's sources are nested-build input rather than
 host test code, and are excluded by the two selectors that decide what a
 fixture package is.
 

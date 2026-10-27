@@ -3,9 +3,11 @@
 Test scope in :mod:`nested_cargo_spawns` is not only a matter of directory
 names. A `#[cfg(test)]` item is test code for the span of that item, and a
 `mod name;` declaration in test scope pulls the file it names into the test
-target as well. Resolving a declaration means knowing Rust's own rules: which
-directory an inline module's children live in, what `#[path = "..."]` overrides,
-and which of `name.rs` and `name/mod.rs` a bare declaration names.
+target as well — whether the declaration carries a `#[cfg(test)]` of its own or
+sits inside a test-scope inline module, which a test build compiles just the
+same. Resolving a declaration means knowing Rust's own rules: which directory
+an inline module's children live in, what `#[path = "..."]` overrides, and
+which of `name.rs` and `name/mod.rs` a bare declaration names.
 
 The paths a declaration produces come from repository text, so each is folded
 and then refused unless it stays inside the checkout: a `#[path]` value or a
@@ -48,6 +50,10 @@ _PATH_ATTRIBUTE: typ.Final = re.compile(r"\bpath\s*=\s*\"[^\"]*\"")
 @dataclasses.dataclass(frozen=True, slots=True)
 class _Declaration:
     """One out-of-line `mod name;` declaration and where Rust looks for it.
+
+    The declaration is in test scope either through its own `#[cfg(test)]`
+    attribute or because it sits inside a test-scope inline module; the file it
+    names is test code either way.
 
     Attributes
     ----------
@@ -271,6 +277,89 @@ def _refused_candidate(
     return None
 
 
+def _attribute_runs(masked: str) -> dict[int, tuple[int, int]]:
+    """Map the token each attribute run precedes to that run's span.
+
+    Every attribute start is visited, including the second and later ones of a
+    run; they all report the same run, so the mapping holds one entry per
+    attributed item.
+
+    Returns
+    -------
+    dict[int, tuple[int, int]]
+        The offset of the token after the run (past any visibility modifier),
+        and the run's `(start, end)`.
+    """
+    runs: dict[int, tuple[int, int]] = {}
+    for match in _ATTRIBUTE.finditer(masked):
+        end = _attribute_run_end(masked, match.start())
+        # Every attribute of a run reaches the same item and the same run end,
+        # so the first start is kept: it is the run's own start, and a later
+        # attribute would hide an earlier `cfg` from `_has_cfg`.
+        runs.setdefault(_modifier_end(masked, end), (match.start(), end))
+    return runs
+
+
+def _has_cfg(masked: str, run: tuple[int, int]) -> bool:
+    """Report whether an attribute run carries a `cfg` attribute.
+
+    Returns
+    -------
+    bool
+        True when a `cfg` gates the item, however its predicate reads.
+    """
+    for match in _ATTRIBUTE.finditer(masked, *run):
+        close = scan_balanced(masked, match.end() - 1)
+        if close is None:
+            # An attribute that never closes hides the item's own condition, so
+            # the declaration is treated as gated rather than assumed test code.
+            return True
+        if _CFG_PREDICATE.match(masked[match.end() : close - 1].strip()) is not None:
+            return True
+    return False
+
+
+def _inherited_declarations(
+    source: RustSource, scope: TestScope, pairs: list[tuple[int, int]]
+) -> list[_Declaration]:
+    """Return the declarations that inherit test scope from an enclosing item.
+
+    `#[cfg(test)] mod checks { mod helpers; }` makes the compiler build
+    `src/checks/helpers.rs` into the test target although the declaration
+    carries no attribute of its own. Following only the attributed form left
+    that file without test scope, so a cargo spawn in it produced no NC-007.
+
+    A declaration whose own attribute run carries a `cfg` is left to the
+    attributed pass: a test-requiring one is already recorded there, and any
+    other may keep the item out of a test build, which the reader cannot
+    decide. `#[path = "..."]` is not a `cfg`, so it is read here.
+
+    Returns
+    -------
+    list[_Declaration]
+        The inherited-scope out-of-line declarations, in source order.
+    """
+    runs = _attribute_runs(source.masked)
+    found: list[_Declaration] = []
+    for match in _MODULE.finditer(source.masked):
+        if not scope.contains(match.start()):
+            continue
+        item = _item_end(source.masked, match.end())
+        if item is None or item[1]:
+            continue
+        run = runs.get(match.start())
+        if run is not None and _has_cfg(source.masked, run):
+            continue
+        found.append(
+            _Declaration(
+                chain=_module_chain(source.masked, pairs, match.start()),
+                name=match.group("name"),
+                path=_path_attribute(source, run) if run is not None else None,
+            )
+        )
+    return found
+
+
 def _path_attribute(source: RustSource, run: tuple[int, int]) -> str | None:
     """Return the file `#[path = "..."]` names inside an attribute run, if any.
 
@@ -297,8 +386,8 @@ def scan_scope(
     Returns
     -------
     tuple[TestScope, list[_Declaration]]
-        The spans already known to be test scope, and each `#[cfg(test)] mod
-        name;` declaration with the file it names.
+        The spans already known to be test scope, and each `mod name;`
+        declaration in test scope with the file it names.
     """
     scope = TestScope(whole_file=False)
     declarations: list[_Declaration] = []
@@ -327,7 +416,30 @@ def scan_scope(
             continue
         scope.ranges.append((match.start(), end))
     scope.ranges.sort()
+    # The inherited pass runs after the loop so `scope.contains` can answer for
+    # the whole file, including the inline module bodies found above.
+    declarations.extend(_inherited_declarations(source, scope, pairs))
     return scope, declarations
+
+
+def _declaration_problem(
+    source: RustSource, declaration: _Declaration, reason: str
+) -> str:
+    """Return one problem sentence about a module declaration.
+
+    The declaration may be in test scope through its own `#[cfg(test)]`
+    attribute or through an enclosing test module, so the message names the
+    declaration itself rather than an attribute it may not carry.
+
+    Returns
+    -------
+    str
+        The sentence to record in the envelope's problem facts.
+    """
+    return (
+        f"{source.relative.as_posix()}: the mod {declaration.name}; declaration "
+        f"{reason}"
+    )
 
 
 def resolve_declarations(
@@ -358,25 +470,32 @@ def resolve_declarations(
             named = declared.as_posix()
             if declared.is_absolute():
                 problems.append(
-                    f"{source.relative.as_posix()}: a #[cfg(test)] mod "
-                    f"{declaration.name}; declaration names an absolute path, "
-                    f"which the checkout cannot supply ({named})"
+                    _declaration_problem(
+                        source,
+                        declaration,
+                        f"names an absolute path, which the checkout cannot "
+                        f"supply ({named})",
+                    )
                 )
                 continue
             candidate = _folded(declared)
             if candidate is None:
                 problems.append(
-                    f"{source.relative.as_posix()}: a #[cfg(test)] mod "
-                    f"{declaration.name}; declaration climbs out of the "
-                    f"checkout with `..` ({named})"
+                    _declaration_problem(
+                        source,
+                        declaration,
+                        f"climbs out of the checkout with `..` ({named})",
+                    )
                 )
                 continue
             refused = _refused_candidate(checkout, root, candidate)
             if refused is not None:
                 problems.append(
-                    f"{source.relative.as_posix()}: a #[cfg(test)] mod "
-                    f"{declaration.name}; declaration {refused} "
-                    f"({candidate.as_posix()})"
+                    _declaration_problem(
+                        source,
+                        declaration,
+                        f"{refused} ({candidate.as_posix()})",
+                    )
                 )
                 continue
             if probe_file(checkout / candidate.as_posix()).present:
@@ -387,8 +506,7 @@ def resolve_declarations(
                 or f"{declaration.name}.rs or {declaration.name}/mod.rs"
             )
             problems.append(
-                f"{source.relative.as_posix()}: a #[cfg(test)] mod "
-                f"{declaration.name}; declaration names no file ({named})"
+                _declaration_problem(source, declaration, f"names no file ({named})")
             )
             continue
         for candidate in present:

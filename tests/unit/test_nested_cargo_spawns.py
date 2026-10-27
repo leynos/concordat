@@ -409,6 +409,92 @@ def test_an_out_of_line_module_with_a_path_attribute_is_test_scope(
     ]
 
 
+def test_a_module_declared_inside_a_test_module_is_test_scope(
+    tmp_path: pathlib.Path,
+) -> None:
+    """An inline test module's own `mod name;` names test code.
+
+    `#[cfg(test)] mod checks { mod helpers; }` makes the compiler build
+    `src/checks/helpers.rs` into the test target even though the declaration
+    carries no attribute of its own. Following only the attributed form left
+    the file without test scope, so a cargo spawn there went unreported.
+    """
+    put(tmp_path, "src/lib.rs", "#[cfg(test)]\nmod checks {\n    mod helpers;\n}\n")
+    put(
+        tmp_path,
+        "src/checks/helpers.rs",
+        'fn run() {\n    Command::new("cargo").arg("build");\n}\n',
+    )
+    facts = evidence(tmp_path).spawns
+    assert [(fact["path"], fact["state"]) for fact in facts] == [
+        ("src/checks/helpers.rs", "online")
+    ]
+
+
+def test_a_nested_declaration_reads_its_own_path_attribute(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A `mod name;` inside a test module may carry its own `#[path]`.
+
+    Rust resolves the value against the module's directory, exactly as it does
+    for an attributed declaration at the same depth.
+    """
+    put(
+        tmp_path,
+        "src/lib.rs",
+        '#[cfg(test)]\nmod checks {\n    #[path = "helper_file.rs"]\n'
+        "    mod helpers;\n}\n",
+    )
+    put(
+        tmp_path,
+        "src/checks/helper_file.rs",
+        'fn run() {\n    Command::new("cargo").arg("build");\n}\n',
+    )
+    assert [(fact["path"], fact["state"]) for fact in evidence(tmp_path).spawns] == [
+        ("src/checks/helper_file.rs", "online")
+    ]
+
+
+def test_a_module_declared_outside_test_scope_is_not_followed(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Ordinary library code that declares a module is not test scope.
+
+    Following every `mod name;` rather than only those already inside a test
+    item would make `src/build/helpers.rs` test code and report a spawn there
+    that no test runs.
+    """
+    put(tmp_path, "src/lib.rs", "mod build {\n    mod helpers;\n}\n")
+    put(
+        tmp_path,
+        "src/build/helpers.rs",
+        'fn run() {\n    Command::new("cargo").arg("build");\n}\n',
+    )
+    assert evidence(tmp_path).spawns == []
+
+
+def test_a_config_gated_nested_declaration_is_not_test_scope(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`cfg(not(test))` inside a test module is the code tests leave out.
+
+    The enclosing module is test scope, but this declaration asks the compiler
+    to drop it from a test build, so its file is not test code and a spawn
+    there must not be reported.
+    """
+    put(
+        tmp_path,
+        "src/lib.rs",
+        "#[cfg(test)]\nmod checks {\n    #[cfg(not(test))]\n    mod helpers;\n}\n",
+    )
+    put(
+        tmp_path,
+        "src/checks/helpers.rs",
+        'fn run() {\n    Command::new("cargo").arg("build");\n}\n',
+    )
+    assert evidence(tmp_path).spawns == []
+
+
 def test_a_file_with_a_char_literal_quote_is_readable(tmp_path: pathlib.Path) -> None:
     """`trim_matches('"')` is a char literal, not the start of a string."""
     put(
