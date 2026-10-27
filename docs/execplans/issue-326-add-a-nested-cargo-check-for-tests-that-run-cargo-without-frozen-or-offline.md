@@ -367,6 +367,38 @@ workaround.
       stale were test counts and the review tally, not the survey: `24 Rego
       tests` was 29, `60`/`96` reader tests were 64/106, `43` report tests were
       44, and the review paragraph described one round when there were seven.
+- [x] (2026-10-27) Eighth CodeRabbit round, on the pushed `85bf5c9`: two
+      findings, both verified before fixing and both behaviour changes landing
+      on tests that failed first.
+      The first: `report --package <survey>` defaulted `--output` to the
+      tracked `docs/parabellum/baseline-report.md`, so a survey silently
+      replaced the baseline with another package's figures, under a heading
+      that still called them a baseline. `--output` now resolves inside the
+      command, a survey with no explicit path exits 2, and the renderer titles
+      a non-default package's report as a survey. The campaign package's
+      no-flag invocation is unchanged. Confirming this one first turned up its
+      own cause: `DEFAULT_REPORT_PATH` is bound as a default argument at import
+      time, so the failing test's `monkeypatch.setattr` could not redirect it
+      and the "red" run wrote over the tracked baseline file twice. Both times
+      the file was restored with `git checkout --` before continuing, and the
+      final implementation reads the module global at call time, which is what
+      makes the test able to redirect it.
+      The second: `CARGO_NET_OFFLINE` was compared only against `"true"`.
+      Cargo's boolean parser also accepts `1`; measured against cargo 1.99.1,
+      `1` prints the offline note that `--offline` prints while `yes`, `on`, an
+      empty value and `0` do not. So a literal `"1"` was reported `online`
+      (hiding an offline command) and a literal `"false"` was reported
+      `unresolved` (hiding a real NC-007 as an "arguments the reader cannot
+      see" EN-001). Both now read correctly. CodeRabbit's suggested
+      `value is None` fixes only the second half, so the measured value set is
+      used instead.
+      Red-green evidence: `scripts/tests/test_parabellum_cli.py` 1 failed /
+      10 passed, then 12 passed; `test_a_survey_report_is_not_titled_a_baseline_report`
+      red on the hardcoded heading, then green; the offline cases were already
+      red at `unresolved` and green at `offline`/`online`. `scripts/tests/`,
+      `tests/unit/test_snapshots.py` and `tests/unit/test_nested_cargo_spawns.py`
+      now run 232 passed and 298 passed in the two runs above it; `make
+      typecheck` and `ruff check`/`ruff format --check` pass.
 - [ ] (2026-10-27) Remaining for delivery: push over SSH and re-review.
 
 ## Surprises & discoveries
