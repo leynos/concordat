@@ -180,11 +180,11 @@ workaround.
       on `has_nested_build` and whose lexer reads `--config` values — finds 86
       compliant, 4 indeterminate, 16 noncompliant and 90 findings. Per rule on
       the re-run: NC-007 reached 6 repositories in 16 occurrences, NC-008 15
-      repositories in 26 occurrences, EN-001 4 indeterminate-only repositories
-      (ddlint, monotony, vtcode, wireframe) in 48 occurrences. Promotion to
-      `error` would fail 20 of the 106 audited repositories: the 16
-      noncompliant plus the 4 indeterminate ones, which is the union of the
-      three rule sets. A mixed-package ledger renders the same table through
+      repositories in 26 occurrences, EN-001 19 indeterminate-only
+      repositories in 48 occurrences. Promotion to `error` would fail 20 of the
+      106 audited repositories: the 16 noncompliant plus the 4 indeterminate
+      ones, which is the union of the three rule sets. A mixed-package ledger
+      renders the same table through
       the new filter, with only the selected package's records counted.
 - [x] (2026-10-27) Task 4 real-checkout validation. whitaker `f7a5a93` (main
       before #518) is `noncompliant`: NC-007 on `common/tests/i18n_packaging.rs:58`
@@ -452,7 +452,57 @@ workaround.
       collected items with no other failure — local makeutil is `0.1.2` while
       `ci.yml` pins `0.1.0` at digest `99dd28a…`, and none of the five failing
       modules appears in `git diff --name-only origin/main...HEAD`.
-- [ ] (2026-10-27) Remaining for delivery: push over SSH and re-review.
+- [x] (2026-10-27) Tenth CodeRabbit round, four findings. Two were code and
+      two were documentation. The documentation findings were both a counting
+      error: the EN-001 row of the survey table said 0 noncompliant / 4
+      indeterminate-only / 4 would fail, when the survey data gives 0 / 19 /
+      19, and the four-repository list was really nineteen. Recomputing the
+      rows from `rule-results.jsonl` per finding verdict rather than per
+      repository verdict fixed the table at `:1090` and the mid-plan entry at
+      `:183`, and corrected the same table and list in the pull-request body.
+      The union arithmetic was always right — 16 noncompliant verdicts plus 4
+      indeterminate ones is 20 — which is why the error survived: the EN-001
+      repositories sit inside other rules' noncompliant sets and inflate only
+      the rule-level count, not the estate-level one.
+- [x] (2026-10-27) The first code finding: `command_state` read
+      `cargo .args(extra).arg("--frozen")` as offline, but an unreadable word
+      may be `--`, after which every later word belongs to the program cargo
+      runs. Offline evidence now comes only from the literal prefix, the words
+      before the first unreadable argument. The reverse order stays offline,
+      because cargo parses `--frozen` before reaching anything unreadable.
+      Both orders are parametrized cases; the before case fails against the
+      previous reader (`16f4e80`).
+- [x] (2026-10-27) The second code finding: scope followed only one hop out of
+      an attributed declaration. Files are now rescanned to a fixed point, each
+      carrying how it was reached, so `#[path]`-reached files resolve children
+      beside themselves and crate roots resolve them in their own directory.
+      Verified against the compiler before implementation; a probe package
+      confirms `tests/support/probe.rs` needs `tests/support/helpers.rs` and
+      rejects `tests/support/probe/helpers.rs` with E0583 (`7073580`).
+- [x] (2026-10-27) The fixed-point resolve added twenty-five locals to
+      `collect_rust_evidence`, over Pylint's `max-locals = 20`. Extracting
+      `_scan_source` and `_discover_scope` brought it under the limit with
+      Pylint 10.00/10 on the gate's actual target list, `concordat scripts
+      tests`. Pylint's recursive walk does not descend into `tests/unit`,
+      which has no `__init__.py`; a probe module planted there is never
+      reported, so the 1061-line test module and its `== []` assertions never
+      reach this gate. The pre-existing 1258-line
+      `test_nested_cargo_entry_points.py` sits in the same position. Recorded
+      rather than restructured, because the gate is what governs.
+- [x] (2026-10-27) Estate survey re-run on the fixed-point reader, after the
+      extraction: 106 records, 0 errors, 90 findings, 86 compliant / 16
+      noncompliant / 4 indeterminate, and **zero per-repository differences**
+      from the previous reader. The one deliberate behaviour change — reading
+      files behind a second hop — adds no finding on the real corpus, because
+      the added files are either already reached by another chain or carry no
+      spawn. An earlier version of the change did add 21 findings; all 21 were
+      false positives from following `mod` lines in files no compiler builds,
+      fixed by restricting the scan set. The README now states that
+      restriction, the crate-root and `#[path]` child rules, and the one
+      compiler rule deliberately left unimplemented (`#[path]` on an inline
+      module, three estate occurrences, none in test scope).
+- [ ] (2026-10-27) Remaining for delivery: run the gates on the round's
+      commits, push over SSH and re-review.
 
 ## Surprises & discoveries
 
@@ -623,6 +673,43 @@ workaround.
   finds no reader. Impact: the constant is removed rather than allowed, since
   it is genuinely dead rather than a runtime entry point, and the removal was
   confirmed against all 172 reader tests and the 28 package tests.
+- Observation: Rust resolves a `#[path]`-reached file's children **beside** it,
+  not under a stem directory. Evidence: a probe package whose `tests/it.rs`
+  declares `#[path = "support/probe.rs"] mod probe;` compiles with
+  `tests/support/helpers.rs` and fails with E0583 when the child is at
+  `tests/support/probe/helpers.rs`. Impact: module resolution needs to know
+  *how* a file was reached, not just where it is, so each file carries a
+  `Reach` of `by_name` and `by_path` and offers every base its reach permits.
+  An ordinary non-root library file still owns its stem directory, and a crate
+  root resolves against its own directory.
+- Observation: following `mod` declarations in files no compiler builds invents
+  findings. Evidence: the first fixed-point reader raised the estate survey
+  from 90 findings to 111. Both new ones traced to text that is never compiled
+  — axinite's `tests/support/e2e.rs` (no `tests/support.rs` or
+  `tests/support/mod.rs` declares it) and wildside's
+  `backend/tests/support/entrypoint.rs`, whose declaration sits in a
+  `macro_rules!` body that is `include!`d. Impact: the scan set is restricted
+  to ordinary sources plus whole-file sources that are Cargo targets. The
+  survey then matched the previous reader exactly, 90 findings with zero
+  per-repository differences, and a probe confirms a spawn in an unbuilt
+  `tests/ui/foo.rs` is still read while its `mod helpers;` reports nothing.
+- Observation: `pylint <dir>` only recurses where a package exists. Evidence:
+  a probe module planted in `tests/unit/` produced no message from
+  `pylint tests`, while `pylint tests/unit` reported it immediately; the
+  directory has no `__init__.py`. Impact: `make lint` never sees
+  `tests/unit/test_nested_cargo_spawns.py`, so its length and its `== []`
+  assertions are not gate failures. The pre-existing 1258-line
+  `test_nested_cargo_entry_points.py` confirms the same boundary.
+- Observation: replaying recorded edits from the session transcript restores
+  lost work but not reliably. Evidence: after a `git checkout` discarded two
+  unstaged modules, replaying every recorded `Edit` rebuilt them, but the
+  replay applied edits in transcript order without regard to which ones later
+  text had superseded, so it reintroduced an inline loop that a later edit had
+  extracted away and left one stale `_is_crate_root` reference. Impact: the
+  replay is a recovery aid, not an oracle. The recovered tree was accepted only
+  after the full test suite passed *and* the estate survey reproduced the
+  baseline exactly, which is the check that would have caught any semantic
+  drift.
 
 ## Decision log
 
@@ -823,6 +910,38 @@ workaround.
   those left the rule body undefined and dropped the EN-001 it had just been
   made to report. Fail-closed has to reach the whole message, not only the key
   that selects the rule. Date/Author: 2026-10-27.
+- Decision: module resolution takes a record of how a file was reached rather
+  than deriving a single base directory from its path. Rationale: the compiler
+  uses three different bases for the same-looking file. A crate root resolves
+  against its own directory; a file named by `#[path]` resolves against its
+  parent, not a stem directory; an ordinary library file resolves against the
+  stem directory. A file may be more than one at once — `tests/it.rs` is a
+  target and can also be another test's `#[path]` target — and every reading is
+  compiled, so the resolver offers each permitted base and keeps the one that
+  exists on disk. Date/Author: 2026-10-27.
+- Decision: the discovery loop rescans a file whenever its scope or reach
+  changes, and reports only the last scan's problems. Rationale: a file may be
+  read before the declaration that promotes it to test scope, or before the
+  `#[path]` that changes where its children live. Reporting each pass's
+  problems produced a spurious "names no file" for `tests/support/probe.rs`,
+  because the early pass had not yet learned its reach. A fixed point plus
+  per-file problem replacement reports what the settled state says and nothing
+  else. Date/Author: 2026-10-27.
+- Decision: only sources the compiler builds are scanned for `mod`
+  declarations; a whole-file test source is included only when it is a Cargo
+  target. Rationale: a `<name>.rs` under `tests/` that no manifest names is
+  fixture text. Following its `mod` lines reported declarations that no
+  compiler makes — 21 false findings across the estate, every one traced to
+  such a file. The file's spawns are still read, because the rule's test-scope
+  selector names the directory; only its declarations are ignored. Date/Author:
+  2026-10-27.
+- Decision: `#[path]` on an inline module is not implemented. Rationale: it
+  does set the children's base directory, verified by compiling netsuke's
+  `#[path = "../../src/cli"] mod cli { ... }` shape, but the estate has three
+  occurrences, all in netsuke and none in test scope. The reader treats those
+  children as inline and reports nothing rather than resolving a directory it
+  does not model. The README states the limitation so a future occurrence is a
+  known gap rather than a silent wrong answer. Date/Author: 2026-10-27.
 
 ## Outcomes & retrospective
 
@@ -858,6 +977,30 @@ not contain is a latent defect that the fixtures — not the survey — have to
 guard. Four of the six reader defects found after the first survey were of the
 second kind, which is the argument for keeping both the fixture corpus and the
 estate sweep rather than treating either as sufficient.
+
+The tenth review round produced a third kind, and it is the one worth the most
+attention: a **counting** defect in the written report rather than in the rule.
+The EN-001 row claimed 4 indeterminate-only repositories where the survey data
+gives 19, and the pull-request body carried the same error with a four-name
+list. Nothing in the rule was wrong; the prose was. Two things made it survive
+a full review cycle. The estate-level union — 20 would-fail repositories — was
+correct throughout, because the 19 EN-001 repositories sit inside other rules'
+noncompliant sets, so every cross-check at the repository level agreed. And the
+four names listed were the repositories whose *overall* verdict was
+indeterminate, which is a different question from the rule-level count the
+table's column names. A rule-level table needs to be recomputed from the
+findings, not carried from the verdict summary; the lesson is to derive every
+cell from `rule-results.jsonl` at write time and to reconcile it against the
+independent report renderer, which computes the same table and would have
+disagreed.
+
+The same round's two code findings are a different lesson. Both were latent: no
+corpus repository has an unreadable argument before `--frozen`, and the module
+hops the fixed point adds carry no spawn on the estate. So a survey that
+reports "90 findings, unchanged" cannot distinguish a correct fix from a
+missing one, and the fixture tests are what carry the guarantee. The
+matched-pair argument case and the compiler probes exist precisely because the
+corpus is silent here.
 
 ## Context and orientation
 
@@ -942,7 +1085,44 @@ evidence; any indeterminate argument or environment source without it is
 - Evidence: red first; then green; corpus cases pin whitaker's four direct
   spawns as `online` and theoremc's helpers as spawns.
 - Non-vacuity: the "inherited env does not count" case must still report
-  `online`, proving the exclusion is exercised.
+  `online`, proving the exclusion is exercised. The two argument-order cases
+  are a matched pair that cannot both pass under a reader that ignores order:
+  `args(extra).arg("--frozen")` must be `unresolved` and
+  `arg("--frozen").args(extra)` must be `offline`. The first fails against the
+  previous reader and the second already passed, so the pair also proves the
+  fix is the ordering and not a blanket refusal to read flags after an unknown
+  word.
+
+Obligation `EP-SCOPE-1`: a file named by a declaration in test scope is test
+code; its own declarations are followed in turn, so scope closes transitively;
+the base directory for a declaration is every base its file's reach permits —
+its own directory for a crate root or a `#[path]` target, its stem directory
+for an ordinary file — and no base outside the checkout is ever read.
+
+- Method: unit tests over temporary checkouts, one per compiler rule, each
+  named for the rule it pins; a compiler probe for each resolution claim; and
+  the estate survey as the wide regression control.
+- Artefact: `tests/unit/test_nested_cargo_spawns.py` (seven scope tests) and
+  the probe packages under `/tmp/rustpath-*`.
+- Evidence: green. The compiler probe compiles
+  `#[path = "support/probe.rs"] mod probe;` with the child at
+  `tests/support/helpers.rs` and rejects `tests/support/probe/helpers.rs` with
+  E0583, so the `by_path` base is measured rather than assumed. The
+  `tests/helpers.rs` crate-root case fails with "names no file" when
+  `CRATE_ROOT_DIRECTORIES` is emptied, which is the seeded-fault control. The
+  estate survey reports the same 90 findings, repository by repository, as the
+  reader before this change.
+- Non-vacuity: the late-promotion test
+  (`src/lib.rs -> src/zebra.rs -> src/zebra/helpers.rs`) fails if the fixed
+  point stops after one hop. The `#[path]`-reached test fails if children are
+  resolved against a stem directory. The scanner-set test — a spawn in an
+  unbuilt `tests/ui/foo.rs` is read, its `mod helpers;` is not — fails in both
+  directions: dropping the whole file loses the spawn, and scanning its
+  declarations invents a problem.
+- Residual gap: `#[path]` on an inline module changes its children's base
+  directory, and the reader does not model that. Three estate occurrences
+  exist, all outside test scope. This is a stated limitation, not a claimed
+  guarantee; the README records it.
 
 Obligation `EP-ENTRY-1`: `&&` and fail-fast sequencing prove prefetch order;
 `;` does not; Make prerequisite and recipe order is read with the existing
@@ -1089,7 +1269,7 @@ severity `warning`:
 
 | Rule   | Noncompliant repositories | Indeterminate-only repositories | Would fail |
 | ------ | ------------------------- | ------------------------------- | ---------- |
-| EN-001 | 0                         | 4                               | 4          |
+| EN-001 | 0                         | 19                              | 19         |
 | NC-007 | 6                         | 0                               | 6          |
 | NC-008 | 15                        | 0                               | 15         |
 
@@ -1097,10 +1277,13 @@ The three sets are not disjoint; their union is 20 repositories, and every one
 of those is a repository whose overall verdict is noncompliant or
 indeterminate. Occurrence counts are 16 NC-007, 26 NC-008 and 48 EN-001.
 
-The EN-001 indeterminate-only repositories are `ddlint`, `monotony`, `vtcode`
-and `wireframe`. `vtcode`'s two facts are reader problems rather than
-repository defects — a `#[cfg(test)]` item never closes in two files — and the
-rest are Makefile or workflow recipes the lexer cannot reduce to one command.
+The 19 EN-001 indeterminate-only repositories are `axinite`, `chutoro`,
+`ddlint`, `diesel-cte-ext`, `mdtablefix`, `monotony`, `netsuke`, `ortho-config`,
+`pg-embed-setup-unpriv`, `podbot`, `rstest-bdd`, `shared-actions`, `stilyagi`,
+`theoremc`, `thysalion`, `vtcode`, `weaver`, `whitaker` and `wireframe`.
+`vtcode`'s two facts are reader problems rather than repository defects — a
+`#[cfg(test)]` item never closes in two files — and the rest are Makefile or
+workflow recipes the lexer cannot reduce to one command.
 
 Real-checkout validation, from the shipped CLI:
 

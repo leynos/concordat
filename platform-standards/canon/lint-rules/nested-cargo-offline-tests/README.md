@@ -58,6 +58,26 @@ the one-line parameter change recorded in `docs/roadmap.md` (DF12-109).
   `src/checks/helpers.rs` in scope although the inner declaration carries no
   attribute of its own. A declaration gated by any other `cfg` is left alone,
   because the reader cannot decide what that gate compiles.
+- **Scope follows every hop.** A file brought into scope is itself read for
+  declarations, so `src/lib.rs -> src/checks.rs -> src/checks/helpers.rs` all
+  count, not just the first two. Where a declaration's children live depends on
+  how the compiler reached its file: a crate root (`lib.rs`, `main.rs`,
+  `mod.rs`, and any file directly under `tests/`, `benches/`, `examples/` or
+  `src/bin/`) and a file named by `#[path]` resolve their children beside
+  themselves, while an ordinary library file uses a directory named after it. A
+  file that is several of these at once is read both ways and whichever file
+  exists is taken.
+- **Only files a compiler builds are scanned.** A `<name>.rs` directly under
+  `tests/` that no manifest declares as a target is trybuild fixture text or a
+  file another test `include!`s. Its `mod` lines bind nothing, so following
+  them would report a declaration that no compiler makes. Its spawns are still
+  read when the file sits under a `tests` directory, because the rule's own
+  test-scope selector names that directory.
+- **A `#[path]` on an inline module is not followed.**
+  `#[path = "dir"] mod m { … }` redirects its children to `dir/`, and the
+  estate has three such occurrences, none in test scope. The reader treats the
+  children as inline and reports nothing for them rather than guessing the
+  directory.
 - **Trybuild evidence** is a manifest dependency on the `trybuild` package —
   under any name the manifest gives it, so `tb = { package = "trybuild" }`
   counts — or a `TestCases` reference in test scope through one of those names.
