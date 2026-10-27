@@ -252,6 +252,23 @@ def _rule_rows(tallies: dict[str, _RuleTally]) -> list[tuple[str, ...]]:
     return rows
 
 
+def _title(package: str) -> str:
+    """Return the report's top-level heading for *package*.
+
+    Only the campaign package's report is a baseline. Naming a survey's report
+    a baseline would misdescribe figures taken from another rule package, and
+    the two are otherwise indistinguishable: both read the same shared ledger.
+
+    Returns
+    -------
+    str
+        The heading line.
+    """
+    if package == RULE_PACKAGE:
+        return "# Operation Parabellum baseline report"
+    return f"# Operation Parabellum `{package}` survey report"
+
+
 def render_report(
     ledger_path: pathlib.Path = DEFAULT_LEDGER_PATH,
     package: str = RULE_PACKAGE,
@@ -285,7 +302,7 @@ def render_report(
             rule_counts[rule_id] = rule_counts.get(rule_id, 0) + 1
 
     lines = [
-        "# Operation Parabellum baseline report",
+        _title(package),
         "",
         "Generated from `docs/parabellum/ledger.jsonl` by",
         "`python -m scripts.parabellum_sweep report`. Do not edit by hand.",

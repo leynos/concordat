@@ -29,6 +29,7 @@ from __future__ import annotations
 import dataclasses
 import pathlib
 import subprocess
+import sys
 import tempfile
 import typing as typ
 
@@ -521,17 +522,18 @@ def run_sweep(
 def report_command(
     *,
     ledger: pathlib.Path = DEFAULT_LEDGER_PATH,
-    output: pathlib.Path = DEFAULT_REPORT_PATH,
+    output: pathlib.Path | None = None,
     package: str = RULE_PACKAGE,
 ) -> int:
-    """Regenerate the baseline report from the campaign ledger.
+    """Regenerate a campaign report from the ledger.
 
     Parameters
     ----------
     ledger : pathlib.Path
         The ledger to read.
-    output : pathlib.Path
-        Where to write the Markdown report.
+    output : pathlib.Path | None
+        Where to write the Markdown report. Only the campaign package may be
+        written to the checked-in default, so a survey must name its own path.
     package : str
         Rule package to report on; records written by other packages are
         filtered out before the latest record per repository is chosen.
@@ -539,8 +541,24 @@ def report_command(
     Returns
     -------
     int
-        Zero after the report is written.
+        Zero after the report is written, non-zero when the write was refused.
     """
+    # `output` is resolved here rather than defaulted in the signature because
+    # a default argument would bind `DEFAULT_REPORT_PATH` at import time and
+    # leave this function unable to tell "the operator named this path" from
+    # "the default happens to be this path". A survey landing on the default
+    # would replace the checked-in baseline with another package's figures
+    # under a heading that still calls them a baseline.
+    if output is None:
+        if package != RULE_PACKAGE:
+            print(
+                f"refusing to write {package} to the default report path "
+                f"{DEFAULT_REPORT_PATH}; pass --output to name where this "
+                f"survey's report goes",
+                file=sys.stderr,
+            )
+            return 2
+        output = DEFAULT_REPORT_PATH
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(render_report(ledger, package=package), encoding="utf-8")
     print(f"wrote {output}")

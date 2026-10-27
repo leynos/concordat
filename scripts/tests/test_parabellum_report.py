@@ -634,6 +634,39 @@ class TestPackageFiltering:
         assert "leynos/alpha" in report, report
         assert "leynos/gamma" not in report, report
 
+    def test_a_survey_report_is_not_titled_a_baseline_report(
+        self,
+        ledger_path: pathlib.Path,
+    ) -> None:
+        """A survey's title names the survey, not the campaign it borrows from.
+
+        The ledger is shared, so a survey report looks identical to the
+        baseline unless its heading says otherwise. A reader who is handed one
+        has no other way to tell which package produced the figures.
+        """
+        ledger_path.write_text(
+            json.dumps(
+                TestReport()._record(
+                    "leynos/gamma",
+                    "noncompliant",
+                    package=SURVEY_PACKAGE,
+                    findings=[_finding("NC-007")],
+                )
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        survey = sweep.render_report(ledger_path, package=SURVEY_PACKAGE)
+        baseline = sweep.render_report(ledger_path, package=sweep.RULE_PACKAGE)
+
+        assert survey.splitlines()[0] == (
+            f"# Operation Parabellum `{SURVEY_PACKAGE}` survey report"
+        ), survey.splitlines()[0]
+        assert baseline.splitlines()[0] == ("# Operation Parabellum baseline report"), (
+            baseline.splitlines()[0]
+        )
+
     def test_the_header_names_the_selected_package(
         self,
         ledger_path: pathlib.Path,
