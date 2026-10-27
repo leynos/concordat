@@ -139,18 +139,47 @@ deny contains finding("EN-001", severity, "indeterminate", "", 0, msg) if {
 # A spawn fact the reader wrote in a shape this policy does not know is not a
 # pass: the three states are the whole vocabulary, and silently ignoring a
 # fourth would report a repository clean on evidence nobody judged.
+#
+# `object.get` supplies a sentinel rather than reading the key directly,
+# because `not spawn.state in {...}` on a fact with no `state` at all is
+# undefined: Rego has no value to negate, the rule body fails, and the fact
+# escapes unjudged. The sentinel makes the absence itself reportable, and the
+# `is_object` guard keeps `object.get` from raising a type error on a fact
+# that is not a mapping at all.
 deny contains finding("EN-001", "error", "indeterminate", "", 0, msg) if {
 	envelope_ok
 	some spawn in input.spawns
-	not spawn.state in {"offline", "online", "unresolved"}
-	msg := sprintf("a spawn fact carries the unknown state %q", [spawn.state])
+	msg := _unknown_spawn(spawn)
 }
 
 deny contains finding("EN-001", "error", "indeterminate", "", 0, msg) if {
 	envelope_ok
 	some entry in input.entry_points
-	not entry.state in {"before", "absent", "uncertain"}
-	msg := sprintf("an entry-point fact carries the unknown state %q", [entry.state])
+	msg := _unknown_entry(entry)
+}
+
+_unknown_spawn(spawn) := msg if {
+	is_object(spawn)
+	state := object.get(spawn, "state", "<missing>")
+	not state in {"offline", "online", "unresolved"}
+	msg := sprintf("a spawn fact carries the unknown state %v", [state])
+}
+
+_unknown_spawn(spawn) := msg if {
+	not is_object(spawn)
+	msg := sprintf("a spawn fact is not an object: %v", [spawn])
+}
+
+_unknown_entry(entry) := msg if {
+	is_object(entry)
+	state := object.get(entry, "state", "<missing>")
+	not state in {"before", "absent", "uncertain"}
+	msg := sprintf("an entry-point fact carries the unknown state %v", [state])
+}
+
+_unknown_entry(entry) := msg if {
+	not is_object(entry)
+	msg := sprintf("an entry-point fact is not an object: %v", [entry])
 }
 
 _describe(spawn) := description if {

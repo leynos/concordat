@@ -206,7 +206,7 @@ artifacts:
       Sensor requiring a test's own cargo run to be offline, and the test
       entry point to warm the cache before it whenever there is a nested
       build for the prefetch to protect.
-    sha256: df62ce46fca131e81354d1d95787be5fa20dbf19c1022770cb067ea6fc1e2445
+    sha256: 7fcbefe38bbd6b92840bcdbdd389b5b1fe63ee904967ac6b4068c51f63ec06af
   - id: lint-rule-nested-cargo-offline-tests-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/nested-cargo-offline-tests/rule.yaml

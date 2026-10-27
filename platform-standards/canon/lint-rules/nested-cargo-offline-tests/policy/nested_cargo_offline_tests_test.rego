@@ -101,6 +101,27 @@ test_a_foreign_envelope_kind_is_an_error_not_a_warning if {
 	{[f.rule_id, f.severity] | some f in fs} == {["EN-001", "error"]}
 }
 
+# A fact the reader wrote without a state is evidence nobody judged, so the
+# policy must say so. Reading `spawn.state` and negating its membership leaves
+# the rule undefined — not failing, not passing — and the repository would be
+# reported clean on a fact that was never classified.
+test_a_spawn_fact_without_a_state_is_indeterminate if {
+	spawn := object.remove(data.fixtures.online_spawn.spawns[0], ["state"])
+	fs := policy.deny with input as object.union(data.fixtures.online_spawn, {"spawns": [spawn]}) with data.parameters as {"exemptions": [], "severity": "warning"}
+	{[f.rule_id, f.severity, f.verdict] | some f in fs} == {["EN-001", "error", "indeterminate"]}
+}
+
+test_an_entry_point_fact_without_a_state_is_indeterminate if {
+	entry := object.remove(data.fixtures.absent_prefetch.entry_points[0], ["state"])
+	fs := policy.deny with input as object.union(data.fixtures.absent_prefetch, {"entry_points": [entry]}) with data.parameters as {"exemptions": [], "severity": "warning"}
+	{[f.rule_id, f.severity, f.verdict] | some f in fs} == {["EN-001", "error", "indeterminate"]}
+}
+
+test_a_spawn_fact_that_is_not_an_object_is_indeterminate if {
+	fs := policy.deny with input as object.union(data.fixtures.online_spawn, {"spawns": ["online"]}) with data.parameters as {"exemptions": [], "severity": "warning"}
+	{[f.rule_id, f.severity, f.verdict] | some f in fs} == {["EN-001", "error", "indeterminate"]}
+}
+
 test_a_named_exemption_suppresses_the_spawn_finding if {
 	fs := policy.deny with input as data.fixtures.exempt_spawn with data.parameters as {"exemptions": exemptions}
 	profile := {[f.rule_id, f.path] | some f in fs}
