@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & retrospective`, `Conformance basis`, and `Verification plan` must
 be kept up to date as work proceeds.
 
-Status: IMPLEMENTED, awaiting review
+Status: IMPLEMENTED, review fixes in progress
 
 ## Purpose / big picture
 
@@ -203,7 +203,23 @@ workaround.
       [#327](https://github.com/leynos/concordat/pull/327) opened against
       `main` with the survey counts, the real-checkout before/after evidence,
       the survey-coverage caveat and the Lody session reference in its body.
-      CodeRabbit review is the remaining step.
+- [ ] (2026-10-27) CodeRabbit review of [#327](https://github.com/leynos/concordat/pull/327)
+      returned 12 findings; all were verified against the code and accepted,
+      and each has its own red-then-green test where it changes behaviour.
+      Fixed: cargo global options before the subcommand (4 tests); a `let`
+      rebinding no longer credits the previous command (1); `--help`/`-h` join
+      the probe flags (3); a nextest setup command is one argv, not a shell
+      script (2); nextest `inherits` chains including the implicit `default`
+      (4); a string `runs-on` label is classified as a one-item label list
+      (2); a refused Makefile makes a delegating `make test` step `uncertain`
+      (1); a conditional fetch step no longer proves the order (2); the report
+      header names the ledger's versions rather than the manifest's (2 new
+      report tests); and the uncertain-entry EN-001 is gated on
+      `has_nested_build` (1 Rego test, 1 fixture). The survey counts in the PR
+      body must be recomputed for the last of these.
+- [ ] (2026-10-27) Remaining for delivery: full sequential commit gate, PR body
+      rewrite with the recomputed counts, the #5/#12 `-h` disposition recorded,
+      the push, and a re-review.
 
 ## Surprises & discoveries
 
@@ -257,9 +273,16 @@ workaround.
   still decisive because the NC-007 and NC-008 findings it was written to
   observe both disappear.
 - Observation: `~/docs/missing-frozen-survey-plan.md` does not exist on this
-  host. Impact: the estate survey step cannot run here. The Task 4 survey and
-  its NC-007/NC-008 comparison are therefore left open in Progress and reported
-  as blocked in the PR, rather than being inferred from the checked-in fixtures.
+  host, so the planned SRE-driven sweep could not be used. Impact and
+  resolution: the Task 4 survey ran instead as a local-mirror survey through
+  the shipped runner (`concordat artefact rule run
+  nested-cargo-offline-tests`) over all 106 repositories mirrored under
+  `~/.lody/repos`, in 103 seconds with 0 operational errors. The evidence and
+  its limits are recorded in the Task 4 Progress entries and in the PR's
+  Survey section: it is a floor over 106 of the 180 eligible repositories, not
+  an estate total. The comparison against the 24 October figures was done as
+  prescribed and every apparent outlier was traced; see the PR's "Comparison
+  with the 24 October survey" section.
 - Observation: `makeutil` 0.1.2 is on `PATH`, but every checked-in fixture
   envelope records `makeutil` 0.1.0, so six generator-drift tests fail. They
   fail identically from a clean archive of
@@ -510,6 +533,30 @@ workaround.
   stated, not as an estate total. Rationale: 106 of the 180 eligible
   repositories are mirrored locally, and a count presented without that bound
   would be read as complete and would understate the promotion-to-error impact.
+  Date/Author: 2026-10-27.
+- Decision: `-h` is a probe flag alongside `--help`, `--version` and `-V`.
+  Rationale: measured on cargo 1.99.1, `cargo build -h`, `cargo build --help`
+  and `cargo -h` all exit `0` without building anything, so none of them can
+  take the package-cache lock. CodeRabbit's review of #327 raised `--help` and
+  raised `-h` as a separate finding that asked to exclude it; excluding it
+  would report a help command as an online spawn, which is a false NC-007.
+  Both findings therefore resolve the same way, and the exclusion suggestion is
+  declined on the measurement rather than on preference. Date/Author:
+  2026-10-27.
+- Decision: an unreadable entry point is reported only where a nested build
+  exists, matching NC-008's gate. Rationale: with no spawn and no trybuild,
+  there is nothing a prefetch could warm, so the finding would ask a repository
+  to fix a problem it does not have; the survey showed 33 of the 45
+  entry-point-uncertain repositories in that state. NC-008 has carried this
+  gate since the package was written, and the asymmetry was an oversight in
+  the uncertain branch rather than a deliberate distinction. Date/Author:
+  2026-10-27.
+- Decision: the report header names the versions its records carry, falling
+  back to the manifest only for an empty selection. Rationale: the ledger is
+  append-only and a campaign re-runs an updated package over part of the
+  estate, so one report can cover two versions; the checked-in report had
+  already drifted to claiming `v0.3.2` while its records held `0.1.0` and
+  `0.2.0`. Naming the manifest described records the report was not showing.
   Date/Author: 2026-10-27.
 
 ## Outcomes & retrospective

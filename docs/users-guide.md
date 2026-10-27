@@ -694,12 +694,24 @@ another's test (leynos/whitaker#518 measured nineteen). The rule reports:
   The rule says it does not know rather than guessing either way.
 
 A version or help probe is not a spawn: `cargo --version`,
-`cargo kani --version`, `cargo help` and `cargo build --help` read no manifest
-and touch no network, while `cargo install --version 1.2.3` carries a value and
-is real work. Fixture package sources are excluded — a `cargo` inside one is
-the build under audit, not the code that starts it; fixture *locks* are
-`nested-cargo-fixture-lockfiles`' business. This rule therefore reports NC-007
-and NC-008 only, and never NC-001 or NC-002.
+`cargo kani --version`, `cargo help`, `cargo build --help` and `cargo build -h`
+read no manifest and touch no network, while `cargo install --version 1.2.3`
+carries a value and is real work. Fixture package sources are excluded — a
+`cargo` inside one is the build under audit, not the code that starts it;
+fixture *locks* are `nested-cargo-fixture-lockfiles`' business. This rule
+therefore reports NC-007 and NC-008 only, and never NC-001 or NC-002.
+
+Two details decide whether a prefetch counts. Cargo accepts its global options
+before the subcommand, so `cargo --locked fetch` and `cargo -q test` are read
+as the commands they name rather than as unknown invocations. A nextest setup
+script's `command` is split into argv and executed directly, with no shell
+between: `cargo fetch --locked && cargo test` there runs `cargo` with the
+connector among its arguments and fetches nothing, so only a single fetching
+command proves the cache warm. A custom nextest profile inherits `default`
+implicitly, or the profile it names in `inherits`, and the chain's setup
+scripts merge, so a fetch declared on any profile in the chain counts. A
+workflow fetch step guarded by an `if:` other than `success()` may not run at
+all, and is not proof of the order.
 
 The rule ships at `warning` severity, so a finding is reported and the gate
 continues. That lets the estate be surveyed and each repository fix its own
