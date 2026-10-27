@@ -15,6 +15,14 @@ literal value that cargo reads as false is visible evidence that the command
 may use the network, so it stays `online` rather than becoming unreadable.
 Every other literal cargo command is `online`. The reader never reports
 `offline` on a guess and never reports `online` on one.
+
+`Command::env` keeps the last value given for a name, so a `CARGO_NET_OFFLINE`
+assignment replaces any earlier one rather than adding to it. The reader
+therefore tracks the *latest* assignment, including a call site's own
+assignment over a helper's, and reports `offline` only when that last
+assignment is still one cargo reads as true. `--frozen` is not revocable this
+way: no argument and no environment variable turns it off, so it remains
+evidence whatever an environment assignment says.
 """
 
 from __future__ import annotations
@@ -76,7 +84,12 @@ class CargoCommand:
     form: str
     words: list[str | None] = dataclasses.field(default_factory=list)
     environment: list[str] = dataclasses.field(default_factory=list)
-    is_offline: bool = False
+    # The latest `CARGO_NET_OFFLINE` assignment: True for a value cargo reads as
+    # offline, False for one it does not, None for a value the reader cannot
+    # see. `has_offline_override` separates "the last assignment said online"
+    # from "nothing has assigned the variable at all".
+    offline_override: bool | None = None
+    has_offline_override: bool = False
     is_uncertain: bool = False
 
     def add_arguments(self, text: str) -> None:
@@ -95,6 +108,9 @@ class CargoCommand:
         nothing about the network and must not make the command `unresolved`,
         while `.env(name, "true")` genuinely does hide whether the offline
         variable is set.
+
+        A visible `CARGO_NET_OFFLINE` assignment replaces the last one, because
+        that is what `Command::env` does with a repeated name.
         """
         pairs = _environment_pairs(text)
         if pairs is None:
@@ -109,22 +125,27 @@ class CargoCommand:
             self.environment.append(key)
             if key != OFFLINE_VARIABLE:
                 continue
-            if value in _OFFLINE_VALUES:
-                self.is_offline = True
-            elif value is None:
+            # The last assignment is the one cargo reads, so each visible pair
+            # replaces the previous answer rather than adding to it.
+            self.offline_override = value in _OFFLINE_VALUES
+            self.has_offline_override = True
+            if value is None:
                 # The name is visible but the value is not, so whether this
                 # pair turns offline mode on is genuinely unknown.
-                self.is_uncertain = True
-            # Any other literal is the command saying it may use the network.
-            # That is visible evidence for `online`, not an unreadable fact:
-            # calling it uncertain would report an EN-001 that says the reader
-            # cannot see the arguments, and hide the NC-007 they earn.
+                self.offline_override = None
 
     def absorb(self, definition: CargoCommand) -> None:
-        """Take on the evidence a helper's own body establishes."""
+        """Take on the evidence a helper's own body establishes.
+
+        A call site's own assignment runs after the helper returns, so it wins
+        over the helper's: the helper's answer is taken only where the site
+        says nothing about the variable itself.
+        """
         self.words[:0] = definition.words
         self.environment[:0] = definition.environment
-        self.is_offline |= definition.is_offline
+        if not self.has_offline_override:
+            self.offline_override = definition.offline_override
+            self.has_offline_override = definition.has_offline_override
         self.is_uncertain |= definition.is_uncertain
 
 
@@ -411,6 +432,25 @@ def helper_body(masked: str, match: re.Match[str]) -> tuple[str, int, int] | Non
     return match.group("name"), start, end
 
 
+def unreached_helper(definition: CargoCommand) -> CargoCommand:
+    """Return a helper definition marked as a spawn with an unreadable call site.
+
+    A helper's call sites are looked up in the file that defines it, so a helper
+    another file calls has none the reader can read. Whatever that call adds —
+    an offline flag, an offline environment, neither — is invisible, and
+    guessing either way would report a state the reader cannot establish.
+
+    Returns
+    -------
+    CargoCommand
+        The definition, recorded as a `helper` spawn with an unreadable
+        argument list so that `command_state` answers `unresolved`.
+    """
+    definition.form = "helper"
+    definition.words.append(None)
+    return definition
+
+
 def command_state(command: CargoCommand) -> str | None:
     """Return the evidence state of *command*, or None when it cannot resolve.
 
@@ -429,9 +469,17 @@ def command_state(command: CargoCommand) -> str | None:
     known = [word for word in command.words if isinstance(word, str)]
     if len(known) == len(command.words) and _is_probe(known):
         return None
-    if command.is_offline or _offline_flags(_literal_prefix(command.words)):
+    # The flags are independent of the environment: nothing the command can set
+    # later revokes `--frozen`, so they prove offline mode on their own.
+    if _offline_flags(_literal_prefix(command.words)):
         return "offline"
-    if command.is_uncertain or len(known) != len(command.words):
+    if command.has_offline_override and command.offline_override is True:
+        return "offline"
+    if (
+        command.is_uncertain
+        or (command.has_offline_override and command.offline_override is None)
+        or len(known) != len(command.words)
+    ):
         return "unresolved"
     return "online"
 

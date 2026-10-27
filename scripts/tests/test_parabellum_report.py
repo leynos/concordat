@@ -536,14 +536,6 @@ def _finding(
 class TestPackageFiltering:
     """The report can be narrowed to one rule package's records."""
 
-    @staticmethod
-    def _rule_cells(report: str, rule_id: str) -> list[str]:
-        """Return the data cells of *rule_id*'s row in the per-rule table."""
-        row = next(
-            line for line in report.splitlines() if line.startswith(f"| {rule_id} ")
-        )
-        return [cell.strip() for cell in row.strip().strip("|").split("|")]
-
     def test_the_filter_applies_before_latest_record_selection(
         self,
         ledger_path: pathlib.Path,

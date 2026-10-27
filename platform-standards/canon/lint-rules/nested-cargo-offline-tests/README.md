@@ -44,9 +44,18 @@ the one-line parameter change recorded in `docs/roadmap.md` (DF12-109).
   against the repository. The rule says it does not know rather than guessing
   either way.
 - **EN-001** (always `error`, indeterminate): the input is not a schema-1
-  `policy-input/nested-cargo-offline-tests` envelope, or a fact carries a state
-  this policy does not know. This says the rule could not run, not that the
-  repository is unsafe, so the `severity` parameter cannot turn it off.
+  `policy-input/nested-cargo-offline-tests` envelope, a fact carries a state
+  this policy does not know, or a fact is missing a field its finding needs
+  (`path` and a numeric `line` on a spawn; `path`, `line` and `name` on an
+  entry point). A known state is not by itself a usable fact: Rego reads a
+  missing key as *undefined* rather than as an error, so the rule body fails,
+  the finding silently disappears, and the repository is reported clean on
+  evidence nobody judged. A wrong type is as unusable as a missing field — `%d`
+  with a string line prints `%!d(string=80)` where a line number belongs — so
+  the required-field check also rejects a field of the wrong type, and the
+  ordinary findings skip a malformed fact so it is reported once. This says the
+  rule could not run, not that the repository is unsafe, so the `severity`
+  parameter cannot turn it off.
 
 ## What counts
 
@@ -93,6 +102,19 @@ the one-line parameter change recorded in `docs/roadmap.md` (DF12-109).
   offline-mode note for each and leaves the network reachable for `"0"`,
   `"yes"`, `"on"` and the empty string. An inherited environment is not
   evidence: the gate's environment is not the test's.
+- **The last `CARGO_NET_OFFLINE` assignment is the one cargo reads.**
+  `Command::env` keeps the value given last for a name, so
+  `.env("CARGO_NET_OFFLINE", "true")` followed by
+  `.env("CARGO_NET_OFFLINE", "0")` leaves the command **online**; the reader
+  reports `online`, not `offline`. A call site's own assignment runs after the
+  helper it called returns, so the call site wins. The same holds for the pairs
+  `.envs([...])` applies in order. A last assignment whose value the reader
+  cannot see makes the spawn `unresolved`, because the earlier pair no longer
+  describes what cargo will read.
+- **`--frozen` is not revocable.** No argument and no environment variable turns
+  it off, so a command carrying `--frozen` stays offline whatever an
+  environment assignment says. Only the environment is last-write-wins; the
+  flag is evidence on its own.
 - **A version or help probe is not a spawn.** `cargo --version`,
   `cargo kani --version`, `cargo help` and `cargo build --help` read no
   manifest and touch no network, so they draw no finding. A version flag that

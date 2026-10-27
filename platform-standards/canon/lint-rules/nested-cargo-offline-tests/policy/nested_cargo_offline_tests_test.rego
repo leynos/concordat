@@ -122,6 +122,73 @@ test_a_spawn_fact_that_is_not_an_object_is_indeterminate if {
 	{[f.rule_id, f.severity, f.verdict] | some f in fs} == {["EN-001", "error", "indeterminate"]}
 }
 
+# A known state is not a usable fact on its own: NC-007 reports the file and
+# line the spawn starts at, so a fact missing either one produces no finding
+# and the spawn would pass unjudged. Each required field is checked separately
+# so a fact missing one of them cannot slip through behind the other.
+test_a_spawn_fact_without_a_path_is_indeterminate if {
+	spawn := object.remove(data.fixtures.online_spawn.spawns[0], ["path"])
+	fs := policy.deny with input as object.union(data.fixtures.online_spawn, {"spawns": [spawn]}) with data.parameters as {"exemptions": [], "severity": "warning"}
+	{[f.rule_id, f.severity, f.verdict] | some f in fs} == {["EN-001", "error", "indeterminate"]}
+}
+
+test_a_spawn_fact_without_a_line_is_indeterminate if {
+	spawn := object.remove(data.fixtures.online_spawn.spawns[0], ["line"])
+	fs := policy.deny with input as object.union(data.fixtures.online_spawn, {"spawns": [spawn]}) with data.parameters as {"exemptions": [], "severity": "warning"}
+	{[f.rule_id, f.severity, f.verdict] | some f in fs} == {["EN-001", "error", "indeterminate"]}
+}
+
+test_a_spawn_fact_with_a_non_numeric_line_is_indeterminate if {
+	spawn := object.union(data.fixtures.online_spawn.spawns[0], {"line": "80"})
+	fs := policy.deny with input as object.union(data.fixtures.online_spawn, {"spawns": [spawn]}) with data.parameters as {"exemptions": [], "severity": "warning"}
+	{[f.rule_id, f.severity, f.verdict] | some f in fs} == {["EN-001", "error", "indeterminate"]}
+}
+
+test_a_malformed_spawn_fact_names_the_missing_fields if {
+	spawn := object.remove(data.fixtures.online_spawn.spawns[0], ["path", "line"])
+	fs := policy.deny with input as object.union(data.fixtures.online_spawn, {"spawns": [spawn]}) with data.parameters as {"exemptions": [], "severity": "warning"}
+	some f in fs
+	contains(f.msg, "path")
+	contains(f.msg, "line")
+}
+
+test_an_absent_entry_point_without_a_name_is_indeterminate if {
+	entry := object.remove(data.fixtures.absent_prefetch.entry_points[0], ["name"])
+	fs := policy.deny with input as object.union(data.fixtures.absent_prefetch, {"entry_points": [entry]}) with data.parameters as {"exemptions": [], "severity": "warning"}
+	{[f.rule_id, f.severity, f.verdict] | some f in fs} == {["EN-001", "error", "indeterminate"]}
+}
+
+test_an_absent_entry_point_without_a_path_is_indeterminate if {
+	entry := object.remove(data.fixtures.absent_prefetch.entry_points[0], ["path"])
+	fs := policy.deny with input as object.union(data.fixtures.absent_prefetch, {"entry_points": [entry]}) with data.parameters as {"exemptions": [], "severity": "warning"}
+	{[f.rule_id, f.severity, f.verdict] | some f in fs} == {["EN-001", "error", "indeterminate"]}
+}
+
+test_an_absent_entry_point_without_a_line_is_indeterminate if {
+	entry := object.remove(data.fixtures.absent_prefetch.entry_points[0], ["line"])
+	fs := policy.deny with input as object.union(data.fixtures.absent_prefetch, {"entry_points": [entry]}) with data.parameters as {"exemptions": [], "severity": "warning"}
+	{[f.rule_id, f.severity, f.verdict] | some f in fs} == {["EN-001", "error", "indeterminate"]}
+}
+
+# An `uncertain` entry point's finding names the entry point, so a fact without
+# a name would produce no finding at all: reading the missing key leaves the
+# rule body undefined and the finding is dropped. The malformed fact is
+# reported instead, as an error, because an entry point nobody can describe is
+# not evidence a repository may pass on.
+test_an_uncertain_entry_point_without_a_name_is_indeterminate if {
+	entry := object.remove(data.fixtures.uncertain_prefetch.entry_points[0], ["name"])
+	spawn := {"path": "a.rs", "line": 1, "form": "command_new", "state": "offline", "flags": [], "environment": []}
+	fs := policy.deny with input as object.union(data.fixtures.uncertain_prefetch, {"spawns": [spawn], "entry_points": [entry]}) with data.parameters as {"exemptions": [], "severity": "warning"}
+	{[f.rule_id, f.severity, f.verdict] | some f in fs} == {["EN-001", "error", "indeterminate"]}
+}
+
+# The required-field checks must not fire on a well-formed envelope: they are
+# a guard against a malformed fact, not a new finding for every clean run.
+test_a_well_formed_envelope_draws_no_malformed_fact_finding if {
+	fs := policy.deny with input as data.fixtures.absent_prefetch with data.parameters as {"exemptions": [], "severity": "warning"}
+	{f.rule_id | some f in fs} == {"NC-008"}
+}
+
 # An indeterminate fact still has to be reported when it is *incomplete*. The
 # message names the reason the ordering could not be read and describes the
 # flags and environment of the spawn; reading either key directly makes the

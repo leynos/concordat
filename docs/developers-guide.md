@@ -675,16 +675,23 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   checkout themselves. Offline evidence is read from the command itself —
   `--frozen`, `--offline` with `--locked`, or a command-local
   `CARGO_NET_OFFLINE="true"` or `"1"`, the two values Cargo's boolean parser
-  reads as offline — so an inherited environment never counts as proof. A
-  version or help probe (`cargo --version`, `cargo kani --version`,
-  `cargo build --help`) is not a spawn; a version flag carrying a value is.
-  Fixture package sources are excluded, because a `cargo` inside one is the
-  build under audit rather than the code that starts it. A prefetch counts only
-  when it is success-gated (`&&` or a fail-fast line sequence), and a workflow
-  step whose command carries an `${{ }}` expression proves no order at all: the
-  expression can supply the `|| true` that hides a failed fetch. The workflow
-  reader asks both steps' `if:` conditions what they skip. A fetch step must
-  run on every run, so anything but `success()` leaves the entry point
+  reads as offline — so an inherited environment never counts as proof. The
+  environment is last-write-wins, matching `Command::env`: the reader tracks
+  the *latest* assignment, a call site's over a helper's, and an earlier
+  `"true"` loses to a later `"0"`. `--frozen` is not revocable this way, so a
+  command carrying it stays offline whatever the environment says. A version or
+  help probe (`cargo --version`, `cargo kani --version`, `cargo build --help`)
+  is not a spawn; a version flag carrying a value is. A helper defined in test
+  scope but never called from its own file — a cross-file call, or no call at
+  all — is reported at its definition as `unresolved` rather than dropped: the
+  reader cannot see what another file's call adds, and never reports `online`
+  on a guess. Fixture package sources are excluded, because a `cargo` inside
+  one is the build under audit rather than the code that starts it. A prefetch
+  counts only when it is success-gated (`&&` or a fail-fast line sequence), and
+  a workflow step whose command carries an `${{ }}` expression proves no order
+  at all: the expression can supply the `|| true` that hides a failed fetch.
+  The workflow reader asks both steps' `if:` conditions what they skip. A fetch
+  step must run on every run, so anything but `success()` leaves the entry point
   `absent`; a test step is asked whether it could run after a failed fetch,
   which `success() && …` rules out, `always()` and `failure()` allow, and a
   branch-dependent disjunction leaves undecidable, so it is reported

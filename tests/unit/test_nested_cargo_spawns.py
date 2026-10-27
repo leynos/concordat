@@ -141,11 +141,66 @@ CASES: dict[str, Case] = {
         "}\n",
         (("command_new", "online"),),
     ),
+    # `Command::env` keeps the last value given for a name, so a later
+    # assignment replaces an earlier one. Recording only that an offline value
+    # was ever seen would call a command offline that its own last line hands
+    # an "offline is off" value — and cargo would then use the network.
+    "env-offline-then-literal-online": Case(
+        "fn run() {\n"
+        '    Command::new("cargo")\n'
+        '        .env("CARGO_NET_OFFLINE", "true")\n'
+        '        .env("CARGO_NET_OFFLINE", "0")\n'
+        '        .arg("build");\n'
+        "}\n",
+        (("command_new", "online"),),
+    ),
+    "env-literal-online-then-offline": Case(
+        "fn run() {\n"
+        '    Command::new("cargo")\n'
+        '        .env("CARGO_NET_OFFLINE", "0")\n'
+        '        .env("CARGO_NET_OFFLINE", "true")\n'
+        '        .arg("build");\n'
+        "}\n",
+        (("command_new", "offline"),),
+    ),
+    # The last value is the one cargo reads, and the reader cannot see it, so
+    # the question is open however clear the earlier assignment was.
+    "env-offline-then-unknown": Case(
+        "fn run(value: &str) {\n"
+        '    Command::new("cargo")\n'
+        '        .env("CARGO_NET_OFFLINE", "true")\n'
+        '        .env("CARGO_NET_OFFLINE", value)\n'
+        '        .arg("build");\n'
+        "}\n",
+        (("command_new", "unresolved"),),
+    ),
+    # A `--frozen` flag is not revocable by anything the caller adds later —
+    # no argument and no environment variable turns it off — so it still
+    # proves the command offline after an overriding environment assignment.
+    "frozen-survives-an-online-override": Case(
+        "fn run() {\n"
+        '    Command::new("cargo")\n'
+        '        .env("CARGO_NET_OFFLINE", "0")\n'
+        '        .arg("--frozen")\n'
+        '        .arg("build");\n'
+        "}\n",
+        (("command_new", "offline"),),
+    ),
     "literal-envs": Case(
         "fn run() {\n"
         '    Command::new("cargo").envs([("CARGO_NET_OFFLINE", "true")]);\n'
         "}\n",
         (("command_new", "offline"),),
+    ),
+    # Within one `envs` list the pairs are applied in order, so the same
+    # last-write-wins reading applies.
+    "literal-envs-last-pair-wins": Case(
+        "fn run() {\n"
+        '    Command::new("cargo")\n'
+        '        .envs([("CARGO_NET_OFFLINE", "true"), ("CARGO_NET_OFFLINE", "0")])\n'
+        '        .arg("build");\n'
+        "}\n",
+        (("command_new", "online"),),
     ),
     "inherited-environment": Case(
         'fn run() {\n    std::env::set_var("CARGO_NET_OFFLINE", "true");\n'
@@ -320,6 +375,27 @@ CASES: dict[str, Case] = {
         '    command.arg("build");\n    command.status();\n}\n',
         (("helper", "online"),),
     ),
+    # Call sites are matched by bare name, so a module-qualified call in the
+    # same file is still found and still carries its own evidence.
+    "helper-called-through-its-module": Case(
+        'pub fn cargo() -> Command {\n    Command::new("cargo")\n}\n\n'
+        'fn run() {\n    common::cargo().arg("build").status();\n}\n',
+        (("helper", "online"),),
+    ),
+    # With no call site in this file the helper may be called from another
+    # one, where the reader cannot see what the call adds. The definition is
+    # reported as unresolved rather than assumed online: the rule never
+    # reports `online` on a guess.
+    "helper-with-no-call-site": Case(
+        'fn cargo() -> Command {\n    Command::new("cargo")\n}\n',
+        (("helper", "unresolved"),),
+    ),
+    # `--frozen` is not revocable by a call site, so a helper that always
+    # passes it is proven offline however it is called.
+    "helper-with-no-call-site-and-frozen": Case(
+        'fn cargo() -> Command {\n    Command::new("cargo").arg("--frozen")\n}\n',
+        (),
+    ),
     # whitaker's `common/tests/i18n_packaging.rs` sets an unrelated variable to
     # a computed value. That says nothing about the network, so the spawn keeps
     # the literal reading it has.
@@ -367,6 +443,34 @@ def test_a_spawn_outside_test_scope_is_ignored(tmp_path: pathlib.Path) -> None:
     source = 'fn run() {\n    Command::new("cargo").arg("build");\n}\n'
     put(tmp_path, "src/lib.rs", source)
     assert states(tmp_path) == []
+
+
+def test_a_helper_called_from_another_file_is_still_reported(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A shared helper's call sites live outside the file that defines it.
+
+    `tests/common/mod.rs` holding `pub fn cargo() -> Command` and a test file
+    calling it is an ordinary way to share a helper. The reader resolves call
+    sites by name in the defining file only, so without a fallback the
+    construction would be skipped as a helper body *and* have no call site
+    found, and the spawn would leave the audit with no fact at all. What the
+    other file's call adds is invisible, so the fact is `unresolved`: an
+    EN-001 that says the reader could not see it, never a silent pass.
+    """
+    put(
+        tmp_path,
+        "tests/common/mod.rs",
+        'pub fn cargo() -> Command {\n    Command::new("cargo")\n}\n',
+    )
+    put(
+        tmp_path,
+        "tests/it.rs",
+        "mod common;\n\n#[test]\nfn t() {\n"
+        '    common::cargo().arg("build").status();\n}\n',
+    )
+
+    assert states(tmp_path) == [("helper", "unresolved")]
 
 
 def test_an_inline_cfg_test_module_is_test_scope(tmp_path: pathlib.Path) -> None:

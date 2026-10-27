@@ -704,8 +704,30 @@ workaround.
       2898 passed, 1 skipped, and the six known `makeutil` fixture-drift
       failures with no nested-cargo failure. That is sixteen more passes than
       the previous run, matching the round's sixteen new cases.
-- [ ] (2026-10-27) Remaining for delivery: this round's commit and SSH push,
-      the PR body update, the fourteenth CodeRabbit pass, then marking the PR
+- [x] (2026-10-27) Round 14's six findings are implemented. The spawn reader
+      now treats a repeated `CARGO_NET_OFFLINE` as last-write-wins, matching
+      `Command::env`, while `--frozen` stays irrevocable; a helper with no call
+      site in its own file is reported at its definition as `unresolved` rather
+      than dropped; the policy rejects a fact missing a field its finding reads,
+      or carrying one of the wrong type; the unused `_rule_cells` copy in
+      `TestPackageFiltering` is deleted; and the plan's own `EP-EXIT-1` and
+      Decision-log entry were corrected to say what `runner.py` actually does —
+      `blocking` and `exit_code` never consult the verdict.
+- [x] (2026-10-27) Round 14's behaviour is documented in the rule README
+      (last-assignment-wins, `--frozen` irrevocable, the required-field check),
+      the users' guide (the same, from the reader's side), the developers'
+      guide (the reader's contract and the cross-file helper fallback), and
+      `docs/concordat-design.md` (both).
+- [x] (2026-10-27) The policy's manifest digest is recomputed for the round-14
+      edit: `426c83d06819db1549f9abb19ca1cdb4e44ff2e61fa8cca7ae5983a0f9f877f7`.
+- [x] (2026-10-27) Round 14's full gate sequence, run through `scrutineer` on
+      the round's tree: `make check-fmt`, `make lint`, `make typecheck`,
+      `make markdownlint` and `make nixie` all pass, and `make test` reports
+      2907 passed, 1 skipped, and the same six known `makeutil` fixture-drift
+      failures with no nested-cargo failure. Every collected item is accounted
+      for.
+- [ ] (2026-10-27) Remaining for delivery: this round's commit, the SSH push,
+      the PR body update, the fifteenth CodeRabbit pass, then marking the PR
       ready for review.
 
 ## Surprises & discoveries
@@ -990,20 +1012,54 @@ workaround.
   rounds and a full green gate. Impact: when a syntax is matched against a
   fixed vocabulary, at least one row has to spell that vocabulary differently
   from its documentation.
+- Observation: a Rego policy can lose a finding without failing. Evidence: the
+  `uncertain` entry-point finding read `entry.name` directly, so the test that
+  removed the name did not produce a malformed-fact finding — it produced *no*
+  finding, because the missing key left the rule body undefined. A second probe
+  showed the ordinary NC-007 clause still firing on a fact whose `line` was the
+  string `"80"`, printing `%!d(string=80)` where a location belongs. Impact:
+  the same undefined-semantics trap the state check guarded against sits one
+  level down, in every field a finding reads, and the fix has to cover both the
+  drop and the duplicate.
+- Observation: a documented contract can be wrong in a way no test notices.
+  Evidence: `EP-EXIT-1` and the Decision log both said `exit_code` depends on
+  the verdict as well as on severity; `RuleRunResult.blocking` has always
+  ignored the verdict entirely. Impact: the plan is the artefact a later reader
+  trusts, so a claim about behaviour needs checking against the code that
+  implements it, not only against the tests that pass.
 
 ## Decision log
 
 - Decision: warning-severity findings are advisory and no longer block a
-  gate; `exit_code` is `0` when the verdict is compliant or every finding is
-  `warning`, otherwise `1`. Rationale: severity is the documented enforcement
-  dial (`docs/concordat-design.md:357`), RT-025 is the only warning producer,
-  and the new package must ship as a survey-mode warning. Verdict and JSON keep
-  their meaning, so evidence is preserved while enforcement changes.
+  gate; `exit_code` is `0` when every finding is `warning`, otherwise `1`. The
+  verdict is not consulted, so an all-warning `noncompliant` result exits `0`
+  while still recording `noncompliant`. Rationale: severity is the documented
+  enforcement dial (`docs/concordat-design.md:357`), RT-025 is the only warning
+  producer, and the new package must ship as a survey-mode warning. Verdict and
+  JSON keep their meaning, so evidence is preserved while enforcement changes.
   Date/Author: 2026-10-25, Claude Code on behalf of leynos.
 - Decision: the Rust reader reports `unresolved` for anything whose offline
   evidence it cannot prove. Rationale: a false `online` finding would push a
   reading of "fix the test" onto code that is already safe; `indeterminate`
   preserves the question without asserting it. Date/Author: 2026-10-25.
+- Decision: a repeated `CARGO_NET_OFFLINE` assignment is last-write-wins, and
+  `--frozen` is irrevocable. Rationale: `Command::env` keeps the value given
+  last for a name and `envs` applies its pairs in order, so treating any earlier
+  `"true"` as proof would report `offline` for a command cargo runs online;
+  the reverse mistake is impossible for `--frozen`, because no argument and no
+  environment variable turns it off. The reader tracks the latest assignment
+  explicitly, including a call site's over the helper's, and a last assignment
+  it cannot see is `unresolved` rather than the earlier pair speaking for it.
+  Date/Author: 2026-10-27, Claude Code on behalf of leynos.
+- Decision: a cargo-starting helper with no call site in its own file is
+  reported at its definition as `unresolved`, not dropped and not reported
+  `online`. Rationale: the helper may be called from another file, whose
+  arguments and environment the reader cannot see, and a call site proven
+  offline does not carry the helper's other call sites with it; `online` would
+  assert a defect on a guess, `unresolved` keeps the construction in the audit
+  without asserting one. This also removes the cross-file helper from the
+  design document's list of remaining limits. Date/Author: 2026-10-27, Claude
+  Code on behalf of leynos.
 - Decision: a selected nextest profile with setup scripts is itself an entry
   point, reported at the line of its `[[profile.<name>.scripts]]` table, or of
   its `[profile.<name>]` heading when there is no table. Rationale: the
@@ -1430,14 +1486,19 @@ ISSUE-326-T4 -> EP-M4 -> scripts/tests/test_parabellum_sweep.py, scripts/tests/t
 
 ## Verification plan
 
-Obligation `EP-EXIT-1`: for every result, `exit_code == 0` iff the verdict is
-compliant or every finding carries severity `warning`; otherwise `1`.
+Obligation `EP-EXIT-1`: for every result, `exit_code == 0` iff every finding
+carries severity `warning` — equivalently, iff `blocking` is false; otherwise
+`1`. The verdict plays no part: an all-warning noncompliant result exits `0`
+and still records `noncompliant`, while an error-severity finding exits `1`
+whatever the verdict says.
 
 - Method: parameterized unit tests over a finite partition.
 - Rationale: the input space is a small product of verdicts and severity
   multisets, so enumeration is exhaustive for the contract.
 - Domain: no findings; all-error; all-warning; mixed error+warning across
-  noncompliant and indeterminate; a finding with an unknown severity label.
+  noncompliant and indeterminate; a finding with an unknown severity label. The
+  all-warning noncompliant cell and the no-findings cell are the two that
+  distinguish verdict-sensitive from severity-only behaviour.
 - Artefact: `tests/unit/test_rule_exit_contract.py`.
 - Evidence: new tests fail against the current `exit_code` before the change
   and pass after.

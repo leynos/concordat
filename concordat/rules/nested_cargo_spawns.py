@@ -42,6 +42,7 @@ from .nested_cargo_commands import (
     follow_chain,
     has_cargo_construction,
     helper_body,
+    unreached_helper,
 )
 from .nested_cargo_modules import (
     Reach,
@@ -259,6 +260,12 @@ def _source_facts(source: RustSource, scope: TestScope) -> list[SpawnFact]:
     helper's own body is a definition rather than a spawn, so only its call
     sites are recorded, and only while they can still reach the network.
 
+    A helper with no call site in its own file is reported at its definition
+    instead, as a command the reader cannot settle. The call may live in
+    another file, where whatever it adds is invisible; skipping the
+    construction altogether would let a nested build leave the audit with no
+    fact at all.
+
     Returns
     -------
     list[SpawnFact]
@@ -276,11 +283,18 @@ def _source_facts(source: RustSource, scope: TestScope) -> list[SpawnFact]:
         definition = _definition(source, body, pairs)
         if definition is None:
             continue
-        sites.extend(
+        calls = [
             site
             for site in _helper_sites(source, name, body, pairs)
-            if scope.contains(site.start) and not _absorbed(site, definition)
-        )
+            if scope.contains(site.start)
+        ]
+        # A helper with no call site in this file may be called from another,
+        # and a call proven offline does not carry the helper's other call
+        # sites with it. Either way the definition is reported once, as
+        # unreadable, so the construction never drops out of the audit.
+        if not calls:
+            sites.append(unreached_helper(definition))
+        sites.extend(site for site in calls if not _absorbed(site, definition))
     direct_facts = [
         _fact(source, command, state)
         for command in direct

@@ -2840,32 +2840,45 @@ The evidence comes from two readers behind one envelope. The spawn reader
 classifies each literal `Command::new("cargo")`, `env!("CARGO")` and
 call-site-resolved helper as `offline`, `online` or `unresolved`; a non-literal
 argument list or a non-literal value for `CARGO_NET_OFFLINE` makes the spawn
-unresolved rather than being rounded down to a pass. A version or help probe
-reads no manifest and is not a spawn, while a version flag carrying a value
-(`cargo install --version 1.2.3`) is real work. Fixture package sources are
-excluded — a cargo spawn inside one is the build under audit, matching the
-fixture-lock rule's fixture set. Test scope follows the compiler through two
-paths, both in `nested_cargo_modules.py`: a `#[cfg(test)]` item covers its own
-span, and a `mod name;` declaration covered by test scope names a file that is
-test code throughout, whether the declaration carries the attribute or sits
-inside a test-scope inline module — `#[cfg(test)] mod checks { mod helpers; }`
-compiles `src/checks/helpers.rs` into the test target, so the inherited form
-must be followed or its spawns disappear silently. A declaration gated by any
-`cfg` other than a test-requiring one is left to the reader's uncertainty
-rather than guessed at. The trybuild reader resolves dependency renames, so a
-manifest that pulls the crate in as `tb = { package = "trybuild" }` is a fact
-and its `tb::TestCases` references are facts, with each manifest's declared
-names applied only to the sources that manifest governs. Both matter beyond
-their own findings: the policy's `has_nested_build` guard suppresses NC-008 and
-the entry-point EN-001 when no nested build is visible, so missing evidence
-fails silent. The entry-point reader resolves the Makefile `test` target
-through prerequisites and recipes, each selected nextest profile's `setup`
-script, and each workflow step that runs tests, keeping shell connectors: only
-`&&` and a fail-fast line sequence prove that a fetch runs first, because `;`,
-`||`, a pipeline, a background command and an ignored error do not stop the
-tests when the fetch fails. A command whose expansion cannot be resolved, a
-`.ONESHELL` recipe or a recursive `make` makes the entry point `uncertain` with
-its reason rather than inventing an ordering.
+unresolved rather than being rounded down to a pass. Two rules keep the
+environment reading faithful to `std::process::Command`. A repeated
+`CARGO_NET_OFFLINE` assignment is last-write-wins, because `Command::env` keeps
+the value given last for a name; the reader tracks the *latest* assignment — a
+call site's over a helper's, and a later pair over an earlier one — so `"true"`
+followed by `"0"` is `online`, and a last assignment the reader cannot see
+makes the spawn `unresolved` rather than letting the earlier pair speak for it.
+`--frozen`, by contrast, is not revocable by any argument or environment
+variable, so a command carrying it stays `offline` whatever the environment
+says. A helper that starts cargo but has no call site in its own file is
+reported at its definition as `unresolved` instead of being dropped: another
+file may call it, and a call site proven offline does not carry the helper's
+other call sites with it, so the construction never falls out of the audit. A
+version or help probe reads no manifest and is not a spawn, while a version
+flag carrying a value (`cargo install --version 1.2.3`) is real work. Fixture
+package sources are excluded — a cargo spawn inside one is the build under
+audit, matching the fixture-lock rule's fixture set. Test scope follows the
+compiler through two paths, both in `nested_cargo_modules.py`: a `#[cfg(test)]`
+item covers its own span, and a `mod name;` declaration covered by test scope
+names a file that is test code throughout, whether the declaration carries the
+attribute or sits inside a test-scope inline module —
+`#[cfg(test)] mod checks { mod helpers; }` compiles `src/checks/helpers.rs`
+into the test target, so the inherited form must be followed or its spawns
+disappear silently. A declaration gated by any `cfg` other than a
+test-requiring one is left to the reader's uncertainty rather than guessed at.
+The trybuild reader resolves dependency renames, so a manifest that pulls the
+crate in as `tb = { package = "trybuild" }` is a fact and its `tb::TestCases`
+references are facts, with each manifest's declared names applied only to the
+sources that manifest governs. Both matter beyond their own findings: the
+policy's `has_nested_build` guard suppresses NC-008 and the entry-point EN-001
+when no nested build is visible, so missing evidence fails silent. The
+entry-point reader resolves the Makefile `test` target through prerequisites
+and recipes, each selected nextest profile's `setup` script, and each workflow
+step that runs tests, keeping shell connectors: only `&&` and a fail-fast line
+sequence prove that a fetch runs first, because `;`, `||`, a pipeline, a
+background command and an ignored error do not stop the tests when the fetch
+fails. A command whose expansion cannot be resolved, a `.ONESHELL` recipe or a
+recursive `make` makes the entry point `uncertain` with its reason rather than
+inventing an ordering.
 
 A step's `if:` is part of that ordering, and the two steps are asked different
 questions of it. A fetch step is proof only when it runs on every run, so the
@@ -2913,6 +2926,18 @@ against that repository. Remaining limits: a spawn reached through a macro, a
 function pointer or a value assembled at run time is invisible, and a hidden
 command in a Makefile or workflow leaves the entry point `uncertain` rather
 than proved either way.
+
+The policy checks that every fact carries the fields its own findings read.
+Rego treats a missing key as undefined rather than as an error, so a finding
+that reads one leaves its rule body undefined, the finding silently disappears,
+and the repository is reported clean on evidence nobody judged — the same
+failure the state check guards against, one level down. A spawn must therefore
+carry a `path` and a numeric `line`, and an entry point a `path`, a numeric
+`line` and a `name`, since both entry-point findings name the entry point. A
+field of the wrong type is rejected alongside a missing one: `sprintf("%d", …)`
+with a string line prints `%!d(string=80)` where a location belongs. The
+malformed fact is reported once as an envelope error, and the ordinary findings
+skip it, rather than the same fact drawing both an error and a garbled warning.
 
 #### 3.1.4 Verifying the reconciliation invariants
 
