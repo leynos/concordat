@@ -283,8 +283,16 @@ workaround.
       `spawn.environment` directly, so an incomplete fact left the rule body
       undefined and dropped its EN-001; `object.get` defaults now report the
       absence. Both landed red first, and the policy digest was recomputed.
-- [ ] (2026-10-27) Remaining for delivery: third full gate, push over SSH and
-      re-review.
+- [x] (2026-10-27) Third full sequential gate on `c0907e7`. Six of seven
+      green: `make fmt` rewrote no tracked file, `make check-fmt`, `make lint`
+      (Ruff, pylint 10.00/10 on both runs, ambrleaks, the spelling gate, and
+      Skylos), `make typecheck`, `make markdownlint` (0 issues) and
+      `make nixie`. `make test` reported 7 failed, 2815 passed, 1 skipped —
+      the six known `makeutil` fixture-drift failures and the
+      `main-owned-codescene-coverage` OPA deadline flake, with no new failure.
+      The pass count rose from 2813 to 2815, which is the two new errexit
+      tests; the Hypothesis `too_slow` health check did not recur.
+- [ ] (2026-10-27) Remaining for delivery: push over SSH and re-review.
 
 ## Surprises & discoveries
 
