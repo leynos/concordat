@@ -119,6 +119,28 @@ CASES: dict[str, Case] = {
         "}\n",
         (("command_new", "offline"),),
     ),
+    # Cargo treats a literal `CARGO_NET_OFFLINE` value it can read as evidence,
+    # whichever way it reads it. `1` switches offline mode on exactly as `true`
+    # does (measured against cargo 1.99.1), and `false`/`0`/`no`/`off` are the
+    # command saying it may use the network — visible facts, not unreadable
+    # ones. Reporting `unresolved` for them both hides a real NC-007 and
+    # mislabels the finding as "arguments the reader cannot see".
+    "env-offline-numeric-one": Case(
+        "fn run() {\n"
+        '    Command::new("cargo")\n'
+        '        .env("CARGO_NET_OFFLINE", "1")\n'
+        '        .arg("build");\n'
+        "}\n",
+        (("command_new", "offline"),),
+    ),
+    "env-offline-literal-false": Case(
+        "fn run() {\n"
+        '    Command::new("cargo")\n'
+        '        .env("CARGO_NET_OFFLINE", "false")\n'
+        '        .arg("build");\n'
+        "}\n",
+        (("command_new", "online"),),
+    ),
     "literal-envs": Case(
         "fn run() {\n"
         '    Command::new("cargo").envs([("CARGO_NET_OFFLINE", "true")]);\n'

@@ -7,11 +7,14 @@ arguments and environment from the original text, where the literal is still
 there to be read.
 
 A command is `offline` only when it carries `--frozen`, carries both
-`--offline` and `--locked`, or sets `CARGO_NET_OFFLINE` to `"true"` itself. A
-command whose argument or environment source is not a literal is `unresolved`,
-because the reader cannot see what it passes. Every other literal cargo
-command is `online`. The reader never reports `offline` on a guess and never
-reports `online` on one.
+`--offline` and `--locked`, or sets `CARGO_NET_OFFLINE` to a value cargo reads
+as true (`"1"` or `"true"`) itself. A command whose argument or environment
+source is not a literal is `unresolved`, because the reader cannot see what it
+passes — including a `CARGO_NET_OFFLINE` name whose value is not a literal. A
+literal value that cargo reads as false is visible evidence that the command
+may use the network, so it stays `online` rather than becoming unreadable.
+Every other literal cargo command is `online`. The reader never reports
+`offline` on a guess and never reports `online` on one.
 """
 
 from __future__ import annotations
@@ -24,6 +27,11 @@ from .nested_cargo_source import RustSource, enclosing_block
 from .rust_source import scan_balanced, skip_trivia
 
 OFFLINE_VARIABLE: typ.Final = "CARGO_NET_OFFLINE"
+# Cargo reads this variable through its boolean parser, which accepts only `1`
+# and `true`. Measured against cargo 1.99.1: `1` reported the offline-mode
+# note that `--offline` prints, while `yes`, `on`, an empty value and `0` did
+# not, so each of those leaves the network reachable.
+_OFFLINE_VALUES: typ.Final = frozenset({"1", "true"})
 # Flags that ask cargo, or the plugin it dispatches to, to identify itself or
 # to print help. Both print and exit; neither builds anything, so neither can
 # take the package-cache lock the rule exists to protect.
@@ -101,10 +109,16 @@ class CargoCommand:
             self.environment.append(key)
             if key != OFFLINE_VARIABLE:
                 continue
-            if value == "true":
+            if value in _OFFLINE_VALUES:
                 self.is_offline = True
-            else:
+            elif value is None:
+                # The name is visible but the value is not, so whether this
+                # pair turns offline mode on is genuinely unknown.
                 self.is_uncertain = True
+            # Any other literal is the command saying it may use the network.
+            # That is visible evidence for `online`, not an unreadable fact:
+            # calling it uncertain would report an EN-001 that says the reader
+            # cannot see the arguments, and hide the NC-007 they earn.
 
     def absorb(self, definition: CargoCommand) -> None:
         """Take on the evidence a helper's own body establishes."""
