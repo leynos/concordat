@@ -759,6 +759,17 @@ Make lexer, and the honest output there is `indeterminate`. Third, a local
 mirror fleet is a usable sample but not a census; reporting its 106-of-180
 coverage beside every count is what keeps a floor from being read as a total.
 
+The survey was re-run once more after the last four review fixes, and the
+figures held: 90 findings, 20 would-fail repositories, and exactly one
+repository whose facts moved (`wireframe`). That is worth recording because it
+distinguishes two kinds of review finding. A fix that changes a verdict on real
+checkouts is a measurement correction and invalidates the published counts; a
+fix that needs a construct the corpus does not contain is a latent defect that
+the fixtures — not the survey — have to guard. Four of the six reader defects
+found after the first survey were of the second kind, which is the argument for
+keeping both the fixture corpus and the estate sweep rather than treating
+either as sufficient.
+
 ## Context and orientation
 
 `concordat` is a Python policy platform.
