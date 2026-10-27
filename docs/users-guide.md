@@ -729,6 +729,15 @@ scripts merge, so a fetch declared on any profile in the chain counts. A
 workflow fetch step guarded by an `if:` other than `success()` may not run at
 all, and is not proof of the order.
 
+A test step's own `if:` is read from the other side: could the step run
+although the fetch before it failed? GitHub adds its implicit `success()` check
+only when the condition names no status function, so
+`success() && runner.os == 'Linux'` still waits for the fetch and is proof,
+while `success() || github.ref == 'refs/heads/main'` runs on `main` after a
+failed fetch and is reported `uncertain`. A condition that depends on a fact
+the reader does not have, such as the branch, is `uncertain` rather than
+guessed in either direction.
+
 The rule ships at `warning` severity, so a finding is reported and the gate
 continues. That lets the estate be surveyed and each repository fix its own
 findings in its own order; set the `severity` parameter to `error` to block,

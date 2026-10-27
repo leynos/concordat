@@ -40,6 +40,10 @@ from .markdown_envelope import (
     WORKFLOWS_DIRECTORY,
     within_checkout,
 )
+from .nested_cargo_conditions import (
+    condition_proves_order,
+    runs_only_after_success,
+)
 from .nested_cargo_nextest import (
     ABSENT,
     BEFORE,
@@ -66,6 +70,8 @@ if typ.TYPE_CHECKING:
     from .makefile_facts import MakeRecipe, MakeRule, MakeutilReport
 
 OPERATION_READ_WORKFLOW: typ.Final = "read-nested-cargo-workflow"
+OPERATION_READ_MAKEFILE: typ.Final = "read-nested-cargo-makefile"
+OPERATION_READ_NEXTEST: typ.Final = "read-nested-cargo-nextest"
 
 MAKEFILE: typ.Final = "Makefile"
 ONESHELL_TARGET: typ.Final = ".ONESHELL"
@@ -296,12 +302,28 @@ class _MakefileEntry:
 
 
 def _makefile_entry(
-    checkout: pathlib.Path, problems: list[str], config: NextestConfig
+    checkout: pathlib.Path,
+    root: pathlib.Path,
+    problems: list[str],
+    config: NextestConfig,
 ) -> _MakefileEntry:
-    """Return the Makefile's `test` entry point, if it has a test command."""
+    """Return the Makefile's `test` entry point, if it has a test command.
+
+    The Makefile is a policy input, so it is read only once containment is
+    proved. `Path.is_file()` follows symbolic links, which would otherwise let
+    a checkout aim its `Makefile` at a readable file elsewhere on the machine
+    and report that file's test target as this repository's entry point.
+
+    Returns
+    -------
+    _MakefileEntry
+        The entry point fact, the profiles it selects, and whether the file was
+        there but could not be parsed.
+    """
     path = checkout / MAKEFILE
     if not path.is_file():
         return _MakefileEntry(None, [])
+    within_checkout(root, path, OPERATION_READ_MAKEFILE)
     try:
         facts = inspect_makefile(path)
     except MakefileRefusedError as error:
@@ -385,32 +407,22 @@ def _allows_failure(step: dict[str, object]) -> bool:
     return value is not None and value is not False
 
 
-def _abandons_order(step: dict[str, object]) -> bool:
-    """Return whether a step's `if:` runs it whatever earlier steps did."""
-    condition = step.get("if")
-    if not isinstance(condition, str):
-        return False
-    joined = condition.replace(" ", "")
-    return any(marker in joined for marker in ("always()", "failure()", "cancelled()"))
+def _gated(*, prefetch_proved: bool, step: dict[str, object]) -> bool | None:
+    """Return whether an earlier step's fetch gates *step*.
 
-
-def _condition_proves_order(step: dict[str, object]) -> bool:
-    """Return whether a step's `if:` leaves it running on every run.
-
-    A step guarded by `runner.os == 'Linux'` skips entirely elsewhere, and the
-    test step that follows then starts against a cold cache. GitHub's own
-    default is `success()`, so an explicit `success()` is the one spelling
-    that still proves the order; anything else the reader cannot evaluate.
+    Two facts have to hold: an earlier step ran a fetch whose failure would stop
+    the job, and this step runs only after success. The first is accumulated by
+    the caller across the job's steps. The second is the step's own `if:`, and
+    it is three-valued — an unreadable condition is neither gated nor ungated.
 
     Returns
     -------
-    bool
-        True when the step carries no `if:`, or carries exactly `success()`.
+    bool | None
+        True, False, or None when the condition cannot be decided.
     """
-    condition = step.get("if")
-    if condition is None:
-        return True
-    return isinstance(condition, str) and condition.strip() == "success()"
+    if not prefetch_proved:
+        return False
+    return runs_only_after_success(step)
 
 
 def _node_line(node: object, fallback: int) -> int:
@@ -454,20 +466,36 @@ def _step_state(
     commands: list[ScriptCommand],
     *,
     has_expression: bool,
-    gated: bool,
+    gated: bool | None,
     shell: ShellRule,
     make_entry: _MakefileEntry,
     config: NextestConfig,
     profiles: list[str],
 ) -> tuple[str, str]:
-    """Return the prefetch state and reason for one workflow test command."""
+    """Return the prefetch state and reason for one workflow test command.
+
+    *gated* is three-valued. True means an earlier step's fetch is proved to
+    have succeeded before this step could run; False means it is not; None
+    means an earlier fetch ran but this step's `if:` decides on operands the
+    reader cannot evaluate, so neither answer is honest.
+
+    Returns
+    -------
+    tuple[str, str]
+        The state — `before`, `uncertain` or `absent` — and a reason a reader
+        can check against the workflow.
+    """
     inherited = _inherited_state(command.meaning, make_entry, config, profiles)
     if gated:
         return BEFORE, "an earlier step runs cargo fetch --locked"
-    if gates_fetch(commands, position):
+    if gates_fetch(commands, position) and not has_expression:
+        # The chain proves the order only when the command text is settled: an
+        # expression may supply the `|| true` that hides a failed fetch.
         return BEFORE, "cargo fetch --locked runs first in the same step"
     if inherited == BEFORE:
         return BEFORE, "the delegated test target fetches first"
+    if gated is None:
+        return UNCERTAIN, "the step's if condition cannot be shown to require success"
     if has_expression:
         return UNCERTAIN, "part of the step's command is an expression"
     if inherited == UNCERTAIN:
@@ -493,7 +521,7 @@ def _step_scan(
     step: dict[str, object],
     run: str,
     *,
-    gated: bool,
+    gated: bool | None,
     shell: ShellRule,
     make_entry: _MakefileEntry,
     config: NextestConfig,
@@ -577,7 +605,7 @@ def _job_entries(
                 str(job_name),
                 step,
                 run,
-                gated=fetches and not _abandons_order(step),
+                gated=_gated(prefetch_proved=fetches, step=step),
                 shell=effective_shell(step, job, workflow, runs_on),
                 make_entry=make_entry,
                 config=config,
@@ -587,7 +615,7 @@ def _job_entries(
             if (
                 scan.fetches
                 and not _allows_failure(step)
-                and _condition_proves_order(step)
+                and condition_proves_order(step)
             ):
                 fetches = True
     return facts
@@ -720,8 +748,14 @@ def collect_entry_points(
         root = checkout.resolve(strict=True)
     except OSError:
         root = checkout
+    # The nextest configuration is a policy input too: its setup scripts decide
+    # whether a `cargo nextest run` entry point is `before`. Reading it through
+    # the guard keeps a checkout from pointing it at an outside file whose
+    # scripts would then answer for this repository. An absent file returns
+    # False here and `read_nextest` reports it as not present, as before.
+    within_checkout(root, checkout / NEXTEST_CONFIG, OPERATION_READ_NEXTEST)
     config = read_nextest(checkout, problems)
-    entry = _makefile_entry(checkout, problems, config)
+    entry = _makefile_entry(checkout, root, problems, config)
     profiles: list[str] = list(entry.profiles)
     workflows = _workflow_entries(checkout, root, problems, entry, config, profiles)
     facts = [] if entry.fact is None else [entry.fact]

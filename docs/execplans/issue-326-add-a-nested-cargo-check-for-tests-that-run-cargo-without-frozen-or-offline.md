@@ -580,8 +580,97 @@ workaround.
       a leading-`+` refspec and the branch's upstream set to `origin` by name.
       The PR body was rewritten from `/tmp/pr-body.md` and every count in it
       recomputed from the survey data rather than carried forward.
-- [ ] (2026-10-27) Remaining for delivery: the twelfth review round over the
-      pushed fixes, then marking the PR ready for review.
+- [x] (2026-10-27) Twelfth CodeRabbit round, foregrounded: five findings, four
+      unique defects, all real and all reproduced before any edit. Each was
+      confirmed against the running reader rather than taken from the review
+      text: a symlinked `Makefile` and a symlinked `.config/nextest.toml` both
+      read silently and produced facts with no error, `_environment_pairs`
+      returned `None` for a rustfmt-formatted `.env(...)` call, and
+      `success() || github.ref == 'refs/heads/main'` reported `before` on a
+      step that GitHub will run after a failed fetch.
+- [x] (2026-10-27) The containment fixes, in
+      `concordat/rules/nested_cargo_entry_points.py`. `_makefile_entry` and
+      `collect_entry_points` now pass their policy input through
+      `within_checkout` with the new `read-nested-cargo-makefile` and
+      `read-nested-cargo-nextest` operation names, after the `is_file()` check
+      because `Path.is_file()` follows symbolic links. Three tests pin the
+      behaviour: two refusals and one positive control, so the guard is shown
+      to refuse outside paths without refusing legitimate ones.
+- [x] (2026-10-27) Findings 2 and 5 are one defect: `_abandons_order` asked
+      "does the condition mention `always()`, `failure()` or `cancelled()`",
+      which is not the question. GitHub applies its implicit `success()` guard
+      only when the `if:` names no status function at all, so
+      `success() || github.ref == …` runs after a failed fetch while
+      `success() && runner.os == 'Linux'` does not, and a substring test cannot
+      tell them apart. `_abandons_order` is deleted. In its place
+      `runs_only_after_success` answers from a three-valued recursive-descent
+      evaluator over the condition, `_evaluated_after_failure`, which holds
+      `success()` false and asks whether the condition could still be true.
+      `True` means gated, `False` not, and `None` means the answer depends on
+      an operand the reader does not evaluate. The fetch step's own question
+      keeps `condition_proves_order`, which is the stricter "runs on every
+      run" test; the two questions differ and finding 5 says so explicitly.
+- [x] (2026-10-27) Finding 3: the same-step `gates_fetch` proof is now
+      conditional on `not has_expression`. A step running
+      `cargo fetch --locked ${{ inputs.extra }} && cargo test` reads as gated
+      once the expression is stripped, but `inputs.extra` may supply
+      `|| true`, which makes a failed fetch non-fatal. The step is reported
+      `uncertain` instead.
+- [x] (2026-10-27) Finding 4 in `nested_cargo_commands.py`: a single `.env`
+      pair split across lines by rustfmt carries a trailing comma, so
+      `split_top_level` returns three slots with a blank last one and the
+      slot-count guard rejected the pair. That made an unrelated multi-line
+      `.env` report the command `unresolved`, and made a multi-line
+      `.env("CARGO_NET_OFFLINE", "true",)` lose its offline evidence. The blank
+      slot is dropped before counting, and two spawn-reader cases cover both
+      consequences.
+- [x] (2026-10-27) Red before green: the four nested-cargo modules produced
+      six failures for exactly the reasons above before any production edit
+      and 229 passes after. The first green run then failed on four of my own
+      new parametrized expectations, which asserted `absent` for every compound
+      `if:`. Probing `_evaluated_after_failure` directly showed the honest
+      verdicts differ — `failure() || success()` is `absent`,
+      `success() || github.ref == …` is `uncertain`, `success() && …` is
+      `before` — and the table was rewritten to state each one.
+- [x] (2026-10-27) Ruff took nine findings from the new code and all are
+      fixed: four `returns` sections added, the four boolean-typed parameters
+      of `_gated`, `_or_value` and `_and_value` made keyword-only at both
+      definition and call site, and the 91-character operand terminator
+      wrapped.
+- [x] (2026-10-27) The first full gate run went red on pylint `C0302`:
+      `nested_cargo_entry_points.py` reached 989 lines against the 800-line
+      limit at `pyproject.toml:164`, having been 729 lines at `HEAD`. The
+      condition evaluator — the four `if:`-syntax constants and the eleven
+      functions from `_condition_body` down to `_skip_space` — was moved
+      wholesale into a new `concordat/rules/nested_cargo_conditions.py`, whose
+      module docstring records why the two steps ask opposite questions of the
+      same syntax. Only `condition_proves_order` and `runs_only_after_success`
+      are public there; the entry-points module imports those two and keeps
+      `_gated` and `_allows_failure`, which take a step mapping. The module
+      dropped to 763 lines. A direct unit module,
+      `tests/unit/test_nested_cargo_conditions.py` (25 cases), pins the
+      extracted predicate against conditions built to distinguish a three-valued
+      answer from a two-valued one, including the conjunction/or-disjunction
+      pair that the old substring test could not tell apart.
+- [x] (2026-10-27) The same run's `make markdownlint` and `make test` both
+      aborted on the `spelling` prerequisite: the hyphenated form of
+      "misread" in the Outcomes section is split by the checker into a
+      two-letter prefix and "read". Reworded to the unhyphenated spelling.
+- [x] (2026-10-27) The round's behaviour changes are documented rather than
+      left to the code: the rule README gains two "what counts" bullets (both
+      steps' `if:` conditions, and the expression-in-command case), the users'
+      guide a paragraph on the test step's question,
+      `docs/concordat-design.md` the reasoning for asking the two steps
+      different questions, and the developers' guide the builder's side.
+- [x] (2026-10-27) The full gate sequence over the fixed tree is green:
+      `make check-fmt`, `make lint`, `make typecheck`, `make markdownlint` and
+      `make nixie` all pass, and `make test` reports 2882 passed with the six
+      known `makeutil` fixture-drift failures and no nested-cargo failure. The
+      ruff step of `make lint` took two more findings from the new test module
+      — boolean-typed positional parameters again — fixed keyword-only.
+- [ ] (2026-10-27) Remaining for delivery: this round's commit and SSH push,
+      the PR body update, the thirteenth CodeRabbit pass, then marking the PR
+      ready for review.
 
 ## Surprises & discoveries
 
@@ -830,6 +919,25 @@ workaround.
   `"true"` alone, while `_OFFLINE_VALUES` held `{"1", "true"}`. Impact: when a
   round changes a *value set* rather than a mechanism, the prose is part of the
   change surface, and `grep` for the constant is the check that catches it.
+- Observation: "contains `always()`" is not the same predicate as "can run
+  after a failure", and the difference needs three values, not two. Evidence:
+  `success() && runner.os == 'Linux'` gates nothing in the sense the old
+  substring test looked for — it names no abandonment marker — yet it does wait
+  for earlier steps, while `success() || github.ref == …` names no marker
+  either and does not. A marker test can only answer "mentions a status
+  function", and both conditions do. Impact: any reader of a GitHub `if:` has
+  to evaluate the expression, and the honest verdict for an operand it cannot
+  see is `None` rather than either boolean. The parametrized test table was
+  itself wrong on the first pass for exactly this reason: I asserted `absent`
+  for four conditions the evaluator correctly called `uncertain`, so the table
+  had to be corrected rather than the code.
+- Observation: `Path.is_file()` is a containment hole wherever it precedes a
+  read of a policy input. Evidence: a `Makefile` and a `.config/nextest.toml`
+  symlinked to files outside the checkout were both read without error and
+  produced facts attributed to the repository under audit, while
+  `_read_workflow` — which goes through `within_checkout` — refused the same
+  trick. Impact: the containment contract is per-input, not per-envelope, and a
+  reader added after the workflows were guarded can silently miss it.
 
 ## Decision log
 
@@ -1084,6 +1192,30 @@ workaround.
   Rust paths when they are manifest keys. The set stays keyed by the manifest
   spelling so it can still be compared against dependency entries. Date/Author:
   2026-10-27.
+- Decision: the test step's `if:` is judged by evaluating the condition with
+  `success()` held false, not by matching status-function names. Rationale:
+  GitHub's implicit `success()` guard applies only when the condition names no
+  status function, so the names alone say nothing about whether the step waits
+  for a failed fetch; `success() && X` waits and `success() || X` does not.
+  Three-valued evaluation answers the actual question, and returns `None` where
+  the condition depends on `github.ref` or `inputs.*`, which the rule reports as
+  `uncertain` rather than guessing. The fetch step keeps the stricter "runs on
+  every run" test in `condition_proves_order`, because a fetch that sometimes
+  skips warms nothing on the runs it skips; the two steps ask different
+  questions of the same syntax, so one predicate cannot serve both.
+  Date/Author: 2026-10-27.
+- Decision: the `if:`-condition evaluator lives in its own module,
+  `concordat/rules/nested_cargo_conditions.py`, rather than inside the
+  entry-point reader. Rationale: pylint's 800-line module limit
+  (`pyproject.toml:164`) flagged the reader at 989 lines, but the split earns
+  its place on its own terms — the evaluator is a self-contained expression
+  parser with its own vocabulary and no reader state, and both files are easier
+  to follow apart. Only `condition_proves_order` and `runs_only_after_success`
+  cross the boundary; everything else is private to the evaluator. The
+  extraction is covered directly by
+  `tests/unit/test_nested_cargo_conditions.py`, so the moved code is tested
+  where it now lives rather than only through the reader. Date/Author:
+  2026-10-27.
 
 ## Outcomes & retrospective
 
@@ -1163,6 +1295,17 @@ distinct transformations — entry to package, package to source name — and th
 first round that fixed renaming covered only the first. The general form is
 that a value which is rewritten on its way to a comparison needs a test at each
 hop, not one at the end.
+
+The twelfth round is the clearest case yet for writing the test's claim down
+before writing the test. Four of my own new `if:` expectations asserted
+`absent` for conditions the evaluator correctly called `uncertain`, and the
+test failed on its first green run — not because the code was wrong, but
+because I had guessed at the semantics twice: once when I first misread
+GitHub's implicit-`success()` rule, and again when I assumed every compound
+condition would land in the same bucket. Probing the evaluator directly with
+each expression settled it in a minute and would have settled it before the
+test existed. The rule for a truth table over someone else's language is to
+derive each row from a probe, not from what the rows ought to be.
 
 ## Context and orientation
 
@@ -1322,6 +1465,51 @@ loader; unresolved expansion, `.ONESHELL`, and recursive Make stay uncertain.
   the negative control for the unreadable-target fallback: reporting no fact
   there lets the workflow step inherit `absent` and manufactures an NC-008
   against a repository that fixed the problem.
+
+Obligation `EP-ENTRY-2`: a workflow test step is `before` only when an earlier
+fetch is proved and the step's own `if:` cannot run after that fetch failed.
+
+- Method: parameterized unit tests over a finite truth table of conditions,
+  each row a distinct semantic case.
+- Rationale: the condition grammar is open-ended, but the reader evaluates
+  only the part that decides whether a step can outlive a failed fetch, and
+  that part partitions into "always runs", "never runs", and "depends on an
+  operand the reader cannot see". One witness per partition pins the mapping.
+- Domain: no `if:`; a bare `success()`; a wrapped `${{ success() }}`; a
+  non-status condition such as `runner.os == 'Linux'`; `failure()`; `always()`;
+  `failure() || success()`; `success() || github.ref == …`;
+  `cancelled() || success()`; `success() && runner.os == 'Linux'`.
+- Artefact: `tests/unit/test_nested_cargo_entry_points.py` holds the
+  behavioural rows; `tests/unit/test_nested_cargo_conditions.py` holds 25
+  direct cases over the extracted predicate after the `C0302` split, including
+  two for the fetch step's separate question.
+- Evidence: the six-row table reports `absent` for `failure()`,
+  `failure() || success()` and `github.ref == … || always()`; `uncertain` for
+  `success() || github.ref == …` and `cancelled() || success()`; `before` for
+  `success() && runner.os == 'Linux'`. The three standalone tests cover the
+  unwrapped `success()`, the wrapped `${{ success() }}` and the non-status
+  condition. The direct cases add the pairs that separate three-valued from
+  two-valued logic: `success() && (failure() || github.ref == …)` is gated while
+  `success() || github.ref == …` is not settled.
+- Non-vacuity: every row would flip under a substring test for status-function
+  names, and the `success() && …` row is the negative control that a blanket
+  "names a status function, so not gated" rule would report `absent`. The
+  by-hand probe of `_evaluated_after_failure` that fixed my first, wrong table
+  is the evidence that the rows are independently reachable rather than all
+  falling through one branch.
+
+Obligation `EP-CONTAIN-1`: a `Makefile` or `.config/nextest.toml` that resolves
+outside the checkout raises `OperationalRuleError`, which the CLI turns into
+exit code 2, and one inside the checkout is still read.
+
+- Method: unit tests over temporary checkouts, one per input, with a positive
+  control.
+- Artefact: `tests/unit/test_nested_cargo_entry_points.py`.
+- Evidence: both symlink cases raise `OperationalRuleError` matching
+  "outside the checkout"; the control still reports the `test` target.
+- Non-vacuity: without the guard the two cases return facts silently, which is
+  what the pre-fix probe showed. The control fails if the guard is replaced by
+  an unconditional refusal.
 
 Obligation `EP-ENVELOPE-1`: the envelope carries schema version, kind, the
 origin slug or `null`, and every fact list from both readers, and never drops a

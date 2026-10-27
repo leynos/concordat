@@ -190,6 +190,33 @@ CASES: dict[str, Case] = {
         "}\n",
         (("command_new", "unresolved"),),
     ),
+    # rustfmt adds a trailing comma when it breaks a call over several lines,
+    # so `.env("CARGO_TARGET_DIR", target,)` is ordinary formatted code. The
+    # comma leaves an empty third slot; reading that as a third argument makes
+    # a readable pair look unreadable, which both marks the command `unresolved`
+    # and loses the offline evidence a multi-line `.env` carries.
+    "multiline-env-with-trailing-comma": Case(
+        "fn run() {\n"
+        '    Command::new("cargo")\n'
+        "        .env(\n"
+        '            "CARGO_TARGET_DIR",\n'
+        "            target,\n"
+        "        )\n"
+        '        .arg("build");\n'
+        "}\n",
+        (("command_new", "online"),),
+    ),
+    "multiline-offline-env-with-trailing-comma": Case(
+        "fn run() {\n"
+        '    Command::new("cargo")\n'
+        "        .env(\n"
+        '            "CARGO_NET_OFFLINE",\n'
+        '            "true",\n'
+        "        )\n"
+        '        .arg("build");\n'
+        "}\n",
+        (("command_new", "offline"),),
+    ),
     "version": Case(
         'fn run() {\n    Command::new("cargo").arg("--version");\n}\n',
         (),

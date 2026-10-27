@@ -14,6 +14,7 @@ import typing as typ
 
 import pytest
 
+from concordat.errors import OperationalRuleError
 from concordat.rules.nested_cargo_entry_points import collect_entry_points
 from concordat.rules.nested_cargo_scripts import split_commands
 
@@ -1256,3 +1257,166 @@ def test_each_test_command_kind_is_recognised(
     )
     put(tmp_path, WORKFLOW, f"jobs:\n  test:\n    steps:\n      - run: {command}\n")
     assert states(tmp_path) == expected
+
+
+# --- containment -----------------------------------------------------------
+
+
+def test_a_makefile_that_links_outside_the_checkout_is_refused(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A linked `Makefile` would carry an outside target into the report.
+
+    `_read_workflow` already refuses a workflow that resolves outside the
+    checkout, but the Makefile and the nextest configuration are read before
+    any containment check. A repository could aim either at a readable file
+    elsewhere on the machine and have its test target reported as this
+    repository's entry point.
+    """
+    outside = tmp_path / "outside-Makefile"
+    outside.write_text("test:\n\tcargo test\n", encoding="utf-8")
+    checkout = tmp_path / "repo"
+    checkout.mkdir()
+    (checkout / MAKEFILE).symlink_to(outside)
+
+    problems: list[str] = []
+    with pytest.raises(OperationalRuleError, match="outside the checkout"):
+        collect_entry_points(checkout, problems)
+
+
+def test_a_nextest_config_that_links_outside_the_checkout_is_refused(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The nextest configuration is a policy input and is read through the guard.
+
+    Its setup scripts decide whether an entry point is `before`, so reading it
+    from outside the checkout would let an outside file change this
+    repository's verdict.
+    """
+    outside = tmp_path / "outside-nextest.toml"
+    outside.write_text(
+        '[[profile.default.scripts]]\nfilter = "all()"\nsetup = "warm"\n'
+        '[scripts.setup.warm]\ncommand = "cargo fetch --locked"\n',
+        encoding="utf-8",
+    )
+    checkout = tmp_path / "repo"
+    (checkout / ".config").mkdir(parents=True)
+    (checkout / NEXTEST_CONFIG).symlink_to(outside)
+    put(checkout, MAKEFILE, "test:\n\tcargo nextest run\n")
+
+    problems: list[str] = []
+    with pytest.raises(OperationalRuleError, match="outside the checkout"):
+        collect_entry_points(checkout, problems)
+
+
+def test_a_makefile_inside_the_checkout_is_still_read(tmp_path: pathlib.Path) -> None:
+    """Containment refuses outside paths without refusing legitimate ones."""
+    put(tmp_path, MAKEFILE, "test:\n\tcargo test\n")
+
+    assert makefile_state(tmp_path) == [("test", "absent")]
+
+
+# --- `if:` conditions on the test step -------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("condition", "expected"),
+    [
+        # Always true once the fetch has failed, so the step runs anyway.
+        ("${{ failure() || success() }}", "absent"),
+        ("${{ github.ref == 'refs/heads/main' || always() }}", "absent"),
+        ("${{ failure() }}", "absent"),
+        # Depends on a fact the reader does not have: the branch, or whether
+        # the run is being cancelled.
+        ("${{ success() || github.ref == 'refs/heads/main' }}", "uncertain"),
+        ("${{ cancelled() || success() }}", "uncertain"),
+        # A conjunction with `success()` cannot run after a failed fetch.
+        ("${{ success() && runner.os == 'Linux' }}", "before"),
+    ],
+    ids=[
+        "failure-or-success",
+        "branch-or-always",
+        "failure",
+        "success-or-branch",
+        "cancelled-or-success",
+        "success-and-platform",
+    ],
+)
+def test_a_test_step_is_judged_by_whether_it_can_run_after_a_failed_fetch(
+    condition: str, expected: str, tmp_path: pathlib.Path
+) -> None:
+    """A status function in the `if:` replaces GitHub's implicit `success()`.
+
+    GitHub adds its default `success()` check only when the condition names no
+    status function. Once one appears, what the step allows follows from the
+    expression: `failure() || success()` is true either way, while
+    `success() || github.ref == 'refs/heads/main'` runs on `main` after a failed
+    fetch and is undecidable elsewhere. Reporting any of them `before` claims a
+    warm cache from a fetch that may never have run.
+    """
+    put(
+        tmp_path,
+        WORKFLOW,
+        "jobs:\n  test:\n    steps:\n"
+        "      - run: cargo fetch --locked\n"
+        f"      - run: cargo test\n        if: {condition}\n",
+    )
+
+    assert states(tmp_path) == [("workflow", "test", expected)]
+
+
+def test_a_test_step_with_a_non_status_condition_stays_before(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A condition that names no status function still gets the implicit check.
+
+    `runner.os == 'Linux'` may skip the step, but when the step does run GitHub
+    has already established that every earlier step succeeded. Reporting it
+    `absent` would discard a real fetch.
+    """
+    put(
+        tmp_path,
+        WORKFLOW,
+        "jobs:\n  test:\n    steps:\n"
+        "      - run: cargo fetch --locked\n"
+        "      - run: cargo test\n        if: runner.os == 'Linux'\n",
+    )
+
+    assert states(tmp_path) == [("workflow", "test", "before")]
+
+
+def test_a_bare_success_condition_still_proves_the_order(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`success()` on its own is exactly the implicit check, spelled out."""
+    put(
+        tmp_path,
+        WORKFLOW,
+        "jobs:\n  test:\n    steps:\n"
+        "      - run: cargo fetch --locked\n"
+        "      - run: cargo test\n        if: ${{ success() }}\n",
+    )
+
+    assert states(tmp_path) == [("workflow", "test", "before")]
+
+
+# --- expressions in the test step's own command ----------------------------
+
+
+def test_a_same_step_fetch_does_not_prove_order_across_an_expression(
+    tmp_path: pathlib.Path,
+) -> None:
+    """An expression can supply the `|| true` that hides a failed fetch.
+
+    `cargo fetch --locked ${{ inputs.extra }} && cargo test` reads as gated once
+    the expression is removed, but `inputs.extra` may be `|| true`, which makes
+    the fetch's failure non-fatal and lets the test run anyway.
+    """
+    put(
+        tmp_path,
+        WORKFLOW,
+        "jobs:\n  test:\n    steps:\n"
+        "      - run: cargo fetch --locked ${{ inputs.extra }} && cargo test\n",
+    )
+
+    assert states(tmp_path) == [("workflow", "test", "uncertain")]

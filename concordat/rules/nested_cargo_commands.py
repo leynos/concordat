@@ -196,6 +196,13 @@ def _environment_pairs(text: str) -> list[tuple[str | None, str | None]] | None:
     pairs: list[tuple[str | None, str | None]] = []
     for group in groups:
         slots = split_top_level(_unwrap(group))
+        # rustfmt adds a trailing comma when it breaks a call over several
+        # lines, so `.env(\n    "K",\n    "V",\n)` arrives as three slots with
+        # a blank last one. Counting that as a third argument rejects a pair
+        # the reader can see perfectly well, which both hides real offline
+        # evidence and reports the command `unresolved`.
+        if slots and not slots[-1].strip():
+            slots.pop()
         if len(slots) > 2:
             return None
         name = _string_literals(slots[0]) if slots else None

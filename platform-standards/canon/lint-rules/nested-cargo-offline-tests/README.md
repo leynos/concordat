@@ -101,6 +101,20 @@ the one-line parameter change recorded in `docs/roadmap.md` (DF12-109).
   command and its failure stops the run: `&&` or a fail-fast line sequence. A
   `;`, `||`, a pipeline, a background command or an ignored error proves
   nothing.
+- **Both steps' `if:` conditions are read for what they skip.** A workflow
+  fetch step is proof only when it runs on every run, so any `if:` other than
+  `success()` — bare or wrapped in `${{ }}` — leaves the entry point `absent`.
+  The test step is asked the opposite question, whether it can still run after
+  a failed fetch. GitHub adds its implicit `success()` check only when the
+  condition names no status function, so `success() && runner.os == 'Linux'`
+  waits for the fetch and keeps the entry point `before`, while
+  `success() || github.ref == 'refs/heads/main'` can run on `main` after a
+  failure and makes it `uncertain`. A condition resting on a fact the reader
+  does not have is `uncertain` rather than guessed either way.
+- **A command carrying an expression proves no order.**
+  `cargo fetch --locked ${{ inputs.extra }} && cargo test` reads as gated once
+  the expression is removed, but the expression may supply the `|| true` that
+  makes a failed fetch harmless, so the entry point is `uncertain`.
 
 ## Exemptions
 

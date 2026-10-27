@@ -2867,6 +2867,30 @@ tests when the fetch fails. A command whose expansion cannot be resolved, a
 `.ONESHELL` recipe or a recursive `make` makes the entry point `uncertain` with
 its reason rather than inventing an ordering.
 
+A step's `if:` is part of that ordering, and the two steps are asked different
+questions of it. A fetch step is proof only when it runs on every run, so the
+reader keeps the strict test there: any condition other than `success()` — bare
+or wrapped in `${{ }}` — leaves the entry point `absent`, because a fetch that
+sometimes skips warms nothing on the runs it skips. A test step is asked
+whether it could still run after a failed fetch, which is not the same
+question. GitHub applies its implicit `success()` guard only when the condition
+names no status function at all; once one appears, what the step allows follows
+from the expression. The reader therefore evaluates the condition with
+`success()` held false under three-valued logic: a conjunction with `success()`
+is false and the step is gated, `always()` and `failure()` are true and it is
+not, and a disjunction the reader cannot settle —
+`success() || github.ref == …` — leaves the entry point `uncertain`. The same
+three-valued treatment covers a command carrying an expression: a fetch chained
+to a test after an `${{ }}` operand reads as gated once the expression is
+stripped, but the expression can supply the `|| true` that makes a failed fetch
+harmless, so it proves nothing.
+
+Both policy inputs beyond the workflows — `Makefile` and
+`.config/nextest.toml` — are read through `within_checkout` for the reason
+every other input is: `Path.is_file()` follows symbolic links, so a checkout
+could otherwise aim either one at a readable file elsewhere on the machine and
+have that file's target or setup scripts answer for this repository.
+
 Exemptions keep the `whitaker-provisioning` convention of a repository, a path,
 a rationale and a review trigger, and differ from the fixture-lock rule in two
 ways: the path is an exact **file**, because a spawn is a property of the line

@@ -680,9 +680,19 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   `cargo build --help`) is not a spawn; a version flag carrying a value is.
   Fixture package sources are excluded, because a `cargo` inside one is the
   build under audit rather than the code that starts it. A prefetch counts only
-  when it is success-gated (`&&` or a fail-fast line sequence). The builder
-  ignores its parameters: exemptions and severity are the policy's to apply. It
-  runs no Cargo and reads no network.
+  when it is success-gated (`&&` or a fail-fast line sequence), and a workflow
+  step whose command carries an `${{ }}` expression proves no order at all: the
+  expression can supply the `|| true` that hides a failed fetch. The workflow
+  reader asks both steps' `if:` conditions what they skip. A fetch step must
+  run on every run, so anything but `success()` leaves the entry point
+  `absent`; a test step is asked whether it could run after a failed fetch,
+  which `success() && …` rules out, `always()` and `failure()` allow, and a
+  branch-dependent disjunction leaves undecidable, so it is reported
+  `uncertain`. `nested_cargo_conditions` holds that reading: a small
+  three-valued parser over the condition, with `condition_proves_order`
+  answering the fetch step's question and `runs_only_after_success` the test
+  step's. The builder ignores its parameters: exemptions and severity are the
+  policy's to apply. It runs no Cargo and reads no network.
 - `policy-input/whitaker-provisioning` —
   `whitaker_provisioning_envelope.build_whitaker_provisioning_envelope`. It
   reuses the CV-005 workflow decoder for `.github/workflows`, decodes every
