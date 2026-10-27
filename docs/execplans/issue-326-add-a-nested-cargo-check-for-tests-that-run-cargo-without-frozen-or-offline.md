@@ -347,6 +347,22 @@ workaround.
       the four cases it had run together. `make check-fmt` rejected the first
       wording (`+2 -2`) and `make fmt` re-wrapped it; `make check-fmt` and
       `make markdownlint` then both returned 0.
+- [x] (2026-10-27) Post-review re-measurement of the PR body's figures, because
+      the survey had last run at 03:07 and rounds three, four and six all
+      changed the reader afterwards. Both survey halves were re-run over the
+      same 106 mirrors: the envelope pass first, then the real rule path. The
+      envelope diff against the recorded run is exactly one repository —
+      `wireframe`, whose `test` target now reads as an unresolved `DEV_FAST`
+      variable — and it was already indeterminate on another fact, so the rule
+      results are identical: 106 records, 0 errors, 86 compliant, 16
+      noncompliant, 4 indeterminate, 90 findings (16 NC-007, 26 NC-008, 48
+      EN-001), 6 NC-007 and 15 NC-008 repositories, 19 EN-001 repositories and
+      the same 20-repository would-fail union. The three pinned real-checkout
+      snapshots were re-audited too and reproduce their recorded findings line
+      for line. The stale figures were test counts and the review tally, not
+      the survey: `24 Rego tests` was 29, `60`/`96` reader tests were 64/106,
+      `43` report tests were 44, `16 policy` was 16, and the review paragraph
+      described one round when there were seven.
 - [ ] (2026-10-27) Remaining for delivery: push over SSH and re-review.
 
 ## Surprises & discoveries
