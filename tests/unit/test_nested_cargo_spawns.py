@@ -308,6 +308,23 @@ CASES: dict[str, Case] = {
         "        .args(subcommand.args())\n        .output();\n}\n",
         (("command_new", "unresolved"),),
     ),
+    # An unreadable argument before `--frozen` may be `--`, which makes every
+    # later word a positional argument of the program cargo runs. The flags
+    # after it are then not cargo's own, so the spawn is not proven offline.
+    "non-literal-argument-before-frozen": Case(
+        "fn run(extra: &[&str]) {\n"
+        '    Command::new("cargo").args(extra).arg("--frozen").arg("build");\n'
+        "}\n",
+        (("command_new", "unresolved"),),
+    ),
+    # The same argument *after* the offline flags cannot change them: cargo
+    # reads `--frozen` before it reaches anything the reader cannot see.
+    "non-literal-argument-after-frozen": Case(
+        "fn run(extra: &[&str]) {\n"
+        '    Command::new("cargo").arg("--frozen").args(extra).arg("build");\n'
+        "}\n",
+        (("command_new", "offline"),),
+    ),
 }
 
 

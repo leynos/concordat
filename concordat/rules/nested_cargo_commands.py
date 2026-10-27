@@ -407,6 +407,13 @@ def helper_body(masked: str, match: re.Match[str]) -> tuple[str, int, int] | Non
 def command_state(command: CargoCommand) -> str | None:
     """Return the evidence state of *command*, or None when it cannot resolve.
 
+    Offline evidence is only read from the words that precede any argument the
+    reader could not see. An unreadable word may be `--`, which ends cargo's own
+    flag list and hands every later word to the program it runs, so
+    `cargo .args(extra).arg("--frozen")` is not proven offline by that
+    `--frozen`. The reverse order is sound: cargo has already parsed a flag
+    that comes before the unknown word.
+
     Returns
     -------
     str | None
@@ -415,11 +422,27 @@ def command_state(command: CargoCommand) -> str | None:
     known = [word for word in command.words if isinstance(word, str)]
     if len(known) == len(command.words) and _is_probe(known):
         return None
-    if command.is_offline or _offline_flags(known):
+    if command.is_offline or _offline_flags(_literal_prefix(command.words)):
         return "offline"
     if command.is_uncertain or len(known) != len(command.words):
         return "unresolved"
     return "online"
+
+
+def _literal_prefix(words: list[str | None]) -> list[str]:
+    """Return the words that occur before the first unreadable argument.
+
+    Returns
+    -------
+    list[str]
+        The literal prefix, empty when the first word is already unreadable.
+    """
+    prefix: list[str] = []
+    for word in words:
+        if word is None:
+            break
+        prefix.append(word)
+    return prefix
 
 
 def _is_probe(words: list[str]) -> bool:
@@ -467,10 +490,14 @@ def _offline_flags(known: list[str]) -> bool:
     `cargo run -- --offline --locked` is not offline evidence: those flags
     reach the binary under test while cargo itself may still resolve crates.
 
+    The caller passes only the words before the first unreadable argument;
+    see `command_state` for why a later flag cannot be trusted.
+
     Parameters
     ----------
     known:
-        The literal words of the argument list, in source order.
+        The literal words of the argument list, in source order, ending at the
+        first argument the reader could not read.
 
     Returns
     -------
