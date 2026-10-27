@@ -736,7 +736,10 @@ only when the condition names no status function, so
 while `success() || github.ref == 'refs/heads/main'` runs on `main` after a
 failed fetch and is reported `uncertain`. A condition that depends on a fact
 the reader does not have, such as the branch, is `uncertain` rather than
-guessed in either direction.
+guessed in either direction. GitHub matches expression function names without
+regard to case, so `Success()` and `ALWAYS()` are read as the functions they
+name; a name inside a quoted string is part of the text being compared, not a
+call.
 
 The rule ships at `warning` severity, so a finding is reported and the gate
 continues. That lets the estate be surveyed and each repository fix its own

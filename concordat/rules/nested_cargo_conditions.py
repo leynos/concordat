@@ -19,6 +19,12 @@ can see — the status functions — settle, operands it cannot see — `github.
 `inputs.*` — leave the answer unknown. Three-valued logic then spreads that
 unknownness only as far as it should: `success() && X` is false whatever `X`
 is, while `success() || X` cannot be settled either way.
+
+Two details of GitHub's syntax matter to both questions. Function names are
+matched without regard to case, because GitHub's parser lowercases one before
+looking it up, so `Always()` is `always()`. String literals are single-quoted,
+and everything inside one — a `)`, a `||`, even a status function's name — is
+text the condition compares rather than syntax the runner evaluates.
 """
 
 from __future__ import annotations
@@ -33,9 +39,19 @@ if typ.TYPE_CHECKING:
 # text so a bare `success()` and a wrapped `${{ success() }}` read alike.
 _EXPRESSION_WRAPPER: typ.Final = re.compile(r"^\$\{\{(.*)\}\}$", re.DOTALL)
 # Any call to one of GitHub's status functions, compound expressions included.
-_STATUS_CALL: typ.Final = re.compile(r"\b(?:success|failure|cancelled|always)\s*\(")
+# GitHub matches expression function names without regard to case — its own
+# parser lowercases the identifier before looking it up — so `Always()` names
+# `always()` and has to be read the same way.
+_STATUS_CALL: typ.Final = re.compile(
+    r"\b(?:success|failure|cancelled|always)\s*\(", re.IGNORECASE
+)
 # A status function call with nothing inside it, e.g. `success()`.
-_STATUS_ATOM: typ.Final = re.compile(r"(success|failure|cancelled|always)\s*\(\s*\)")
+_STATUS_ATOM: typ.Final = re.compile(
+    r"(success|failure|cancelled|always)\s*\(\s*\)", re.IGNORECASE
+)
+# The whole of a fetch step's condition when it says nothing but `success()`,
+# which is GitHub's own default made explicit.
+_SUCCESS_ONLY: typ.Final = re.compile(r"success\s*\(\s*\)", re.IGNORECASE)
 # What each status function is worth once an earlier step has failed.
 # `cancelled()` is the one that does not follow from the fetch's outcome:
 # whether the run is being cancelled is a fact the reader does not have.
@@ -84,7 +100,12 @@ def condition_proves_order(step: cabc.Mapping[str, object]) -> bool:
     condition = step.get("if")
     if condition is None:
         return True
-    return isinstance(condition, str) and _condition_body(condition) == "success()"
+    if not isinstance(condition, str):
+        return False
+    # GitHub's default is spelled `success()`, but its expression parser
+    # lowercases a function name before looking it up, so `Success()` is the
+    # same condition and proves the same order.
+    return _SUCCESS_ONLY.fullmatch(_condition_body(condition)) is not None
 
 
 def runs_only_after_success(step: cabc.Mapping[str, object]) -> bool | None:
@@ -114,9 +135,16 @@ def runs_only_after_success(step: cabc.Mapping[str, object]) -> bool | None:
         # licence to assume the step is gated.
         return None
     body = _condition_body(condition)
-    if _STATUS_CALL.search(body) is None:
+    code = _without_literals(body)
+    if code is None:
+        # An unclosed string literal is not an expression GitHub would run, so
+        # the reader cannot say what the step would do.
+        return None
+    if _STATUS_CALL.search(code) is None:
         # Naming no status function means GitHub's implicit `success()` guard
         # still applies, so the step waits for every earlier step to succeed.
+        # A `success()` spelled inside a string literal is text the condition
+        # compares, not a call, so the literals were blanked first.
         return True
     # A status function is present, which replaces that implicit guard. The
     # step is gated only if the expression is false whenever the fetch failed.
@@ -220,16 +248,77 @@ def _operand(body: str, index: int) -> tuple[bool | None, int]:
         index = _skip_space(body, index)
         closed = index < len(body) and body[index] == ")"
         return (value if closed else None), min(index + 1, len(body))
+    if index < len(body) and body[index] == "'":
+        # A string literal is an operand the reader does not evaluate — the
+        # `success()` it contains is text, not a call.
+        literal_end = _literal_end(body, index)
+        return None, len(body) if literal_end is None else literal_end
     if (status := _STATUS_ATOM.match(body, index)) is not None:
-        return _FAILED_RUN_STATUS[status.group(1)], status.end()
+        # The matcher is case-insensitive, the table is keyed in lower case.
+        return _FAILED_RUN_STATUS[status.group(1).lower()], status.end()
     return None, _unknown_operand_end(body, index)
+
+
+def _literal_end(body: str, index: int) -> int | None:
+    """Return the offset just past the string literal opening at *index*.
+
+    GitHub writes string literals in single quotes, and `''` inside one is an
+    escaped quote rather than the end of the literal.
+
+    Returns
+    -------
+    int | None
+        The offset just past the closing quote, or None when the literal is
+        never closed — an expression GitHub would refuse to evaluate.
+    """
+    index += 1
+    while index < len(body):
+        if body[index] != "'":
+            index += 1
+        elif body.startswith("''", index):
+            index += 2
+        else:
+            return index + 1
+    return None
+
+
+def _without_literals(body: str) -> str | None:
+    """Return *body* with every string literal replaced by a space.
+
+    A status function's name only counts as a call when it appears in the
+    expression itself. `github.event.name == 'always()'` compares a string and
+    names no status function, so GitHub's implicit `success()` guard still
+    applies; searching the raw text would mistake the literal for a call.
+
+    Returns
+    -------
+    str | None
+        The expression with each quoted literal blanked out, keeping every
+        other character in place, or None when a literal is left unclosed.
+    """
+    characters: list[str] = []
+    index = 0
+    while index < len(body):
+        if body[index] != "'":
+            characters.append(body[index])
+            index += 1
+            continue
+        end = _literal_end(body, index)
+        if end is None:
+            return None
+        characters.append(" ")
+        index = end
+    return "".join(characters)
 
 
 def _unknown_operand_end(body: str, index: int) -> int:
     """Return where the operand starting at *index* ends.
 
     An operand the reader does not evaluate still has to be stepped over, so it
-    ends at the first `&&` or `||` that is not inside its own brackets.
+    ends at the first `&&` or `||` that is neither inside its own brackets nor
+    inside a string literal. A literal is data: the `)` or `||` it contains
+    belongs to the text, and letting it end the operand would split the
+    expression at the wrong place.
 
     Returns
     -------
@@ -239,6 +328,14 @@ def _unknown_operand_end(body: str, index: int) -> int:
     depth = 0
     while index < len(body):
         char = body[index]
+        if char == "'":
+            literal_end = _literal_end(body, index)
+            if literal_end is None:
+                # An unclosed literal swallows the rest of the expression, so
+                # whatever followed it cannot be an operand's end.
+                return len(body)
+            index = literal_end
+            continue
         if char == "(":
             depth += 1
         elif char == ")":

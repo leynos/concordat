@@ -888,6 +888,23 @@ def test_an_explicit_success_fetch_step_is_proof(tmp_path: pathlib.Path) -> None
     assert states(tmp_path) == [("workflow", "test", "before")]
 
 
+def test_an_upper_case_success_fetch_step_is_proof(tmp_path: pathlib.Path) -> None:
+    """GitHub matches expression function names without regard to case.
+
+    `Success()` is the same condition as `success()`, so a fetch step guarded
+    by it still runs on every run and still warms the cache.
+    """
+    put(
+        tmp_path,
+        WORKFLOW,
+        "jobs:\n  test:\n    steps:\n"
+        "      - run: cargo fetch --locked\n"
+        "        if: Success()\n"
+        "      - run: cargo test\n",
+    )
+    assert states(tmp_path) == [("workflow", "test", "before")]
+
+
 def test_an_always_step_is_not_proof(tmp_path: pathlib.Path) -> None:
     """`if: always()` runs whether or not the prefetch succeeded."""
     put(
@@ -1326,20 +1343,30 @@ def test_a_makefile_inside_the_checkout_is_still_read(tmp_path: pathlib.Path) ->
         ("${{ failure() || success() }}", "absent"),
         ("${{ github.ref == 'refs/heads/main' || always() }}", "absent"),
         ("${{ failure() }}", "absent"),
+        # Expression function names are case-insensitive, so an upper-case
+        # spelling names the same status function.
+        ("${{ ALWAYS() }}", "absent"),
+        ("${{ SUCCESS() }}", "before"),
         # Depends on a fact the reader does not have: the branch, or whether
         # the run is being cancelled.
         ("${{ success() || github.ref == 'refs/heads/main' }}", "uncertain"),
         ("${{ cancelled() || success() }}", "uncertain"),
         # A conjunction with `success()` cannot run after a failed fetch.
         ("${{ success() && runner.os == 'Linux' }}", "before"),
+        # A status function's name inside a string literal is text the
+        # condition compares, not a call, so the implicit guard stands.
+        ("${{ github.event.name == 'always()' }}", "before"),
     ],
     ids=[
         "failure-or-success",
         "branch-or-always",
         "failure",
+        "upper-always",
+        "upper-success",
         "success-or-branch",
         "cancelled-or-success",
         "success-and-platform",
+        "status-call-in-literal",
     ],
 )
 def test_a_test_step_is_judged_by_whether_it_can_run_after_a_failed_fetch(

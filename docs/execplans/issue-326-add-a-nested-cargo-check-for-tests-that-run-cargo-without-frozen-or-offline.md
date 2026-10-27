@@ -668,8 +668,44 @@ workaround.
       known `makeutil` fixture-drift failures and no nested-cargo failure. The
       ruff step of `make lint` took two more findings from the new test module
       — boolean-typed positional parameters again — fixed keyword-only.
+- [x] (2026-10-27) CodeRabbit round 13, finding 3: status-function names are
+      matched without regard to case. GitHub's expression parser lowercases a
+      function name before looking it up, so `Always()` on a test step runs it
+      after a failed fetch and `SUCCESS()` names a status function rather than
+      leaving the implicit guard in place. `_STATUS_CALL` and `_STATUS_ATOM`
+      take `re.IGNORECASE`, the captured name is lowercased before the
+      `_FAILED_RUN_STATUS` lookup, and the fetch step's stricter test now
+      compares through a dedicated `_SUCCESS_ONLY` pattern instead of a literal
+      string, so `Success()` proves the order too. Red first: the pre-fix
+      module returned `True` (gated) for all of `Always()`, `${{ ALWAYS() }}`,
+      `Failure()` and `SUCCESS()`.
+- [x] (2026-10-27) CodeRabbit round 13, finding 1: string literals are data,
+      not syntax. `_literal_end` walks a single-quoted literal, treating `''` as
+      an escaped quote, and `_without_literals` blanks each literal before the
+      status-function search, so `github.event.name == 'always()'` names no
+      status function and keeps the implicit `success()` guard.
+      `_unknown_operand_end` and `_operand` step over literals, so a `)` or `||`
+      inside one no longer ends an operand early. An unclosed literal is an
+      expression GitHub would reject, and the answer is `None`.
+- [x] (2026-10-27) CodeRabbit round 13, findings 2 and 4 (the same weakness in
+      `scripts/tests/test_parabellum_report.py`): the fixture versions are
+      raised to `7.1.0`/`7.2.0` and the negative assertion now names the
+      fallback's exact spelling — `` `rulename` vX; `` — rather than asserting
+      that the manifest version appears nowhere in the report. A future bump to
+      either fixture version, or a version that happens to be a substring of
+      another number, can no longer fail the test for no reason.
+- [x] (2026-10-27) Round 13's behaviour is documented in the rule README
+      (case-insensitive names and quoted literals), the users' guide (the same,
+      from the reader's side), and `docs/concordat-design.md` (the parser's
+      treatment of names and literals, including the unclosed-literal case).
+- [x] (2026-10-27) Round 13's full gate sequence, run through `scrutineer` on
+      the round's tree: `make check-fmt`, `make lint`, `make typecheck`,
+      `make markdownlint` and `make nixie` all pass, and `make test` reports
+      2898 passed, 1 skipped, and the six known `makeutil` fixture-drift
+      failures with no nested-cargo failure. That is sixteen more passes than
+      the previous run, matching the round's sixteen new cases.
 - [ ] (2026-10-27) Remaining for delivery: this round's commit and SSH push,
-      the PR body update, the thirteenth CodeRabbit pass, then marking the PR
+      the PR body update, the fourteenth CodeRabbit pass, then marking the PR
       ready for review.
 
 ## Surprises & discoveries
@@ -938,6 +974,22 @@ workaround.
   `_read_workflow` — which goes through `within_checkout` — refused the same
   trick. Impact: the containment contract is per-input, not per-envelope, and a
   reader added after the workflows were guarded can silently miss it.
+- Observation: a review's stated consequence can fail to reproduce while the
+  defect underneath it is real. Evidence: the thirteenth round's finding 1 said
+  `github.event.name == 'x || always()'` returns an ungated answer because the
+  literal's `||` ends the unknown operand early. Probing the pre-fix module gave
+  `None` for that exact string — over-conservative, not a false `absent` —
+  while `'a)b'` and `'a || b'` did derail the parser in the ways the finding
+  described. Impact: the fix was made for the reason the probes demonstrated,
+  and the difference is recorded here rather than the review's wording being
+  restated as fact.
+- Observation: a case-insensitivity bug is invisible to a test table written
+  in one case. Evidence: the twenty-five-case evaluator table, the behavioural
+  `if:` table and three standalone tests all spelled every status function in
+  lower case, so `Always()` returning `True` (gated) survived thirteen review
+  rounds and a full green gate. Impact: when a syntax is matched against a
+  fixed vocabulary, at least one row has to spell that vocabulary differently
+  from its documentation.
 
 ## Decision log
 
@@ -1216,6 +1268,33 @@ workaround.
   `tests/unit/test_nested_cargo_conditions.py`, so the moved code is tested
   where it now lives rather than only through the reader. Date/Author:
   2026-10-27.
+- Decision: status-function names are matched case-insensitively, and the
+  fetched step's "exactly `success()`" test is a `re.IGNORECASE` pattern rather
+  than a comparison against the literal string. Rationale: GitHub's expression
+  parser lowercases the identifier before looking it up, so `Always()` and
+  `success()` are the same function to the runner; a case-sensitive reader
+  reports a step that runs after a failed fetch as gated, which is the one
+  direction this rule must never be wrong in. A second pattern,
+  `_SUCCESS_ONLY`, keeps the fetch step's stricter question honest: reusing
+  `_STATUS_ATOM` there would need a group comparison anyway, and it would match
+  `failure()` and `always()`, which are precisely the conditions a fetch step
+  may not carry. Date/Author: 2026-10-27.
+- Decision: string literals are tracked while parsing, and an unclosed literal
+  makes the condition unreadable (`None`) rather than being read to the end of
+  the expression. Rationale: `'...'` is data, so a `)` or `||` inside one must
+  not end an operand, and a status function's name inside one must not count as
+  a call — `github.event.name == 'always()'` compares text and leaves GitHub's
+  implicit guard in place, which is the opposite verdict from treating it as a
+  call. An unclosed literal is an expression GitHub itself would refuse to
+  evaluate, so no reading of it describes a run that could happen; reporting
+  `uncertain` is the honest answer. Date/Author: 2026-10-27.
+- Decision: the report renderer's version test uses fixture versions far from
+  any plausible manifest version, and its negative assertion names the
+  fallback's full spelling instead of searching the report for the manifest
+  version. Rationale: the test's subject is which versions the header names,
+  not which versions the package might one day declare. Searching for the bare
+  manifest version couples the test to a number that changes for unrelated
+  reasons and would fail the day a fixture matched it. Date/Author: 2026-10-27.
 
 ## Outcomes & retrospective
 

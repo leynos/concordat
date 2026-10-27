@@ -9,6 +9,11 @@ guard, and naming one replaces it with whatever the expression says.
 The evaluator is three-valued because a condition can rest on a fact the reader
 does not have. `success() && github.ref == 'refs/heads/main'` is false after a
 failed fetch whatever the branch is; `success() || github.ref == …` is not.
+
+Two spellings of the same syntax matter. GitHub's expression parser lowercases
+a function name before looking it up, so `Always()` is `always()`. A
+single-quoted literal is data: the `success()` inside one is text the condition
+compares, and neither it nor any `)` or `||` beside it is syntax.
 """
 
 from __future__ import annotations
@@ -33,6 +38,10 @@ from concordat.rules.nested_cargo_conditions import (
         ("runner.os == 'Linux'", False),
         ("always()", False),
         ("${{ success() && runner.os == 'Linux' }}", False),
+        # GitHub matches expression function names without regard to case.
+        ("Success()", True),
+        ("${{ SUCCESS() }}", True),
+        ("Always()", False),
     ],
     ids=[
         "no-condition",
@@ -41,6 +50,9 @@ from concordat.rules.nested_cargo_conditions import (
         "platform-only",
         "always",
         "success-and-platform",
+        "capitalised-success",
+        "wrapped-upper-success",
+        "capitalised-always",
     ],
 )
 def test_the_fetch_step_must_run_on_every_run(
@@ -77,8 +89,31 @@ def test_the_fetch_step_must_run_on_every_run(
         ("cancelled()", None),
         ("!cancelled()", None),
         ("${{ success() || inputs.force }}", None),
+        # GitHub matches expression function names without regard to case, so
+        # `ALWAYS()` allows the step after a failed fetch just as the lower-case
+        # spelling does, and `SUCCESS()` names a status function rather than
+        # leaving GitHub's implicit guard in place.
+        ("Always()", False),
+        ("${{ ALWAYS() }}", False),
+        ("Failure()", False),
+        ("SUCCESS()", True),
+        ("SUCCESS() || github.ref == 'refs/heads/main'", None),
+        # A quoted literal is data, not syntax. `always()` spelled inside one
+        # names no status function, so GitHub's implicit `success()` guard
+        # stands and the step waits for the fetch.
+        ("github.event.name == 'always()'", True),
+        # Brackets and connectors inside a literal belong to the string. The
+        # `|| failure()` here is a real disjunction, so the step can run after
+        # a failed fetch even though `success()` is one of its operands.
+        ("success() && github.event.name == 'a)b' || failure()", False),
+        # `''` escapes a quote, so the literal does not end at the doubled
+        # quote and the `||` after it is still part of the string.
+        ("success() && github.event.name == 'it''s || b'", True),
         # Syntax this reader does not model is unknown, not the part it read.
         ("success() ${{ github.ref }}", None),
+        # An unclosed literal is not an expression GitHub would run, so the
+        # reader cannot say what the step would have done.
+        ("github.event.name == 'it''s", None),
         # A YAML scalar rather than an expression is not something it can read.
         (True, None),
     ],
@@ -100,7 +135,16 @@ def test_the_fetch_step_must_run_on_every_run(
         "cancelled",
         "not-cancelled",
         "wrapped-success-or-input",
+        "capitalised-always",
+        "wrapped-upper-always",
+        "capitalised-failure",
+        "upper-success",
+        "upper-success-or-branch",
+        "status-call-in-literal",
+        "bracket-and-connector-in-literal",
+        "escaped-quote-in-literal",
         "trailing-syntax",
+        "unclosed-literal",
         "non-string",
     ],
 )

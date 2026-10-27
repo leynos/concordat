@@ -2879,11 +2879,19 @@ from the expression. The reader therefore evaluates the condition with
 `success()` held false under three-valued logic: a conjunction with `success()`
 is false and the step is gated, `always()` and `failure()` are true and it is
 not, and a disjunction the reader cannot settle —
-`success() || github.ref == …` — leaves the entry point `uncertain`. The same
-three-valued treatment covers a command carrying an expression: a fetch chained
-to a test after an `${{ }}` operand reads as gated once the expression is
-stripped, but the expression can supply the `|| true` that makes a failed fetch
-harmless, so it proves nothing.
+`success() || github.ref == …` — leaves the entry point `uncertain`. GitHub's
+expression parser lowercases a function name before looking it up, so the
+reader matches status-function names without regard to case and `Always()`
+replaces the implicit guard just as `always()` does. String literals are
+single-quoted and are data rather than syntax: the reader blanks each literal
+before looking for a status-function call and steps over it when finding where
+an operand ends, so `github.event.name == 'always()'` names no status function
+and `'a || b'` contains no disjunction. An unclosed literal is an expression
+GitHub would reject, and the entry point is `uncertain` rather than read from a
+guess about where the literal stopped. The same three-valued treatment covers a
+command carrying an expression: a fetch chained to a test after an `${{ }}`
+operand reads as gated once the expression is stripped, but the expression can
+supply the `|| true` that makes a failed fetch harmless, so it proves nothing.
 
 Both policy inputs beyond the workflows — `Makefile` and
 `.config/nextest.toml` — are read through `within_checkout` for the reason

@@ -110,7 +110,11 @@ the one-line parameter change recorded in `docs/roadmap.md` (DF12-109).
   waits for the fetch and keeps the entry point `before`, while
   `success() || github.ref == 'refs/heads/main'` can run on `main` after a
   failure and makes it `uncertain`. A condition resting on a fact the reader
-  does not have is `uncertain` rather than guessed either way.
+  does not have is `uncertain` rather than guessed either way. Function names
+  are matched without regard to case, as GitHub matches them, so `Success()` and
+  `ALWAYS()` read as `success()` and `always()`. A name inside a quoted
+  literal is text the condition compares, not a call:
+  `github.event.name == 'always()'` still gets the implicit check.
 - **A command carrying an expression proves no order.**
   `cargo fetch --locked ${{ inputs.extra }} && cargo test` reads as gated once
   the expression is removed, but the expression may supply the `|| true` that

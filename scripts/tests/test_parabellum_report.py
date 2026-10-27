@@ -705,14 +705,19 @@ class TestPackageFiltering:
         over part of the estate, so the records the report renders can be
         stamped by two versions at once. Claiming the current manifest
         version would describe versions the report does not show.
+
+        The fixture versions are far from any version this package is likely
+        to reach, and the second assertion names the fallback's exact
+        spelling. Asserting that the manifest version appears nowhere would
+        fail for no reason the day the manifest happened to match a fixture.
         """
         ledger_path.write_text(
             "".join(
                 json.dumps(record) + "\n"
                 for record in (
-                    TestReport()._record("leynos/alpha", "compliant", version="0.1.0"),
+                    TestReport()._record("leynos/alpha", "compliant", version="7.1.0"),
                     TestReport()._record(
-                        "leynos/beta", "noncompliant", version="0.2.0"
+                        "leynos/beta", "noncompliant", version="7.2.0"
                     ),
                 )
             ),
@@ -721,8 +726,10 @@ class TestPackageFiltering:
 
         report = sweep.render_report(ledger_path)
 
-        assert f"Rule package: `{sweep.RULE_PACKAGE}` v0.1.0, v0.2.0" in report, report
-        assert f"v{sweep.rule_version(sweep.RULE_PACKAGE)}" not in report, report
+        assert f"Rule package: `{sweep.RULE_PACKAGE}` v7.1.0, v7.2.0" in report, report
+        manifest = sweep.rule_version(sweep.RULE_PACKAGE)
+        fallback = f"Rule package: `{sweep.RULE_PACKAGE}` v{manifest};"
+        assert fallback not in report, report
 
     def test_the_header_names_the_makeutil_revisions_the_records_carry(
         self,
