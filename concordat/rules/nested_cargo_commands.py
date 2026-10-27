@@ -173,6 +173,24 @@ class CargoCommand:
         if OFFLINE_VARIABLE in names:
             self._record_offline_operation(offline=False)
 
+    def mark_arguments_unknown(self) -> None:
+        """Record an argument call the reader cannot see through.
+
+        An unreadable word is where `command_state` stops trusting the argument
+        list, so this is the same evidence an unparseable `.args(..)` leaves.
+        """
+        self.words.append(None)
+
+    def mark_environment_unknown(self) -> None:
+        """Record an environment operation the reader cannot see through.
+
+        A call made on only some paths may set `CARGO_NET_OFFLINE` again, and
+        which path runs is exactly what the reader cannot tell. Recording an
+        unknown operation is what stops an earlier assignment from being taken
+        as the last word.
+        """
+        self._record_offline_operation(offline=None)
+
     def _record_offline_operation(self, *, offline: bool | None) -> None:
         """Make *offline* the answer the latest environment operation gives."""
         self.offline_override = offline
@@ -344,12 +362,27 @@ def _record(command: CargoCommand, method: str, text: str) -> None:
         command.remove_environment(method, text)
 
 
-def follow_chain(source: RustSource, command: CargoCommand, index: int) -> int:
+def follow_chain(
+    source: RustSource, command: CargoCommand, index: int, *, conditional: bool = False
+) -> int:
     """Collect `.arg`/`.args`/`.env`/`.envs` calls from *index*, returning the end.
 
     The call shapes are found in the masked text, where a literal cannot look
     like a call, and their arguments are read from the original text, where the
     literal is still there to be read.
+
+    Parameters
+    ----------
+    source
+        The file being read.
+    command
+        The command the calls are recorded against.
+    index
+        The offset to start reading at.
+    conditional
+        Record the calls as operations the reader cannot see rather than as
+        evidence. A chain that runs on only some paths may or may not add the
+        flag or the assignment, so the command it leaves behind is unknown.
 
     Returns
     -------
@@ -371,7 +404,10 @@ def follow_chain(source: RustSource, command: CargoCommand, index: int) -> int:
         close = scan_balanced(masked, after)
         if close is None:
             return index
-        _record(command, name.group(), source.text[after + 1 : close - 1])
+        if conditional:
+            _record_unseen([name.group()], command)
+        else:
+            _record(command, name.group(), source.text[after + 1 : close - 1])
         index = close
 
 
@@ -415,7 +451,13 @@ def bound_name(masked: str, offset: int) -> str | None:
 
 
 def collect_variable(
-    source: RustSource, command: CargoCommand, name: str, start: int, end: int
+    source: RustSource,
+    command: CargoCommand,
+    name: str,
+    start: int,
+    end: int,
+    block: tuple[int, int],
+    pairs: list[tuple[int, int]],
 ) -> None:
     """Collect the calls a bound variable receives before it is rebound.
 
@@ -423,13 +465,41 @@ def collect_variable(
     belongs to that value rather than this one. Reading past the rebinding
     would credit this command with a flag set on another one — here, an
     offline flag on a command that is not cargo at all.
+
+    A call in a block nested inside the binding's own block is not read either.
+    `let mut cmd = Command::new("cargo"); if frozen { cmd.arg("--frozen"); }
+    cmd.status()` carries the flag only when `frozen` holds, so recording it
+    would classify the spawn `offline` on one path of two. Such a call is
+    recorded as an operation the reader cannot see, which makes the command
+    `unresolved` — but only when it could change what cargo reads, so a
+    conditional `.status()` still leaves the evidence intact.
     """
     rebinding = _rebinding(name).search(source.masked, start, end)
     if rebinding is not None:
         end = rebinding.start()
     pattern = re.compile(rf"\b{re.escape(name)}\s*\.")
     for match in pattern.finditer(source.masked, start, end):
-        follow_chain(source, command, match.end() - 1)
+        index = match.end() - 1
+        if enclosing_block(pairs, match.start()) == block:
+            follow_chain(source, command, index)
+        else:
+            follow_chain(source, command, index, conditional=True)
+
+
+def _record_unseen(methods: typ.Iterable[str], command: CargoCommand) -> None:
+    """Record the calls in *methods* as operations the reader cannot see.
+
+    An argument call appends an unreadable word, which is where
+    `command_state` already stops trusting the argument list; an environment
+    call or removal records an unknown entry in the offline ledger. A method
+    that changes neither, such as `.status()`, is stepped over: the command
+    cargo runs is the same either way.
+    """
+    for method in methods:
+        if method in ARGUMENT_METHODS:
+            command.mark_arguments_unknown()
+        elif method in ENVIRONMENT_METHODS or method in ENVIRONMENT_REMOVAL_METHODS:
+            command.mark_environment_unknown()
 
 
 def construction(
@@ -451,7 +521,7 @@ def construction(
     block = enclosing_block(pairs, match.start())
     name = bound_name(source.masked, match.start())
     if block is not None and name is not None:
-        collect_variable(source, command, name, after, block[1])
+        collect_variable(source, command, name, after, block[1], block, pairs)
     return command
 
 
@@ -517,7 +587,12 @@ def command_state(command: CargoCommand) -> str | None:
     flag list and hands every later word to the program it runs, so
     `cargo .args(extra).arg("--frozen")` is not proven offline by that
     `--frozen`. The reverse order is sound: cargo has already parsed a flag
-    that comes before the unknown word.
+    that comes before the unknown word. A call recorded as unseen — one made in
+    a block nested inside the binding's own, which runs on only some paths — is
+    unknown in the same way: it may add a word or an environment operation the
+    reader never saw. A recorded `--frozen` still proves offline mode, because
+    nothing revokes it, but a recorded offline *environment* does not, because
+    the unseen call may run after it and write the variable again.
 
     Returns
     -------

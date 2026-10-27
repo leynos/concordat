@@ -438,6 +438,57 @@ CASES: dict[str, Case] = {
         '    command.arg("build");\n    command.arg("--frozen");\n}\n',
         (("command_new", "offline"),),
     ),
+    # A call made in a block nested inside the binding's own block runs only
+    # on some paths. Reading it as unconditional would call this spawn offline
+    # although `--frozen` is there only when `frozen` holds.
+    "conditional-bound-flag": Case(
+        "fn run(frozen: bool) {\n"
+        '    let mut command = Command::new("cargo");\n'
+        '    if frozen { command.arg("--frozen"); }\n'
+        '    command.arg("build").status();\n'
+        "}\n",
+        (("command_new", "unresolved"),),
+    ),
+    # The environment is the same question one step further on: a conditional
+    # offline assignment may or may not be the one cargo obeys.
+    "conditional-bound-environment": Case(
+        "fn run(frozen: bool) {\n"
+        '    let mut command = Command::new("cargo");\n'
+        '    if frozen { command.env("CARGO_NET_OFFLINE", "true"); }\n'
+        '    command.arg("build").status();\n'
+        "}\n",
+        (("command_new", "unresolved"),),
+    ),
+    # Only a call that could change what cargo reads makes the answer unknown.
+    # A conditional `.status()` asks for nothing, so the spawn is still online.
+    "conditional-bound-status": Case(
+        "fn run(verbose: bool) {\n"
+        '    let mut command = Command::new("cargo");\n'
+        '    command.arg("build");\n'
+        "    if verbose { command.status(); }\n"
+        "}\n",
+        (("command_new", "online"),),
+    ),
+    # `--frozen` is irrevocable, so it still proves offline mode even though a
+    # later call the reader cannot see may add anything it likes.
+    "conditional-bound-flag-after-frozen": Case(
+        "fn run(frozen: bool) {\n"
+        '    let mut command = Command::new("cargo");\n'
+        '    command.arg("--frozen");\n'
+        '    if frozen { command.arg("build"); }\n'
+        "}\n",
+        (("command_new", "offline"),),
+    ),
+    # The reverse order is not sound: an unseen environment operation runs
+    # after the visible assignment, so it may write the variable again.
+    "conditional-bound-environment-after-offline": Case(
+        "fn run(frozen: bool) {\n"
+        '    let mut command = Command::new("cargo");\n'
+        '    command.env("CARGO_NET_OFFLINE", "true");\n'
+        '    if frozen { command.env("CARGO_NET_OFFLINE", "0"); }\n'
+        "}\n",
+        (("command_new", "unresolved"),),
+    ),
     # A second `let` of the same name is a different command. Carrying its
     # flags onto the first one would report a non-cargo build as offline.
     "shadowed-binding": Case(

@@ -2853,41 +2853,48 @@ while an unreadable removal name or an unreadable `envs(..)` list records
 "unknown" because either may name the offline variable or set it back. A list
 followed by more expression — `.envs([(..)].into_iter().chain(extra))` — is
 such a list: the trailing words may append a pair that overrides the visible
-one, so reading the literal alone would report `offline` on a guess.
-`--frozen`, by contrast, is not revocable by any argument or environment
-variable, so a command carrying it stays `offline` whatever the environment
-says. A helper that starts cargo, is defined in test scope, and has no call
-site in its own file is reported at its definition as `unresolved` instead of
-being dropped: another file may call it, and a call site proven offline does
-not carry the helper's other call sites with it, so the construction never
-falls out of the audit. A helper defined outside test scope is not reported:
-its call sites are visible, and library code is outside the rule's scope. A
-version or help probe reads no manifest and is not a spawn, while a version
-flag carrying a value (`cargo install --version 1.2.3`) is real work. Fixture
-package sources are excluded — a cargo spawn inside one is the build under
-audit, matching the fixture-lock rule's fixture set. Test scope follows the
-compiler through two paths, both in `nested_cargo_modules.py`: a `#[cfg(test)]`
-item covers its own span, and a `mod name;` declaration covered by test scope
-names a file that is test code throughout, whether the declaration carries the
-attribute or sits inside a test-scope inline module —
-`#[cfg(test)] mod checks { mod helpers; }` compiles `src/checks/helpers.rs`
-into the test target, so the inherited form must be followed or its spawns
-disappear silently. A declaration gated by any `cfg` other than a
-test-requiring one is left to the reader's uncertainty rather than guessed at.
-The trybuild reader resolves dependency renames, so a manifest that pulls the
-crate in as `tb = { package = "trybuild" }` is a fact and its `tb::TestCases`
-references are facts, with each manifest's declared names applied only to the
-sources that manifest governs. Both matter beyond their own findings: the
-policy's `has_nested_build` guard suppresses NC-008 and the entry-point EN-001
-when no nested build is visible, so missing evidence fails silent. The
-entry-point reader resolves the Makefile `test` target through prerequisites
-and recipes, each selected nextest profile's `setup` script, and each workflow
-step that runs tests, keeping shell connectors: only `&&` and a fail-fast line
-sequence prove that a fetch runs first, because `;`, `||`, a pipeline, a
-background command and an ignored error do not stop the tests when the fetch
-fails. A command whose expansion cannot be resolved, a `.ONESHELL` recipe or a
-recursive `make` makes the entry point `uncertain` with its reason rather than
-inventing an ordering.
+one, so reading the literal alone would report `offline` on a guess. A call
+made through a binding is read the same way when it sits in a block nested
+inside the binding's own: `if frozen { cmd.arg("--frozen"); }` sets the flag on
+one path of two, so recording it would call the spawn `offline` on a path the
+reader cannot establish. Such a call is recorded as an operation the reader
+cannot see — an unreadable word for an argument method, an unknown ledger entry
+for an environment method or removal — which makes the command `unresolved`,
+while a method that changes neither, such as `.status()`, is stepped over and
+leaves the rest of the evidence intact. `--frozen`, by contrast, is not
+revocable by any argument or environment variable, so a command carrying it
+stays `offline` whatever the environment says. A helper that starts cargo, is
+defined in test scope, and has no call site in its own file is reported at its
+definition as `unresolved` instead of being dropped: another file may call it,
+and a call site proven offline does not carry the helper's other call sites
+with it, so the construction never falls out of the audit. A helper defined
+outside test scope is not reported: its call sites are visible, and library
+code is outside the rule's scope. A version or help probe reads no manifest and
+is not a spawn, while a version flag carrying a value
+(`cargo install --version 1.2.3`) is real work. Fixture package sources are
+excluded — a cargo spawn inside one is the build under audit, matching the
+fixture-lock rule's fixture set. Test scope follows the compiler through two
+paths, both in `nested_cargo_modules.py`: a `#[cfg(test)]` item covers its own
+span, and a `mod name;` declaration covered by test scope names a file that is
+test code throughout, whether the declaration carries the attribute or sits
+inside a test-scope inline module — `#[cfg(test)] mod checks { mod helpers; }`
+compiles `src/checks/helpers.rs` into the test target, so the inherited form
+must be followed or its spawns disappear silently. A declaration gated by any
+`cfg` other than a test-requiring one is left to the reader's uncertainty
+rather than guessed at. The trybuild reader resolves dependency renames, so a
+manifest that pulls the crate in as `tb = { package = "trybuild" }` is a fact
+and its `tb::TestCases` references are facts, with each manifest's declared
+names applied only to the sources that manifest governs. Both matter beyond
+their own findings: the policy's `has_nested_build` guard suppresses NC-008 and
+the entry-point EN-001 when no nested build is visible, so missing evidence
+fails silent. The entry-point reader resolves the Makefile `test` target
+through prerequisites and recipes, each selected nextest profile's `setup`
+script, and each workflow step that runs tests, keeping shell connectors: only
+`&&` and a fail-fast line sequence prove that a fetch runs first, because `;`,
+`||`, a pipeline, a background command and an ignored error do not stop the
+tests when the fetch fails. A command whose expansion cannot be resolved, a
+`.ONESHELL` recipe or a recursive `make` makes the entry point `uncertain` with
+its reason rather than inventing an ordering.
 
 A step's `if:` is part of that ordering, and the two steps are asked different
 questions of it. A fetch step is proof only when it runs on every run, so the

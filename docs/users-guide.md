@@ -688,8 +688,14 @@ another's test (leynos/whitaker#518 measured nineteen). The rule reports:
   `unresolved` rather than letting an earlier visible assignment stand. An
   `envs` list followed by more expression, such as
   `.envs([(..)].into_iter().chain(extra))`, counts as unseen: the trailing
-  words may append a pair that overrides the visible one. `--frozen` is not
-  revocable this way: no argument and no environment variable turns it off.
+  words may append a pair that overrides the visible one. A call made on a
+  command through a binding may not run at all: in
+  `let mut cmd = Command::new("cargo"); if frozen { cmd.arg("--frozen"); }` the
+  flag is present only when `frozen` holds, so a call inside a block nested in
+  the binding's own counts as unseen — an argument call as an unreadable word,
+  an environment call or removal as an unknown ledger entry — while a method
+  that changes neither, such as `cmd.status()`, is stepped over. `--frozen` is
+  not revocable this way: no argument and no environment variable turns it off.
 - **NC-008**: a test entry point (the Makefile `test` target, a selected
   nextest profile's setup script, or a workflow step that runs tests) with no
   success-gated `cargo fetch --locked` before it. The finding is reported only

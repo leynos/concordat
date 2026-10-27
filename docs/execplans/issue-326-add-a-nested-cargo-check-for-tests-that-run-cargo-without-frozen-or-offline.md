@@ -472,9 +472,13 @@ workaround.
       repository verdict fixed the table at `:1090` and the mid-plan entry at
       `:183`, and corrected the same table and list in the pull-request body.
       The union arithmetic was always right — 16 noncompliant verdicts plus 4
-      indeterminate ones is 20 — which is why the error survived: the EN-001
-      repositories sit inside other rules' noncompliant sets and inflate only
-      the rule-level count, not the estate-level one.
+      indeterminate ones is 20 — which is why the error survived. The reason
+      is a count, not containment: with only 16 noncompliant repositories in
+      total, at most 16 of the 19 EN-001 repositories can sit inside other
+      rules' noncompliant sets, so at least three of them must be repositories
+      whose overall verdict is indeterminate. They still fall inside the
+      20-repository would-fail union, which is why every estate-level
+      cross-check agreed while the rule-level row was wrong.
 - [x] (2026-10-27) The first code finding: `command_state` read
       `cargo .args(extra).arg("--frozen")` as offline, but an unreadable word
       may be `--`, after which every later word belongs to the program cargo
@@ -801,8 +805,59 @@ workaround.
       after it; trailing whitespace still reads. The new case
       `envs-list-with-trailing-expression` failed first, then passed, and the
       spawn suite is 106/106. Four documents name the shape.
+- [x] (2026-10-27) Round 17 was gated green after `make fmt` reflowed four
+      documents and a code-span wrap I introduced was reworded, committed as
+      `3d887af`, pushed and verified, and the PR body updated. The eighteenth
+      CodeRabbit pass returned five findings, which are three distinct issues:
+      the survey-union explanation (twice), conditional calls on a bound
+      command, and `state` narrowing in a comprehension.
+- [x] (2026-10-27) Round 18's conditional-call finding is implemented.
+      `collect_variable` scanned the whole remaining block for `name.` and
+      passed every hit to `follow_chain`, so
+      `if frozen { cmd.arg("--frozen"); }` recorded the flag as unconditional
+      and classified the spawn `offline`. A probe confirmed the reading in both
+      shapes — an argument call and an environment call — before the fix. A hit
+      whose enclosing block differs from the binding's block now goes to
+      `follow_chain(..., conditional=True)`, which records it through
+      `_record_unseen`: an argument method appends a `None` word, an
+      environment method or removal records an unknown ledger entry, and a
+      method that changes neither is stepped over. The two new state-changing
+      cases and the negative control `conditional-bound-status` failed first
+      and pass, and two further cases pin that an earlier unconditional
+      `--frozen` survives a conditional call while an earlier unconditional
+      environment assignment does not. The spawn suite is 111/111.
+- [x] (2026-10-27) The mutation that proves those tests bite: reverting
+      `collect_variable` to unconditional gives 3 failed / 108 passed, exactly
+      the three cases written for the defect, with both negative controls still
+      green. `--frozen`'s irrevocability is what makes
+      `conditional-bound-flag-after-frozen` a real distinction rather than a
+      duplicate: the recorded flag still proves offline mode, so the reader
+      does not lose evidence it legitimately has.
+- [x] (2026-10-27) The `# noqa: SLF001` I first wrote for the external call to
+      `_record_offline_operation` was unnecessary and is gone. Pylint's
+      `messages control` disables `all` and re-enables a named list that has no
+      protected-access rule, and Ruff's `select` list has no `SLF` family, so
+      nothing would have flagged it — but a public seam is the better shape
+      anyway. `CargoCommand` now exposes `mark_arguments_unknown` and
+      `mark_environment_unknown`, each a one-line statement of the fact being
+      recorded, and `_record_unseen` uses them. A checker that did not exist
+      yet would otherwise have made the private access a latent gate failure.
+- [x] (2026-10-27) The `state` narrowing finding is applied as written:
+      `(state := command_state(command)) is not None and state != "offline"`.
+      The old membership test works under the interpreter, but the mutable set
+      does not retain its literal members for negative narrowing, so a strict
+      checker can still pass `str | None` to `_fact`.
+- [x] (2026-10-27) The survey-union explanation is corrected at both
+      occurrences. The old text said the 19 EN-001 repositories sit inside
+      other rules' noncompliant sets; there are only 16 noncompliant
+      repositories overall, so at most 16 of the 19 can, and at least three
+      must be overall-indeterminate. Both places now give the count-based
+      reason, and the 20-repository would-fail union is unchanged.
+- [x] (2026-10-27) Round 18's behaviour is documented in the rule README, the
+      users' guide, the developers' guide and the design document, each naming
+      the conditional-call shape and the method that steps over.
 - [ ] (2026-10-27) Remaining for delivery: this round's gate sequence, commit,
-      SSH push, PR body note, the eighteenth CodeRabbit pass, then marking the
+      SSH push, PR body note, the nineteenth CodeRabbit pass, then marking the
       PR ready for review.
 
 ## Surprises & discoveries
@@ -1143,6 +1198,34 @@ workaround.
   `offline` for a list whose appended pairs run afterwards. Impact: two
   functions reading the same bracket shape need the same rejection rule, and
   the second one is the one that decides whether a *list* is readable at all.
+- Observation: a block-aware scan can still read a conditional call as
+  unconditional. Evidence: `collect_variable` bounds its scan to the binding's
+  own block, which stops it reading past a rebinding, but a hit inside a nested
+  `if`, `match` or closure is still inside those bounds.
+  `if frozen { cmd.arg("--frozen"); }` therefore recorded the flag and the
+  spawn read `offline` although the flag exists on one path of two. Impact:
+  stopping the scan at the right *place* is not the same as reading the right
+  *shape*; the block a hit sits in has to be compared with the binding's, and a
+  hit that differs is evidence of unreadability rather than evidence of a flag.
+- Observation: the existing word and ledger machinery already had the right
+  way to say "a call the reader cannot see". Evidence: an unreadable `.args`
+  argument already appends a `None` word, and an unreadable environment
+  operation already records `offline=None`; both make `command_state` answer
+  `unresolved`. The first design added a `has_unseen_call` flag and a
+  `mark_unseen` method, and only one of the five new tests failed against it,
+  because a conditional environment call left an earlier `"true"` standing.
+  Impact: reusing the two existing representations fixed the behaviour without
+  a new state field, and the five-case table — not the first test that failed —
+  decided the design.
+- Observation: a `# noqa` can be a claim about a checker that was never
+  looking. Evidence: the first version of `_record_unseen` called
+  `command._record_offline_operation` from outside the class and carried
+  `# noqa: SLF001`, but Ruff's `select` list has no `SLF` family and Pylint
+  re-enables a named list with no protected-access rule, so the suppression
+  guarded nothing. Impact: check what the gates actually enable before
+  suppressing, and prefer a public seam when the call crosses a class boundary —
+  `mark_arguments_unknown` and `mark_environment_unknown` say what is being
+  recorded as well as allowing it.
 
 ## Decision log
 
@@ -1511,6 +1594,25 @@ workaround.
   the module's promise never to report `offline` on a guess. Trailing
   whitespace is still accepted, because rustfmt leaves the closing bracket at
   the end of a line. Date/Author: 2026-10-27, Claude Code on behalf of leynos.
+- Decision: a call on a bound command whose enclosing block differs from the
+  binding's is recorded as an unseen operation, not as evidence. Rationale: the
+  call runs on only some paths, so `if frozen { cmd.arg("--frozen"); }` would
+  otherwise make the spawn `offline` on a guess — the exact class of false
+  negative the rule exists to avoid. An argument method appends a `None` word
+  and an environment method or removal records `offline=None` in the ledger,
+  reusing the two representations an unreadable `.args` and an unreadable
+  `.envs` already use, so `command_state` needs no change. `--frozen` remains
+  irrevocable, so an unconditional flag recorded before the conditional call
+  still proves offline mode. Date/Author: 2026-10-27, Claude Code on behalf of
+  leynos.
+- Decision: `CargoCommand` exposes `mark_arguments_unknown` and
+  `mark_environment_unknown` rather than letting `_record_unseen` reach its
+  private `_record_offline_operation`. Rationale: the call crosses a class
+  boundary from a module-level helper, and a named method states which fact is
+  being recorded. The `# noqa: SLF001` that first guarded it was removed
+  because no enabled Ruff or Pylint rule reports protected access; the seam is
+  about clarity, not about silencing a gate. Date/Author: 2026-10-27, Claude
+  Code on behalf of leynos.
 
 ## Outcomes & retrospective
 
@@ -1557,15 +1659,17 @@ The EN-001 row claimed 4 indeterminate-only repositories where the survey data
 gives 19, and the pull-request body carried the same error with a four-name
 list. Nothing in the rule was wrong; the prose was. Two things made it survive
 a full review cycle. The estate-level union — 20 would-fail repositories — was
-correct throughout, because the 19 EN-001 repositories sit inside other rules'
-noncompliant sets, so every cross-check at the repository level agreed. And the
-four names listed were the repositories whose *overall* verdict was
-indeterminate, which is a different question from the rule-level count the
-table's column names. A rule-level table needs to be recomputed from the
-findings, not carried from the verdict summary; the lesson is to derive every
-cell from `rule-results.jsonl` at write time and to reconcile it against the
-independent report renderer, which computes the same table and would have
-disagreed.
+correct throughout: there are only 16 noncompliant repositories in total, so at
+most 16 of the 19 EN-001 repositories can sit inside other rules' noncompliant
+sets, and at least three of them must be repositories whose overall verdict is
+indeterminate. Either way they fall inside the 16-plus-4 union, so every
+cross-check at the repository level agreed. And the four names listed were the
+repositories whose *overall* verdict was indeterminate, which is a different
+question from the rule-level count the table's column names. A rule-level table
+needs to be recomputed from the findings, not carried from the verdict summary;
+the lesson is to derive every cell from `rule-results.jsonl` at write time and
+to reconcile it against the independent report renderer, which computes the
+same table and would have disagreed.
 
 The same round's two code findings are a different lesson. Both were latent: no
 corpus repository has an unreadable argument before `--frozen`, and the module
@@ -1706,7 +1810,18 @@ evidence; any indeterminate argument or environment source without it is
   fact only when the key is normalized to Rust's spelling. It fails against the
   previous reader with the manifest fact alone, and the plain `trybuild` and
   `tb` aliases already passed, so it pins the hyphen hop rather than alias
-  handling in general.
+  handling in general. The conditional-call cases are a third matched set. A
+  conditional `.arg("--frozen")` and a conditional
+  `.env("CARGO_NET_OFFLINE", "true")` must both be `unresolved`, while a
+  conditional `.status()` — which changes neither the words nor the environment
+  — must stay `online`, so the set cannot be satisfied by refusing to read
+  every call in a nested block. Two further cases split by evidence form: a
+  conditional argument call after an unconditional `--frozen` stays `offline`,
+  because the flag is irrevocable, while a conditional environment call after
+  an unconditional `"true"` is `unresolved`, because the variable is
+  last-write-wins and the unseen call may run after it. Reverting
+  `collect_variable` to unconditional fails exactly the three state-changing
+  cases and leaves both controls green.
 
 Obligation `EP-SCOPE-1`: a file named by a declaration in test scope is test
 code; its own declarations are followed in turn, so scope closes transitively;

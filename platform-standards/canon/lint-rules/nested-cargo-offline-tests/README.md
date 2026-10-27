@@ -127,6 +127,15 @@ the one-line parameter change recorded in `docs/roadmap.md` (DF12-109).
   it off, so a command carrying `--frozen` stays offline whatever an
   environment assignment says. Only the environment is last-write-wins; the
   flag is evidence on its own.
+- **A call on a bound command may not run.** With
+  `let mut cmd = Command::new("cargo"); if frozen { cmd.arg("--frozen"); }` the
+  flag is there only when `frozen` holds, so a call inside a block nested in
+  the binding's own is recorded as an operation the reader cannot see rather
+  than as evidence: an argument call appends an unreadable word, which is where
+  the argument list stops being trusted, and an environment call or removal
+  records an unknown entry in the ledger. A method that changes neither, such as
+  `cmd.status()`, is stepped over, so the evidence the other calls established
+  still stands.
 - **A version or help probe is not a spawn.** `cargo --version`,
   `cargo kani --version`, `cargo help` and `cargo build --help` read no
   manifest and touch no network, so they draw no finding. A version flag that

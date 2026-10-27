@@ -247,7 +247,7 @@ def _helper_sites(
         block = enclosing_block(pairs, match.start())
         bound = bound_name(source.masked, match.start())
         if block is not None and bound is not None:
-            collect_variable(source, command, bound, after, block[1])
+            collect_variable(source, command, bound, after, block[1], block, pairs)
         found.append(command)
     return found
 
@@ -309,7 +309,7 @@ def _source_facts(source: RustSource, scope: TestScope) -> list[SpawnFact]:
     site_facts = [
         _fact(source, command, state)
         for command in sites
-        if (state := command_state(command)) not in {None, "offline"}
+        if (state := command_state(command)) is not None and state != "offline"
     ]
     return sorted(direct_facts + site_facts, key=operator.itemgetter("line"))
 
