@@ -446,6 +446,16 @@ def _offline_flags(known: list[str]) -> bool:
     Words after `--` belong to the program cargo runs, not to cargo, so
     `cargo run -- --offline --locked` is not offline evidence: those flags
     reach the binary under test while cargo itself may still resolve crates.
+
+    Parameters
+    ----------
+    known:
+        The literal words of the argument list, in source order.
+
+    Returns
+    -------
+    bool
+        True when cargo's own flags rule the network out.
     """
     flags = known[: known.index("--")] if "--" in known else known
     return "--frozen" in flags or ("--offline" in flags and "--locked" in flags)
