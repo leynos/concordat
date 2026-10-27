@@ -640,11 +640,11 @@ workaround.
   fact would have been reported clean. The sentinel is read with `object.get`
   behind an `is_object` guard, because `object.get` on a non-object is a hard
   type error that aborts the whole query. Date/Author: 2026-10-27.
-- Decision: errexit is recognised from the letter `e` in a short option *and*
+- Decision: errexit is recognized from the letter `e` in a short option *and*
   from a short option ending in `o` followed by the word `errexit`. Rationale:
   `-o errexit` is the long spelling of `-e` and stops the script, so a template
-  written that way is fail-fast and a fetch-first block under it gates the test.
-  Only `-` words are considered because `+o errexit` unsets the option,
+  written that way is fail-fast and a fetch-first block under it gates the
+  test. Only `-` words are considered because `+o errexit` unsets the option,
   `-O errexit` is rejected by bash, and `--errexit` is not an option at all;
   all three were checked against the installed bash rather than assumed.
   Date/Author: 2026-10-27.
