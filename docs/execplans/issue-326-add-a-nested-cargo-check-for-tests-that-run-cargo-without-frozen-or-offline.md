@@ -199,7 +199,11 @@ workaround.
       repositories and about 29 trybuild repositories, against the recorded
       about 20 and about 30. The difference is coverage, not disagreement;
       the rule's counts are a floor.
-- [ ] Delivery: draft PR with session reference.
+- [x] (2026-10-27) Delivery: draft pull request
+      [#327](https://github.com/leynos/concordat/pull/327) opened against
+      `main` with the survey counts, the real-checkout before/after evidence,
+      the survey-coverage caveat and the Lody session reference in its body.
+      CodeRabbit review is the remaining step.
 
 ## Surprises & discoveries
 
