@@ -327,8 +327,17 @@ workaround.
       costs a finding. The splitter now tracks quoted state and backslash
       escapes; a new case reported `unresolved` before the change and
       `online` after.
-- [ ] (2026-10-27) Remaining for delivery: fifth full gate, push over SSH and
-      re-review.
+- [x] (2026-10-27) Fifth full sequential gate on `4029121`. Six of seven
+      green: `make fmt` rewrote no tracked file, `make check-fmt`, `make lint`
+      (Ruff, pylint 10.00/10 on both runs, ambrleaks, spelling, Skylos),
+      `make typecheck`, `make markdownlint` (0 issues) and `make nixie`.
+      `make test` reported 6 failed, 2818 passed, 1 skipped — again only the
+      six known `makeutil` fixture-drift failures, with the codescene flake and
+      the Hypothesis `too_slow` check both absent. The pass count moved
+      2817 → 2818, exactly the new `comma-inside-an-env-value` case, and the
+      three callers of `split_top_level` are covered by suites that stayed
+      green.
+- [ ] (2026-10-27) Remaining for delivery: push over SSH and re-review.
 
 ## Surprises & discoveries
 
