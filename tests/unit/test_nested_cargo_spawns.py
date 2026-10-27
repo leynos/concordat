@@ -1026,6 +1026,39 @@ def test_an_alias_does_not_reach_a_sibling_package(
     ]
 
 
+def test_a_hyphenated_trybuild_alias_is_matched_by_its_rust_name(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Cargo renames a dependency key's hyphens to underscores in Rust.
+
+    `my-trybuild = { package = "trybuild" }` puts the crate in scope as
+    `my_trybuild`, because a hyphen cannot appear in a Rust path. Matching the
+    key as written builds a pattern for a name no source file can use, so a
+    test that does reach trybuild through that rename would carry no source
+    fact — and the source fact is what says the checkout actually uses
+    trybuild, rather than only declaring it.
+    """
+    put(tmp_path, "Cargo.toml", '[workspace]\nmembers = ["member"]\n')
+    put(
+        tmp_path,
+        "member/Cargo.toml",
+        '[package]\nname = "member"\n\n'
+        '[dev-dependencies]\nmy-trybuild = { package = "trybuild", version = "1" }\n',
+    )
+    put(
+        tmp_path,
+        "member/tests/ui.rs",
+        "fn main() {\n    let cases = my_trybuild::TestCases::new();\n}\n",
+    )
+
+    facts = evidence(tmp_path).trybuild
+
+    assert [(fact["path"], fact["line"], fact["form"]) for fact in facts] == [
+        ("member/Cargo.toml", 1, "manifest"),
+        ("member/tests/ui.rs", 2, "source"),
+    ]
+
+
 def test_a_plain_reference_is_recorded_under_a_virtual_workspace_manifest(
     tmp_path: pathlib.Path,
 ) -> None:

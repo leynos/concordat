@@ -313,16 +313,22 @@ def _test_literal(aliases: frozenset[str]) -> re.Pattern[str]:
     Cargo lets a dependency rename the package it pulls in, so the crate may
     be in scope as `tb` rather than `trybuild`. Only the names the workspace
     actually declares are matched: a `TestCases` path through any other name
-    belongs to some other crate.
+    belongs to some other crate. *aliases* holds the names as the manifests
+    write them, which is not always how source spells them.
 
     Returns
     -------
     re.Pattern[str]
         The pattern for a reference through one of *aliases*.
     """
+    # A dependency key is written in the manifest, but Rust path segments
+    # cannot contain hyphens: Cargo exposes `my-trybuild` to source as
+    # `my_trybuild`. Matching the key as written would build a pattern for a
+    # name no file can use.
+    in_source = {name.replace("-", "_") for name in aliases}
     # Longest first, so an alias that is a prefix of another cannot shadow it.
     joined = "|".join(
-        re.escape(name) for name in sorted(aliases, key=len, reverse=True)
+        re.escape(name) for name in sorted(in_source, key=len, reverse=True)
     )
     return re.compile(rf"\b(?:{joined})\s*::\s*TestCases")
 
