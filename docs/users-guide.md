@@ -707,14 +707,15 @@ renames a dependency with `key = { package = "name" }`, so
 the manifest fact and a `tb::TestCases` reference in that package's test scope
 are recognized. A `TestCases` path through a name the governing manifest does
 not declare belongs to some other crate and is not evidence. The trybuild
-package's plain name always counts, so a reference in a file whose manifest is a
-virtual workspace root is still read.
+package's plain name always counts, so a reference in a file whose manifest is
+a virtual workspace root is still read.
 
-Test scope follows the compiler, not just the attribute. `#[cfg(test)] mod
-checks { mod helpers; }` builds `src/checks/helpers.rs` into the test target
-although `mod helpers;` carries no attribute of its own, so a cargo spawn there
-is reported too. A declaration gated by any other `cfg` is outside this rule's
-judgement, because the reader cannot decide what that gate compiles.
+Test scope follows the compiler, not just the attribute.
+`#[cfg(test)] mod checks { mod helpers; }` builds `src/checks/helpers.rs` into
+the test target although `mod helpers;` carries no attribute of its own, so a
+cargo spawn there is reported too. A declaration gated by any other `cfg` is
+outside this rule's judgement, because the reader cannot decide what that gate
+compiles.
 
 Two details decide whether a prefetch counts. Cargo accepts its global options
 before the subcommand, so `cargo --locked fetch` and `cargo -q test` are read

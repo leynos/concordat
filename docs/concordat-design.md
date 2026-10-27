@@ -2858,14 +2858,14 @@ and its `tb::TestCases` references are facts, with each manifest's declared
 names applied only to the sources that manifest governs. Both matter beyond
 their own findings: the policy's `has_nested_build` guard suppresses NC-008 and
 the entry-point EN-001 when no nested build is visible, so missing evidence
-fails silent. The entry-point reader resolves the Makefile
-`test` target through prerequisites and recipes, each selected nextest profile's
-`setup` script, and each workflow step that runs tests, keeping shell
-connectors: only `&&` and a fail-fast line sequence prove that a fetch runs
-first, because `;`, `||`, a pipeline, a background command and an ignored error
-do not stop the tests when the fetch fails. A command whose expansion cannot be
-resolved, a `.ONESHELL` recipe or a recursive `make` makes the entry point
-`uncertain` with its reason rather than inventing an ordering.
+fails silent. The entry-point reader resolves the Makefile `test` target
+through prerequisites and recipes, each selected nextest profile's `setup`
+script, and each workflow step that runs tests, keeping shell connectors: only
+`&&` and a fail-fast line sequence prove that a fetch runs first, because `;`,
+`||`, a pipeline, a background command and an ignored error do not stop the
+tests when the fetch fails. A command whose expansion cannot be resolved, a
+`.ONESHELL` recipe or a recursive `make` makes the entry point `uncertain` with
+its reason rather than inventing an ordering.
 
 Exemptions keep the `whitaker-provisioning` convention of a repository, a path,
 a rationale and a review trigger, and differ from the fixture-lock rule in two
