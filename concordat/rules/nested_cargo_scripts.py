@@ -37,6 +37,11 @@ _TWO_CHARACTER_CONNECTORS: typ.Final = frozenset({"&&", "||", "|&"})
 _ONE_CHARACTER_CONNECTORS: typ.Final = frozenset({";", "|", "&"})
 _GATING_CONNECTORS: typ.Final = frozenset({"&&", "\n"})
 _REDIRECTION_OPERATORS: typ.Final = frozenset({">", "<"})
+# A `#` opens a comment only where a word starts: after whitespace, a
+# connector, or nothing at all. `a#b` is one word, so the position decides
+# rather than the character alone — and a `#` inside quotes or a substitution
+# never reaches this check, because those are scanned as units.
+_COMMENT_STARTERS: typ.Final = frozenset({" ", "\t", "\n", ";", "&", "|"})
 
 # Shell keywords that introduce a command without being one, so a recipe line
 # such as `if [ x ]; then $(MAKE) fetch; fi` still names `make`.
@@ -107,7 +112,9 @@ class ShellCommand:
     gates_next: bool
 
 
-def split_commands(script: str, *, newline_gates: bool = True) -> list[ShellCommand]:
+def split_commands(
+    script: str, *, newline_gates: bool = True, comments: bool = True
+) -> list[ShellCommand]:
     """Split a shell script into commands while keeping the connectors.
 
     `lex_segments` drops connectors, so it cannot say whether one command's
@@ -129,6 +136,11 @@ def split_commands(script: str, *, newline_gates: bool = True) -> list[ShellComm
         `run` shell, and it is not for a shell that runs every line whatever
         happened. Newlines always separate commands; this only says whether
         they gate.
+    comments:
+        Whether a `#` that starts a word opens a comment. It does wherever a
+        shell reads the script. A nextest setup `command` is split into argv
+        and executed directly, with no shell between, so there a `#` is an
+        ordinary argument and the caller passes ``False``.
 
     Returns
     -------
@@ -140,6 +152,10 @@ def split_commands(script: str, *, newline_gates: bool = True) -> list[ShellComm
     index = 0
     depth = 0
     quote: str | None = None
+    # Where the comment opened in the command being built, so its text is cut
+    # from that command's slice. A comment always runs to the newline that also
+    # ends the command, so it is always at the tail.
+    comment_start: int | None = None
     while index < len(script):
         character = script[index]
         if quote is not None:
@@ -148,6 +164,18 @@ def split_commands(script: str, *, newline_gates: bool = True) -> list[ShellComm
                 continue
             quote = None if character == quote else quote
             index += 1
+            continue
+        if (
+            comments
+            and character == "#"
+            and (index == 0 or script[index - 1] in _COMMENT_STARTERS)
+        ):
+            # The comment runs to the newline but does not consume it: the
+            # newline still separates the command before the comment from the
+            # one after it, and still gates when the shell fails fast.
+            comment_start = index if comment_start is None else comment_start
+            newline = script.find("\n", index)
+            index = len(script) if newline < 0 else newline
             continue
         if character == "\\":
             index += 2
@@ -182,12 +210,17 @@ def split_commands(script: str, *, newline_gates: bool = True) -> list[ShellComm
         connector, end = found
         _append_command(
             commands,
-            script[start:index],
+            script[start : comment_start if comment_start is not None else index],
             gates_next=_gates(connector, newline_gates=newline_gates),
         )
         start = end
         index = end
-    _append_command(commands, script[start:], gates_next=False)
+        comment_start = None
+    _append_command(
+        commands,
+        script[start : comment_start if comment_start is not None else len(script)],
+        gates_next=False,
+    )
     return commands
 
 
@@ -271,7 +304,9 @@ class ScriptCommand:
     meaning: CommandMeaning
 
 
-def script_commands(text: str, *, newline_gates: bool = True) -> list[ScriptCommand]:
+def script_commands(
+    text: str, *, newline_gates: bool = True, comments: bool = True
+) -> list[ScriptCommand]:
     """Split one script and classify each of its commands.
 
     Parameters
@@ -283,6 +318,10 @@ def script_commands(text: str, *, newline_gates: bool = True) -> list[ScriptComm
         success. That is true of Make's recipe shells and of a fail-fast
         workflow shell, and false of a shell that runs every line whatever
         happened.
+    comments:
+        Whether a `#` that starts a word opens a comment, as it does wherever
+        a shell reads the script. A nextest setup `command` is argv rather
+        than shell text, so its caller passes ``False``.
 
     Returns
     -------
@@ -291,7 +330,9 @@ def script_commands(text: str, *, newline_gates: bool = True) -> list[ScriptComm
     """
     return [
         ScriptCommand(command.text, command.gates_next, _classify(command.text))
-        for command in split_commands(text, newline_gates=newline_gates)
+        for command in split_commands(
+            text, newline_gates=newline_gates, comments=comments
+        )
     ]
 
 

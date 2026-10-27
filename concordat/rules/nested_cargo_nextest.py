@@ -254,7 +254,9 @@ def _setup_command_state(command: str) -> str:
         `before` for a single fetching command, `uncertain` for anything the
         reader cannot reduce to one readable command, and `absent` otherwise.
     """
-    commands = script_commands(command)
+    # Split into argv and executed directly, with no shell between: a `#` here
+    # is an ordinary argument, not the start of a comment.
+    commands = script_commands(command, comments=False)
     if len(commands) != 1:
         return UNCERTAIN
     only = commands[0].meaning

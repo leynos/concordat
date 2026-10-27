@@ -551,7 +551,10 @@ def _job_entries(
     jobs = _mapping(parsed.get("jobs"))
     if jobs is None:
         return []
-    workflow = parsed.get("defaults")
+    # `_default_shell` reads `defaults.run.shell` out of the mapping it is
+    # given, so the workflow itself is passed: its top-level `defaults` block
+    # would be one level too shallow and its shell silently dropped.
+    workflow = parsed
     facts: list[EntryPointFact] = []
     for job_name, raw_job in jobs.items():
         job = _mapping(raw_job)

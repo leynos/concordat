@@ -212,7 +212,8 @@ def effective_shell(
     job:
         The job mapping the step belongs to.
     workflow:
-        The workflow's top-level `defaults` block, if it declares one.
+        The decoded workflow mapping. Its top-level `defaults` block is read
+        here; passing that block itself would hide it.
     runs_on:
         The job's `runs-on` value, which selects the default shell.
 

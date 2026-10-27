@@ -74,6 +74,19 @@ CASES: dict[str, Case] = {
         'fn run() {\n    Command::new("cargo").arg("--offline");\n}\n',
         (("command_new", "online"),),
     ),
+    # Words after `--` are the arguments of the program cargo runs, not of
+    # cargo. Reading them as cargo's own flags would call a spawn offline that
+    # can still reach the network.
+    "offline-after-double-dash": Case(
+        "fn run() {\n"
+        '    Command::new("cargo").args(["run", "--", "--offline", "--locked"]);\n'
+        "}\n",
+        (("command_new", "online"),),
+    ),
+    "frozen-after-double-dash": Case(
+        'fn run() {\n    Command::new("cargo").args(["run", "--", "--frozen"]);\n}\n',
+        (("command_new", "online"),),
+    ),
     "command-local-env": Case(
         "fn run() {\n"
         '    Command::new("cargo")\n'

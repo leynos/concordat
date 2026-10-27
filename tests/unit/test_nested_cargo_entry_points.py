@@ -149,6 +149,47 @@ def test_a_continuation_does_not_split_a_command() -> None:
     assert gates(continued) == [(continued, False)]
 
 
+@pytest.mark.parametrize(
+    "comment",
+    [
+        "# now run; the tests",
+        "# fetch first && then test",
+        "# don't skip this",
+        "# a | b",
+        "# background & later",
+    ],
+    ids=["semicolon", "and", "apostrophe", "pipe", "background"],
+)
+def test_a_shell_comment_is_not_read_as_live_shell(comment: str) -> None:
+    """A `#` comment is text the shell discards, not a command.
+
+    Reading a comment as live shell both breaks the ordering proof — a `;` or
+    `&&` inside it ends the command — and can swallow the lines after it, since
+    an apostrophe in prose opens a quote the next apostrophe has to close.
+    """
+    script = f"cargo fetch --locked\n{comment}\ncargo test"
+    assert gates(script) == [
+        ("cargo fetch --locked", True),
+        ("cargo test", False),
+    ]
+
+
+def test_a_comment_after_a_command_does_not_hide_it() -> None:
+    """A trailing comment is stripped, so the command it trails stays whole."""
+    assert gates("cargo fetch --locked  # warm the cache\ncargo test") == [
+        ("cargo fetch --locked", True),
+        ("cargo test", False),
+    ]
+
+
+def test_a_hash_inside_a_word_is_not_a_comment() -> None:
+    """Only a `#` that starts a word opens a comment, as POSIX shells agree."""
+    assert gates("echo a#b && cargo test") == [
+        ("echo a#b", True),
+        ("cargo test", False),
+    ]
+
+
 # --- the Makefile test target ----------------------------------------------
 
 
@@ -958,6 +999,28 @@ def test_a_workflow_default_is_used_when_the_job_declares_none(
         "          cargo fetch --locked\n          cargo test\n",
     )
     assert states(tmp_path) == [("workflow", "test", "before")]
+
+
+def test_a_non_fail_fast_workflow_default_is_not_dropped(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A workflow default that is *less* strict than the runner's still applies.
+
+    Ubuntu's runner default shell is already fail-fast, so a workflow default
+    of `bash -e {0}` looks right either way. `bash {0}` is the discriminating
+    case: reading the workflow's `defaults` block as though it were itself
+    that block finds nothing, falls back to the runner default, and wrongly
+    claims the fetch gates the test.
+    """
+    put(
+        tmp_path,
+        WORKFLOW,
+        "defaults:\n  run:\n    shell: bash {0}\n"
+        "jobs:\n  test:\n    runs-on: ubuntu-latest\n"
+        "    steps:\n      - run: |\n"
+        "          cargo fetch --locked\n          cargo test\n",
+    )
+    assert states(tmp_path) == [("workflow", "test", "absent")]
 
 
 def test_a_windows_runner_does_not_fail_fast(tmp_path: pathlib.Path) -> None:

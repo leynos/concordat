@@ -441,8 +441,14 @@ def _is_probe(words: list[str]) -> bool:
 
 
 def _offline_flags(known: list[str]) -> bool:
-    """Report whether a command's literal flags prove it cannot reach the network."""
-    return "--frozen" in known or ("--offline" in known and "--locked" in known)
+    """Report whether a command's literal flags prove it cannot reach the network.
+
+    Words after `--` belong to the program cargo runs, not to cargo, so
+    `cargo run -- --offline --locked` is not offline evidence: those flags
+    reach the binary under test while cargo itself may still resolve crates.
+    """
+    flags = known[: known.index("--")] if "--" in known else known
+    return "--frozen" in flags or ("--offline" in flags and "--locked" in flags)
 
 
 def split_top_level(text: str) -> list[str]:
