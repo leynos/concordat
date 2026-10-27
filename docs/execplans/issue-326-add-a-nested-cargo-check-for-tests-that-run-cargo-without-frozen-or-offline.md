@@ -553,8 +553,28 @@ workaround.
       `test_skylos_lint_contract.py` asserted an exact entry-point set and was
       updated to carry the new typed record, keeping the set independently
       maintained rather than derived from the configuration under test.
-- [ ] (2026-10-27) Remaining for delivery: run the full commit gates on the
-      round's commits, push over SSH and re-review.
+- [x] (2026-10-27) Full commit gates on the round's commits, through
+      `scrutineer`, sequentially, with each log under `/tmp`: `make check-fmt`,
+      `make lint` (all six stages, Skylos included), `make typecheck`,
+      `make markdownlint` and `make nixie` all exit `0`. `make test` reports
+      the six `makeutil` fixture-drift failures that predate the branch and,
+      on one pass, the OPA `eval_cancel_error` flake; the flake cleared on the
+      re-run, and no failure is branch-related. The gate run was started
+      before a two-line plan correction landed, so the docs-sensitive gates
+      were re-run at the corrected commit; the delta touches no Python.
+- [x] (2026-10-27) Eleventh CodeRabbit round, foregrounded: two unique
+      findings, both real. A hyphenated trybuild alias was matched by its
+      manifest key, but Cargo exposes `my-trybuild` to Rust as `my_trybuild`,
+      so the pattern named a path no file can spell and the source fact was
+      lost. The impact is narrower than the finding claimed — the manifest
+      fact is recorded independently, so `has_nested_build` still held and no
+      NC-008 went missing — but the evidence that the checkout *uses*
+      trybuild was absent, and the new test fails against the previous
+      reader. The second finding was documentation drift from the tenth
+      round: the code narrowed the offline value set to `"true"` and `"1"`
+      while five prose descriptions still named `"true"` alone. Both fixed,
+      with the README now stating which spellings leave the network reachable.
+- [ ] (2026-10-27) Remaining for delivery: push over SSH and re-review.
 
 ## Surprises & discoveries
 
@@ -784,6 +804,25 @@ workaround.
   receiver rewrite clears it. The method is reached only through that one
   expression, so a typed entry point for the one symbol is the narrow honest
   record, and the contract test carries it alongside the `_RuleTally` one.
+- Observation: the ninth round's rename fix and the eleventh round's alias fix
+  are the same question asked at two different layers, and only the first was
+  covered. The ninth round taught the reader that a dependency *key* is not the
+  package it names, so `tb = { package = "trybuild" }` counts as trybuild. That
+  fix compared the resolved package fine, but the alias it then matched against
+  source was still the key as written, and Cargo renames a key's hyphens to
+  underscores for the Rust-visible name. Evidence: a `my-trybuild` rename with a
+  `my_trybuild::TestCases` call produced the manifest fact and no source fact.
+  Impact: resolving a manifest entry to its package and resolving that entry to
+  its *source spelling* are separate transformations, and a rename fix that
+  stops at the first one leaves the second untested.
+- Observation: a scoping fix can quietly outrun the prose that describes it.
+  The tenth round narrowed `CARGO_NET_OFFLINE` to the values Cargo's boolean
+  parser accepts and recorded the measurement in a code comment, but five
+  documents still described the old single value. Evidence: the README, users'
+  guide, developers' guide, design document and this plan's glossary each said
+  `"true"` alone, while `_OFFLINE_VALUES` held `{"1", "true"}`. Impact: when a
+  round changes a *value set* rather than a mechanism, the prose is part of the
+  change surface, and `grep` for the constant is the check that catches it.
 
 ## Decision log
 
@@ -1028,6 +1067,16 @@ workaround.
   whitelist entry — would have suppressed any future `merged` method in the
   package; the control run confirms this one suppresses exactly the one symbol
   while a planted dead sibling is still reported. Date/Author: 2026-10-27.
+- Decision: the trybuild alias set keeps the manifest spelling and normalizes
+  hyphens at pattern-build time, in `_test_literal`, rather than normalizing
+  when `_aliases_by_directory` records the key. Rationale: the hyphen rule
+  belongs to how Rust names a crate in source, which is exactly what
+  `_test_literal` is building a pattern for, and a reader of that function
+  needs the rule there. Normalizing at collection would spread the
+  transformation across two functions and leave the stored names looking like
+  Rust paths when they are manifest keys. The set stays keyed by the manifest
+  spelling so it can still be compared against dependency entries. Date/Author:
+  2026-10-27.
 
 ## Outcomes & retrospective
 
@@ -1098,6 +1147,15 @@ the code was wrong, and only a seeded fault told them apart. This is why the
 plan's verification obligations ask for a negative control beside each
 guarantee: a passing suite is evidence that the code runs, not that it is
 right, and the two are easy to confuse when the fixture corpus is quiet.
+
+The eleventh round adds a smaller one about transformations. The ninth round
+established that a dependency key is not the package it names; the eleventh
+found that a package name is not the spelling source uses either, because Cargo
+maps a key's hyphens to underscores. One rename therefore passes through two
+distinct transformations — entry to package, package to source name — and the
+first round that fixed renaming covered only the first. The general form is
+that a value which is rewritten on its way to a comparison needs a test at each
+hop, not one at the end.
 
 ## Context and orientation
 
@@ -1188,7 +1246,13 @@ evidence; any indeterminate argument or environment source without it is
   `arg("--frozen").args(extra)` must be `offline`. The first fails against the
   previous reader and the second already passed, so the pair also proves the
   fix is the ordering and not a blanket refusal to read flags after an unknown
-  word.
+  word. The hyphenated trybuild alias is a second matched pair: the rename
+  `my-trybuild = { package = "trybuild" }` with a `my_trybuild::TestCases` call
+  must yield both a manifest fact and a source fact, and it yields the source
+  fact only when the key is normalized to Rust's spelling. It fails against the
+  previous reader with the manifest fact alone, and the plain `trybuild` and
+  `tb` aliases already passed, so it pins the hyphen hop rather than alias
+  handling in general.
 
 Obligation `EP-SCOPE-1`: a file named by a declaration in test scope is test
 code; its own declarations are followed in turn, so scope closes transitively;
