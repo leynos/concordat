@@ -303,8 +303,17 @@ workaround.
       severity, which contradicts `RuleRunResult.exit_code`; the bullet now
       says an indeterminate finding blocks only when its severity is not
       `warning`.
-- [ ] (2026-10-27) Remaining for delivery: fourth full gate, push over SSH and
-      re-review.
+- [x] (2026-10-27) Fourth full sequential gate on `ec0838d`. Six of seven
+      green: `make fmt` rewrote no tracked file, `make check-fmt`, `make lint`
+      (Ruff, pylint 10.00/10, ambrleaks, spelling, Skylos), `make typecheck`,
+      `make markdownlint` (0 issues) and `make nixie`. `make test` reported
+      6 failed, 2817 passed, 1 skipped — only the six known `makeutil`
+      fixture-drift failures this time; the `main-owned-codescene-coverage`
+      OPA deadline flake and the Hypothesis `too_slow` check did not occur. The
+      pass count reconciles exactly: 2815 before, plus the new
+      `path-qualified-binding` case, plus the codescene test that had been
+      flaking.
+- [ ] (2026-10-27) Remaining for delivery: push over SSH and re-review.
 
 ## Surprises & discoveries
 
