@@ -682,8 +682,12 @@ another's test (leynos/whitaker#518 measured nineteen). The rule reports:
   environment is not proof, because the gate's environment is not the test's.
   When a command assigns `CARGO_NET_OFFLINE` more than once, the *last*
   assignment is the one Cargo reads, so `"true"` followed by `"0"` leaves the
-  spawn `online`. `--frozen` is not revocable this way: no argument and no
-  environment variable turns it off.
+  spawn `online`. Removing the variable counts as an operation too:
+  `env_remove("CARGO_NET_OFFLINE")` and `env_clear()` both leave the spawn
+  `online`, and an environment operation the reader cannot see makes it
+  `unresolved` rather than letting an earlier visible assignment stand.
+  `--frozen` is not revocable this way: no argument and no environment variable
+  turns it off.
 - **NC-008**: a test entry point (the Makefile `test` target, a selected
   nextest profile's setup script, or a workflow step that runs tests) with no
   success-gated `cargo fetch --locked` before it. The finding is reported only
@@ -696,9 +700,11 @@ another's test (leynos/whitaker#518 measured nineteen). The rule reports:
   point is reported only when the checkout has a spawn or trybuild use, for the
   same reason NC-008 is: there is otherwise nothing for a prefetch to protect.
   The rule says it does not know rather than guessing either way. A helper that
-  starts cargo but has no call site in the file that defines it — because
-  another file calls it, or because nothing does — is also `unresolved`, since
-  what another file's call adds is not visible to the reader.
+  starts cargo, is defined in test scope, and has no call site in the file that
+  defines it — because another file calls it, or because nothing does — is also
+  `unresolved`, since what another file's call adds is not visible to the
+  reader. A helper defined in library code is left alone: its call sites are
+  visible, and library code is outside the rule's scope.
 
 A version or help probe is not a spawn: `cargo --version`,
 `cargo kani --version`, `cargo help`, `cargo build --help` and `cargo build -h`

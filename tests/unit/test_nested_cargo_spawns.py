@@ -192,6 +192,89 @@ CASES: dict[str, Case] = {
         "}\n",
         (("command_new", "offline"),),
     ),
+    # An unreadable `envs` list is an environment operation the reader cannot
+    # see, and it runs after the visible assignment. The list may set
+    # `CARGO_NET_OFFLINE` to anything, so the earlier `"true"` no longer
+    # describes what cargo reads. Leaving it as `offline` would be the reader
+    # reporting offline mode on a guess.
+    "env-offline-then-unreadable-envs": Case(
+        "fn run(extra: &[(&str, &str)]) {\n"
+        '    Command::new("cargo")\n'
+        '        .env("CARGO_NET_OFFLINE", "true")\n'
+        "        .envs(extra)\n"
+        '        .arg("build");\n'
+        "}\n",
+        (("command_new", "unresolved"),),
+    ),
+    # A pair whose name the reader cannot see is the same problem one level
+    # down: the hidden name may be `CARGO_NET_OFFLINE`, and the pair's position
+    # after the visible assignment makes it the one cargo reads.
+    "env-offline-then-unreadable-name": Case(
+        "fn run(name: &str) {\n"
+        '    Command::new("cargo")\n'
+        '        .env("CARGO_NET_OFFLINE", "true")\n'
+        '        .env(name, "0")\n'
+        '        .arg("build");\n'
+        "}\n",
+        (("command_new", "unresolved"),),
+    ),
+    # `env_clear` removes every variable the command would have inherited, and
+    # every assignment made before it. The earlier `"true"` is gone, so cargo
+    # reads no offline setting at all.
+    "env-offline-then-clear": Case(
+        "fn run() {\n"
+        '    Command::new("cargo")\n'
+        '        .env("CARGO_NET_OFFLINE", "true")\n'
+        "        .env_clear()\n"
+        '        .arg("build");\n'
+        "}\n",
+        (("command_new", "online"),),
+    ),
+    "env-offline-then-remove": Case(
+        "fn run() {\n"
+        '    Command::new("cargo")\n'
+        '        .env("CARGO_NET_OFFLINE", "true")\n'
+        '        .env_remove("CARGO_NET_OFFLINE")\n'
+        '        .arg("build");\n'
+        "}\n",
+        (("command_new", "online"),),
+    ),
+    # A removal is an operation like any other, so a visible assignment after
+    # it wins again.
+    "env-offline-remove-then-online": Case(
+        "fn run() {\n"
+        '    Command::new("cargo")\n'
+        '        .env("CARGO_NET_OFFLINE", "true")\n'
+        '        .env_remove("CARGO_NET_OFFLINE")\n'
+        '        .env("CARGO_NET_OFFLINE", "true")\n'
+        '        .arg("build");\n'
+        "}\n",
+        (("command_new", "offline"),),
+    ),
+    # An unreadable name is an operation that may have been the last one — but
+    # a visible assignment after it settles the question again.
+    "env-offline-unreadable-then-literal-online": Case(
+        "fn run(name: &str) {\n"
+        '    Command::new("cargo")\n'
+        '        .env("CARGO_NET_OFFLINE", "true")\n'
+        '        .env(name, "0")\n'
+        '        .env("CARGO_NET_OFFLINE", "0")\n'
+        '        .arg("build");\n'
+        "}\n",
+        (("command_new", "online"),),
+    ),
+    # `--frozen` is still proof after an operation the reader cannot read:
+    # the flags and the environment are independent, and nothing revokes the
+    # flag.
+    "frozen-survives-an-unreadable-env": Case(
+        "fn run(extra: &[(&str, &str)]) {\n"
+        '    Command::new("cargo")\n'
+        '        .arg("--frozen")\n'
+        "        .envs(extra)\n"
+        '        .arg("build");\n'
+        "}\n",
+        (("command_new", "offline"),),
+    ),
     # Within one `envs` list the pairs are applied in order, so the same
     # last-write-wins reading applies.
     "literal-envs-last-pair-wins": Case(
@@ -442,6 +525,32 @@ def test_a_spawn_outside_test_scope_is_ignored(tmp_path: pathlib.Path) -> None:
     """Library code building cargo is not a nested test build."""
     source = 'fn run() {\n    Command::new("cargo").arg("build");\n}\n'
     put(tmp_path, "src/lib.rs", source)
+    assert states(tmp_path) == []
+
+
+def test_a_helper_defined_and_called_outside_test_scope_is_ignored(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A library helper is not reported just because no test call site exists.
+
+    The fallback that reports an unreached helper exists for a helper whose
+    calls live somewhere the reader cannot see. Library code is somewhere it
+    *can* see, and the rule declines to judge it: a helper defined in
+    `src/builder.rs` and called from library code is not a nested test build,
+    and reporting it would put an EN-001 on a file the rule promises to leave
+    alone — one no exemption can suppress.
+    """
+    put(
+        tmp_path,
+        "src/builder.rs",
+        'pub fn cargo() -> Command {\n    Command::new("cargo")\n}\n',
+    )
+    put(
+        tmp_path,
+        "src/lib.rs",
+        "mod builder;\n\npub fn build() {\n"
+        '    builder::cargo().arg("build").status();\n}\n',
+    )
     assert states(tmp_path) == []
 
 

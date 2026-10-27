@@ -2843,16 +2843,22 @@ argument list or a non-literal value for `CARGO_NET_OFFLINE` makes the spawn
 unresolved rather than being rounded down to a pass. Two rules keep the
 environment reading faithful to `std::process::Command`. A repeated
 `CARGO_NET_OFFLINE` assignment is last-write-wins, because `Command::env` keeps
-the value given last for a name; the reader tracks the *latest* assignment — a
+the value given last for a name; the reader tracks the *latest* operation — a
 call site's over a helper's, and a later pair over an earlier one — so `"true"`
-followed by `"0"` is `online`, and a last assignment the reader cannot see
-makes the spawn `unresolved` rather than letting the earlier pair speak for it.
+followed by `"0"` is `online`, and a last operation the reader cannot see makes
+the spawn `unresolved` rather than letting the earlier pair speak for it.
+`env_remove` and `env_clear` are operations on that ledger rather than
+assignments: both take the variable away, so both leave the spawn `online`,
+while an unreadable removal name or an unreadable `envs(..)` list records
+"unknown" because either may name the offline variable or set it back.
 `--frozen`, by contrast, is not revocable by any argument or environment
 variable, so a command carrying it stays `offline` whatever the environment
-says. A helper that starts cargo but has no call site in its own file is
-reported at its definition as `unresolved` instead of being dropped: another
-file may call it, and a call site proven offline does not carry the helper's
-other call sites with it, so the construction never falls out of the audit. A
+says. A helper that starts cargo, is defined in test scope, and has no call
+site in its own file is reported at its definition as `unresolved` instead of
+being dropped: another file may call it, and a call site proven offline does
+not carry the helper's other call sites with it, so the construction never
+falls out of the audit. A helper defined outside test scope is not reported:
+its call sites are visible, and library code is outside the rule's scope. A
 version or help probe reads no manifest and is not a spawn, while a version
 flag carrying a value (`cargo install --version 1.2.3`) is real work. Fixture
 package sources are excluded — a cargo spawn inside one is the build under

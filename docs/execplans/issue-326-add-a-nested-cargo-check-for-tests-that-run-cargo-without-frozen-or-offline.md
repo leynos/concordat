@@ -17,12 +17,23 @@ work; a 19-minute wait was observed in `leynos/whitaker` and the pattern is
 documented in `leynos/whitaker#518`. After this change,
 `concordat artefact rule run nested-cargo-offline-tests --repo <checkout>`
 reports, without running Cargo or touching the network, every Cargo-command
-spawn below `tests/`/`test_support/` that can reach the network, and every
-entry point (`Makefile` target, nextest setup script, CI workflow step) whose
-test ramp starts Cargo before it has prefetched the graph offline. The report
-is advisory by default (`warning` severity) so the estate can be surveyed
-before the rule is promoted to blocking, and a warning finding must no longer
-fail a gate — that is the first task, and it is what lets the survey run safely.
+spawn below `tests/`/`test_support/` that the reader can detect and that can
+reach the network, and every entry point (`Makefile` target, nextest setup
+script, CI workflow step) whose test ramp starts Cargo before it has prefetched
+the graph offline. The report is advisory by default (`warning` severity) so
+the estate can be surveyed before the rule is promoted to blocking, and a
+warning finding must no longer fail a gate — that is the first task, and it is
+what lets the survey run safely.
+
+The audit is a static reading of the source, so its promise is bounded by what
+that reading can see. It does not follow a macro that expands to
+`Command::new("cargo")`, a `fn` pointer or trait object holding the
+construction, or a command assembled in another crate; a spawn it cannot see
+draws no finding. An entry point is reported only when the checkout already has
+a spawn or trybuild fact for its prefetch to protect, so a checkout whose
+spawns are all invisible to the reader is also silent about its entry points.
+Both limits are stated in the rule's README, and they are the reason the rule
+ships as a survey rather than a proof.
 
 ## Constraints
 
@@ -726,8 +737,42 @@ workaround.
       2907 passed, 1 skipped, and the same six known `makeutil` fixture-drift
       failures with no nested-cargo failure. Every collected item is accounted
       for.
+- [x] (2026-10-27) Round 14 was committed as `2d32b95` (12 files, +490/−75),
+      SSH-pushed, and the tracking ref refreshed with a leading-`+` refspec;
+      `ls-remote` reported a remote head equal to the local one. The fifteenth
+      CodeRabbit pass then returned four findings, all verified real.
+- [x] (2026-10-27) Round 15's four findings are implemented. `env_remove` and
+      `env_clear` now count as operations on the `CARGO_NET_OFFLINE` ledger
+      rather than being stepped over, so a removal leaves the spawn `online`;
+      an unreadable `envs(..)` list, removal name or value records "unknown"
+      and makes the spawn `unresolved`; the sticky `is_uncertain` field is
+      deleted, because the ledger's `None` already carries that answer and a
+      later visible assignment must be able to replace it; and the
+      unreached-helper fallback is now restricted to definitions inside test
+      scope, so library code stays outside the rule as the README promises.
+      Seven new spawn cases and one standalone test failed first, then 105
+      spawn tests and 267 nested-cargo and policy tests passed.
+- [x] (2026-10-27) Round 15's behaviour is documented in the rule README
+      (removal as an operation, unreadable operations as unknown), the users'
+      guide (the same, from the reader's side, plus the test-scope limit on the
+      helper fallback), the developers' guide (the operation ledger and the
+      limit), and `docs/concordat-design.md` (both).
+- [x] (2026-10-27) The plan's opening promise and Outcomes claim are limited to
+      constructs the reader can detect, with the blind spots named: macros,
+      `fn` pointers and other crates, plus the entry-point suppression when no
+      nested-build fact is visible.
+- [x] (2026-10-27) Round 15's full gate sequence, run through `scrutineer` on
+      the round's tree. The first pass was red at `make lint`: three Ruff FBT
+      findings in the new `_record_offline_operation`, because a boolean was
+      passed positionally. The parameter is now keyword-only and all six call
+      sites pass `offline=...`. The second pass is green: `make check-fmt`,
+      `make lint` (Ruff, Pylint 10.00/10, df12-pylint 10.00/10, AMBR leaks,
+      spelling, Skylos all clean), `make typecheck`, `make markdownlint` and
+      `make nixie` all exit 0, and `make test` reports 2915 passed, 1 skipped
+      and the same six known `makeutil` fixture-drift failures. That is eight
+      more passes than round 14, matching the round's eight new tests.
 - [ ] (2026-10-27) Remaining for delivery: this round's commit, the SSH push,
-      the PR body update, the fifteenth CodeRabbit pass, then marking the PR
+      the PR body update, the sixteenth CodeRabbit pass, then marking the PR
       ready for review.
 
 ## Surprises & discoveries
@@ -1027,6 +1072,25 @@ workaround.
   ignored the verdict entirely. Impact: the plan is the artefact a later reader
   trusts, so a claim about behaviour needs checking against the code that
   implements it, not only against the tests that pass.
+- Observation: a "sticky uncertainty" flag cannot substitute for a ledger.
+  Evidence: the reader carried `is_uncertain`, set by an unreadable value and
+  never cleared, intended to stop a later visible `"0"` from claiming the
+  command was read. The round-15 case
+  `env-offline-unreadable-then-literal-online` expected `online` and got
+  `unresolved`, because the flag outlived the assignment that answered the
+  question. Probing `_environment_pairs('name, "0"')` showed it already returns
+  `[(None, "0")]`, so the flag added nothing and the field was deleted. Impact:
+  the honest representation is one entry per operation — definite offline,
+  definite online, or unknown — with the last one winning. A flag that only
+  accumulates cannot express "this later operation replaced that one".
+- Observation: the rule's own scope promise can be broken by a fallback added
+  for a different reason. Evidence: the round-14 cross-file helper fallback
+  reported any helper with no call site in its file, including one defined in
+  `src/builder.rs`. That is an unsuppressable EN-001 on library code the README
+  says the rule does not judge. Impact: a new "report it rather than drop it"
+  branch needs the same scope test as the findings it feeds; the guard is
+  `scope.contains(definition.start)`, and it is the definition's location, not
+  the call site's, that decides.
 
 ## Decision log
 
@@ -1351,19 +1415,48 @@ workaround.
   not which versions the package might one day declare. Searching for the bare
   manifest version couples the test to a number that changes for unrelated
   reasons and would fail the day a fixture matched it. Date/Author: 2026-10-27.
+- Decision: the offline question is tracked as a ledger of *operations* rather
+  than of assignments, with `env_remove` and `env_clear` recorded as definite
+  "online" and an unreadable operation recorded as "unknown". Rationale:
+  `Command::env_remove` removes a name and `Command::env_clear` removes the
+  lot, so both undo an earlier `env` assignment instead of making a new one;
+  reading only assignments let
+  `.env("CARGO_NET_OFFLINE", "true").env_remove(..)` come out `offline`. An
+  unreadable `envs(..)` argument may itself name the variable or set it back,
+  and it runs after everything before it, so it has to replace the previous
+  answer rather than be skipped. Date/Author: 2026-10-27, Claude Code on behalf
+  of leynos.
+- Decision: the sticky `is_uncertain` field is deleted rather than kept
+  alongside the ledger. Rationale: the ledger's `None` already means "the last
+  operation was unreadable", and a flag that never clears prevents a later
+  visible assignment from answering the question the flag was protecting.
+  `_environment_pairs` already reports an unreadable name as `(None, value)`
+  and an unreadable value as `(name, None)`, so the field was redundant as well
+  as wrong. Date/Author: 2026-10-27, Claude Code on behalf of leynos.
+- Decision: the unreached-helper fallback applies only to a helper whose
+  *definition* is inside test scope. Rationale: the fallback exists so a
+  test-scope construction never drops out of the audit, but a helper in library
+  code is outside the reader's scope by the rule's own promise, and its call
+  sites are visible where they are made. Reporting it would put an
+  unsuppressable EN-001 on a file the rule says it leaves alone. Date/Author:
+  2026-10-27, Claude Code on behalf of leynos.
 
 ## Outcomes & retrospective
 
 The four planned tasks are implemented and validated. The runner no longer
 fails a gate on a warning finding; the new package reports every test-scope
-cargo spawn and every test entry point a checkout has, and ships as a survey.
-The real runner over 106 mirrored repositories finds 16 repositories with an
-unsafe nested cargo run or a cold test entry point and a further 4 where the
-reader could not prove either way, which is the evidence a promotion decision
-needs and is more than the checked-in fixtures could have shown. The review
-round moved the sensitive numbers a long way — 37 indeterminate repositories
-became 4 — which is itself the lesson that a permissive indeterminate branch
-inflates exactly the count a promotion decision is made on.
+cargo spawn and every test entry point a checkout has *that the reader can
+detect*, and ships as a survey. What the reader cannot detect — a construction
+behind a macro, a `fn` pointer or another crate — is stated as a limit rather
+than counted as compliant, and an entry point is reported only where the
+checkout has a spawn or trybuild fact for its prefetch to protect. The real
+runner over 106 mirrored repositories finds 16 repositories with an unsafe
+nested cargo run or a cold test entry point and a further 4 where the reader
+could not prove either way, which is the evidence a promotion decision needs
+and is more than the checked-in fixtures could have shown. The review round
+moved the sensitive numbers a long way — 37 indeterminate repositories became 4
+— which is itself the lesson that a permissive indeterminate branch inflates
+exactly the count a promotion decision is made on.
 
 Three lessons are worth carrying forward. First, a survey of a text-level
 reader is only as good as its negative controls: three of the four probes that

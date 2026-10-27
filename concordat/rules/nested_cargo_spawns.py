@@ -292,7 +292,13 @@ def _source_facts(source: RustSource, scope: TestScope) -> list[SpawnFact]:
         # and a call proven offline does not carry the helper's other call
         # sites with it. Either way the definition is reported once, as
         # unreadable, so the construction never drops out of the audit.
-        if not calls:
+        #
+        # Only a definition that is itself test code is reported. A helper in
+        # library code is outside the reader's scope and stays outside it: its
+        # call sites are visible here, and library code is not something this
+        # rule judges. Reporting it would put an unsuppressable EN-001 on a
+        # file the rule promises to leave alone.
+        if not calls and scope.contains(definition.start):
             sites.append(unreached_helper(definition))
         sites.extend(site for site in calls if not _absorbed(site, definition))
     direct_facts = [

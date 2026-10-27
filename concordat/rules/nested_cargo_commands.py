@@ -17,12 +17,17 @@ Every other literal cargo command is `online`. The reader never reports
 `offline` on a guess and never reports `online` on one.
 
 `Command::env` keeps the last value given for a name, so a `CARGO_NET_OFFLINE`
-assignment replaces any earlier one rather than adding to it. The reader
-therefore tracks the *latest* assignment, including a call site's own
-assignment over a helper's, and reports `offline` only when that last
-assignment is still one cargo reads as true. `--frozen` is not revocable this
-way: no argument and no environment variable turns it off, so it remains
-evidence whatever an environment assignment says.
+assignment replaces any earlier one rather than adding to it. `env_remove` and
+`env_clear` remove an earlier assignment rather than making a new one, so both
+count as the latest operation on the name: a removal leaves the command
+`online`, because cargo reads no offline variable from it. The reader therefore
+tracks the *latest operation*, including a call site's own over a helper's, and
+reports `offline` only when that last operation is still an assignment cargo
+reads as true. An operation the reader cannot see — an unreadable list, an
+unreadable name, an unreadable value — makes the command `unresolved`, because
+it may be the one cargo obeys. `--frozen` is not revocable this way: no
+argument and no environment variable turns it off, so it remains evidence
+whatever an environment operation says.
 """
 
 from __future__ import annotations
@@ -46,6 +51,10 @@ _OFFLINE_VALUES: typ.Final = frozenset({"1", "true"})
 _PROBE_FLAGS: typ.Final = frozenset({"--version", "-V", "--help", "-h"})
 ARGUMENT_METHODS: typ.Final = frozenset({"arg", "args"})
 ENVIRONMENT_METHODS: typ.Final = frozenset({"env", "envs"})
+# `env_remove` drops one variable and `env_clear` drops the lot. Both undo an
+# earlier `env` assignment, so both belong in the offline ledger.
+ENVIRONMENT_REMOVAL_METHODS: typ.Final = frozenset({"env_remove", "env_clear"})
+ENVIRONMENT_CLEAR: typ.Final = "env_clear"
 _PUNCTUATION: typ.Final = frozenset(" \t\r\n,[]()&")
 
 COMMAND_NEW: typ.Final = re.compile(r"\bCommand\s*::\s*new\s*\(")
@@ -84,13 +93,19 @@ class CargoCommand:
     form: str
     words: list[str | None] = dataclasses.field(default_factory=list)
     environment: list[str] = dataclasses.field(default_factory=list)
-    # The latest `CARGO_NET_OFFLINE` assignment: True for a value cargo reads as
-    # offline, False for one it does not, None for a value the reader cannot
-    # see. `has_offline_override` separates "the last assignment said online"
-    # from "nothing has assigned the variable at all".
+    # The latest operation on `CARGO_NET_OFFLINE`: True for an assignment cargo
+    # reads as offline, False for one it does not (including `env_remove` of the
+    # name and an `env_clear` that wipes it), None for an operation the reader
+    # cannot see through — an unreadable list, an unreadable name, or a value it
+    # cannot read. `has_offline_override` separates "the last operation said
+    # online" from "nothing has touched the variable at all".
+    #
+    # This is a ledger of *operations*, not of assignments, because an
+    # operation the reader cannot see may still be the one cargo obeys:
+    # `.env("CARGO_NET_OFFLINE", "true").envs(extra)` is not proof of offline
+    # mode when `extra` may set it back.
     offline_override: bool | None = None
     has_offline_override: bool = False
-    is_uncertain: bool = False
 
     def add_arguments(self, text: str) -> None:
         """Record `.arg(..)`/`.args(..)` text; an unreadable source is unknown."""
@@ -109,30 +124,59 @@ class CargoCommand:
         while `.env(name, "true")` genuinely does hide whether the offline
         variable is set.
 
-        A visible `CARGO_NET_OFFLINE` assignment replaces the last one, because
-        that is what `Command::env` does with a repeated name.
+        Every operation replaces the last one, because that is what
+        `Command::env` does with a repeated name — and an operation the reader
+        cannot read through replaces it too, with an unknown answer. Treating
+        the unknown as merely "uncertain" would leave an earlier `"true"` in
+        place, and `command_state` answers `offline` before it answers
+        `unresolved`.
         """
         pairs = _environment_pairs(text)
         if pairs is None:
-            self.is_uncertain = True
+            # The whole list is opaque and runs after everything before it, so
+            # it may be the assignment cargo obeys.
+            self._record_offline_operation(offline=None)
             return
         for key, value in pairs:
             if key is None:
-                # The name is what decides whether this pair matters, so an
-                # unreadable one leaves the offline question open.
-                self.is_uncertain = True
+                # The name is what decides whether this pair matters, and a
+                # hidden name may be `CARGO_NET_OFFLINE`, so this pair replaces
+                # the previous answer as an unknown one.
+                self._record_offline_operation(offline=None)
                 continue
             self.environment.append(key)
             if key != OFFLINE_VARIABLE:
                 continue
-            # The last assignment is the one cargo reads, so each visible pair
-            # replaces the previous answer rather than adding to it.
-            self.offline_override = value in _OFFLINE_VALUES
-            self.has_offline_override = True
             if value is None:
                 # The name is visible but the value is not, so whether this
                 # pair turns offline mode on is genuinely unknown.
-                self.offline_override = None
+                self._record_offline_operation(offline=None)
+                continue
+            self._record_offline_operation(offline=value in _OFFLINE_VALUES)
+
+    def remove_environment(self, method: str, text: str) -> None:
+        """Record `env_remove(..)`/`env_clear(..)` and act on the offline name.
+
+        Both remove whatever an earlier assignment set rather than setting it
+        again, so the offline ledger records a definite "online" answer.
+        `env_clear` takes no names and drops the whole environment, so it
+        always does. An unreadable removal name is recorded as unknown, because
+        it may name the offline variable.
+        """
+        if method == ENVIRONMENT_CLEAR:
+            self._record_offline_operation(offline=False)
+            return
+        names = _string_literals(text)
+        if names is None:
+            self._record_offline_operation(offline=None)
+            return
+        if OFFLINE_VARIABLE in names:
+            self._record_offline_operation(offline=False)
+
+    def _record_offline_operation(self, *, offline: bool | None) -> None:
+        """Make *offline* the answer the latest environment operation gives."""
+        self.offline_override = offline
+        self.has_offline_override = True
 
     def absorb(self, definition: CargoCommand) -> None:
         """Take on the evidence a helper's own body establishes.
@@ -146,7 +190,6 @@ class CargoCommand:
         if not self.has_offline_override:
             self.offline_override = definition.offline_override
             self.has_offline_override = definition.has_offline_override
-        self.is_uncertain |= definition.is_uncertain
 
 
 def _string_end(text: str, index: int) -> int:
@@ -279,11 +322,18 @@ def _top_level_groups(text: str) -> list[str] | None:
 
 
 def _record(command: CargoCommand, method: str, text: str) -> None:
-    """Record one collected call's argument text against *command*."""
+    """Record one collected call's argument text against *command*.
+
+    Only the calls that change what cargo reads are recorded. Every other
+    method on the builder is stepped over, so `.status()` does not end the
+    chain.
+    """
     if method in ARGUMENT_METHODS:
         command.add_arguments(text)
     elif method in ENVIRONMENT_METHODS:
         command.add_environment(text)
+    elif method in ENVIRONMENT_REMOVAL_METHODS:
+        command.remove_environment(method, text)
 
 
 def follow_chain(source: RustSource, command: CargoCommand, index: int) -> int:
@@ -475,11 +525,9 @@ def command_state(command: CargoCommand) -> str | None:
         return "offline"
     if command.has_offline_override and command.offline_override is True:
         return "offline"
-    if (
-        command.is_uncertain
-        or (command.has_offline_override and command.offline_override is None)
-        or len(known) != len(command.words)
-    ):
+    if (command.has_offline_override and command.offline_override is None) or len(
+        known
+    ) != len(command.words):
         return "unresolved"
     return "online"
 

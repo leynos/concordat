@@ -102,15 +102,24 @@ the one-line parameter change recorded in `docs/roadmap.md` (DF12-109).
   offline-mode note for each and leaves the network reachable for `"0"`,
   `"yes"`, `"on"` and the empty string. An inherited environment is not
   evidence: the gate's environment is not the test's.
-- **The last `CARGO_NET_OFFLINE` assignment is the one cargo reads.**
+- **The last `CARGO_NET_OFFLINE` operation is the one cargo reads.**
   `Command::env` keeps the value given last for a name, so
   `.env("CARGO_NET_OFFLINE", "true")` followed by
   `.env("CARGO_NET_OFFLINE", "0")` leaves the command **online**; the reader
   reports `online`, not `offline`. A call site's own assignment runs after the
   helper it called returns, so the call site wins. The same holds for the pairs
-  `.envs([...])` applies in order. A last assignment whose value the reader
+  `.envs([...])` applies in order. A last operation whose value the reader
   cannot see makes the spawn `unresolved`, because the earlier pair no longer
   describes what cargo will read.
+- **Removing the variable is an operation too.**
+  `env_remove("CARGO_NET_OFFLINE")` and `env_clear()` take away whatever an
+  earlier assignment set, so they leave the command **online**: cargo reads no
+  offline variable from it. A removal whose name the reader cannot see —
+  `env_remove(name)` — is `unresolved`, and so is an `envs(..)` argument the
+  reader cannot read in full, because either may name the offline variable or
+  set it back after a visible `"true"`. An operation the reader cannot see
+  still counts as the latest one; it is not discarded in favour of an earlier
+  visible assignment.
 - **`--frozen` is not revocable.** No argument and no environment variable turns
   it off, so a command carrying `--frozen` stays offline whatever an
   environment assignment says. Only the environment is last-write-wins; the
