@@ -431,10 +431,28 @@ workaround.
       failed then 70 passed, `bb83e50` 3 failed then 76 passed; the three
       nested-cargo suites run 189 passed and pylint, `ruff check`,
       `ruff format --check` and `ty` all pass.
-- [ ] (2026-10-27) Remaining for delivery: update the users' guide, design
-      document and package README for the widened trybuild evidence and
-      inherited module scope, run the Markdown gates, hand the tree to
-      `scrutineer`, then push over SSH and re-review.
+- [x] (2026-10-27) The users' guide, the design document and the rule README
+      now describe the widened evidence: test scope inherited from an
+      enclosing `#[cfg(test)]` module, non-test `cfg` gates left unjudged, and
+      trybuild recognized under a dependency rename with each manifest's names
+      applied only to the sources it governs. `make markdownlint` and
+      `make nixie` both exit 0.
+- [x] (2026-10-27) Full gate run by `scrutineer` on `b923333`: six of seven
+      gates passed first time — `fmt`, `lint` (Pylint 10.00/10 on both
+      passes), `typecheck`, `markdownlint`, `nixie`, and `test` at 6 failed /
+      2833 passed / 1 skipped. `check-fmt` failed, and it was a genuine
+      regression from the documentation commit rather than inherited: both
+      `origin/main` copies are mdtablefix-clean under the same pinned 0.6.1,
+      while the new paragraphs were hand-wrapped to 80 columns and mdtablefix
+      wraps at its own computed width. `make fmt` reflowed both files and
+      `make check-fmt` now exits 0 (`b104181`). Lesson: run `make fmt` before
+      `make check-fmt`, not after, whenever prose is added by hand.
+      The six `make test` failures are the acknowledged makeutil drift, and
+      the runner confirmed the count reconciles exactly against the 2840
+      collected items with no other failure — local makeutil is `0.1.2` while
+      `ci.yml` pins `0.1.0` at digest `99dd28a…`, and none of the five failing
+      modules appears in `git diff --name-only origin/main...HEAD`.
+- [ ] (2026-10-27) Remaining for delivery: push over SSH and re-review.
 
 ## Surprises & discoveries
 
