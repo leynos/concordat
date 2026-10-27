@@ -650,6 +650,35 @@ def test_a_path_reached_file_resolves_its_children_beside_it(
     assert problems == []
 
 
+def test_a_file_reached_both_ways_keeps_every_base(tmp_path: pathlib.Path) -> None:
+    """Both readings of one file are compiled, so both bases must survive.
+
+    `src/checks.rs` is named here by a plain `mod checks;`, whose children live
+    in `src/checks/`, and by `#[path = "checks.rs"]` from the same file, whose
+    children live beside it. Each declaration is real, so the compiler builds
+    whichever child exists. Recording only the last reach seen — or replacing
+    the flags instead of unioning them — offers one base and reports the child
+    the other base holds as naming no file.
+    """
+    put(
+        tmp_path,
+        "src/lib.rs",
+        '#[cfg(test)]\nmod checks;\n#[cfg(test)]\n#[path = "checks.rs"]\nmod alias;\n',
+    )
+    put(tmp_path, "src/checks.rs", "mod inner;\n")
+    put(
+        tmp_path,
+        "src/checks/inner.rs",
+        'fn run() {\n    Command::new("cargo").arg("build");\n}\n',
+    )
+    problems: list[str] = []
+    facts = evidence(tmp_path, problems).spawns
+    assert [(fact["path"], fact["state"]) for fact in facts] == [
+        ("src/checks/inner.rs", "online")
+    ]
+    assert problems == []
+
+
 def test_a_file_with_a_char_literal_quote_is_readable(tmp_path: pathlib.Path) -> None:
     """`trim_matches('"')` is a char literal, not the start of a string."""
     put(
