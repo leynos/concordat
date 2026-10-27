@@ -319,8 +319,16 @@ workaround.
       contradicted its own "Evidence versus enforcement" section a few lines
       below. Fixed there too, and a search confirms no other document repeats
       the wording.
-- [ ] (2026-10-27) Remaining for delivery: Markdown gate re-run, push over SSH
-      and re-review.
+- [x] (2026-10-27) Sixth CodeRabbit round, on the pushed `6438697`: one
+      finding, verified. `split_top_level` split on commas inside quoted
+      literals, so `.env("RUST_LOG", "info,foo=debug")` looked like three
+      slots rather than one pair, the command became `unresolved`, and its
+      real NC-007 finding was hidden — the error points the safe way but still
+      costs a finding. The splitter now tracks quoted state and backslash
+      escapes; a new case reported `unresolved` before the change and
+      `online` after.
+- [ ] (2026-10-27) Remaining for delivery: fifth full gate, push over SSH and
+      re-review.
 
 ## Surprises & discoveries
 
