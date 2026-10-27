@@ -207,7 +207,8 @@ workaround.
       [#327](https://github.com/leynos/concordat/pull/327) opened against
       `main` with the survey counts, the real-checkout before/after evidence,
       the survey-coverage caveat and the Lody session reference in its body.
-- [x] (2026-10-27) CodeRabbit review of [#327](https://github.com/leynos/concordat/pull/327)
+- [x] (2026-10-27) CodeRabbit review of
+      [#327](https://github.com/leynos/concordat/pull/327)
       returned 12 findings; all were verified against the code and accepted,
       and each has its own red-then-green test where it changes behaviour.
       Fixed: cargo global options before the subcommand (4 tests); a `let`
@@ -232,8 +233,19 @@ workaround.
       from 53 to 20, and the noncompliant sets are unchanged at 6 NC-007 and
       15 NC-008 repositories. Re-auditing the three real-checkout snapshots
       with the fixed reader reproduces the recorded findings exactly.
-- [ ] (2026-10-27) Remaining for delivery: full sequential commit gate, the
-      push, and a re-review.
+- [x] (2026-10-27) Full sequential commit gate under the `scrutineer`
+      subagent. Six of seven gates are green: `make fmt`, `make check-fmt`,
+      `make lint` (Ruff, pylint 10.00/10, df12, ambrleaks, spelling and Skylos
+      all clean), `make typecheck`, `make markdownlint` (0 issues) and
+      `make nixie`. `make test` is red with exactly the six anticipated
+      `makeutil` fixture-drift failures and nothing else — 6 failed, 2803
+      passed, 1 skipped — and the `main-owned-codescene-coverage` OPA deadline
+      flake did not recur. `make fmt` rewrote four files (Ruff reflows in
+      `nested_cargo_scripts.py`, `nested_cargo_nextest.py` and
+      `test_parabellum_report.py`, prose reflow in the rule README) and the
+      reformatted ExecPlan, so the gate validated the formatted tree.
+- [ ] (2026-10-27) Remaining for delivery: commit the formatter rewrites, push
+      over SSH, and re-review.
 
 ## Surprises & discoveries
 
@@ -289,14 +301,13 @@ workaround.
 - Observation: `~/docs/missing-frozen-survey-plan.md` does not exist on this
   host, so the planned SRE-driven sweep could not be used. Impact and
   resolution: the Task 4 survey ran instead as a local-mirror survey through
-  the shipped runner (`concordat artefact rule run
-  nested-cargo-offline-tests`) over all 106 repositories mirrored under
-  `~/.lody/repos`, with 0 operational errors. The evidence and
-  its limits are recorded in the Task 4 Progress entries and in the PR's
-  Survey section: it is a floor over 106 of the 180 eligible repositories, not
-  an estate total. The comparison against the 24 October figures was done as
-  prescribed and every apparent outlier was traced; see the PR's "Comparison
-  with the 24 October survey" section.
+  the shipped runner (`concordat artefact rule run nested-cargo-offline-tests`)
+  over all 106 repositories mirrored under `~/.lody/repos`, with 0 operational
+  errors. The evidence and its limits are recorded in the Task 4 Progress
+  entries and in the PR's Survey section: it is a floor over 106 of the 180
+  eligible repositories, not an estate total. The comparison against the 24
+  October figures was done as prescribed and every apparent outlier was traced;
+  see the PR's "Comparison with the 24 October survey" section.
 - Observation: `makeutil` 0.1.2 is on `PATH`, but every checked-in fixture
   envelope records `makeutil` 0.1.0, so six generator-drift tests fail. They
   fail identically from a clean archive of
@@ -553,8 +564,8 @@ workaround.
   and `cargo -h` all exit `0` without building anything, so none of them can
   take the package-cache lock. CodeRabbit's review of #327 raised `--help` and
   raised `-h` as a separate finding that asked to exclude it; excluding it
-  would report a help command as an online spawn, which is a false NC-007.
-  Both findings therefore resolve the same way, and the exclusion suggestion is
+  would report a help command as an online spawn, which is a false NC-007. Both
+  findings therefore resolve the same way, and the exclusion suggestion is
   declined on the measurement rather than on preference. Date/Author:
   2026-10-27.
 - Decision: an unreadable entry point is reported only where a nested build
@@ -562,8 +573,8 @@ workaround.
   there is nothing a prefetch could warm, so the finding would ask a repository
   to fix a problem it does not have; the survey showed 33 of the 45
   entry-point-uncertain repositories in that state. NC-008 has carried this
-  gate since the package was written, and the asymmetry was an oversight in
-  the uncertain branch rather than a deliberate distinction. Date/Author:
+  gate since the package was written, and the asymmetry was an oversight in the
+  uncertain branch rather than a deliberate distinction. Date/Author:
   2026-10-27.
 - Decision: the report header names the versions its records carry, falling
   back to the manifest only for an empty selection. Rationale: the ledger is
@@ -803,20 +814,20 @@ Survey scratch, kept under `/tmp` and not committed: the envelope survey
 (`/tmp/corpus-survey/survey.py`, `results.jsonl`), the rule survey
 (`/tmp/corpus-survey/run_rule_survey.py`, `rule-results.jsonl`, 106 records and
 zero errors), the raw-grep baseline (`raw_counts.tsv`), the mixed-package
-ledger used to exercise the report filter
-(`/tmp/corpus-survey/ledger.jsonl`) and the rendered reports
-(`survey-report.md`, `survey-report-full.md`). The checkout snapshots are
-`/tmp/nc-audit-whitaker-before`, `/tmp/nc-audit-whitaker-after`,
-`/tmp/nc-audit-theoremc`, `/tmp/nc-main-whitaker` and `/tmp/nc-main-theoremc`.
+ledger used to exercise the report filter (`/tmp/corpus-survey/ledger.jsonl`)
+and the rendered reports (`survey-report.md`, `survey-report-full.md`). The
+checkout snapshots are `/tmp/nc-audit-whitaker-before`,
+`/tmp/nc-audit-whitaker-after`, `/tmp/nc-audit-theoremc`,
+`/tmp/nc-main-whitaker` and `/tmp/nc-main-theoremc`.
 
 The survey was run twice: once against the reader as first reviewed (106
 records, 0 errors, 144 findings) and once against the reader after the
 CodeRabbit fixes (106 records, 0 errors, 90 findings). Both runs used the
 shipped `concordat artefact rule run` path over the same 106 mirrors at
-identical commits, so the difference between them is the code, not the
-corpus. The tallies below are the post-fix run, which is the one reported in
-the pull request; the pre-fix figures are kept in `Progress` for the
-before/after comparison.
+identical commits, so the difference between them is the code, not the corpus.
+The tallies below are the post-fix run, which is the one reported in the pull
+request; the pre-fix figures are kept in `Progress` for the before/after
+comparison.
 
 Survey tallies over the 106 mirrored repositories, with every finding at
 severity `warning`:
