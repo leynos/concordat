@@ -857,8 +857,12 @@ reader's problem.
 
 Obligation `EP-POLICY-1`: the policy emits NC-007 for `online` spawns and
 NC-008 for absent entry-point prefetch only when spawn or trybuild evidence
-exists; every unresolved/uncertain/problem fact is EN-001 indeterminate; an
-envelope defect is an error-severity EN-001.
+exists; every unresolved spawn and every recorded problem is EN-001
+indeterminate; an uncertain entry point is EN-001 indeterminate only when
+`has_nested_build` is true, because without a nested build the prefetch it
+might have missed would warm nothing; a fact whose `state` is outside the known
+vocabulary is an error-severity EN-001; and an envelope defect is an
+error-severity EN-001.
 
 - Method: Rego unit tests over `fixtures/data.json`, plus the real runner.
 - Artefact: `policy/nested_cargo_offline_tests_test.rego`,
