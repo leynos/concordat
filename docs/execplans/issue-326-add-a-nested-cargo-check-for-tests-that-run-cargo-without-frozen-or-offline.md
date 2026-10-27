@@ -5,7 +5,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Outcomes & retrospective`, `Conformance basis`, and `Verification plan` must
 be kept up to date as work proceeds.
 
-Status: IMPLEMENTED, review fixes in progress
+Status: IMPLEMENTED, green after review
 
 ## Purpose / big picture
 
@@ -172,16 +172,20 @@ workaround.
       contract tests are green.
 - [x] (2026-10-27) Task 4 survey, run locally because the SRE plan file is
       absent (Decision log). The real runner audited all 106 locally mirrored
-      bare repositories: 53 compliant, 37 indeterminate, 16 noncompliant, zero
-      operational errors, and every one of the 144 findings carried severity
-      `warning`, so all 106 runs exited `0` — the survey mode works end to
-      end. Per rule: NC-007 reached 6 repositories in 16 occurrences, NC-008
-      15 repositories in 26 occurrences, EN-001 52 indeterminate-only
-      repositories in 102 occurrences. Promotion to `error` would fail 53 of
-      the 106 audited repositories (the union of the three rule sets, which
-      equals the 16 + 37 non-compliant verdicts). A mixed-package ledger
-      renders the same table through the new filter, with only the selected
-      package's records counted.
+      bare repositories: zero operational errors, and every finding carried
+      severity `warning`, so all 106 runs exited `0` — the survey mode works
+      end to end. The first run, against the pre-review reader, found 53
+      compliant, 37 indeterminate, 16 noncompliant and 144 findings. The
+      re-run after the CodeRabbit fixes — whose entry-point EN-001 is now gated
+      on `has_nested_build` and whose lexer reads `--config` values — finds 86
+      compliant, 4 indeterminate, 16 noncompliant and 90 findings. Per rule on
+      the re-run: NC-007 reached 6 repositories in 16 occurrences, NC-008 15
+      repositories in 26 occurrences, EN-001 4 indeterminate-only repositories
+      (ddlint, monotony, vtcode, wireframe) in 48 occurrences. Promotion to
+      `error` would fail 20 of the 106 audited repositories: the 16
+      noncompliant plus the 4 indeterminate ones, which is the union of the
+      three rule sets. A mixed-package ledger renders the same table through
+      the new filter, with only the selected package's records counted.
 - [x] (2026-10-27) Task 4 real-checkout validation. whitaker `f7a5a93` (main
       before #518) is `noncompliant`: NC-007 on `common/tests/i18n_packaging.rs:58`
       and `crates/no_std_fs_operations/tests/integration_exclusion.rs:166`,
@@ -203,7 +207,7 @@ workaround.
       [#327](https://github.com/leynos/concordat/pull/327) opened against
       `main` with the survey counts, the real-checkout before/after evidence,
       the survey-coverage caveat and the Lody session reference in its body.
-- [ ] (2026-10-27) CodeRabbit review of [#327](https://github.com/leynos/concordat/pull/327)
+- [x] (2026-10-27) CodeRabbit review of [#327](https://github.com/leynos/concordat/pull/327)
       returned 12 findings; all were verified against the code and accepted,
       and each has its own red-then-green test where it changes behaviour.
       Fixed: cargo global options before the subcommand (4 tests); a `let`
@@ -215,11 +219,21 @@ workaround.
       (1); a conditional fetch step no longer proves the order (2); the report
       header names the ledger's versions rather than the manifest's (2 new
       report tests); and the uncertain-entry EN-001 is gated on
-      `has_nested_build` (1 Rego test, 1 fixture). The survey counts in the PR
-      body must be recomputed for the last of these.
-- [ ] (2026-10-27) Remaining for delivery: full sequential commit gate, PR body
-      rewrite with the recomputed counts, the #5/#12 `-h` disposition recorded,
-      the push, and a re-review.
+      `has_nested_build` (1 Rego test, 1 fixture).
+- [x] (2026-10-27) Survey re-run after those fixes, then the PR body rewritten
+      from it. The gate on the entry-point EN-001 is the decisive change: 33 of
+      the 45 entry-point-uncertain repositories had no spawn and no trybuild, so
+      they drop out entirely, and EN-001 falls from 52 indeterminate-only
+      repositories to 4. The lexer fixes also caught `wireframe`, whose
+      `test` target names an unresolved `DEV_FAST` variable through a
+      `--config` value the old reader had not treated as one; that repository
+      is now EN-001 indeterminate, so it was already in the union on another
+      fact. The union of repositories promotion to `error` would fail falls
+      from 53 to 20, and the noncompliant sets are unchanged at 6 NC-007 and
+      15 NC-008 repositories. Re-auditing the three real-checkout snapshots
+      with the fixed reader reproduces the recorded findings exactly.
+- [ ] (2026-10-27) Remaining for delivery: full sequential commit gate, the
+      push, and a re-review.
 
 ## Surprises & discoveries
 
@@ -245,7 +259,7 @@ workaround.
   `tests/build_module_slice_ui_tests.rs:102` and
   `tests/command_env_ui_tests.rs:75`/`:178` — two `unresolved` spawns and an
   `absent` workflow entry point, which is a true positive; (b) `wildside` is
-  the one repository in the 53-repository union that carries no EN-001, because
+  the one repository in the 20-repository union that carries no EN-001, because
   its trybuild evidence produces NC-008 alone; (c) `theoremc` `origin/main` has
   moved from `8f48abb` to `70926a18`, where the fixture-crate spawn at
   `tests/common/fixture_crate.rs:224` is a new NC-007 — the survey snapshot is
@@ -277,7 +291,7 @@ workaround.
   resolution: the Task 4 survey ran instead as a local-mirror survey through
   the shipped runner (`concordat artefact rule run
   nested-cargo-offline-tests`) over all 106 repositories mirrored under
-  `~/.lody/repos`, in 103 seconds with 0 operational errors. The evidence and
+  `~/.lody/repos`, with 0 operational errors. The evidence and
   its limits are recorded in the Task 4 Progress entries and in the PR's
   Survey section: it is a floor over 106 of the 180 eligible repositories, not
   an estate total. The comparison against the 24 October figures was done as
@@ -565,9 +579,12 @@ The four planned tasks are implemented and validated. The runner no longer
 fails a gate on a warning finding; the new package reports every test-scope
 cargo spawn and every test entry point a checkout has, and ships as a survey.
 The real runner over 106 mirrored repositories finds 16 repositories with an
-unsafe nested cargo run or a cold test entry point and a further 37 where the
+unsafe nested cargo run or a cold test entry point and a further 4 where the
 reader could not prove either way, which is the evidence a promotion decision
-needs and is more than the checked-in fixtures could have shown.
+needs and is more than the checked-in fixtures could have shown. The review
+round moved the sensitive numbers a long way — 37 indeterminate repositories
+became 4 — which is itself the lesson that a permissive indeterminate branch
+inflates exactly the count a promotion decision is made on.
 
 Three lessons are worth carrying forward. First, a survey of a text-level
 reader is only as good as its negative controls: three of the four probes that
@@ -785,25 +802,39 @@ destructive commands are planned.
 Survey scratch, kept under `/tmp` and not committed: the envelope survey
 (`/tmp/corpus-survey/survey.py`, `results.jsonl`), the rule survey
 (`/tmp/corpus-survey/run_rule_survey.py`, `rule-results.jsonl`, 106 records and
-zero errors in 103 seconds), the raw-grep baseline (`raw_counts.tsv`), the
-mixed-package ledger used to exercise the report filter
+zero errors), the raw-grep baseline (`raw_counts.tsv`), the mixed-package
+ledger used to exercise the report filter
 (`/tmp/corpus-survey/ledger.jsonl`) and the rendered reports
 (`survey-report.md`, `survey-report-full.md`). The checkout snapshots are
 `/tmp/nc-audit-whitaker-before`, `/tmp/nc-audit-whitaker-after`,
 `/tmp/nc-audit-theoremc`, `/tmp/nc-main-whitaker` and `/tmp/nc-main-theoremc`.
+
+The survey was run twice: once against the reader as first reviewed (106
+records, 0 errors, 144 findings) and once against the reader after the
+CodeRabbit fixes (106 records, 0 errors, 90 findings). Both runs used the
+shipped `concordat artefact rule run` path over the same 106 mirrors at
+identical commits, so the difference between them is the code, not the
+corpus. The tallies below are the post-fix run, which is the one reported in
+the pull request; the pre-fix figures are kept in `Progress` for the
+before/after comparison.
 
 Survey tallies over the 106 mirrored repositories, with every finding at
 severity `warning`:
 
 | Rule   | Noncompliant repositories | Indeterminate-only repositories | Would fail |
 | ------ | ------------------------- | ------------------------------- | ---------- |
-| EN-001 | 0                         | 52                              | 52         |
+| EN-001 | 0                         | 4                               | 4          |
 | NC-007 | 6                         | 0                               | 6          |
 | NC-008 | 15                        | 0                               | 15         |
 
-The three sets are not disjoint; their union is 53 repositories, and every one
+The three sets are not disjoint; their union is 20 repositories, and every one
 of those is a repository whose overall verdict is noncompliant or
-indeterminate. Occurrence counts are 16 NC-007, 26 NC-008 and 102 EN-001.
+indeterminate. Occurrence counts are 16 NC-007, 26 NC-008 and 48 EN-001.
+
+The EN-001 indeterminate-only repositories are `ddlint`, `monotony`, `vtcode`
+and `wireframe`. `vtcode`'s two facts are reader problems rather than
+repository defects — a `#[cfg(test)]` item never closes in two files — and the
+rest are Makefile or workflow recipes the lexer cannot reduce to one command.
 
 Real-checkout validation, from the shipped CLI:
 
