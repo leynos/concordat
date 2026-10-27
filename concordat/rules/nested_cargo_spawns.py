@@ -28,7 +28,6 @@ import re
 import typing as typ
 
 from .dependency_family_discovery import cargo_tables
-from .fs_probe import probe_file
 from .nested_cargo import is_fixture_directory, standalone_directories
 from .nested_cargo_commands import (
     COMMAND_NEW,
@@ -37,12 +36,11 @@ from .nested_cargo_commands import (
     collect_variable,
     command_state,
     construction,
-    first_literal,
     follow_chain,
     has_cargo_construction,
     helper_body,
-    split_top_level,
 )
+from .nested_cargo_modules import resolve_declarations, scan_scope
 from .nested_cargo_source import (
     RustSource,
     TestScope,
@@ -54,7 +52,7 @@ from .nested_cargo_source import (
     read_sources,
     whole_file_scope,
 )
-from .rust_source import scan_balanced, skip_trivia
+from .rust_source import scan_balanced
 
 if typ.TYPE_CHECKING:
     from .nested_cargo import Manifest
@@ -167,213 +165,6 @@ def _fact(source: RustSource, command: CargoCommand, state: str) -> SpawnFact:
         ],
         "environment": list(command.environment),
     }
-
-
-def _predicate_mentions_test(predicate: str) -> bool:
-    """Report whether a `cfg` predicate requires the `test` flag."""
-    text = predicate.strip()
-    if text == "test":
-        return True
-    head, has_open, _ = text.partition("(")
-    if not has_open or not text.endswith(")"):
-        return False
-    if head.strip() not in {"all", "any"}:
-        return False
-    inner = text[len(head) + 1 : -1]
-    return any(
-        _predicate_mentions_test(part)
-        for part in split_top_level(inner)
-        if part.strip()
-    )
-
-
-def _is_test_attribute(masked: str, match: re.Match[str]) -> bool:
-    """Report whether the attribute at *match* is a `cfg` requiring `test`."""
-    close = scan_balanced(masked, match.end() - 1)
-    if close is None:
-        return False
-    body = masked[match.end() : close - 1].strip()
-    predicate = _CFG_PREDICATE.match(body)
-    return predicate is not None and _predicate_mentions_test(predicate.group(1))
-
-
-def _item_end(masked: str, index: int) -> tuple[int, bool] | None:
-    """Return an item's end and whether it opens a body, or None if unbalanced.
-
-    Returns
-    -------
-    tuple[int, bool] | None
-        The index after the item, and whether the item is one with a `{}` body.
-    """
-    depth = 0
-    position = index
-    while position < len(masked):
-        char = masked[position]
-        if char in "([":
-            depth += 1
-        elif char in ")]":
-            depth -= 1
-        elif depth == 0 and char == ";":
-            return position + 1, False
-        elif depth == 0 and char == "{":
-            close = scan_balanced(masked, position)
-            return (close, True) if close is not None else None
-        position += 1
-    return None
-
-
-def _modifier_end(masked: str, index: int) -> int:
-    """Return the index after any visibility modifiers at *index*."""
-    match = _MODIFIERS.match(masked, skip_trivia(masked, index))
-    return match.end() if match is not None else index
-
-
-def _attribute_run_end(masked: str, start: int) -> int:
-    """Return the index after the run of attributes beginning at *start*."""
-    index = start
-    while True:
-        after = skip_trivia(masked, index)
-        if not masked.startswith("#[", after):
-            return after
-        close = scan_balanced(masked, after + 1)
-        if close is None:
-            return after
-        index = close
-
-
-def _module_chain(
-    masked: str, pairs: list[tuple[int, int]], offset: int
-) -> tuple[str, ...]:
-    """Return the inline modules enclosing *offset*, outermost first.
-
-    Returns
-    -------
-    tuple[str, ...]
-        The module names whose bodies contain the offset.
-    """
-    chain: list[str] = []
-    current = offset
-    while (block := enclosing_block(pairs, current)) is not None:
-        match = _ENCLOSING_MODULE.search(masked[: block[0]])
-        if match is not None:
-            chain.append(match.group(1))
-        current = block[0]
-    return tuple(reversed(chain))
-
-
-def _module_base(
-    relative: pathlib.PurePosixPath, chain: tuple[str, ...]
-) -> pathlib.PurePosixPath:
-    """Return the directory a nested module declaration is resolved against.
-
-    A root module (`lib.rs`, `main.rs`, `mod.rs`) owns its own directory, and
-    any other file owns a directory named after it. Inline modules below it add
-    one directory component each, which is what Rust's own module resolution
-    does for a file that is not itself a root module.
-
-    Returns
-    -------
-    pathlib.PurePosixPath
-        The directory the declaration's files live in.
-    """
-    parent = relative.parent
-    owner = parent if relative.stem in CRATE_ROOT_STEMS else parent / relative.stem
-    return owner.joinpath(*chain)
-
-
-def _module_files(
-    relative: pathlib.PurePosixPath,
-    chain: tuple[str, ...],
-    name: str,
-    path_attribute: str | None,
-) -> list[pathlib.PurePosixPath]:
-    """Return the paths an out-of-line module declaration may name.
-
-    `#[path = "..."]` overrides the name entirely. Rust resolves it against
-    the declaring file's own directory when the declaration is at the top
-    level, and against the module's directory when it sits inside an inline
-    module block; the second case is what `_module_base` already returns.
-
-    Returns
-    -------
-    list[pathlib.PurePosixPath]
-        Every file the declaration may name, most specific first.
-    """
-    if path_attribute is not None:
-        return [
-            relative.parent / path_attribute
-            if not chain
-            else _module_base(relative, chain) / path_attribute
-        ]
-    base = _module_base(relative, chain)
-    return [base / f"{name}.rs", base / name / "mod.rs"]
-
-
-def _folded(candidate: pathlib.PurePosixPath) -> pathlib.PurePosixPath | None:
-    """Return *candidate* with `.` and `..` folded out, or `None` if it escapes.
-
-    Rust resolves a `#[path]` value against the declaring file's directory, so
-    a step back that stays inside the checkout is ordinary: whitaker declares
-    `#[path = "../tests/behaviour.rs"]` from `src/driver/mod.rs`, which names
-    `src/tests/behaviour.rs`. Folding first keeps that path readable and makes
-    the fact it produces name the file once, in canonical form, rather than
-    carrying `src/driver/../tests/...` into a report.
-
-    Folding is lexical, exactly as the module system treats it, so a symbolic
-    link is still resolved separately by the caller.
-
-    Returns
-    -------
-    pathlib.PurePosixPath | None
-        The folded path, or ``None`` when it climbs above the checkout root.
-    """
-    parts: list[str] = []
-    for part in candidate.parts:
-        if part in {"", "."}:
-            continue
-        if part == "..":
-            if not parts:
-                return None
-            parts.pop()
-            continue
-        parts.append(part)
-    return pathlib.PurePosixPath(*parts) if parts else pathlib.PurePosixPath()
-
-
-def _refused_candidate(
-    checkout: pathlib.Path, root: pathlib.Path, candidate: pathlib.PurePosixPath
-) -> str | None:
-    """Return why a declared module path falls outside the checkout, if it does.
-
-    A `#[path = "..."]` value is checkout-controlled text. An absolute value
-    replaces the base path entirely, and a symbolic link can point anywhere.
-    Reading such a file would carry its spawn facts and its path into the
-    envelope, so the candidate is refused before the probe follows it. The
-    sibling readers already refuse inputs outside the checkout; a module
-    declaration must not be the way around them.
-
-    The caller folds `..` out first, since Rust resolves the value against the
-    declaring file and an intermediate step back can legitimately land inside
-    the checkout. What reaches here is therefore already normalised.
-
-    Returns
-    -------
-    str | None
-        The reason the candidate is refused, or ``None`` when it may be read.
-    """
-    if candidate.is_absolute():
-        return "names an absolute path, which the checkout cannot supply"
-    path = checkout / candidate.as_posix()
-    if not probe_file(path).present:
-        # Absence is the probe's answer, not a refusal; the caller reports it.
-        return None
-    try:
-        resolved = path.resolve(strict=True)
-    except OSError:
-        return None
-    if resolved != root and not resolved.is_relative_to(root):
-        return f"resolves to {resolved}, outside the checkout"
-    return None
 
 
 def _helper_names(source: RustSource) -> dict[str, tuple[int, int]]:
@@ -596,138 +387,6 @@ def collect_trybuild_manifests(
     return found
 
 
-def _path_attribute(source: RustSource, run: tuple[int, int]) -> str | None:
-    """Return the file `#[path = "..."]` names inside an attribute run, if any.
-
-    The attribute run is located in the masked text, where the value is blanked,
-    and read from the original text at the same offsets.
-
-    Returns
-    -------
-    str | None
-        The declared path, or None when the run has no readable `path`.
-    """
-    start, end = run
-    found = _PATH_ATTRIBUTE.search(source.masked, start, end)
-    if found is None:
-        return None
-    return first_literal(source.text[found.start() : found.end()])
-
-
-def _scan_scope(
-    source: RustSource, problems: list[str]
-) -> tuple[TestScope, list[_Declaration]]:
-    """Return the test spans of one file and the modules it declares out of line.
-
-    Returns
-    -------
-    tuple[TestScope, list[_Declaration]]
-        The spans already known to be test scope, and each `#[cfg(test)] mod
-        name;` declaration with the file it names.
-    """
-    scope = TestScope(whole_file=False)
-    declarations: list[_Declaration] = []
-    pairs = brace_pairs(source.masked)
-    for match in _ATTRIBUTE.finditer(source.masked):
-        if not _is_test_attribute(source.masked, match):
-            continue
-        run = (match.start(), _attribute_run_end(source.masked, match.start()))
-        declaration = skip_trivia(source.masked, _modifier_end(source.masked, run[1]))
-        item = _item_end(source.masked, declaration)
-        if item is None:
-            problems.append(
-                f"{source.relative.as_posix()}: a #[cfg(test)] item never closes"
-            )
-            continue
-        end, has_body = item
-        module = _MODULE.match(source.masked, declaration)
-        if module is not None and not has_body:
-            declarations.append(
-                _Declaration(
-                    chain=_module_chain(source.masked, pairs, match.start()),
-                    name=module.group("name"),
-                    path=_path_attribute(source, run),
-                )
-            )
-            continue
-        scope.ranges.append((match.start(), end))
-    scope.ranges.sort()
-    return scope, declarations
-
-
-def _resolve_declarations(
-    checkout: pathlib.Path,
-    source: RustSource,
-    declarations: list[_Declaration],
-    scopes: dict[pathlib.PurePosixPath, TestScope],
-    fixtures: frozenset[str],
-    problems: list[str],
-) -> list[pathlib.PurePosixPath]:
-    """Record whole-file test scope for each file a declaration names.
-
-    Returns
-    -------
-    list[pathlib.PurePosixPath]
-        The newly discovered files, which the caller must read and scan.
-    """
-    root = checkout.resolve()
-    discovered: list[pathlib.PurePosixPath] = []
-    for declaration in declarations:
-        present: list[pathlib.PurePosixPath] = []
-        for declared in _module_files(
-            source.relative,
-            declaration.chain,
-            declaration.name,
-            declaration.path,
-        ):
-            named = declared.as_posix()
-            if declared.is_absolute():
-                problems.append(
-                    f"{source.relative.as_posix()}: a #[cfg(test)] mod "
-                    f"{declaration.name}; declaration names an absolute path, "
-                    f"which the checkout cannot supply ({named})"
-                )
-                continue
-            candidate = _folded(declared)
-            if candidate is None:
-                problems.append(
-                    f"{source.relative.as_posix()}: a #[cfg(test)] mod "
-                    f"{declaration.name}; declaration climbs out of the "
-                    f"checkout with `..` ({named})"
-                )
-                continue
-            refused = _refused_candidate(checkout, root, candidate)
-            if refused is not None:
-                problems.append(
-                    f"{source.relative.as_posix()}: a #[cfg(test)] mod "
-                    f"{declaration.name}; declaration {refused} "
-                    f"({candidate.as_posix()})"
-                )
-                continue
-            if probe_file(checkout / candidate.as_posix()).present:
-                present.append(candidate)
-        if not present:
-            named = (
-                declaration.path
-                or f"{declaration.name}.rs or {declaration.name}/mod.rs"
-            )
-            problems.append(
-                f"{source.relative.as_posix()}: a #[cfg(test)] mod "
-                f"{declaration.name}; declaration names no file ({named})"
-            )
-            continue
-        for candidate in present:
-            if in_fixture(candidate, fixtures):
-                continue
-            known = scopes.get(candidate)
-            if known is not None:
-                known.whole_file = True
-                continue
-            scopes[candidate] = TestScope(whole_file=True)
-            discovered.append(candidate)
-    return discovered
-
-
 def collect_rust_evidence(
     checkout: pathlib.Path,
     manifests: typ.Mapping[pathlib.Path, Manifest],
@@ -758,7 +417,7 @@ def collect_rust_evidence(
     pending = [source for source in sources if not scopes[source.relative].whole_file]
     while pending:
         source = pending.pop()
-        scope, declarations = _scan_scope(source, problems)
+        scope, declarations = scan_scope(source, problems)
         known = scopes.get(source.relative)
         if known is not None and known.whole_file:
             # A module declaration already proved this whole file is test code.
@@ -767,7 +426,7 @@ def collect_rust_evidence(
             known.ranges = scope.ranges
         else:
             scopes[source.relative] = scope
-        for relative in _resolve_declarations(
+        for relative in resolve_declarations(
             checkout, source, declarations, scopes, fixtures, problems
         ):
             found, error = read_source(checkout, relative)
