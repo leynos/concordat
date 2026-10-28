@@ -856,9 +856,18 @@ workaround.
 - [x] (2026-10-27) Round 18's behaviour is documented in the rule README, the
       users' guide, the developers' guide and the design document, each naming
       the conditional-call shape and the method that steps over.
-- [ ] (2026-10-27) Remaining for delivery: this round's gate sequence, commit,
-      SSH push, PR body note, the nineteenth CodeRabbit pass, then marking the
-      PR ready for review.
+- [x] (2026-10-27) Round 18's full gate sequence. `make fmt` rewrote no tracked
+      file. `make check-fmt`, `make lint`, `make typecheck`,
+      `make markdownlint` and `make nixie` all exit `0`; `make lint` reports
+      Ruff clean, pylint 10.00/10 on both the plain and the df12 run, AMBR
+      leaks and the spelling gate clean, and Skylos clean. `make test` reports
+      6 failed, 2921 passed, 1 skipped. The six failures are the known
+      `makeutil` fixture drift and nothing else: the installed binary is
+      `0.1.2` while the workflows pin `0.1.0`, which is the cause those
+      assertions name, and `git diff origin/main...HEAD` over the five
+      affected test modules is empty, so this branch cannot have caused them.
+      The pass count reconciles exactly against the round-17 baseline of 2915:
+      plus one round-17 case and five round-18 cases.
 
 ## Surprises & discoveries
 
