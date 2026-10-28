@@ -898,6 +898,20 @@ workaround.
       reaches a different rule path, and its verdict does not change. The PR
       body's occurrence sentence was recomputed from the new ledger, with the
       reason for the movement stated.
+- [x] (2026-10-27) Twentieth CodeRabbit round: two findings, both documentation
+      accuracy, both verified against the code before being fixed. The users'
+      guide listed a compliant result as a separate reason for exit `0`, which
+      reads as an exception a compliant-with-findings result would slip
+      through. `exit_code` consults only `blocking`, `blocking` consults only
+      severity, and `_overall_verdict` returns `compliant` only for an empty
+      finding set, so the rule is stated as severity-only with that fact named.
+      The plan's survey tallies still carried the pre-round-19 occurrence
+      counts while a later record carried the updated ones; both now read 11
+      NC-007, 26 NC-008 and 53 EN-001. The round's gate sequence is green on
+      the same six known `makeutil` failures. One `test_clippy_exception` case
+      failed once and then passed three times in a row, alone and as a module;
+      it shells out to the drifting `makeutil` binary with the host loaded, so
+      it is a transient rather than a regression.
 
 ## Surprises & discoveries
 
