@@ -2094,7 +2094,9 @@ severity `warning`:
 
 The three sets are not disjoint; their union is 20 repositories, and every one
 of those is a repository whose overall verdict is noncompliant or
-indeterminate. Occurrence counts are 16 NC-007, 26 NC-008 and 48 EN-001.
+indeterminate. Occurrence counts are 11 NC-007, 26 NC-008 and 53 EN-001; the
+nineteenth round's mutable-reference handoff moved two `ortho-config` spawns
+from NC-007 to EN-001 without changing any repository-level count.
 
 The 19 EN-001 indeterminate-only repositories are `axinite`, `chutoro`,
 `ddlint`, `diesel-cte-ext`, `mdtablefix`, `monotony`, `netsuke`, `ortho-config`,

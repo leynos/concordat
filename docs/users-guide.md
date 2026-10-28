@@ -525,8 +525,9 @@ policy could not prove compliance and fails closed (for example, the `Makefile`
 includes other files, or the parse had to recover from syntax errors).
 
 Each finding also carries a `severity`, shown on every row of the table.
-Severity is the enforcement dial; the verdict is evidence. Exit codes: `0`
-compliant or every finding is an advisory `warning`; `1` at least one
+Severity is the enforcement dial; the verdict is evidence, and the exit code
+reads only the severity. Exit codes: `0` when every finding is an advisory
+`warning` (a `compliant` result has no findings at all); `1` at least one
 non-warning finding, including indeterminate verdicts, which fail closed; `2`
 operational failure (for example, the pinned `makeutil` or `conftest`
 executable is missing), reported on standard error.
