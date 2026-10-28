@@ -696,6 +696,11 @@ another's test (leynos/whitaker#518 measured nineteen). The rule reports:
   an environment call or removal as an unknown ledger entry — while a method
   that changes neither, such as `cmd.status()`, is stepped over. `--frozen` is
   not revocable this way: no argument and no environment variable turns it off.
+  A command passed to another function as a mutable reference, as in
+  `configure(&mut cmd)`, is `unresolved`: the callee may set `--frozen` or an
+  offline environment the reader cannot see. A `--frozen` set before the
+  handoff still makes it `offline`; an offline environment set before it does
+  not, because the callee may write the variable again.
 - **NC-008**: a test entry point (the Makefile `test` target, a selected
   nextest profile's setup script, or a workflow step that runs tests) with no
   success-gated `cargo fetch --locked` before it. The finding is reported only

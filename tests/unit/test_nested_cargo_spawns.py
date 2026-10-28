@@ -469,6 +469,49 @@ CASES: dict[str, Case] = {
         "}\n",
         (("command_new", "online"),),
     ),
+    # `configure(&mut cmd)` hands the command to another function, which may set
+    # `--frozen` or an offline environment the reader never sees. The reader
+    # collects only `cmd.method(..)` calls, so treating this as `online` accuses
+    # a spawn on a guess — it must say `unresolved` instead. A command built and
+    # spawned inline, as in `Command::new("cargo").status()`, has no binding to
+    # hand over, so it must not become unresolved on this account.
+    "mutable-reference-handoff": Case(
+        "fn configure(command: &mut Command) {\n"
+        '    command.arg("--frozen");\n'
+        "}\n"
+        "fn run() {\n"
+        '    let mut cmd = Command::new("cargo");\n'
+        "    configure(&mut cmd);\n"
+        "    cmd.status();\n"
+        "}\n",
+        (("command_new", "unresolved"),),
+    ),
+    "mutable-reference-handoff-negative": Case(
+        'fn run() {\n    Command::new("cargo").arg("build").status();\n}\n',
+        (("command_new", "online"),),
+    ),
+    # A `--frozen` set before the handoff still proves offline mode: nothing in
+    # the callee revokes a flag cargo has already been given. The same ordering
+    # with an offline *environment* does not survive, because the callee may
+    # write the variable again.
+    "mutable-reference-handoff-after-frozen": Case(
+        "fn run() {\n"
+        '    let mut cmd = Command::new("cargo");\n'
+        '    cmd.arg("--frozen");\n'
+        "    configure(&mut cmd);\n"
+        "    cmd.status();\n"
+        "}\n",
+        (("command_new", "offline"),),
+    ),
+    "mutable-reference-handoff-after-offline-environment": Case(
+        "fn run() {\n"
+        '    let mut cmd = Command::new("cargo");\n'
+        '    cmd.env("CARGO_NET_OFFLINE", "true");\n'
+        "    configure(&mut cmd);\n"
+        "    cmd.status();\n"
+        "}\n",
+        (("command_new", "unresolved"),),
+    ),
     # `--frozen` is irrevocable, so it still proves offline mode even though a
     # later call the reader cannot see may add anything it likes.
     "conditional-bound-flag-after-frozen": Case(

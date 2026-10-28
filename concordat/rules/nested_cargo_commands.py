@@ -85,6 +85,22 @@ def _rebinding(name: str) -> re.Pattern[str]:
     return re.compile(rf"\blet\s+(?:mut\s+)?{re.escape(name)}\s*(?::[^=;]*)?=")
 
 
+def _handoff(name: str) -> re.Pattern[str]:
+    """Return a pattern matching a mutable borrow of *name* passed to a call.
+
+    `configure(&mut cmd)` is the only way the binding can reach a function that
+    changes what cargo reads, so the borrow is the whole signal; the callee's
+    body may live in another file. Taking `name` as a parameter keeps the
+    pattern from matching an unrelated variable's borrow.
+
+    Returns
+    -------
+    re.Pattern[str]
+        The pattern, matching the borrow rather than the call around it.
+    """
+    return re.compile(rf"&\s*mut\s+{re.escape(name)}\b")
+
+
 @dataclasses.dataclass(slots=True)
 class CargoCommand:
     """One cargo command under construction, and the evidence it carries."""
@@ -473,6 +489,14 @@ def collect_variable(
     recorded as an operation the reader cannot see, which makes the command
     `unresolved` — but only when it could change what cargo reads, so a
     conditional `.status()` still leaves the evidence intact.
+
+    A handoff such as `configure(&mut cmd)` is not a call on the binding, so
+    the collector never sees what the callee sets. The arguments and the
+    environment are therefore both recorded as unknown, because the callee may
+    append `--frozen` or write `CARGO_NET_OFFLINE`. Without that, the spawn
+    reads `online` and the rule reports NC-007 on a command that may be
+    offline — an accusation from a guess, which this reader promises not to
+    make.
     """
     rebinding = _rebinding(name).search(source.masked, start, end)
     if rebinding is not None:
@@ -484,6 +508,9 @@ def collect_variable(
             follow_chain(source, command, index)
         else:
             follow_chain(source, command, index, conditional=True)
+    if _handoff(name).search(source.masked, start, end):
+        command.mark_arguments_unknown()
+        command.mark_environment_unknown()
 
 
 def _record_unseen(methods: typ.Iterable[str], command: CargoCommand) -> None:

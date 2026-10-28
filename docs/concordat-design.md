@@ -2938,10 +2938,14 @@ itself, not merely in the schema, because an exemption nobody must revisit is
 not a record. Both entry-point findings are gated on the checkout having at
 least one spawn or trybuild fact: an unreadable recipe in a repository that
 starts no cargo has nothing for a prefetch to protect, so it is not evidence
-against that repository. Remaining limits: a spawn reached through a macro, a
-function pointer or a value assembled at run time is invisible, and a hidden
-command in a Makefile or workflow leaves the entry point `uncertain` rather
-than proved either way.
+against that repository. A command handed to another function as a mutable
+reference (`configure(&mut cmd)`) is read as `unresolved`, because the callee
+may set `--frozen` or an offline environment the reader never sees; the same
+call is sound after a `--frozen`, which nothing revokes, but not after an
+offline environment, which the callee may overwrite. Remaining limits: a spawn
+reached through a macro, a function pointer or a value assembled at run time is
+invisible, and a hidden command in a Makefile or workflow leaves the entry point
+`uncertain` rather than proved either way.
 
 The policy checks that every fact carries the fields its own findings read.
 Rego treats a missing key as undefined rather than as an error, so a finding

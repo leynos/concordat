@@ -868,6 +868,36 @@ workaround.
       affected test modules is empty, so this branch cannot have caused them.
       The pass count reconciles exactly against the round-17 baseline of 2915:
       plus one round-17 case and five round-18 cases.
+- [x] (2026-10-27) Nineteenth CodeRabbit round, foregrounded: two findings,
+      which are one defect. `collect_variable` matched only `name.` calls, so
+      `configure(&mut cmd)` — a mutable borrow handed to another function that
+      may set `--frozen` or `CARGO_NET_OFFLINE` — was invisible and the spawn
+      read `online`. That is an NC-007 accusation from a guess, which the module
+      promises never to make. Probed before the fix: the handoff shape returned
+      `online` while the direct `cmd.arg("--frozen")` form returned `offline`.
+      `_handoff(name)` now matches the borrow and records both an unreadable
+      word and an unknown environment entry, so the spawn is `unresolved`.
+      Four cases were written red first: the handoff, a negative control on an
+      inline construction, and two ordering cases — `--frozen` before the
+      handoff stays `offline` because nothing revokes it, while an offline
+      environment before it does not, because the callee may rewrite the
+      variable. Mutation-verified: disabling the new branch fails exactly the
+      two state-changing cases and leaves both controls green. Two negative
+      probes confirm the pattern is name-exact — `fill(&mut other)` and
+      `fill(&mut cmdx)` leave the command `online`. The behaviour is documented
+      in the rule README, the users' guide, the developers' guide and the design
+      document.
+- [x] (2026-10-27) The estate survey was re-run rather than assumed, because
+      the handoff is the first review fix that could change a published count.
+      A fleet scan found exactly one mirrored repository with the shape,
+      `ortho-config`, using `CargoEnvironment::apply(&mut command)`. The re-run
+      over the same 106 commits confirms the impact is confined to occurrences:
+      NC-007 falls from 16 to 11 and EN-001 rises from 48 to 53, while verdicts
+      (86 compliant, 16 noncompliant, 4 indeterminate), finding totals (90) and
+      the 20-repository would-fail union are all unchanged. Only one repository
+      reaches a different rule path, and its verdict does not change. The PR
+      body's occurrence sentence was recomputed from the new ledger, with the
+      reason for the movement stated.
 
 ## Surprises & discoveries
 

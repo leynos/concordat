@@ -136,6 +136,14 @@ the one-line parameter change recorded in `docs/roadmap.md` (DF12-109).
   records an unknown entry in the ledger. A method that changes neither, such as
   `cmd.status()`, is stepped over, so the evidence the other calls established
   still stands.
+- **A handoff hides what the callee sets.** `configure(&mut cmd)` lends the
+  command to another function, which may append `--frozen` or write
+  `CARGO_NET_OFFLINE`, and whose body may live in another file. Both the
+  argument list and the environment are therefore recorded as unseen and the
+  spawn is `unresolved` — never `online`, which would accuse a spawn the reader
+  cannot judge. A `--frozen` set before the handoff still proves offline mode,
+  because nothing revokes it; an offline environment set before it does not,
+  because the callee may write the variable again.
 - **A version or help probe is not a spawn.** `cargo --version`,
   `cargo kani --version`, `cargo help` and `cargo build --help` read no
   manifest and touch no network, so they draw no finding. A version flag that
