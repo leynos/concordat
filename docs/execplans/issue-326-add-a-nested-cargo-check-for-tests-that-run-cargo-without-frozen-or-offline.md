@@ -912,6 +912,14 @@ workaround.
       failed once and then passed three times in a row, alone and as a module;
       it shells out to the drifting `makeutil` binary with the host loaded, so
       it is a transient rather than a regression.
+- [x] (2026-10-28) Twenty-first CodeRabbit round: one finding, already true of
+      the users' guide and re-raised at plan level. `EP-EXIT-1` quantified over
+      "every result" without excluding the case where no result is produced, so
+      it read as if `exit_code == 2` violated the obligation. The plan now
+      scopes the obligation to a successfully evaluated `RuleRunResult` and
+      names exit `2` as caller-assigned. The same round's gate sequence is
+      green on the same six known `makeutil` failures, and the PR body carries
+      the round note.
 
 ## Surprises & discoveries
 
@@ -1807,11 +1815,14 @@ ISSUE-326-T4 -> EP-M4 -> scripts/tests/test_parabellum_sweep.py, scripts/tests/t
 
 ## Verification plan
 
-Obligation `EP-EXIT-1`: for every result, `exit_code == 0` iff every finding
-carries severity `warning` — equivalently, iff `blocking` is false; otherwise
-`1`. The verdict plays no part: an all-warning noncompliant result exits `0`
-and still records `noncompliant`, while an error-severity finding exits `1`
-whatever the verdict says.
+Obligation `EP-EXIT-1`: for every successfully evaluated `RuleRunResult`,
+`exit_code == 0` iff every finding carries severity `warning` — equivalently,
+iff `blocking` is false; otherwise `1`. The verdict plays no part: an
+all-warning noncompliant result exits `0` and still records `noncompliant`,
+while an error-severity finding exits `1` whatever the verdict says.
+Operational failure is outside this obligation: a run that never produces a
+result exits `2`, and that code is assigned by the caller rather than by
+`RuleRunResult.exit_code`.
 
 - Method: parameterized unit tests over a finite partition.
 - Rationale: the input space is a small product of verdicts and severity
@@ -2067,8 +2078,12 @@ Commit gate runs are delegated to `scrutineer` with logs under `/tmp`.
 - The BDD feature `nested_cargo_offline_tests_rule_run.feature` passes for
   offline-safe, warning NC-007, missing-prefetch NC-008, and unreadable
   evidence.
-- `make check-fmt`, `make lint`, `make typecheck`, `make test`,
-  `make markdownlint`, and `make nixie` pass.
+- `make check-fmt`, `make lint`, `make typecheck`, `make markdownlint`, and
+  `make nixie` pass. `make test` passes apart from six accepted pre-existing
+  `makeutil` fixture-drift failures. The checked-in envelopes record `makeutil`
+  0.1.0 while the installed binary reports 0.1.2; all six reproduce unchanged on
+  `origin/main` in a scratch worktree, so they are recorded as an exception
+  rather than a regression.
 
 ## Idempotence and recovery
 
