@@ -920,6 +920,16 @@ workaround.
       names exit `2` as caller-assigned. The same round's gate sequence is
       green on the same six known `makeutil` failures, and the PR body carries
       the round note.
+- [x] (2026-10-28) CodeScene `Code Health Review (main)` fails on this PR and is
+      recorded as an advisory exception rather than a regression. It is a
+      whole-PR gate, not a per-commit delta: it reports 12 new files below code
+      health 10.00, led by `nested_cargo_entry_points.py` (7.22) and
+      `nested_cargo_commands.py` (7.74), and names the same set on every commit
+      checked, from `af25553` through `95e4e50` — all twelve commits in the
+      branch's recent history. No documentation commit changes it, and `main`
+      carries no equivalent check, so there is no baseline it regressed against.
+      `main` is also unprotected, so the gate is advisory and blocks nothing.
+      Refactoring those readers to satisfy it is a separate change.
 
 ## Surprises & discoveries
 
