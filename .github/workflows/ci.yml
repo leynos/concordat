@@ -56,7 +56,7 @@ jobs:
           go install github.com/open-policy-agent/conftest@v0.52.0
 
       - name: Install mdtablefix
-        uses: leynos/shared-actions/.github/actions/install-mdtablefix@7d751eded578e48dacf43ab173d5820e6437c474
+        uses: leynos/shared-actions/.github/actions/install-mdtablefix@5a99aed78ce68dcebd3052b75c31e6f173162b1e
         with:
           version: ${{ env.MDTABLEFIX_VERSION }}
 
@@ -139,7 +139,7 @@ jobs:
         # the publisher measured on 3.13, and the ratchet compared the two.
         env:
           UV_PYTHON: '3.13'
-        uses: leynos/shared-actions/.github/actions/generate-coverage@ff1dd759dfffc0db3459e30e833f52437ee62b57
+        uses: leynos/shared-actions/.github/actions/generate-coverage@5a99aed78ce68dcebd3052b75c31e6f173162b1e
         with:
           output-path: coverage.xml
           format: cobertura
