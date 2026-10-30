@@ -1,0 +1,14 @@
+{
+  "repository": "leynos/shared-actions",
+  "tip": "5a99aed78ce68dcebd3052b75c31e6f173162b1e",
+  "root": "5a99aed78ce68dcebd3052b75c31e6f173162b1e",
+  "action_directory": ".github/actions/install-whitaker",
+  "action_tree": "183e1bb43c8fc198afc79f41482689898eb42efc",
+  "commits": [
+    {
+      "revision": "5a99aed78ce68dcebd3052b75c31e6f173162b1e",
+      "first_parent": "8e6a325765ba382691d1b1c65fcccf1fc1d1b00c",
+      "action_tree": "183e1bb43c8fc198afc79f41482689898eb42efc"
+    }
+  ]
+}
