@@ -204,6 +204,14 @@ class TestManifestRepositoryNames:
 _REPOS = ("leynos/alpha", "leynos/beta", "leynos/gamma")
 
 
+def _ledger_index(records: sweep.Ledger) -> sweep.LedgerIndex:
+    """Build the production lookup index from a generated history."""
+    index = sweep.LedgerIndex()
+    for record in records:
+        index.add(record)
+    return index
+
+
 def _record(repository: str, verdict: str, sha: str | None) -> sweep.LedgerRecord:
     """Build a complete ledger record with the fields under test varied.
 
@@ -245,7 +253,8 @@ class TestLedgerSelection:
         The ledger is append-only, so a re-audit adds a row rather than
         replacing one; selection must therefore be last-wins.
         """
-        latest = sweep._latest_records(ledger)
+        index = _ledger_index(ledger)
+        latest = index.latest_by_repository
 
         assert set(latest) == {r["repository"] for r in ledger}, latest
         for repository, record in latest.items():
@@ -262,13 +271,14 @@ class TestLedgerSelection:
         A commit SHA asks "has this exact commit been recorded"; `None` asks
         the different question "is this repository excluded".
         """
+        index = _ledger_index(ledger)
         for repository in _REPOS:
             excluded = any(
                 r["repository"] == repository and r["verdict"] == "excluded"
                 for r in ledger
             )
             assert (
-                sweep._already_ledgered(ledger, repository, commit_sha=None) == excluded
+                sweep._already_ledgered(index, repository, commit_sha=None) == excluded
             ), repository
             for sha in ("a" * 40, "b" * 40):
                 seen = any(
@@ -276,5 +286,5 @@ class TestLedgerSelection:
                     for r in ledger
                 )
                 assert (
-                    sweep._already_ledgered(ledger, repository, commit_sha=sha) == seen
+                    sweep._already_ledgered(index, repository, commit_sha=sha) == seen
                 ), f"{repository}@{sha[:6]}"

@@ -20,6 +20,7 @@ import typing as typ
 import pytest
 
 from concordat.errors import OperationalRuleError
+from concordat.rules import makefile_facts
 from concordat.rules.makefile_facts import MakefileRefusedError, inspect_makefile
 from concordat.rules.makefile_observed import (
     MakefileParseEvent,
@@ -236,7 +237,11 @@ class TestInspectMakefile:
             subprocess.TimeoutExpired(cmd="makeutil", timeout=10.0),
             PermissionError("makeutil"),
         ):
-            monkeypatch.setattr(subprocess, "run", _raise_process_error(error))
+            monkeypatch.setattr(
+                makefile_facts.bounded_subprocess,
+                "run_bounded",
+                _raise_process_error(error),
+            )
             events: list[MakefileParseEvent] = []
             with pytest.raises(OperationalRuleError):
                 inspect_makefile_observed(tmp_path / "Makefile", emit=events.append)
@@ -304,7 +309,11 @@ class TestInspectMakefile:
         operational-error boundary naming the Makefile it was parsing.
         """
         _write_checkout(tmp_path, cargo=False, makefile=True)
-        monkeypatch.setattr(subprocess, "run", _raise_process_error(case.error))
+        monkeypatch.setattr(
+            makefile_facts.bounded_subprocess,
+            "run_bounded",
+            _raise_process_error(case.error),
+        )
 
         with pytest.raises(OperationalRuleError, match=case.match) as exc_info:
             inspect_makefile(tmp_path / "Makefile")

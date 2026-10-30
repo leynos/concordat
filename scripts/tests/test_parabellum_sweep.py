@@ -539,8 +539,13 @@ class TestLedgerDecoding:
         assert info.value.operation == "load-ledger", info.value.operation
 
     def test_a_complete_record_round_trips(self, ledger_path: pathlib.Path) -> None:
-        """A record written by the sweep decodes back unchanged."""
+        """A record written by the sweep is streamed into the ledger index."""
         record = sweep._excluded_record("leynos/gauss", "migration in flight")
         ledger_path.write_text(json.dumps(record) + "\n", encoding="utf-8")
 
-        assert sweep._load_ledger(ledger_path) == [record], "record should round-trip"
+        index = sweep._load_ledger(ledger_path)
+        assert index.latest_by_repository == {"leynos/gauss": record}, index
+        assert index.excluded_repositories == {"leynos/gauss"}, index
+        assert sweep._already_ledgered(index, "leynos/gauss", commit_sha=None), (
+            "the indexed exclusion should prevent duplicate ledger entries"
+        )

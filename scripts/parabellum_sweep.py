@@ -30,6 +30,7 @@ import typing as typ
 
 from cyclopts import App, Parameter
 
+from concordat import bounded_subprocess
 from concordat.errors import OperationalRuleError
 from concordat.rules import RuleRunResult, run_rule
 
@@ -53,6 +54,9 @@ from scripts.parabellum_ledger import (
 )
 from scripts.parabellum_ledger import (
     Ledger as Ledger,
+)
+from scripts.parabellum_ledger import (
+    LedgerIndex as LedgerIndex,
 )
 from scripts.parabellum_ledger import (
     LedgerOptionalFields as LedgerOptionalFields,
@@ -139,9 +143,6 @@ from scripts.parabellum_report import (
     _findings_summary as _findings_summary,
 )
 from scripts.parabellum_report import (
-    _latest_records as _latest_records,
-)
-from scripts.parabellum_report import (
     render_report as render_report,
 )
 
@@ -161,6 +162,9 @@ __all__ = [
 ]
 
 GIT_TIMEOUT: typ.Final = 300.0
+MAX_CAPTURE_BYTES_PER_STREAM: typ.Final = (
+    bounded_subprocess.MAX_CAPTURE_BYTES_PER_STREAM
+)
 
 app = App(name="parabellum-sweep")
 
@@ -210,13 +214,11 @@ def _git(
     resource: str,
 ) -> str:
     try:
-        completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed argv, no shell
-            ["git", *args],  # ruff: ignore[start-process-with-partial-path] - resolved from PATH
+        completed = bounded_subprocess.run_bounded(
+            ["git", *args],
             cwd=cwd,
-            capture_output=True,
-            text=True,
             timeout=GIT_TIMEOUT,
-            check=False,
+            max_bytes_per_stream=MAX_CAPTURE_BYTES_PER_STREAM,
         )
     except FileNotFoundError as error:
         message = "git is required but was not found on PATH"
@@ -228,6 +230,16 @@ def _git(
         ) from error
     except subprocess.TimeoutExpired as error:
         message = f"git {args[0]} timed out after {GIT_TIMEOUT}s"
+        raise OperationalRuleError(
+            message,
+            operation=operation,
+            tool="git",
+            resource=resource,
+        ) from error
+    except bounded_subprocess.OutputLimitExceededError as error:
+        message = (
+            f"git {args[0]} {error.stream} exceeded {error.limit_bytes} byte limit"
+        )
         raise OperationalRuleError(
             message,
             operation=operation,
@@ -330,7 +342,7 @@ class _SweepSession:
     """
 
     owner: str
-    ledger: Ledger
+    ledger: LedgerIndex
     ledger_path: pathlib.Path
     only: frozenset[str] | None
     limit: int | None
@@ -361,7 +373,7 @@ class _SweepSession:
         # before the run, so a record written during the run has to enter it
         # too or the ledger checks cannot see this run's own work.
         _append_record(self.ledger_path, self.appended, record)
-        self.ledger.append(record)
+        self.ledger.add(record)
 
     def _record_exclusion(self, entry: EstateEntry) -> None:
         """Append an exclusion record unless the repository already has one.

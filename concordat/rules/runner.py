@@ -25,6 +25,7 @@ import subprocess
 import tempfile
 import typing as typ
 
+from concordat import bounded_subprocess
 from concordat.errors import OperationalRuleError
 
 from .packages import (
@@ -45,6 +46,9 @@ POLICY_EXIT_CODES: typ.Final = frozenset({0, 1})
 # Diagnostics are quoted back to the operator, so cap how much of a runaway
 # stderr reaches the error message.
 _MAX_ERROR_DETAIL: typ.Final = 500
+MAX_CAPTURE_BYTES_PER_STREAM: typ.Final = (
+    bounded_subprocess.MAX_CAPTURE_BYTES_PER_STREAM
+)
 
 VERDICT_COMPLIANT: typ.Final = "compliant"
 VERDICT_NONCOMPLIANT: typ.Final = "noncompliant"
@@ -144,12 +148,10 @@ def _policy_namespace(rule_id: str) -> str:
 def _run_conftest(argv: list[str], rule_id: str) -> subprocess.CompletedProcess[str]:
     """Run the fixed Conftest argv, translating spawn and timeout failures."""
     try:
-        return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed argv, no shell
+        return bounded_subprocess.run_bounded(
             argv,
-            capture_output=True,
-            text=True,
             timeout=CONFTEST_TIMEOUT,
-            check=False,
+            max_bytes_per_stream=MAX_CAPTURE_BYTES_PER_STREAM,
         )
     except FileNotFoundError as error:
         message = "conftest is required but was not found on PATH"
@@ -161,6 +163,14 @@ def _run_conftest(argv: list[str], rule_id: str) -> subprocess.CompletedProcess[
         ) from error
     except subprocess.TimeoutExpired as error:
         message = f"conftest timed out after {CONFTEST_TIMEOUT}s"
+        raise OperationalRuleError(
+            message,
+            operation="invoke-conftest",
+            tool="conftest",
+            resource=rule_id,
+        ) from error
+    except bounded_subprocess.OutputLimitExceededError as error:
+        message = f"conftest {error.stream} exceeded {error.limit_bytes} byte limit"
         raise OperationalRuleError(
             message,
             operation="invoke-conftest",

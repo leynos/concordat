@@ -45,7 +45,7 @@ class TestGitOperations:
                 stderr="fatal: repository not found",
             )
 
-        monkeypatch.setattr(sweep.subprocess, "run", fake_run)
+        monkeypatch.setattr(sweep.bounded_subprocess, "run_bounded", fake_run)
         with pytest.raises(sweep.OperationalRuleError) as exc_info:
             sweep.resolve_head("leynos", "ghost")
         error = exc_info.value
@@ -87,7 +87,11 @@ class TestGitOperations:
         both must carry the same context so the sweep can record which
         repository the lookup was for.
         """
-        monkeypatch.setattr(sweep.subprocess, "run", _raise(failure))
+        monkeypatch.setattr(
+            sweep.bounded_subprocess,
+            "run_bounded",
+            _raise(failure),
+        )
 
         with pytest.raises(sweep.OperationalRuleError, match=message) as exc_info:
             sweep.resolve_head("leynos", "ghost")

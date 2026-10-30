@@ -12,6 +12,7 @@ import json
 import subprocess
 import typing as typ
 
+from concordat import bounded_subprocess
 from concordat.errors import OperationalRuleError
 
 if typ.TYPE_CHECKING:
@@ -30,6 +31,9 @@ EXPECTED_STATUS_FOR_EXIT_CODE: typ.Final = {0: "complete", 1: "recovered"}
 # `makeutil` exits 2 when it refuses a Makefile outright, as opposed to
 # failing to run or emitting an unusable report.
 EXIT_CODE_REFUSED: typ.Final = 2
+MAX_CAPTURE_BYTES_PER_STREAM: typ.Final = (
+    bounded_subprocess.MAX_CAPTURE_BYTES_PER_STREAM
+)
 
 ERROR_MAKEUTIL_MISSING = (
     "makeutil is required but was not found on PATH; install the pinned "
@@ -170,18 +174,21 @@ def _run_makeutil(
         If makeutil cannot be started.
     """
     try:
-        return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed argv, no shell
-            ["makeutil", "parse", path.name],  # ruff: ignore[start-process-with-partial-path] - resolved from PATH
+        return bounded_subprocess.run_bounded(
+            ["makeutil", "parse", path.name],
             cwd=path.parent,
-            capture_output=True,
-            text=True,
             timeout=timeout,
-            check=False,
+            max_bytes_per_stream=MAX_CAPTURE_BYTES_PER_STREAM,
         )
     except FileNotFoundError as error:
         raise _makeutil_error(ERROR_MAKEUTIL_MISSING, path) from error
     except subprocess.TimeoutExpired as error:
         message = f"makeutil timed out after {timeout}s on {path}"
+        raise _makeutil_error(message, path) from error
+    except bounded_subprocess.OutputLimitExceededError as error:
+        message = (
+            f"makeutil {error.stream} exceeded {error.limit_bytes} byte limit on {path}"
+        )
         raise _makeutil_error(message, path) from error
     except OSError as error:
         # Permission denied, bad working directory, and similar launch

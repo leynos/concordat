@@ -11,7 +11,6 @@ from scripts.parabellum_ledger import (
     RULE_PACKAGE,
     RULE_VERSION,
     FindingRecord,
-    Ledger,
     LedgerRecord,
     _load_ledger,
 )
@@ -33,15 +32,6 @@ VERDICT_ORDER: typ.Final = (
     "compliant",
     "excluded",
 )
-
-
-def _latest_records(
-    ledger: Ledger,
-) -> dict[str, LedgerRecord]:
-    latest: dict[str, LedgerRecord] = {}
-    for record in ledger:
-        latest[record["repository"]] = record
-    return latest
 
 
 # A table cell ends at an unescaped `|`, and a newline ends the row. Ledger
@@ -98,7 +88,7 @@ def render_report(ledger_path: pathlib.Path = DEFAULT_LEDGER_PATH) -> str:
         one ledger record, the latest one wins.
 
     """
-    latest = _latest_records(_load_ledger(ledger_path))
+    latest = _load_ledger(ledger_path).latest_by_repository
     counts: dict[str, int] = {}
     rule_counts: dict[str, int] = {}
     for record in latest.values():

@@ -6,6 +6,7 @@ sweep that writes them and the report that reads them back.
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 import json
 import typing as typ
@@ -127,6 +128,34 @@ class LedgerRecord(LedgerRequiredFields, LedgerOptionalFields):
 
 
 type Ledger = list[LedgerRecord]
+
+
+@dataclasses.dataclass(slots=True)
+class LedgerIndex:
+    """Bounded in-memory views needed to resume sweeps and render reports.
+
+    The append-only file remains the source of truth. This index keeps only
+    each repository's latest record, the commits already seen for that
+    repository, and whether it has an exclusion record, avoiding retention
+    of every decoded JSON object during a sweep.
+    """
+
+    latest_by_repository: dict[str, LedgerRecord] = dataclasses.field(
+        default_factory=dict
+    )
+    commits_by_repository: dict[str, set[str]] = dataclasses.field(default_factory=dict)
+    excluded_repositories: set[str] = dataclasses.field(default_factory=set)
+
+    def add(self, record: LedgerRecord) -> None:
+        """Index one newly read or appended ledger record."""
+        repository = record["repository"]
+        self.latest_by_repository[repository] = record
+        commit_sha = record["commit_sha"]
+        if commit_sha is not None:
+            self.commits_by_repository.setdefault(repository, set()).add(commit_sha)
+        if record["verdict"] == "excluded":
+            self.excluded_repositories.add(repository)
+
 
 # Derived from the TypedDict so a new required key cannot be forgotten here.
 _LEDGER_REQUIRED_KEYS: typ.Final = frozenset(LedgerRequiredFields.__annotations__)
@@ -281,28 +310,26 @@ def _validate_finding_fields(finding: object, label: str, path: pathlib.Path) ->
         _require_field(entry[field], expected, f"{label} field {field!r}", path)
 
 
-def _load_ledger(path: pathlib.Path) -> Ledger:
-    """Read the append-only ledger, rejecting any line it cannot decode."""
+def _load_ledger(path: pathlib.Path) -> LedgerIndex:
+    """Stream and index the append-only ledger, validating each line."""
     if not path.exists():
-        return []
+        return LedgerIndex()
+    index = LedgerIndex()
     try:
-        text = path.read_text(encoding="utf-8")
+        with path.open(encoding="utf-8") as handle:
+            for number, line in enumerate(handle, 1):
+                if not line.strip():
+                    continue
+                try:
+                    decoded: object = json.loads(line)
+                except json.JSONDecodeError as error:
+                    message = f"ledger {path} line {number} is not valid JSON: {error}"
+                    raise _ledger_error(message, path) from error
+                index.add(_ledger_record(decoded, path, number))
     except (OSError, UnicodeDecodeError) as error:
         message = f"cannot read ledger {path}: {error}"
         raise _ledger_error(message, path) from error
-    records: Ledger = []
-    for number, line in enumerate(text.splitlines(), 1):
-        if not line.strip():
-            continue
-        try:
-            decoded: object = json.loads(line)
-        except json.JSONDecodeError as error:
-            # Decoding inside the comprehension let this escape as a bare
-            # `JSONDecodeError`, naming neither the ledger nor the line.
-            message = f"ledger {path} line {number} is not valid JSON: {error}"
-            raise _ledger_error(message, path) from error
-        records.append(_ledger_record(decoded, path, number))
-    return records
+    return index
 
 
 def _timestamp() -> str:
@@ -375,17 +402,11 @@ def _finding_record(finding: Finding) -> FindingRecord:
 
 
 def _already_ledgered(
-    ledger: Ledger,
+    ledger: LedgerIndex,
     repository: str,
     *,
     commit_sha: str | None,
 ) -> bool:
     if commit_sha is None:
-        return any(
-            record["repository"] == repository and record["verdict"] == "excluded"
-            for record in ledger
-        )
-    return any(
-        record["repository"] == repository and record["commit_sha"] == commit_sha
-        for record in ledger
-    )
+        return repository in ledger.excluded_repositories
+    return commit_sha in ledger.commits_by_repository.get(repository, set())
