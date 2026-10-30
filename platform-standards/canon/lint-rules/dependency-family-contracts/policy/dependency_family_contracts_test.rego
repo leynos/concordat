@@ -1,4 +1,4 @@
-# Fixture tests for DF-001 to DF-003 and DF-006, dependency family contracts.
+# Fixture tests for DF-001 to DF-009, dependency family contracts.
 package canon.lint_rules.dependency_family_contracts_test
 
 import rego.v1
@@ -87,6 +87,13 @@ test_maturin_bounded if {
 test_pure_python_template if {
   findings := policy.deny with input as data.fixtures.pure_python_template
   count(findings) == 0
+}
+
+# A relationship whose catalog entry records no migration still yields its
+# finding; reading `rel.migrations` directly suppressed the whole rule.
+test_pylint_catch_all if {
+  findings := policy.deny with input as data.fixtures.pylint_catch_all
+  ids(findings) == {"DF-001"}
 }
 
 # Type identity: one group, with the lock giving the resolved identities.
@@ -238,4 +245,79 @@ test_family_lone_group_entry if {
 test_pytest_bdd_ignored_beside_group_entry if {
   findings := policy.deny with input as data.fixtures.pytest_bdd_ignored_beside_group_entry
   count(findings) == 0
+}
+
+
+# A target-specific declaration is a declaration; the family is grouped.
+test_target_specific_member if {
+  findings := policy.deny with input as data.fixtures.target_specific_member
+  count(findings) == 0
+}
+
+# Two locked identities for the renamed bridge are a type-identity defect.
+test_renamed_bridge_version_skew if {
+  findings := policy.deny with input as data.fixtures.renamed_bridge_version_skew
+  profile(findings) == {["DF-007", "noncompliant"]}
+}
+
+# A declaration that resolves away from the linked Fluent identity is a defect.
+test_fluent_boundary_mismatch if {
+  findings := policy.deny with input as data.fixtures.fluent_boundary_mismatch
+  profile(findings) == {["DF-007", "noncompliant"]}
+}
+
+# A documented bound still held is compliant.
+test_protected_bound_held if {
+  findings := policy.deny with input as data.fixtures.protected_bound_held
+  count(findings) == 0
+}
+
+# A declaration that admits a version the documented bound excluded.
+test_protected_bound_relaxed if {
+  findings := policy.deny with input as data.fixtures.protected_bound_relaxed
+  profile(findings) == {["DF-005", "noncompliant"]}
+}
+
+# A bound this audit cannot parse is indeterminate, never held.
+test_protected_bound_unknown if {
+  findings := policy.deny with input as data.fixtures.protected_bound_unknown
+  profile(findings) == {["DF-006", "indeterminate"]}
+}
+
+# Every derived occurrence still agrees with the canonical value.
+test_derived_satisfied if {
+  findings := policy.deny with input as data.fixtures.derived_satisfied
+  count(findings) == 0
+}
+
+# A copied Makefile has drifted from the canonical requirement.
+test_derived_drifted if {
+  findings := policy.deny with input as data.fixtures.derived_drifted
+  profile(findings) == {["DF-004", "noncompliant"]}
+  some finding in findings
+  finding.path == "Makefile"
+}
+
+# An equal comparison catches a copied pin that moved alone.
+test_derived_equal_drifted if {
+  findings := policy.deny with input as data.fixtures.derived_equal_drifted
+  profile(findings) == {["DF-004", "noncompliant"]}
+}
+
+# An action pin not in the reviewed SHAs is unapproved.
+test_action_pin_unreviewed if {
+  findings := policy.deny with input as data.fixtures.action_pin_unreviewed
+  profile(findings) == {["DF-009", "noncompliant"]}
+}
+
+# The same project covered by pip and uv is updated twice.
+test_duplicate_pip_uv if {
+  findings := policy.deny with input as data.fixtures.duplicate_pip_uv
+  profile(findings) == {["DF-008", "noncompliant"]}
+}
+
+# A contract naming no relationship in the data is indeterminate.
+test_contract_unknown if {
+  findings := policy.deny with input as data.fixtures.contract_unknown
+  profile(findings) == {["DF-006", "indeterminate"]}
 }

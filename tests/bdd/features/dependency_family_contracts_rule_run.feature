@@ -22,13 +22,27 @@ Feature: Dependency-family contracts rule run
     When I audit the checkout for its dependency families
     Then the audit exit status is 1
     And the audit output reports "DF-001"
-    And the audit output reports "are not taken together by one Dependabot group"
+    And the audit output reports "is not taken together by one narrow Dependabot group"
 
   Scenario: a recorded exception silences the relationship it names
     Given a checkout whose PyO3 packages fall to the catch-all group with a reviewed exception
     When I audit the checkout for its dependency families
     Then the audit exit status is 0
     And the audit table reports zero findings
+
+  Scenario: a derived PyO3 version that drifted from the manifest is reported
+    Given a checkout whose Makefile pins a different PyO3 version from its manifest
+    When I audit the checkout for its dependency families
+    Then the audit exit status is 1
+    And the audit output reports "DF-004"
+    And the audit output reports "no longer matches the canonical value"
+
+  Scenario: a documented PyO3 bound the declaration has moved past is reported
+    Given a checkout whose PyO3 declaration has moved past its documented bound
+    When I audit the checkout for its dependency families
+    Then the audit exit status is 1
+    And the audit output reports "DF-005"
+    And the audit output reports "no longer held by the declaration"
 
   Scenario: a checkout with no Dependabot configuration is indeterminate
     Given a checkout that declares PyO3 but has no Dependabot configuration

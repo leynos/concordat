@@ -421,6 +421,13 @@ A relationship applies only where the repository declares every member:
   the first entry that does not ignore it. An ecosystem that needs the rest of
   its dependencies updated keeps a second, plain entry beside the group entry,
   ignoring the group's members;
+- a type identity must resolve to one version in the lock, and to the version
+  the declaration names (DF-007);
+- a Python or Cargo surface must be monitored by its native ecosystem, and the
+  same Python requirements must not be covered by both `pip` and `uv` entries
+  (DF-008);
+- a full-SHA action pin must appear in the reviewed pins recorded in
+  `.concordat` (DF-009);
 - a missing configuration, an unreadable manifest or lock, a Python project
   outside the root, or a Cargo manifest outside the governed Rust surfaces is
   reported as indeterminate (DF-006). A repository that has not declared
@@ -435,7 +442,8 @@ A relationship applies only where the repository declares every member:
   that cannot be read is reported the same way, and a `members` glob that is
   absolute or leaves the checkout is ignored. A nested manifest that names no
   related package draws nothing. A directory that cannot be listed during that
-  scan is reported the same way.
+  scan is reported the same way. An indeterminate result is never rendered as
+  compliant.
 
 To keep an older generation deliberately, record an exception in `.concordat`:
 
@@ -445,6 +453,65 @@ dependencies:
     - relationship: pyo3-build-config-family
       rationale: the extension stays on the 0.28 generation
       review_trigger: review when PyO3 0.30 ships
+```
+
+An exception lacking any of the three fields is reported (DF-006) and exempts
+nothing. A repository that documents a relationship without declaring every
+member locally can name it in `family_contracts`; the rule then applies it and
+reports the missing member rather than skipping the relationship.
+
+Record a compatibility bound the repository relies on, so that relaxing it is
+reported (DF-005) rather than passing silently:
+
+```yaml
+dependencies:
+  protected_bounds:
+    - relationship: pyo3-build-config-family
+      package: pyo3
+      bound: "<0.29"
+      rationale: the extension relies on the 0.28 build interface
+      review_trigger: review when the extension migrates to 0.30
+```
+
+`manifest` and `evidence` are optional. A bound the audit cannot parse, or a
+package outside the named relationship, is indeterminate (DF-006), never held.
+
+Record a canonical value and every place it is copied, so that drift is
+reported (DF-004):
+
+```yaml
+dependencies:
+  derived_inputs:
+    - id: pyo3-version
+      comparator: satisfies
+      canonical:
+        manifest: Cargo.toml
+        package: pyo3
+      selectors:
+        - kind: makefile-variable
+          path: Makefile
+          variable: PYO3_VERSION
+      rationale: one PyO3 line across the build
+      review_trigger: review when PyO3 0.29 is adopted
+```
+
+`comparator` is `equal` or `satisfies`. Selector kinds are `makefile-variable`,
+`makefile-recipe`, `workflow-env`, `action-input` and `action-ref`. A selector
+the audit cannot resolve (an unexpanded expression, a missing file, two
+disagreeing occurrences) is indeterminate (DF-006). An occurrence may carry an
+`override` with `override_rationale` and `override_review_trigger`.
+
+For an action pin, `canonical` names the action instead of a manifest, and
+`reviewed` lists the approved commits:
+
+```yaml
+      canonical:
+        action:
+          uses: actions/checkout
+          path: .github/workflows/ci.yml
+      reviewed:
+        - sha: 0123456789abcdef0123456789abcdef01234567
+          provenance: reviewed in the pinning change
 ```
 
 `main-owned-codescene-coverage` audits the coverage topology (CV-005):

@@ -1239,15 +1239,27 @@ requirement and whether that is an exact pin or an explicit upper bound, its
 locked versions from `Cargo.lock` or `uv.lock`, and Dependabot's treatment of
 it (covering entry, first matching group in document order, narrow groups that
 match, `ignore` rule). The estate's relationship data is read from
-`platform-standards/canon/data/dependency-families.yaml` and the repository's
-exceptions from `.concordat`. When `language.rust.surfaces` is undeclared the
+`platform-standards/canon/data/dependency-families.yaml`, and the repository's
+exceptions, contracts, documented bounds, derived inputs and reviewed action
+pins from `.concordat`. When `language.rust.surfaces` is undeclared the
 resolver falls back to the root `Cargo.toml`, so the builder walks the tree
 (skipping hidden directories and `target`, `vendor`, `node_modules`, `venv`,
 `build` and `dist`) and reads every other `Cargo.toml` loosely, naming it as a
 problem when it cannot be decoded or declares a package (by published name)
-that a relationship lists; a declared list stays authoritative. That discovery
-lives in `dependency_family_discovery.py` and the Dependabot coverage reader in
-`dependency_family_coverage.py`. The same walk finds nested `pyproject.toml`
+that a relationship lists. A declared surface list governs what is read in
+full, but the same walk still runs: a manifest outside the governed surfaces
+that declares a related package is named and makes the result indeterminate, so
+declaring surfaces cannot hide a related manifest. That discovery lives in
+`dependency_family_discovery.py`; `dependency_family_declarations.py` turns the
+discovered surfaces and locks into declaration facts; the Dependabot coverage
+reader lives in `dependency_family_coverage.py`; and resolved lock identities in
+`dependency_family_resolution.py`. `dependency_family_versions.py` holds the
+version-range comparison shared by the bound and derived-input facts, and
+`dependency_family_update_types.py` classifies update types for Dependabot
+groups. `dependency_family_derived.py` resolves the `.concordat` selectors
+(Makefile variables and recipes, workflow environment values, action inputs and
+pins) against the checkout; a value it cannot expand stays an unresolved fact
+rather than an assumed match. The same walk finds nested `pyproject.toml`
 files, and a directory it cannot list is a problem rather than a shorter
 result. A manifest the surface resolver rejects, a Python project outside the
 root, an unreadable lock and a missing configuration become `problems` or

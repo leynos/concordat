@@ -19,7 +19,7 @@ import pathlib
 import tomllib
 import typing as typ
 
-from .dependency_family_coverage import mapping
+from .dependency_family_coverage import mapping, sequence
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -144,6 +144,8 @@ def workspace_member_manifests(
     return sorted(found)
 
 
+
+
 def loose_manifest(nested: pathlib.Path) -> tuple[dict[str, object], str | None]:
     """Return a nested manifest decoded without the surface resolver, or why not.
 
@@ -163,15 +165,26 @@ def loose_manifest(nested: pathlib.Path) -> tuple[dict[str, object], str | None]
         return {}, str(error)
 
 
-def _inherited_for(
+class WorkspaceInfo(typ.TypedDict):
+    """The membership facts of one `[workspace]` manifest."""
+
+    members: list[str]
+    exclude: list[str]
+
+
+
+
+def inherited_workspace(
     manifest: pathlib.PurePosixPath,
     documents: dict[pathlib.PurePosixPath, dict[str, object]],
-    governed: dict[str, object],
+    fallback: dict[str, object] | None = None,
 ) -> dict[str, object]:
-    """Return the `[workspace.dependencies]` a nested manifest can inherit.
+    """Return the `[workspace.dependencies]` a manifest can inherit.
 
-    The nearest ancestor manifest that defines a workspace wins over the
-    governed workspace's own table, as Cargo resolves membership.
+    Cargo resolves `workspace = true` from the nearest ancestor that defines a
+    workspace, including the manifest's own directory when a package and
+    workspace share one file. A more distant workspace's table is never used,
+    which is why this does not merge every governed workspace.
 
     Returns
     -------
@@ -184,8 +197,56 @@ def _inherited_for(
         )
         listed = mapping((workspace or {}).get("dependencies"))
         if listed is not None:
-            return {**governed, **listed}
-    return governed
+            return {**(fallback or {}), **listed}
+    return fallback or {}
+
+
+def workspace_info(document: dict[str, object]) -> WorkspaceInfo | None:
+    """Return a manifest's workspace membership, or None when it defines none."""
+    workspace = mapping(document.get("workspace"))
+    if workspace is None:
+        return None
+    return {
+        "members": [str(item) for item in sequence(workspace.get("members")) or []],
+        "exclude": [str(item) for item in sequence(workspace.get("exclude")) or []],
+    }
+
+
+def workspace_includes(info: WorkspaceInfo, relative: str) -> bool:
+    """Return whether a workspace's globs list *relative* and no exclude removes it.
+
+    Parameters
+    ----------
+    info:
+        The workspace's member and exclude globs.
+    relative:
+        The candidate manifest's directory, relative to the workspace root.
+
+    Returns
+    -------
+    bool
+        Whether Cargo would treat the candidate as a member.
+    """
+    path = pathlib.PurePosixPath(relative)
+    return _matches_any(path, info["members"]) and not _matches_any(
+        path, info["exclude"]
+    )
+
+
+def _matches_any(path: pathlib.PurePosixPath, patterns: cabc.Iterable[str]) -> bool:
+    """Return whether *path* matches any glob, skipping entries Cargo rejects.
+
+    A malformed `members` entry (an empty string, for example) is not a member
+    glob Cargo would honour. Ignoring it keeps the malformed entry from either
+    raising or silently widening what the audit reads.
+    """
+    for pattern in patterns:
+        try:
+            if path.match(pattern):
+                return True
+        except ValueError:
+            continue
+    return False
 
 
 def _declared_packages(
@@ -215,6 +276,7 @@ def ungoverned_problems(
     nested: list[pathlib.Path],
     members: cabc.Collection[str],
     governed: dict[str, object],
+    unmonitored: cabc.Collection[str] = (),
 ) -> list[str]:
     """Return the problems posed by nested manifests no declared surface governs.
 
@@ -222,13 +284,16 @@ def ungoverned_problems(
     be said about what it declares. One that decodes is a problem only when it
     declares, or defines for its workspace, a package some recorded
     relationship names: otherwise no relationship could apply to it and its
-    absence from the audit hides nothing.
+    absence from the audit hides nothing. A manifest the repository has listed
+    under `dependencies.unmonitored_manifests` is deliberately outside the
+    audit and draws no problem.
 
     Returns
     -------
     list[str]
         One sentence per manifest that matters.
     """
+    unmonitored_paths = set(unmonitored)
     loaded = {
         pathlib.PurePosixPath(path.relative_to(checkout).as_posix()): loose_manifest(
             path
@@ -238,12 +303,14 @@ def ungoverned_problems(
     documents = {path: doc for path, (doc, error) in loaded.items() if error is None}
     found: list[str] = []
     for path, (doc, error) in sorted(loaded.items()):
+        if str(path) in unmonitored_paths:
+            continue
         outside = f"{path} is a Cargo manifest outside the governed Rust surfaces"
         if error is not None:
             found.append(f"{outside} and cannot be read: {error}")
             continue
         related = sorted(
-            _declared_packages(doc, _inherited_for(path, documents, governed))
+            _declared_packages(doc, inherited_workspace(path, documents, governed))
             & set(members)
         )
         if related:
