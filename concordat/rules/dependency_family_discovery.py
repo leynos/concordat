@@ -171,6 +171,49 @@ _SKIPPED_DIRECTORIES = frozenset({
 })
 
 
+def walk_files(
+    checkout: pathlib.Path, problems: list[str], *, label: str | None = None
+) -> list[pathlib.Path]:
+    """Return every file below the root that the audit may enter, in path order.
+
+    Hidden directories and vendored or generated trees are not projects and are
+    not entered. A directory the walk cannot list is a problem fact, never a
+    silently shorter list.
+
+    Parameters
+    ----------
+    checkout:
+        The repository root to walk.
+    problems:
+        The fact list; an unlistable directory appends one sentence.
+    label:
+        What the walk was looking for, named in the problem sentence. A caller
+        that reads every file leaves it out.
+
+    Returns
+    -------
+    list[pathlib.Path]
+        The discovered files, sorted.
+    """
+
+    def unreadable(error: OSError) -> None:
+        where = pathlib.Path(error.filename or ".").relative_to(checkout).as_posix()
+        looking_for = f" for {label}" if label is not None else ""
+        message = f"cannot scan {where}{looking_for}: {error.strerror}"
+        if message not in problems:
+            problems.append(message)
+
+    found: list[pathlib.Path] = []
+    for directory, subdirectories, files in os.walk(checkout, onerror=unreadable):
+        subdirectories[:] = [
+            entry
+            for entry in subdirectories
+            if not entry.startswith(".") and entry not in _SKIPPED_DIRECTORIES
+        ]
+        found.extend(pathlib.Path(directory) / name for name in files)
+    return sorted(found)
+
+
 def nested_files(
     checkout: pathlib.Path, name: str, problems: list[str]
 ) -> list[pathlib.Path]:
@@ -185,20 +228,8 @@ def nested_files(
     list[pathlib.Path]
         The nested files, in path order.
     """
-
-    def unreadable(error: OSError) -> None:
-        where = pathlib.Path(error.filename or ".").relative_to(checkout).as_posix()
-        message = f"cannot scan {where} for {name}: {error.strerror}"
-        if message not in problems:
-            problems.append(message)
-
-    found: list[pathlib.Path] = []
-    for directory, subdirectories, files in os.walk(checkout, onerror=unreadable):
-        subdirectories[:] = [
-            entry
-            for entry in subdirectories
-            if not entry.startswith(".") and entry not in _SKIPPED_DIRECTORIES
-        ]
-        if name in files and pathlib.Path(directory) != checkout:
-            found.append(pathlib.Path(directory) / name)
-    return sorted(found)
+    return [
+        path
+        for path in walk_files(checkout, problems, label=name)
+        if path.name == name and path.parent != checkout
+    ]

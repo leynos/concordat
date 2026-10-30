@@ -43,6 +43,9 @@ from concordat.rules.markdown_envelope import (
 from concordat.rules.nested_cargo_lock_envelope import (
     ENVELOPE_KIND as NESTED_CARGO_LOCK_ENVELOPE_KIND,
 )
+from concordat.rules.nested_cargo_offline_envelope import (
+    ENVELOPE_KIND as NESTED_CARGO_OFFLINE_ENVELOPE_KIND,
+)
 from concordat.rules.spelling_envelope import (
     ENVELOPE_KIND as SPELLING_ENVELOPE_KIND,
 )
@@ -128,6 +131,11 @@ class TestRegisteredPackages:
                 "nested-cargo-fixture-lockfiles",
                 NESTED_CARGO_LOCK_ENVELOPE_KIND,
                 id="nested-cargo-fixture-lockfiles",
+            ),
+            pytest.param(
+                "nested-cargo-offline-tests",
+                NESTED_CARGO_OFFLINE_ENVELOPE_KIND,
+                id="nested-cargo-offline-tests",
             ),
             pytest.param(
                 "markdown-formatting-baseline",
@@ -402,6 +410,7 @@ class TestDeclaredInputKind:
             ("rust-build-defaults", BUILD_DEFAULTS_ENVELOPE_KIND),
             ("rust-dev-build-footprint", DEV_BUILD_ENVELOPE_KIND),
             ("nested-cargo-fixture-lockfiles", NESTED_CARGO_LOCK_ENVELOPE_KIND),
+            ("nested-cargo-offline-tests", NESTED_CARGO_OFFLINE_ENVELOPE_KIND),
             ("markdown-formatting-baseline", MARKDOWN_ENVELOPE_KIND),
             ("main-owned-codescene-coverage", COVERAGE_ENVELOPE_KIND),
             ("dependabot-update-shape", DEPENDABOT_ENVELOPE_KIND),

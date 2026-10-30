@@ -1406,13 +1406,49 @@ Table 3 is a proposal for the general `artefact` command family and does not
 describe what ships today. The one `artefact` subcommand that is implemented,
 `concordat artefact rule run`, ships a narrower, already-fixed scheme instead:
 
-- `0` — compliant.
-- `1` — policy findings, including `indeterminate` (which fails closed).
+- `0` — compliant, or every finding carries the advisory `warning` severity.
+- `1` — at least one finding of any other severity. An `indeterminate`
+  finding fails closed only when its severity is not `warning`.
 - `2` — operational failure.
 
 See
 [`docs/developers-guide.md`, "Verdicts and exit codes"](developers-guide.md#verdicts-and-exit-codes)
 for the mapping from verdict to exit code.
+
+##### Severity: evidence versus enforcement
+
+A finding's `severity` is the enforcement dial, and the verdict is evidence.
+`RuleRunResult.verdict` and the JSON document always report what the policy
+proved; `RuleRunResult.blocking` and `exit_code` decide only whether a caller
+stops. A result is non-blocking when it is compliant or when every finding
+carries `severity: "warning"`. Every other label blocks, including a misspelt
+one, so a policy cannot weaken a gate by inventing a spelling.
+
+This separation exists because the estate needs to be surveyed before it can be
+fixed. A rule introduced across dozens of repositories would otherwise have to
+choose between shipping at `error` and breaking every lane before anyone has
+seen the findings, or not shipping at all. Shipping at `warning` lets the
+survey run, lets each repository fix its own findings in its own time, and
+keeps the evidence in the ledger and the report. Promotion to `error` is then a
+one-line policy change made once the survey shows the estate clean — the same
+two-phase shape this design already describes for the Auditor rules (see
+"Active enforcement" above) and the same shape the rule tables use when they
+record a warning severity alongside a planned error promotion.
+
+The shipped policies respect the contract today: the 4- and 5-arity
+`finding(...)` helpers hard-code `error`, and the packages that need another
+severity pass it explicitly. `RT-025` in `rust-toolchain-policy` is `warning`
+for both its noncompliant and indeterminate branches, and every finding in
+`nested-cargo-offline-tests` but its envelope defect takes the package's
+`severity` parameter, which defaults to `warning`. That is the precedent, not
+an accident, and it is why the change to `exit_code` does not need a policy
+migration: an all-`error` result behaves exactly as it did before, and the
+advisory findings become non-blocking as their names implied.
+
+The table renderer prints the severity on each finding row so that an exit
+status of `0` is never mistaken for "nothing found". The JSON document is
+unchanged in shape: consumers that read `severity`, `verdict`, and `findings`
+already have everything they need.
 
 ##### Configuration and locking
 
@@ -2779,6 +2815,149 @@ so an exemption does not travel. Path dependencies of a member that lie inside
 the workspace root are members too, as in Cargo, unless excluded. Remaining
 limits: a `path` entry in `[workspace.dependencies]` that a member inherits is
 not followed, and a fixture outside the fixture-like paths is not reached.
+
+##### Nested cargo offline tests
+
+The audit-only `nested-cargo-offline-tests` package owns NC-007 and NC-008. It
+answers the other half of the same problem the fixture-lock package addresses:
+the fixture lock decides whether a nested build compiles the workspace graph,
+and this rule decides whether it can reach the network at all. A test that
+starts its own `cargo` resolves dependencies and may update the crates.io index
+while holding the package-cache lock every repository on the host shares, so
+one repository's test can leave another repository's gate waiting for many
+minutes (leynos/whitaker#518 measured nineteen). NC-007 reports a cargo spawn
+in test scope that carries no command-local offline evidence: `--frozen`, or
+both `--offline` and `--locked`, or `CARGO_NET_OFFLINE` set to `"true"` or
+`"1"` on the command, the two values Cargo's boolean parser reads as offline.
+NC-008 reports a test entry point with no success-gated `cargo fetch --locked`
+before it, and only when a spawn or trybuild use gives the prefetch something
+to protect. Both are `warning` in the shipped parameters, so the estate is
+surveyed before the rule blocks; a `severity` parameter raises them to `error`
+without a policy edit, and an envelope defect stays `error` because it says the
+rule could not run rather than that the repository is unsafe.
+
+The evidence comes from two readers behind one envelope. The spawn reader
+classifies each literal `Command::new("cargo")`, `env!("CARGO")` and
+call-site-resolved helper as `offline`, `online` or `unresolved`; a non-literal
+argument list or a non-literal value for `CARGO_NET_OFFLINE` makes the spawn
+unresolved rather than being rounded down to a pass. Two rules keep the
+environment reading faithful to `std::process::Command`. A repeated
+`CARGO_NET_OFFLINE` assignment is last-write-wins, because `Command::env` keeps
+the value given last for a name; the reader tracks the *latest* operation — a
+call site's over a helper's, and a later pair over an earlier one — so `"true"`
+followed by `"0"` is `online`, and a last operation the reader cannot see makes
+the spawn `unresolved` rather than letting the earlier pair speak for it.
+`env_remove` and `env_clear` are operations on that ledger rather than
+assignments: both take the variable away, so both leave the spawn `online`,
+while an unreadable removal name or an unreadable `envs(..)` list records
+"unknown" because either may name the offline variable or set it back. A list
+followed by more expression — `.envs([(..)].into_iter().chain(extra))` — is
+such a list: the trailing words may append a pair that overrides the visible
+one, so reading the literal alone would report `offline` on a guess. A call
+made through a binding is read the same way when it sits in a block nested
+inside the binding's own: `if frozen { cmd.arg("--frozen"); }` sets the flag on
+one path of two, so recording it would call the spawn `offline` on a path the
+reader cannot establish. Such a call is recorded as an operation the reader
+cannot see — an unreadable word for an argument method, an unknown ledger entry
+for an environment method or removal — which makes the command `unresolved`,
+while a method that changes neither, such as `.status()`, is stepped over and
+leaves the rest of the evidence intact. `--frozen`, by contrast, is not
+revocable by any argument or environment variable, so a command carrying it
+stays `offline` whatever the environment says. A helper that starts cargo, is
+defined in test scope, and has no call site in its own file is reported at its
+definition as `unresolved` instead of being dropped: another file may call it,
+and a call site proven offline does not carry the helper's other call sites
+with it, so the construction never falls out of the audit. A helper defined
+outside test scope is not reported: its call sites are visible, and library
+code is outside the rule's scope. A version or help probe reads no manifest and
+is not a spawn, while a version flag carrying a value
+(`cargo install --version 1.2.3`) is real work. Fixture package sources are
+excluded — a cargo spawn inside one is the build under audit, matching the
+fixture-lock rule's fixture set. Test scope follows the compiler through two
+paths, both in `nested_cargo_modules.py`: a `#[cfg(test)]` item covers its own
+span, and a `mod name;` declaration covered by test scope names a file that is
+test code throughout, whether the declaration carries the attribute or sits
+inside a test-scope inline module — `#[cfg(test)] mod checks { mod helpers; }`
+compiles `src/checks/helpers.rs` into the test target, so the inherited form
+must be followed or its spawns disappear silently. A declaration gated by any
+`cfg` other than a test-requiring one is left to the reader's uncertainty
+rather than guessed at. The trybuild reader resolves dependency renames, so a
+manifest that pulls the crate in as `tb = { package = "trybuild" }` is a fact
+and its `tb::TestCases` references are facts, with each manifest's declared
+names applied only to the sources that manifest governs. Both matter beyond
+their own findings: the policy's `has_nested_build` guard suppresses NC-008 and
+the entry-point EN-001 when no nested build is visible, so missing evidence
+fails silent. The entry-point reader resolves the Makefile `test` target
+through prerequisites and recipes, each selected nextest profile's `setup`
+script, and each workflow step that runs tests, keeping shell connectors: only
+`&&` and a fail-fast line sequence prove that a fetch runs first, because `;`,
+`||`, a pipeline, a background command and an ignored error do not stop the
+tests when the fetch fails. A command whose expansion cannot be resolved, a
+`.ONESHELL` recipe or a recursive `make` makes the entry point `uncertain` with
+its reason rather than inventing an ordering.
+
+A step's `if:` is part of that ordering, and the two steps are asked different
+questions of it. A fetch step is proof only when it runs on every run, so the
+reader keeps the strict test there: any condition other than `success()` — bare
+or wrapped in `${{ }}` — leaves the entry point `absent`, because a fetch that
+sometimes skips warms nothing on the runs it skips. A test step is asked
+whether it could still run after a failed fetch, which is not the same
+question. GitHub applies its implicit `success()` guard only when the condition
+names no status function at all; once one appears, what the step allows follows
+from the expression. The reader therefore evaluates the condition with
+`success()` held false under three-valued logic: a conjunction with `success()`
+is false and the step is gated, `always()` and `failure()` are true and it is
+not, and a disjunction the reader cannot settle —
+`success() || github.ref == …` — leaves the entry point `uncertain`. GitHub's
+expression parser lowercases a function name before looking it up, so the
+reader matches status-function names without regard to case and `Always()`
+replaces the implicit guard just as `always()` does. String literals are
+single-quoted and are data rather than syntax: the reader blanks each literal
+before looking for a status-function call and steps over it when finding where
+an operand ends, so `github.event.name == 'always()'` names no status function
+and `'a || b'` contains no disjunction. An unclosed literal is an expression
+GitHub would reject, and the entry point is `uncertain` rather than read from a
+guess about where the literal stopped. The same three-valued treatment covers a
+command carrying an expression: a fetch chained to a test after an `${{ }}`
+operand reads as gated once the expression is stripped, but the expression can
+supply the `|| true` that makes a failed fetch harmless, so it proves nothing.
+
+Both policy inputs beyond the workflows — `Makefile` and
+`.config/nextest.toml` — are read through `within_checkout` for the reason
+every other input is: `Path.is_file()` follows symbolic links, so a checkout
+could otherwise aim either one at a readable file elsewhere on the machine and
+have that file's target or setup scripts answer for this repository.
+
+Exemptions keep the `whitaker-provisioning` convention of a repository, a path,
+a rationale and a review trigger, and differ from the fixture-lock rule in two
+ways: the path is an exact **file**, because a spawn is a property of the line
+that starts it, and the exemption suppresses NC-007 and NC-008 only. Evidence
+the reader could not establish stays reported, so an exempt file cannot hide
+the rule's own uncertainty. Both text fields must be non-blank in the policy
+itself, not merely in the schema, because an exemption nobody must revisit is
+not a record. Both entry-point findings are gated on the checkout having at
+least one spawn or trybuild fact: an unreadable recipe in a repository that
+starts no cargo has nothing for a prefetch to protect, so it is not evidence
+against that repository. A command handed to another function as a mutable
+reference (`configure(&mut cmd)`) is read as `unresolved`, because the callee
+may set `--frozen` or an offline environment the reader never sees; the same
+call is sound after a `--frozen`, which nothing revokes, but not after an
+offline environment, which the callee may overwrite. Remaining limits: a spawn
+reached through a macro, a function pointer or a value assembled at run time is
+invisible, and a hidden command in a Makefile or workflow leaves the entry point
+`uncertain` rather than proved either way.
+
+The policy checks that every fact carries the fields its own findings read.
+Rego treats a missing key as undefined rather than as an error, so a finding
+that reads one leaves its rule body undefined, the finding silently disappears,
+and the repository is reported clean on evidence nobody judged — the same
+failure the state check guards against, one level down. A spawn must therefore
+carry a `path` and a numeric `line`, and an entry point a `path`, a numeric
+`line` and a `name`, since both entry-point findings name the entry point. A
+field of the wrong type is rejected alongside a missing one: `sprintf("%d", …)`
+with a string line prints `%!d(string=80)` where a location belongs. The
+malformed fact is reported once as an envelope error, and the ordinary findings
+skip it, rather than the same fact drawing both an error and a garbled warning.
 
 #### 3.1.4 Verifying the reconciliation invariants
 

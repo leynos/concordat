@@ -17,12 +17,17 @@ from .nested_cargo_lock_envelope import (
     NestedCargoLockEnvelope,
     build_nested_cargo_lock_envelope,
 )
+from .nested_cargo_offline_envelope import ENVELOPE_KIND as OFFLINE_ENVELOPE_KIND
+from .nested_cargo_offline_envelope import (
+    NestedCargoOfflineEnvelope,
+    build_nested_cargo_offline_envelope,
+)
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
     import pathlib
 
-type NestedCargoEnvelope = NestedCargoLockEnvelope
+type NestedCargoEnvelope = NestedCargoLockEnvelope | NestedCargoOfflineEnvelope
 
 
 def _lock_envelope(
@@ -41,8 +46,10 @@ def _lock_envelope(
 
 BY_PACKAGE: typ.Final = types.MappingProxyType({
     "nested-cargo-fixture-lockfiles": _lock_envelope,
+    "nested-cargo-offline-tests": build_nested_cargo_offline_envelope,
 })
 
 BY_KIND: typ.Final = types.MappingProxyType({
     LOCK_ENVELOPE_KIND: _lock_envelope,
+    OFFLINE_ENVELOPE_KIND: build_nested_cargo_offline_envelope,
 })

@@ -541,8 +541,15 @@ actuators that remediate them. Each check ships as a lint rule package under
   fixture lock resolves only registry packages the workspace lock resolves, and
   a fixture manifest with dependencies is locked. Acceptance: the pinned corpus
   (netsuke before and after #913, rstest-bdd before and after #895) gives the
-  expected result for every case. Fixture manifest coverage, nextest
-  configuration and CI wiring follow as separate packages.
+  expected result for every case. The second, a test's own cargo runs (NC-007,
+  NC-008, `nested-cargo-offline-tests`), is shipped at `warning` severity: a
+  test-scope spawn carries command-local offline evidence, and a test entry
+  point that has a nested build for it to protect runs `cargo fetch --locked`
+  first. Acceptance: leynos/whitaker before and after #518 and
+  leynos/theoremc's main give the expected result for every case, and the
+  fixture-lock package's exemptions do not reach it. Promotion to `error` is a
+  separate change made once the estate survey is clean. Fixture manifest
+  coverage, nextest configuration and CI wiring follow as separate packages.
 - [ ] Ship the Dependabot governance rule packages (DB-001 to DB-004):
   manifest-scan sensor diffing package roots against `dependabot.yml` entries,
   cooldown policy checks (tiered for semver ecosystems, `default-days` for

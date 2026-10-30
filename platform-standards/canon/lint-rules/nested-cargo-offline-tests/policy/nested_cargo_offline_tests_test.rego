@@ -1,0 +1,277 @@
+package canon.lint_rules.nested_cargo_offline_tests_test
+
+import data.canon.lint_rules.nested_cargo_offline_tests as policy
+import rego.v1
+
+exemptions := [{
+	"repository": "leynos/example",
+	"path": "installer/src/builder.rs",
+	"rationale": "the installer smoke test must install from crates.io",
+	"review_trigger": "review when the installer stops downloading a published crate",
+}]
+
+entry_point_exemption := [{
+	"repository": "leynos/example",
+	"path": "Makefile",
+	"rationale": "the vendored toolchain lane owns its own fetch",
+	"review_trigger": "review when the lane is retired",
+}]
+
+findings(fixture) := fs if {
+	fs := policy.deny with input as fixture with data.parameters as {"exemptions": []}
+}
+
+profile(fixture) := {[f.rule_id, f.verdict, f.path] | some f in findings(fixture)}
+
+severities(fixture) := {[f.rule_id, f.severity] | some f in findings(fixture)}
+
+test_an_offline_spawn_is_compliant if {
+	count(findings(data.fixtures.compliant)) == 0
+}
+
+test_a_command_local_offline_variable_is_compliant if {
+	count(findings(data.fixtures.online_cargo_net_offline)) == 0
+}
+
+test_a_prefetch_before_the_tests_is_compliant if {
+	count(findings(data.fixtures.prefetch_before)) == 0
+}
+
+test_an_online_spawn_is_noncompliant if {
+	profile(data.fixtures.online_spawn) == {["NC-007", "noncompliant", "tests/build_discovery_bdd.rs"]}
+}
+
+test_an_absent_entry_point_is_noncompliant if {
+	profile(data.fixtures.absent_prefetch) == {["NC-008", "noncompliant", "Makefile"]}
+}
+
+test_trybuild_evidence_alone_makes_an_entry_point_count if {
+	profile(data.fixtures.absent_with_trybuild) == {["NC-008", "noncompliant", ".github/workflows/ci.yml"]}
+}
+
+# A checkout that spawns nothing and uses no trybuild has nothing for a
+# prefetch to protect, so its cold entry point is not a finding.
+test_an_entry_point_without_evidence_is_not_judged if {
+	count(findings(data.fixtures.no_spawn_or_trybuild)) == 0
+}
+
+test_an_unresolved_spawn_is_indeterminate if {
+	profile(data.fixtures.unresolved_spawn) == {["EN-001", "indeterminate", "tests/forwarded_args.rs"]}
+}
+
+test_an_uncertain_entry_point_is_indeterminate if {
+	profile(data.fixtures.uncertain_prefetch) == {
+		["NC-007", "noncompliant", "tests/build_suite_bdd.rs"],
+		["EN-001", "indeterminate", "Makefile"],
+	}
+}
+
+# An entry point only matters when there is a nested build for a prefetch to
+# protect. A repository that spawns no cargo and uses no trybuild has nothing
+# the missing prefetch could warm, so an unreadable recipe there is not
+# evidence against it — the same gate NC-008 already carries.
+test_an_uncertain_entry_point_without_a_nested_build_is_not_judged if {
+	count(findings(data.fixtures.uncertain_entry_without_nested_build)) == 0
+}
+
+test_unreadable_evidence_is_indeterminate if {
+	profile(data.fixtures.unreadable_evidence) == {["EN-001", "indeterminate", ""]}
+}
+
+# The default is survey mode: a warning finding is reported but does not block.
+test_findings_carry_warning_severity_by_default if {
+	severities(data.fixtures.online_spawn) == {["NC-007", "warning"]}
+}
+
+test_the_severity_parameter_reaches_the_finding if {
+	fs := policy.deny with input as data.fixtures.online_spawn with data.parameters as {"exemptions": [], "severity": "error"}
+	{[f.rule_id, f.severity] | some f in fs} == {["NC-007", "error"]}
+}
+
+# An envelope defect is the rule's own failure, not a repository's, so it stays
+# an error however the rule is configured.
+test_a_missing_envelope_is_an_error_not_a_warning if {
+	fs := policy.deny with input as {} with data.parameters as {"exemptions": [], "severity": "warning"}
+	{[f.rule_id, f.severity, f.verdict] | some f in fs} == {["EN-001", "error", "indeterminate"]}
+}
+
+test_a_foreign_envelope_kind_is_an_error_not_a_warning if {
+	wrong := object.union(data.fixtures.compliant, {"kind": "policy-input/nested-cargo-fixture-lockfiles"})
+	fs := policy.deny with input as wrong with data.parameters as {"exemptions": [], "severity": "warning"}
+	{[f.rule_id, f.severity] | some f in fs} == {["EN-001", "error"]}
+}
+
+# A fact the reader wrote without a state is evidence nobody judged, so the
+# policy must say so. Reading `spawn.state` and negating its membership leaves
+# the rule undefined — not failing, not passing — and the repository would be
+# reported clean on a fact that was never classified.
+test_a_spawn_fact_without_a_state_is_indeterminate if {
+	spawn := object.remove(data.fixtures.online_spawn.spawns[0], ["state"])
+	fs := policy.deny with input as object.union(data.fixtures.online_spawn, {"spawns": [spawn]}) with data.parameters as {"exemptions": [], "severity": "warning"}
+	{[f.rule_id, f.severity, f.verdict] | some f in fs} == {["EN-001", "error", "indeterminate"]}
+}
+
+test_an_entry_point_fact_without_a_state_is_indeterminate if {
+	entry := object.remove(data.fixtures.absent_prefetch.entry_points[0], ["state"])
+	fs := policy.deny with input as object.union(data.fixtures.absent_prefetch, {"entry_points": [entry]}) with data.parameters as {"exemptions": [], "severity": "warning"}
+	{[f.rule_id, f.severity, f.verdict] | some f in fs} == {["EN-001", "error", "indeterminate"]}
+}
+
+test_a_spawn_fact_that_is_not_an_object_is_indeterminate if {
+	fs := policy.deny with input as object.union(data.fixtures.online_spawn, {"spawns": ["online"]}) with data.parameters as {"exemptions": [], "severity": "warning"}
+	{[f.rule_id, f.severity, f.verdict] | some f in fs} == {["EN-001", "error", "indeterminate"]}
+}
+
+# A known state is not a usable fact on its own: NC-007 reports the file and
+# line the spawn starts at, so a fact missing either one produces no finding
+# and the spawn would pass unjudged. Each required field is checked separately
+# so a fact missing one of them cannot slip through behind the other.
+test_a_spawn_fact_without_a_path_is_indeterminate if {
+	spawn := object.remove(data.fixtures.online_spawn.spawns[0], ["path"])
+	fs := policy.deny with input as object.union(data.fixtures.online_spawn, {"spawns": [spawn]}) with data.parameters as {"exemptions": [], "severity": "warning"}
+	{[f.rule_id, f.severity, f.verdict] | some f in fs} == {["EN-001", "error", "indeterminate"]}
+}
+
+test_a_spawn_fact_without_a_line_is_indeterminate if {
+	spawn := object.remove(data.fixtures.online_spawn.spawns[0], ["line"])
+	fs := policy.deny with input as object.union(data.fixtures.online_spawn, {"spawns": [spawn]}) with data.parameters as {"exemptions": [], "severity": "warning"}
+	{[f.rule_id, f.severity, f.verdict] | some f in fs} == {["EN-001", "error", "indeterminate"]}
+}
+
+test_a_spawn_fact_with_a_non_numeric_line_is_indeterminate if {
+	spawn := object.union(data.fixtures.online_spawn.spawns[0], {"line": "80"})
+	fs := policy.deny with input as object.union(data.fixtures.online_spawn, {"spawns": [spawn]}) with data.parameters as {"exemptions": [], "severity": "warning"}
+	{[f.rule_id, f.severity, f.verdict] | some f in fs} == {["EN-001", "error", "indeterminate"]}
+}
+
+test_a_malformed_spawn_fact_names_the_missing_fields if {
+	spawn := object.remove(data.fixtures.online_spawn.spawns[0], ["path", "line"])
+	fs := policy.deny with input as object.union(data.fixtures.online_spawn, {"spawns": [spawn]}) with data.parameters as {"exemptions": [], "severity": "warning"}
+	some f in fs
+	contains(f.msg, "path")
+	contains(f.msg, "line")
+}
+
+test_an_absent_entry_point_without_a_name_is_indeterminate if {
+	entry := object.remove(data.fixtures.absent_prefetch.entry_points[0], ["name"])
+	fs := policy.deny with input as object.union(data.fixtures.absent_prefetch, {"entry_points": [entry]}) with data.parameters as {"exemptions": [], "severity": "warning"}
+	{[f.rule_id, f.severity, f.verdict] | some f in fs} == {["EN-001", "error", "indeterminate"]}
+}
+
+test_an_absent_entry_point_without_a_path_is_indeterminate if {
+	entry := object.remove(data.fixtures.absent_prefetch.entry_points[0], ["path"])
+	fs := policy.deny with input as object.union(data.fixtures.absent_prefetch, {"entry_points": [entry]}) with data.parameters as {"exemptions": [], "severity": "warning"}
+	{[f.rule_id, f.severity, f.verdict] | some f in fs} == {["EN-001", "error", "indeterminate"]}
+}
+
+test_an_absent_entry_point_without_a_line_is_indeterminate if {
+	entry := object.remove(data.fixtures.absent_prefetch.entry_points[0], ["line"])
+	fs := policy.deny with input as object.union(data.fixtures.absent_prefetch, {"entry_points": [entry]}) with data.parameters as {"exemptions": [], "severity": "warning"}
+	{[f.rule_id, f.severity, f.verdict] | some f in fs} == {["EN-001", "error", "indeterminate"]}
+}
+
+# An `uncertain` entry point's finding names the entry point, so a fact without
+# a name would produce no finding at all: reading the missing key leaves the
+# rule body undefined and the finding is dropped. The malformed fact is
+# reported instead, as an error, because an entry point nobody can describe is
+# not evidence a repository may pass on.
+test_an_uncertain_entry_point_without_a_name_is_indeterminate if {
+	entry := object.remove(data.fixtures.uncertain_prefetch.entry_points[0], ["name"])
+	spawn := {"path": "a.rs", "line": 1, "form": "command_new", "state": "offline", "flags": [], "environment": []}
+	fs := policy.deny with input as object.union(data.fixtures.uncertain_prefetch, {"spawns": [spawn], "entry_points": [entry]}) with data.parameters as {"exemptions": [], "severity": "warning"}
+	{[f.rule_id, f.severity, f.verdict] | some f in fs} == {["EN-001", "error", "indeterminate"]}
+}
+
+# The required-field checks must not fire on a well-formed envelope: they are
+# a guard against a malformed fact, not a new finding for every clean run.
+test_a_well_formed_envelope_draws_no_malformed_fact_finding if {
+	fs := policy.deny with input as data.fixtures.absent_prefetch with data.parameters as {"exemptions": [], "severity": "warning"}
+	{f.rule_id | some f in fs} == {"NC-008"}
+}
+
+# An indeterminate fact still has to be reported when it is *incomplete*. The
+# message names the reason the ordering could not be read and describes the
+# flags and environment of the spawn; reading either key directly makes the
+# rule undefined when the reader omitted it, and the finding is silently
+# dropped. A fact nobody could finish describing is the last one that may be
+# reported clean.
+test_an_uncertain_entry_point_without_a_reason_still_reports if {
+	entry := object.remove(data.fixtures.uncertain_prefetch.entry_points[0], ["reason"])
+	spawn := {"path": "a.rs", "line": 1, "form": "command_new", "state": "offline", "flags": [], "environment": []}
+	fs := policy.deny with input as object.union(data.fixtures.uncertain_prefetch, {"spawns": [spawn], "entry_points": [entry]}) with data.parameters as {"exemptions": [], "severity": "warning"}
+	{[f.rule_id, f.severity, f.verdict] | some f in fs} == {["EN-001", "warning", "indeterminate"]}
+}
+
+test_an_unresolved_spawn_without_a_description_still_reports if {
+	spawn := object.remove(data.fixtures.unresolved_spawn.spawns[0], ["flags", "environment"])
+	fs := policy.deny with input as object.union(data.fixtures.unresolved_spawn, {"spawns": [spawn]}) with data.parameters as {"exemptions": [], "severity": "warning"}
+	{[f.rule_id, f.severity, f.verdict] | some f in fs} == {["EN-001", "warning", "indeterminate"]}
+}
+
+test_a_named_exemption_suppresses_the_spawn_finding if {
+	fs := policy.deny with input as data.fixtures.exempt_spawn with data.parameters as {"exemptions": exemptions}
+	profile := {[f.rule_id, f.path] | some f in fs}
+	profile == {["NC-007", "tests/build_discovery_bdd.rs"], ["NC-008", "Makefile"]}
+}
+
+test_a_named_exemption_suppresses_the_entry_point_finding if {
+	fs := policy.deny with input as data.fixtures.exempt_entry_point with data.parameters as {"exemptions": entry_point_exemption}
+	count(fs) == 0
+}
+
+# An exemption names a repository: the same file elsewhere is audited.
+test_an_exemption_does_not_travel if {
+	fs := policy.deny with input as data.fixtures.named_elsewhere with data.parameters as {"exemptions": exemptions}
+	{f.rule_id | some f in fs} == {"NC-007"}
+}
+
+# An exemption with no rationale or no review trigger asks nobody to revisit
+# it, so it is not a record and must not suppress anything. Both tests use the
+# fixture whose repository the exemption names, and assert the finding for the
+# file it names: a fixture from another repository would pass whatever the
+# blank field were compared against, so it would test nothing.
+test_an_empty_rationale_is_not_an_exemption if {
+	empty := [{"repository": "leynos/example", "path": "installer/src/builder.rs", "rationale": "", "review_trigger": "t"}]
+	fs := policy.deny with input as data.fixtures.exempt_spawn with data.parameters as {"exemptions": empty}
+	["NC-007", "installer/src/builder.rs"] in {[f.rule_id, f.path] | some f in fs}
+}
+
+test_an_empty_review_trigger_is_not_an_exemption if {
+	empty := [{"repository": "leynos/example", "path": "installer/src/builder.rs", "rationale": "r", "review_trigger": "  "}]
+	fs := policy.deny with input as data.fixtures.exempt_spawn with data.parameters as {"exemptions": empty}
+	["NC-007", "installer/src/builder.rs"] in {[f.rule_id, f.path] | some f in fs}
+}
+
+# Suppression covers NC-007 and NC-008 only: evidence the reader could not
+# establish stays reported.
+test_an_exemption_does_not_suppress_indeterminate_evidence if {
+	named := [{"repository": "leynos/example", "path": "tests/forwarded_args.rs", "rationale": "r", "review_trigger": "t"}]
+	fs := policy.deny with input as data.fixtures.unresolved_spawn with data.parameters as {"exemptions": named}
+	{f.rule_id | some f in fs} == {"EN-001"}
+}
+
+# A path-only match would hide a finding elsewhere; matching is exact. The
+# exemption names a file the checkout reports nothing about, so every finding
+# must survive. The assertion lists paths rather than rule IDs alone: two of
+# the three findings are NC-007, so a rule-ID-only check would still pass with
+# one of them wrongly suppressed.
+test_an_exemption_covers_only_its_file if {
+	other := [{"repository": "leynos/example", "path": "installer/src/other.rs", "rationale": "r", "review_trigger": "t"}]
+	fs := policy.deny with input as data.fixtures.exempt_spawn with data.parameters as {"exemptions": other}
+	profile := {[f.rule_id, f.path] | some f in fs}
+	profile == {["NC-007", "installer/src/builder.rs"], ["NC-007", "tests/build_discovery_bdd.rs"], ["NC-008", "Makefile"]}
+}
+
+test_a_noncompliant_finding_names_the_command_and_the_remedy if {
+	some f in findings(data.fixtures.online_spawn)
+	f.rule_id == "NC-007"
+	contains(f.msg, "tests/build_discovery_bdd.rs:80")
+	contains(f.msg, "--frozen")
+}
+
+test_a_prefetch_finding_names_the_entry_point_and_the_remedy if {
+	some f in findings(data.fixtures.absent_prefetch)
+	f.rule_id == "NC-008"
+	contains(f.msg, "Makefile:27")
+	contains(f.msg, "cargo fetch --locked")
+}

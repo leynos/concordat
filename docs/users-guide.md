@@ -524,9 +524,18 @@ Verdicts are three-valued. `compliant` means the finding set is empty;
 policy could not prove compliance and fails closed (for example, the `Makefile`
 includes other files, or the parse had to recover from syntax errors).
 
-Exit codes: `0` compliant; `1` at least one finding, including indeterminate
-verdicts; `2` operational failure (for example, the pinned `makeutil` or
-`conftest` executable is missing), reported on standard error.
+Each finding also carries a `severity`, shown on every row of the table.
+Severity is the enforcement dial; the verdict is evidence, and the exit code
+reads only the severity. Exit codes: `0` when every finding is an advisory
+`warning` (a `compliant` result has no findings at all); `1` at least one
+non-warning finding, including indeterminate verdicts, which fail closed; `2`
+operational failure (for example, the pinned `makeutil` or `conftest`
+executable is missing), reported on standard error.
+
+A warning-only result therefore exits `0` but still prints its findings and
+reports its verdict, and `--format json` carries both the verdict and the
+severity of every finding. This is what lets a newly introduced rule survey an
+estate before it is promoted to `error` and starts blocking lanes.
 
 An unreadable file is not an absent one. If the root `Cargo.toml` or the root
 `Makefile` exists but cannot be inspected, because of permissions or any other
@@ -650,6 +659,129 @@ remote), its directory relative to the root, a rationale that should name the
 lane that owns its lock, and a review trigger, the event that sends the
 exemption back for review (the shape of `dependencies.family_exceptions`). An
 exemption does not travel to another repository.
+
+### Auditing a test's own cargo runs
+
+The `nested-cargo-offline-tests` rule keeps a test's nested build from holding
+the shared package-cache lock:
+
+```shell
+concordat artefact rule run nested-cargo-offline-tests --repo /path/to/checkout
+```
+
+A test that starts its own `cargo` — a nested build, `cargo package`,
+`cargo publish --dry-run`, `cargo dylint`, a trybuild case — resolves
+dependencies and may update the crates.io index. It does that while holding the
+package-cache lock every repository on the host shares, so on a machine where
+several agents build at once one repository can wait many minutes behind
+another's test (leynos/whitaker#518 measured nineteen). The rule reports:
+
+- **NC-007**: a `cargo` spawn in test scope that can reach the network — no
+  `--frozen`, not both `--offline` and `--locked`, and no command-local
+  `CARGO_NET_OFFLINE` set to `"true"` or `"1"`, the two values Cargo reads as
+  offline. Offline evidence is read from the command itself; an inherited
+  environment is not proof, because the gate's environment is not the test's.
+  When a command assigns `CARGO_NET_OFFLINE` more than once, the *last*
+  assignment is the one Cargo reads, so `"true"` followed by `"0"` leaves the
+  spawn `online`. Removing the variable counts as an operation too:
+  `env_remove("CARGO_NET_OFFLINE")` and `env_clear()` both leave the spawn
+  `online`, and an environment operation the reader cannot see makes it
+  `unresolved` rather than letting an earlier visible assignment stand. An
+  `envs` list followed by more expression, such as
+  `.envs([(..)].into_iter().chain(extra))`, counts as unseen: the trailing
+  words may append a pair that overrides the visible one. A call made on a
+  command through a binding may not run at all: in
+  `let mut cmd = Command::new("cargo"); if frozen { cmd.arg("--frozen"); }` the
+  flag is present only when `frozen` holds, so a call inside a block nested in
+  the binding's own counts as unseen — an argument call as an unreadable word,
+  an environment call or removal as an unknown ledger entry — while a method
+  that changes neither, such as `cmd.status()`, is stepped over. `--frozen` is
+  not revocable this way: no argument and no environment variable turns it off.
+  A command passed to another function as a mutable reference, as in
+  `configure(&mut cmd)`, is `unresolved`: the callee may set `--frozen` or an
+  offline environment the reader cannot see. A `--frozen` set before the
+  handoff still makes it `offline`; an offline environment set before it does
+  not, because the callee may write the variable again.
+- **NC-008**: a test entry point (the Makefile `test` target, a selected
+  nextest profile's setup script, or a workflow step that runs tests) with no
+  success-gated `cargo fetch --locked` before it. The finding is reported only
+  when the checkout has a spawn or trybuild use for the prefetch to protect. A
+  fetch counts only when its failure stops the run: `&&` or a fail-fast line
+  sequence, not `;`, `||`, a pipeline or an ignored error.
+- **EN-001** (indeterminate): a spawn whose arguments or environment the reader
+  cannot see, an entry point whose ordering it cannot read, a file it cannot
+  decode, or an input that is not this rule's envelope. An unreadable entry
+  point is reported only when the checkout has a spawn or trybuild use, for the
+  same reason NC-008 is: there is otherwise nothing for a prefetch to protect.
+  The rule says it does not know rather than guessing either way. A helper that
+  starts cargo, is defined in test scope, and has no call site in the file that
+  defines it — because another file calls it, or because nothing does — is also
+  `unresolved`, since what another file's call adds is not visible to the
+  reader. A helper defined in library code is left alone: its call sites are
+  visible, and library code is outside the rule's scope.
+
+A version or help probe is not a spawn: `cargo --version`,
+`cargo kani --version`, `cargo help`, `cargo build --help` and `cargo build -h`
+read no manifest and touch no network, while `cargo install --version 1.2.3`
+carries a value and is real work. Fixture package sources are excluded — a
+`cargo` inside one is the build under audit, not the code that starts it;
+fixture *locks* are `nested-cargo-fixture-lockfiles`' business. This rule
+therefore reports NC-007 and NC-008 only, and never NC-001 or NC-002.
+
+Trybuild use counts under whatever name the manifest gives the crate. Cargo
+renames a dependency with `key = { package = "name" }`, so
+`tb = { package = "trybuild", version = "1" }` declares trybuild as `tb`; both
+the manifest fact and a `tb::TestCases` reference in that package's test scope
+are recognized. A `TestCases` path through a name the governing manifest does
+not declare belongs to some other crate and is not evidence. The trybuild
+package's plain name always counts, so a reference in a file whose manifest is
+a virtual workspace root is still read.
+
+Test scope follows the compiler, not just the attribute.
+`#[cfg(test)] mod checks { mod helpers; }` builds `src/checks/helpers.rs` into
+the test target although `mod helpers;` carries no attribute of its own, so a
+cargo spawn there is reported too. A declaration gated by any other `cfg` is
+outside this rule's judgement, because the reader cannot decide what that gate
+compiles.
+
+Two details decide whether a prefetch counts. Cargo accepts its global options
+before the subcommand, so `cargo --locked fetch` and `cargo -q test` are read
+as the commands they name rather than as unknown invocations. A nextest setup
+script's `command` is split into argv and executed directly, with no shell
+between: `cargo fetch --locked && cargo test` there runs `cargo` with the
+connector among its arguments and fetches nothing, so only a single fetching
+command proves the cache warm. A custom nextest profile inherits `default`
+implicitly, or the profile it names in `inherits`, and the chain's setup
+scripts merge, so a fetch declared on any profile in the chain counts. A
+workflow fetch step guarded by an `if:` other than `success()` may not run at
+all, and is not proof of the order.
+
+A test step's own `if:` is read from the other side: could the step run
+although the fetch before it failed? GitHub adds its implicit `success()` check
+only when the condition names no status function, so
+`success() && runner.os == 'Linux'` still waits for the fetch and is proof,
+while `success() || github.ref == 'refs/heads/main'` runs on `main` after a
+failed fetch and is reported `uncertain`. A condition that depends on a fact
+the reader does not have, such as the branch, is `uncertain` rather than
+guessed in either direction. GitHub matches expression function names without
+regard to case, so `Success()` and `ALWAYS()` are read as the functions they
+name; a name inside a quoted string is part of the text being compared, not a
+call.
+
+The rule ships at `warning` severity, so a finding is reported and the gate
+continues. That lets the estate be surveyed and each repository fix its own
+findings in its own order; set the `severity` parameter to `error` to block,
+which is the intended end state. An envelope defect stays `error` whatever the
+parameter says, because it means the rule could not run rather than that the
+repository is unsafe.
+
+A file that must reach the network is named in the `exemptions` parameter, with
+its repository (`owner/name`, from the `origin` remote), the exact
+repository-relative **file** path, a rationale and a review trigger. Both text
+fields must be non-blank, and an exemption suppresses NC-007 and NC-008 only:
+evidence the reader could not establish stays reported. The shipped defaults
+record leynos/whitaker's `installer/src/builder.rs`, which builds its own copy
+of the crate from crates.io — the behaviour the installer exists to prove.
 
 ### Auditing Rust development build storage
 
@@ -1194,14 +1326,40 @@ concordat artefact rule run markdown-formatting-baseline --repo .
 append-only campaign ledger `docs/parabellum/ledger.jsonl`:
 
 ```shell
-uv run python -m scripts.parabellum_sweep [--only a,b] [--limit N] [--force]
-uv run python -m scripts.parabellum_sweep report
+uv run python -m scripts.parabellum_sweep \
+  [--only a,b] [--limit N] [--force] [--package PACKAGE]
+uv run python -m scripts.parabellum_sweep report [--package PACKAGE] [--output PATH]
 ```
 
-A repository already ledgered at its current head commit is skipped unless
-`--force` is given, so an interrupted sweep resumes by re-running the same
-command. The `report` subcommand regenerates
-`docs/parabellum/baseline-report.md` from the ledger.
+`--package` selects the rule package to audit and defaults to
+`rust-makefile-baseline`. Any installed package works, which is how a survey
+campaign shares the ledger with the baseline without disturbing it:
+
+```shell
+uv run python -m scripts.parabellum_sweep \
+  --package nested-cargo-offline-tests --limit 5
+uv run python -m scripts.parabellum_sweep report \
+  --package nested-cargo-offline-tests --output nested-cargo-survey.md
+```
+
+A survey report must name its output path. The default is the checked-in
+`docs/parabellum/baseline-report.md`, so `report --package <survey>` without
+`--output` is refused with exit code 2 rather than silently replacing the
+baseline with another package's figures. A survey report is also titled
+"`<package>` survey report" rather than "baseline report", since both are
+generated from the same shared ledger.
+
+A repository already ledgered at its current head commit **under the same
+package and package version** is skipped unless `--force` is given, so an
+interrupted sweep resumes by re-running the same command. Records written by
+another package never satisfy the check, and bumping a package's manifest
+version re-opens every repository it had covered, because a policy change can
+change the verdict for the same commit. The `report` subcommand regenerates a
+report from the ledger, filtering to the selected package before choosing each
+repository's latest record. It reports both occurrence counts and, per rule,
+the number of distinct repositories with noncompliant evidence, the number with
+indeterminate-only evidence, and how many would fail if the package's findings
+were promoted to error severity.
 
 ## Previewing and applying estate changes
 
