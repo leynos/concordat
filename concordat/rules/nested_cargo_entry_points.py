@@ -57,6 +57,7 @@ from .nested_cargo_scripts import (
     TEST_TARGET,
     CommandMeaning,
     ScriptCommand,
+    conditional_fetch_precedes,
     gates_fetch,
     line_fetches,
     script_commands,
@@ -500,6 +501,10 @@ def _step_state(
         return UNCERTAIN, "part of the step's command is an expression"
     if inherited == UNCERTAIN:
         return UNCERTAIN, "the delegated test target could not be read"
+    if conditional_fetch_precedes(commands, position):
+        # A fetch inside a branch may not run at all, so neither its success
+        # nor the paths that skipped it can be settled either way.
+        return UNCERTAIN, "cargo fetch --locked runs only on some paths"
     if not shell.is_known and _prefetch_precedes(commands, position):
         # The only thing standing between this fetch and the test is a line
         # break, and whether that gates depends on a shell nobody named.

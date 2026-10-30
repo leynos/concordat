@@ -942,6 +942,73 @@ def test_a_prefetch_in_the_same_run_block_proves_the_order(
     assert states(tmp_path) == [("workflow", "test", "before")]
 
 
+def test_a_fetch_inside_a_conditional_branch_is_not_proof(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A fetch the shell may skip warms nothing on the runs that skip it.
+
+    `if false; then ... fi` is the smallest form of a branch that does not run.
+    The connectors after the fetch still say the test waited for its success,
+    but the fetch itself is not on every path that reaches the test, so the
+    ordering could not be read and must not be reported as proof.
+    """
+    put(
+        tmp_path,
+        WORKFLOW,
+        "jobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n"
+        "      - run: |\n"
+        "          if false; then\n"
+        "            cargo fetch --locked\n"
+        "          fi\n"
+        "          cargo test\n",
+    )
+    assert states(tmp_path) == [("workflow", "test", "uncertain")]
+
+
+def test_a_fetch_and_test_in_the_same_branch_prove_the_order(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Both commands skip together, so the fetch still gates the test.
+
+    Whenever the branch runs, the fail-fast shell reaches the test only after
+    the fetch succeeded; when the branch is skipped, neither command runs.
+    Reading the construct as conditional is not the same as refusing to read
+    it.
+    """
+    put(
+        tmp_path,
+        WORKFLOW,
+        "jobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n"
+        "      - run: |\n"
+        '          if [ -n "$CI" ]; then\n'
+        "            cargo fetch --locked\n"
+        "            cargo test\n"
+        "          fi\n",
+    )
+    assert states(tmp_path) == [("workflow", "test", "before")]
+
+
+def test_a_conditional_fetch_does_not_protect_the_next_step(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A fetch step that runs on only some paths warms nothing for the others.
+
+    The step-level protection read is the line-wide question, so a fetch inside
+    a branch cannot answer it however the later connectors read.
+    """
+    put(
+        tmp_path,
+        WORKFLOW,
+        "jobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n"
+        "      - run: |\n"
+        "          if false; then\n"
+        "            cargo fetch --locked\n"
+        "          fi\n"
+        "      - run: cargo test\n",
+    )
+    assert states(tmp_path) == [("workflow", "test", "absent")]
+
+
 def _multi_line(tmp_path: pathlib.Path, job_body: str) -> None:
     """Write a workflow whose `test` job runs a fetch then a test on two lines."""
     put(

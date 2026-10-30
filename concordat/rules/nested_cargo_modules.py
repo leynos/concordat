@@ -27,7 +27,7 @@ import re
 import typing as typ
 
 from .fs_probe import probe_file
-from .nested_cargo_commands import first_literal, split_top_level
+from .nested_cargo_commands import first_literal
 from .nested_cargo_source import (
     RustSource,
     TestScope,
@@ -35,6 +35,7 @@ from .nested_cargo_source import (
     enclosing_block,
     in_fixture,
 )
+from .nested_cargo_text import split_top_level
 from .rust_source import scan_balanced, skip_trivia
 
 CRATE_ROOT_STEMS: typ.Final = frozenset({"lib", "main", "mod"})

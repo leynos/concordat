@@ -61,6 +61,19 @@ _SHELL_KEYWORDS: typ.Final = frozenset({
     "!",
 })
 
+# Shell constructs whose body runs only when a condition holds. A fetch inside
+# one has not run on every path that reaches a command outside it, so it cannot
+# stand as proof for that command however the connectors read.
+_CONSTRUCT_OPENERS: typ.Final = frozenset({
+    "if",
+    "while",
+    "until",
+    "for",
+    "case",
+    "select",
+})
+_CONSTRUCT_CLOSERS: typ.Final = frozenset({"fi", "esac", "done"})
+
 _PROFILE_OPTIONS: typ.Final = frozenset({"--profile", "-P"})
 
 # Cargo accepts its global options in front of the subcommand, so
@@ -297,11 +310,18 @@ class CommandMeaning:
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class ScriptCommand:
-    """One split command together with its meaning."""
+    """One split command together with its meaning.
+
+    ``constructs`` names the conditional constructs the command runs inside,
+    outermost first, by the number given to the opener that started each one.
+    An empty tuple means no `if`, `while`, `for` or `case` body encloses the
+    command, so it runs on every path through the script.
+    """
 
     text: str
     gates_next: bool
     meaning: CommandMeaning
+    constructs: tuple[int, ...] = ()
 
 
 def script_commands(
@@ -328,12 +348,55 @@ def script_commands(
     list[ScriptCommand]
         Each command with its gating flag and meaning, in script order.
     """
-    return [
+    commands = [
         ScriptCommand(command.text, command.gates_next, _classify(command.text))
         for command in split_commands(
             text, newline_gates=newline_gates, comments=comments
         )
     ]
+    return _with_constructs(commands)
+
+
+def _with_constructs(commands: list[ScriptCommand]) -> list[ScriptCommand]:
+    """Return *commands*, each tagged with the conditional constructs around it.
+
+    A shell runs an `if`, `while`, `for` or `case` body only when its condition
+    holds. Recording where each construct opens lets the ordering predicates
+    ask whether one command runs on every path that reaches another, rather
+    than only whether it appears earlier in the text.
+
+    Returns
+    -------
+    list[ScriptCommand]
+        The commands in script order, each with its construct path.
+    """
+    stack: list[int] = []
+    opened = 0
+    found: list[ScriptCommand] = []
+    for command in commands:
+        word = _leading_word(command.text)
+        if word in _CONSTRUCT_OPENERS:
+            opened += 1
+            stack.append(opened)
+        elif word in _CONSTRUCT_CLOSERS and stack:
+            stack.pop()
+        found.append(dataclasses.replace(command, constructs=tuple(stack)))
+    return found
+
+
+def _leading_word(text: str) -> str:
+    """Return the first word the shell reads, past Make's recipe prefixes.
+
+    Returns
+    -------
+    str
+        The first word, or an empty string when the command is blank.
+    """
+    for word in _shell_words(text).split():
+        stripped = word.lstrip("@-+")
+        if stripped:
+            return stripped
+    return ""
 
 
 def _shell_words(text: str) -> str:
@@ -568,8 +631,9 @@ def line_fetches(commands: list[ScriptCommand], *, is_resolved: bool) -> bool:
     """Return whether this line runs a fetch that must succeed before it ends.
 
     A fetch proves the cache warm only when the command is read from text the
-    expansion settled and every command after it is reached only when it
-    succeeded, all the way to the end of the line.
+    expansion settled, it is not inside a conditional construct that may skip
+    it, and every command after it is reached only when it succeeded, all the
+    way to the end of the line.
 
     Returns
     -------
@@ -580,6 +644,7 @@ def line_fetches(commands: list[ScriptCommand], *, is_resolved: bool) -> bool:
         return False
     return any(
         command.meaning.is_prefetch
+        and not command.constructs
         and all(later.gates_next for later in commands[index:-1])
         for index, command in enumerate(commands)
     )
@@ -588,14 +653,56 @@ def line_fetches(commands: list[ScriptCommand], *, is_resolved: bool) -> bool:
 def gates_fetch(commands: list[ScriptCommand], position: int) -> bool:
     """Return whether a fetch earlier in this line gates the command at *position*.
 
+    A fetch proves the order only for a command it runs on every path to. One
+    inside an `if` body still gates a command in that same body, because both
+    skip together; it proves nothing for a command outside the construct,
+    which runs on the paths that skipped the fetch.
+
     Returns
     -------
     bool
-        True when a fetch precedes *position* and every command between the two
-        must succeed for *position* to be reached.
+        True when a fetch precedes *position*, encloses it or runs beside it,
+        and every command between the two must succeed for *position* to be
+        reached.
     """
+    target = commands[position].constructs
     return any(
         command.meaning.is_prefetch
+        and _encloses(command.constructs, target)
         and all(later.gates_next for later in commands[index:position])
         for index, command in enumerate(commands[:position])
     )
+
+
+def conditional_fetch_precedes(commands: list[ScriptCommand], position: int) -> bool:
+    """Report whether a fetch before *position* runs only on some paths.
+
+    A fetch and a command inside the same construct skip together, so that
+    fetch is answerable by :func:`gates_fetch`. One in a different construct
+    is not: the command at *position* also runs on the paths that skipped the
+    fetch, and whether the cache was warm there is exactly what the reader
+    cannot see.
+
+    Returns
+    -------
+    bool
+        True when a locked fetch precedes *position* inside a conditional
+        construct the command at *position* is not also inside.
+    """
+    target = commands[position].constructs
+    return any(
+        command.meaning.is_prefetch and not _encloses(command.constructs, target)
+        for command in commands[:position]
+    )
+
+
+def _encloses(outer: tuple[int, ...], inner: tuple[int, ...]) -> bool:
+    """Report whether every path through *inner* also passes through *outer*.
+
+    Returns
+    -------
+    bool
+        True when *outer* is a prefix of *inner* — the same construct, or one
+        the command is nested inside.
+    """
+    return inner[: len(outer)] == outer

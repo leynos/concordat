@@ -252,11 +252,39 @@ def _helper_sites(
     return found
 
 
+def _reads(command: CargoCommand) -> list[tuple[CargoCommand, str]]:
+    """Return the evidence each process *command* starts reads, with its state.
+
+    A bound command may be run more than once, and each run carries whatever
+    had been set at that point. A flag added after a run cannot protect it, so
+    the state is read per execution rather than once for the merged ledger. A
+    command that is never run is read from the ledger it was left as, which is
+    what a returned or stored command carries when something else runs it.
+
+    Returns
+    -------
+    list[tuple[CargoCommand, str]]
+        One entry per distinct state, in the order the states were established.
+        An execution that only probes for a version or help contributes none.
+    """
+    found: list[tuple[CargoCommand, str]] = []
+    seen: set[str] = set()
+    for execution in command.executions or [command]:
+        state = command_state(execution)
+        if state is None or state in seen:
+            continue
+        seen.add(state)
+        found.append((execution, state))
+    return found
+
+
 def _source_facts(source: RustSource, scope: TestScope) -> list[SpawnFact]:
     """Return the spawn facts of one source.
 
     A construction written in the file is recorded whatever its state, so the
     envelope carries the offline ones as evidence of what was examined. A
+    command that is run more than once is recorded once per distinct state,
+    because each run reads the evidence that existed at its own execution. A
     helper's own body is a definition rather than a spawn, so only its call
     sites are recorded, and only while they can still reach the network.
 
@@ -302,14 +330,15 @@ def _source_facts(source: RustSource, scope: TestScope) -> list[SpawnFact]:
             sites.append(unreached_helper(definition))
         sites.extend(site for site in calls if not _absorbed(site, definition))
     direct_facts = [
-        _fact(source, command, state)
+        _fact(source, ledger, state)
         for command in direct
-        if (state := command_state(command)) is not None
+        for ledger, state in _reads(command)
     ]
     site_facts = [
-        _fact(source, command, state)
+        _fact(source, ledger, state)
         for command in sites
-        if (state := command_state(command)) is not None and state != "offline"
+        for ledger, state in _reads(command)
+        if state != "offline"
     ]
     return sorted(direct_facts + site_facts, key=operator.itemgetter("line"))
 
@@ -317,14 +346,18 @@ def _source_facts(source: RustSource, scope: TestScope) -> list[SpawnFact]:
 def _absorbed(site: CargoCommand, definition: CargoCommand) -> bool:
     """Take on a helper's evidence and report whether it proves the site offline.
 
+    The site is dropped only when every process it starts is proven offline:
+    one protected execution does not cover an earlier unprotected one.
+
     Returns
     -------
     bool
         True when the call site, once the helper's own arguments and environment
-        are counted, cannot reach the network.
+        are counted, cannot reach the network on any path it is run.
     """
     site.absorb(definition)
-    return command_state(site) == "offline"
+    reads = _reads(site)
+    return bool(reads) and all(state == "offline" for _ledger, state in reads)
 
 
 def _test_literal(aliases: frozenset[str]) -> re.Pattern[str]:

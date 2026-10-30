@@ -127,6 +127,15 @@ the one-line parameter change recorded in `docs/roadmap.md` (DF12-109).
   it off, so a command carrying `--frozen` stays offline whatever an
   environment assignment says. Only the environment is last-write-wins; the
   flag is evidence on its own.
+- **Each process is judged by what the command carried when it started.**
+  Reusing one `Command` starts a fresh process each time, so
+  `cmd.arg("build"); cmd.status(); cmd.arg("--frozen"); cmd.status();` starts
+  one unprotected process and one protected one, and the unprotected one is
+  still reported. The reader records one fact per distinct state, so a later
+  flag cannot reach back into an earlier run. The same holds in reverse: an
+  offline environment set before the first run and removed before the second
+  gives an `offline` fact and an `online` fact. A command that is never run is
+  judged on its final state, because that is the only evidence there is.
 - **A call on a bound command may not run.** With
   `let mut cmd = Command::new("cargo"); if frozen { cmd.arg("--frozen"); }` the
   flag is there only when `frozen` holds, so a call inside a block nested in
@@ -143,7 +152,9 @@ the one-line parameter change recorded in `docs/roadmap.md` (DF12-109).
   spawn is `unresolved` — never `online`, which would accuse a spawn the reader
   cannot judge. A `--frozen` set before the handoff still proves offline mode,
   because nothing revokes it; an offline environment set before it does not,
-  because the callee may write the variable again.
+  because the callee may write the variable again. The handoff applies from the
+  point it is written, so a run before `configure(&mut cmd)` is judged on what
+  the command carried then, and only runs after the borrow are `unresolved`.
 - **A version or help probe is not a spawn.** `cargo --version`,
   `cargo kani --version`, `cargo help` and `cargo build --help` read no
   manifest and touch no network, so they draw no finding. A version flag that
@@ -152,6 +163,15 @@ the one-line parameter change recorded in `docs/roadmap.md` (DF12-109).
   command and its failure stops the run: `&&` or a fail-fast line sequence. A
   `;`, `||`, a pipeline, a background command or an ignored error proves
   nothing.
+- **A fetch inside a shell branch proves nothing on its own.** An `if`, `while`,
+  `until`, `for`, `case` or `select` body may not run at all, so
+  `if false; then cargo fetch --locked; fi` is not a prefetch for a later
+  command. When the test command sits in the same body as the fetch and the
+  gate between them holds, the order is proven, because both run together or
+  neither does. A fetch in a different branch makes the entry point
+  `uncertain`: neither its success nor the paths that skipped it can be settled
+  either way. A fetch inside a conditional step does not protect a later step,
+  which stays `absent`.
 - **Both steps' `if:` conditions are read for what they skip.** A workflow
   fetch step is proof only when it runs on every run, so any `if:` other than
   `success()` — bare or wrapped in `${{ }}` — leaves the entry point `absent`.

@@ -37,6 +37,7 @@ import re
 import typing as typ
 
 from .nested_cargo_source import RustSource, enclosing_block
+from .nested_cargo_text import split_top_level
 from .rust_source import scan_balanced, skip_trivia
 
 OFFLINE_VARIABLE: typ.Final = "CARGO_NET_OFFLINE"
@@ -51,6 +52,10 @@ _OFFLINE_VALUES: typ.Final = frozenset({"1", "true"})
 _PROBE_FLAGS: typ.Final = frozenset({"--version", "-V", "--help", "-h"})
 ARGUMENT_METHODS: typ.Final = frozenset({"arg", "args"})
 ENVIRONMENT_METHODS: typ.Final = frozenset({"env", "envs"})
+# The methods that start the process. Each one runs the command with whatever
+# it carries at that moment, so a flag or environment set afterwards cannot
+# protect an earlier run.
+EXECUTION_METHODS: typ.Final = frozenset({"status", "output", "spawn"})
 # `env_remove` drops one variable and `env_clear` drops the lot. Both undo an
 # earlier `env` assignment, so both belong in the offline ledger.
 ENVIRONMENT_REMOVAL_METHODS: typ.Final = frozenset({"env_remove", "env_clear"})
@@ -122,6 +127,12 @@ class CargoCommand:
     # mode when `extra` may set it back.
     offline_override: bool | None = None
     has_offline_override: bool = False
+    # One entry per process this command starts, holding the evidence the
+    # command carried at that moment. Reuse is ordinary Rust, and a flag added
+    # after the first run must not be read back into it:
+    # `cmd.arg("build"); cmd.status(); cmd.arg("--frozen"); cmd.status()`
+    # starts one unprotected process and one protected one.
+    executions: list[CargoCommand] = dataclasses.field(default_factory=list)
 
     def add_arguments(self, text: str) -> None:
         """Record `.arg(..)`/`.args(..)` text; an unreadable source is unknown."""
@@ -212,13 +223,36 @@ class CargoCommand:
         self.offline_override = offline
         self.has_offline_override = True
 
+    def snapshot(self) -> CargoCommand:
+        """Return the evidence this command carries now, for one execution.
+
+        Returns
+        -------
+        CargoCommand
+            A copy that no later call can change.
+        """
+        return dataclasses.replace(
+            self,
+            words=list(self.words),
+            environment=list(self.environment),
+            executions=[],
+        )
+
     def absorb(self, definition: CargoCommand) -> None:
         """Take on the evidence a helper's own body establishes.
 
         A call site's own assignment runs after the helper returns, so it wins
         over the helper's: the helper's answer is taken only where the site
-        says nothing about the variable itself.
+        says nothing about the variable itself. Every process the site starts
+        reads the helper's arguments too, so each execution takes the evidence
+        as well.
         """
+        self._absorb_evidence(definition)
+        for execution in self.executions:
+            execution._absorb_evidence(definition)
+
+    def _absorb_evidence(self, definition: CargoCommand) -> None:
+        """Add a helper's arguments and environment to this evidence."""
         self.words[:0] = definition.words
         self.environment[:0] = definition.environment
         if not self.has_offline_override:
@@ -366,10 +400,14 @@ def _top_level_groups(text: str) -> list[str] | None:
 def _record(command: CargoCommand, method: str, text: str) -> None:
     """Record one collected call's argument text against *command*.
 
-    Only the calls that change what cargo reads are recorded. Every other
-    method on the builder is stepped over, so `.status()` does not end the
-    chain.
+    A method that runs the command records the evidence the process reads at
+    that point, because a flag or environment added afterwards cannot reach
+    back to it. The builder methods that change what cargo reads are recorded
+    on the ledger; every other method is stepped over.
     """
+    if method in EXECUTION_METHODS:
+        command.executions.append(command.snapshot())
+        return
     if method in ARGUMENT_METHODS:
         command.add_arguments(text)
     elif method in ENVIRONMENT_METHODS:
@@ -502,13 +540,26 @@ def collect_variable(
     if rebinding is not None:
         end = rebinding.start()
     pattern = re.compile(rf"\b{re.escape(name)}\s*\.")
+    # A handoff marks the command unknown from the point in the source where it
+    # appears. Applying it once after the loop would rewrite the evidence of an
+    # execution that happened before the borrow, so a `cmd.status()` above
+    # `configure(&mut cmd)` would be judged with a state the callee has not
+    # had the chance to change yet.
+    handoffs = [
+        match.start() for match in _handoff(name).finditer(source.masked, start, end)
+    ]
+    applied = 0
     for match in pattern.finditer(source.masked, start, end):
+        while applied < len(handoffs) and handoffs[applied] < match.start():
+            command.mark_arguments_unknown()
+            command.mark_environment_unknown()
+            applied += 1
         index = match.end() - 1
         if enclosing_block(pairs, match.start()) == block:
             follow_chain(source, command, index)
         else:
             follow_chain(source, command, index, conditional=True)
-    if _handoff(name).search(source.masked, start, end):
+    if applied < len(handoffs):
         command.mark_arguments_unknown()
         command.mark_environment_unknown()
 
@@ -719,43 +770,3 @@ def _offline_flags(known: list[str]) -> bool:
     """
     flags = known[: known.index("--")] if "--" in known else known
     return "--frozen" in flags or ("--offline" in flags and "--locked" in flags)
-
-
-def split_top_level(text: str) -> list[str]:
-    """Split on commas outside nested parentheses and string literals.
-
-    A comma inside a quoted value is data, not a separator. Splitting on it
-    turns `.env("RUST_LOG", "info,foo=debug")` — one name-value pair — into
-    three slots, which cannot be read as pairs at all. The command is then
-    reported `unresolved` and the NC-007 finding its real flags earned is
-    hidden, so the quote is tracked here rather than left to the caller.
-
-    Returns
-    -------
-    list[str]
-        The comma-separated parts, in source order.
-    """
-    parts: list[str] = []
-    depth, start = 0, 0
-    index = 0
-    is_quoted = False
-    while index < len(text):
-        char = text[index]
-        if is_quoted:
-            # A backslash escapes the next character, so the quote after it
-            # does not close the literal: `"a\"b"` is one value.
-            if char == "\\":
-                index += 2
-                continue
-            if char == '"':
-                is_quoted = False
-        elif char == '"':
-            is_quoted = True
-        else:
-            depth += (char == "(") - (char == ")")
-            if char == "," and depth == 0:
-                parts.append(text[start:index])
-                start = index + 1
-        index += 1
-    parts.append(text[start:])
-    return parts

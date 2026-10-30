@@ -930,6 +930,44 @@ workaround.
       carries no equivalent check, so there is no baseline it regressed against.
       `main` is also unprotected, so the gate is advisory and blocks nothing.
       Refactoring those readers to satisfy it is a separate change.
+- [x] (2026-10-30) Codex review round: two correctness findings, each
+      reproduced by a failing test before its fix. (1) Command state was merged
+      across runs, so `cmd.arg("build"); cmd.status(); cmd.arg("--frozen");
+      cmd.status();` reported only the protected run. The reader now snapshots
+      its ledger at each `.status()`, `.output()` and `.spawn()` and reports one
+      fact per distinct state. `absorb` carries helper evidence into every
+      snapshot, a handoff is applied at its source position so a run before
+      `configure(&mut cmd)` is judged on what it carried, and `_absorbed`
+      requires every read to be offline. Two new `CASES` rows pin a flag added
+      between runs and one revoked between runs. (2) A fetch inside a shell
+      branch was credited as a prefetch: `if false; then cargo fetch --locked;
+      fi` proved nothing, but only connectors had been inspected. Each script
+      command now carries the construct path of its enclosing `if`, `while`,
+      `until`, `for`, `case` and `select` bodies. A prefetch counts only when
+      its construct path encloses the test command's, and a fetch in a sibling
+      branch makes the step `uncertain` rather than `before`; a conditional
+      fetch step does not protect a later step, which stays `absent`. Three
+      entry-point tests pin the outcomes, including the same-branch control
+      that still reads `before`.
+- [x] (2026-10-30) The `make test` OPA flake is now explained rather than
+      retried. The tester gives each Rego test rule a hard five-second deadline
+      and exposes no flag to change it (`--timeout` is not a `conftest verify`
+      option; OPA 1.15.2, Conftest 0.68.2). A rule that evaluates in
+      milliseconds crosses that deadline when the process is starved of CPU, so
+      `eval_cancel_error: context deadline exceeded` appears while six xdist
+      workers and another agent's build saturate the host. Pinning the suite
+      with an `xdist_group` marker narrowed the fan-out but did not stop the
+      failure, because the other workers still competed. `make test` now runs
+      the policy module in a second, serial invocation after the parallel run,
+      so the process has the machine to itself. The continuous-integration
+      workflow already passes `pytest-workers: ''`, so this changes nothing
+      there.
+- [x] (2026-10-30) The six `makeutil` fixture-drift failures are a host pin
+      mismatch, not a regression. The checked-in envelopes record `makeutil`
+      0.1.0 and the host binary reports 0.1.2. Installing the pinned 0.1.0 into
+      `.makeutil-pin` and prefixing `PATH` with it for `make test` turns all six
+      green, so the suite runs green in full rather than with an accepted
+      exception. The pin directory is scratch and is not committed.
 
 ## Surprises & discoveries
 
@@ -2089,11 +2127,11 @@ Commit gate runs are delegated to `scrutineer` with logs under `/tmp`.
   offline-safe, warning NC-007, missing-prefetch NC-008, and unreadable
   evidence.
 - `make check-fmt`, `make lint`, `make typecheck`, `make markdownlint`, and
-  `make nixie` pass. `make test` passes apart from six accepted pre-existing
-  `makeutil` fixture-drift failures. The checked-in envelopes record `makeutil`
-  0.1.0 while the installed binary reports 0.1.2; all six reproduce unchanged on
-  `origin/main` in a scratch worktree, so they are recorded as an exception
-  rather than a regression.
+  `make nixie` pass. `make test` passes in full when the pinned `makeutil`
+  0.1.0 leads `PATH`: the checked-in envelopes record 0.1.0, and the host
+  binary reports 0.1.2, so the six fixture-regeneration tests fail on drift
+  alone. They reproduce unchanged on `origin/main` in a scratch worktree, which
+  is how the drift was told apart from a regression.
 
 ## Idempotence and recovery
 

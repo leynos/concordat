@@ -438,6 +438,33 @@ CASES: dict[str, Case] = {
         '    command.arg("build");\n    command.arg("--frozen");\n}\n',
         (("command_new", "offline"),),
     ),
+    # A bound command can be run more than once, and a flag added after the
+    # first run does not reach back to it. Reading only the merged ledger would
+    # report the offline run and silently drop the online one that preceded
+    # it, so each execution carries the evidence it actually read.
+    "reused-bound-variable": Case(
+        "fn run() {\n"
+        '    let mut command = Command::new("cargo");\n'
+        '    command.arg("build");\n'
+        "    command.status();\n"
+        '    command.arg("--frozen");\n'
+        "    command.status();\n"
+        "}\n",
+        (("command_new", "online"), ("command_new", "offline")),
+    ),
+    # The same reuse with the offline flag first: the later run is still online
+    # after the flag is removed, so the reader cannot let the earlier run's
+    # protection cover it.
+    "reused-bound-variable-revoked": Case(
+        "fn run() {\n"
+        '    let mut command = Command::new("cargo");\n'
+        '    command.env("CARGO_NET_OFFLINE", "true");\n'
+        "    command.status();\n"
+        '    command.env_remove("CARGO_NET_OFFLINE");\n'
+        "    command.status();\n"
+        "}\n",
+        (("command_new", "offline"), ("command_new", "online")),
+    ),
     # A call made in a block nested inside the binding's own block runs only
     # on some paths. Reading it as unconditional would call this spawn offline
     # although `--frozen` is there only when `frozen` holds.

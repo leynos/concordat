@@ -266,9 +266,10 @@ def test_theoremc_forwards_arguments_and_is_indeterminate(
 def test_a_plugin_version_probe_draws_no_finding(tmp_path: pathlib.Path) -> None:
     """A version probe in leynos/theoremc resolves nothing, so it is not judged."""
     put(tmp_path, "tests/probe.rs", THEOREMC_FORWARDED)
-    messages = " ".join(f.message for f in findings(tmp_path))
-    assert "kani" not in messages, messages
-    assert "cargo_runner.rs:19" not in messages, messages
+    reported = [(f.rule_id, f.path, f.line) for f in findings(tmp_path)]
+    # Only the forwarded-arguments spawn (line 6) is judged; the
+    # `cargo kani --version` probe on line 13 draws nothing.
+    assert reported == [("EN-001", "tests/probe.rs", 6)], reported
 
 
 def test_a_fixture_package_source_draws_no_spawn_finding(
