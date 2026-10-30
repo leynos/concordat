@@ -949,6 +949,14 @@ workaround.
       fetch step does not protect a later step, which stays `absent`. Three
       entry-point tests pin the outcomes, including the same-branch control
       that still reads `before`.
+- [x] (2026-10-30) The same round's follow-up: sibling branches were still one
+      path, so a fetch in a `then` branch vouched for a test in the matching
+      `else` branch, and a fetch in one `case` arm for a test in another. Each
+      branch now gets its own number: `else` and `elif` replace the innermost
+      branch, and so does a `case` arm's `label)`. `_leading_word` also skips
+      `then`, `do` and `else`, so a construct opening after one of them on the
+      same line is counted and its `fi` closes the right construct. Two tests
+      pin the `else` and `case` outcomes, both red before the change.
 - [x] (2026-10-30) The `make test` OPA flake is now explained rather than
       retried. The tester gives each Rego test rule a hard five-second deadline
       and exposes no flag to change it (`--timeout` is not a `conftest verify`

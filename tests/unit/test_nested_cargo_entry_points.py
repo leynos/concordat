@@ -988,6 +988,53 @@ def test_a_fetch_and_test_in_the_same_branch_prove_the_order(
     assert states(tmp_path) == [("workflow", "test", "before")]
 
 
+def test_a_fetch_in_the_then_branch_does_not_prove_the_else_branch(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Mutually exclusive branches never run in the same execution.
+
+    The newlines after the fetch still gate in text order, but the test runs
+    on precisely the paths where the fetch did not run, so nothing is proved.
+    """
+    put(
+        tmp_path,
+        WORKFLOW,
+        "jobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n"
+        "      - run: |\n"
+        '          if [ -n "$CI" ]; then\n'
+        "            cargo fetch --locked\n"
+        "          else\n"
+        "            cargo test\n"
+        "          fi\n",
+    )
+    assert states(tmp_path) == [("workflow", "test", "uncertain")]
+
+
+def test_a_fetch_in_one_case_arm_does_not_prove_another(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A `case` arm runs only when its own pattern matched.
+
+    The `;;` separators disappear in the split, so the arms have to be told
+    apart by their labels or the fetch would read as preceding the test.
+    """
+    put(
+        tmp_path,
+        WORKFLOW,
+        "jobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n"
+        "      - run: |\n"
+        '          case "$CI" in\n'
+        "            yes)\n"
+        "              cargo fetch --locked\n"
+        "              ;;\n"
+        "            no)\n"
+        "              cargo test\n"
+        "              ;;\n"
+        "          esac\n",
+    )
+    assert states(tmp_path) == [("workflow", "test", "uncertain")]
+
+
 def test_a_conditional_fetch_does_not_protect_the_next_step(
     tmp_path: pathlib.Path,
 ) -> None:

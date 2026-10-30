@@ -73,6 +73,12 @@ _CONSTRUCT_OPENERS: typ.Final = frozenset({
     "select",
 })
 _CONSTRUCT_CLOSERS: typ.Final = frozenset({"fi", "esac", "done"})
+# Keywords that introduce a command rather than being one, so the word after
+# them is the one that names the command.
+_KEYWORDS_BEFORE_A_COMMAND: typ.Final = frozenset({"then", "do", "else"})
+# Keywords that start a sibling branch of the construct they sit in. Two
+# branches never run in the same execution, so they must not share a path.
+_BRANCH_SEPARATORS: typ.Final = frozenset({"else", "elif"})
 
 _PROFILE_OPTIONS: typ.Final = frozenset({"--profile", "-P"})
 
@@ -314,8 +320,9 @@ class ScriptCommand:
 
     ``constructs`` names the conditional constructs the command runs inside,
     outermost first, by the number given to the opener that started each one.
-    An empty tuple means no `if`, `while`, `for` or `case` body encloses the
-    command, so it runs on every path through the script.
+    A sibling branch gets its own number, so commands in two branches never
+    share a path. An empty tuple means no `if`, `while`, `for` or `case` body
+    encloses the command, so it runs on every path through the script.
     """
 
     text: str
@@ -365,26 +372,57 @@ def _with_constructs(commands: list[ScriptCommand]) -> list[ScriptCommand]:
     ask whether one command runs on every path that reaches another, rather
     than only whether it appears earlier in the text.
 
+    Sibling branches are separate paths: `else` and `elif` replace the branch
+    the following commands run in, and so does each `case` arm label. A fetch
+    in the `then` branch never runs in the same execution as a test in the
+    `else` branch, however the connectors read.
+
     Returns
     -------
     list[ScriptCommand]
         The commands in script order, each with its construct path.
     """
-    stack: list[int] = []
+    stack: list[tuple[str, int]] = []
     opened = 0
     found: list[ScriptCommand] = []
     for command in commands:
         word = _leading_word(command.text)
+        if _starts_a_new_branch(_first_word(command.text), stack):
+            opened += 1
+            stack[-1] = (stack[-1][0], opened)
         if word in _CONSTRUCT_OPENERS:
             opened += 1
-            stack.append(opened)
+            stack.append((word, opened))
         elif word in _CONSTRUCT_CLOSERS and stack:
             stack.pop()
-        found.append(dataclasses.replace(command, constructs=tuple(stack)))
+        found.append(
+            dataclasses.replace(
+                command, constructs=tuple(number for _kind, number in stack)
+            )
+        )
     return found
 
 
-def _leading_word(text: str) -> str:
+def _starts_a_new_branch(first: str, stack: list[tuple[str, int]]) -> bool:
+    """Return whether *first* begins a branch sibling to the innermost one.
+
+    `else` and `elif` do so inside an `if`, and a `case` arm's `label)` does so
+    inside a `case`. A `(` in the word rules out a function definition, whose
+    `name()` would otherwise look like an arm label.
+
+    Returns
+    -------
+    bool
+        True when the word begins a sibling branch.
+    """
+    if not stack:
+        return False
+    if first in _BRANCH_SEPARATORS:
+        return True
+    return stack[-1][0] == "case" and first.endswith(")") and "(" not in first
+
+
+def _first_word(text: str) -> str:
     """Return the first word the shell reads, past Make's recipe prefixes.
 
     Returns
@@ -395,6 +433,26 @@ def _leading_word(text: str) -> str:
     for word in _shell_words(text).split():
         stripped = word.lstrip("@-+")
         if stripped:
+            return stripped
+    return ""
+
+
+def _leading_word(text: str) -> str:
+    """Return the word that names the command, past the shell's keywords.
+
+    `then`, `do` and `else` introduce a command rather than being one, so a
+    construct that opens after them on the same line is still found. Reading
+    `then` as the command would leave its `fi` to close a construct that was
+    never opened, and the commands after it would be judged on the wrong path.
+
+    Returns
+    -------
+    str
+        The first word that is not one of those keywords, or an empty string.
+    """
+    for word in _shell_words(text).split():
+        stripped = word.lstrip("@-+")
+        if stripped and stripped not in _KEYWORDS_BEFORE_A_COMMAND:
             return stripped
     return ""
 

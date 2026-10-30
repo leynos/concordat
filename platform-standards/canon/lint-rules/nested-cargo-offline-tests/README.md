@@ -170,8 +170,10 @@ the one-line parameter change recorded in `docs/roadmap.md` (DF12-109).
   gate between them holds, the order is proven, because both run together or
   neither does. A fetch in a different branch makes the entry point
   `uncertain`: neither its success nor the paths that skipped it can be settled
-  either way. A fetch inside a conditional step does not protect a later step,
-  which stays `absent`.
+  either way. Sibling branches are separate paths: a fetch in a `then` branch
+  does not prove a test in the matching `else` or `elif` branch, and a fetch in
+  one `case` arm does not prove a test in another. A fetch inside a conditional
+  step does not protect a later step, which stays `absent`.
 - **Both steps' `if:` conditions are read for what they skip.** A workflow
   fetch step is proof only when it runs on every run, so any `if:` other than
   `success()` — bare or wrapped in `${{ }}` — leaves the entry point `absent`.
