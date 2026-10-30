@@ -22,6 +22,7 @@ _FIXTURES: typ.Final = pathlib.Path(__file__).parents[1] / "fixtures/whitaker"
 _SNAPSHOTS: typ.Final = (
     _FIXTURES / "approved-revisions-2aed718.json",
     _FIXTURES / "approved-revisions-d5fded1.json",
+    _FIXTURES / "approved-revisions-5a99aed.json",
 )
 
 
@@ -86,15 +87,21 @@ def test_snapshot_records_the_complete_reviewed_first_parent_segment(
         ),
         (
             "d5fded1107ee6822fdbf9539d81ff18ce6ce073a",
-            "d5fded1107ee6822fdbf9539d81ff18ce6ce073a",
+            "8e6a325765ba382691d1b1c65fcccf1fc1d1b00c",
             "9230ba5c24773e5e8bbbf056060ca2da39ea9267",
         ),
+        (
+            "5a99aed78ce68dcebd3052b75c31e6f173162b1e",
+            "5a99aed78ce68dcebd3052b75c31e6f173162b1e",
+            "183e1bb43c8fc198afc79f41482689898eb42efc",
+        ),
     ]
-    chain_a, chain_b = snapshots
+    chain_a, chain_b, chain_c = snapshots
     assert chain_a["commits"][0]["first_parent"] == (
         "774cc5a01e457714aede66e14a97b3e257812fc2"
     )
     assert chain_b["commits"][0]["first_parent"] == chain_a["tip"]
+    assert chain_c["commits"][0]["first_parent"] == chain_b["tip"]
     for snapshot in snapshots:
         commits = snapshot["commits"]
         assert snapshot["repository"] == "leynos/shared-actions"
