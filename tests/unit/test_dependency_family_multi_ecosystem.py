@@ -179,6 +179,11 @@ def _split_config() -> ConfigFile:
     group runs only that group, over the dependencies its `patterns` take, so
     the member's ecosystem also needs a plain entry for everything else. The
     plain entry ignores the member, which the group entry already handles.
+
+    Returns
+    -------
+    ConfigFile
+        A decoded configuration holding the group entry then the plain entry.
     """
     group_entry = _entry(
         "uv", **{"multi-ecosystem-group": "maturin-pyo3", "patterns": ["maturin"]}

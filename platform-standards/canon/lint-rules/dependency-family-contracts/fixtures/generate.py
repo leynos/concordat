@@ -237,7 +237,10 @@ CARGO_GROUP_ENTRY_PYO3_ONLY = (
     "  - package-ecosystem: cargo\n    directory: /\n"
     "    multi-ecosystem-group: maturin-pyo3\n    patterns: ['pyo3']\n"
 )
-IGNORE_FAMILY = "    ignore:\n      - dependency-name: pyo3\n      - dependency-name: pyo3-build-config\n"
+IGNORE_FAMILY = (
+    "    ignore:\n      - dependency-name: pyo3\n"
+    "      - dependency-name: pyo3-build-config\n"
+)
 IGNORE_MATURIN = "    ignore:\n      - dependency-name: maturin\n"
 PIP_GROUP_ENTRY = (
     "  - package-ecosystem: pip\n    directory: /\n"
