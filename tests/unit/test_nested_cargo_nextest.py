@@ -296,3 +296,18 @@ def test_the_shipped_exemptions_apply_to_netsuke_only(
         put(root, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
         put(root, path, RUSTC_TEST)
         assert ids(root) == expected, name
+
+
+def test_the_shared_actions_toy_app_is_exempt_at_home_only(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The fixture crate's own build test is exempt by default, but only there."""
+    path = "rust-toy-app/tests/manpage_generation.rs"
+    for name, expected in (("shared-actions", set()), ("other", {"NC-004"})):
+        root = tmp_path / name
+        pygit2.init_repository(str(root)).remotes.create(
+            "origin", f"https://github.com/leynos/{name}.git"
+        )
+        put(root, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+        put(root, path, BUILD_TEST)
+        assert ids(root) == expected, name

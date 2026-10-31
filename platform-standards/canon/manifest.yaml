@@ -245,7 +245,7 @@ artifacts:
     path: platform-standards/canon/lint-rules/nested-cargo-nextest/rule.yaml
     description: >-
       Rule package manifest for the nested cargo nextest configuration audit.
-    sha256: efaa754f7f520aaf596394995ad7ff4ef347c224ff909e4ad2e8fd6f802e8435
+    sha256: 5c10239d5859b2888e0a5b3e61209faf4e45260bf354aaab32682f5f4062e619
   - id: lint-rule-main-owned-codescene-coverage
     type: opa-policy
     path: >-

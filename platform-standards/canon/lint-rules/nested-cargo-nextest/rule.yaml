@@ -70,6 +70,17 @@ parameters:
   defaults:
     severity: warning
     exemptions:
+      - repository: leynos/shared-actions
+        path: rust-toy-app/tests/manpage_generation.rs
+        rationale: >-
+          A fixture crate's own test runs `cargo build` on that crate, which
+          shares the outer `cargo test` target directory. The repository has
+          no workspace for nextest to govern: every lane that runs the crate
+          passes `use-cargo-nextest: 'false'`, so a nextest group could bound
+          nothing.
+        review_trigger: >-
+          review when a lane runs the toy app under nextest, or the test
+          builds a different crate
       - repository: leynos/netsuke
         path: tests/kani_cfg_ui_tests.rs
         rationale: >-

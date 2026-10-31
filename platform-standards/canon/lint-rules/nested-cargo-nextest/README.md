@@ -57,9 +57,10 @@ the `exemptions` parameter with its `repository` (`owner/name`, read from the
 `origin` remote), its `path` (relative to the root), a `rationale` and a
 `review_trigger` (the event after which the exemption is revisited). A blank
 rationale or trigger suppresses nothing. An exempt spawner is not counted at
-all. An exemption does not apply to another repository. Three ship by default,
-for netsuke's single-file `rustc` compile tests and its `cargo package --list`
-smoke test (ADR-0059 keeps them in the default profile).
+all. An exemption does not apply to another repository. Four ship by default:
+netsuke's single-file `rustc` compile tests and its `cargo package --list`
+smoke test (ADR-0059 keeps them in the default profile), and shared-actions'
+toy-app test, which no nextest lane runs.
 
 ## Severity
 
