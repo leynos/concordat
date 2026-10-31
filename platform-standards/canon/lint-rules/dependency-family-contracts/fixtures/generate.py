@@ -145,7 +145,11 @@ def with_files(files: dict[str, str], **overrides: str | None) -> dict[str, str]
 SERDE_LOCK = LOCK + '\n[[package]]\nname = "serde-pyobject"\nversion = "0.8.0"\n'
 SERDE_CARGO = CARGO + 'pyo3-serde = { package = "serde-pyobject", version = "0.8.0" }\n'
 PYTEST_PYPROJECT = """\
-[project]\nname = \"demo\"\nversion = \"0.1.0\"\ndependencies = [\"maturin==1.13.3\", \"pytest==9.1.1\", \"pytest-bdd==9.0.0\"]\n"""
+[project]
+name = "demo"
+version = "0.1.0"
+dependencies = ["maturin==1.13.3", "pytest==9.1.1", "pytest-bdd==9.0.0"]
+"""
 MATURIN_PYPROJECT = """\
 [project]
 name = "demo"
