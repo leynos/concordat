@@ -43,6 +43,7 @@ def _runtime(action: str = ACTION_V1) -> dict[str, str]:
     return {
         f"{DIRECTORY}/action.yml": action,
         f"{DIRECTORY}/scripts/install.sh": "echo install\n",
+        f"{DIRECTORY}/installer-digests.sha256": "abc  installer\n",
         f"{DIRECTORY}/tests/test_action.py": "# v1\n",
         f"{DIRECTORY}/README.md": "guide v1\n",
     }
@@ -76,7 +77,8 @@ def test_a_change_confined_to_tests_or_markdown_is_listed(
     [
         {f"{DIRECTORY}/action.yml": ACTION_V2},
         {f"{DIRECTORY}/scripts/install.sh": "echo changed\n"},
-        {f"{DIRECTORY}/installer-digests.sha256": "abc  installer\n"},
+        {f"{DIRECTORY}/installer-digests.sha256": "def  installer\n"},
+        {f"{DIRECTORY}/snapshot-digests.sha256": "abc  snapshot\n"},
         {f"{DIRECTORY}/scripts/extra.sh": "echo extra\n"},
         {f"{DIRECTORY}/unknown.txt": "a new file at the action root\n"},
         {f"{DIRECTORY}/tests.sh": "echo a file whose name merely starts with tests\n"},
@@ -84,7 +86,8 @@ def test_a_change_confined_to_tests_or_markdown_is_listed(
     ids=[
         "action-yml",
         "script-edit",
-        "digest-manifest",
+        "digest-manifest-edited",
+        "digest-manifest-added",
         "script-added",
         "unknown-root-file",
         "tests-prefixed-name",

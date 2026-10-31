@@ -1977,16 +1977,19 @@ when it is a first-parent commit on shared-actions `main` that is an approved
 root, or descends from one and leaves the `install-whitaker` directory's
 runtime digest equal to that root's, so the action a consumer runs is the
 reviewed one whatever else changed in shared-actions. The digest covers every
-file in the directory except the `tests/` tree and Markdown files, which a
-consumer never executes. The list is generated offline, from a shared-actions
-clone, and committed in the rule's manifest, rather than looked up through the
-GitHub API at audit time: the audited checkout holds no shared-actions history,
-an offline derivation is verifiable in the rule's own tests, and the audit
-gains no network dependency or rate-limit budget. The cost is that the list is
-regenerated after shared-actions gains commits; a change to the action's
-runtime content stays refused until a reviewer adds it as a root. A root whose
-runtime files mention `tests/` or a Markdown path is refused, because a script
-could otherwise run or read content the digest ignores.
+file in the directory except the `tests/` tree and Markdown files, which the
+action does not execute; a reviewer confirms that when approving a root. The
+list is generated offline, from a shared-actions clone, and committed in the
+rule's manifest, rather than looked up through the GitHub API at audit time:
+the audited checkout holds no shared-actions history, an offline derivation is
+verifiable in the rule's own tests, and the audit gains no network dependency
+or rate-limit budget. The cost is that the list is regenerated after
+shared-actions gains commits; a change to the action's runtime content stays
+refused until a reviewer adds it as a root. A root whose runtime files mention
+`tests/` or a Markdown path is refused, because a script could otherwise run or
+read content the digest ignores. The scan is a guard, not a dependency
+analysis; it misses an indirect reference such as a glob, so the root review
+also checks that no runtime file reaches excluded content.
 
 Rule version 0.3.2 refines three of QG-001's textual readings so that they
 match what the shell executes; run against netsuke's Makefile, the older

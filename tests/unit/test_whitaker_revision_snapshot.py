@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import itertools
 import json
 import pathlib
@@ -45,6 +46,7 @@ class _Snapshot(typ.TypedDict):
     action_directory: str
     action_tree: str
     runtime_digest: str
+    runtime_records: list[str]
     commits: list[_Commit]
 
 
@@ -140,6 +142,30 @@ def test_runtime_digests_record_which_chains_run_the_same_action(
     assert len(set(digests)) == 3
     assert digests[2] == digests[3]
     assert snapshots[2]["action_tree"] != snapshots[3]["action_tree"]
+
+
+def test_runtime_digests_recompute_from_their_recorded_preimage(
+    snapshots: list[_Snapshot],
+) -> None:
+    """Each digest is the SHA-256 of its sorted `<mode> <blob> <path>` records.
+
+    The records were captured with `git ls-tree -r` at the chain's root, dropping
+    `tests/` and Markdown paths, then sorted bytewise; the digest hashes them
+    joined with a newline after each. Recomputing needs no clone, so a wrong
+    digest or a wrong record fails here.
+    """
+    for snapshot in snapshots:
+        records = snapshot["runtime_records"]
+        assert records == sorted(records)
+        assert all(
+            re.fullmatch(r"\d{6} [0-9a-f]{40} \S+", record) for record in records
+        )
+        assert not any(
+            record.split(" ", 2)[2].startswith("tests/") or record.endswith(".md")
+            for record in records
+        )
+        preimage = "".join(f"{record}\n" for record in records).encode()
+        assert hashlib.sha256(preimage).hexdigest() == snapshot["runtime_digest"]
 
 
 def test_shipped_defaults_equal_the_independent_complete_history(

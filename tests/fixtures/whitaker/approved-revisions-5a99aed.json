@@ -5,6 +5,17 @@
   "action_directory": ".github/actions/install-whitaker",
   "action_tree": "183e1bb43c8fc198afc79f41482689898eb42efc",
   "runtime_digest": "f8e8608cecc1438272d4f9450bd7b27333ce3fe20e3deec552fe77c033bf8b03",
+  "runtime_records": [
+    "100644 10a7dff1c307f94d9d8719a41dc3460583c3ef5e snapshot-digests.sha256",
+    "100644 3f407b59e538a954af688e816dc514ce2a488786 action.yml",
+    "100644 5d73247d3e0f58caa87157667a5af9f2bb2e9156 installer-digests.sha256",
+    "100644 65dd7e4f412fb62a8e7d0729cfcd3b7727832ca8 clippy-snapshots.tsv",
+    "100644 8d4174c57be4701275cf097ff039f179c9f5189f scripts/extract-zip.py",
+    "100755 1111f26a3df1d4f24651ed8a32b54da5f33a64d5 scripts/resolve-snapshot.sh",
+    "100755 42da00a3fed3cc5d54ef2a6ea99db5d1de4fc671 scripts/bootstrap-paths.sh",
+    "100755 6951f25e0648477b83d6dacbc70fcbec8496d906 scripts/verify_rolling_assets.py",
+    "100755 a3b089c3578cc6e33ae8ce885d92b7ca344e1cfd scripts/resolve-release.sh"
+  ],
   "commits": [
     {
       "revision": "5a99aed78ce68dcebd3052b75c31e6f173162b1e",

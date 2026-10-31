@@ -751,19 +751,26 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   first. Git read failures while walking the history surface as
   `OperationalRuleError`, never a traceback. The reviewed revision snapshot
   under `tests/fixtures/whitaker/` is an independent oracle for the complete
-  shipped list. Its commit, first-parent and action-tree records come directly
+  shipped list. Its commit, first-parent and runtime-record data come directly
   from a full shared-actions clone, not from the rule manifest or its
   generator. When refreshing the list, capture the root-to-tip first-parent
   segment with `git rev-list --first-parent`, record each commit's first parent
-  and action-directory tree with `git rev-parse`, and verify each tree against
-  the approved root. Update the snapshot's frozen tip and the provenance
-  assertions in `tests/unit/test_whitaker_revision_snapshot.py` only after
-  reviewing that history. If action contents change, retain the approved-root
-  review boundary rather than extending this content-identical snapshot. The
-  tests compare the entire ordered list, evaluate every recorded pin through
-  QG-002, and require rejection when manifest entries are removed or altered.
-  The shared batch helper accepts the runner's envelope union so these
-  provisioning envelopes reuse its existing result-to-file completeness checks.
+  with `git rev-parse`, and capture the root's runtime records with
+  `git ls-tree -r` (dropping `tests/` and Markdown paths, formatting each as
+  `<mode> <blob> <path>` and sorting bytewise). Eligibility is the runtime
+  digest, the SHA-256 of those records, so verify each commit's digest against
+  the approved root; the action-directory tree id stays as provenance only.
+  Approving a root also needs a human check that its runtime files reach
+  excluded content (tests or Markdown) by no indirect route, such as a glob or
+  a computed path: the automatic scan only refuses literal `tests/` and `.md`
+  mentions. Update the snapshot's frozen tip and the provenance assertions in
+  `tests/unit/test_whitaker_revision_snapshot.py` only after reviewing that
+  history. If action contents change, retain the approved-root review boundary
+  rather than extending this content-identical snapshot. The tests compare the
+  entire ordered list, evaluate every recorded pin through QG-002, and require
+  rejection when manifest entries are removed or altered. The shared batch
+  helper accepts the runner's envelope union so these provisioning envelopes
+  reuse its existing result-to-file completeness checks.
 - `policy-input/markdown-formatting-baseline` —
   `markdown_envelope.build_markdown_envelope`. Alongside the same `makeutil`
   report for the root `Makefile`, it carries `.markdownlint-cli2.jsonc` decoded
