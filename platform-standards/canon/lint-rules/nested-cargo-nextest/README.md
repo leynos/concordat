@@ -22,13 +22,17 @@ A textual scan of `*.rs` files, deliberately narrow so it does not demand
 configuration from a repository that needs none:
 
 - only **test code** counts: a file under `tests/`, `test_support/`, `testing/`
-  or `ui/` (or named `*_test.rs` or `*_tests.rs`), or text after the first
-  `#[cfg(test)]` of another file. `build.rs`, `xtask`, hidden, `target`,
+  or `ui/` (or named `*_test.rs` or `*_tests.rs`), or the braces of an item
+  marked `#[cfg(test)]` in another file (production code after a closed
+  `mod tests` is not test code). `build.rs`, `xtask`, hidden, `target`,
   `vendor`, `node_modules`, `build`, `dist` and `venv` trees are skipped;
 - a `cargo` spawn counts only with a **compiling subcommand** (`build`,
   `check`, `test`, `run`, `package`, `clippy`, `doc`, `install`, `publish`,
-  `bench`, `miri`, `nextest`, `llvm-cov`, `rustdoc`, `rustc`) among the
-  arguments; `cargo metadata` and `cargo config` do not count;
+  `bench`, `miri`, `nextest`, `llvm-cov`, `rustdoc`, `rustc`) among **the same
+  command's** arguments, read from the spawn to the next `Command::new` or the
+  next function; a command bound to a name and handed to a function in the same
+  file is also read against that function's body. `cargo metadata` and
+  `cargo config` do not count;
 - a `rustc` spawn always counts;
 - the file must name `Command`, so `env!("CARGO")` read for a path alone is not
   a spawn;

@@ -415,3 +415,53 @@ def test_a_toolchain_selector_before_the_subcommand_is_still_a_compile(
     put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
     put(tmp_path, "tests/ui.rs", TOOLCHAIN_TEST)
     assert ids(tmp_path) == {"NC-004"}
+
+
+AFTER_TEST_MODULE = (
+    "use std::process::Command;\n"
+    "#[cfg(test)]\nmod tests {\n    #[test]\n    fn reads() {\n"
+    '        Command::new("cargo").arg("metadata").output().unwrap();\n    }\n}\n'
+    "pub fn build() {\n"
+    '    Command::new("cargo").arg("build").status().unwrap();\n}\n'
+)
+COMMENTED_MARKER = (
+    "// #[cfg(test)]\nuse std::process::Command;\n"
+    "pub fn build() {\n"
+    '    Command::new("cargo").arg("build").status().unwrap();\n}\n'
+)
+SECOND_TEST_BLOCK = (
+    "use std::process::Command;\n"
+    "#[cfg(test)]\nmod helpers {}\n"
+    "pub fn run() {}\n"
+    "#[cfg(test)]\nmod tests {\n    #[test]\n    fn compiles() {\n"
+    '        Command::new("cargo").arg("build").status().unwrap();\n    }\n}\n'
+)
+HANDED_ON_QUERY_THEN_GIT = HANDED_ON_QUERY + (
+    'fn other() {\n    Command::new("git").arg("build").status().unwrap();\n}\n'
+)
+
+
+@pytest.mark.parametrize(
+    ("path", "source", "expected"),
+    [
+        ("src/lib.rs", AFTER_TEST_MODULE, set()),
+        ("src/lib.rs", COMMENTED_MARKER, set()),
+        ("src/lib.rs", SECOND_TEST_BLOCK, {"NC-004"}),
+        ("tests/common/mod.rs", HANDED_ON_QUERY_THEN_GIT, set()),
+        ("tests/common/mod.rs", HANDED_ON, {"NC-004"}),
+    ],
+    ids=[
+        "production-build-after-a-closed-test-module",
+        "marker-in-a-comment",
+        "build-in-a-second-test-block",
+        "query-helper-then-an-unrelated-build",
+        "build-helper",
+    ],
+)
+def test_test_scope_is_lexical_and_handed_on_commands_read_their_callee(
+    tmp_path: pathlib.Path, path: str, source: str, expected: set[str]
+) -> None:
+    """A `#[cfg(test)]` item scopes its braces, and a callee scopes its arguments."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, path, source)
+    assert ids(tmp_path) == expected
