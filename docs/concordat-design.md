@@ -1983,8 +1983,10 @@ clone, and committed in the rule's manifest, rather than looked up through the
 GitHub API at audit time: the audited checkout holds no shared-actions history,
 an offline derivation is verifiable in the rule's own tests, and the audit
 gains no network dependency or rate-limit budget. The cost is that the list is
-regenerated after shared-actions gains commits; a changed action directory
-stays refused until a reviewer adds it as a root.
+regenerated after shared-actions gains commits; a change to the action's
+runtime content stays refused until a reviewer adds it as a root. A root whose
+runtime files mention `tests/` or a Markdown path is refused, because a script
+could otherwise run or read content the digest ignores.
 
 Rule version 0.3.2 refines three of QG-001's textual readings so that they
 match what the shell executes; run against netsuke's Makefile, the older
