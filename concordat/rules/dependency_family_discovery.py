@@ -45,6 +45,16 @@ def cargo_tables(
     return tables
 
 
+def _is_contained_glob(pattern: object) -> bool:
+    """Return whether *pattern* is text that stays below the workspace root."""
+    if not isinstance(pattern, str):
+        return False
+    written = pathlib.PurePosixPath(pattern)
+    if written.is_absolute() or not written.parts:
+        return False
+    return ".." not in written.parts
+
+
 def _member_directories(
     checkout: pathlib.Path, root: pathlib.PurePosixPath, patterns: object
 ) -> set[pathlib.PurePosixPath]:
@@ -61,10 +71,7 @@ def _member_directories(
     base = checkout / root
     found: set[pathlib.PurePosixPath] = set()
     for pattern in patterns if isinstance(patterns, list) else []:
-        if not isinstance(pattern, str):
-            continue
-        written = pathlib.PurePosixPath(pattern)
-        if written.is_absolute() or not written.parts or ".." in written.parts:
+        if not _is_contained_glob(pattern):
             continue
         found.update(
             pathlib.PurePosixPath(match.relative_to(checkout).as_posix())
