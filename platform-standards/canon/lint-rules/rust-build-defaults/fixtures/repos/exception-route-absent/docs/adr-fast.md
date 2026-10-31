@@ -1,0 +1,1 @@
+# ADR: the fast route

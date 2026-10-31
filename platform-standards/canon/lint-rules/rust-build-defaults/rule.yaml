@@ -16,8 +16,13 @@ description: >-
   `RUSTFLAGS` restates the fast flags. Direct installer-managed Whitaker
   routes instead require statically known isolation and reject development
   flag contamination; unresolved profile or ambient routes remain unmeasured.
+  A route that runs after a `cd` out of the checkout never reads the checkout's
+  Cargo configuration. A repository whose fast route is explicit and kept out
+  of that configuration on purpose records the exception as data in
+  `.concordat`; the exception waives clauses only while its route still carries
+  the standard's flags and its decision record exists (BD-010).
   Audit-only: this rule declares no mutations.
-version: 0.2.1
+version: 0.3.0
 sensor:
   type: conftest
   input: policy-input/rust-build-defaults
@@ -70,6 +75,13 @@ parameters:
         description: >-
           Cargo subcommands a workflow step runs as a gate build, which BD-009
           holds to the fast flags when the step's RUSTFLAGS is set.
+      waivable_clauses:
+        type: array
+        items:
+          type: string
+        description: >-
+          Clauses a recorded exception in `.concordat` can waive: the ones that
+          ask for the fast flags and the backend to be defaults.
       setup_rust_rustflags:
         type: string
         description: >-
@@ -96,4 +108,10 @@ parameters:
       - doc
       - nextest
       - test
+    waivable_clauses:
+      - BD-001
+      - BD-002
+      - BD-004
+      - BD-008
+      - BD-009
     setup_rust_rustflags: -D warnings

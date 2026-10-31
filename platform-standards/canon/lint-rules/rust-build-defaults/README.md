@@ -138,6 +138,35 @@ makes only those clauses indeterminate; the others still run. See
   workflow's `env:`, or the toolchain action. shared-actions `setup-rust`
   exports its `rustflags` input, `-D warnings` by default, to every later step;
   `rustflags: ''` exports nothing, so the configuration applies.
+- **BD-010** (error): a recorded exception is not substantiated. A repository
+  that keeps the fast flags out of Cargo's auto-discovered configuration on
+  purpose declares that in `.concordat`, as data:
+
+  ```yaml
+  language:
+    rust:
+      build_defaults:
+        exceptions:
+          - clauses: [BD-002, BD-004, BD-008]
+            route: tools/dev-fast/config.toml
+            adr: docs/adr-012-linux-dev-fast-routing.md
+            rationale: Wheels build in containers that carry no mold.
+            review_trigger: Revisit when the wheel images carry mold.
+  ```
+
+  A substantiated exception waives its clauses, which must be among
+  `waivable_clauses` (BD-001, BD-002, BD-004, BD-008 and BD-009: the clauses
+  that ask for the fast flags and the backend to be defaults). It is
+  substantiated only while the `route` is a Cargo configuration whose every
+  `rustflags` source carries the parallel frontend and one Linux-applicable
+  source carries the linker, so the fast path itself still meets the standard;
+  the `adr` file exists; and the `rationale` and `review_trigger` are not
+  empty. Anything else is a BD-010 finding naming the unmet condition, and the
+  clauses keep reporting. BD-003 and BD-005 to BD-007 check what a
+  configuration says or what a build does, so no exception excuses them. The
+  route can be a fragment that `cargo --config` selects explicitly; the rule
+  reads it and does not run Cargo. A declaration the rule cannot read (a
+  non-list, a missing field) is an operational failure, never a waiver.
 - **CF-001** (error, indeterminate): `.cargo/config.toml` exists but could not
   be read, parsed, or used, so no clause that reads it can be decided. This
   includes a configuration Cargo itself refuses:
@@ -256,6 +285,24 @@ target is out of scope too. The estate builds it through a pattern rule,
 `target/%/$(TARGET):`, whose recipe passes
 `$(if $(findstring release,$(@)),--release)`, and a static reading can neither
 follow a pattern rule nor evaluate `$@`.
+
+### Whitaker routes that follow other commands
+
+An installer-managed Whitaker is recognised when its command starts a segment
+of the recipe line, and the segments of `a && b; c || d | e` are read one by
+one, so `cd .. && unset X && RUSTFLAGS="" whitaker --all` has an isolated
+Whitaker as its last segment. (Until 0.3.0 the second ampersand of `&&` stayed
+on the segment it introduced, so no command after `&&` matched.)
+
+A Cranelift profile in the checkout's `.cargo/config.toml` leaves the isolation
+unproved, because a `RUSTFLAGS` assignment does not displace a profile backend.
+A route that first changes into the parent of the checkout (`cd ..`,
+`cd "$(dir $(CURDIR))"` or `cd "$(CURDIR)/.."`) never discovers that file, so a
+backend it selects does not reach Whitaker; cabochon keeps its Whitaker
+toolchain away from nightly-only configuration this way. A `cd` into a
+subdirectory does not count, since Cargo finds the file from there. A Cranelift
+selection in the root `Cargo.toml` still counts, because `--manifest-path`
+reads it wherever the route runs.
 
 ### Restating the fast flags
 

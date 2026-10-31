@@ -1,0 +1,4 @@
+# The dated pin keeps builds reproducible; do not change the channel
+# without re-reading the record behind it.
+[toolchain]
+channel = "nightly-2026-08-23"

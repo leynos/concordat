@@ -12,6 +12,28 @@ runs_isolated_whitaker(segment) if regex.match(
 
 exempt_segment(segment) if runs_isolated_whitaker(segment)
 
+# A `cd` to the parent of the checkout, in the spellings a recipe uses: `..`,
+# GNU Make's `$(dir $(CURDIR))` and `$(CURDIR)/..`, bare or quoted. A `cd` into
+# a subdirectory does not count: Cargo still finds the checkout's configuration
+# from there.
+leaves_checkout(segment) if regex.match(
+	`^[[:space:]]*[-@+]*[[:space:]]*cd[[:space:]]+(\.\./?|"\.\./?"|'\.\./?'|"?\$\(dir[[:space:]]+\$\(CURDIR\)\)/?"?|"?\$\(CURDIR\)/\.\./?"?)[[:space:]]*$`,
+	segment,
+)
+
+# The route runs outside the checkout when a segment before it in the same
+# recipe line leaves the checkout. Cargo discovers `.cargo/config.toml` from the
+# working directory upwards, so the checkout's configuration, and any backend
+# profile it selects, is never read; `--manifest-path` still reads the manifest.
+route_leaves_checkout(recipe, segment) if {
+	segments := recipe_segments(recipe)
+	some index, later in segments
+	later == segment
+	some earlier_index, earlier in segments
+	earlier_index < index
+	leaves_checkout(earlier)
+}
+
 isolated_suite_sites contains [rule, recipe, segment] if {
 	some target in gate_targets
 	target in known_targets
@@ -83,35 +105,42 @@ suite_contamination(rule, segment) if {
 	"cranelift" in suite_values(rule, segment, "CARGO_PROFILE_TEST_CODEGEN_BACKEND")
 }
 
-suite_isolation_unproved(rule, segment) if {
+suite_isolation_unproved(rule, _, segment) if {
 	count(suite_values(rule, segment, "RUSTFLAGS")) != 1
 }
 
 # RUSTFLAGS does not displace a separate profile or package backend. The facts
 # do not prove how the suite's internal Cargo call selects/overrides these, so
 # preserve an explicit measurement gap instead of assuming an LLVM route.
-separate_suite_backend if {
+separate_config_backend if {
 	some backend in backends
 	backend.scope in {"profile", "package-override"}
 	backend.backend == "cranelift"
 }
 
-separate_suite_backend if {
+separate_manifest_backend if {
 	some backend in manifest_backends
 	backend.backend != "llvm"
 }
 
-suite_isolation_unproved(_, _) if manifest_backend_error != ""
+suite_isolation_unproved(_, _, _) if manifest_backend_error != ""
 
-suite_isolation_unproved(_, _) if separate_suite_backend
+suite_isolation_unproved(_, _, _) if separate_manifest_backend
 
-suite_isolation_unproved(rule, segment) if {
+# A route that leaves the checkout never discovers its Cargo configuration, so
+# a backend selected there does not reach the suite.
+suite_isolation_unproved(_, recipe, segment) if {
+	separate_config_backend
+	not route_leaves_checkout(recipe, segment)
+}
+
+suite_isolation_unproved(rule, _, segment) if {
 	some name in ["RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS", "CARGO_PROFILE_DEV_CODEGEN_BACKEND", "CARGO_PROFILE_TEST_CODEGEN_BACKEND"]
 	values := suite_values(rule, segment, name)
 	count(values) > 1
 }
 
-suite_isolation_unproved(rule, segment) if {
+suite_isolation_unproved(rule, _, segment) if {
 	some name in ["RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS", "CARGO_PROFILE_DEV_CODEGEN_BACKEND", "CARGO_PROFILE_TEST_CODEGEN_BACKEND"]
 	some value in suite_values(rule, segment, name)
 	suite_value_unknown(value)
@@ -129,7 +158,7 @@ deny contains f if {
 	rustflags_clause_applies
 	some [rule, recipe, segment] in isolated_suite_sites
 	not suite_contamination(rule, segment)
-	suite_isolation_unproved(rule, segment)
+	suite_isolation_unproved(rule, recipe, segment)
 	f := located_finding("BD-008", "indeterminate", "Makefile", recipe.location.start_line,
 		"the direct Whitaker route lacks complete statically known flag/profile isolation; its selected backends or unresolved overrides cannot be proven isolated")
 }
