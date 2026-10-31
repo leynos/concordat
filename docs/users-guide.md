@@ -951,7 +951,7 @@ Upgrading to rule 0.3.0: a repository can pass where 0.2.1 reported BD-008 or
 report where it did not, in the two Whitaker cases below.
 
 - An installer-managed Whitaker that follows `cd`, `unset` or an environment
-  assignment in an `&&` chain is now recognised as an isolated route, and
+  assignment in an `&&` chain is now recognized as an isolated route, and
   judged as one (development flags on it are contamination). A recipe that
   first changes into the parent of the checkout (`cd ..`,
   `cd "$(dir $(CURDIR))"`) no longer reads as unproved when the checkout's

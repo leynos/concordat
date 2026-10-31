@@ -288,7 +288,7 @@ follow a pattern rule nor evaluate `$@`.
 
 ### Whitaker routes that follow other commands
 
-An installer-managed Whitaker is recognised when its command starts a segment
+An installer-managed Whitaker is recognized when its command starts a segment
 of the recipe line, and the segments of `a && b; c || d | e` are read one by
 one, so `cd .. && unset X && RUSTFLAGS="" whitaker --all` has an isolated
 Whitaker as its last segment. (Until 0.3.0 the second ampersand of `&&` stayed
