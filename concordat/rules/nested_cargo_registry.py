@@ -22,6 +22,11 @@ from .nested_cargo_manifest_envelope import (
     NestedCargoManifestEnvelope,
     build_nested_cargo_manifest_envelope,
 )
+from .nested_cargo_nextest_envelope import ENVELOPE_KIND as NEXTEST_ENVELOPE_KIND
+from .nested_cargo_nextest_envelope import (
+    NestedCargoNextestEnvelope,
+    build_nested_cargo_nextest_envelope,
+)
 from .nested_cargo_offline_envelope import ENVELOPE_KIND as OFFLINE_ENVELOPE_KIND
 from .nested_cargo_offline_envelope import (
     NestedCargoOfflineEnvelope,
@@ -33,7 +38,10 @@ if typ.TYPE_CHECKING:
     import pathlib
 
 type NestedCargoEnvelope = (
-    NestedCargoLockEnvelope | NestedCargoOfflineEnvelope | NestedCargoManifestEnvelope
+    NestedCargoLockEnvelope
+    | NestedCargoOfflineEnvelope
+    | NestedCargoManifestEnvelope
+    | NestedCargoNextestEnvelope
 )
 
 
@@ -65,14 +73,30 @@ def _manifest_envelope(
     return build_nested_cargo_manifest_envelope(checkout)
 
 
+def _nextest_envelope(
+    checkout: pathlib.Path,
+    _parameters: cabc.Mapping[str, object] | None = None,
+) -> NestedCargoNextestEnvelope:
+    """Build the NC-004/NC-005 envelope, ignoring the manifest parameters.
+
+    Returns
+    -------
+    NestedCargoNextestEnvelope
+        The `policy-input/nested-cargo-nextest` document for *checkout*.
+    """
+    return build_nested_cargo_nextest_envelope(checkout)
+
+
 BY_PACKAGE: typ.Final = types.MappingProxyType({
     "nested-cargo-fixture-lockfiles": _lock_envelope,
     "nested-cargo-offline-tests": build_nested_cargo_offline_envelope,
     "nested-cargo-fixture-manifests": _manifest_envelope,
+    "nested-cargo-nextest": _nextest_envelope,
 })
 
 BY_KIND: typ.Final = types.MappingProxyType({
     LOCK_ENVELOPE_KIND: _lock_envelope,
     OFFLINE_ENVELOPE_KIND: build_nested_cargo_offline_envelope,
     MANIFEST_ENVELOPE_KIND: _manifest_envelope,
+    NEXTEST_ENVELOPE_KIND: _nextest_envelope,
 })

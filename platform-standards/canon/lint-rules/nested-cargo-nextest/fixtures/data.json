@@ -1,0 +1,310 @@
+{
+  "fixtures": {
+    "no_spawner": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-nextest",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "nextest": {
+        "state": "absent",
+        "error": null,
+        "serial_groups": [
+          "nested-cargo-builds"
+        ],
+        "grouped_override": true,
+        "slow_timeout": true,
+        "global_timeout": true
+      },
+      "spawners": [],
+      "problems": []
+    },
+    "bounded": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-nextest",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "nextest": {
+        "state": "present",
+        "error": null,
+        "serial_groups": [
+          "nested-cargo-builds"
+        ],
+        "grouped_override": true,
+        "slow_timeout": true,
+        "global_timeout": true
+      },
+      "spawners": [
+        {
+          "path": "tests/ui.rs",
+          "kind": "cargo",
+          "binary": "ui",
+          "test_functions": [
+            "compiles"
+          ],
+          "named": true
+        }
+      ],
+      "problems": []
+    },
+    "no_config": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-nextest",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "nextest": {
+        "state": "absent",
+        "error": null,
+        "serial_groups": [],
+        "grouped_override": false,
+        "slow_timeout": false,
+        "global_timeout": false
+      },
+      "spawners": [
+        {
+          "path": "tests/ui.rs",
+          "kind": "cargo",
+          "binary": "ui",
+          "test_functions": [
+            "compiles"
+          ],
+          "named": true
+        }
+      ],
+      "problems": []
+    },
+    "no_serial_group": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-nextest",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "nextest": {
+        "state": "present",
+        "error": null,
+        "serial_groups": [],
+        "grouped_override": false,
+        "slow_timeout": true,
+        "global_timeout": true
+      },
+      "spawners": [
+        {
+          "path": "tests/ui.rs",
+          "kind": "cargo",
+          "binary": "ui",
+          "test_functions": [
+            "compiles"
+          ],
+          "named": true
+        }
+      ],
+      "problems": []
+    },
+    "no_grouped_override": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-nextest",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "nextest": {
+        "state": "present",
+        "error": null,
+        "serial_groups": [
+          "nested-cargo-builds"
+        ],
+        "grouped_override": false,
+        "slow_timeout": true,
+        "global_timeout": true
+      },
+      "spawners": [
+        {
+          "path": "tests/ui.rs",
+          "kind": "cargo",
+          "binary": "ui",
+          "test_functions": [
+            "compiles"
+          ],
+          "named": true
+        }
+      ],
+      "problems": []
+    },
+    "no_slow_timeout": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-nextest",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "nextest": {
+        "state": "present",
+        "error": null,
+        "serial_groups": [
+          "nested-cargo-builds"
+        ],
+        "grouped_override": true,
+        "slow_timeout": false,
+        "global_timeout": true
+      },
+      "spawners": [
+        {
+          "path": "tests/ui.rs",
+          "kind": "cargo",
+          "binary": "ui",
+          "test_functions": [
+            "compiles"
+          ],
+          "named": true
+        }
+      ],
+      "problems": []
+    },
+    "no_global_timeout": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-nextest",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "nextest": {
+        "state": "present",
+        "error": null,
+        "serial_groups": [
+          "nested-cargo-builds"
+        ],
+        "grouped_override": true,
+        "slow_timeout": true,
+        "global_timeout": false
+      },
+      "spawners": [
+        {
+          "path": "tests/ui.rs",
+          "kind": "cargo",
+          "binary": "ui",
+          "test_functions": [
+            "compiles"
+          ],
+          "named": true
+        }
+      ],
+      "problems": []
+    },
+    "unnamed_binary": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-nextest",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "nextest": {
+        "state": "present",
+        "error": null,
+        "serial_groups": [
+          "nested-cargo-builds"
+        ],
+        "grouped_override": true,
+        "slow_timeout": true,
+        "global_timeout": true
+      },
+      "spawners": [
+        {
+          "path": "tests/ui.rs",
+          "kind": "cargo",
+          "binary": "ui",
+          "test_functions": [
+            "compiles"
+          ],
+          "named": false
+        }
+      ],
+      "problems": []
+    },
+    "unreadable_config": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-nextest",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "nextest": {
+        "state": "unreadable",
+        "error": "invalid TOML",
+        "serial_groups": [
+          "nested-cargo-builds"
+        ],
+        "grouped_override": true,
+        "slow_timeout": true,
+        "global_timeout": true
+      },
+      "spawners": [
+        {
+          "path": "tests/ui.rs",
+          "kind": "cargo",
+          "binary": "ui",
+          "test_functions": [
+            "compiles"
+          ],
+          "named": true
+        }
+      ],
+      "problems": []
+    },
+    "unreadable_source": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-nextest",
+      "repository": {
+        "path": ".",
+        "name": "leynos/example"
+      },
+      "nextest": {
+        "state": "present",
+        "error": null,
+        "serial_groups": [
+          "nested-cargo-builds"
+        ],
+        "grouped_override": true,
+        "slow_timeout": true,
+        "global_timeout": true
+      },
+      "spawners": [],
+      "problems": [
+        "tests/big.rs is larger than 1048576 bytes"
+      ]
+    },
+    "named_elsewhere": {
+      "schema_version": 1,
+      "kind": "policy-input/nested-cargo-nextest",
+      "repository": {
+        "path": ".",
+        "name": "leynos/other"
+      },
+      "nextest": {
+        "state": "absent",
+        "error": null,
+        "serial_groups": [],
+        "grouped_override": false,
+        "slow_timeout": false,
+        "global_timeout": false
+      },
+      "spawners": [
+        {
+          "path": "tests/ui.rs",
+          "kind": "cargo",
+          "binary": "ui",
+          "test_functions": [
+            "compiles"
+          ],
+          "named": true
+        }
+      ],
+      "problems": []
+    }
+  }
+}

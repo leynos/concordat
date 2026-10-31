@@ -827,6 +827,33 @@ severity, so findings are reported and the exit status stays 0; set the
 `severity` parameter to `error` to enforce it. The audit reads the working tree
 below the root, skipping hidden, `target`, `vendor` and similar directories.
 
+### Auditing the nextest configuration of compiler-spawning tests
+
+The `nested-cargo-nextest` rule keeps compiler work inside tests bounded:
+
+```shell
+concordat artefact rule run nested-cargo-nextest --repo /path/to/checkout
+```
+
+When a Rust test spawns `cargo build` (or another compiling subcommand) or
+`rustc`, a cold build inside a timed test looks like a hang. **NC-004** reports
+a missing piece of `.config/nextest.toml`: a test group with `max-threads = 1`,
+an override that places tests in it, a `slow-timeout` (in a profile or an
+override) and a `global-timeout` (in a profile). **NC-005** reports a top-level
+`tests/<stem>.rs` that spawns a compiler but is not named, by binary or test
+function, in a serial group's override filter, so the group never holds it.
+
+The scan is textual and conservative: only test code counts, `cargo metadata`
+and similar do not, Python tests are left to pytest, and a helper under `src/`
+or `tests/support/` is judged by the repository-level pieces alone. A test
+bounded some other way is named in the `exemptions` parameter with its
+repository, path, rationale and review trigger (a blank rationale or trigger
+suppresses nothing). The rule ships at `warning` severity, so findings are
+reported and the exit status stays 0; set the `severity` parameter to `error`
+to enforce it. See the
+[rule reference](../platform-standards/canon/lint-rules/nested-cargo-nextest/README.md)
+for the precise scan.
+
 ### Auditing Rust development build storage
 
 The `rust-dev-build-footprint` rule keeps default development builds small:

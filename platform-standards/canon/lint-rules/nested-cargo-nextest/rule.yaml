@@ -1,0 +1,112 @@
+schema_version: 1
+id: nested-cargo-nextest
+name: Nested cargo nextest configuration
+description: >-
+  Audits `.config/nextest.toml` for repositories whose Rust tests spawn
+  `cargo` (with a compiling subcommand) or `rustc`, so compiler work inside a
+  timed test is serialized and bounded instead of looking like a hang. When a
+  test source spawns a compiler, the configuration must define a serial test
+  group (`max-threads = 1`) that an override places tests in, set a
+  `slow-timeout` and set a `global-timeout` (NC-004), and a top-level
+  `tests/<stem>.rs` that spawns must be named, by binary or test function, in
+  a grouped override's filter (NC-005). The scan is textual and conservative:
+  only test sources count, `cargo metadata` and similar do not, and Python tests
+  are left to their own runner. A named exemption, with its repository, test
+  source, rationale and review trigger, takes a spawner out of both checks. A
+  repository with no such test is compliant. The rule ships at `warning`
+  severity so the estate can be surveyed before it blocks; the `severity`
+  parameter raises it to `error` without a code change. Audit-only: this rule
+  declares no mutations.
+version: 0.1.0
+sensor:
+  type: conftest
+  input: policy-input/nested-cargo-nextest
+  policy: policy/
+  tests:
+    - policy/
+  data:
+    - fixtures/data.json
+parameters:
+  schema:
+    type: object
+    additionalProperties: false
+    properties:
+      severity:
+        type: string
+        enum: [warning, error]
+        description: >-
+          The severity of every NC-004 and NC-005 finding, and of the
+          indeterminate findings that report evidence the reader could not
+          establish. An envelope defect is always `error`: it says the rule
+          could not run, not that the repository is unsafe. A `warning` finding
+          is reported but does not block; promotion to `error` is the intended
+          end state once the estate survey is clean.
+      exemptions:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [repository, path, rationale, review_trigger]
+          properties:
+            repository:
+              type: string
+            path:
+              type: string
+            rationale:
+              type: string
+              minLength: 1
+            review_trigger:
+              type: string
+              minLength: 1
+        description: >-
+          Test sources the rule does not count as compiler-spawning, each with
+          its repository (`owner/name`, read from the `origin` remote), its
+          path relative to the root, the rationale and the review trigger (the
+          event after which the exemption is revisited). Both text fields must
+          be non-blank; the policy ignores an entry that leaves either blank,
+          because an exemption nobody must revisit is not a record. A test that
+          only runs a prebuilt compiler fixture, bounded some other way,
+          belongs here.
+  defaults:
+    severity: warning
+    exemptions:
+      - repository: leynos/shared-actions
+        path: rust-toy-app/tests/manpage_generation.rs
+        rationale: >-
+          A fixture crate's own test runs `cargo build` on that crate, which
+          shares the outer `cargo test` target directory. The repository has
+          no workspace for nextest to govern: every lane that runs the crate
+          passes `use-cargo-nextest: 'false'`, so a nextest group could bound
+          nothing.
+        review_trigger: >-
+          review when a lane runs the toy app under nextest, or the test
+          builds a different crate
+      - repository: leynos/netsuke
+        path: tests/kani_cfg_ui_tests.rs
+        rationale: >-
+          Compiles one dependency-free fixture with rustc to prove the
+          `cfg(kani)` check-cfg contract. ADR-0059 moved every contract that
+          needs Cargo's package-cache lock or a dependency graph out of timed
+          tests; what remains is a single-file compile with no nested Cargo.
+        review_trigger: >-
+          review when the test starts compiling against the netsuke library
+          or invokes Cargo
+      - repository: leynos/netsuke
+        path: tests/ninja_gen_escape_ui_tests.rs
+        rationale: >-
+          Compiles one dependency-free fixture with rustc to prove the
+          NinjaValue escape boundary is consuming. ADR-0059 left single-file
+          compiles in the default profile because they carry no nested Cargo
+          and no dependency rebuild.
+        review_trigger: >-
+          review when the fixture needs an `--extern` crate or the test invokes
+          Cargo
+      - repository: leynos/netsuke
+        path: tests/packaging_smoke_tests.rs
+        rationale: >-
+          Runs `cargo package --list`, which compiles nothing; the verification
+          build that `cargo publish --dry-run` performs moved to
+          `make test-package-verify` (ADR-0059).
+        review_trigger: >-
+          review when the test runs a Cargo subcommand that compiles
+          (`publish --dry-run`, `package` without `--list`)

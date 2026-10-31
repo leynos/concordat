@@ -2997,6 +2997,27 @@ found five repositories with uncovered manifests; promotion to `error` follows
 once they are clean. Dependency tables are read through `cargo_tables`, so a
 registry dependency under `[target.'cfg(...)'.dependencies]` makes a candidate.
 
+##### Nested cargo nextest configuration
+
+NC-004 and NC-005 (`nested-cargo-nextest`) bound compiler work in tests. The
+rule's first problem is deciding that a repository has such tests without
+demanding configuration of those that do not, so the scan is a source scan with
+four narrowings: test code only, compiling subcommands only (`cargo metadata`
+is not compilation), a `Command` in the file, and no Python (pytest bounds
+those). The configuration facts are the ones netsuke and rstest-bdd converged
+on: a serial group, an override that uses it, an explicit `slow-timeout`
+(profile or override) and a `global-timeout` (any profile, since netsuke sets
+it on `ci`). A top-level test binary must also be named by a grouped override's
+filter, by binary or by one of its functions, which is how ortho-config's BDD
+suite is told apart from netsuke's. The package does not evaluate nextest
+filtersets: a name appearing in a grouped filter is the evidence, which is
+cheap and errs towards acceptance. Exemptions name a test source and follow the
+NC-001 convention: repository, path, rationale and review trigger, where a
+blank rationale or trigger suppresses nothing. The package ships at `warning`
+severity through a `severity` parameter, as `nested-cargo-offline-tests` does,
+because the estate survey found configuration gaps in a dozen repositories;
+promotion to `error` follows once they are clean.
+
 #### 3.1.4 Verifying the reconciliation invariants
 
 Several checks reduce to a pure comparator over a small structured input, where

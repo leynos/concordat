@@ -729,6 +729,15 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   so coverage here means the same thing as in the dependency-family package.
   The coverage fact is `False` with no configuration and `None` (indeterminate)
   with an undecodable one.
+- `policy-input/nested-cargo-nextest` —
+  `nested_cargo_nextest_envelope.build_nested_cargo_nextest_envelope`. The scan
+  for compiler-spawning tests lives in `nested_cargo_spawn` (test code only,
+  compiling subcommands only, files that name `Command`, 1 MiB cap); the
+  envelope reads `.config/nextest.toml` for serial groups, whether an override
+  uses one, `slow-timeout` in any profile or override and `global-timeout` in
+  any profile, and marks each top-level test binary as named or not by the
+  grouped filters. It runs neither Cargo nor nextest and does not evaluate
+  filtersets.
 - `policy-input/whitaker-provisioning` —
   `whitaker_provisioning_envelope.build_whitaker_provisioning_envelope`. It
   reuses the CV-005 workflow decoder for `.github/workflows`, decodes every

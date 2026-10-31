@@ -233,6 +233,19 @@ artifacts:
     description: >-
       Rule package manifest for the nested cargo fixture manifest audit.
     sha256: 0298f084690bc5c3606ce04b25a2f7b500a5dc27d9a83f1265bf391d7fceee72
+  - id: lint-rule-nested-cargo-nextest
+    type: opa-policy
+    path: platform-standards/canon/lint-rules/nested-cargo-nextest/policy/nested_cargo_nextest.rego
+    description: >-
+      Sensor requiring a serial, bounded nextest group where Rust tests spawn
+      cargo or rustc.
+    sha256: 0264854038fa49414a3965b2b618049bb2c9d257a7012eb7d7df9ef95ecf0546
+  - id: lint-rule-nested-cargo-nextest-manifest
+    type: lint-config
+    path: platform-standards/canon/lint-rules/nested-cargo-nextest/rule.yaml
+    description: >-
+      Rule package manifest for the nested cargo nextest configuration audit.
+    sha256: 5c10239d5859b2888e0a5b3e61209faf4e45260bf354aaab32682f5f4062e619
   - id: lint-rule-main-owned-codescene-coverage
     type: opa-policy
     path: >-
