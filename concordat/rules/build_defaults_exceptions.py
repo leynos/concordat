@@ -37,7 +37,13 @@ import typing as typ
 
 from concordat.errors import OperationalRuleError
 
-from .cargo_config import normalise_flags, read_cargo_config, rustflags_sources
+from .cargo_config import (
+    RustflagsSource,
+    TomlDocument,
+    normalise_flags,
+    read_cargo_config,
+    rustflags_sources,
+)
 from .fs_probe import regular_file_exists
 from .rust_surfaces import CONCORDAT_FILENAME, rust_language_mapping
 
@@ -103,26 +109,32 @@ def _text(mapping: dict[str, object], key: str, checkout: pathlib.Path) -> str:
     return value
 
 
+def _is_text_list(value: object) -> typ.TypeGuard[list[str]]:
+    """Return whether *value* is a list holding only strings."""
+    return isinstance(value, list) and all(
+        isinstance(item, str) for item in typ.cast("list[object]", value)
+    )
+
+
 def _clauses(mapping: dict[str, object], checkout: pathlib.Path) -> list[str]:
     """Return the declared clause identifiers."""
     value = mapping.get("clauses")
-    if not isinstance(value, list) or not all(
-        isinstance(item, str) for item in typ.cast("list[object]", value)
-    ):
+    if not _is_text_list(value):
         message = f"a build_defaults exception needs a list of clauses: {value!r}"
         raise _error(message, checkout)
-    return list(typ.cast("list[str]", value))
+    return list(value)
+
+
+def _has_control_character(path: str) -> bool:
+    """Return whether *path* holds an ASCII control character."""
+    return any(ord(character) < 32 for character in path)
 
 
 def _safe_relative(path: str) -> bool:
     """Return whether *path* names a file within the checkout."""
     posix = pathlib.PurePosixPath(path)
-    return (
-        bool(path)
-        and not posix.is_absolute()
-        and ".." not in posix.parts
-        and not any(ord(character) < 32 for character in path)
-    )
+    is_inside = not posix.is_absolute() and ".." not in posix.parts
+    return bool(path) and is_inside and not _has_control_character(path)
 
 
 def _within(checkout: pathlib.Path, relative: str) -> pathlib.Path | None:
@@ -151,29 +163,41 @@ _UNREADABLE_ROUTE: typ.Final = _RouteFacts(
 )
 
 
+def _route_document(path: pathlib.Path) -> TomlDocument | None:
+    """Return the parsed route configuration, or ``None`` when unreadable."""
+    try:
+        return read_cargo_config(path)
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return None
+
+
+def _carries(source: RustflagsSource, wanted: list[str]) -> bool:
+    """Return whether *source* names every flag in *wanted*."""
+    return all(flag in source["flags"] for flag in wanted)
+
+
 def _route_facts(
     path: pathlib.Path | None, threads_flag: str, linker_flag: str
 ) -> _RouteFacts:
     """Read the explicit route configuration the exception relies on."""
-    if path is None:
+    if path is None or not regular_file_exists(
+        path, operation=OPERATION_READ_EXCEPTIONS
+    ):
         return _ABSENT_ROUTE
-    try:
-        if not regular_file_exists(path, operation=OPERATION_READ_EXCEPTIONS):
-            return _ABSENT_ROUTE
-        document = read_cargo_config(path)
-    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError, OperationalRuleError):
+    document = _route_document(path)
+    if document is None:
         return _UNREADABLE_ROUTE
     sources = rustflags_sources(document)
     wanted_threads = normalise_flags([threads_flag])
     wanted_linker = normalise_flags([linker_flag])
-    has_threads = bool(sources) and all(
-        all(flag in source["flags"] for flag in wanted_threads) for source in sources
+    return _RouteFacts(
+        state=ROUTE_OK,
+        has_threads=bool(sources)
+        and all(_carries(source, wanted_threads) for source in sources),
+        has_linker=any(
+            source["linux"] and _carries(source, wanted_linker) for source in sources
+        ),
     )
-    has_linker = any(
-        source["linux"] and all(flag in source["flags"] for flag in wanted_linker)
-        for source in sources
-    )
-    return _RouteFacts(state=ROUTE_OK, has_threads=has_threads, has_linker=has_linker)
 
 
 def _exception(
