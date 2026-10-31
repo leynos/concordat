@@ -124,31 +124,38 @@ def _start_process(
     )
 
 
+def _kill_windows_process_tree(process: subprocess.Popen[bytes]) -> bool:
+    """Stop a Windows child tree and report whether `taskkill` succeeded."""
+    try:
+        completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed argv, no shell
+            ["taskkill", "/F", "/T", "/PID", str(process.pid)],  # ruff: ignore[start-process-with-partial-path] - Windows inbox utility
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=_TREE_KILL_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return completed.returncode == 0
+
+
+def _kill_posix_process_group(process: subprocess.Popen[bytes]) -> bool:
+    """Stop the dedicated POSIX process group and report whether it existed."""
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except OSError:
+        return False
+    return True
+
+
 def _kill_process_tree(process: subprocess.Popen[bytes]) -> None:
     """Stop the child and descendants that may still own its output pipes."""
-    if os.name == "nt":
-        try:
-            completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed argv, no shell
-                ["taskkill", "/F", "/T", "/PID", str(process.pid)],  # ruff: ignore[start-process-with-partial-path] - Windows inbox utility
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                timeout=_TREE_KILL_TIMEOUT_SECONDS,
-                check=False,
-            )
-        except (OSError, subprocess.TimeoutExpired):
-            completed = None
-        if completed is not None and completed.returncode == 0:
-            return
-    else:
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        except OSError:
-            pass
-        else:
-            return
-    if process.poll() is None:
+    tree_stopped = (
+        _kill_windows_process_tree(process)
+        if os.name == "nt"
+        else _kill_posix_process_group(process)
+    )
+    if not tree_stopped and process.poll() is None:
         with contextlib.suppress(ProcessLookupError):
             process.kill()
 
@@ -226,6 +233,71 @@ def _stop_readers_after_timeout(
     _join_readers(readers, time.monotonic() + _READER_CLEANUP_SECONDS)
 
 
+def _complete_process(
+    process: subprocess.Popen[bytes],
+    args: typ.Sequence[str | pathlib.Path],
+    timeout: float,
+    max_bytes_per_stream: int,
+    stdout_capture: _PipeCapture,
+    stderr_capture: _PipeCapture,
+    *,
+    timed_out: bool,
+) -> subprocess.CompletedProcess[str]:
+    """Build the result or raise the bounded process error."""
+    stdout, stdout_overflowed, stdout_errors = _capture_snapshot(stdout_capture)
+    stderr_data, stderr_overflowed, stderr_errors = _capture_snapshot(stderr_capture)
+    stderr = _stderr_bytes(
+        stderr_data,
+        max_bytes_per_stream,
+        overflowed=stderr_overflowed,
+    )
+    if stdout_errors or stderr_errors:
+        raise (stdout_errors or stderr_errors)[0]
+    if timed_out:
+        raise subprocess.TimeoutExpired(args, timeout, output=stdout, stderr=stderr)
+    if stdout_overflowed:
+        raise OutputLimitExceededError("stdout", max_bytes_per_stream)
+    returncode = process.returncode
+    if returncode is None:
+        raise RuntimeError
+
+    return subprocess.CompletedProcess(
+        args,
+        returncode,
+        stdout=_decode(stdout),
+        stderr=_decode(
+            stderr,
+            errors="replace" if stderr_overflowed else "strict",
+        ),
+    )
+
+
+def _finish_process(
+    process: subprocess.Popen[bytes],
+    args: typ.Sequence[str | pathlib.Path],
+    timeout: float,
+    max_bytes_per_stream: int,
+    stdout_capture: _PipeCapture,
+    stderr_capture: _PipeCapture,
+    readers: tuple[threading.Thread, ...],
+    deadline: float,
+) -> subprocess.CompletedProcess[str]:
+    """Wait within the deadline, stop held-open pipes, and collect output."""
+    timed_out = _wait_for_process(process, deadline)
+    if timed_out or not _join_readers(readers, deadline):
+        timed_out = True
+        _stop_readers_after_timeout(process, readers)
+    return _complete_process(
+        process,
+        args,
+        timeout,
+        max_bytes_per_stream,
+        stdout_capture,
+        stderr_capture,
+        timed_out=timed_out,
+    )
+
+
 def run_bounded(
     args: typ.Sequence[str | pathlib.Path],
     *,
@@ -249,13 +321,10 @@ def run_bounded(
     Raises
     ------
     ValueError
-        If the per-stream byte limit is not positive.
-    RuntimeError
-        If the process pipes cannot be created.
-    OutputLimitExceededError
-        If stdout exceeds the retention limit.
-    subprocess.TimeoutExpired
-        If the process does not finish before *timeout*.
+        If the per-stream byte limit is not positive. The adapter also raises
+        ``RuntimeError`` when the pipes cannot be created,
+        :class:`OutputLimitExceededError` on stdout overflow, and
+        ``TimeoutExpired`` when the child exceeds *timeout*.
     """
     if max_bytes_per_stream <= 0:
         raise ValueError
@@ -265,38 +334,13 @@ def run_bounded(
         stdout_capture, stderr_capture, readers = _start_readers(
             process, max_bytes_per_stream
         )
-        timed_out = _wait_for_process(process, deadline)
-        if not _join_readers(readers, deadline):
-            timed_out = True
-            _stop_readers_after_timeout(process, readers)
-        elif timed_out:
-            _stop_readers_after_timeout(process, readers)
-
-        stdout, stdout_overflowed, stdout_errors = _capture_snapshot(stdout_capture)
-        stderr_data, stderr_overflowed, stderr_errors = _capture_snapshot(
-            stderr_capture
-        )
-        stderr = _stderr_bytes(
-            stderr_data,
-            max_bytes_per_stream,
-            overflowed=stderr_overflowed,
-        )
-        if stdout_errors or stderr_errors:
-            raise (stdout_errors or stderr_errors)[0]
-        if timed_out:
-            raise subprocess.TimeoutExpired(args, timeout, output=stdout, stderr=stderr)
-        if stdout_overflowed:
-            raise OutputLimitExceededError("stdout", max_bytes_per_stream)
-        returncode = process.returncode
-        if returncode is None:
-            raise RuntimeError
-
-        return subprocess.CompletedProcess(
+        return _finish_process(
+            process,
             args,
-            returncode,
-            stdout=_decode(stdout),
-            stderr=_decode(
-                stderr,
-                errors="replace" if stderr_overflowed else "strict",
-            ),
+            timeout,
+            max_bytes_per_stream,
+            stdout_capture,
+            stderr_capture,
+            readers,
+            deadline,
         )
