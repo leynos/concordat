@@ -1887,7 +1887,7 @@ the dependency-pin actionability checks.
 | DB-004       | Lockfile-wide dependency audits do not gate Dependabot pull requests, and a scheduled audit workflow exists to cover the gap.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Quality-Gate Integrity          | OPA/Conftest                                                        | warning              | 4                        |
 | DB-005       | Every Dependabot `updates` entry runs daily and ends with one catch-all group (`patterns: ["*"]`, `update-types: [minor, patch]`), any earlier group being narrower than `*`; `github-actions` entries cover `/` and every local action under `.github/actions`; cargo `versioning-strategy` is `auto` or `lockfile-only`.                                                                                                                                                                                                                                                                                                          | Quality-Gate Integrity          | OPA/Conftest (`dependabot-update-shape`)                            | error                | 4                        |
 | DF-001       | A recorded family or type-identity relationship (for example `pyo3` with `pyo3-build-config`) is taken together by one narrow Dependabot group ahead of the catch-all, matched on the published package names; report-only.                                                                                                                                                                                                                                                                                                                                                                                                         | Quality-Gate Integrity          | OPA/Conftest (`dependency-family-contracts`)                        | error                | 4                        |
-| DF-002       | A recorded tuple of independently versioned packages (for example maturin with PyO3) has an upper bound or an `ignore` rule on a member; an exact pin is not protection; report-only.                                                                                                                                                                                                                                                                                                                                                                                                                                               | Quality-Gate Integrity          | OPA/Conftest (`dependency-family-contracts`)                        | error                | 4                        |
+| DF-002       | A recorded tuple of independently versioned packages (for example maturin with PyO3) has an upper bound or an `ignore` rule on a member, or every member in one defined multi-ecosystem Dependabot group; an exact pin is not protection; report-only.                                                                                                                                                                                                                                                                                                                                                                              | Quality-Gate Integrity          | OPA/Conftest (`dependency-family-contracts`)                        | error                | 4                        |
 | DF-003       | A narrow group that matches every member of a recorded family is not shadowed by an earlier group; report-only.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Quality-Gate Integrity          | OPA/Conftest (`dependency-family-contracts`)                        | error                | 4                        |
 | DF-006       | The facts a dependency relationship needs could be established: a decodable Dependabot configuration, readable manifests and, for type identity, a lock. Missing evidence is indeterminate, never compliant.                                                                                                                                                                                                                                                                                                                                                                                                                        | Quality-Gate Integrity          | OPA/Conftest (`dependency-family-contracts`)                        | error                | 4                        |
 | MT-001       | A scheduled mutation-testing workflow exists and calls the pinned shared mutation-testing workflow; mutation testing is scheduled, not merge-blocking.                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Quality-Gate Integrity          | OPA/Conftest + file presence                                        | warning              | 4                        |
@@ -2202,19 +2202,26 @@ type identity need their members taken together by one narrow group ahead of
 the catch-all (DF-001, and DF-003 when an earlier group shadows it);
 independently versioned packages such as maturin and PyO3 form a supported
 tuple that a group cannot select, so a member needs an upper bound or an
-`ignore` rule and an exact pin is not protection (DF-002); a tool pin and its
-generated inputs, and a behavioural migration, need their own checks and are
-left to later work. The envelope builder collects the facts outside policy
-evaluation: declarations from every governed Cargo surface (reusing the nested
-surface resolver) and the root `pyproject.toml`, each with its section, target,
-optionality, published package identity (a renamed dependency resolves to the
-name Dependabot matches), requirement, locked versions, and the covering
-`updates` entry, first-matching group and `ignore` rule. A relationship applies
-only where the repository declares every member, and a Cargo manifest that no
-declared surface governs is a problem fact, rather than an unread pass, when it
-declares a package a relationship names or cannot be decoded (a repository
-without `language.rust.surfaces` is read at its root only), so unrelated
-duplicate crate versions and a copied wheel template in a pure-Python
+`ignore` rule, or every member must join one multi-ecosystem group so that the
+update arrives as a single pull request (DF-002), and an exact pin is not
+protection; a tool pin and its generated inputs, and a behavioural migration,
+need their own checks and are left to later work. The envelope builder collects
+the facts outside policy evaluation: declarations from every governed Cargo
+surface (reusing the nested surface resolver) and the root `pyproject.toml`,
+each with its section, target, optionality, published package identity (a
+renamed dependency resolves to the name Dependabot matches), requirement,
+locked versions, and the covering `updates` entry, first-matching group,
+`ignore` rule and the multi-ecosystem group the entry joins for the package
+(named only when the file defines the group and the entry's `patterns` take the
+package). A relationship applies only where the repository declares every
+member, and a Cargo manifest that no declared surface governs is a problem
+fact, rather than an unread pass, when it declares a package a relationship
+names or cannot be decoded (a repository without `language.rust.surfaces` is
+read at its root only), except that the members of a governed workspace root
+are read through it, for these facts only. They are deliberately not Rust
+surfaces: the footprint and Makefile rules judge a surface as a project root,
+so declaring a member would make them ask for its governing workspace instead.
+Unrelated duplicate crate versions and a copied wheel template in a pure-Python
 repository draw no finding. A repository may stay on an older generation by
 recording an exception in `.concordat` under `dependencies.family_exceptions`,
 naming the relationship, a rationale and a review trigger. Missing facts are

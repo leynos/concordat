@@ -45,9 +45,11 @@ from .dependency_family_coverage import (
 )
 from .dependency_family_discovery import (
     cargo_tables,
+    loose_manifest,
     nested_files,
     published_name,
     ungoverned_problems,
+    workspace_member_manifests,
 )
 from .fs_probe import probe_file
 from .rust_surfaces import resolve_rust_surfaces
@@ -320,18 +322,48 @@ def _cargo_surfaces(
         problems.append(f"the Rust surfaces could not be resolved: {detail}")
         return []
     surfaces = [dict(surface) for surface in resolution.surfaces]
+    listed = workspace_member_manifests(checkout, surfaces)
     if not resolution.declared:
         governed = {str(surface["path"]) for surface in surfaces}
         ungoverned = [
             nested
             for nested in nested_files(checkout, "Cargo.toml", problems)
             if nested.relative_to(checkout).as_posix() not in governed
+            and nested not in listed
         ]
         problems.extend(
             ungoverned_problems(
                 checkout, ungoverned, members, _workspace_requirements(surfaces)
             )
         )
+    return surfaces + _member_surfaces(checkout, listed, problems)
+
+
+def _member_surfaces(
+    checkout: pathlib.Path, listed: list[pathlib.Path], problems: list[str]
+) -> list[dict[str, object]]:
+    """Return the readable member manifests as surfaces for dependency facts.
+
+    A member that cannot be decoded is a problem, never an empty set of edges.
+    The dicts are used here only: they are not handed to any other rule, which
+    would judge a member as a project root.
+
+    Returns
+    -------
+    list[dict[str, object]]
+        One surface-shaped dict per member that decoded.
+    """
+    surfaces: list[dict[str, object]] = []
+    for manifest in listed:
+        relative = manifest.relative_to(checkout).as_posix()
+        document, error = loose_manifest(manifest)
+        if error is not None:
+            problems.append(
+                f"{relative} is a member of a governed Cargo workspace and "
+                f"cannot be read: {error}"
+            )
+            continue
+        surfaces.append({"path": relative, "role": "crate", "parsed": document})
     return surfaces
 
 

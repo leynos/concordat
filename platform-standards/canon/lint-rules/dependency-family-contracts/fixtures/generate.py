@@ -82,6 +82,30 @@ def dependabot(
     )
 
 
+def define_multi(config: str, definition: str) -> str:
+    """Return *config* with the top-level multi-ecosystem groups *definition*."""
+    return config.replace("version: 2\n", "version: 2\n" + definition, 1)
+
+
+def maturin_with_multi(
+    definition: str, cargo_join: str, maturin_join: str
+) -> dict[str, str]:
+    """Return a maturin and PyO3 checkout whose entries join the given groups."""
+    config = (
+        dependabot(NARROW_FAMILY + CATCH_ALL, extra=cargo_join)
+        + PIP_ENTRY
+        + CATCH_ALL
+        + maturin_join
+    )
+    return {
+        **base(),
+        "pyproject.toml": MATURIN_PYPROJECT.format(spec="==1.13.3"),
+        ".github/dependabot.yml": define_multi(config, definition)
+        if definition
+        else config,
+    }
+
+
 def base(
     groups: str = NARROW_FAMILY + CATCH_ALL, *, cargo: str = CARGO, lock: str = LOCK
 ) -> dict[str, str]:
@@ -168,6 +192,15 @@ SHADOWING = """\
         patterns: ['pyo3', 'pyo3-build-config']
 """
 
+ROOT_WORKSPACE = """\
+[workspace]
+members = ["native"]
+
+[workspace.dependencies]
+pyo3 = "0.28.3"
+pyo3-build-config = "0.28.3"
+"""
+
 SURFACES = (
     "language:\n  rust:\n    surfaces:\n"
     "      - path: rust/Cargo.toml\n      - path: rust/native/Cargo.toml\n"
@@ -175,6 +208,20 @@ SURFACES = (
 PIP_ENTRY = (
     "  - package-ecosystem: pip\n    directory: /\n"
     "    schedule:\n      interval: daily\n    groups:\n"
+)
+MULTI_DEFINITION = (
+    "multi-ecosystem-groups:\n  maturin-pyo3:\n    schedule:\n      interval: daily\n"
+)
+OTHER_DEFINITION = (
+    MULTI_DEFINITION + "  other-group:\n    schedule:\n      interval: daily\n"
+)
+JOIN_PYO3 = "    multi-ecosystem-group: maturin-pyo3\n    patterns: ['pyo3']\n"
+JOIN_MATURIN = "    multi-ecosystem-group: maturin-pyo3\n    patterns: ['maturin']\n"
+JOIN_MATURIN_ELSEWHERE = (
+    "    multi-ecosystem-group: other-group\n    patterns: ['maturin']\n"
+)
+JOIN_MATURIN_MISSING = (
+    "    multi-ecosystem-group: maturin-pyo3\n    patterns: ['pytest']\n"
 )
 SERDE_IGNORE = (
     "    ignore:\n      - dependency-name: {name}\n        versions: ['>=0.9']\n"
@@ -229,6 +276,20 @@ SCENARIOS: dict[str, dict[str, str]] = {
             NARROW_FAMILY + CATCH_ALL, directory="/rust"
         ),
     },
+    # A member of the root workspace is read through it, undeclared: the split
+    # is seen in the member, and the grouped variant is clean.
+    "workspace_member_split": {
+        "Cargo.toml": ROOT_WORKSPACE,
+        "native/Cargo.toml": NESTED_MEMBER,
+        "Cargo.lock": LOCK,
+        ".github/dependabot.yml": dependabot(CATCH_ALL),
+    },
+    "workspace_member_grouped": {
+        "Cargo.toml": ROOT_WORKSPACE,
+        "native/Cargo.toml": NESTED_MEMBER,
+        "Cargo.lock": LOCK,
+        ".github/dependabot.yml": dependabot(NARROW_FAMILY + CATCH_ALL),
+    },
     # A renamed bridge: Dependabot matches the published name, not the alias.
     "renamed_bridge_unprotected": base(
         NARROW_FAMILY + CATCH_ALL, cargo=SERDE_CARGO, lock=SERDE_LOCK
@@ -264,6 +325,25 @@ SCENARIOS: dict[str, dict[str, str]] = {
         + PIP_ENTRY
         + CATCH_ALL,
     },
+    # One multi-ecosystem group takes maturin and PyO3 into a single pull
+    # request, so one CI run sees the pair: protected without a bound.
+    "maturin_multi_group": maturin_with_multi(
+        MULTI_DEFINITION, JOIN_PYO3, JOIN_MATURIN
+    ),
+    # Only PyO3's entry joins: maturin still arrives alone.
+    "maturin_multi_group_one_member": maturin_with_multi(
+        MULTI_DEFINITION, JOIN_PYO3, ""
+    ),
+    # The members join different groups, so they arrive in different pull requests.
+    "maturin_multi_group_split": maturin_with_multi(
+        OTHER_DEFINITION, JOIN_PYO3, JOIN_MATURIN_ELSEWHERE
+    ),
+    # The entries name a group the file never defines: Dependabot rejects it.
+    "maturin_multi_group_undefined": maturin_with_multi("", JOIN_PYO3, JOIN_MATURIN),
+    # The group is defined and joined, but its patterns do not take maturin.
+    "maturin_multi_group_patterns_miss": maturin_with_multi(
+        MULTI_DEFINITION, JOIN_PYO3, JOIN_MATURIN_MISSING
+    ),
     # A pure-Python repository with a copied wheel template: PyO3 is absent, so
     # the maturin relationship does not apply and no lockstep is invented.
     "pure_python_template": {

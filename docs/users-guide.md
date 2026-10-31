@@ -407,17 +407,28 @@ A relationship applies only where the repository declares every member:
   the group by `serde-pyobject`, not by the alias, and an `ignore` rule would
   freeze the pair rather than move it;
 - independently versioned packages (for example maturin with PyO3) need an upper
-  bound or an `ignore` rule on a member (DF-002); an exact pin is not one;
+  bound or an `ignore` rule on a member, or every member in one multi-ecosystem
+  group (DF-002); an exact pin is not one. A multi-ecosystem group counts only
+  when its whole chain holds: each member's entry names a group the file
+  defines under `multi-ecosystem-groups`, the entry's `patterns` take the
+  member, and all members name the same group. Dependabot then raises one pull
+  request for the group, so one CI run sees the tuple; it does not choose
+  compatible versions;
 - a missing configuration, an unreadable manifest or lock, a Python project
   outside the root, or a Cargo manifest outside the governed Rust surfaces is
   reported as indeterminate (DF-006). A repository that has not declared
-  `language.rust.surfaces` is read at its root only. Each nested `Cargo.toml`
-  (hidden, `target`, `vendor`, `node_modules` and similar trees excepted) is
-  then read loosely: one that declares a package a recorded relationship names,
-  or that cannot be read or decoded, is named and makes the result
-  indeterminate until the repository declares its surfaces. A nested manifest
-  that names no related package draws nothing. A directory that cannot be
-  listed during that scan is reported the same way.
+  `language.rust.surfaces` is read at its root only. The members of a governed
+  workspace root (its `members` globs, less `exclude`) are read too, for these
+  facts only: they are not Rust surfaces, which other rules judge as project
+  roots, so a workspace needs no member declared. Each other nested
+  `Cargo.toml` (hidden, `target`, `vendor`, `node_modules` and similar trees
+  excepted) is then read loosely: one that declares a package a recorded
+  relationship names, or that cannot be read or decoded, is named and makes the
+  result indeterminate until the repository declares its surfaces. A member
+  that cannot be read is reported the same way, and a `members` glob that is
+  absolute or leaves the checkout is ignored. A nested manifest that names no
+  related package draws nothing. A directory that cannot be listed during that
+  scan is reported the same way.
 
 To keep an older generation deliberately, record an exception in `.concordat`:
 

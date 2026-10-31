@@ -8,10 +8,13 @@ and Dependabot configuration, plus the relationship data in
 `platform-standards/canon/data/dependency-families.yaml`.
 
 A relationship applies only where the repository declares every member, in any
-governed manifest: the Cargo surfaces (nested and workspace-inherited
-dependencies included, `package =` renames resolved to the published name) and
-the root `pyproject.toml`. Facts are collected outside policy evaluation; the
-policy opens no file and contacts no registry.
+governed manifest: the Cargo surfaces and the member crates of each governed
+workspace root (nested and workspace-inherited dependencies included,
+`package =` renames resolved to the published name) and the root
+`pyproject.toml`. Members are read for these facts only and are not Rust
+surfaces, so a workspace needs no member declared in `language.rust.surfaces`.
+Facts are collected outside policy evaluation; the policy opens no file and
+contacts no registry.
 
 ## Rules
 
@@ -19,10 +22,10 @@ policy opens no file and contacts no registry.
   narrow Dependabot group takes ahead of the catch-all, and no narrow group
   could. Repair: add a group for the family.
 - **DF-002** A `tuple` of independently versioned packages (for example maturin
-  with PyO3) with no upper bound and no `ignore` rule on any member. A group
-  cannot select mutually compatible latest versions, and an exact pin is the
-  thing a version update replaces. An `ignore` rule must name the published
-  package, not an alias.
+  with PyO3) with no upper bound, no `ignore` rule on any member and no shared
+  multi-ecosystem group. A group cannot select mutually compatible latest
+  versions, and an exact pin is the thing a version update replaces. An
+  `ignore` rule must name the published package, not an alias.
 - **DF-003** A narrow group matches every member of a family, but an earlier
   group takes one of them first. Repair: move it ahead of the shadowing group.
 - **DF-006** The facts could not be established: no decodable Dependabot
@@ -65,7 +68,12 @@ data carries no estate-wide version number.
 
 - Only the root `pyproject.toml` is read; a Python project elsewhere is
   reported, not passed.
-- Multi-ecosystem groups are not interpreted.
+- Multi-ecosystem groups are read for one purpose: a tuple (DF-002) whose
+  members all join one group the file defines, with `patterns` that take each
+  member, arrives as a single pull request and counts as protected. The rule
+  does not read a group as protecting a family (DF-001), and an entry that
+  names an undefined group, or whose `patterns` miss the member, is left
+  outside it.
 - Whether a failure would follow from an unprotected relationship (runtime
   compatibility) is a matter for the consumer's canary, not this rule.
 
