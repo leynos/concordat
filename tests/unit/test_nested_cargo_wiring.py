@@ -5,14 +5,16 @@ from __future__ import annotations
 import dataclasses
 import typing as typ
 
+import pygit2
 import pytest
 
-from concordat.rules import runner
+from concordat.rules import packages, runner
 from concordat.rules.nested_cargo_wiring_envelope import (
     build_nested_cargo_wiring_envelope,
 )
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import pathlib
 
 RULE_ID = "nested-cargo-ci-wiring"
@@ -154,3 +156,78 @@ def test_the_envelope_records_each_place_and_each_job(tmp_path: pathlib.Path) ->
         ("step test/2 run", "$RUNNER_TEMP/t"),
     ]
     assert fact["jobs"] == [{"id": "test", "opts_out": True, "wrapper_named": False}]
+
+
+TEMP_TARGET = "  CARGO_TARGET_DIR: ${{ runner.temp }}/target\n"
+
+
+def result_with(
+    monkeypatch: pytest.MonkeyPatch,
+    root: pathlib.Path,
+    parameters: cabc.Mapping[str, object],
+) -> runner.RuleRunResult:
+    """Run the rule as if its manifest declared *parameters*.
+
+    Returns
+    -------
+    runner.RuleRunResult
+        The result the package reports under *parameters*.
+    """
+    defaults = packages.rule_parameters(packages.rule_package_dir(RULE_ID))
+    monkeypatch.setattr(
+        runner, "_rule_parameters", lambda _rule_dir: defaults | dict(parameters)
+    )
+    return runner.run_rule(RULE_ID, root)
+
+
+def temporary_target_checkout(root: pathlib.Path) -> None:
+    """Write a repository whose workflow sets a per-run CARGO_TARGET_DIR."""
+    pygit2.init_repository(str(root)).remotes.create(
+        "origin", "https://github.com/leynos/example.git"
+    )
+    put(root, workflow(top="env:\n" + TEMP_TARGET))
+
+
+def exemption(**overrides: str) -> dict[str, str]:
+    """Return a complete exemption for the workflow, with overrides."""
+    return {
+        "repository": "leynos/example",
+        "path": ".github/workflows/ci.yml",
+        "rationale": "benchmark lane needs a private tree",
+        "review_trigger": "review when the benchmark lane moves",
+    } | overrides
+
+
+def test_a_complete_exemption_takes_the_workflow_out(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Repository, workflow, rationale and review trigger suppress NC-006."""
+    temporary_target_checkout(tmp_path)
+    assert {f.rule_id for f in runner.run_rule(RULE_ID, tmp_path).findings} == {
+        "NC-006"
+    }
+    result = result_with(monkeypatch, tmp_path, {"exemptions": [exemption()]})
+    assert not result.findings
+
+
+@pytest.mark.parametrize(
+    "blank", [{"rationale": " "}, {"review_trigger": ""}], ids=["rationale", "trigger"]
+)
+def test_an_exemption_without_a_reviewed_record_suppresses_nothing(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, blank: dict[str, str]
+) -> None:
+    """A blank rationale or review trigger is not a record."""
+    temporary_target_checkout(tmp_path)
+    result = result_with(monkeypatch, tmp_path, {"exemptions": [exemption(**blank)]})
+    assert {f.rule_id for f in result.findings} == {"NC-006"}
+
+
+def test_an_exemption_does_not_travel_to_another_repository(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The same workflow under another repository's name is audited."""
+    temporary_target_checkout(tmp_path)
+    result = result_with(
+        monkeypatch, tmp_path, {"exemptions": [exemption(repository="leynos/other")]}
+    )
+    assert {f.rule_id for f in result.findings} == {"NC-006"}

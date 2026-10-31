@@ -44,7 +44,6 @@ if typ.TYPE_CHECKING:
 
 type NestedCargoEnvelope = (
     NestedCargoLockEnvelope
-    NestedCargoLockEnvelope
     | NestedCargoOfflineEnvelope
     | NestedCargoManifestEnvelope
     | NestedCargoNextestEnvelope

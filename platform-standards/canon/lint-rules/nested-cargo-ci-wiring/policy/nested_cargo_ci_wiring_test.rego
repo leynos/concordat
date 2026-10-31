@@ -15,7 +15,8 @@ parameters := {"temporary_patterns": patterns, "exemptions": []}
 exemptions := [{
 	"repository": "leynos/example",
 	"path": ".github/workflows/ci.yml",
-	"reason": "benchmark lane needs a private tree",
+	"rationale": "benchmark lane needs a private tree",
+	"review_trigger": "review when the benchmark lane moves",
 }]
 
 findings(fixture) := fs if {
@@ -90,4 +91,18 @@ test_a_foreign_envelope_kind_is_not_a_pass if {
 	wrong := object.union(data.fixtures.compliant, {"kind": "policy-input/nested-cargo-nextest"})
 	fs := policy.deny with input as wrong with data.parameters as parameters
 	{f.rule_id | some f in fs} == {"EN-001"}
+}
+
+# An exemption without a rationale or a review trigger is not a record, and
+# suppresses nothing.
+test_an_exemption_without_a_rationale_suppresses_nothing if {
+	blank := [object.union(exemptions[0], {"rationale": "  "})]
+	fs := policy.deny with input as data.fixtures.runner_temp_target with data.parameters as object.union(parameters, {"exemptions": blank})
+	count(fs) > 0
+}
+
+test_an_exemption_without_a_review_trigger_suppresses_nothing if {
+	blank := [object.union(exemptions[0], {"review_trigger": ""})]
+	fs := policy.deny with input as data.fixtures.runner_temp_target with data.parameters as object.union(parameters, {"exemptions": blank})
+	count(fs) > 0
 }

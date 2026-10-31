@@ -33,10 +33,18 @@ temporary_patterns := data.parameters.temporary_patterns
 
 repository_name := input.repository.name
 
+# An exemption is a reviewed record: it names the repository, the workflow,
+# why it needs the wiring the rule forbids, and what event sends it back for
+# review. A blank rationale or review trigger asks nobody to revisit it, so it
+# is not a record and suppresses nothing.
 is_exempt(path) if {
 	some exemption in exemptions
 	exemption.repository == repository_name
 	exemption.path == path
+	is_string(exemption.rationale)
+	trim_space(exemption.rationale) != ""
+	is_string(exemption.review_trigger)
+	trim_space(exemption.review_trigger) != ""
 }
 
 is_temporary(value) if {

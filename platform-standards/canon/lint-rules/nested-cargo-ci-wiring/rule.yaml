@@ -12,7 +12,8 @@ description: >-
   name `RUSTC_WRAPPER` somewhere in the workflow or job, since `setup-rust`
   otherwise exports the wrapper to every later step and child `cargo`
   inherits it without any job-level `env`. A named exemption, with its
-  repository, workflow and reason, takes a workflow out of the check.
+  repository, workflow, rationale and review trigger, takes a workflow out of
+  the check.
   Audit-only: this rule declares no mutations.
 version: 0.1.0
 sensor:
@@ -40,19 +41,26 @@ parameters:
         items:
           type: object
           additionalProperties: false
-          required: [repository, path, reason]
+          required: [repository, path, rationale, review_trigger]
           properties:
             repository:
               type: string
             path:
               type: string
-            reason:
+            rationale:
               type: string
+              minLength: 1
+            review_trigger:
+              type: string
+              minLength: 1
         description: >-
           Workflows the rule does not audit, each with its repository
           (`owner/name`, read from the `origin` remote), its path relative to
-          the root and the reason. A benchmark lane that needs a private tree
-          belongs here.
+          the root, the rationale and the review trigger (the event after which
+          the exemption is revisited). Both text fields must be non-blank; the
+          policy ignores an entry that leaves either blank, because an
+          exemption nobody must revisit is not a record. A benchmark lane that
+          needs a private tree belongs here.
   defaults:
     temporary_patterns:
       - '(?i)runner\.temp|RUNNER_TEMP'
