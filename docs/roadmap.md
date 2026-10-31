@@ -551,9 +551,9 @@ actuators that remediate them. Each check ships as a lint rule package under
   separate change made once the estate survey is clean. Fixture manifest
   coverage (NC-003, `nested-cargo-fixture-manifests`) is shipped as the third:
   every standalone manifest with a registry dependency is covered by a `cargo`
-  entry of `dependabot.yml`. The nextest configuration check (NC-004,
-  NC-005, `nested-cargo-nextest`) is the fourth: where Rust tests spawn `cargo`
-  or `rustc`, the configuration serializes them, sets a `slow-timeout` and a
+  entry of `dependabot.yml`. The nextest configuration check (NC-004, NC-005,
+  `nested-cargo-nextest`) is the fourth: where Rust tests spawn `cargo` or
+  `rustc`, the configuration serializes them, sets a `slow-timeout` and a
   `global-timeout`, and names each spawning test binary in a grouped override.
   The CI wiring check follows as a separate package.
 - [ ] Ship the Dependabot governance rule packages (DB-001 to DB-004):

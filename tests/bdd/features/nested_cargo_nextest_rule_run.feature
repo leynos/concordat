@@ -13,7 +13,7 @@ Feature: Nested cargo nextest configuration
     Examples:
       | command     | config   | status | finding   |
       | cargo build | bounds   | 0      | compliant |
-      | cargo build | is absent | 1     | NC-004    |
-      | cargo build | skips it | 1      | NC-005    |
+      | cargo build | is absent | 0     | NC-004    |
+      | cargo build | skips it | 0      | NC-005    |
       | cargo check | bounds   | 0      | compliant |
       | cargo metadata | is absent | 0   | compliant |

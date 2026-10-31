@@ -239,13 +239,13 @@ artifacts:
     description: >-
       Sensor requiring a serial, bounded nextest group where Rust tests spawn
       cargo or rustc.
-    sha256: 5349aae9940b7152355766f247eca22b84bd323611ec7b1af72daa8882baa864
+    sha256: 0264854038fa49414a3965b2b618049bb2c9d257a7012eb7d7df9ef95ecf0546
   - id: lint-rule-nested-cargo-nextest-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/nested-cargo-nextest/rule.yaml
     description: >-
       Rule package manifest for the nested cargo nextest configuration audit.
-    sha256: 87d058d755a1f75f0d11c0088b4835bd1e5437c9e20ec0031cbe6fba9a6cdd5a
+    sha256: a7cf337b2f2716284b504824c9842c378094e5ece26c1e34b85427a5a09ced02
   - id: lint-rule-main-owned-codescene-coverage
     type: opa-policy
     path: >-

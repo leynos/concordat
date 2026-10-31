@@ -11,14 +11,16 @@ from __future__ import annotations
 import dataclasses
 import typing as typ
 
+import pygit2
 import pytest
 
-from concordat.rules import runner
+from concordat.rules import packages, runner
 from concordat.rules.nested_cargo_nextest_envelope import (
     build_nested_cargo_nextest_envelope,
 )
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import pathlib
 
 RULE_ID = "nested-cargo-nextest"
@@ -178,3 +180,97 @@ def test_a_global_timeout_in_another_profile_counts(tmp_path: pathlib.Path) -> N
     put(tmp_path, "tests/ui.rs", BUILD_TEST)
     put(tmp_path, ".config/nextest.toml", config)
     assert ids(tmp_path) == set()
+
+
+def result_with(
+    monkeypatch: pytest.MonkeyPatch,
+    root: pathlib.Path,
+    parameters: cabc.Mapping[str, object],
+) -> runner.RuleRunResult:
+    """Run the rule as if its manifest declared *parameters*.
+
+    Returns
+    -------
+    runner.RuleRunResult
+        The result the package reports under *parameters*.
+    """
+    monkeypatch.setattr(runner, "_rule_parameters", lambda _rule_dir: dict(parameters))
+    return runner.run_rule(RULE_ID, root)
+
+
+def unbounded_checkout(root: pathlib.Path) -> None:
+    """Write a repository whose cargo-spawning test has no nextest configuration."""
+    pygit2.init_repository(str(root)).remotes.create(
+        "origin", "https://github.com/leynos/example.git"
+    )
+    put(root, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(root, "tests/ui.rs", BUILD_TEST)
+
+
+def exemption(**overrides: str) -> dict[str, str]:
+    """Return a complete exemption for the spawner, with overrides."""
+    return {
+        "repository": "leynos/example",
+        "path": "tests/ui.rs",
+        "rationale": "runs a prebuilt compiler fixture bounded by the job",
+        "review_trigger": "review when the fixture starts compiling",
+    } | overrides
+
+
+def test_a_finding_is_reported_but_does_not_block(tmp_path: pathlib.Path) -> None:
+    """The package ships at warning, so the estate can be surveyed first."""
+    unbounded_checkout(tmp_path)
+    result = runner.run_rule(RULE_ID, tmp_path)
+    assert {f.severity for f in result.findings} == {"warning"}
+    assert result.verdict == "noncompliant"
+    assert result.exit_code == 0
+    assert result.blocking is False
+
+
+def test_the_severity_parameter_restores_blocking(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Promotion is a parameter change, not a policy edit."""
+    unbounded_checkout(tmp_path)
+    result = result_with(monkeypatch, tmp_path, {"severity": "error", "exemptions": []})
+    assert {f.severity for f in result.findings} == {"error"}
+    assert result.exit_code == 1
+
+
+def test_a_complete_exemption_takes_the_spawner_out(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Repository, source, rationale and review trigger suppress both checks."""
+    unbounded_checkout(tmp_path)
+    result = result_with(monkeypatch, tmp_path, {"exemptions": [exemption()]})
+    assert not result.findings
+
+
+@pytest.mark.parametrize(
+    "blank", [{"rationale": " "}, {"review_trigger": ""}], ids=["rationale", "trigger"]
+)
+def test_an_exemption_without_a_reviewed_record_suppresses_nothing(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, blank: dict[str, str]
+) -> None:
+    """A blank rationale or review trigger is not a record."""
+    unbounded_checkout(tmp_path)
+    result = result_with(monkeypatch, tmp_path, {"exemptions": [exemption(**blank)]})
+    assert {f.rule_id for f in result.findings} == {"NC-004"}
+
+
+def test_an_exemption_does_not_travel_to_another_repository(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The same source under another repository's name is audited."""
+    unbounded_checkout(tmp_path)
+    result = result_with(
+        monkeypatch, tmp_path, {"exemptions": [exemption(repository="leynos/other")]}
+    )
+    assert {f.rule_id for f in result.findings} == {"NC-004"}
+
+
+@pytest.mark.parametrize("key", ["severity", "exemptions"])
+def test_the_manifest_declares_each_parameter_default(key: str) -> None:
+    """A parameter the schema declares must have a default, or it is inert."""
+    defaults = packages.rule_parameters(packages.rule_package_dir(RULE_ID))
+    assert key in defaults

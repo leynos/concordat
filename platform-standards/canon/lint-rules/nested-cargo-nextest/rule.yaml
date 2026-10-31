@@ -12,8 +12,11 @@ description: >-
   a grouped override's filter (NC-005). The scan is textual and conservative:
   only test sources count, `cargo metadata` and similar do not, and Python tests
   are left to their own runner. A named exemption, with its repository, test
-  source and reason, takes a spawner out of both checks. A repository with no
-  such test is compliant. Audit-only: this rule declares no mutations.
+  source, rationale and review trigger, takes a spawner out of both checks. A
+  repository with no such test is compliant. The rule ships at `warning`
+  severity so the estate can be surveyed before it blocks; the `severity`
+  parameter raises it to `error` without a code change. Audit-only: this rule
+  declares no mutations.
 version: 0.1.0
 sensor:
   type: conftest
@@ -28,23 +31,42 @@ parameters:
     type: object
     additionalProperties: false
     properties:
+      severity:
+        type: string
+        enum: [warning, error]
+        description: >-
+          The severity of every NC-004 and NC-005 finding, and of the
+          indeterminate findings that report evidence the reader could not
+          establish. An envelope defect is always `error`: it says the rule
+          could not run, not that the repository is unsafe. A `warning` finding
+          is reported but does not block; promotion to `error` is the intended
+          end state once the estate survey is clean.
       exemptions:
         type: array
         items:
           type: object
           additionalProperties: false
-          required: [repository, path, reason]
+          required: [repository, path, rationale, review_trigger]
           properties:
             repository:
               type: string
             path:
               type: string
-            reason:
+            rationale:
               type: string
+              minLength: 1
+            review_trigger:
+              type: string
+              minLength: 1
         description: >-
           Test sources the rule does not count as compiler-spawning, each with
           its repository (`owner/name`, read from the `origin` remote), its
-          path relative to the root and the reason. A test that only runs a
-          prebuilt compiler fixture, bounded some other way, belongs here.
+          path relative to the root, the rationale and the review trigger (the
+          event after which the exemption is revisited). Both text fields must
+          be non-blank; the policy ignores an entry that leaves either blank,
+          because an exemption nobody must revisit is not a record. A test that
+          only runs a prebuilt compiler fixture, bounded some other way,
+          belongs here.
   defaults:
+    severity: warning
     exemptions: []

@@ -36,16 +36,17 @@ configuration from a repository that needs none:
 
 ## Checks
 
-- **NC-004** (error): a non-exempt spawner exists and the configuration is
-  missing (`.config/nextest.toml` absent), has no test group with
-  `max-threads = 1`, has no profile override placing tests in such a group,
-  sets no `slow-timeout` (in a profile or an override), or sets no
+- **NC-004** (warning by default): a non-exempt spawner exists and the
+  configuration is missing (`.config/nextest.toml` absent), has no test group
+  with `max-threads = 1`, has no profile override placing tests in such a
+  group, sets no `slow-timeout` (in a profile or an override), or sets no
   `global-timeout` (in any profile). Each missing piece is its own finding.
-- **NC-005** (error): a top-level `tests/<stem>.rs` spawner is not named, by
-  binary or by one of its `fn` names, in the filter of an override that uses a
-  serial group. Helpers under `src/` or `tests/support/`, and
+- **NC-005** (warning by default): a top-level `tests/<stem>.rs` spawner is not
+  named, by binary or by one of its `fn` names, in the filter of an override
+  that uses a serial group. Helpers under `src/` or `tests/support/`, and
   `main.rs`/`mod.rs`, are judged at repository level only.
-- **EN-001** (error, indeterminate): the envelope is not a schema-1
+- **EN-001** (indeterminate; an error for an envelope defect, the configured
+  severity otherwise): the envelope is not a schema-1
   `policy-input/nested-cargo-nextest` document, the configuration cannot be
   read, or a source file could not be read or exceeds 1 MiB.
 
@@ -53,9 +54,18 @@ configuration from a repository that needs none:
 
 A test source that starts a compiler but is bounded some other way is listed in
 the `exemptions` parameter with its `repository` (`owner/name`, read from the
-`origin` remote), its `path` (relative to the root) and a `reason`. An exempt
-spawner is not counted at all. An exemption does not apply to another
-repository. No exemption is shipped by default.
+`origin` remote), its `path` (relative to the root), a `rationale` and a
+`review_trigger` (the event after which the exemption is revisited). A blank
+rationale or trigger suppresses nothing. An exempt spawner is not counted at
+all. An exemption does not apply to another repository. No exemption is shipped
+by default.
+
+## Severity
+
+The `severity` parameter defaults to `warning`: findings are reported and the
+rule's exit status stays 0, so the estate can be surveyed before the rule
+blocks. Set it to `error` to enforce the rule. An envelope defect is always an
+error.
 
 ## What the rule declines to judge
 

@@ -3012,7 +3012,11 @@ filter, by binary or by one of its functions, which is how ortho-config's BDD
 suite is told apart from netsuke's. The package does not evaluate nextest
 filtersets: a name appearing in a grouped filter is the evidence, which is
 cheap and errs towards acceptance. Exemptions name a test source and follow the
-NC-001 convention.
+NC-001 convention: repository, path, rationale and review trigger, where a
+blank rationale or trigger suppresses nothing. The package ships at `warning`
+severity through a `severity` parameter, as `nested-cargo-offline-tests` does,
+because the estate survey found configuration gaps in a dozen repositories;
+promotion to `error` follows once they are clean.
 
 #### 3.1.4 Verifying the reconciliation invariants
 

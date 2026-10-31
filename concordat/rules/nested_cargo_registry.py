@@ -22,15 +22,15 @@ from .nested_cargo_manifest_envelope import (
     NestedCargoManifestEnvelope,
     build_nested_cargo_manifest_envelope,
 )
-from .nested_cargo_offline_envelope import ENVELOPE_KIND as OFFLINE_ENVELOPE_KIND
-from .nested_cargo_offline_envelope import (
-    NestedCargoOfflineEnvelope,
-    build_nested_cargo_offline_envelope,
-)
 from .nested_cargo_nextest_envelope import ENVELOPE_KIND as NEXTEST_ENVELOPE_KIND
 from .nested_cargo_nextest_envelope import (
     NestedCargoNextestEnvelope,
     build_nested_cargo_nextest_envelope,
+)
+from .nested_cargo_offline_envelope import ENVELOPE_KIND as OFFLINE_ENVELOPE_KIND
+from .nested_cargo_offline_envelope import (
+    NestedCargoOfflineEnvelope,
+    build_nested_cargo_offline_envelope,
 )
 
 if typ.TYPE_CHECKING:

@@ -847,7 +847,10 @@ The scan is textual and conservative: only test code counts, `cargo metadata`
 and similar do not, Python tests are left to pytest, and a helper under `src/`
 or `tests/support/` is judged by the repository-level pieces alone. A test
 bounded some other way is named in the `exemptions` parameter with its
-repository, path and reason. See the
+repository, path, rationale and review trigger (a blank rationale or trigger
+suppresses nothing). The rule ships at `warning` severity, so findings are
+reported and the exit status stays 0; set the `severity` parameter to `error`
+to enforce it. See the
 [rule reference](../platform-standards/canon/lint-rules/nested-cargo-nextest/README.md)
 for the precise scan.
 
