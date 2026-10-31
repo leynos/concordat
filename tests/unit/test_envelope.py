@@ -252,7 +252,7 @@ class TestBuildEnvelope:
             encoding="utf-8",
         )
         (rust_directory / "Cargo.toml").write_text(
-            "[workspace]\nmembers = []\n",
+            "[workspace]\nmembers = []\n\n[profile.dev]\nincremental = false\n",
             encoding="utf-8",
         )
         (tmp_path / "Cargo.toml").write_text(
@@ -272,7 +272,11 @@ class TestBuildEnvelope:
             {
                 "path": "rust/Cargo.toml",
                 "role": "workspace",
-                "parsed": {"workspace": {"members": []}},
+                "parsed": {
+                    "workspace": {"members": []},
+                    "profile": {"dev": {"incremental": False}},
+                },
+                "build_root": True,
             }
         ], surfaces
 

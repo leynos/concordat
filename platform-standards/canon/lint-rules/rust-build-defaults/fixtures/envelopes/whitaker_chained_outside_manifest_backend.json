@@ -37,7 +37,8 @@
               "codegen-backend": "cranelift"
             }
           }
-        }
+        },
+        "build_root": true
       }
     ]
   },

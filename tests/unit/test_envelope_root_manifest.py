@@ -41,7 +41,10 @@ def test_root_marker_preserves_governed_surface_order_and_identity(
     )
     nested = tmp_path / "nested"
     nested.mkdir()
-    (nested / "Cargo.toml").write_text("[workspace]\nmembers = []\n", encoding="utf-8")
+    (nested / "Cargo.toml").write_text(
+        "[workspace]\nmembers = []\n\n[profile.dev]\nincremental = false\n",
+        encoding="utf-8",
+    )
     declaration = "language:\n  rust:\n    surfaces: []\n"
     if surface_paths:
         declaration = "language:\n  rust:\n    surfaces:\n" + "".join(
