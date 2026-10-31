@@ -99,6 +99,74 @@ class TestGitOperations:
         _assert_git_error_context(exc_info.value)
 
 
+class TestCloneAndAuditPackage:
+    """`clone_and_audit` audits the package it was asked for."""
+
+    @staticmethod
+    def _fake_git(
+        args: typ.Sequence[str],
+        **kwargs: object,
+    ) -> sweep.subprocess.CompletedProcess[str]:
+        """Answer every git invocation with a plausible success."""
+        del kwargs
+        argv = list(args)
+        # `_git` builds the full argv, so the subcommand follows the binary.
+        if argv[:2] == ["git", "rev-parse"]:
+            return sweep.subprocess.CompletedProcess(
+                args=argv,
+                returncode=0,
+                stdout="a" * 40 + "\n",
+                stderr="",
+            )
+        return sweep.subprocess.CompletedProcess(
+            args=argv, returncode=0, stdout="", stderr=""
+        )
+
+    def test_the_default_package_is_the_campaign_package(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Two positional arguments keep auditing the baseline package."""
+        audited: list[str] = []
+        monkeypatch.setattr(sweep.bounded_subprocess, "run_bounded", self._fake_git)
+        monkeypatch.setattr(
+            sweep,
+            "run_rule",
+            lambda package, checkout: audited.append(package) or _result(package),
+        )
+
+        sweep.clone_and_audit("leynos", "wireframe")
+
+        assert audited == [sweep.RULE_PACKAGE], audited
+
+    def test_the_selected_package_reaches_run_rule(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A survey package is passed through to the rule runner unchanged."""
+        seen: list[tuple[str, object]] = []
+        monkeypatch.setattr(sweep.bounded_subprocess, "run_bounded", self._fake_git)
+
+        def fake_run_rule(package: str, checkout: object) -> sweep.RuleRunResult:
+            seen.append((package, checkout))
+            return _result(package)
+
+        monkeypatch.setattr(sweep, "run_rule", fake_run_rule)
+
+        sha, result = sweep.clone_and_audit(
+            "leynos", "wireframe", package="nested-cargo-offline-tests"
+        )
+
+        assert sha == "a" * 40, sha
+        assert [package for package, _ in seen] == ["nested-cargo-offline-tests"], seen
+        assert result.rule_package == "nested-cargo-offline-tests", result
+
+
+def _result(package: str) -> sweep.RuleRunResult:
+    """Return a clean result for *package*."""
+    return sweep.RuleRunResult(rule_package=package, verdict="compliant", findings=())
+
+
 class TestCloneDestination:
     """`clone_and_audit` refuses identifiers it was handed directly."""
 

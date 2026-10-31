@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import io
 import typing as typ
+from contextlib import redirect_stderr
 
 import pytest
 
@@ -194,10 +196,221 @@ class TestSweepCommand:
         self._invoke(["--help"])
 
         rendered = capsys.readouterr().out
-        for name in ("only", "limit", "force", "estate", "ledger"):
+        for name in ("only", "limit", "force", "package", "estate", "ledger"):
             assert f"--{name}" in rendered, f"--{name} missing from:\n{rendered}"
             # A namespaced flag renders as `--<prefix>.<name>`; the default
             # paths in the help carry dots only before file extensions.
             assert f".{name}" not in rendered, (
                 f"--{name} should not be namespaced:\n{rendered}"
             )
+
+
+class TestPackageFlag:
+    """`--package` selects the rule package the sweep audits."""
+
+    @staticmethod
+    def _capture(monkeypatch: pytest.MonkeyPatch) -> list[sweep.SweepOptions]:
+        """Patch `run_sweep`, returning the options each call is handed."""
+        seen: list[sweep.SweepOptions] = []
+
+        def fake_run_sweep(
+            *,
+            estate_path: pathlib.Path,
+            ledger_path: pathlib.Path,
+            options: sweep.SweepOptions,
+        ) -> sweep.Ledger:
+            del estate_path, ledger_path
+            seen.append(options)
+            return []
+
+        monkeypatch.setattr(sweep, "run_sweep", fake_run_sweep)
+        return seen
+
+    def test_the_package_flag_reaches_the_sweep_options(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The flag is parsed and carried into `SweepOptions` unchanged."""
+        seen = self._capture(monkeypatch)
+
+        TestSweepCommand._invoke(["--package", "nested-cargo-offline-tests"])
+
+        assert [options.package for options in seen] == [
+            "nested-cargo-offline-tests"
+        ], seen
+
+    def test_the_default_is_the_baseline_package(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Without the flag the sweep audits the campaign package."""
+        seen = self._capture(monkeypatch)
+
+        TestSweepCommand._invoke([])
+
+        assert [options.package for options in seen] == [sweep.RULE_PACKAGE], seen
+
+
+def _run_report(*tokens: str) -> tuple[int, str]:
+    """Run the `report` subcommand, returning its status and standard error.
+
+    The subcommand is always supplied here rather than by the caller, so a
+    test that forgets it cannot fall through to the app's *default* command
+    and start a real estate sweep.
+
+    The status is read from `SystemExit` rather than from the return value:
+    Cyclopts raises with the command's return as the exit code, so a test
+    that only looked at the return would pass for a command that does not
+    refuse anything.
+
+    Returns
+    -------
+    tuple[int, str]
+        The command's exit status, and everything it wrote to standard error.
+    """
+    error = io.StringIO()
+    with redirect_stderr(error):
+        try:
+            sweep.app(["report", *tokens])
+        except SystemExit as exc:
+            status = 0 if exc.code is None else int(exc.code)
+        else:
+            status = 0
+    return status, error.getvalue()
+
+
+class TestReportCommandPackageFlag:
+    """`report --package` narrows the rendered report to one package."""
+
+    @staticmethod
+    def _invoke(
+        tokens: list[str],
+        *,
+        ledger: pathlib.Path,
+        output: pathlib.Path,
+    ) -> int:
+        """Run the app with the report's paths filled in, returning its code."""
+        status, _ = _run_report(
+            *tokens, "--ledger", str(ledger), "--output", str(output)
+        )
+        return status
+
+    def test_the_package_reaches_render_report(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: pathlib.Path,
+    ) -> None:
+        """The report command forwards its package selection to the renderer."""
+        seen: list[str] = []
+
+        def fake_render(
+            _ledger_path: pathlib.Path, package: str = sweep.RULE_PACKAGE
+        ) -> str:
+            seen.append(package)
+            return "report\n"
+
+        monkeypatch.setattr(sweep, "render_report", fake_render)
+        output_path = tmp_path / "report.md"
+
+        status = self._invoke(
+            ["--package", "nested-cargo-offline-tests"],
+            ledger=tmp_path / "ledger.jsonl",
+            output=output_path,
+        )
+
+        assert status == 0, status
+        assert seen == ["nested-cargo-offline-tests"], seen
+        assert output_path.read_text(encoding="utf-8") == "report\n"
+
+    def test_the_report_defaults_to_the_campaign_package(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: pathlib.Path,
+    ) -> None:
+        """Without a package the renderer is asked for the baseline campaign."""
+        seen: list[str] = []
+
+        def fake_render(
+            _ledger_path: pathlib.Path, package: str = sweep.RULE_PACKAGE
+        ) -> str:
+            seen.append(package)
+            return "report\n"
+
+        monkeypatch.setattr(sweep, "render_report", fake_render)
+
+        status = self._invoke(
+            [],
+            ledger=tmp_path / "ledger.jsonl",
+            output=tmp_path / "report.md",
+        )
+
+        assert status == 0, status
+        assert seen == [sweep.RULE_PACKAGE], seen
+
+    def test_a_survey_package_will_not_overwrite_the_baseline_report(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: pathlib.Path,
+    ) -> None:
+        """A non-default package cannot write to the tracked baseline report.
+
+        The default output path is the campaign's checked-in
+        `docs/parabellum/baseline-report.md`. Writing a survey there would
+        silently replace the baseline with a different package's figures, and
+        the report's own heading would still call it a baseline. An operator
+        must name where a survey report goes.
+
+        The baseline is redirected to *tmp_path* rather than left alone: the
+        test that a survey is refused would otherwise pass while having
+        overwritten the checked-in report on the way to being refused.
+        """
+        rendered: list[pathlib.Path] = []
+
+        def fake_render(
+            _ledger_path: pathlib.Path, package: str = sweep.RULE_PACKAGE
+        ) -> str:
+            rendered.append(_ledger_path)
+            return "survey\n"
+
+        monkeypatch.setattr(sweep, "render_report", fake_render)
+        monkeypatch.setattr(sweep, "DEFAULT_REPORT_PATH", tmp_path / "baseline.md")
+
+        status, error = _run_report(
+            "--package",
+            "nested-cargo-offline-tests",
+            "--ledger",
+            str(tmp_path / "ledger.jsonl"),
+        )
+
+        assert status != 0, "a survey package exited successfully"
+        assert rendered == [], "the renderer ran before the path was checked"
+        assert not (tmp_path / "baseline.md").exists(), "the baseline was written"
+        assert "output" in error, f"the refusal should name the missing flag: {error!r}"
+
+    def test_the_baseline_package_still_writes_without_an_output_path(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: pathlib.Path,
+    ) -> None:
+        """The campaign's own report keeps its documented no-flag invocation.
+
+        The guard exists to stop a survey landing on the baseline, not to make
+        every caller name a path, so the default package must still work with
+        only `--ledger` given.
+        """
+        rendered: list[str] = []
+
+        def fake_render(
+            _ledger_path: pathlib.Path, package: str = sweep.RULE_PACKAGE
+        ) -> str:
+            rendered.append(package)
+            return "baseline\n"
+
+        monkeypatch.setattr(sweep, "render_report", fake_render)
+        monkeypatch.setattr(sweep, "DEFAULT_REPORT_PATH", tmp_path / "baseline.md")
+
+        status, error = _run_report("--ledger", str(tmp_path / "ledger.jsonl"))
+
+        assert status == 0, error
+        assert rendered == [sweep.RULE_PACKAGE], rendered
+        assert (tmp_path / "baseline.md").read_text(encoding="utf-8") == "baseline\n"

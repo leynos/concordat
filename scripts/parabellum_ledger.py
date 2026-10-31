@@ -12,14 +12,16 @@ import json
 import typing as typ
 
 from concordat.errors import OperationalRuleError
+from concordat.rules import packages
 
 if typ.TYPE_CHECKING:
     import pathlib
 
     from concordat.rules import Finding
 
+# The campaign default. The sweep can audit any installed package, but the
+# baseline report and every record written without a selection name this one.
 RULE_PACKAGE: typ.Final = "rust-makefile-baseline"
-RULE_VERSION: typ.Final = "0.2.0"
 # The commit makeutil v0.1.0 is tagged at, which CI installs as a release.
 MAKEUTIL_REV: typ.Final = "d33acd3ecb8d7d84042a28807243752e1f4dccee"
 LEDGER_SCHEMA_VERSION: typ.Final = 1
@@ -134,27 +136,39 @@ type Ledger = list[LedgerRecord]
 class LedgerIndex:
     """Bounded in-memory views needed to resume sweeps and render reports.
 
-    The append-only file remains the source of truth. This index keeps only
-    each repository's latest record, the commits already seen for that
-    repository, and whether it has an exclusion record, avoiding retention
-    of every decoded JSON object during a sweep.
+    The append-only file remains the source of truth. For sweeps, the index
+    keeps package-scoped latest records, commit keys, and exclusions without
+    retaining every decoded JSON object. Reports select one package and omit
+    commit history entirely because it is not needed to render them.
     """
 
+    package: str | None = None
+    include_commit_history: bool = True
     latest_by_repository: dict[str, LedgerRecord] = dataclasses.field(
         default_factory=dict
     )
-    commits_by_repository: dict[str, set[str]] = dataclasses.field(default_factory=dict)
-    excluded_repositories: set[str] = dataclasses.field(default_factory=set)
+    commits_by_repository: dict[str, set[tuple[str, str, str]]] = dataclasses.field(
+        default_factory=dict
+    )
+    excluded_repositories_by_package: dict[str, set[str]] = dataclasses.field(
+        default_factory=dict
+    )
 
     def add(self, record: LedgerRecord) -> None:
         """Index one newly read or appended ledger record."""
+        package = record["rule_package"]
+        if self.package is not None and package != self.package:
+            return
         repository = record["repository"]
         self.latest_by_repository[repository] = record
         commit_sha = record["commit_sha"]
-        if commit_sha is not None:
-            self.commits_by_repository.setdefault(repository, set()).add(commit_sha)
+        if commit_sha is not None and self.include_commit_history:
+            key = (package, record["rule_version"], commit_sha)
+            self.commits_by_repository.setdefault(repository, set()).add(key)
         if record["verdict"] == "excluded":
-            self.excluded_repositories.add(repository)
+            self.excluded_repositories_by_package.setdefault(package, set()).add(
+                repository
+            )
 
 
 # Derived from the TypedDict so a new required key cannot be forgotten here.
@@ -310,11 +324,30 @@ def _validate_finding_fields(finding: object, label: str, path: pathlib.Path) ->
         _require_field(entry[field], expected, f"{label} field {field!r}", path)
 
 
-def _load_ledger(path: pathlib.Path) -> LedgerIndex:
-    """Stream and index the append-only ledger, validating each line."""
+def _load_ledger(
+    path: pathlib.Path,
+    *,
+    package: str | None = None,
+    include_commit_history: bool = True,
+) -> LedgerIndex:
+    """Stream and index the append-only ledger, validating each line.
+
+    A report can set *package* and disable *include_commit_history* so its
+    memory use depends on current report rows rather than campaign history.
+
+    Returns
+    -------
+    LedgerIndex
+        Latest records, exclusions, and the requested commit-history index.
+
+    Raises
+    ------
+    _ledger_error
+        If a line is invalid or the ledger cannot be read.
+    """
     if not path.exists():
-        return LedgerIndex()
-    index = LedgerIndex()
+        return LedgerIndex(package, include_commit_history)
+    index = LedgerIndex(package, include_commit_history)
     try:
         with path.open(encoding="utf-8") as handle:
             for number, line in enumerate(handle, 1):
@@ -342,22 +375,79 @@ def _timestamp() -> str:
     )
 
 
-def _base_record(repository: str) -> LedgerRecord:
+def rule_version(package: str = RULE_PACKAGE) -> str:
+    """Return the version *package*'s manifest declares.
+
+    A record must name the policy that judged it, so the version is read from
+    the package manifest at audit time rather than kept in a constant here. A
+    hand-maintained copy drifts: this module carried ``0.2.0`` while
+    ``rust-makefile-baseline`` had reached ``0.3.2``, which would have stamped
+    false provenance on every new record.
+
+    Parameters
+    ----------
+    package:
+        Rule package identifier. Defaults to the campaign package.
+
+    Returns
+    -------
+    str
+        The declared package version.
+
+    Raises
+    ------
+    OperationalRuleError
+        If the package is unknown, or its manifest declares no version.
+    """
+    rule_dir = packages.rule_package_dir(package)
+    version = packages.rule_manifest(rule_dir).get("version")
+    if not isinstance(version, str) or not version.strip():
+        message = f"rule package {package!r} declares no version"
+        raise OperationalRuleError(
+            message,
+            operation="load-rule-manifest",
+            resource=rule_dir / "rule.yaml",
+        )
+    return version
+
+
+def _base_record(
+    repository: str,
+    *,
+    package: str = RULE_PACKAGE,
+    version: str | None = None,
+) -> LedgerRecord:
+    """Return a fresh record naming *package* and the version it is stamped with.
+
+    Without an explicit *version* the manifest is consulted, so a caller that
+    only knows the package still writes truthful provenance.
+
+    Returns
+    -------
+    LedgerRecord
+        An ``error``-verdict record awaiting a commit, verdict and findings.
+    """
     return {
         "schema_version": LEDGER_SCHEMA_VERSION,
         "repository": repository,
         "commit_sha": None,
         "audited_at": _timestamp(),
-        "rule_package": RULE_PACKAGE,
-        "rule_version": RULE_VERSION,
+        "rule_package": package,
+        "rule_version": rule_version(package) if version is None else version,
         "makeutil_rev": MAKEUTIL_REV,
         "verdict": "error",
         "findings": [],
     }
 
 
-def _excluded_record(repository: str, reason: str) -> LedgerRecord:
-    record = _base_record(repository)
+def _excluded_record(
+    repository: str,
+    reason: str,
+    *,
+    package: str = RULE_PACKAGE,
+    version: str | None = None,
+) -> LedgerRecord:
+    record = _base_record(repository, package=package, version=version)
     record["verdict"] = "excluded"
     record["exclusion_reason"] = reason
     return record
@@ -406,7 +496,29 @@ def _already_ledgered(
     repository: str,
     *,
     commit_sha: str | None,
+    package: str = RULE_PACKAGE,
+    package_version: str | None = None,
 ) -> bool:
+    """Report whether *repository* is already covered by *package*.
+
+    The resume key is repository, commit, package and package version. The
+    ledger is shared by several campaigns, so a record only answers for the
+    package that wrote it; and the same commit under the same package is not
+    the same evidence when the policy has moved, so a version bump re-opens
+    the repositories it had already covered.
+
+    ``commit_sha=None`` asks the other question — "is this repository excluded
+    from the campaign" — which has no commit and no version to match.
+
+    Returns
+    -------
+    bool
+        Whether a matching record is already present.
+    """
+    if ledger.package is not None and ledger.package != package:
+        return False
     if commit_sha is None:
-        return repository in ledger.excluded_repositories
-    return commit_sha in ledger.commits_by_repository.get(repository, set())
+        return repository in ledger.excluded_repositories_by_package.get(package, set())
+    version = rule_version(package) if package_version is None else package_version
+    key = (package, version, commit_sha)
+    return key in ledger.commits_by_repository.get(repository, set())

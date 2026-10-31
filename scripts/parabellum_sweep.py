@@ -1,10 +1,13 @@
 """Operation Parabellum estate sweep driver.
 
 Clones each Rust repository named in ``docs/parabellum/estate.yaml`` at its
-current default-branch head, audits it with the ``rust-makefile-baseline``
-rule package, and appends one JSON record per repository to the append-only
-campaign ledger ``docs/parabellum/ledger.jsonl``. A repository already
-ledgered at the same commit is skipped unless ``--force`` is given, so an
+current default-branch head, audits it with the selected rule package, and
+appends one JSON record per repository to the append-only campaign ledger
+``docs/parabellum/ledger.jsonl``. The default package is
+``rust-makefile-baseline``; ``--package`` selects another installed package,
+which is how a survey campaign shares the ledger without disturbing the
+baseline. A repository already ledgered at the same commit under the same
+package and package version is skipped unless ``--force`` is given, so an
 interrupted sweep is resumed by re-running the same command.
 
 Audit-only: the sweep never writes to any estate repository.
@@ -17,7 +20,8 @@ only works while definition and call site share a module.
 
 Usage from the repository root::
 
-    uv run python -m scripts.parabellum_sweep [--only a,b] [--limit N] [--force]
+    uv run python -m scripts.parabellum_sweep \
+        [--only a,b] [--limit N] [--force] [--package PACKAGE]
 """
 
 from __future__ import annotations
@@ -25,6 +29,7 @@ from __future__ import annotations
 import dataclasses
 import pathlib
 import subprocess
+import sys
 import tempfile
 import typing as typ
 
@@ -45,9 +50,6 @@ from scripts.parabellum_ledger import (
 )
 from scripts.parabellum_ledger import (
     RULE_PACKAGE as RULE_PACKAGE,
-)
-from scripts.parabellum_ledger import (
-    RULE_VERSION as RULE_VERSION,
 )
 from scripts.parabellum_ledger import (
     FindingRecord as FindingRecord,
@@ -90,6 +92,9 @@ from scripts.parabellum_ledger import (
 )
 from scripts.parabellum_ledger import (
     _timestamp as _timestamp,
+)
+from scripts.parabellum_ledger import (
+    rule_version as rule_version,
 )
 from scripts.parabellum_manifest import (
     _OWNER_PATTERN as _OWNER_PATTERN,
@@ -176,6 +181,7 @@ class SweepOptions:
     only: frozenset[str] | None = None
     limit: int | None = None
     force: bool = False
+    package: str = RULE_PACKAGE
 
 
 # A frozen singleton so `run_sweep`'s default is a real, shareable value
@@ -184,8 +190,8 @@ _DEFAULT_SWEEP_OPTIONS: typ.Final = SweepOptions()
 
 
 # `name="*"` flattens the fields onto the command, so the CLI keeps its
-# top-level `--only`/`--limit`/`--force`/`--estate`/`--ledger` flags rather
-# than gaining a nested `--options.` prefix.
+# top-level `--only`/`--limit`/`--force`/`--package`/`--estate`/`--ledger`
+# flags rather than gaining a nested `--options.` prefix.
 # `kw_only` keeps the flags keyword-only, as the previous `*`-marked signature
 # made them: without it Cyclopts would also accept them positionally.
 @Parameter(name="*")
@@ -196,6 +202,7 @@ class SweepCommandOptions:
     only: str | None = None
     limit: int | None = None
     force: bool = False
+    package: str = RULE_PACKAGE
     estate: pathlib.Path = DEFAULT_ESTATE_PATH
     ledger: pathlib.Path = DEFAULT_LEDGER_PATH
 
@@ -220,32 +227,12 @@ def _git(
             timeout=GIT_TIMEOUT,
             max_bytes_per_stream=MAX_CAPTURE_BYTES_PER_STREAM,
         )
-    except FileNotFoundError as error:
-        message = "git is required but was not found on PATH"
-        raise OperationalRuleError(
-            message,
-            operation=operation,
-            tool="git",
-            resource=resource,
-        ) from error
-    except subprocess.TimeoutExpired as error:
-        message = f"git {args[0]} timed out after {GIT_TIMEOUT}s"
-        raise OperationalRuleError(
-            message,
-            operation=operation,
-            tool="git",
-            resource=resource,
-        ) from error
-    except bounded_subprocess.OutputLimitExceededError as error:
-        message = (
-            f"git {args[0]} {error.stream} exceeded {error.limit_bytes} byte limit"
-        )
-        raise OperationalRuleError(
-            message,
-            operation=operation,
-            tool="git",
-            resource=resource,
-        ) from error
+    except (
+        FileNotFoundError,
+        subprocess.TimeoutExpired,
+        bounded_subprocess.OutputLimitExceededError,
+    ) as error:
+        raise _git_launch_error(args, error, operation, resource) from error
     if completed.returncode != 0:
         detail = (completed.stderr or "").strip()
         message = f"git {args[0]} failed: {detail}"
@@ -256,6 +243,32 @@ def _git(
             resource=resource,
         )
     return completed.stdout
+
+
+def _git_launch_error(
+    args: list[str],
+    error: FileNotFoundError
+    | subprocess.TimeoutExpired
+    | bounded_subprocess.OutputLimitExceededError,
+    operation: str,
+    resource: str,
+) -> OperationalRuleError:
+    """Build contextual errors for failures to run a git command."""
+    match error:
+        case FileNotFoundError():
+            message = "git is required but was not found on PATH"
+        case subprocess.TimeoutExpired():
+            message = f"git {args[0]} timed out after {GIT_TIMEOUT}s"
+        case bounded_subprocess.OutputLimitExceededError(
+            stream=stream, limit_bytes=limit_bytes
+        ):
+            message = f"git {args[0]} {stream} exceeded {limit_bytes} byte limit"
+    return OperationalRuleError(
+        message,
+        operation=operation,
+        tool="git",
+        resource=resource,
+    )
 
 
 def resolve_head(owner: str, name: str) -> str:
@@ -278,8 +291,31 @@ def resolve_head(owner: str, name: str) -> str:
         ) from error
 
 
-def clone_and_audit(owner: str, name: str) -> tuple[str, RuleRunResult]:
-    """Shallow-clone the repository, audit it, and return (sha, result)."""
+def clone_and_audit(
+    owner: str,
+    name: str,
+    package: str = RULE_PACKAGE,
+) -> tuple[str, RuleRunResult]:
+    """Shallow-clone the repository, audit it, and return (sha, result).
+
+    Parameters
+    ----------
+    owner, name:
+        The repository to audit.
+    package:
+        Rule package to evaluate, defaulting to the campaign package.
+
+    Returns
+    -------
+    tuple[str, RuleRunResult]
+        The checked-out commit and the package's result for it.
+
+    Raises
+    ------
+    OperationalRuleError
+        If an identifier is invalid, the clone destination escapes the scratch
+        root, or a git invocation fails.
+    """
     repository = f"{owner}/{name}"
     _validated_identifier(owner, _OWNER_PATTERN, "owner", repository)
     _validated_identifier(name, _REPO_NAME_PATTERN, "repository name", repository)
@@ -314,15 +350,20 @@ def clone_and_audit(owner: str, name: str) -> tuple[str, RuleRunResult]:
             operation="clone-repository",
             resource=repository,
         ).strip()
-        result = run_rule(RULE_PACKAGE, checkout)
+        result = run_rule(package, checkout)
         return sha, result
 
 
-def _audit_record(owner: str, entry: EstateEntry) -> LedgerRecord:
+def _audit_record(
+    owner: str,
+    entry: EstateEntry,
+    package: str,
+    version: str,
+) -> LedgerRecord:
     repository = f"{owner}/{entry.name}"
-    record = _base_record(repository)
+    record = _base_record(repository, package=package, version=version)
     try:
-        sha, result = clone_and_audit(owner, entry.name)
+        sha, result = clone_and_audit(owner, entry.name, package=package)
     except OperationalRuleError as error:
         record["error_detail"] = str(error)
         return record
@@ -347,6 +388,10 @@ class _SweepSession:
     only: frozenset[str] | None
     limit: int | None
     force: bool
+    package: str = RULE_PACKAGE
+    # Resolved once by `run_sweep`, so a mid-run manifest edit cannot stamp
+    # two different versions on records from the same invocation.
+    package_version: str = ""
     appended: Ledger = dataclasses.field(default_factory=list)
     audited: int = 0
     # Repositories this run has already handled, whatever the outcome. The
@@ -385,9 +430,18 @@ class _SweepSession:
         if entry.excluded is None:
             return
         repository = f"{self.owner}/{entry.name}"
-        if _already_ledgered(self.ledger, repository, commit_sha=None):
+        if _already_ledgered(
+            self.ledger, repository, commit_sha=None, package=self.package
+        ):
             return
-        self._persist(_excluded_record(repository, entry.excluded))
+        self._persist(
+            _excluded_record(
+                repository,
+                entry.excluded,
+                package=self.package,
+                version=self.package_version,
+            )
+        )
 
     def _process_auditable(self, entry: EstateEntry) -> bool:
         """Audit a non-excluded entry; stop once the audit budget is spent."""
@@ -402,18 +456,27 @@ class _SweepSession:
         try:
             head = resolve_head(self.owner, entry.name)
         except OperationalRuleError as error:
-            record = _base_record(repository)
+            record = _base_record(
+                repository, package=self.package, version=self.package_version
+            )
             record["error_detail"] = str(error)
             self._persist(record)
             return True
 
         if not self.force and _already_ledgered(
-            self.ledger, repository, commit_sha=head
+            self.ledger,
+            repository,
+            commit_sha=head,
+            package=self.package,
+            package_version=self.package_version,
         ):
-            print(f"{repository}: already ledgered at {head[:12]}, skipping")
+            print(
+                f"{repository}: already ledgered at {head[:12]} "
+                f"for {self.package} v{self.package_version}, skipping"
+            )
             return False
 
-        record = _audit_record(self.owner, entry)
+        record = _audit_record(self.owner, entry, self.package, self.package_version)
         self._persist(record)
         print(f"{repository}: {record['verdict']}")
         return True
@@ -442,15 +505,28 @@ def run_sweep(
     -------
     Ledger
         Records appended during this invocation.
+
+    Notes
+    -----
+    ``options.package`` is resolved, and so validated, before the first clone:
+    a mistyped survey selection fails in a second rather than after an estate's
+    worth of cloning. An invalid package therefore raises
+    :class:`~concordat.errors.OperationalRuleError` from the resolution call
+    rather than from this function's own body.
     """
+    # Resolving the version first validates the package too: an unknown
+    # identifier raises here, before any repository is touched.
+    package_version = rule_version(options.package)
     estate = load_estate(estate_path)
     session = _SweepSession(
         owner=estate.owner,
-        ledger=_load_ledger(ledger_path),
+        ledger=_load_ledger(ledger_path, package=options.package),
         ledger_path=ledger_path,
         only=options.only,
         limit=options.limit,
         force=options.force,
+        package=options.package,
+        package_version=package_version,
     )
 
     for entry in estate.repositories:
@@ -464,11 +540,45 @@ def run_sweep(
 def report_command(
     *,
     ledger: pathlib.Path = DEFAULT_LEDGER_PATH,
-    output: pathlib.Path = DEFAULT_REPORT_PATH,
+    output: pathlib.Path | None = None,
+    package: str = RULE_PACKAGE,
 ) -> int:
-    """Regenerate the baseline report from the campaign ledger."""
+    """Regenerate a campaign report from the ledger.
+
+    Parameters
+    ----------
+    ledger : pathlib.Path
+        The ledger to read.
+    output : pathlib.Path | None
+        Where to write the Markdown report. Only the campaign package may be
+        written to the checked-in default, so a survey must name its own path.
+    package : str
+        Rule package to report on; records written by other packages are
+        filtered out before the latest record per repository is chosen.
+
+    Returns
+    -------
+    int
+        Zero after the report is written, non-zero when the write was refused.
+    """
+    # `output` is resolved here rather than defaulted in the signature because
+    # a default argument would bind `DEFAULT_REPORT_PATH` at import time and
+    # leave this function unable to tell "the operator named this path" from
+    # "the default happens to be this path". A survey landing on the default
+    # would replace the checked-in baseline with another package's figures
+    # under a heading that still calls them a baseline.
+    if output is None:
+        if package != RULE_PACKAGE:
+            print(
+                f"refusing to write {package} to the default report path "
+                f"{DEFAULT_REPORT_PATH}; pass --output to name where this "
+                f"survey's report goes",
+                file=sys.stderr,
+            )
+            return 2
+        output = DEFAULT_REPORT_PATH
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(render_report(ledger), encoding="utf-8")
+    output.write_text(render_report(ledger, package=package), encoding="utf-8")
     print(f"wrote {output}")
     return 0
 
@@ -478,7 +588,8 @@ def sweep_command(options: SweepCommandOptions = _DEFAULT_COMMAND_OPTIONS) -> in
     """Audit the Rust estate and append results to the campaign ledger.
 
     ``--only`` takes a comma-separated list of repository names;
-    ``--limit`` bounds how many repositories are audited this run.
+    ``--limit`` bounds how many repositories are audited this run;
+    ``--package`` selects the rule package, defaulting to the campaign one.
 
     Parameters
     ----------
@@ -499,6 +610,7 @@ def sweep_command(options: SweepCommandOptions = _DEFAULT_COMMAND_OPTIONS) -> in
         only=frozenset(only_set) if only_set else None,
         limit=options.limit,
         force=options.force,
+        package=options.package,
     )
     appended = run_sweep(
         estate_path=options.estate,

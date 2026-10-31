@@ -663,6 +663,62 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   compares `(name, version, source)` of packages that have a source and records
   the first ten foreign ones. Anything it cannot read is a problem fact, which
   the policy answers as indeterminate. It runs no Cargo and reads no network.
+- `policy-input/nested-cargo-offline-tests` —
+  `nested_cargo_offline_envelope.build_nested_cargo_offline_envelope`. It joins
+  two readers: `nested_cargo_spawns` classifies every `cargo` a test scope
+  starts as `offline`, `online` or `unresolved` and collects the trybuild uses
+  that give an entry point something to protect; `nested_cargo_entry_points`
+  resolves the Makefile `test` target, each selected nextest profile's setup
+  script and each workflow step that runs tests, as `before`, `absent` or
+  `uncertain`. The shell helpers in `nested_cargo_shells` and
+  `nested_cargo_scripts` serve the entry-point reader rather than reading the
+  checkout themselves. Offline evidence is read from the command itself —
+  `--frozen`, `--offline` with `--locked`, or a command-local
+  `CARGO_NET_OFFLINE="true"` or `"1"`, the two values Cargo's boolean parser
+  reads as offline — so an inherited environment never counts as proof. The
+  environment is last-write-wins, matching `Command::env`: the reader tracks
+  the *latest* operation, a call site's over a helper's, and an earlier
+  `"true"` loses to a later `"0"`. `env_remove` and `env_clear` are operations
+  on the same ledger rather than assignments: both take the variable away, so
+  both leave the command `online`, and an operation the reader cannot see — an
+  unreadable `envs(..)` list, an unreadable removal name, an unreadable value —
+  records "unknown" and makes the command `unresolved` rather than letting an
+  earlier visible assignment stand. A list followed by more expression, as in
+  `.envs([(..)].into_iter().chain(extra))`, is an unreadable list: the trailing
+  words may append a pair that runs after the visible one. A call on a bound
+  command made inside a block nested in the binding's own is recorded as unseen
+  for the same reason the unreadable list is: it runs on only some paths, so
+  `if frozen { cmd.arg("--frozen"); }` proves nothing about the spawn. An
+  argument method appends an unreadable word and an environment method records
+  an unknown ledger entry; a method that changes neither, such as `.status()`,
+  is stepped over. `--frozen` is not revocable this way, so a command carrying
+  it stays offline whatever the environment says. A mutable borrow of the
+  binding, as in `configure(&mut cmd)`, records both an unreadable word and an
+  unknown environment entry: the callee may append `--frozen` or write
+  `CARGO_NET_OFFLINE`, and its body may live in another file. Only the borrow
+  is matched, so `fill(&mut other)` does not affect the command. A version or
+  help probe (`cargo --version`, `cargo kani --version`, `cargo build --help`)
+  is not a spawn; a version flag carrying a value is. A helper defined in test
+  scope but never called from its own file — a cross-file call, or no call at
+  all — is reported at its definition as `unresolved` rather than dropped: the
+  reader cannot see what another file's call adds, and never reports `online`
+  on a guess. A helper defined outside test scope is not reported, because its
+  call sites are visible and library code is not what this rule judges. Fixture
+  package sources are excluded, because a `cargo` inside one is the build under
+  audit rather than the code that starts it. A prefetch counts only when it is
+  success-gated (`&&` or a fail-fast line sequence), and a workflow step whose
+  command carries an `${{ }}` expression proves no order at all: the expression
+  can supply the `|| true` that hides a failed fetch. The workflow reader asks
+  both steps' `if:` conditions what they skip. A fetch step must run on every
+  run, so anything but `success()` leaves the entry point `absent`; a test step
+  is asked whether it could run after a failed fetch, which `success() && …`
+  rules out, `always()` and `failure()` allow, and a branch-dependent
+  disjunction leaves undecidable, so it is reported `uncertain`.
+  `nested_cargo_conditions` holds that reading: a small three-valued parser
+  over the condition, with `condition_proves_order` answering the fetch step's
+  question and `runs_only_after_success` the test step's. The builder ignores
+  its parameters: exemptions and severity are the policy's to apply. It runs no
+  Cargo and reads no network.
 - `policy-input/whitaker-provisioning` —
   `whitaker_provisioning_envelope.build_whitaker_provisioning_envelope`. It
   reuses the CV-005 workflow decoder for `.github/workflows`, decodes every
@@ -1424,12 +1480,29 @@ findings by `_overall_verdict`:
 - `indeterminate` — findings exist, but none is `noncompliant` (the policy
   could not prove compliance, and fails closed rather than passing).
 
-The `rule_run` CLI command maps these, plus operational failure, onto three
-exit codes: `0` compliant, `1` at least one finding (including indeterminate,
-which fails closed), `2` operational failure — an uncaught
-`OperationalRuleError` is caught in `concordat.cli.main` and converted to exit
-code 2, printed to standard error, distinct from the `1` that `ConcordatError`
-maps to.
+The verdict is evidence, not enforcement. `RuleRunResult.blocking` decides
+whether a caller should stop, and `exit_code` maps it to a status:
+
+- `0` — compliant, or every finding carries the advisory `warning` severity.
+- `1` — at least one finding of any other severity. An `indeterminate`
+  finding fails closed only when its severity is not `warning`.
+- `2` — operational failure; an uncaught `OperationalRuleError` is caught in
+  `concordat.cli.main` and converted to exit code 2, printed to standard error,
+  distinct from the `1` that `ConcordatError` maps to.
+
+Severity is matched exactly: only the literal `warning` is advisory. A misspelt
+or unknown label blocks, so a policy cannot weaken a gate by inventing a
+spelling, and a finding whose metadata omits `severity` still defaults to
+`error`. `blocking` and `exit_code` are the same fact in two forms, so a
+warning-only `noncompliant` result exits `0` while its verdict and JSON
+document keep reporting `noncompliant`. The table renderer prints the severity
+on every finding row for exactly that reason: the status can say "not blocking"
+while the output still says what was found.
+
+The rules that ship this way use the severity as the promotion dial. A rule
+introduced to survey an estate starts at `warning`, is fixed repository by
+repository, and is promoted to `error` in a separate policy change once the
+survey shows the estate clean.
 
 ### Rule package identifier validation
 
@@ -1557,31 +1630,88 @@ because auditing the whole estate takes many minutes and clones over the
 network; an interrupted sweep resumes from where the ledger left off rather
 than restarting.
 
-**Idempotency rule:** a repository is skipped, rather than re-audited, when the
+**Idempotency rule:** the resume key is repository, commit, package, and
+package version. A repository is skipped, rather than re-audited, when the
 ledger already holds a record for that repository at the same `commit_sha`
-(`_already_ledgered`). Excluded entries use a variant of this rule keyed on
-`verdict == "excluded"` instead of a commit, since an exclusion has no commit
-to compare against. `--force` bypasses the commit-based skip (but not the
+under the same `rule_package` and `rule_version` (`_already_ledgered`). The
+ledger is shared by several campaigns, so a record only answers for the package
+that wrote it, and a manifest version bump re-opens the repositories it had
+covered — the same commit under a changed policy is not the same evidence.
+`rule_version` is read from the package manifest at audit time by
+`rule_version(package)`; a hand-kept constant in `parabellum_ledger.py` had
+already drifted from `rust-makefile-baseline`'s declared version, which would
+have stamped false provenance on every new record.
+
+Excluded entries use a variant of this rule keyed on `verdict == "excluded"`
+and the package instead of a commit, since an exclusion has no commit to
+compare against. `--force` bypasses the commit-based skip (but not the
 exclusion skip, which unconditionally prevents duplicate exclusion records for
-the same repository).
+the same repository and package).
+
+### Report rendering and package filtering
+
+`scripts/parabellum_report.py` renders the Markdown report. `render_report`
+takes a `package` argument defaulting to `RULE_PACKAGE` and filters the ledger
+by `rule_package` **before** using the index's latest record per repository.
+That order matters: choosing the latest record first would let a later survey
+record hide the baseline's earlier verdict for the same repository, silently
+dropping a repository the baseline audited.
+
+The sweep index keeps each package's latest repository record and the
+package/version/commit keys needed for idempotency. Report loading selects only
+its package and does not build the commit-history index, so its memory use is
+proportional to current report rows rather than the full campaign history.
+
+The report has three sections:
+
+- `## Summary` — one bullet per verdict, plus the occurrence count of each
+  finding by rule.
+- `## Repositories` (Table 1) — the latest verdict, commit, and findings per
+  repository.
+- `## Repositories by rule` (Table 2) — distinct-repository counts per rule,
+  with the rule's severity beside them. It omits rules whose only evidence is
+  compliant findings, and the whole section is skipped when there is nothing to
+  tabulate, so a new campaign's first report does not carry a caption over an
+  empty table.
+
+Table 2's "would fail" column counts repositories whose evidence for the rule
+is noncompliant or indeterminate-only. A `warning`-severity noncompliant
+finding does not block today, but it is precisely the evidence a
+promotion-to-error decision rests on, so it is counted as a repository that
+would fail. `_RuleTally.would_fail()` is the union of the noncompliant and
+indeterminate-only sets, which keeps each repository counted once however many
+findings it has for the rule.
 
 ### The git boundary
 
-All git operations funnel through the module-private `_git` helper, which
-shells out to the `git` binary (`subprocess.run`, fixed argv, no shell) with a
-300-second timeout (`GIT_TIMEOUT`). Every call site supplies an `operation` and
+All git operations funnel through the module-private `_git` helper, which calls
+`git` through `concordat.bounded_subprocess.run_bounded` with fixed argv and
+`shell=False`. The shared adapter drains stdout and stderr concurrently,
+retains at most 1 MiB from each stream, and gives the command a 300-second
+timeout (`GIT_TIMEOUT`). It rejects stdout overflow because Git output is
+machine-readable, and marks truncated stderr while preserving its diagnostic
+prefix. A timeout stops the child process group, including descendants that
+could otherwise keep the pipes open. Every call site supplies an `operation` and
 `resource` for the resulting `OperationalRuleError` if the command is missing,
-times out, or exits non-zero. Two call sites build on `_git`:
+times out, exceeds the output cap, or exits non-zero. Conftest and makeutil use
+the same adapter with their own timeout and error context. Two call sites build
+on `_git`:
 
 - `resolve_head(owner, name)` runs `git ls-remote <url> HEAD` to obtain the
   default-branch head SHA **without cloning** — used to decide, cheaply,
   whether a repository has already been ledgered at its current head before
   paying for a clone.
-- `clone_and_audit(owner, name)` performs a shallow, single-branch clone
-  (`git clone --depth 1 --quiet`) into a temporary directory, resolves `HEAD`
-  there with `git rev-parse HEAD`, and hands the checkout to
-  `concordat.rules.run_rule` for the `rust-makefile-baseline` audit. The sweep
+- `clone_and_audit(owner, name, package=RULE_PACKAGE)` performs a shallow,
+  single-branch clone (`git clone --depth 1 --quiet`) into a temporary
+  directory, resolves `HEAD` there with `git rev-parse HEAD`, and hands the
+  checkout, with the selected package, to `concordat.rules.run_rule`. The sweep
   is audit-only: nothing here ever writes to an estate repository.
+
+`run_sweep` resolves `rule_version(options.package)` before the first clone.
+That call also validates the package identifier (through
+`packages.rule_package_dir`), so a mistyped `--package` fails in a second
+rather than after an estate's worth of cloning, and a mid-run manifest edit
+cannot stamp two different versions on records from one invocation.
 
 ## Property tests and the bounded reachability contract
 
@@ -1713,8 +1843,10 @@ calls another concordat function that does.
 `tests/conftest.py` defines a small, purpose-built `CmdMox` harness (not the
 similarly-named third-party `cmdmox` library) and exposes it as the `cmd_mox`
 pytest fixture. It monkeypatches `subprocess.run` globally for the duration of
-a test (`CmdMox.replay`), so it intercepts *any* subprocess invocation —
-`makeutil`, `conftest`, `git` — regardless of which module issued it.
+a test (`CmdMox.replay`), so it intercepts subprocess calls that use that API.
+The bounded adapter uses `Popen`, so tests for Git, Conftest, and makeutil
+wrapper translations patch `bounded_subprocess.run_bounded`; direct adapter
+tests use real child processes to exercise pipe draining and timeouts.
 Expectations are queued with a fluent builder:
 
 ```python
@@ -1750,6 +1882,6 @@ module:
   call with a fixed SHA or a function that raises `OperationalRuleError`,
   without needing `cmd_mox` at all.
 
-The rule of thumb: if the code shells out via `subprocess.run`, reach for
-`cmd_mox`; if it calls a sibling concordat function, monkeypatch that function
-on the module that does the calling.
+The rule of thumb: use `cmd_mox` for code that calls `subprocess.run`; patch
+`bounded_subprocess.run_bounded` to test its callers' error translation, and
+use a real child process to test the adapter itself.

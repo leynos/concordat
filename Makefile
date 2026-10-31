@@ -198,8 +198,13 @@ makeutil: ## Verify the Makefile parser used by contract tests
 conftest: ## Verify the policy engine the lint-rule suites run under
 	$(call ensure_tool,$@)
 
+# The policy suites run in a second, serial invocation. OPA's tester gives each
+# Rego test rule a fixed five-second deadline, and competing with the parallel
+# workers for the CPU is enough to cross it on a loaded host.
 test: build spelling uv $(VENV_TOOLS) makeutil conftest ## Run tests
-	$(UV_ENV) uv run pytest -v -n auto
+	$(UV_ENV) uv run pytest -v -n auto \
+	  --ignore=tests/unit/test_lint_rule_policies.py
+	$(UV_ENV) uv run pytest -v tests/unit/test_lint_rule_policies.py
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | \

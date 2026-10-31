@@ -64,6 +64,16 @@ type = "variable"
 full_name = "scripts.canon_artifacts_tui.CanonArtifactsApp.BINDINGS"
 reason = "Textual reads the class binding table when it initialises the application."
 
+[[tool.skylos.dead_code.entrypoints]]
+type = "method"
+full_name = "scripts.parabellum_report._RuleTally.severity"
+reason = "Called by _rule_rows in the same module; Skylos records the call as a module-level `tally.severity` and so finds no reference to the method itself."
+
+[[tool.skylos.dead_code.entrypoints]]
+type = "method"
+full_name = "concordat.rules.nested_cargo_modules.Reach.merged"
+reason = "Called by resolve_declarations in the same module at `before.merged(observed)`, where `before` comes from `reaches.get(...)`; Skylos records that call as a module-level `reaches.get.merged` and so finds no reference to the method itself. Live: replacing the union with the last observation makes test_a_file_reached_both_ways_keeps_every_base fail."
+
 [tool.ruff.lint]
 select = [
     "F",        # Pyflakes rules

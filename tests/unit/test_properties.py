@@ -202,17 +202,30 @@ class TestManifestRepositoryNames:
 
 
 _REPOS = ("leynos/alpha", "leynos/beta", "leynos/gamma")
+_PACKAGES = ("rust-makefile-baseline", "nested-cargo-offline-tests")
+_VERSIONS = ("0.1.0", "0.2.0")
 
 
-def _ledger_index(records: sweep.Ledger) -> sweep.LedgerIndex:
-    """Build the production lookup index from a generated history."""
-    index = sweep.LedgerIndex()
+def _ledger_index(
+    records: sweep.Ledger,
+    *,
+    package: str | None = None,
+    include_commit_history: bool = True,
+) -> sweep.LedgerIndex:
+    """Build the production index from a generated history."""
+    index = sweep.LedgerIndex(package, include_commit_history)
     for record in records:
         index.add(record)
     return index
 
 
-def _record(repository: str, verdict: str, sha: str | None) -> sweep.LedgerRecord:
+def _record(
+    repository: str,
+    verdict: str,
+    sha: str | None,
+    package: str = _PACKAGES[0],
+    version: str = _VERSIONS[0],
+) -> sweep.LedgerRecord:
     """Build a complete ledger record with the fields under test varied.
 
     Built through `_base_record` rather than by hand, so the generated
@@ -223,9 +236,10 @@ def _record(repository: str, verdict: str, sha: str | None) -> sweep.LedgerRecor
     sweep.LedgerRecord
         A complete ledger record with the requested fields varied.
     """
-    record = sweep._base_record(repository)
+    record = sweep._base_record(repository, package=package)
     record["verdict"] = verdict
     record["commit_sha"] = sha
+    record["rule_version"] = version
     return record
 
 
@@ -235,6 +249,8 @@ _LEDGER = st.lists(
         st.sampled_from(_REPOS),
         st.sampled_from(("compliant", "noncompliant", "indeterminate", "excluded")),
         st.one_of(st.none(), st.sampled_from(("a" * 40, "b" * 40))),
+        st.sampled_from(_PACKAGES),
+        st.sampled_from(_VERSIONS),
     ),
     max_size=8,
 )
@@ -253,13 +269,27 @@ class TestLedgerSelection:
         The ledger is append-only, so a re-audit adds a row rather than
         replacing one; selection must therefore be last-wins.
         """
-        index = _ledger_index(ledger)
-        latest = index.latest_by_repository
-
-        assert set(latest) == {r["repository"] for r in ledger}, latest
-        for repository, record in latest.items():
-            tail = [r for r in ledger if r["repository"] == repository][-1]
-            assert record is tail, f"{repository}: expected the last record"
+        for package in _PACKAGES:
+            index = _ledger_index(
+                ledger,
+                package=package,
+                include_commit_history=False,
+            )
+            latest = index.latest_by_repository
+            expected = {
+                record["repository"]
+                for record in ledger
+                if record["rule_package"] == package
+            }
+            assert set(latest) == expected, latest
+            for repository, record in latest.items():
+                tail = [
+                    row
+                    for row in ledger
+                    if row["repository"] == repository
+                    and row["rule_package"] == package
+                ][-1]
+                assert record is tail, f"{repository} in {package}: expected last row"
 
     @given(_LEDGER)
     def test_idempotency_lookup_matches_a_scan(
@@ -268,23 +298,43 @@ class TestLedgerSelection:
     ) -> None:
         """`_already_ledgered` agrees with a direct scan of the history.
 
-        A commit SHA asks "has this exact commit been recorded"; `None` asks
-        the different question "is this repository excluded".
+        A commit SHA asks "has this exact commit, under this package version,
+        been recorded"; `None` asks the different question "is this repository
+        excluded from this package's campaign". Both are scoped to the package,
+        so a history mixing two campaigns must not answer either question from
+        the other one's records.
         """
         index = _ledger_index(ledger)
-        for repository in _REPOS:
-            excluded = any(
-                r["repository"] == repository and r["verdict"] == "excluded"
-                for r in ledger
-            )
-            assert (
-                sweep._already_ledgered(index, repository, commit_sha=None) == excluded
-            ), repository
-            for sha in ("a" * 40, "b" * 40):
-                seen = any(
-                    r["repository"] == repository and r["commit_sha"] == sha
+        for package in _PACKAGES:
+            for repository in _REPOS:
+                excluded = any(
+                    r["repository"] == repository
+                    and r["verdict"] == "excluded"
+                    and r["rule_package"] == package
                     for r in ledger
                 )
                 assert (
-                    sweep._already_ledgered(index, repository, commit_sha=sha) == seen
-                ), f"{repository}@{sha[:6]}"
+                    sweep._already_ledgered(
+                        index, repository, commit_sha=None, package=package
+                    )
+                    == excluded
+                ), f"{repository} in {package}"
+                for sha in ("a" * 40, "b" * 40):
+                    for version in _VERSIONS:
+                        seen = any(
+                            r["repository"] == repository
+                            and r["commit_sha"] == sha
+                            and r["rule_package"] == package
+                            and r["rule_version"] == version
+                            for r in ledger
+                        )
+                        assert (
+                            sweep._already_ledgered(
+                                index,
+                                repository,
+                                commit_sha=sha,
+                                package=package,
+                                package_version=version,
+                            )
+                            == seen
+                        ), f"{repository}@{sha[:6]} in {package} v{version}"

@@ -352,8 +352,10 @@ def rule_run(
 ) -> int:
     """Audit a local checkout against a canon lint rule package.
 
-    Exit codes: 0 compliant; 1 at least one finding (including
-    indeterminate verdicts, which fail closed); 2 operational failure.
+    Exit codes: 0 compliant, or every finding advisory (`warning` severity);
+    1 at least one non-advisory finding (including indeterminate verdicts,
+    which fail closed); 2 operational failure. The verdict and JSON document
+    report what was found either way; only the status is advisory-aware.
 
     The Markdown package asks the GitHub API at *github_api_url* what each
     pinned action SHA names; the client is built only if a pin needs it.

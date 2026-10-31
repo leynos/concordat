@@ -164,6 +164,20 @@ class TestReportRendering:
         report = sweep.render_report(ledger_path)
         assert f"makeutil `{sweep.MAKEUTIL_REV[:12]}`" in report, report
 
+    def test_report_names_the_current_package_version(
+        self, ledger_path: pathlib.Path
+    ) -> None:
+        """Semantics: the header names the version the records were audited by.
+
+        These records are stamped with the current manifest version, so the
+        header names it. It is read from the record rather than the manifest
+        because the ledger is append-only: a report covering records written
+        by an earlier version must say so rather than claim the current one.
+        """
+        report = sweep.render_report(ledger_path)
+        version = sweep.rule_version(sweep.RULE_PACKAGE)
+        assert f"v{version}" in report, report
+
     def test_report_counts_each_verdict(self, ledger_path: pathlib.Path) -> None:
         """Semantics: every repository is summarized under its verdict."""
         report = sweep.render_report(ledger_path)
