@@ -84,6 +84,7 @@ parameters:
       - "6dea5677a84fec60ca51b07202570e3af12ffdb4"
       - "d5fded1107ee6822fdbf9539d81ff18ce6ce073a"
       - "5a99aed78ce68dcebd3052b75c31e6f173162b1e"
+      - "6e99f225cb06684f9e6f89b63a7ca4a04095c067"
     compliant_install_whitaker_refs:
       - "6dea5677a84fec60ca51b07202570e3af12ffdb4"
       - "8a83824b29dfe8f861714b544dc85fb925ed010c"
@@ -168,6 +169,8 @@ parameters:
       - "05708ba58378ae2049a166d20192e81e3bbd7447"
       - "8e6a325765ba382691d1b1c65fcccf1fc1d1b00c"
       - "5a99aed78ce68dcebd3052b75c31e6f173162b1e"
+      - "6e99f225cb06684f9e6f89b63a7ca4a04095c067"
+      - "872f59f53717b5bebe8e24b2f4a7496b089a939a"
     producer_repositories:
       - leynos/whitaker
     action_repository: leynos/shared-actions

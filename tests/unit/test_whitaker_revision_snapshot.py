@@ -23,6 +23,7 @@ _SNAPSHOTS: typ.Final = (
     _FIXTURES / "approved-revisions-2aed718.json",
     _FIXTURES / "approved-revisions-d5fded1.json",
     _FIXTURES / "approved-revisions-5a99aed.json",
+    _FIXTURES / "approved-revisions-6e99f22.json",
 )
 
 
@@ -95,13 +96,19 @@ def test_snapshot_records_the_complete_reviewed_first_parent_segment(
             "5a99aed78ce68dcebd3052b75c31e6f173162b1e",
             "183e1bb43c8fc198afc79f41482689898eb42efc",
         ),
+        (
+            "6e99f225cb06684f9e6f89b63a7ca4a04095c067",
+            "872f59f53717b5bebe8e24b2f4a7496b089a939a",
+            "68fcb35324561347c569785e422aca109d572538",
+        ),
     ]
-    chain_a, chain_b, chain_c = snapshots
+    chain_a, chain_b, chain_c, chain_d = snapshots
     assert chain_a["commits"][0]["first_parent"] == (
         "774cc5a01e457714aede66e14a97b3e257812fc2"
     )
     assert chain_b["commits"][0]["first_parent"] == chain_a["tip"]
     assert chain_c["commits"][0]["first_parent"] == chain_b["tip"]
+    assert chain_d["commits"][0]["first_parent"] == chain_c["tip"]
     for snapshot in snapshots:
         commits = snapshot["commits"]
         assert snapshot["repository"] == "leynos/shared-actions"
