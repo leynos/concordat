@@ -132,7 +132,7 @@ artifacts:
       Sensor policy for the rust-build-defaults rule package: the parallel
       frontend and linker defaults, the rustflags sources held equal, and the
       codegen backend configured or refused by a recorded exception.
-    sha256: a89dd89c73d4ecef4ac89ba07e558858e6ab2a02166666f733b78330200a2514
+    sha256: 3bae82abf4a827c448a1ada0515274a66d19050928d9514172264d80c5b18cc6
   - id: lint-rule-rust-build-defaults-build-paths-make
     type: opa-policy
     path: >-
@@ -141,14 +141,21 @@ artifacts:
       Makefile half of rust-build-defaults BD-007 and BD-008: coverage
       recipes select LLVM where Cranelift is the default, and gate recipes
       that assign RUSTFLAGS restate the fast flags.
-    sha256: 3c4426d29d44d0454a959447b2f9e716c42e4aa656de8c2c52a383937d20bba9
+    sha256: 7f8fd6a644fa6a5431aaeab8c75503c66fa06b3738cab39487d8c50ea6202e90
   - id: lint-rule-rust-build-defaults-isolated-whitaker
     type: opa-policy
     path: >-
       platform-standards/canon/lint-rules/rust-build-defaults/policy/isolated_whitaker.rego
     description: >
       BD-008 direct Whitaker recognition and binding toolchain isolation.
-    sha256: daa8153d5f2344377ec2e08274d8b4f4ac64c14ff7e37a3bdeb1b97b5dc74b74
+    sha256: 6075842efd35c2b2c97e50a5938318382022eb00db52409563d27b3a76a79039
+  - id: lint-rule-rust-build-defaults-standard-exceptions
+    type: opa-policy
+    path: platform-standards/canon/lint-rules/rust-build-defaults/policy/standard_exceptions.rego
+    description: >
+      BD-010 recorded exceptions to the build standard: a substantiated
+      exception in .concordat waives its clauses.
+    sha256: 54664e1b2408b1a9490ba712dc084a8829c6d75cdd9895bd20a98c5f363d1c1b
   - id: lint-rule-rust-build-defaults-scoped-backends
     type: opa-policy
     path: >-
@@ -171,7 +178,7 @@ artifacts:
     description: >
       Rule package manifest (sensor wiring, parameters, defaults) for
       rust-build-defaults.
-    sha256: 16acaf69c5a87ec09396381d18ca7b1cdde72d7a8123bac3478f54f2118ba337
+    sha256: 67e4d56dd94e93a0160c22bbbc768921880f41b1791122b0e912603ca07cbeab
   - id: lint-rule-rust-dev-build-footprint
     type: opa-policy
     path: platform-standards/canon/lint-rules/rust-dev-build-footprint/policy/rust_dev_build_footprint.rego
