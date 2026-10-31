@@ -185,9 +185,31 @@ def coverage(
     index, table = _handling_entry(config, covering, package, python=python)
     return {
         **_entry_coverage(config, index, table, package),
-        "ignored": is_ignored(table, package, python=python),
+        "ignored": _is_held_back(config, covering, package, python=python),
         "multi_group": _multi_group(config, table, package, python=python),
     }
+
+
+def _is_held_back(
+    config: ConfigFile,
+    covering: list[tuple[int, dict[str, object]]],
+    package: str,
+    *,
+    python: bool,
+) -> bool:
+    """Return whether an `ignore` rule keeps every covering entry off *package*.
+
+    A package one entry ignores and another processes is still updated, so an
+    `ignore` rule protects it only when no covering entry handles it.
+
+    Returns
+    -------
+    bool
+        Whether the package is held back by an `ignore` rule.
+    """
+    if any(_processes(config, entry, package, python=python) for _, entry in covering):
+        return False
+    return any(is_ignored(entry, package, python=python) for _, entry in covering)
 
 
 def _covering_entries(
