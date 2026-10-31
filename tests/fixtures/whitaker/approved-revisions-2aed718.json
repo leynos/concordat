@@ -4,6 +4,14 @@
   "root": "6dea5677a84fec60ca51b07202570e3af12ffdb4",
   "action_directory": ".github/actions/install-whitaker",
   "action_tree": "e37c663890d62c79187175a37189d58c02266e12",
+  "runtime_digest": "4f42092cf9289b45d02f4d612cab8572a4cef34954680db69f24933192c2aa31",
+  "runtime_records": [
+    "100644 8d4174c57be4701275cf097ff039f179c9f5189f scripts/extract-zip.py",
+    "100644 b4c31b8449df76090ff1109286c3735239d15939 action.yml",
+    "100644 be01a067fec0d1684f140e469b76a55dd1bd5145 installer-digests.sha256",
+    "100755 6951f25e0648477b83d6dacbc70fcbec8496d906 scripts/verify_rolling_assets.py",
+    "100755 a3b089c3578cc6e33ae8ce885d92b7ca344e1cfd scripts/resolve-release.sh"
+  ],
   "commits": [
     {
       "revision": "6dea5677a84fec60ca51b07202570e3af12ffdb4",

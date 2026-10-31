@@ -36,7 +36,8 @@ parameters:
           shared-actions revisions an install-whitaker pin may name. Derived,
           never edited by hand: `scripts/whitaker_revisions.py sync` lists
           every revision that descends from an entry of install_whitaker_roots
-          with the action directory unchanged, oldest first, so a root leads.
+          with the action's runtime content unchanged (every file in the
+          directory except tests and Markdown), oldest first, so a root leads.
       install_whitaker_roots:
         type: array
         items:
@@ -47,7 +48,9 @@ parameters:
           reviewed. `scripts/whitaker_revisions.py sync` derives
           compliant_install_whitaker_refs from them: every first-parent commit
           on shared-actions main that is a root, or descends from one and
-          leaves the directory's Git tree id equal to that root's.
+          leaves the directory's runtime digest equal to that root's. A
+          reviewer approving a root must check that its runtime files do not
+          reach excluded content by indirect means.
       producer_repositories:
         type: array
         items:

@@ -160,9 +160,7 @@ def test_a_git_read_failure_is_a_controlled_error_through_the_cli(
         message = "object not found"
         raise pygit2.GitError(message)
 
-    monkeypatch.setattr(
-        "concordat.rules.whitaker_revisions.directory_tree_id", unreadable
-    )
+    monkeypatch.setattr("concordat.rules.whitaker_revisions.runtime_digest", unreadable)
 
     assert run_main(monkeypatch, clone, "list") == 2
     assert "cannot read" in capsys.readouterr().err

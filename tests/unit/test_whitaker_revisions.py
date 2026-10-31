@@ -2,7 +2,7 @@
 
 Each scenario builds a small shared-actions history in a temporary repository,
 because the derivation asks Git two questions (does the commit descend from an
-approved root, and is the action directory's tree id the root's) and only a
+approved root, and is the action's runtime digest the root's) and only a
 real history answers both.
 """
 
@@ -36,6 +36,119 @@ def test_a_commit_that_leaves_the_directory_alone_is_listed(history: History) ->
     found = compliant_revisions(history.repository, [root], DIRECTORY, "main")
 
     assert found == [root, later]
+
+
+def _runtime(action: str = ACTION_V1) -> dict[str, str]:
+    """Return a small action directory: `action.yml`, one script, a test, a guide."""
+    return {
+        f"{DIRECTORY}/action.yml": action,
+        f"{DIRECTORY}/scripts/install.sh": "echo install\n",
+        f"{DIRECTORY}/installer-digests.sha256": "abc  installer\n",
+        f"{DIRECTORY}/tests/test_action.py": "# v1\n",
+        f"{DIRECTORY}/README.md": "guide v1\n",
+    }
+
+
+@pytest.mark.parametrize(
+    "edit",
+    [
+        {f"{DIRECTORY}/tests/test_action.py": "# v2\n"},
+        {f"{DIRECTORY}/tests/fixtures/new.json": "{}\n"},
+        {f"{DIRECTORY}/README.md": "guide v2\n"},
+        {f"{DIRECTORY}/CHANGELOG.md": "- entry\n"},
+        {f"{DIRECTORY}/scripts/NOTES.md": "notes\n"},
+    ],
+    ids=["test-edit", "test-added", "readme", "changelog-added", "nested-markdown"],
+)
+def test_a_change_confined_to_tests_or_markdown_is_listed(
+    history: History, edit: dict[str, str]
+) -> None:
+    """Tests and Markdown never run in a consumer's workflow, so they do not count."""
+    root = history.commit(_runtime(), "root")
+    later = history.commit({**_runtime(), **edit}, "tests or docs only")
+
+    found = compliant_revisions(history.repository, [root], DIRECTORY, "main")
+
+    assert found == [root, later]
+
+
+@pytest.mark.parametrize(
+    "edit",
+    [
+        {f"{DIRECTORY}/action.yml": ACTION_V2},
+        {f"{DIRECTORY}/scripts/install.sh": "echo changed\n"},
+        {f"{DIRECTORY}/installer-digests.sha256": "def  installer\n"},
+        {f"{DIRECTORY}/snapshot-digests.sha256": "abc  snapshot\n"},
+        {f"{DIRECTORY}/scripts/extra.sh": "echo extra\n"},
+        {f"{DIRECTORY}/unknown.txt": "a new file at the action root\n"},
+        {f"{DIRECTORY}/tests.sh": "echo a file whose name merely starts with tests\n"},
+    ],
+    ids=[
+        "action-yml",
+        "script-edit",
+        "digest-manifest-edited",
+        "digest-manifest-added",
+        "script-added",
+        "unknown-root-file",
+        "tests-prefixed-name",
+    ],
+)
+def test_a_change_to_runtime_content_is_refused(
+    history: History, edit: dict[str, str]
+) -> None:
+    """Any runtime file that changes or appears drops the commit from the list."""
+    root = history.commit(_runtime(), "root")
+    changed = history.commit({**_runtime(), **edit}, "changes runtime content")
+
+    found = compliant_revisions(history.repository, [root], DIRECTORY, "main")
+
+    assert found == [root]
+    assert changed not in found
+
+
+def test_a_changed_file_mode_is_refused(history: History) -> None:
+    """Making a helper script executable changes what the action runs."""
+    root = history.commit(_runtime(), "root")
+    changed = history.commit(
+        _runtime(),
+        "makes the script executable",
+        executable=frozenset({f"{DIRECTORY}/scripts/install.sh"}),
+    )
+
+    found = compliant_revisions(history.repository, [root], DIRECTORY, "main")
+
+    assert found == [root]
+    assert changed not in found
+
+
+def test_a_renamed_runtime_file_is_refused(history: History) -> None:
+    """The path is part of the digest, so a move is a change."""
+    root = history.commit(_runtime(), "root")
+    files = _runtime()
+    files[f"{DIRECTORY}/scripts/setup.sh"] = files.pop(
+        f"{DIRECTORY}/scripts/install.sh"
+    )
+    renamed = history.commit(files, "renames the script")
+
+    found = compliant_revisions(history.repository, [root], DIRECTORY, "main")
+
+    assert renamed not in found
+
+
+@pytest.mark.parametrize(
+    "reference",
+    ["bash tests/helper.sh\n", "cat README.md\n", "cat docs/guide.md | sh\n"],
+    ids=["tests-path", "readme", "markdown-path"],
+)
+def test_a_root_whose_runtime_names_an_excluded_path_is_refused(
+    history: History, reference: str
+) -> None:
+    """A script that runs or reads an excluded file would escape the digest."""
+    files = {**_runtime(), f"{DIRECTORY}/scripts/install.sh": reference}
+    root = history.commit(files, "root that leans on an excluded path")
+
+    with pytest.raises(OperationalRuleError, match="excludes"):
+        compliant_revisions(history.repository, [root], DIRECTORY, "main")
 
 
 def test_a_commit_before_the_root_is_refused(history: History) -> None:
