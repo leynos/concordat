@@ -375,3 +375,43 @@ def test_a_bound_command_handed_to_a_query_helper_is_not_compiler_work(
     put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
     put(tmp_path, "tests/common/mod.rs", HANDED_ON_QUERY)
     assert ids(tmp_path) == set()
+
+
+def grouped_config(filter_expression: str) -> str:
+    """Return a bounded configuration whose one grouped override uses a filter."""
+    return CLEAN.replace("binary(ui)", filter_expression)
+
+
+@pytest.mark.parametrize(
+    ("filter_expression", "expected"),
+    [
+        ("binary(ui)", set()),
+        ("binary(=ui)", set()),
+        ("test(/^compiles($|::)/)", set()),
+        ("binary(other) | test(compiles)", set()),
+        ("binary(ui_extra)", {"NC-005"}),
+        ("binary(extra_ui)", {"NC-005"}),
+        ("test(/^compiles_more($|::)/)", {"NC-005"}),
+        ("package(ui)", {"NC-005"}),
+    ],
+)
+def test_a_name_counts_only_as_a_whole_word_inside_a_predicate(
+    tmp_path: pathlib.Path, filter_expression: str, expected: set[str]
+) -> None:
+    """`binary(ui_extra)` does not name the `ui` binary, nor `package(ui)` a test."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/ui.rs", BUILD_TEST)
+    put(tmp_path, ".config/nextest.toml", grouped_config(filter_expression))
+    assert ids(tmp_path) == expected
+
+
+TOOLCHAIN_TEST = BUILD_TEST.replace('["build", "--bin", "x"]', '["+nightly", "build"]')
+
+
+def test_a_toolchain_selector_before_the_subcommand_is_still_a_compile(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`cargo +nightly build` compiles, so its test needs the configuration."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/ui.rs", TOOLCHAIN_TEST)
+    assert ids(tmp_path) == {"NC-004"}

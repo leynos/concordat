@@ -23,6 +23,7 @@ the policy answers indeterminate.
 
 from __future__ import annotations
 
+import re
 import typing as typ
 
 from .dependency_family_coverage import mapping, sequence
@@ -181,23 +182,65 @@ def _nextest(checkout: pathlib.Path) -> tuple[Nextest, list[str]]:
     return _facts(document)
 
 
-def _named(spawner: Spawner, filters: list[str]) -> bool:
-    """Report whether a grouped filter names the spawner's binary or a test.
+PREDICATE: typ.Final = re.compile(r"\b(?:binary|binary_id|test)\(")
 
-    A spawner that is not a top-level test binary has nothing to name and is
-    judged by the repository-level facts alone.
+
+def _predicate_arguments(text: str) -> list[str]:
+    """Return the arguments of every `binary(..)`, `binary_id(..)` and `test(..)`.
+
+    The parentheses are balanced rather than matched lazily, because a regex
+    argument such as `/^name($|::)/` holds parentheses of its own.
+
+    Returns
+    -------
+    list[str]
+        The text between each predicate's parentheses.
+    """
+    found: list[str] = []
+    for match in PREDICATE.finditer(text):
+        depth, start = 1, match.end()
+        for offset, char in enumerate(text[start:], start):
+            depth += (char == "(") - (char == ")")
+            if depth == 0:
+                found.append(text[start:offset])
+                break
+    return found
+
+
+def _mentions(argument: str, name: str) -> bool:
+    """Report whether *name* occurs in a predicate argument as a whole word.
+
+    `ui` is in `binary(ui)` and in `test(/^ui($|::)/)` but not in
+    `binary(ui_extra)`: a name that continues into more word characters is a
+    different binary or test.
 
     Returns
     -------
     bool
-        True when a grouped filter mentions the binary or one of its functions.
+        True when *name* is delimited by non-word characters or the ends.
+    """
+    return re.search(rf"(?<!\w){re.escape(name)}(?!\w)", argument) is not None
+
+
+def _named(spawner: Spawner, filters: list[str]) -> bool:
+    """Report whether a grouped filter names the spawner's binary or a test.
+
+    A spawner that is not a top-level test binary has nothing to name and is
+    judged by the repository-level facts alone. A name counts only inside a
+    `binary(..)`, `binary_id(..)` or `test(..)` predicate and only as a whole
+    word, so a filter on `ui_extra` does not name `ui`.
+
+    Returns
+    -------
+    bool
+        True when a grouped filter's predicate mentions the binary or one of
+        its functions.
     """
     if spawner["binary"] is None:
         return True
-    text = "\n".join(filters)
-    return spawner["binary"] in text or any(
-        name in text for name in spawner["test_functions"]
-    )
+    arguments = _predicate_arguments("\n".join(filters))
+    names = [spawner["binary"], *spawner["test_functions"]]
+    return any(_mentions(argument, name) for argument in arguments for name in names)
 
 
 def build_nested_cargo_nextest_envelope(

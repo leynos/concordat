@@ -59,7 +59,7 @@ SUBCOMMANDS: typ.Final = (
     "|nextest|llvm-cov|rustdoc"
 )
 COMPILES: typ.Final = re.compile(
-    rf"""\.args?\(\s*(?:&?\[\s*)?(?:\+\w+["']\s*,\s*["'])?["'](?:{SUBCOMMANDS})["']"""
+    rf"""\.args?\(\s*(?:&?\[\s*)?(?:["']\+\w+["']\s*,\s*)?["'](?:{SUBCOMMANDS})["']"""
 )
 COMMAND_NEW: typ.Final = re.compile(r"Command::new\(")
 BINDING: typ.Final = re.compile(

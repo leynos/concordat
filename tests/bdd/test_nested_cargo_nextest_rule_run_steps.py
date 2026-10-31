@@ -94,3 +94,16 @@ def then_output(cli_invocation: dict[str, RunResult], finding: str) -> None:
     """Assert the actual rendered verdict or rule identifier."""
     output = cli_invocation["result"].stdout
     assert finding in output, output
+
+
+@then("the nested nextest output reports no finding")
+def then_no_finding(cli_invocation: dict[str, RunResult]) -> None:
+    """Assert a clean result, which `compliant` alone cannot show.
+
+    `compliant` is a substring of `noncompliant`, so the clean rows assert the
+    absence of every rule identifier and of the noncompliant verdict instead.
+    """
+    output = cli_invocation["result"].stdout
+    assert "noncompliant" not in output, output
+    assert "NC-00" not in output, output
+    assert "compliant" in output, output

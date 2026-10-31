@@ -11,9 +11,19 @@ Feature: Nested cargo nextest configuration
     And the nested nextest output contains "<finding>"
 
     Examples:
-      | command     | config   | status | finding   |
-      | cargo build | bounds   | 0      | compliant |
-      | cargo build | is absent | 0     | NC-004    |
-      | cargo build | skips it | 0      | NC-005    |
-      | cargo check | bounds   | 0      | compliant |
-      | cargo metadata | is absent | 0   | compliant |
+      | command     | config    | status | finding |
+      | cargo build | is absent | 0      | NC-004  |
+      | cargo build | skips it  | 0      | NC-005  |
+
+  Scenario Outline: A test that needs no configuration, or has it, draws no finding
+    Given a crate whose test runs "<command>"
+    And a nextest configuration that "<config>"
+    When I audit the nested cargo nextest configuration
+    Then the nested nextest exit status is 0
+    And the nested nextest output reports no finding
+
+    Examples:
+      | command        | config    |
+      | cargo build    | bounds    |
+      | cargo check    | bounds    |
+      | cargo metadata | is absent |
