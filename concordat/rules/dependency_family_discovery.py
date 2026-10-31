@@ -45,7 +45,7 @@ def cargo_tables(
     return tables
 
 
-def _is_contained_glob(pattern: object) -> bool:
+def _is_contained_glob(pattern: object) -> typ.TypeGuard[str]:
     """Return whether *pattern* is text that stays below the workspace root."""
     if not isinstance(pattern, str):
         return False
