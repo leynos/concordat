@@ -102,6 +102,39 @@ def has_dependency(manifest: Manifest) -> bool:
     return any(table for _, _, table in cargo_tables(manifest))
 
 
+def _is_registry_spec(spec: object) -> bool:
+    """Report whether one dependency value resolves from a registry."""
+    match spec:
+        case str():
+            return True
+        case {"path": _} | {"git": _} | {"workspace": True}:
+            return False
+        case dict():
+            return True
+        case _:
+            return False
+
+
+def has_registry_dependency(manifest: Manifest) -> bool:
+    """Report whether a manifest declares a dependency that resolves from a registry.
+
+    A path or git dependency has nothing for Dependabot to update, and a
+    `workspace = true` entry only inherits the workspace table's declaration.
+
+    Returns
+    -------
+    bool
+        True when some dependency names a version rather than a path or git
+        source, in a plain or a target-specific
+        (`[target.'cfg(...)'.dependencies]`) table.
+    """
+    return any(
+        _is_registry_spec(spec)
+        for _, _, table in cargo_tables(manifest)
+        for spec in table.values()
+    )
+
+
 def _candidates(root: pathlib.Path, pattern: str) -> list[pathlib.Path]:
     """Return the paths one `members` entry names, glob or literal.
 
@@ -249,6 +282,40 @@ def _members_of(
     for pattern in _string_list(workspace.get("members")):
         found |= _pattern_members(root, pattern, skip, base)
     return found
+
+
+def rooted_member_directories(
+    checkout: pathlib.Path,
+    root: pathlib.Path,
+    manifests: typ.Mapping[pathlib.Path, Manifest],
+) -> set[pathlib.Path]:
+    """Return the resolved member directories of the one workspace rooted at *root*.
+
+    A nested workspace under an excluded directory of another workspace keeps
+    its members to itself, so a caller asking what a root owns must not read
+    the estate-wide member set.
+
+    Parameters
+    ----------
+    checkout:
+        The repository root.
+    root:
+        The directory of the workspace root manifest.
+    manifests:
+        Each decoded `Cargo.toml` below and at the root, by absolute path.
+
+    Returns
+    -------
+    set[pathlib.Path]
+        The root's explicit and implicit members, resolved; empty when *root*
+        holds no `[workspace]` table.
+    """
+    workspace = manifests[root / MANIFEST].get("workspace")
+    if not isinstance(workspace, dict):
+        return set()
+    return _workspace_members(
+        checkout, root, typ.cast("Manifest", workspace), manifests
+    )
 
 
 def workspace_member_directories(

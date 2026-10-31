@@ -1,0 +1,95 @@
+schema_version: 1
+id: nested-cargo-fixture-manifests
+name: Nested cargo fixture manifests
+description: >-
+  Audits that every standalone Cargo manifest below the root (a fixture crate,
+  probe or sample that no workspace owns and that declares a registry
+  dependency, itself or in the workspace it roots) is covered by a `cargo`
+  entry of `.github/dependabot.yml` (NC-003). Dependabot reads only the
+  directories its configuration lists, and `/` covers the root manifest alone,
+  so a fixture is updated only when its directory, or a glob reaching it, is
+  named. A path-only manifest has nothing to update. A named exemption, with
+  its repository, directory, rationale and review trigger, takes a manifest out
+  of the check. The rule ships at `warning` severity so the estate can be
+  surveyed before it blocks; the `severity` parameter raises it to `error`
+  without a code change. Audit-only: this rule declares no mutations.
+version: 0.1.0
+sensor:
+  type: conftest
+  input: policy-input/nested-cargo-fixture-manifests
+  policy: policy/
+  tests:
+    - policy/
+  data:
+    - fixtures/data.json
+parameters:
+  schema:
+    type: object
+    additionalProperties: false
+    properties:
+      severity:
+        type: string
+        enum: [warning, error]
+        description: >-
+          The severity of every NC-003 finding, and of the indeterminate
+          findings that report evidence the reader could not establish. An
+          envelope defect is always `error`: it says the rule could not run,
+          not that the repository is unsafe. A `warning` finding is reported
+          but does not block; promotion to `error` is the intended end state
+          once the estate survey is clean.
+      exemptions:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [repository, path, rationale, review_trigger]
+          properties:
+            repository:
+              type: string
+            path:
+              type: string
+            rationale:
+              type: string
+              minLength: 1
+            review_trigger:
+              type: string
+              minLength: 1
+        description: >-
+          Manifest directories the rule does not audit, each with its
+          repository (`owner/name`, read from the `origin` remote), its
+          directory relative to the root, the rationale and the review trigger
+          (the event after which the exemption is revisited). Both text fields
+          must be non-blank; the policy ignores an entry that leaves either
+          blank, because an exemption nobody must revisit is not a record. A
+          vendored patch that is deliberately left alone belongs here.
+  defaults:
+    severity: warning
+    exemptions:
+      - repository: leynos/rstest-bdd
+        path: tests/fixtures/published-gpui-e2e
+        rationale: >-
+          A derived fixture: its first-party rstest-bdd dependencies are
+          patched to crates packaged from the workspace at the staged version,
+          so a Dependabot bump of those pins would name a release the staging
+          step never built. Its `make update-published-gpui-e2e-lock` target
+          and the refresh-derived-fixture-lockfiles workflow own its manifest
+          and lock.
+        review_trigger: >-
+          review when the fixture stops patching the staged first-party
+          crates, or when Dependabot can ignore the rstest-bdd family there
+      - repository: leynos/axinite
+        path: tools-src/telegram/patches/grammers-crypto
+        rationale: >-
+          A vendored patch of grammers-crypto wired in through a path
+          override; its dependencies are the upstream crate's and move only
+          when the patch is rebased on a new upstream release.
+        review_trigger: review when the patch is rebased or dropped
+      - repository: leynos/lille
+        path: third_party/feldera-size-of
+        rationale: >-
+          A vendored fork of feldera-size-of 0.1.7 wired in through
+          `[patch.crates-io]`, kept only until upstream publishes ordered-float
+          5.x support; its dependencies follow the upstream release.
+        review_trigger: >-
+          review when feldera-size-of publishes ordered-float 5.x support and
+          the fork is removed
