@@ -144,6 +144,8 @@ def with_files(files: dict[str, str], **overrides: str | None) -> dict[str, str]
 
 SERDE_LOCK = LOCK + '\n[[package]]\nname = "serde-pyobject"\nversion = "0.8.0"\n'
 SERDE_CARGO = CARGO + 'pyo3-serde = { package = "serde-pyobject", version = "0.8.0" }\n'
+PYTEST_PYPROJECT = """\
+[project]\nname = \"demo\"\nversion = \"0.1.0\"\ndependencies = [\"maturin==1.13.3\", \"pytest==9.1.1\", \"pytest-bdd==9.0.0\"]\n"""
 MATURIN_PYPROJECT = """\
 [project]
 name = "demo"
@@ -388,6 +390,21 @@ SCENARIOS: dict[str, dict[str, str]] = {
             + PIP_ENTRY
             + CATCH_ALL
             + IGNORE_MATURIN,
+        ),
+    },
+    # The femtologging shape: pytest-bdd is ignored in the plain entry and the
+    # group entry does not take it, so nothing updates it and the pytest tuple
+    # is held back.
+    "pytest_bdd_ignored_beside_group_entry": {
+        "pyproject.toml": PYTEST_PYPROJECT,
+        ".github/dependabot.yml": define_multi(
+            "version: 2\nupdates:\n"
+            + PIP_GROUP_ENTRY
+            + "  - package-ecosystem: pip\n    directory: /\n"
+            "    schedule:\n      interval: daily\n    groups:\n"
+            + CATCH_ALL
+            + "    ignore:\n      - dependency-name: pytest-bdd\n",
+            MULTI_DEFINITION,
         ),
     },
     # The merged cuprum shape: a lone group entry leaves the rest of the

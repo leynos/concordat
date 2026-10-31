@@ -231,3 +231,11 @@ test_family_lone_group_entry if {
   findings := policy.deny with input as data.fixtures.family_lone_group_entry
   ids(findings) == {"DF-001"}
 }
+
+# pytest-bdd is ignored in the plain entry and the group entry does not take it:
+# nothing updates it, so the pytest tuple is held back. The maturin tuple is not
+# declared (no PyO3), so only the pytest relationship applies.
+test_pytest_bdd_ignored_beside_group_entry if {
+  findings := policy.deny with input as data.fixtures.pytest_bdd_ignored_beside_group_entry
+  count(findings) == 0
+}

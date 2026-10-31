@@ -262,3 +262,25 @@ def test_when_no_entry_handles_a_package_the_first_covering_entry_answers() -> N
     config = _config([first, second], None)
 
     assert coverage(config, "uv", ["/"], "pytest")["entry"] == 0
+
+
+def test_a_package_one_entry_ignores_and_no_entry_handles_reads_as_ignored() -> None:
+    """The group entry does not take it and the plain entry ignores it: held back."""
+    group_entry = _entry(
+        "uv", **{"multi-ecosystem-group": "maturin-pyo3", "patterns": ["maturin"]}
+    )
+    plain_entry = _entry(
+        "uv",
+        groups={"minor-and-patch": {"patterns": ["*"]}},
+        ignore=[{"dependency-name": "maturin"}, {"dependency-name": "pytest-bdd"}],
+    )
+    config = _config([group_entry, plain_entry], _DEFINED)
+
+    assert coverage(config, "uv", ["/"], "pytest-bdd")["ignored"] is True
+
+
+def test_a_package_another_entry_handles_does_not_read_as_ignored() -> None:
+    """The plain entry ignores maturin but the group entry handles it: not held back."""
+    fact = coverage(_split_config(), "uv", ["/"], "maturin")
+
+    assert fact["ignored"] is False
