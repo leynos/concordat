@@ -69,4 +69,33 @@ parameters:
           belongs here.
   defaults:
     severity: warning
-    exemptions: []
+    exemptions:
+      - repository: leynos/netsuke
+        path: tests/kani_cfg_ui_tests.rs
+        rationale: >-
+          Compiles one dependency-free fixture with rustc to prove the
+          `cfg(kani)` check-cfg contract. ADR-0059 moved every contract that
+          needs Cargo's package-cache lock or a dependency graph out of timed
+          tests; what remains is a single-file compile with no nested Cargo.
+        review_trigger: >-
+          review when the test starts compiling against the netsuke library
+          or invokes Cargo
+      - repository: leynos/netsuke
+        path: tests/ninja_gen_escape_ui_tests.rs
+        rationale: >-
+          Compiles one dependency-free fixture with rustc to prove the
+          NinjaValue escape boundary is consuming. ADR-0059 left single-file
+          compiles in the default profile because they carry no nested Cargo
+          and no dependency rebuild.
+        review_trigger: >-
+          review when the fixture needs an `--extern` crate or the test invokes
+          Cargo
+      - repository: leynos/netsuke
+        path: tests/packaging_smoke_tests.rs
+        rationale: >-
+          Runs `cargo package --list`, which compiles nothing; the verification
+          build that `cargo publish --dry-run` performs moved to
+          `make test-package-verify` (ADR-0059).
+        review_trigger: >-
+          review when the test runs a Cargo subcommand that compiles
+          (`publish --dry-run`, `package` without `--list`)

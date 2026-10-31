@@ -274,3 +274,25 @@ def test_the_manifest_declares_each_parameter_default(key: str) -> None:
     """A parameter the schema declares must have a default, or it is inert."""
     defaults = packages.rule_parameters(packages.rule_package_dir(RULE_ID))
     assert key in defaults
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "tests/kani_cfg_ui_tests.rs",
+        "tests/ninja_gen_escape_ui_tests.rs",
+        "tests/packaging_smoke_tests.rs",
+    ],
+)
+def test_the_shipped_exemptions_apply_to_netsuke_only(
+    tmp_path: pathlib.Path, path: str
+) -> None:
+    """Netsuke's single-file compile tests are exempt by default, but only at home."""
+    for name, expected in (("netsuke", set()), ("other", {"NC-004"})):
+        root = tmp_path / name
+        pygit2.init_repository(str(root)).remotes.create(
+            "origin", f"https://github.com/leynos/{name}.git"
+        )
+        put(root, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+        put(root, path, RUSTC_TEST)
+        assert ids(root) == expected, name
