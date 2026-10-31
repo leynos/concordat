@@ -197,6 +197,15 @@ def coverage(
     }
 
 
+def _joined_group(config: ConfigFile, entry: dict[str, object]) -> str | None:
+    """Return the defined multi-ecosystem group *entry* names, if any."""
+    name = entry.get("multi-ecosystem-group")
+    defined = mapping((mapping(config["parsed"]) or {}).get("multi-ecosystem-groups"))
+    if defined is None or not isinstance(name, str):
+        return None
+    return name if name in defined else None
+
+
 def _multi_group(
     config: ConfigFile, entry: dict[str, object], package: str, *, python: bool
 ) -> str | None:
@@ -213,16 +222,13 @@ def _multi_group(
     str | None
         The group name, or None when the package is not in a defined group.
     """
-    name = entry.get("multi-ecosystem-group")
-    defined = mapping((mapping(config["parsed"]) or {}).get("multi-ecosystem-groups"))
-    patterns = sequence(entry.get("patterns"))
-    if not isinstance(name, str) or defined is None or name not in defined:
+    name = _joined_group(config, entry)
+    if name is None:
         return None
     wanted = normalise(package) if python else package
-    taken = any(
-        fnmatch.fnmatchcase(wanted, normalise(str(pattern)) if python else str(pattern))
-        for pattern in patterns or []
-    )
+    patterns = [str(pattern) for pattern in sequence(entry.get("patterns")) or []]
+    comparable = [normalise(pattern) if python else pattern for pattern in patterns]
+    taken = any(fnmatch.fnmatchcase(wanted, pattern) for pattern in comparable)
     return name if taken else None
 
 

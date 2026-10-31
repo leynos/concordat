@@ -85,6 +85,33 @@ def _passes_through_link(
     )
 
 
+def _listed_members(
+    checkout: pathlib.Path, surface: dict[str, object], governed: set[str]
+) -> list[pathlib.Path]:
+    """Return the member manifests one governed workspace root lists.
+
+    Returns
+    -------
+    list[pathlib.Path]
+        Manifests of listed, non-excluded directories that hold a `Cargo.toml`,
+        are not themselves governed, and are not reached through a link.
+    """
+    workspace = mapping((mapping(surface.get("parsed")) or {}).get("workspace"))
+    if workspace is None:
+        return []
+    root = pathlib.PurePosixPath(str(surface["path"])).parent
+    excluded = _member_directories(checkout, root, workspace.get("exclude"))
+    listed = _member_directories(checkout, root, workspace.get("members")) - excluded
+    manifests = {directory: directory / "Cargo.toml" for directory in listed}
+    return [
+        checkout / manifest
+        for directory, manifest in manifests.items()
+        if manifest.as_posix() not in governed
+        and not _passes_through_link(checkout, directory)
+        and (checkout / manifest).is_file()
+    ]
+
+
 def workspace_member_manifests(
     checkout: pathlib.Path, surfaces: cabc.Iterable[dict[str, object]]
 ) -> list[pathlib.Path]:
@@ -100,24 +127,13 @@ def workspace_member_manifests(
     list[pathlib.Path]
         The member manifests, sorted, that are not themselves governed surfaces.
     """
-    governed = {str(surface["path"]) for surface in surfaces}
-    found: set[pathlib.Path] = set()
-    for surface in surfaces:
-        workspace = mapping((mapping(surface.get("parsed")) or {}).get("workspace"))
-        if workspace is None:
-            continue
-        root = pathlib.PurePosixPath(str(surface["path"])).parent
-        excluded = _member_directories(checkout, root, workspace.get("exclude"))
-        for directory in _member_directories(checkout, root, workspace.get("members")):
-            manifest = directory / "Cargo.toml"
-            if (
-                directory in excluded
-                or manifest.as_posix() in governed
-                or _passes_through_link(checkout, directory)
-                or not (checkout / manifest).is_file()
-            ):
-                continue
-            found.add(checkout / manifest)
+    roots = list(surfaces)
+    governed = {str(surface["path"]) for surface in roots}
+    found = {
+        manifest
+        for surface in roots
+        for manifest in _listed_members(checkout, surface, governed)
+    }
     return sorted(found)
 
 
