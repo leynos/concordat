@@ -192,6 +192,56 @@ def _write_maturin_pyo3(checkout: pathlib.Path, *, joined: bool) -> None:
     )
 
 
+_TWO_ENTRY_CONFIG: typ.Final = """\
+version: 2
+multi-ecosystem-groups:
+  maturin-pyo3:
+    schedule:
+      interval: daily
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    multi-ecosystem-group: maturin-pyo3
+    patterns: ['pyo3', 'pyo3-build-config']
+  - package-ecosystem: uv
+    directory: /
+    multi-ecosystem-group: maturin-pyo3
+    patterns: ['maturin']
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: daily
+    groups:
+      minor-and-patch:
+        patterns: ['*']
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: pyo3
+      - dependency-name: pyo3-build-config
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: daily
+    groups:
+      minor-and-patch:
+        patterns: ['*']
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: maturin
+"""
+
+
+@given(
+    "a checkout whose group entry and plain entry split maturin and PyO3 from the rest"
+)
+def given_two_entries(family_checkout: pathlib.Path) -> None:
+    """Write the shape Dependabot needs: a group entry and a plain entry each."""
+    _write_maturin_pyo3(family_checkout, joined=False)
+    (family_checkout / ".github" / "dependabot.yml").write_text(
+        _TWO_ENTRY_CONFIG, encoding="utf-8"
+    )
+
+
 @given(
     "a checkout pinning maturin exactly with both ecosystems in one "
     "multi-ecosystem group"

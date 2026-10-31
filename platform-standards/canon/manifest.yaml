@@ -363,7 +363,7 @@ artifacts:
       platform-standards/canon/lint-rules/dependency-family-contracts/policy/dependency_family_contracts.rego
     description: >
       Report-only DF-001 to DF-003 and DF-006 policy checking recorded dependency relationships against Dependabot grouping.
-    sha256: 760fab7f757eec76b991ceea12291e2b9df0a09bdbbfaf5f46e949dee8679969
+    sha256: 6143be98de41bd3749904d396537b57fa8c55ca2debcc2a763ab32478133a9e6
   - id: lint-rule-dependency-family-contracts-manifest
     type: lint-config
     path: >-

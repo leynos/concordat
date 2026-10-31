@@ -82,3 +82,9 @@ Feature: Dependency-family contracts rule run
     When I audit the checkout for its dependency families
     Then the audit exit status is 0
     And the audit table reports zero findings
+
+  Scenario: a group entry beside a plain entry per ecosystem is audited clean
+    Given a checkout whose group entry and plain entry split maturin and PyO3 from the rest
+    When I audit the checkout for its dependency families
+    Then the audit exit status is 0
+    And the audit table reports zero findings

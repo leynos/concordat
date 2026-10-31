@@ -87,6 +87,19 @@ def define_multi(config: str, definition: str) -> str:
     return config.replace("version: 2\n", "version: 2\n" + definition, 1)
 
 
+def entries_of(config: str) -> str:
+    """Return the `updates` entries of *config*, without its header."""
+    return config.split("updates:\n", 1)[1]
+
+
+def two_entry_config(group_entries: str, plain_entries: str) -> str:
+    """Return a config listing the group entries before the plain ones."""
+    return define_multi(
+        "version: 2\nupdates:\n" + group_entries + entries_of(plain_entries),
+        MULTI_DEFINITION,
+    )
+
+
 def maturin_with_multi(
     definition: str, cargo_join: str, maturin_join: str
 ) -> dict[str, str]:
@@ -214,6 +227,24 @@ MULTI_DEFINITION = (
 )
 OTHER_DEFINITION = (
     MULTI_DEFINITION + "  other-group:\n    schedule:\n      interval: daily\n"
+)
+CARGO_GROUP_ENTRY = (
+    "  - package-ecosystem: cargo\n    directory: /\n"
+    "    multi-ecosystem-group: maturin-pyo3\n"
+    "    patterns: ['pyo3', 'pyo3-build-config']\n"
+)
+CARGO_GROUP_ENTRY_PYO3_ONLY = (
+    "  - package-ecosystem: cargo\n    directory: /\n"
+    "    multi-ecosystem-group: maturin-pyo3\n    patterns: ['pyo3']\n"
+)
+IGNORE_FAMILY = (
+    "    ignore:\n      - dependency-name: pyo3\n"
+    "      - dependency-name: pyo3-build-config\n"
+)
+IGNORE_MATURIN = "    ignore:\n      - dependency-name: maturin\n"
+PIP_GROUP_ENTRY = (
+    "  - package-ecosystem: pip\n    directory: /\n"
+    "    multi-ecosystem-group: maturin-pyo3\n    patterns: ['maturin']\n"
 )
 JOIN_PYO3 = "    multi-ecosystem-group: maturin-pyo3\n    patterns: ['pyo3']\n"
 JOIN_MATURIN = "    multi-ecosystem-group: maturin-pyo3\n    patterns: ['maturin']\n"
@@ -344,6 +375,30 @@ SCENARIOS: dict[str, dict[str, str]] = {
     "maturin_multi_group_patterns_miss": maturin_with_multi(
         MULTI_DEFINITION, JOIN_PYO3, JOIN_MATURIN_MISSING
     ),
+    # The shape Dependabot needs: an entry that joins a group runs only that
+    # group, so each ecosystem also keeps a plain entry (ignoring the member)
+    # for everything else. The group entry comes first; the plain entry supplies
+    # the groups for the rest. The family and the tuple are both protected.
+    "maturin_two_entries": {
+        **base(),
+        "pyproject.toml": MATURIN_PYPROJECT.format(spec="==1.13.3"),
+        ".github/dependabot.yml": two_entry_config(
+            CARGO_GROUP_ENTRY + PIP_GROUP_ENTRY,
+            dependabot(NARROW_FAMILY + CATCH_ALL, extra=IGNORE_FAMILY)
+            + PIP_ENTRY
+            + CATCH_ALL
+            + IGNORE_MATURIN,
+        ),
+    },
+    # The merged cuprum shape: a lone group entry leaves the rest of the
+    # ecosystem unhandled, so a family that needs a narrow group reads as split.
+    "family_lone_group_entry": {
+        **base(),
+        ".github/dependabot.yml": define_multi(
+            "version: 2\nupdates:\n" + CARGO_GROUP_ENTRY_PYO3_ONLY,
+            MULTI_DEFINITION,
+        ),
+    },
     # A pure-Python repository with a copied wheel template: PyO3 is absent, so
     # the maturin relationship does not apply and no lockstep is invented.
     "pure_python_template": {
