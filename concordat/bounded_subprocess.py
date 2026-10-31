@@ -280,15 +280,20 @@ def _capture_output(state: _ProcessState) -> _ProcessOutput:
     )
 
 
-def _process_returncode(
+def _raise_pipe_error(output: _ProcessOutput) -> None:
+    """Propagate the first error raised while draining a child pipe."""
+    errors = output.stdout_errors or output.stderr_errors
+    if errors:
+        raise errors[0]
+
+
+def _raise_process_timeout(
     state: _ProcessState,
     output: _ProcessOutput,
     *,
     timed_out: bool,
-) -> int:
-    """Raise capture/timeout errors, or return the child exit code."""
-    if output.stdout_errors or output.stderr_errors:
-        raise (output.stdout_errors or output.stderr_errors)[0]
+) -> None:
+    """Raise the timeout error with bounded child output when needed."""
     if timed_out:
         raise subprocess.TimeoutExpired(
             state.args,
@@ -296,8 +301,24 @@ def _process_returncode(
             output=output.stdout,
             stderr=output.stderr,
         )
+
+
+def _raise_stdout_overflow(state: _ProcessState, output: _ProcessOutput) -> None:
+    """Reject machine-readable stdout that exceeded its capture limit."""
     if output.stdout_overflowed:
         raise OutputLimitExceededError("stdout", state.max_bytes_per_stream)
+
+
+def _process_returncode(
+    state: _ProcessState,
+    output: _ProcessOutput,
+    *,
+    timed_out: bool,
+) -> int:
+    """Raise capture/timeout errors, or return the child exit code."""
+    _raise_pipe_error(output)
+    _raise_process_timeout(state, output, timed_out=timed_out)
+    _raise_stdout_overflow(state, output)
     returncode = state.process.returncode
     if returncode is None:
         raise RuntimeError
