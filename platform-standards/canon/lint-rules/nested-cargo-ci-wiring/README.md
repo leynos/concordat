@@ -47,9 +47,10 @@ leaves to the repository: scope the wrapper to the commands that should use it
 
 A workflow that needs a private tree on purpose (a benchmark lane) is listed in
 the `exemptions` parameter with its `repository` (`owner/name`, read from the
-`origin` remote), its `path` (`.github/workflows/<file>`) a `rationale` and a `review_trigger` (the event after which the exemption is revisited; a blank rationale or trigger suppresses nothing). An
-exemption does not apply to another repository. No exemption is shipped by
-default.
+`origin` remote), its `path` (`.github/workflows/<file>`) a `rationale` and a
+`review_trigger` (the event after which the exemption is revisited; a blank
+rationale or trigger suppresses nothing). An exemption does not apply to
+another repository. No exemption is shipped by default.
 
 ## What the rule declines to judge
 
