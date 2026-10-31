@@ -3010,18 +3010,19 @@ a brace in a string moves nothing); production code after a closed `mod tests`
 is not test code. A compiling argument counts only when it belongs to the same
 command as the spawn: it is read from the spawn to the next `Command::new` or
 the next function item, and a command bound to a name and handed to a function
-defined in the same file is also read against that function's body, because
-the callee adds the arguments. A callee in another file is not seen, which errs
-towards not demanding configuration. The configuration facts are the ones netsuke and rstest-bdd converged
-on: a serial group, an override that uses it, an explicit `slow-timeout`
-(profile or override) and a `global-timeout` (any profile, since netsuke sets
-it on `ci`). A top-level test binary must also be named by a grouped override's
-filter, by binary or by one of its functions, which is how ortho-config's BDD
-suite is told apart from netsuke's. The package does not evaluate nextest
-filtersets: a name appearing in a grouped filter is the evidence, which is
-cheap and errs towards acceptance. The name must be a whole word inside a
-`binary()`, `binary_id()` or `test()` predicate, so `binary(ui_extra)` does not
-name `ui`, and a regex argument such as `/^name($|::)/` is read whole. Exemptions name a test source and follow the
+defined in the same file is also read against that function's body, because the
+callee adds the arguments. A callee in another file is not seen, which errs
+towards not demanding configuration. The configuration facts are the ones
+netsuke and rstest-bdd converged on: a serial group, an override that uses it,
+an explicit `slow-timeout` (profile or override) and a `global-timeout` (any
+profile, since netsuke sets it on `ci`). A top-level test binary must also be
+named by a grouped override's filter, by binary or by one of its functions,
+which is how ortho-config's BDD suite is told apart from netsuke's. The package
+does not evaluate nextest filtersets: a name appearing in a grouped filter is
+the evidence, which is cheap and errs towards acceptance. The name must be a
+whole word inside a `binary()`, `binary_id()` or `test()` predicate, so
+`binary(ui_extra)` does not name `ui`, and a regex argument such as
+`/^name($|::)/` is read whole. Exemptions name a test source and follow the
 NC-001 convention: repository, path, rationale and review trigger, where a
 blank rationale or trigger suppresses nothing. The package ships at `warning`
 severity through a `severity` parameter, as `nested-cargo-offline-tests` does,

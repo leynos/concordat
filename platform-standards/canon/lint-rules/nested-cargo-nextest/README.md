@@ -30,8 +30,8 @@ configuration from a repository that needs none:
   `check`, `test`, `run`, `package`, `clippy`, `doc`, `install`, `publish`,
   `bench`, `miri`, `nextest`, `llvm-cov`, `rustdoc`, `rustc`) among **the same
   command's** arguments, read from the spawn to the next `Command::new` or the
-  next function; a command bound to a name and handed to a function in the
-  same file is also read against that function's body. `cargo metadata` and
+  next function; a command bound to a name and handed to a function in the same
+  file is also read against that function's body. `cargo metadata` and
   `cargo config` do not count;
 - a `rustc` spawn always counts;
 - the file must name `Command`, so `env!("CARGO")` read for a path alone is not
