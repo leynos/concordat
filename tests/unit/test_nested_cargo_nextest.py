@@ -311,3 +311,67 @@ def test_the_shared_actions_toy_app_is_exempt_at_home_only(
         put(root, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
         put(root, path, BUILD_TEST)
         assert ids(root) == expected, name
+
+
+MIXED_TEST = (
+    "use std::process::Command;\n"
+    "pub fn build() {\n"
+    '    Command::new("cargo").arg("build").status().unwrap();\n'
+    "}\n"
+    "#[cfg(test)]\nmod tests {\n    use super::*;\n"
+    "    #[test]\n    fn metadata() {\n"
+    '        Command::new("cargo").arg("metadata").output().unwrap();\n'
+    "    }\n}\n"
+)
+TWO_COMMANDS_TEST = (
+    "use std::process::Command;\n"
+    "#[test]\nfn reads() {\n"
+    '    Command::new("cargo").args(["metadata"]).output().unwrap();\n'
+    '    Command::new("git").args(["build"]).output().unwrap();\n}\n'
+)
+
+
+@pytest.mark.parametrize(
+    ("path", "source"),
+    [
+        ("src/lib.rs", MIXED_TEST),
+        ("tests/reads.rs", TWO_COMMANDS_TEST),
+    ],
+    ids=["production-build-beside-test-metadata", "build-argument-of-another-command"],
+)
+def test_a_compiling_argument_elsewhere_does_not_make_metadata_a_spawner(
+    tmp_path: pathlib.Path, path: str, source: str
+) -> None:
+    """The compiling argument must belong to the same command as the cargo spawn."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, path, source)
+    assert ids(tmp_path) == set()
+
+
+HANDED_ON = (
+    "use std::process::Command;\n"
+    "fn build_test_binary() {\n"
+    '    let mut command = Command::new(env!("CARGO"));\n'
+    "    add_build_request(&mut command);\n}\n"
+    "fn add_build_request(command: &mut Command) {\n"
+    '    command.arg("build").status().unwrap();\n}\n'
+)
+HANDED_ON_QUERY = HANDED_ON.replace('"build"', '"metadata"')
+
+
+def test_a_bound_command_handed_to_a_helper_is_read_with_the_helper(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The callee that adds `build` still makes the spawn compiler work."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", HANDED_ON)
+    assert ids(tmp_path) == {"NC-004"}
+
+
+def test_a_bound_command_handed_to_a_query_helper_is_not_compiler_work(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The same shape with `metadata` compiles nothing."""
+    put(tmp_path, "Cargo.toml", '[package]\nname = "x"\nversion = "0.1.0"\n')
+    put(tmp_path, "tests/common/mod.rs", HANDED_ON_QUERY)
+    assert ids(tmp_path) == set()
