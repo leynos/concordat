@@ -132,7 +132,9 @@ def _test_spans(text: str) -> list[tuple[int, int]]:
     """
     masked = mask_literals(text)
     closers = dict(brace_pairs(masked))
-    blocks = (_marked_block(masked, found, closers) for found in CFG_TEST.finditer(masked))
+    blocks = (
+        _marked_block(masked, found, closers) for found in CFG_TEST.finditer(masked)
+    )
     return [block for block in blocks if block is not None]
 
 
