@@ -38,6 +38,7 @@ from .markdown_envelope import (
 from .rust_surfaces import (
     CargoManifest,
     CargoSurface,
+    build_root_surfaces,
     resolve_rust_surfaces,
     root_cargo_toml_exists,
 )
@@ -145,7 +146,10 @@ def build_envelope(
             "root_makefile": makefile_report is not None,
             "rust_surfaces_declared": resolution.declared,
         },
-        "cargo": {"parsed": cargo_parsed, "surfaces": list(resolution.surfaces)},
+        "cargo": {
+            "parsed": cargo_parsed,
+            "surfaces": list(build_root_surfaces(resolution.surfaces)),
+        },
         "makefile": makefile_report,
     }
     return envelope
@@ -369,7 +373,10 @@ def build_build_defaults_envelope(
             "cargo_config": cargo_config is not None,
             "toolchain_file": toolchain is not None,
         },
-        "cargo": {"parsed": cargo_parsed, "surfaces": list(resolution.surfaces)},
+        "cargo": {
+            "parsed": cargo_parsed,
+            "surfaces": list(build_root_surfaces(resolution.surfaces)),
+        },
         "toolchain": toolchain,
         "cargo_config": cargo_config,
         "exceptions": find_exception_sections(

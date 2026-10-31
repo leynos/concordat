@@ -16,7 +16,7 @@ from .cargo_config import (
 )
 from .dev_build_context import resolve_dev_context, toml_table
 from .dev_build_metadata import cargo_metadata_facts
-from .rust_surfaces import CargoSurface, resolve_rust_surfaces
+from .rust_surfaces import CargoSurface, build_root_surfaces, resolve_rust_surfaces
 
 if typ.TYPE_CHECKING:
     import pathlib
@@ -236,5 +236,8 @@ def build_dev_build_envelope(
     return {
         "schema_version": 2,
         "kind": ENVELOPE_KIND,
-        "surfaces": [_surface(checkout, surface) for surface in resolution.surfaces],
+        "surfaces": [
+            _surface(checkout, surface)
+            for surface in build_root_surfaces(resolution.surfaces)
+        ],
     }
