@@ -204,6 +204,26 @@ def _cargo_requirement(value: object) -> tuple[str, bool]:
     return (version if isinstance(version, str) else ""), False
 
 
+def _is_path_only(value: object, inherited: dict[str, object], key: str) -> bool:
+    """Return whether a dependency is a local path with no registry version.
+
+    Dependabot never offers an update for a crate that resolves from a path, so
+    it cannot drift from its family and is not a declaration to judge. A path
+    dependency that also names a `version` is published and stays collected, as
+    does one inherited from `[workspace.dependencies]` whose entry has a version.
+
+    Returns
+    -------
+    bool
+        True for a table with `path` and neither `version` nor a versioned
+        workspace inheritance.
+    """
+    table = mapping(value) or {}
+    if table.get("workspace") is True:
+        table = mapping(inherited.get(key)) or {}
+    return "path" in table and not isinstance(table.get("version"), str)
+
+
 def _classify(requirement: str) -> tuple[str, bool]:
     """Return how a requirement constrains its package, and whether it is bounded.
 
@@ -412,6 +432,7 @@ def _surface_declarations(
         )
         for section, target, table in table_rows
         for key, value in table.items()
+        if not _is_path_only(value, inherited, key)
     ]
 
 
