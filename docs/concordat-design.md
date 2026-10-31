@@ -2204,28 +2204,32 @@ independently versioned packages such as maturin and PyO3 form a supported
 tuple that a group cannot select, so a member needs an upper bound or an
 `ignore` rule, or every member must join one multi-ecosystem group so that the
 update arrives as a single pull request (DF-002), and an exact pin is not
-protection; a tool pin and its generated inputs, and a behavioural migration,
-need their own checks and are left to later work. The envelope builder collects
-the facts outside policy evaluation: declarations from every governed Cargo
-surface (reusing the nested surface resolver) and the root `pyproject.toml`,
-each with its section, target, optionality, published package identity (a
-renamed dependency resolves to the name Dependabot matches), requirement,
-locked versions, and the covering `updates` entry, first-matching group,
-`ignore` rule and the multi-ecosystem group the entry joins for the package
-(named only when the file defines the group and the entry's `patterns` take the
-package). A relationship applies only where the repository declares every
-member, and a Cargo manifest that no declared surface governs is a problem
-fact, rather than an unread pass, when it declares a package a relationship
-names or cannot be decoded (a repository without `language.rust.surfaces` is
-read at its root only), except that the members of a governed workspace root
-are read through it, for these facts only. They are deliberately not Rust
-surfaces: the footprint and Makefile rules judge a surface as a project root,
-so declaring a member would make them ask for its governing workspace instead.
-Unrelated duplicate crate versions and a copied wheel template in a pure-Python
-repository draw no finding. A repository may stay on an older generation by
-recording an exception in `.concordat` under `dependencies.family_exceptions`,
-naming the relationship, a rationale and a review trigger. Missing facts are
-DF-006 indeterminate findings, never passes.
+protection (the same shared group takes a family together, DF-001). Dependabot
+builds one job per entry and an entry that joins a group runs only that group,
+so the collector reads, among the entries covering a directory, the first that
+processes each package: a group entry for what its `patterns` take, otherwise
+one that does not ignore it; a tool pin and its generated inputs, and a
+behavioural migration, need their own checks and are left to later work. The
+envelope builder collects the facts outside policy evaluation: declarations
+from every governed Cargo surface (reusing the nested surface resolver) and the
+root `pyproject.toml`, each with its section, target, optionality, published
+package identity (a renamed dependency resolves to the name Dependabot
+matches), requirement, locked versions, and the covering `updates` entry,
+first-matching group, `ignore` rule and the multi-ecosystem group the entry
+joins for the package (named only when the file defines the group and the
+entry's `patterns` take the package). A relationship applies only where the
+repository declares every member, and a Cargo manifest that no declared surface
+governs is a problem fact, rather than an unread pass, when it declares a
+package a relationship names or cannot be decoded (a repository without
+`language.rust.surfaces` is read at its root only), except that the members of
+a governed workspace root are read through it, for these facts only. They are
+deliberately not Rust surfaces: the footprint and Makefile rules judge a
+surface as a project root, so declaring a member would make them ask for its
+governing workspace instead. Unrelated duplicate crate versions and a copied
+wheel template in a pure-Python repository draw no finding. A repository may
+stay on an older generation by recording an exception in `.concordat` under
+`dependencies.family_exceptions`, naming the relationship, a rationale and a
+review trigger. Missing facts are DF-006 indeterminate findings, never passes.
 
 ##### Rust toolchain policy (RT-022 through RT-027)
 

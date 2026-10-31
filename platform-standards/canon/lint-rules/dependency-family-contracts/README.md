@@ -68,12 +68,15 @@ data carries no estate-wide version number.
 
 - Only the root `pyproject.toml` is read; a Python project elsewhere is
   reported, not passed.
-- Multi-ecosystem groups are read for one purpose: a tuple (DF-002) whose
-  members all join one group the file defines, with `patterns` that take each
-  member, arrives as a single pull request and counts as protected. The rule
-  does not read a group as protecting a family (DF-001), and an entry that
-  names an undefined group, or whose `patterns` miss the member, is left
-  outside it.
+- Multi-ecosystem groups are read for one purpose: members that all join one
+  group the file defines, with `patterns` that take each member, arrive as a
+  single pull request. That protects a tuple (DF-002) and takes a family
+  together (DF-001, DF-003). An entry that names an undefined group, or whose
+  `patterns` miss the member, is left outside it. Dependabot builds one job per
+  entry and an entry that joins a group runs only that group, so when several
+  entries cover a directory the rule reads the first one that processes the
+  package: a group entry for what its `patterns` take, otherwise one that does
+  not ignore it.
 - Whether a failure would follow from an unprotected relationship (runtime
   compatibility) is a matter for the consumer's canary, not this rule.
 

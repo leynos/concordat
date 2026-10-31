@@ -170,3 +170,90 @@ def test_a_package_no_entry_covers_has_no_multi_group() -> None:
     fact = coverage(config, "cargo", ["/"], "pyo3")
 
     assert (fact["entry"], fact["multi_group"]) == (None, None)
+
+
+def _split_config() -> ConfigFile:
+    """Return the two-entry shape: the group entry first, then the plain entry.
+
+    Dependabot builds one job per entry. An entry that joins a multi-ecosystem
+    group runs only that group, over the dependencies its `patterns` take, so
+    the member's ecosystem also needs a plain entry for everything else. The
+    plain entry ignores the member, which the group entry already handles.
+    """
+    group_entry = _entry(
+        "uv", **{"multi-ecosystem-group": "maturin-pyo3", "patterns": ["maturin"]}
+    )
+    plain_entry = _entry(
+        "uv",
+        groups={
+            "pylint-astroid": {"patterns": ["pylint", "astroid"]},
+            "minor-and-patch": {"patterns": ["*"], "update-types": ["minor", "patch"]},
+        },
+        ignore=[{"dependency-name": "maturin"}],
+    )
+    return _config([group_entry, plain_entry], _DEFINED)
+
+
+def test_the_group_entry_handles_the_member_it_takes() -> None:
+    """The member is covered by the group entry, not by the plain entry."""
+    fact = coverage(_split_config(), "uv", ["/"], "maturin")
+
+    assert (fact["entry"], fact["multi_group"], fact["ignored"]) == (
+        0,
+        "maturin-pyo3",
+        False,
+    )
+
+
+@pytest.mark.parametrize("package", ["pylint", "astroid"])
+def test_the_plain_entry_handles_what_the_group_entry_does_not_take(
+    package: str,
+) -> None:
+    """Skip the group entry for a package its `patterns` miss, as Dependabot does."""
+    fact = coverage(_split_config(), "uv", ["/"], package)
+
+    assert (fact["entry"], fact["group"], fact["multi_group"]) == (
+        1,
+        "pylint-astroid",
+        None,
+    )
+
+
+def test_an_entry_that_ignores_a_package_does_not_handle_it() -> None:
+    """The first entry that actually processes the package supplies its facts."""
+    ignoring = _entry("uv", ignore=[{"dependency-name": "pytest"}])
+    handling = _entry("uv", groups={"minor-and-patch": {"patterns": ["*"]}})
+    config = _config([ignoring, handling], None)
+
+    assert coverage(config, "uv", ["/"], "pytest")["entry"] == 1
+
+
+def test_a_package_only_ignored_keeps_the_ignoring_entry() -> None:
+    """When no entry processes the package, the first covering entry answers."""
+    ignoring = _entry("uv", ignore=[{"dependency-name": "pytest"}])
+    config = _config([ignoring], None)
+
+    fact = coverage(config, "uv", ["/"], "pytest")
+
+    assert (fact["entry"], fact["ignored"]) == (0, True)
+
+
+def test_a_lone_group_entry_leaves_other_packages_unhandled() -> None:
+    """The merged cuprum shape: nothing handles pylint, and the fact says so."""
+    group_entry = _entry(
+        "uv", **{"multi-ecosystem-group": "maturin-pyo3", "patterns": ["maturin"]}
+    )
+    config = _config([group_entry], _DEFINED)
+
+    fact = coverage(config, "uv", ["/"], "pylint")
+
+    assert (fact["entry"], fact["group"], fact["multi_group"]) == (0, None, None)
+
+
+def test_when_no_entry_handles_a_package_the_first_covering_entry_answers() -> None:
+    """Both entries ignore it, so the document-order first one supplies the fact."""
+    first = _entry("uv", ignore=[{"dependency-name": "pytest"}])
+    second = _entry("uv", ignore=[{"dependency-name": "pytest"}])
+    config = _config([first, second], None)
+
+    assert coverage(config, "uv", ["/"], "pytest")["entry"] == 0

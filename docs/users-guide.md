@@ -413,7 +413,14 @@ A relationship applies only where the repository declares every member:
   defines under `multi-ecosystem-groups`, the entry's `patterns` take the
   member, and all members name the same group. Dependabot then raises one pull
   request for the group, so one CI run sees the tuple; it does not choose
-  compatible versions;
+  compatible versions. The same shared group also takes a family together
+  (DF-001 and DF-003). Dependabot builds one job per entry, and an entry that
+  joins a group runs only that group, over the dependencies its `patterns`
+  take, so the rule reads the first entry covering a directory that actually
+  processes each package: a group entry for what its `patterns` take, otherwise
+  the first entry that does not ignore it. An ecosystem that needs the rest of
+  its dependencies updated keeps a second, plain entry beside the group entry,
+  ignoring the group's members;
 - a missing configuration, an unreadable manifest or lock, a Python project
   outside the root, or a Cargo manifest outside the governed Rust surfaces is
   reported as indeterminate (DF-006). A repository that has not declared

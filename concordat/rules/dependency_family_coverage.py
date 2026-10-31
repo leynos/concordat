@@ -178,23 +178,72 @@ def coverage(
     updates = sequence((mapping(config["parsed"]) or {}).get("updates"))
     if updates is None:
         return _missing_coverage("the Dependabot configuration has no updates")
-    covering = (
-        (index, entry)
-        for directory in directories
-        for index, entry in enumerate(updates)
-        if _entry_covers(entry, ecosystem, directory)
-    )
-    found = next(covering, None)
-    if found is None:
-        return _missing_coverage(f"no {ecosystem} entry covers {directories[0]}")
-    index, entry = found
-    table = typ.cast("dict[str, object]", entry)
     python = ecosystem in {"pip", "uv"}
+    covering = _covering_entries(updates, ecosystem, directories)
+    if not covering:
+        return _missing_coverage(f"no {ecosystem} entry covers {directories[0]}")
+    index, table = _handling_entry(config, covering, package, python=python)
     return {
         **_entry_coverage(config, index, table, package),
         "ignored": is_ignored(table, package, python=python),
         "multi_group": _multi_group(config, table, package, python=python),
     }
+
+
+def _covering_entries(
+    updates: list[object], ecosystem: str, directories: cabc.Sequence[str]
+) -> list[tuple[int, dict[str, object]]]:
+    """Return the entries covering the nearest directory that any entry covers.
+
+    Returns
+    -------
+    list[tuple[int, dict[str, object]]]
+        Index and entry, in document order; empty when none covers a directory.
+    """
+    for directory in directories:
+        found = [
+            (index, typ.cast("dict[str, object]", entry))
+            for index, entry in enumerate(updates)
+            if _entry_covers(entry, ecosystem, directory)
+        ]
+        if found:
+            return found
+    return []
+
+
+def _handling_entry(
+    config: ConfigFile,
+    covering: list[tuple[int, dict[str, object]]],
+    package: str,
+    *,
+    python: bool,
+) -> tuple[int, dict[str, object]]:
+    """Return the first covering entry that processes *package*.
+
+    Dependabot builds one job per entry. An entry that joins a multi-ecosystem
+    group runs only that group, over the dependencies its `patterns` take, and
+    an entry that ignores a package skips it, so the facts belong to the first
+    entry that does neither. When none processes the package the first covering
+    entry answers, and its facts show the package is not taken by any group.
+
+    Returns
+    -------
+    tuple[int, dict[str, object]]
+        The entry's index and mapping.
+    """
+    for index, entry in covering:
+        if _processes(config, entry, package, python=python):
+            return index, entry
+    return covering[0]
+
+
+def _processes(
+    config: ConfigFile, entry: dict[str, object], package: str, *, python: bool
+) -> bool:
+    """Return whether *entry*'s job considers *package* for a version update."""
+    if entry.get("multi-ecosystem-group") is not None:
+        return _multi_group(config, entry, package, python=python) is not None
+    return not is_ignored(entry, package, python=python)
 
 
 def _joined_group(config: ConfigFile, entry: dict[str, object]) -> str | None:

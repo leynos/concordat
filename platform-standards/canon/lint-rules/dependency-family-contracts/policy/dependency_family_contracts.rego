@@ -125,15 +125,20 @@ protected_tuple(rel) if {
 }
 
 # One multi-ecosystem group takes every member: Dependabot opens a single pull
-# request for the group, so one CI run sees the whole tuple. This coordinates
-# the update; it does not choose compatible versions, which is why it protects
-# a tuple but never counts for a family that needs a narrow group.
-protected_tuple(rel) if {
+# request for the group, so one CI run sees the whole relationship. This
+# coordinates the update; it does not choose compatible versions, which is why
+# it protects a tuple without an upper bound, and why it only counts when every
+# member is in the group.
+shared_multi_group(rel) if {
   multi_groups := {d.coverage.multi_group | some d in member_declarations(rel)}
   count(multi_groups) == 1
   every d in member_declarations(rel) {
     d.coverage.multi_group != null
   }
+}
+
+protected_tuple(rel) if {
+  shared_multi_group(rel)
 }
 
 deny contains finding("DF-006", "indeterminate", ".", msg) if {
@@ -172,9 +177,10 @@ deny contains finding("DF-001", "noncompliant", first_path(rel), msg) if {
   group_family(rel)
   count(uncovered(rel)) == 0
   not shared_narrow_group(rel)
+  not shared_multi_group(rel)
   count(matching_all_narrow(rel)) == 0
   msg := sprintf(
-    "%s: %s are not taken together by one Dependabot group ahead of the catch-all (taken by: %s); add a group for the family, or record a reviewed exception",
+    "%s: %s are not taken together by one Dependabot group ahead of the catch-all (taken by: %s); add a group for the family, join the members to one multi-ecosystem group, or record a reviewed exception",
     [rel.id, concat(", ", sort(rel.members)), concat(", ", group_names(rel))],
   )
 }

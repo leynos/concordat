@@ -216,3 +216,18 @@ test_workspace_member_grouped if {
   findings := policy.deny with input as data.fixtures.workspace_member_grouped
   count(findings) == 0
 }
+
+# The shape Dependabot needs: the group entry takes pyo3, its build crate and
+# maturin into one pull request, and a plain entry ignores them and keeps the
+# rest. One group takes the family together and protects the tuple.
+test_maturin_two_entries if {
+  findings := policy.deny with input as data.fixtures.maturin_two_entries
+  count(findings) == 0
+}
+
+# A lone group entry takes only pyo3, so the family is split: its build crate
+# has no group at all.
+test_family_lone_group_entry if {
+  findings := policy.deny with input as data.fixtures.family_lone_group_entry
+  ids(findings) == {"DF-001"}
+}
