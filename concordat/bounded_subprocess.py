@@ -49,6 +49,32 @@ class _PipeCapture:
     lock: threading.Lock = dataclasses.field(default_factory=threading.Lock, repr=False)
 
 
+@dataclasses.dataclass(slots=True)
+class _ProcessState:
+    """Operation data shared by the bounded-process completion helpers."""
+
+    process: subprocess.Popen[bytes]
+    args: typ.Sequence[str | pathlib.Path]
+    timeout: float
+    max_bytes_per_stream: int
+    stdout_capture: _PipeCapture
+    stderr_capture: _PipeCapture
+    readers: tuple[threading.Thread, ...]
+    deadline: float
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class _ProcessOutput:
+    """Bounded output and reader state captured from both child pipes."""
+
+    stdout: bytes
+    stdout_overflowed: bool
+    stdout_errors: tuple[OSError, ...]
+    stderr: bytes
+    stderr_overflowed: bool
+    stderr_errors: tuple[OSError, ...]
+
+
 def _drain_pipe(
     pipe: typ.BinaryIO,
     capture: _PipeCapture,
@@ -233,69 +259,78 @@ def _stop_readers_after_timeout(
     _join_readers(readers, time.monotonic() + _READER_CLEANUP_SECONDS)
 
 
+def _capture_output(state: _ProcessState) -> _ProcessOutput:
+    """Copy bounded output state and format the stderr truncation marker."""
+    stdout, stdout_overflowed, stdout_errors = _capture_snapshot(state.stdout_capture)
+    stderr_data, stderr_overflowed, stderr_errors = _capture_snapshot(
+        state.stderr_capture
+    )
+    stderr = _stderr_bytes(
+        stderr_data,
+        state.max_bytes_per_stream,
+        overflowed=stderr_overflowed,
+    )
+    return _ProcessOutput(
+        stdout=stdout,
+        stdout_overflowed=stdout_overflowed,
+        stdout_errors=stdout_errors,
+        stderr=stderr,
+        stderr_overflowed=stderr_overflowed,
+        stderr_errors=stderr_errors,
+    )
+
+
+def _process_returncode(
+    state: _ProcessState,
+    output: _ProcessOutput,
+    *,
+    timed_out: bool,
+) -> int:
+    """Raise capture/timeout errors, or return the child exit code."""
+    if output.stdout_errors or output.stderr_errors:
+        raise (output.stdout_errors or output.stderr_errors)[0]
+    if timed_out:
+        raise subprocess.TimeoutExpired(
+            state.args,
+            state.timeout,
+            output=output.stdout,
+            stderr=output.stderr,
+        )
+    if output.stdout_overflowed:
+        raise OutputLimitExceededError("stdout", state.max_bytes_per_stream)
+    returncode = state.process.returncode
+    if returncode is None:
+        raise RuntimeError
+    return returncode
+
+
 def _complete_process(
-    process: subprocess.Popen[bytes],
-    args: typ.Sequence[str | pathlib.Path],
-    timeout: float,
-    max_bytes_per_stream: int,
-    stdout_capture: _PipeCapture,
-    stderr_capture: _PipeCapture,
+    state: _ProcessState,
     *,
     timed_out: bool,
 ) -> subprocess.CompletedProcess[str]:
     """Build the result or raise the bounded process error."""
-    stdout, stdout_overflowed, stdout_errors = _capture_snapshot(stdout_capture)
-    stderr_data, stderr_overflowed, stderr_errors = _capture_snapshot(stderr_capture)
-    stderr = _stderr_bytes(
-        stderr_data,
-        max_bytes_per_stream,
-        overflowed=stderr_overflowed,
-    )
-    if stdout_errors or stderr_errors:
-        raise (stdout_errors or stderr_errors)[0]
-    if timed_out:
-        raise subprocess.TimeoutExpired(args, timeout, output=stdout, stderr=stderr)
-    if stdout_overflowed:
-        raise OutputLimitExceededError("stdout", max_bytes_per_stream)
-    returncode = process.returncode
-    if returncode is None:
-        raise RuntimeError
+    output = _capture_output(state)
+    returncode = _process_returncode(state, output, timed_out=timed_out)
 
     return subprocess.CompletedProcess(
-        args,
+        state.args,
         returncode,
-        stdout=_decode(stdout),
+        stdout=_decode(output.stdout),
         stderr=_decode(
-            stderr,
-            errors="replace" if stderr_overflowed else "strict",
+            output.stderr,
+            errors="replace" if output.stderr_overflowed else "strict",
         ),
     )
 
 
-def _finish_process(
-    process: subprocess.Popen[bytes],
-    args: typ.Sequence[str | pathlib.Path],
-    timeout: float,
-    max_bytes_per_stream: int,
-    stdout_capture: _PipeCapture,
-    stderr_capture: _PipeCapture,
-    readers: tuple[threading.Thread, ...],
-    deadline: float,
-) -> subprocess.CompletedProcess[str]:
+def _finish_process(state: _ProcessState) -> subprocess.CompletedProcess[str]:
     """Wait within the deadline, stop held-open pipes, and collect output."""
-    timed_out = _wait_for_process(process, deadline)
-    if timed_out or not _join_readers(readers, deadline):
+    timed_out = _wait_for_process(state.process, state.deadline)
+    if timed_out or not _join_readers(state.readers, state.deadline):
         timed_out = True
-        _stop_readers_after_timeout(process, readers)
-    return _complete_process(
-        process,
-        args,
-        timeout,
-        max_bytes_per_stream,
-        stdout_capture,
-        stderr_capture,
-        timed_out=timed_out,
-    )
+        _stop_readers_after_timeout(state.process, state.readers)
+    return _complete_process(state, timed_out=timed_out)
 
 
 def run_bounded(
@@ -334,7 +369,7 @@ def run_bounded(
         stdout_capture, stderr_capture, readers = _start_readers(
             process, max_bytes_per_stream
         )
-        return _finish_process(
+        state = _ProcessState(
             process,
             args,
             timeout,
@@ -344,3 +379,4 @@ def run_bounded(
             readers,
             deadline,
         )
+        return _finish_process(state)
