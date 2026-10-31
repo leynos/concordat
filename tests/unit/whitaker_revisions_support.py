@@ -31,9 +31,24 @@ class History:
         """Initialise an empty repository at *path*."""
         self.repository = pygit2.init_repository(str(path), initial_head="main")
         self.parents: list[pygit2.Oid] = []
+        self.executable: frozenset[str] = frozenset()
 
-    def commit(self, files: dict[str, str], message: str) -> str:
-        """Commit *files* as the whole tree and return the new commit id."""
+    def commit(
+        self,
+        files: dict[str, str],
+        message: str,
+        executable: frozenset[str] = frozenset(),
+    ) -> str:
+        """Commit *files* as the whole tree and return the new commit id.
+
+        Paths in *executable* get the executable file mode.
+
+        Returns
+        -------
+        str
+            The id of the new commit.
+        """
+        self.executable = executable
         tree = self._tree(files)
         oid = self.repository.create_commit(
             "refs/heads/main", SIGNATURE, SIGNATURE, message, tree, self.parents
@@ -66,7 +81,7 @@ class History:
         self.parents = [oid]
         return str(oid)
 
-    def _tree(self, files: dict[str, str]) -> pygit2.Oid:
+    def _tree(self, files: dict[str, str], prefix: str = "") -> pygit2.Oid:
         """Write a nested tree for *files* and return its id."""
         builder = self.repository.TreeBuilder()
         nested: dict[str, dict[str, str]] = {}
@@ -76,9 +91,16 @@ class History:
                 nested.setdefault(head, {})[tail] = text
             else:
                 blob = self.repository.create_blob(text.encode())
-                builder.insert(name, blob, pygit2.GIT_FILEMODE_BLOB)
+                mode = (
+                    pygit2.GIT_FILEMODE_BLOB_EXECUTABLE
+                    if f"{prefix}{name}" in self.executable
+                    else pygit2.GIT_FILEMODE_BLOB
+                )
+                builder.insert(name, blob, mode)
         for head, children in nested.items():
-            builder.insert(head, self._tree(children), pygit2.GIT_FILEMODE_TREE)
+            builder.insert(
+                head, self._tree(children, f"{prefix}{head}/"), pygit2.GIT_FILEMODE_TREE
+            )
         return builder.write()
 
 

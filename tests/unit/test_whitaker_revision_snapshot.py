@@ -5,6 +5,7 @@ from __future__ import annotations
 import itertools
 import json
 import pathlib
+import re
 import typing as typ
 
 import pytest
@@ -43,6 +44,7 @@ class _Snapshot(typ.TypedDict):
     root: str
     action_directory: str
     action_tree: str
+    runtime_digest: str
     commits: list[_Commit]
 
 
@@ -121,6 +123,23 @@ def test_snapshot_records_the_complete_reviewed_first_parent_segment(
         )
         for parent, child in itertools.pairwise(commits):
             assert child["first_parent"] == parent["revision"]
+
+
+def test_runtime_digests_record_which_chains_run_the_same_action(
+    snapshots: list[_Snapshot],
+) -> None:
+    """Chains c and d differ in `tests/` only, so they share one runtime digest.
+
+    The digests were captured with plain Git plumbing (`ls-tree -r`, drop
+    `tests/` and Markdown, sort `<mode> <blob> <path>` records, SHA-256), not
+    with the module under test. 5a99aed7, 6e99f225 and 872f59f5 run the same
+    `action.yml` and helpers; #652 changed only the action's tests.
+    """
+    digests = [snapshot["runtime_digest"] for snapshot in snapshots]
+    assert all(re.fullmatch(r"[0-9a-f]{64}", digest) for digest in digests)
+    assert len(set(digests)) == 3
+    assert digests[2] == digests[3]
+    assert snapshots[2]["action_tree"] != snapshots[3]["action_tree"]
 
 
 def test_shipped_defaults_equal_the_independent_complete_history(

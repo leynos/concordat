@@ -737,8 +737,9 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   `concordat.rules.whitaker_revisions` (owner: the whitaker-provisioning
   package; callers: `scripts/whitaker_revisions.py` and its tests only). It
   walks shared-actions main first-parent and keeps each commit that is an
-  approved root, or descends from one with the action directory's Git tree id
-  equal to that root's. After shared-actions gains commits, run
+  approved root, or descends from one with the action directory's runtime
+  digest (every file except `tests/` and Markdown) equal to that root's. After
+  shared-actions gains commits, run
   `uv run python scripts/whitaker_revisions.py sync <shared-actions clone>`,
   then commit the regenerated `rule.yaml` and refresh its digest in the canon
   manifest. `check <clone>` exits 1 and names each missing or non-derivable
