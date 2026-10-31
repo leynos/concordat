@@ -109,8 +109,32 @@ def test_a_substantiated_exception_reports_its_facts(tmp_path: pathlib.Path) -> 
             False,
         ),
         ("[unstable]\ncodegen-backend = true\n", False, False),
+        (
+            (
+                "[target.'cfg(unix)']\n"
+                'rustflags = ["-Zthreads=8", "-Clink-arg=-fuse-ld=mold"]\n'
+            ),
+            True,
+            False,
+        ),
+        (
+            (
+                '[build]\nrustflags = ["-Zthreads=8", "-Clink-arg=-fuse-ld=mold"]\n'
+                "[target.'cfg(target_os = \"linux\")']\n"
+                'rustflags = ["-Zthreads=8", "-Clink-arg=-fuse-ld=mold"]\n'
+            ),
+            True,
+            False,
+        ),
     ],
-    ids=["no-linker", "no-threads", "linker-off-linux", "no-rustflags"],
+    ids=[
+        "no-linker",
+        "no-threads",
+        "linker-off-linux",
+        "no-rustflags",
+        "linker-reaches-macos-through-unix",
+        "linker-also-in-build",
+    ],
 )
 def test_a_route_missing_a_fast_flag_is_reported(
     tmp_path: pathlib.Path, route: str, *, threads: bool, linker: bool
@@ -142,6 +166,19 @@ def test_a_missing_route_or_record_is_reported(tmp_path: pathlib.Path) -> None:
     [exception] = inspect_standard_exceptions(tmp_path)
     assert exception["route_state"] == ROUTE_ABSENT
     assert exception["adr_present"] is False
+
+
+def test_a_route_cargo_would_refuse_is_unreadable(tmp_path: pathlib.Path) -> None:
+    """Dropping a non-string flag would report a configuration Cargo cannot load."""
+    _files(
+        tmp_path,
+        "[target.'cfg(target_os = \"linux\")']\n"
+        'rustflags = ["-Zthreads=8", "-Clink-arg=-fuse-ld=mold", 42]\n',
+    )
+    _declare(tmp_path, _entry())
+    [exception] = inspect_standard_exceptions(tmp_path)
+    assert exception["route_state"] == ROUTE_UNREADABLE
+    assert (exception["route_threads"], exception["route_linker"]) == (False, False)
 
 
 def test_an_unparsable_route_is_reported(tmp_path: pathlib.Path) -> None:

@@ -42,6 +42,7 @@ from .cargo_config import (
     TomlDocument,
     normalise_flags,
     read_cargo_config,
+    rustflags_cargo_would_refuse,
     rustflags_sources,
 )
 from .fs_probe import regular_file_exists
@@ -185,7 +186,10 @@ def _route_facts(
     ):
         return _ABSENT_ROUTE
     document = _route_document(path)
-    if document is None:
+    # A configuration Cargo refuses to load cannot be a working fast route, so it
+    # is unreadable: reading the rest of it would waive clauses for a build that
+    # fails.
+    if document is None or rustflags_cargo_would_refuse(document) is not None:
         return _UNREADABLE_ROUTE
     sources = rustflags_sources(document)
     wanted_threads = normalise_flags([threads_flag])
@@ -194,9 +198,26 @@ def _route_facts(
         state=ROUTE_OK,
         has_threads=bool(sources)
         and all(_carries(source, wanted_threads) for source in sources),
-        has_linker=any(
-            source["linux"] and _carries(source, wanted_linker) for source in sources
-        ),
+        has_linker=_linker_is_linux_only(sources, wanted_linker),
+    )
+
+
+def _linker_is_linux_only(sources: list[RustflagsSource], wanted: list[str]) -> bool:
+    """Return whether a Linux-only source carries the linker and no other does.
+
+    A linker that ships for Linux alone breaks the build wherever else a source
+    reaches (`cfg(unix)` also matches macOS), so any source that names it must
+    apply to Linux and nowhere else, and at least one must carry all of it.
+
+    Returns
+    -------
+    bool
+        ``True`` when the linker is named only in Linux-only sources and one of
+        them carries it whole.
+    """
+    naming = [source for source in sources if any(f in source["flags"] for f in wanted)]
+    return any(_carries(source, wanted) for source in naming) and all(
+        source["linux_only"] for source in naming
     )
 
 

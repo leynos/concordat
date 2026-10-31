@@ -65,3 +65,41 @@ test_a_gate_build_after_a_cd_or_unset_prefix_is_still_flagged if {
 	profile(findings) == {["BD-008", "noncompliant"]}
 	count(findings) == 4
 }
+
+# -- the working directory is tracked in order ---------------------------------
+
+# Cargo discovers configuration from the directory the tool runs in, so a `cd ..`
+# that a later `cd` undoes is not an exit. The depth is relative to the checkout.
+test_a_single_cd_to_the_parent_leaves_the_checkout if {
+	policy.cwd_depth([`cd .. `, ` whitaker --all`], 1) == -1
+}
+
+test_a_cd_into_a_subdirectory_then_back_is_where_it_started if {
+	policy.cwd_depth([`cd crates `, ` cd .. `, ` whitaker --all`], 2) == 0
+}
+
+test_two_cds_to_the_parent_stay_outside if {
+	policy.cwd_depth([`cd .. `, ` cd .. `, ` whitaker --all`], 2) == -2
+}
+
+test_the_parent_named_absolutely_leaves_the_checkout if {
+	policy.cwd_depth([`cd "$(dir $(CURDIR))" `, ` whitaker --all`], 1) == -1
+}
+
+test_a_cd_back_into_the_checkout_directory_is_inside_again if {
+	policy.cwd_depth([`cd .. `, ` cd repo `, ` whitaker --all`], 2) == 0
+}
+
+test_an_absolute_parent_after_a_subdirectory_still_leaves if {
+	policy.cwd_depth([`cd crates `, ` cd $(dir $(CURDIR)) `, ` whitaker --all`], 2) == -1
+}
+
+# A cd the policy does not understand never reads as leaving the checkout.
+test_an_unknown_cd_resets_the_depth_to_the_checkout if {
+	policy.cwd_depth([`cd .. `, ` cd /tmp `, ` whitaker --all`], 2) == 0
+	policy.cwd_depth([`cd ../sibling `, ` whitaker --all`], 1) == 0
+}
+
+test_a_recipe_without_a_cd_runs_in_the_checkout if {
+	policy.cwd_depth([` whitaker --all`], 0) == 0
+}

@@ -299,8 +299,11 @@ unproved, because a `RUSTFLAGS` assignment does not displace a profile backend.
 A route that first changes into the parent of the checkout (`cd ..`,
 `cd "$(dir $(CURDIR))"` or `cd "$(CURDIR)/.."`) never discovers that file, so a
 backend it selects does not reach Whitaker; cabochon keeps its Whitaker
-toolchain away from nightly-only configuration this way. A `cd` into a
-subdirectory does not count, since Cargo finds the file from there. A Cranelift
+toolchain away from nightly-only configuration this way. The working directory
+is tracked in order, as a depth relative to the checkout: a `cd` into a
+subdirectory does not count, and neither does `cd crates && cd ..`, since Cargo
+finds the file from the checkout; a `cd` the policy does not understand (an
+absolute path, `../sibling`) resets the depth to the checkout. A Cranelift
 selection in the root `Cargo.toml` still counts, because `--manifest-path`
 reads it wherever the route runs.
 

@@ -12,26 +12,74 @@ runs_isolated_whitaker(segment) if regex.match(
 
 exempt_segment(segment) if runs_isolated_whitaker(segment)
 
-# A `cd` to the parent of the checkout, in the spellings a recipe uses: `..`,
-# GNU Make's `$(dir $(CURDIR))` and `$(CURDIR)/..`, bare or quoted. A `cd` into
-# a subdirectory does not count: Cargo still finds the checkout's configuration
-# from there.
-leaves_checkout(segment) if regex.match(
-	`^[[:space:]]*[-@+]*[[:space:]]*cd[[:space:]]+(\.\./?|"\.\./?"|'\.\./?'|"?\$\(dir[[:space:]]+\$\(CURDIR\)\)/?"?|"?\$\(CURDIR\)/\.\./?"?)[[:space:]]*$`,
+# The recipe's working directory is tracked in order, as a depth relative to the
+# checkout: a `cd ..` is one level up (-1), a `cd` into a subdirectory one level
+# down (+1), and the parent of the checkout named absolutely (GNU Make's
+# `$(dir $(CURDIR))` or `$(CURDIR)/..`, bare or quoted) sets the depth to -1
+# whatever came before. Any other `cd` (an absolute path, `.`, `../sibling`) is
+# not understood and resets the depth to 0, so it never reads as leaving the
+# checkout. A route runs outside the checkout only at a negative depth: a `cd
+# crates && cd ..` is back where it started, and Cargo still finds the
+# checkout's configuration from there.
+cd_segment(segment) if regex.match(`^[[:space:]]*[-@+]*[[:space:]]*cd([[:space:]]|$)`, segment)
+
+cd_up(segment) if regex.match(
+	`^[[:space:]]*[-@+]*[[:space:]]*cd[[:space:]]+(\.\./?|"\.\./?"|'\.\./?')[[:space:]]*$`,
 	segment,
 )
 
-# The route runs outside the checkout when a segment before it in the same
-# recipe line leaves the checkout. Cargo discovers `.cargo/config.toml` from the
-# working directory upwards, so the checkout's configuration, and any backend
-# profile it selects, is never read; `--manifest-path` still reads the manifest.
+cd_parent(segment) if regex.match(
+	`^[[:space:]]*[-@+]*[[:space:]]*cd[[:space:]]+("?\$\(dir[[:space:]]+\$\(CURDIR\)\)/?"?|"?\$\(CURDIR\)/\.\./?"?)[[:space:]]*$`,
+	segment,
+)
+
+cd_down(segment) if regex.match(
+	`^[[:space:]]*[-@+]*[[:space:]]*cd[[:space:]]+"?[A-Za-z0-9_][^[:space:]"']*"?[[:space:]]*$`,
+	segment,
+)
+
+# A `cd` that names where it goes instead of moving relative to where it was.
+cd_resets(segment) if cd_parent(segment)
+
+cd_resets(segment) if {
+	cd_segment(segment)
+	not cd_up(segment)
+	not cd_down(segment)
+}
+
+cd_reset_depth(segment) := -1 if cd_parent(segment)
+
+cd_reset_depth(segment) := 0 if {
+	cd_resets(segment)
+	not cd_parent(segment)
+}
+
+cd_move(segment) := -1 if cd_up(segment)
+
+cd_move(segment) := 1 if cd_down(segment)
+
+# The depth at `index`: the last reset before it, then every relative move
+# after that reset.
+cwd_depth(segments, index) := depth if {
+	resets := {position | some position, earlier in segments; position < index; cd_resets(earlier)}
+	count(resets) > 0
+	anchor := max(resets)
+	moves := [step | some position, earlier in segments; position > anchor; position < index; step := cd_move(earlier)]
+	depth := cd_reset_depth(segments[anchor]) + sum(moves)
+} else := depth if {
+	moves := [step | some position, earlier in segments; position < index; step := cd_move(earlier)]
+	depth := sum(moves)
+}
+
+# The route runs outside the checkout when the recipe line has left it before the
+# segment runs. Cargo discovers `.cargo/config.toml` from the working directory
+# upwards, so the checkout's configuration, and any backend profile it selects,
+# is never read; `--manifest-path` still reads the manifest.
 route_leaves_checkout(recipe, segment) if {
 	segments := recipe_segments(recipe)
 	some index, later in segments
 	later == segment
-	some earlier_index, earlier in segments
-	earlier_index < index
-	leaves_checkout(earlier)
+	cwd_depth(segments, index) < 0
 }
 
 isolated_suite_sites contains [rule, recipe, segment] if {
