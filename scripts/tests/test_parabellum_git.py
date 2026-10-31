@@ -45,7 +45,7 @@ class TestGitOperations:
                 stderr="fatal: repository not found",
             )
 
-        monkeypatch.setattr(sweep.subprocess, "run", fake_run)
+        monkeypatch.setattr(sweep.bounded_subprocess, "run_bounded", fake_run)
         with pytest.raises(sweep.OperationalRuleError) as exc_info:
             sweep.resolve_head("leynos", "ghost")
         error = exc_info.value
@@ -87,7 +87,11 @@ class TestGitOperations:
         both must carry the same context so the sweep can record which
         repository the lookup was for.
         """
-        monkeypatch.setattr(sweep.subprocess, "run", _raise(failure))
+        monkeypatch.setattr(
+            sweep.bounded_subprocess,
+            "run_bounded",
+            _raise(failure),
+        )
 
         with pytest.raises(sweep.OperationalRuleError, match=message) as exc_info:
             sweep.resolve_head("leynos", "ghost")
@@ -100,17 +104,12 @@ class TestCloneAndAuditPackage:
 
     @staticmethod
     def _fake_git(
-        *args: object,
+        args: typ.Sequence[str],
         **kwargs: object,
     ) -> sweep.subprocess.CompletedProcess[str]:
         """Answer every git invocation with a plausible success."""
         del kwargs
-        first = args[0] if args else None
-        argv: list[str] = (
-            [str(part) for part in typ.cast("list[object]", first)]
-            if isinstance(first, list)
-            else []
-        )
+        argv = list(args)
         # `_git` builds the full argv, so the subcommand follows the binary.
         if argv[:2] == ["git", "rev-parse"]:
             return sweep.subprocess.CompletedProcess(
@@ -129,7 +128,7 @@ class TestCloneAndAuditPackage:
     ) -> None:
         """Two positional arguments keep auditing the baseline package."""
         audited: list[str] = []
-        monkeypatch.setattr(sweep.subprocess, "run", self._fake_git)
+        monkeypatch.setattr(sweep.bounded_subprocess, "run_bounded", self._fake_git)
         monkeypatch.setattr(
             sweep,
             "run_rule",
@@ -146,7 +145,7 @@ class TestCloneAndAuditPackage:
     ) -> None:
         """A survey package is passed through to the rule runner unchanged."""
         seen: list[tuple[str, object]] = []
-        monkeypatch.setattr(sweep.subprocess, "run", self._fake_git)
+        monkeypatch.setattr(sweep.bounded_subprocess, "run_bounded", self._fake_git)
 
         def fake_run_rule(package: str, checkout: object) -> sweep.RuleRunResult:
             seen.append((package, checkout))

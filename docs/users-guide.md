@@ -1476,6 +1476,13 @@ the number of distinct repositories with noncompliant evidence, the number with
 indeterminate-only evidence, and how many would fail if the package's findings
 were promoted to error severity.
 
+Commands run by the sweep and its rule runners retain at most 1 MiB from each
+output stream. If stdout exceeds the cap, the operation fails rather than
+parsing incomplete machine-readable output. Oversized stderr keeps its useful
+prefix and ends with a truncation marker. A command that reaches its timeout is
+stopped together with child processes that could otherwise keep its output
+pipes open.
+
 ## Previewing and applying estate changes
 
 Use the `plan` and `apply` commands to run OpenTofu against the active estate

@@ -10,7 +10,7 @@ import typing as typ
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
-from concordat import cli
+from concordat import bounded_subprocess, cli
 from concordat.rules import runner
 
 from .conftest import RunResult
@@ -212,7 +212,7 @@ def given_no_makeutil(monkeypatch: pytest.MonkeyPatch) -> None:
     def raise_missing(*args: object, **kwargs: object) -> typ.NoReturn:
         raise FileNotFoundError("makeutil")
 
-    monkeypatch.setattr(subprocess, "run", raise_missing)
+    monkeypatch.setattr(bounded_subprocess, "run_bounded", raise_missing)
 
 
 @when("I run the rule against the checkout")

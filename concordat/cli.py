@@ -13,7 +13,7 @@ import urllib.parse
 
 from cyclopts import App, Parameter
 
-from . import credentials, xdg
+from . import bounded_subprocess, credentials, xdg
 from .auditor.github import DEFAULT_API_URL, GithubClient
 from .enrol import disenrol_repositories, enrol_repositories
 from .errors import ConcordatError, OperationalRuleError
@@ -449,14 +449,16 @@ def _gh_cli_token(hostname: str) -> str | None:
         The token `gh auth token --hostname` prints, or None.
     """
     try:
-        completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed argv; the host comes from a parsed URL, and no shell runs
-            ["gh", "auth", "token", "--hostname", hostname],  # ruff: ignore[start-process-with-partial-path] - gh is resolved on PATH by design
-            capture_output=True,
-            text=True,
-            check=False,
+        completed = bounded_subprocess.run_bounded(
+            ["gh", "auth", "token", "--hostname", hostname],
             timeout=10,
+            max_bytes_per_stream=bounded_subprocess.MAX_CAPTURE_BYTES_PER_STREAM,
         )
-    except (OSError, subprocess.TimeoutExpired) as error:
+    except (
+        OSError,
+        subprocess.TimeoutExpired,
+        bounded_subprocess.OutputLimitExceededError,
+    ) as error:
         _logger.debug(
             "gh auth token unavailable for %s: %s", hostname, type(error).__name__
         )

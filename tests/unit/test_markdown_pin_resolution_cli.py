@@ -282,6 +282,11 @@ def test_a_rate_limited_lookup_is_reported_as_such(
         pytest.param(subprocess.CompletedProcess([], 0, "\n", ""), None, id="empty"),
         pytest.param(FileNotFoundError("gh"), None, id="no-gh"),
         pytest.param(subprocess.TimeoutExpired(["gh"], 10), None, id="slow"),
+        pytest.param(
+            cli.bounded_subprocess.OutputLimitExceededError("stdout", 128),
+            None,
+            id="oversized-token-output",
+        ),
     ],
 )
 def test_the_gh_cli_token_is_read_or_skipped(
@@ -291,7 +296,7 @@ def test_the_gh_cli_token_is_read_or_skipped(
 ) -> None:
     """`gh auth token` supplies a token when it has one and never stops the run."""
     mocker.stopall()
-    run = mocker.patch.object(subprocess, "run")
+    run = mocker.patch.object(cli.bounded_subprocess, "run_bounded")
     if isinstance(completed, Exception):
         run.side_effect = completed
     else:

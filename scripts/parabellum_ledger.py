@@ -6,6 +6,7 @@ sweep that writes them and the report that reads them back.
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 import json
 import typing as typ
@@ -129,6 +130,46 @@ class LedgerRecord(LedgerRequiredFields, LedgerOptionalFields):
 
 
 type Ledger = list[LedgerRecord]
+
+
+@dataclasses.dataclass(slots=True)
+class LedgerIndex:
+    """Bounded in-memory views needed to resume sweeps and render reports.
+
+    The append-only file remains the source of truth. For sweeps, the index
+    keeps package-scoped latest records, commit keys, and exclusions without
+    retaining every decoded JSON object. Reports select one package and omit
+    commit history entirely because it is not needed to render them.
+    """
+
+    package: str | None = None
+    include_commit_history: bool = True
+    latest_by_repository: dict[str, LedgerRecord] = dataclasses.field(
+        default_factory=dict
+    )
+    commits_by_repository: dict[str, set[tuple[str, str, str]]] = dataclasses.field(
+        default_factory=dict
+    )
+    excluded_repositories_by_package: dict[str, set[str]] = dataclasses.field(
+        default_factory=dict
+    )
+
+    def add(self, record: LedgerRecord) -> None:
+        """Index one newly read or appended ledger record."""
+        package = record["rule_package"]
+        if self.package is not None and package != self.package:
+            return
+        repository = record["repository"]
+        self.latest_by_repository[repository] = record
+        commit_sha = record["commit_sha"]
+        if commit_sha is not None and self.include_commit_history:
+            key = (package, record["rule_version"], commit_sha)
+            self.commits_by_repository.setdefault(repository, set()).add(key)
+        if record["verdict"] == "excluded":
+            self.excluded_repositories_by_package.setdefault(package, set()).add(
+                repository
+            )
+
 
 # Derived from the TypedDict so a new required key cannot be forgotten here.
 _LEDGER_REQUIRED_KEYS: typ.Final = frozenset(LedgerRequiredFields.__annotations__)
@@ -283,28 +324,45 @@ def _validate_finding_fields(finding: object, label: str, path: pathlib.Path) ->
         _require_field(entry[field], expected, f"{label} field {field!r}", path)
 
 
-def _load_ledger(path: pathlib.Path) -> Ledger:
-    """Read the append-only ledger, rejecting any line it cannot decode."""
+def _load_ledger(
+    path: pathlib.Path,
+    *,
+    package: str | None = None,
+    include_commit_history: bool = True,
+) -> LedgerIndex:
+    """Stream and index the append-only ledger, validating each line.
+
+    A report can set *package* and disable *include_commit_history* so its
+    memory use depends on current report rows rather than campaign history.
+
+    Returns
+    -------
+    LedgerIndex
+        Latest records, exclusions, and the requested commit-history index.
+
+    Raises
+    ------
+    _ledger_error
+        If a line is invalid or the ledger cannot be read.
+    """
     if not path.exists():
-        return []
+        return LedgerIndex(package, include_commit_history)
+    index = LedgerIndex(package, include_commit_history)
     try:
-        text = path.read_text(encoding="utf-8")
+        with path.open(encoding="utf-8") as handle:
+            for number, line in enumerate(handle, 1):
+                if not line.strip():
+                    continue
+                try:
+                    decoded: object = json.loads(line)
+                except json.JSONDecodeError as error:
+                    message = f"ledger {path} line {number} is not valid JSON: {error}"
+                    raise _ledger_error(message, path) from error
+                index.add(_ledger_record(decoded, path, number))
     except (OSError, UnicodeDecodeError) as error:
         message = f"cannot read ledger {path}: {error}"
         raise _ledger_error(message, path) from error
-    records: Ledger = []
-    for number, line in enumerate(text.splitlines(), 1):
-        if not line.strip():
-            continue
-        try:
-            decoded: object = json.loads(line)
-        except json.JSONDecodeError as error:
-            # Decoding inside the comprehension let this escape as a bare
-            # `JSONDecodeError`, naming neither the ledger nor the line.
-            message = f"ledger {path} line {number} is not valid JSON: {error}"
-            raise _ledger_error(message, path) from error
-        records.append(_ledger_record(decoded, path, number))
-    return records
+    return index
 
 
 def _timestamp() -> str:
@@ -434,7 +492,7 @@ def _finding_record(finding: Finding) -> FindingRecord:
 
 
 def _already_ledgered(
-    ledger: Ledger,
+    ledger: LedgerIndex,
     repository: str,
     *,
     commit_sha: str | None,
@@ -457,18 +515,10 @@ def _already_ledgered(
     bool
         Whether a matching record is already present.
     """
+    if ledger.package is not None and ledger.package != package:
+        return False
     if commit_sha is None:
-        return any(
-            record["repository"] == repository
-            and record["verdict"] == "excluded"
-            and record["rule_package"] == package
-            for record in ledger
-        )
+        return repository in ledger.excluded_repositories_by_package.get(package, set())
     version = rule_version(package) if package_version is None else package_version
-    return any(
-        record["repository"] == repository
-        and record["commit_sha"] == commit_sha
-        and record["rule_package"] == package
-        and record["rule_version"] == version
-        for record in ledger
-    )
+    key = (package, version, commit_sha)
+    return key in ledger.commits_by_repository.get(repository, set())

@@ -1687,10 +1687,15 @@ the same repository and package).
 
 `scripts/parabellum_report.py` renders the Markdown report. `render_report`
 takes a `package` argument defaulting to `RULE_PACKAGE` and filters the ledger
-by `rule_package` **before** `_latest_records` selects one record per
-repository. That order matters: choosing the latest record first would let a
-later survey record hide the baseline's earlier verdict for the same
-repository, silently dropping a repository the baseline audited.
+by `rule_package` **before** using the index's latest record per repository.
+That order matters: choosing the latest record first would let a later survey
+record hide the baseline's earlier verdict for the same repository, silently
+dropping a repository the baseline audited.
+
+The sweep index keeps each package's latest repository record and the
+package/version/commit keys needed for idempotency. Report loading selects only
+its package and does not build the commit-history index, so its memory use is
+proportional to current report rows rather than the full campaign history.
 
 The report has three sections:
 
@@ -1714,11 +1719,18 @@ findings it has for the rule.
 
 ### The git boundary
 
-All git operations funnel through the module-private `_git` helper, which
-shells out to the `git` binary (`subprocess.run`, fixed argv, no shell) with a
-300-second timeout (`GIT_TIMEOUT`). Every call site supplies an `operation` and
+All git operations funnel through the module-private `_git` helper, which calls
+`git` through `concordat.bounded_subprocess.run_bounded` with fixed argv and
+`shell=False`. The shared adapter drains stdout and stderr concurrently,
+retains at most 1 MiB from each stream, and gives the command a 300-second
+timeout (`GIT_TIMEOUT`). It rejects stdout overflow because Git output is
+machine-readable, and marks truncated stderr while preserving its diagnostic
+prefix. A timeout stops the child process group, including descendants that
+could otherwise keep the pipes open. Every call site supplies an `operation` and
 `resource` for the resulting `OperationalRuleError` if the command is missing,
-times out, or exits non-zero. Two call sites build on `_git`:
+times out, exceeds the output cap, or exits non-zero. Conftest and makeutil use
+the same adapter with their own timeout and error context. Two call sites build
+on `_git`:
 
 - `resolve_head(owner, name)` runs `git ls-remote <url> HEAD` to obtain the
   default-branch head SHA **without cloning** — used to decide, cheaply,
@@ -1866,8 +1878,10 @@ calls another concordat function that does.
 `tests/conftest.py` defines a small, purpose-built `CmdMox` harness (not the
 similarly-named third-party `cmdmox` library) and exposes it as the `cmd_mox`
 pytest fixture. It monkeypatches `subprocess.run` globally for the duration of
-a test (`CmdMox.replay`), so it intercepts *any* subprocess invocation —
-`makeutil`, `conftest`, `git` — regardless of which module issued it.
+a test (`CmdMox.replay`), so it intercepts subprocess calls that use that API.
+The bounded adapter uses `Popen`, so tests for Git, Conftest, and makeutil
+wrapper translations patch `bounded_subprocess.run_bounded`; direct adapter
+tests use real child processes to exercise pipe draining and timeouts.
 Expectations are queued with a fluent builder:
 
 ```python
@@ -1903,6 +1917,6 @@ module:
   call with a fixed SHA or a function that raises `OperationalRuleError`,
   without needing `cmd_mox` at all.
 
-The rule of thumb: if the code shells out via `subprocess.run`, reach for
-`cmd_mox`; if it calls a sibling concordat function, monkeypatch that function
-on the module that does the calling.
+The rule of thumb: use `cmd_mox` for code that calls `subprocess.run`; patch
+`bounded_subprocess.run_bounded` to test its callers' error translation, and
+use a real child process to test the adapter itself.
