@@ -108,12 +108,21 @@ def _passed_on(text: str, start: int, window: str) -> bool:
     `let mut command = Command::new(cargo); build(&mut command)` adds its
     arguments in the callee, which may sit anywhere in the file, so a command
     that is bound and then passed on is read against the rest of the file.
+
+    Returns
+    -------
+    bool
+        True when the command at *start* is bound to a name that *window* hands
+        to another function.
     """
     bound = BINDING.search(text[max(0, start - 120) : start])
     if bound is None:
         return False
     name = re.escape(bound["name"])
-    return re.search(rf"(?:&mut[ \t]+{name}\b|[(,][ \t]*{name}[ \t]*[,)])", window) is not None
+    return (
+        re.search(rf"(?:&mut[ \t]+{name}\b|[(,][ \t]*{name}[ \t]*[,)])", window)
+        is not None
+    )
 
 
 def _command_window(text: str, start: int) -> str:
