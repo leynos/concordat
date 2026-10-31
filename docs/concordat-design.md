@@ -3029,6 +3029,22 @@ severity through a `severity` parameter, as `nested-cargo-offline-tests` does,
 because the estate survey found configuration gaps in a dozen repositories;
 promotion to `error` follows once they are clean.
 
+##### Nested cargo CI wiring
+
+NC-006 (`nested-cargo-ci-wiring`) reads the CI side of the same problem. The
+first draft of the check asked for the sccache environment at job level so a
+child `cargo` would inherit it. `setup-rust` already exports `RUSTC_WRAPPER`
+through `GITHUB_ENV` after its sccache steps, which reaches every later step
+and so every child `cargo`; demanding a job-level copy would add configuration
+that changes nothing. The rule therefore checks what can actually break
+inheritance: a `CARGO_TARGET_DIR` pointed at a per-run or temporary path, and a
+silent `export-rustc-wrapper: false`. The action documents that opt-out for
+nested builds such as trybuild fixtures (each compile is a miss that is also
+stored), so a job that opts out and scopes the wrapper itself passes.
+Temporary-path patterns and exemptions are rule parameters. No estate workflow
+trips the rule today, so its proof is synthetic; the corpus holds no real bad
+instance.
+
 #### 3.1.4 Verifying the reconciliation invariants
 
 Several checks reduce to a pure comparator over a small structured input, where

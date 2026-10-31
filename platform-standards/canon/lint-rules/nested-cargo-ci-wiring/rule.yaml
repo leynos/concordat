@@ -1,0 +1,70 @@
+schema_version: 1
+id: nested-cargo-ci-wiring
+name: Nested cargo CI wiring
+description: >-
+  Audits the workflows that run nested `cargo` builds so a child `cargo`
+  inherits the job's warm cache (NC-006). A workflow must not set
+  `CARGO_TARGET_DIR` (in `env` or a `run` script) to a per-run or temporary
+  path: the runner's temp directory, the run id, number or attempt, the commit
+  SHA, a `mktemp` directory or `/tmp`, because every run and every nested build
+  then starts with an empty target tree and sccache keys miss on differing
+  paths. A job that sets `setup-rust`'s `export-rustc-wrapper` to false must
+  name `RUSTC_WRAPPER` somewhere in the workflow or job, since `setup-rust`
+  otherwise exports the wrapper to every later step and child `cargo`
+  inherits it without any job-level `env`. A named exemption, with its
+  repository, workflow, rationale and review trigger, takes a workflow out of
+  the check.
+  Audit-only: this rule declares no mutations.
+version: 0.1.0
+sensor:
+  type: conftest
+  input: policy-input/nested-cargo-ci-wiring
+  policy: policy/
+  tests:
+    - policy/
+  data:
+    - fixtures/data.json
+parameters:
+  schema:
+    type: object
+    additionalProperties: false
+    properties:
+      temporary_patterns:
+        type: array
+        items:
+          type: string
+        description: >-
+          RE2 patterns; a `CARGO_TARGET_DIR` value matching one is a per-run or
+          temporary path.
+      exemptions:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [repository, path, rationale, review_trigger]
+          properties:
+            repository:
+              type: string
+            path:
+              type: string
+            rationale:
+              type: string
+              minLength: 1
+            review_trigger:
+              type: string
+              minLength: 1
+        description: >-
+          Workflows the rule does not audit, each with its repository
+          (`owner/name`, read from the `origin` remote), its path relative to
+          the root, the rationale and the review trigger (the event after which
+          the exemption is revisited). Both text fields must be non-blank; the
+          policy ignores an entry that leaves either blank, because an
+          exemption nobody must revisit is not a record. A benchmark lane that
+          needs a private tree belongs here.
+  defaults:
+    temporary_patterns:
+      - '(?i)runner\.temp|RUNNER_TEMP'
+      - '(?i)github\.(run_id|run_number|run_attempt|sha)|GITHUB_(RUN_ID|RUN_NUMBER|RUN_ATTEMPT|SHA)'
+      - '(?i)mktemp|TMPDIR|(^|[^[:alnum:]_.-])/tmp(/|$)|^/tmp'
+      - '\$\('
+    exemptions: []
