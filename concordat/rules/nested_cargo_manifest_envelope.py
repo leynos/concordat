@@ -162,7 +162,6 @@ def _registry_manifest(
 
 def _is_candidate(
     path: pathlib.Path,
-    directory: str,
     manifests: typ.Mapping[pathlib.Path, Manifest],
     members: set[str],
     checkout: pathlib.Path,
@@ -178,6 +177,7 @@ def _is_candidate(
         True when the manifest is below the root, owned by no workspace, and
         declares (or roots a workspace that declares) a registry dependency.
     """
+    directory = path.parent.relative_to(checkout).as_posix()
     if path.parent == checkout or directory in members:
         return False
     return _registry_manifest(path, manifests, members, checkout)
@@ -193,7 +193,7 @@ def _fixture_manifests(
     found: list[FixtureManifest] = []
     for path in sorted(manifests):
         directory = path.parent.relative_to(checkout).as_posix()
-        if not _is_candidate(path, directory, manifests, members, checkout):
+        if not _is_candidate(path, manifests, members, checkout):
             continue
         found.append({
             "path": f"{directory}/{MANIFEST}",
