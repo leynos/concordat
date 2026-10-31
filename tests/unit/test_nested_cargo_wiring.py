@@ -58,6 +58,27 @@ class Case:
 
 
 RUN_ENV = '      - run: echo "CARGO_TARGET_DIR=$RUNNER_TEMP/t" >> "$GITHUB_ENV"\n'
+RUN_EXPRESSION_EXPORT = (
+    "      - run: |\n"
+    "          export CARGO_TARGET_DIR=${{ runner.temp }}/target\n"
+    "          cargo test\n"
+)
+RUN_EXPRESSION_PREFIX = (
+    "      - run: CARGO_TARGET_DIR=/cache/${{ github.run_id }} cargo test\n"
+)
+RUN_COMMENT = (
+    "      - run: |\n"
+    "          # CARGO_TARGET_DIR=/tmp/target was the old configuration.\n"
+    "          cargo test\n"
+)
+RUN_OTHER_VARIABLE = (
+    "      - run: |\n"
+    "          export OTHER_CARGO_TARGET_DIR=/tmp/target\n"
+    "          cargo test\n"
+)
+RUN_STABLE_EXPRESSION = (
+    "      - run: CARGO_TARGET_DIR=${{ github.workspace }}/target cargo test\n"
+)
 SCOPED = '      - run: RUSTC_WRAPPER="$SCCACHE_PATH" cargo test\n'
 OPT_OUT = "export-rustc-wrapper: false"
 CASES = {
@@ -82,6 +103,17 @@ CASES = {
         {"NC-006"},
     ),
     "run-script-assignment": Case(workflow(steps=RUN_ENV), {"NC-006"}),
+    "run-script-export-of-an-expression": Case(
+        workflow(steps=RUN_EXPRESSION_EXPORT), {"NC-006"}
+    ),
+    "run-script-prefix-assignment-with-an-expression": Case(
+        workflow(steps=RUN_EXPRESSION_PREFIX), {"NC-006"}
+    ),
+    "run-script-comment-is-not-an-assignment": Case(workflow(steps=RUN_COMMENT), set()),
+    "run-script-other-variable-is-not-this-one": Case(
+        workflow(steps=RUN_OTHER_VARIABLE), set()
+    ),
+    "run-script-stable-expression": Case(workflow(steps=RUN_STABLE_EXPRESSION), set()),
     "tmp-path": Case(
         workflow(top="env:\n  CARGO_TARGET_DIR: /tmp/target\n"), {"NC-006"}
     ),

@@ -48,8 +48,13 @@ WRAPPER_VARIABLE: typ.Final = "RUSTC_WRAPPER"
 SETUP_ACTION: typ.Final = "setup-rust"
 OPT_OUT_INPUT: typ.Final = "export-rustc-wrapper"
 FALSE_SPELLINGS: typ.Final = frozenset({"false", "0", "no", "off"})
+# An unquoted value is a run of ordinary characters and whole `${{ .. }}`
+# expressions, because GitHub substitutes an expression (which may hold spaces)
+# before the shell runs; the variable name needs a boundary so that
+# `OTHER_CARGO_TARGET_DIR=` is not read as this variable.
 RUN_ASSIGNMENT: typ.Final = re.compile(
-    rf"{TARGET_VARIABLE}=(?P<value>\"[^\"\n]*\"|'[^'\n]*'|[^\s;&|]+)"
+    rf"(?<!\w){TARGET_VARIABLE}="
+    r"(?P<value>\"[^\"\n]*\"|'[^'\n]*'|(?:\$\{\{.*?\}\}|[^\s;&|])+)"
 )
 
 
@@ -153,9 +158,13 @@ def _run_targets(run: object, where: str) -> list[TargetSetting]:
     """Return every `CARGO_TARGET_DIR=value` assignment in a `run` script."""
     if not isinstance(run, str):
         return []
+    # A comment line is documentation, not an assignment.
+    script = "\n".join(
+        line for line in run.splitlines() if not line.lstrip().startswith("#")
+    )
     return [
         {"where": f"{where} run", "value": match["value"].strip("\"'")}
-        for match in RUN_ASSIGNMENT.finditer(run)
+        for match in RUN_ASSIGNMENT.finditer(script)
     ]
 
 
