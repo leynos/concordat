@@ -2971,8 +2971,13 @@ and manifests whose dependencies are all path, git or inherited, are not
 candidates. netsuke's own contract reads tracked manifests through Git; this
 package reads the working tree below the root with the shared skip list,
 because the audited checkout need not be a Git checkout. Exemptions follow the
-same convention as NC-001: repository, directory and reason, matched against the
-`origin` slug.
+same convention as NC-001: repository, directory, rationale and review trigger,
+matched against the `origin` slug, and a blank rationale or trigger suppresses
+nothing. The package ships at `warning` severity through a `severity`
+parameter, as `nested-cargo-offline-tests` does, because the estate survey
+found five repositories with uncovered manifests; promotion to `error` follows
+once they are clean. Dependency tables are read through `cargo_tables`, so a
+registry dependency under `[target.'cfg(...)'.dependencies]` makes a candidate.
 
 #### 3.1.4 Verifying the reconciliation invariants
 

@@ -43,11 +43,11 @@ from concordat.rules.markdown_envelope import (
 from concordat.rules.nested_cargo_lock_envelope import (
     ENVELOPE_KIND as NESTED_CARGO_LOCK_ENVELOPE_KIND,
 )
-from concordat.rules.nested_cargo_offline_envelope import (
-    ENVELOPE_KIND as NESTED_CARGO_OFFLINE_ENVELOPE_KIND,
-)
 from concordat.rules.nested_cargo_manifest_envelope import (
     ENVELOPE_KIND as NESTED_CARGO_MANIFEST_ENVELOPE_KIND,
+)
+from concordat.rules.nested_cargo_offline_envelope import (
+    ENVELOPE_KIND as NESTED_CARGO_OFFLINE_ENVELOPE_KIND,
 )
 from concordat.rules.spelling_envelope import (
     ENVELOPE_KIND as SPELLING_ENVELOPE_KIND,

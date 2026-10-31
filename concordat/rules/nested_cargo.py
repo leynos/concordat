@@ -124,10 +124,15 @@ def has_registry_dependency(manifest: Manifest) -> bool:
     Returns
     -------
     bool
-        True when some dependency names a version rather than a path or git source.
+        True when some dependency names a version rather than a path or git
+        source, in a plain or a target-specific
+        (`[target.'cfg(...)'.dependencies]`) table.
     """
-    tables = (mapping(manifest.get(table)) or {} for table in DEPENDENCY_TABLES)
-    return any(_is_registry_spec(spec) for table in tables for spec in table.values())
+    return any(
+        _is_registry_spec(spec)
+        for _, _, table in cargo_tables(manifest)
+        for spec in table.values()
+    )
 
 
 def _candidates(root: pathlib.Path, pattern: str) -> list[pathlib.Path]:

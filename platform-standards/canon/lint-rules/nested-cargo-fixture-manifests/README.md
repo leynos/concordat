@@ -17,12 +17,13 @@ corpus behind the rule is rstest-bdd, whose nested fixtures were added to
 
 ## Checks
 
-- **NC-003** (error): a manifest below the root that no workspace owns, and
-  that declares a registry dependency, is not covered by any `cargo` entry of
-  `.github/dependabot.yml`. A `directories` entry may be a literal path or a
-  glob (`*` within a segment, `**` across segments), as Dependabot reads them.
-  With no configuration at all every such manifest is uncovered.
-- **EN-001** (error, indeterminate): the envelope is not a schema-1
+- **NC-003** (warning by default): a manifest below the root that no workspace
+  owns, and that declares a registry dependency, is not covered by any `cargo`
+  entry of `.github/dependabot.yml`. A `directories` entry may be a literal
+  path or a glob (`*` within a segment, `**` across segments), as Dependabot
+  reads them. With no configuration at all every such manifest is uncovered.
+- **EN-001** (indeterminate; an error for an envelope defect, the configured
+  severity otherwise): the envelope is not a schema-1
   `policy-input/nested-cargo-fixture-manifests` document, the Dependabot
   configuration cannot be decoded, or a manifest could not be read.
 
@@ -42,9 +43,17 @@ corpus behind the rule is rstest-bdd, whose nested fixtures were added to
 
 A manifest that is deliberately left alone (a vendored patch, say) is listed in
 the `exemptions` parameter with its `repository` (`owner/name`, read from the
-`origin` remote), its `path` (the directory, relative to the root) and a
-`reason`. An exemption does not apply to another repository. No exemption is
-shipped by default.
+`origin` remote), its `path` (the directory, relative to the root), a
+`rationale` and a `review_trigger` (the event after which the exemption is
+revisited). A blank rationale or trigger suppresses nothing. An exemption does
+not apply to another repository. No exemption is shipped by default.
+
+## Severity
+
+The `severity` parameter defaults to `warning`: findings are reported and the
+rule's exit status stays 0, so the estate can be surveyed before the rule
+blocks. Set it to `error` to enforce the rule. An envelope defect is always an
+error.
 
 ## What the rule declines to judge
 

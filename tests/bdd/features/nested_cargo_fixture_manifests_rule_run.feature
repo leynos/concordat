@@ -13,5 +13,5 @@ Feature: Nested cargo fixture manifests
     Examples:
       | dependency | coverage | status | finding   |
       | serde      | lists    | 0      | compliant |
-      | serde      | omits    | 1      | NC-003    |
+      | serde      | omits    | 0      | NC-003    |
       | a path     | omits    | 0      | compliant |

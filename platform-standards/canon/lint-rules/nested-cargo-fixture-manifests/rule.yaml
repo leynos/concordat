@@ -9,8 +9,10 @@ description: >-
   directories its configuration lists, and `/` covers the root manifest alone,
   so a fixture is updated only when its directory, or a glob reaching it, is
   named. A path-only manifest has nothing to update. A named exemption, with
-  its repository, directory and reason, takes a manifest out of the check.
-  Audit-only: this rule declares no mutations.
+  its repository, directory, rationale and review trigger, takes a manifest out
+  of the check. The rule ships at `warning` severity so the estate can be
+  surveyed before it blocks; the `severity` parameter raises it to `error`
+  without a code change. Audit-only: this rule declares no mutations.
 version: 0.1.0
 sensor:
   type: conftest
@@ -25,23 +27,41 @@ parameters:
     type: object
     additionalProperties: false
     properties:
+      severity:
+        type: string
+        enum: [warning, error]
+        description: >-
+          The severity of every NC-003 finding, and of the indeterminate
+          findings that report evidence the reader could not establish. An
+          envelope defect is always `error`: it says the rule could not run,
+          not that the repository is unsafe. A `warning` finding is reported
+          but does not block; promotion to `error` is the intended end state
+          once the estate survey is clean.
       exemptions:
         type: array
         items:
           type: object
           additionalProperties: false
-          required: [repository, path, reason]
+          required: [repository, path, rationale, review_trigger]
           properties:
             repository:
               type: string
             path:
               type: string
-            reason:
+            rationale:
               type: string
+              minLength: 1
+            review_trigger:
+              type: string
+              minLength: 1
         description: >-
           Manifest directories the rule does not audit, each with its
           repository (`owner/name`, read from the `origin` remote), its
-          directory relative to the root and the reason. A vendored patch that
-          is deliberately left alone belongs here.
+          directory relative to the root, the rationale and the review trigger
+          (the event after which the exemption is revisited). Both text fields
+          must be non-blank; the policy ignores an entry that leaves either
+          blank, because an exemption nobody must revisit is not a record. A
+          vendored patch that is deliberately left alone belongs here.
   defaults:
+    severity: warning
     exemptions: []

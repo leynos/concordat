@@ -6,12 +6,15 @@ import rego.v1
 exemptions := [{
 	"repository": "leynos/example",
 	"path": "tests/fixtures/a",
-	"reason": "vendored patch left alone on purpose",
+	"rationale": "vendored patch left alone on purpose",
+	"review_trigger": "review when the patch is dropped",
 }]
 
 findings(fixture) := fs if {
 	fs := policy.deny with input as fixture with data.parameters as {"exemptions": []}
 }
+
+severities(fixture, parameters) := {f.severity | some f in policy.deny with input as fixture with data.parameters as parameters}
 
 profile(fixture) := {[f.rule_id, f.verdict, f.path] | some f in findings(fixture)}
 
@@ -64,4 +67,37 @@ test_a_foreign_envelope_kind_is_not_a_pass if {
 	wrong := object.union(data.fixtures.compliant, {"kind": "policy-input/nested-cargo-fixture-lockfiles"})
 	fs := policy.deny with input as wrong with data.parameters as {"exemptions": []}
 	{f.rule_id | some f in fs} == {"EN-001"}
+}
+
+# An exemption without a rationale or a review trigger is not a record, and
+# suppresses nothing.
+test_an_exemption_without_a_rationale_suppresses_nothing if {
+	blank := [object.union(exemptions[0], {"rationale": "  "})]
+	fs := policy.deny with input as data.fixtures.uncovered_fixture with data.parameters as {"exemptions": blank}
+	{f.rule_id | some f in fs} == {"NC-003"}
+}
+
+test_an_exemption_without_a_review_trigger_suppresses_nothing if {
+	blank := [object.union(exemptions[0], {"review_trigger": ""})]
+	fs := policy.deny with input as data.fixtures.uncovered_fixture with data.parameters as {"exemptions": blank}
+	{f.rule_id | some f in fs} == {"NC-003"}
+}
+
+# The package ships as a survey: no configured severity means a warning.
+test_the_default_severity_is_a_warning if {
+	severities(data.fixtures.uncovered_fixture, {"exemptions": []}) == {"warning"}
+}
+
+test_the_configured_severity_applies if {
+	severities(data.fixtures.uncovered_fixture, {"exemptions": [], "severity": "error"}) == {"error"}
+}
+
+test_indeterminate_findings_carry_the_configured_severity if {
+	severities(data.fixtures.unreadable_configuration, {"exemptions": [], "severity": "error"}) == {"error"}
+}
+
+# An envelope defect says the rule could not run, whatever severity is set.
+test_an_envelope_defect_is_always_an_error if {
+	fs := policy.deny with input as {} with data.parameters as {"exemptions": [], "severity": "warning"}
+	{f.severity | some f in fs} == {"error"}
 }

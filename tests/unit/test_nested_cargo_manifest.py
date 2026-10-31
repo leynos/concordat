@@ -10,14 +10,16 @@ from __future__ import annotations
 import dataclasses
 import typing as typ
 
+import pygit2
 import pytest
 
-from concordat.rules import runner
+from concordat.rules import packages, runner
 from concordat.rules.nested_cargo_manifest_envelope import (
     build_nested_cargo_manifest_envelope,
 )
 
 if typ.TYPE_CHECKING:
+    import collections.abc as cabc
     import pathlib
 
 RULE_ID = "nested-cargo-fixture-manifests"
@@ -169,3 +171,114 @@ def test_only_registry_dependencies_make_a_candidate(
     put(tmp_path, ".github/dependabot.yml", dependabot("/"))
     envelope = build_nested_cargo_manifest_envelope(tmp_path)
     assert len(envelope["manifests"]) == candidates
+
+
+TARGET_ONLY = (
+    '[package]\nname = "f"\nversion = "0.0.0"\n'
+    "[target.'cfg(unix)'.dependencies]\nlibc = \"0.2\"\n"
+)
+
+
+def test_a_registry_dependency_in_a_target_table_makes_a_candidate(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Dependabot updates `[target.'cfg(..)'.dependencies]` like any other table."""
+    put(tmp_path, "Cargo.toml", ROOT)
+    put(tmp_path, FIX, TARGET_ONLY)
+    put(tmp_path, ".github/dependabot.yml", dependabot("/"))
+    assert rule_ids(tmp_path) == {"NC-003"}
+
+
+def result_with(
+    monkeypatch: pytest.MonkeyPatch,
+    root: pathlib.Path,
+    parameters: cabc.Mapping[str, object],
+) -> runner.RuleRunResult:
+    """Run the rule as if its manifest declared *parameters*.
+
+    Returns
+    -------
+    runner.RuleRunResult
+        The result the package reports under *parameters*.
+    """
+    monkeypatch.setattr(runner, "_rule_parameters", lambda _rule_dir: dict(parameters))
+    return runner.run_rule(RULE_ID, root)
+
+
+def uncovered_fixture(root: pathlib.Path) -> None:
+    """Write a repository whose one fixture no Dependabot entry covers."""
+    pygit2.init_repository(str(root)).remotes.create(
+        "origin", "https://github.com/leynos/example.git"
+    )
+    put(root, "Cargo.toml", ROOT)
+    put(root, FIX, FIXTURE)
+    put(root, ".github/dependabot.yml", dependabot("/"))
+
+
+def exemption(**overrides: str) -> dict[str, str]:
+    """Return a complete exemption for the uncovered fixture, with overrides."""
+    return {
+        "repository": "leynos/example",
+        "path": "tests/fixtures/a",
+        "rationale": "vendored patch left alone on purpose",
+        "review_trigger": "review when the patch is dropped",
+    } | overrides
+
+
+def test_a_finding_is_reported_but_does_not_block(tmp_path: pathlib.Path) -> None:
+    """The package ships at warning, so the estate can be surveyed first."""
+    uncovered_fixture(tmp_path)
+    result = runner.run_rule(RULE_ID, tmp_path)
+    assert {f.severity for f in result.findings} == {"warning"}
+    assert result.verdict == "noncompliant"
+    assert result.exit_code == 0
+    assert result.blocking is False
+
+
+def test_the_severity_parameter_restores_blocking(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Promotion is a parameter change, not a policy edit."""
+    uncovered_fixture(tmp_path)
+    result = result_with(monkeypatch, tmp_path, {"severity": "error", "exemptions": []})
+    assert {f.severity for f in result.findings} == {"error"}
+    assert result.exit_code == 1
+
+
+def test_a_complete_exemption_takes_the_manifest_out(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Repository, directory, rationale and review trigger suppress NC-003."""
+    uncovered_fixture(tmp_path)
+    result = result_with(monkeypatch, tmp_path, {"exemptions": [exemption()]})
+    assert not result.findings
+
+
+@pytest.mark.parametrize(
+    "blank", [{"rationale": " "}, {"review_trigger": ""}], ids=["rationale", "trigger"]
+)
+def test_an_exemption_without_a_reviewed_record_suppresses_nothing(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, blank: dict[str, str]
+) -> None:
+    """A blank rationale or review trigger is not a record."""
+    uncovered_fixture(tmp_path)
+    result = result_with(monkeypatch, tmp_path, {"exemptions": [exemption(**blank)]})
+    assert {f.rule_id for f in result.findings} == {"NC-003"}
+
+
+def test_an_exemption_does_not_travel_to_another_repository(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The same directory under another repository's name is audited."""
+    uncovered_fixture(tmp_path)
+    result = result_with(
+        monkeypatch, tmp_path, {"exemptions": [exemption(repository="leynos/other")]}
+    )
+    assert {f.rule_id for f in result.findings} == {"NC-003"}
+
+
+@pytest.mark.parametrize("key", ["severity", "exemptions"])
+def test_the_manifest_declares_each_parameter_default(key: str) -> None:
+    """A parameter the schema declares must have a default, or it is inert."""
+    defaults = packages.rule_parameters(packages.rule_package_dir(RULE_ID))
+    assert key in defaults
