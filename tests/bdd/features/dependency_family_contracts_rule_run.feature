@@ -56,3 +56,29 @@ Feature: Dependency-family contracts rule run
     Then the audit exit status is 1
     And the audit output reports "DF-006"
     And the audit output reports "outside the governed Rust surfaces"
+
+  Scenario: maturin and PyO3 joined to one multi-ecosystem group are audited clean
+    Given a checkout pinning maturin exactly with both ecosystems in one multi-ecosystem group
+    When I audit the checkout for its dependency families
+    Then the audit exit status is 0
+    And the audit table reports zero findings
+
+  Scenario: maturin and PyO3 left in separate ecosystem entries are reported
+    Given a checkout pinning maturin exactly with no multi-ecosystem group
+    When I audit the checkout for its dependency families
+    Then the audit exit status is 1
+    And the audit output reports "DF-002"
+    And the audit output reports "join the members to one multi-ecosystem group"
+
+  Scenario: a workspace member's PyO3 packages left to the catch-all are reported
+    Given a checkout whose workspace member declares PyO3 under the catch-all group
+    When I audit the checkout for its dependency families
+    Then the audit exit status is 1
+    And the audit output reports "DF-001"
+    And the audit output reports "native/Cargo.toml"
+
+  Scenario: a workspace member's PyO3 packages in a narrow group are audited clean
+    Given a checkout whose workspace member declares PyO3 in a narrow Dependabot group
+    When I audit the checkout for its dependency families
+    Then the audit exit status is 0
+    And the audit table reports zero findings

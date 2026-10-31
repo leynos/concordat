@@ -124,6 +124,18 @@ protected_tuple(rel) if {
   d.coverage.ignored
 }
 
+# One multi-ecosystem group takes every member: Dependabot opens a single pull
+# request for the group, so one CI run sees the whole tuple. This coordinates
+# the update; it does not choose compatible versions, which is why it protects
+# a tuple but never counts for a family that needs a narrow group.
+protected_tuple(rel) if {
+  multi_groups := {d.coverage.multi_group | some d in member_declarations(rel)}
+  count(multi_groups) == 1
+  every d in member_declarations(rel) {
+    d.coverage.multi_group != null
+  }
+}
+
 deny contains finding("DF-006", "indeterminate", ".", msg) if {
   not envelope_ok
   msg := "policy input is not a policy-input/dependency-family-contracts envelope at schema version 1"
@@ -183,14 +195,16 @@ deny contains finding("DF-003", "noncompliant", first_path(rel), msg) if {
 
 # DF-002: independently versioned packages. A group cannot select mutually
 # compatible latest versions, so a member needs an upper bound or an `ignore`
-# rule; an exact pin is the thing a version update replaces.
+# rule, or every member must join one multi-ecosystem group so the update
+# arrives as one pull request; an exact pin is the thing a version update
+# replaces.
 deny contains finding("DF-002", "noncompliant", first_path(rel), msg) if {
   some rel in applicable
   rel.kind == "tuple"
   count(uncovered(rel)) == 0
   not protected_tuple(rel)
   msg := sprintf(
-    "%s: %s are independently versioned and no member has an upper bound or an ignore rule (requirements: %s); add a documented bound or an ignore rule, or record a reviewed exception",
+    "%s: %s are independently versioned and no member has an upper bound or an ignore rule (requirements: %s); add a documented bound or an ignore rule, join the members to one multi-ecosystem group, or record a reviewed exception",
     [rel.id, concat(", ", sort(rel.members)), concat(", ", requirements(rel))],
   )
 }

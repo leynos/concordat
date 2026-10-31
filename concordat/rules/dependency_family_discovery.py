@@ -6,6 +6,10 @@ files, reads them loosely (no resolver, no repository code), and reports the
 ones that could matter: a manifest that cannot be read or decoded, or that
 declares, or defines for its workspace, a package some recorded relationship
 names. Everything else draws nothing, since no relationship could apply to it.
+
+The members of a governed workspace root are read too, for dependency facts
+only. A workspace lists its member crates, so governing the root governs them;
+they are not Rust surfaces, which other rules judge as project roots.
 """
 
 from __future__ import annotations
@@ -41,7 +45,106 @@ def cargo_tables(
     return tables
 
 
-def _loose_manifest(nested: pathlib.Path) -> tuple[dict[str, object], str | None]:
+def _is_contained_glob(pattern: object) -> typ.TypeGuard[str]:
+    """Return whether *pattern* is text that stays below the workspace root."""
+    if not isinstance(pattern, str):
+        return False
+    written = pathlib.PurePosixPath(pattern)
+    if written.is_absolute() or not written.parts:
+        return False
+    return ".." not in written.parts
+
+
+def _member_directories(
+    checkout: pathlib.Path, root: pathlib.PurePosixPath, patterns: object
+) -> set[pathlib.PurePosixPath]:
+    """Return the directories a workspace's `members` or `exclude` globs name.
+
+    The globs come from the repository, so one that is absolute, climbs out
+    with `..`, or is not text is ignored rather than followed.
+
+    Returns
+    -------
+    set[pathlib.PurePosixPath]
+        Checkout-relative directories that exist.
+    """
+    base = checkout / root
+    found: set[pathlib.PurePosixPath] = set()
+    for pattern in patterns if isinstance(patterns, list) else []:
+        if not _is_contained_glob(pattern):
+            continue
+        found.update(
+            pathlib.PurePosixPath(match.relative_to(checkout).as_posix())
+            for match in base.glob(pattern)
+            if match.is_dir()
+        )
+    return found
+
+
+def _passes_through_link(
+    checkout: pathlib.Path, relative: pathlib.PurePosixPath
+) -> bool:
+    """Return whether any component of *relative* is a symbolic link."""
+    return any(
+        (checkout / ancestor).is_symlink()
+        for ancestor in (relative, *relative.parents)
+        if str(ancestor) != "."
+    )
+
+
+def _listed_members(
+    checkout: pathlib.Path, surface: dict[str, object], governed: set[str]
+) -> list[pathlib.Path]:
+    """Return the member manifests one governed workspace root lists.
+
+    Returns
+    -------
+    list[pathlib.Path]
+        Manifests of listed, non-excluded directories that hold a `Cargo.toml`,
+        are not themselves governed, and are not reached through a link.
+    """
+    workspace = mapping((mapping(surface.get("parsed")) or {}).get("workspace"))
+    if workspace is None:
+        return []
+    root = pathlib.PurePosixPath(str(surface["path"])).parent
+    excluded = _member_directories(checkout, root, workspace.get("exclude"))
+    listed = _member_directories(checkout, root, workspace.get("members")) - excluded
+    manifests = {directory: directory / "Cargo.toml" for directory in listed}
+    return [
+        checkout / manifest
+        for directory, manifest in manifests.items()
+        if manifest.as_posix() not in governed
+        and not _passes_through_link(checkout, directory)
+        and (checkout / manifest).is_file()
+    ]
+
+
+def workspace_member_manifests(
+    checkout: pathlib.Path, surfaces: cabc.Iterable[dict[str, object]]
+) -> list[pathlib.Path]:
+    """Return the member manifests of every governed workspace root.
+
+    A member is a listed directory holding a `Cargo.toml` and not named by
+    `exclude`. A path that runs through a symbolic link is left out: the link
+    could lead outside the checkout, and the nested-manifest scan then names
+    the manifest as ungoverned, so nothing is read unseen.
+
+    Returns
+    -------
+    list[pathlib.Path]
+        The member manifests, sorted, that are not themselves governed surfaces.
+    """
+    roots = list(surfaces)
+    governed = {str(surface["path"]) for surface in roots}
+    found = {
+        manifest
+        for surface in roots
+        for manifest in _listed_members(checkout, surface, governed)
+    }
+    return sorted(found)
+
+
+def loose_manifest(nested: pathlib.Path) -> tuple[dict[str, object], str | None]:
     """Return a nested manifest decoded without the surface resolver, or why not.
 
     A symbolic link is refused rather than followed: the resolver contains
@@ -127,7 +230,7 @@ def ungoverned_problems(
         One sentence per manifest that matters.
     """
     loaded = {
-        pathlib.PurePosixPath(path.relative_to(checkout).as_posix()): _loose_manifest(
+        pathlib.PurePosixPath(path.relative_to(checkout).as_posix()): loose_manifest(
             path
         )
         for path in nested
