@@ -25,13 +25,14 @@ from __future__ import annotations
 
 import typing as typ
 
-from .dependabot_envelope import build_dependabot_envelope
+from .dependabot_envelope import read_dependabot_config
 from .dependency_family_coverage import coverage
 from .nested_cargo import (
     MANIFEST,
     has_registry_dependency,
     load_manifests,
     origin_slug,
+    rooted_member_directories,
     workspace_member_directories,
 )
 
@@ -138,7 +139,6 @@ def _covered(config: ConfigFile | None, directory: str) -> bool | None:
 def _registry_manifest(
     path: pathlib.Path,
     manifests: typ.Mapping[pathlib.Path, Manifest],
-    members: set[str],
     checkout: pathlib.Path,
 ) -> bool:
     """Report whether a manifest, or the workspace it roots, has registry deps."""
@@ -148,15 +148,11 @@ def _registry_manifest(
     workspace = document.get("workspace")
     if not isinstance(workspace, dict):
         return False
-    rooted = [
-        other
-        for other in manifests
-        if other != path
-        and other.parent.relative_to(checkout).as_posix() in members
-        and path.parent in other.parents
-    ]
+    owned = rooted_member_directories(checkout, path.parent, manifests)
     return has_registry_dependency(typ.cast("Manifest", workspace)) or any(
-        has_registry_dependency(manifests[other]) for other in rooted
+        has_registry_dependency(manifests[other])
+        for other in manifests
+        if other != path and other.parent.resolve() in owned
     )
 
 
@@ -180,7 +176,7 @@ def _is_candidate(
     directory = path.parent.relative_to(checkout).as_posix()
     if path.parent == checkout or directory in members:
         return False
-    return _registry_manifest(path, manifests, members, checkout)
+    return _registry_manifest(path, manifests, checkout)
 
 
 def _fixture_manifests(
@@ -221,7 +217,7 @@ def build_nested_cargo_manifest_envelope(
         could not be established.
     """
     problems: list[str] = []
-    config = build_dependabot_envelope(checkout)["config"]
+    config = read_dependabot_config(checkout)
     manifests = load_manifests(checkout, problems)
     return {
         "schema_version": ENVELOPE_SCHEMA_VERSION,

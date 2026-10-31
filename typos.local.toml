@@ -7,8 +7,9 @@ stems = []
 
 [words]
 accepted = [
-    "Hashi", # HashiCorp product-name prefix.
-    "mold",  # The mold linker tool name, not the en-GB spelling of "mould".
+    "grammers", # The Telegram client library whose crate axinite vendors.
+    "Hashi",    # HashiCorp product-name prefix.
+    "mold",     # The mold linker tool name, not the en-GB spelling of "mould".
 ]
 
 [words.corrections]

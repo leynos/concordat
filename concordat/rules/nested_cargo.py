@@ -284,6 +284,40 @@ def _members_of(
     return found
 
 
+def rooted_member_directories(
+    checkout: pathlib.Path,
+    root: pathlib.Path,
+    manifests: typ.Mapping[pathlib.Path, Manifest],
+) -> set[pathlib.Path]:
+    """Return the resolved member directories of the one workspace rooted at *root*.
+
+    A nested workspace under an excluded directory of another workspace keeps
+    its members to itself, so a caller asking what a root owns must not read
+    the estate-wide member set.
+
+    Parameters
+    ----------
+    checkout:
+        The repository root.
+    root:
+        The directory of the workspace root manifest.
+    manifests:
+        Each decoded `Cargo.toml` below and at the root, by absolute path.
+
+    Returns
+    -------
+    set[pathlib.Path]
+        The root's explicit and implicit members, resolved; empty when *root*
+        holds no `[workspace]` table.
+    """
+    workspace = manifests[root / MANIFEST].get("workspace")
+    if not isinstance(workspace, dict):
+        return set()
+    return _workspace_members(
+        checkout, root, typ.cast("Manifest", workspace), manifests
+    )
+
+
 def workspace_member_directories(
     checkout: pathlib.Path, manifests: typ.Mapping[pathlib.Path, Manifest]
 ) -> set[str]:

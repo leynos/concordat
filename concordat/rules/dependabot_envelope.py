@@ -179,8 +179,12 @@ def _load_config(checkout: pathlib.Path, name: str) -> ConfigFile | None:
     return _decode_config(relative, text)
 
 
-def _find_config(checkout: pathlib.Path) -> ConfigFile | None:
+def read_dependabot_config(checkout: pathlib.Path) -> ConfigFile | None:
     """Return the repository's Dependabot configuration fact, if it has one.
+
+    This reads the configuration alone, so a caller that needs only the
+    `updates` entries does not fail because an unrelated `.github/actions` tree
+    cannot be read.
 
     GitHub reads one configuration file. A repository carrying both
     spellings is reported rather than resolved by picking one, since the
@@ -286,6 +290,6 @@ def build_dependabot_envelope(checkout: pathlib.Path) -> DependabotEnvelope:
         "schema_version": ENVELOPE_SCHEMA_VERSION,
         "kind": ENVELOPE_KIND,
         "repository": {"path": str(checkout), "name": None},
-        "config": _find_config(checkout),
+        "config": read_dependabot_config(checkout),
         "action_directories": _action_directories(checkout),
     }

@@ -802,11 +802,13 @@ manifest is uncovered; a configuration that cannot be decoded is indeterminate.
 
 A manifest left alone on purpose is named in the rule's `exemptions` parameter
 with its repository (`owner/name`), directory, rationale and review trigger; a
-blank rationale or trigger suppresses nothing. No exemption is shipped by
-default. The rule ships at `warning` severity, so findings are reported and the
-exit status stays 0; set the `severity` parameter to `error` to enforce it. The
-audit reads the working tree below the root, skipping hidden, `target`,
-`vendor` and similar directories.
+blank rationale or trigger suppresses nothing. Three ship by default, for
+rstest-bdd's derived `published-gpui-e2e` fixture and the vendored
+`grammers-crypto` (axinite) and `feldera-size-of` (lille) patches. The rule
+ships at `warning` severity, so findings are reported and the exit status stays
+0; set the `severity` parameter to `error` to enforce it. The audit reads the
+working tree below the root, skipping hidden, `target`, `vendor` and similar
+directories.
 
 ### Auditing Rust development build storage
 

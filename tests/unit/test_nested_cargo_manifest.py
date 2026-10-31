@@ -282,3 +282,53 @@ def test_the_manifest_declares_each_parameter_default(key: str) -> None:
     """A parameter the schema declares must have a default, or it is inert."""
     defaults = packages.rule_parameters(packages.rule_package_dir(RULE_ID))
     assert key in defaults
+
+
+def test_a_nested_workspace_under_an_excluded_directory_keeps_its_members(
+    tmp_path: pathlib.Path,
+) -> None:
+    """An outer workspace does not own the members of the one it excludes."""
+    put(tmp_path, "Cargo.toml", ROOT)
+    put(tmp_path, "tests/outer/Cargo.toml", '[workspace]\nexclude = ["inner"]\n')
+    put(tmp_path, "tests/outer/inner/Cargo.toml", '[workspace]\nmembers = ["m"]\n')
+    put(tmp_path, "tests/outer/inner/m/Cargo.toml", MEMBER)
+    put(tmp_path, ".github/dependabot.yml", dependabot("/"))
+    envelope = build_nested_cargo_manifest_envelope(tmp_path)
+    assert [m["directory"] for m in envelope["manifests"]] == ["tests/outer/inner"]
+
+
+def test_an_unreadable_actions_directory_does_not_stop_the_audit(
+    tmp_path: pathlib.Path,
+) -> None:
+    """NC-003 reads the `updates` entries only, never the local actions."""
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    repository = tmp_path / "repo"
+    put(repository, "Cargo.toml", ROOT)
+    put(repository, FIX, FIXTURE)
+    put(repository, ".github/dependabot.yml", dependabot("/"))
+    (repository / ".github" / "actions").symlink_to(elsewhere)
+    assert rule_ids(repository) == {"NC-003"}
+
+
+@pytest.mark.parametrize(
+    ("slug", "directory"),
+    [
+        ("leynos/rstest-bdd", "tests/fixtures/published-gpui-e2e"),
+        ("leynos/axinite", "tools-src/telegram/patches/grammers-crypto"),
+        ("leynos/lille", "third_party/feldera-size-of"),
+    ],
+)
+def test_the_shipped_exemptions_apply_to_their_repository_only(
+    tmp_path: pathlib.Path, slug: str, directory: str
+) -> None:
+    """A vendored or derived manifest is exempt by default, but only at home."""
+    for name, expected in ((slug, set()), ("leynos/other", {"NC-003"})):
+        root = tmp_path / name.split("/")[1]
+        pygit2.init_repository(str(root)).remotes.create(
+            "origin", f"https://github.com/{name}.git"
+        )
+        put(root, "Cargo.toml", ROOT)
+        put(root, f"{directory}/Cargo.toml", FIXTURE)
+        put(root, ".github/dependabot.yml", dependabot("/"))
+        assert rule_ids(root) == expected, name

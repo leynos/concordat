@@ -64,4 +64,32 @@ parameters:
           vendored patch that is deliberately left alone belongs here.
   defaults:
     severity: warning
-    exemptions: []
+    exemptions:
+      - repository: leynos/rstest-bdd
+        path: tests/fixtures/published-gpui-e2e
+        rationale: >-
+          A derived fixture: its first-party rstest-bdd dependencies are
+          patched to crates packaged from the workspace at the staged version,
+          so a Dependabot bump of those pins would name a release the staging
+          step never built. Its `make update-published-gpui-e2e-lock` target
+          and the refresh-derived-fixture-lockfiles workflow own its manifest
+          and lock.
+        review_trigger: >-
+          review when the fixture stops patching the staged first-party
+          crates, or when Dependabot can ignore the rstest-bdd family there
+      - repository: leynos/axinite
+        path: tools-src/telegram/patches/grammers-crypto
+        rationale: >-
+          A vendored patch of grammers-crypto wired in through a path
+          override; its dependencies are the upstream crate's and move only
+          when the patch is rebased on a new upstream release.
+        review_trigger: review when the patch is rebased or dropped
+      - repository: leynos/lille
+        path: third_party/feldera-size-of
+        rationale: >-
+          A vendored fork of feldera-size-of 0.1.7 wired in through
+          `[patch.crates-io]`, kept only until upstream publishes ordered-float
+          5.x support; its dependencies follow the upstream release.
+        review_trigger: >-
+          review when feldera-size-of publishes ordered-float 5.x support and
+          the fork is removed
