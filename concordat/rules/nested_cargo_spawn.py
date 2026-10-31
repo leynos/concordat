@@ -99,14 +99,31 @@ class Spawner(typ.TypedDict):
     test_functions: list[str]
 
 
+def _marked_block(
+    masked: str, marker: re.Match[str], closers: dict[int, int]
+) -> tuple[int, int] | None:
+    """Return the braced block a `#[cfg(test)]` marker applies to, if it has one.
+
+    Returns
+    -------
+    tuple[int, int] | None
+        The block as `(start, end)`, or None for a marked item with no braces
+        (`mod tests;`, `use ..;`) or with unbalanced ones.
+    """
+    item = ITEM_START.search(masked, marker.end())
+    if item is None or item.group() != "{":
+        return None
+    end = closers.get(item.start())
+    return None if end is None else (marker.start(), end)
+
+
 def _test_spans(text: str) -> list[tuple[int, int]]:
     """Return the offset ranges of the items marked `#[cfg(test)]`.
 
     A marked item is test code only for its own braces, so production code
     after a closed `mod tests { .. }` is not. The structure is read from the
     masked source (same offsets, comments and literal contents blanked), so a
-    marker in a comment or a brace in a string moves nothing. A marked item
-    with no braces (`mod tests;`, `use ..;`) holds no code of its own.
+    marker in a comment or a brace in a string moves nothing.
 
     Returns
     -------
@@ -115,12 +132,8 @@ def _test_spans(text: str) -> list[tuple[int, int]]:
     """
     masked = mask_literals(text)
     closers = dict(brace_pairs(masked))
-    spans: list[tuple[int, int]] = []
-    for marker in CFG_TEST.finditer(masked):
-        item = ITEM_START.search(masked, marker.end())
-        if item is not None and item.group() == "{" and item.start() in closers:
-            spans.append((marker.start(), closers[item.start()]))
-    return spans
+    blocks = (_marked_block(masked, found, closers) for found in CFG_TEST.finditer(masked))
+    return [block for block in blocks if block is not None]
 
 
 def _is_test_position(
