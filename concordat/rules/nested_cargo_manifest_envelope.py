@@ -160,6 +160,29 @@ def _registry_manifest(
     )
 
 
+def _is_candidate(
+    path: pathlib.Path,
+    directory: str,
+    manifests: typ.Mapping[pathlib.Path, Manifest],
+    members: set[str],
+    checkout: pathlib.Path,
+) -> bool:
+    """Report whether a manifest is a standalone one with registry dependencies.
+
+    The root manifest and workspace members are the Dependabot envelope's
+    business, so only a manifest that no workspace owns can be a candidate.
+
+    Returns
+    -------
+    bool
+        True when the manifest is below the root, owned by no workspace, and
+        declares (or roots a workspace that declares) a registry dependency.
+    """
+    if path.parent == checkout or directory in members:
+        return False
+    return _registry_manifest(path, manifests, members, checkout)
+
+
 def _fixture_manifests(
     checkout: pathlib.Path,
     manifests: typ.Mapping[pathlib.Path, Manifest],
@@ -170,11 +193,7 @@ def _fixture_manifests(
     found: list[FixtureManifest] = []
     for path in sorted(manifests):
         directory = path.parent.relative_to(checkout).as_posix()
-        if (
-            path.parent == checkout
-            or directory in members
-            or not _registry_manifest(path, manifests, members, checkout)
-        ):
+        if not _is_candidate(path, directory, manifests, members, checkout):
             continue
         found.append({
             "path": f"{directory}/{MANIFEST}",
