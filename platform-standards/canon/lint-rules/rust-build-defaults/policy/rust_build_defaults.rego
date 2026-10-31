@@ -30,6 +30,9 @@ default config_path := ".cargo/config.toml"
 
 config_path := input.cargo_config.path
 
+# A clause a substantiated exception waives (BD-010) emits nothing: the
+# function is undefined for it, so every rule body that builds its finding with
+# this helper fails for that clause alone.
 finding(rule_id, verdict, path, msg) := {
 	"rule_id": rule_id,
 	"severity": "error",
@@ -37,7 +40,7 @@ finding(rule_id, verdict, path, msg) := {
 	"path": path,
 	"line": 0,
 	"msg": msg,
-}
+} if not clause_waived(rule_id)
 
 # -- envelope and applicability --------------------------------------------
 

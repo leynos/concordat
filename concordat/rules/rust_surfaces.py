@@ -340,3 +340,36 @@ def resolve_rust_surfaces(checkout: pathlib.Path) -> RustSurfaceResolution:
         SurfaceDeclaration(MANIFEST_FILENAME, None),
     )
     return RustSurfaceResolution(declared=False, surfaces=(surface,))
+
+
+def rust_language_mapping(checkout: pathlib.Path) -> dict[str, object] | None:
+    """Return the `language.rust` mapping declared in *checkout*'s `.concordat`.
+
+    Rust rule packages declare per-repository facts beside the surfaces (the
+    build-defaults exceptions are one), so they share this reader rather than
+    each parsing the manifest.
+
+    Parameters
+    ----------
+    checkout:
+        Repository root containing an optional `.concordat` declaration.
+
+    Returns
+    -------
+    dict[str, object] | None
+        The mapping, or ``None`` when the checkout declares no `language.rust`.
+
+    A `.concordat` that cannot be read or parsed, or a level that is not a
+    mapping, raises `OperationalRuleError` from the helpers it calls.
+    """
+    manifest_path = checkout / CONCORDAT_FILENAME
+    manifest = _load_manifest(manifest_path)
+    if manifest is None:
+        return None
+    language = manifest.get("language")
+    if language is None:
+        return None
+    rust = _as_mapping(language, "language", manifest_path).get("rust")
+    if rust is None:
+        return None
+    return _as_mapping(rust, "language.rust", manifest_path)

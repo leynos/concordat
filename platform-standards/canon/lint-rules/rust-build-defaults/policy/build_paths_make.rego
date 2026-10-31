@@ -125,7 +125,13 @@ comment_or_print(segment) if regex.match(`^[[:space:]]*[-@+]*[[:space:]]*(#|echo
 # command. Each match is a maximal run of quoted strings and non-delimiter
 # characters; a lone `&` (as in `2>&1`) stays inside its run. An unterminated
 # quote is not a run on its own, so it splits as a delimiter would.
-command_segments(text) := [match[0] |
+#
+# The second ampersand of `&&` is not a delimiter run of its own: the pattern
+# lets a lone `&` start a run when a non-delimiter follows it, so `a && b`
+# yields `b` as `& b`. That stray prefix kept every command after `&&` from
+# matching a pattern anchored at the segment's start, an isolated Whitaker
+# included, so it is stripped here.
+command_segments(text) := [trim_left(match[0], "&") |
 	some match in regex.find_all_string_submatch_n(`(?:"[^"]*"|'[^']*'|[^"';&|]|&[^&"';|]|&$)+`, text, -1)
 ]
 

@@ -991,6 +991,30 @@ which 0.1.1 never opened.
 - Clauses BD-001 to BD-006 read the same files as before, so their verdicts do
   not change.
 
+Upgrading to rule 0.3.0: a repository can pass where 0.2.1 reported BD-008 or
+report where it did not, in the two Whitaker cases below.
+
+- An installer-managed Whitaker that follows `cd`, `unset` or an environment
+  assignment in an `&&` chain is now recognized as an isolated route, and
+  judged as one (development flags on it are contamination). A recipe that
+  first changes into the parent of the checkout (`cd ..`,
+  `cd "$(dir $(CURDIR))"`) no longer reads as unproved when the checkout's
+  `.cargo/config.toml` selects Cranelift, because Cargo never discovers that
+  file from there. The working directory is tracked in order, so
+  `cd crates && cd ..` is back in the checkout and does not count. A Cranelift
+  selection in the root `Cargo.toml` still does.
+- A repository whose fast route is explicit and kept out of Cargo's
+  auto-discovered configuration on purpose (cuprum's `make dev-*` fragment,
+  ADR-012) records the exception in `.concordat` under
+  `language.rust.build_defaults.exceptions`: the `clauses` it waives, the
+  `route` (a Cargo configuration carrying `-Zthreads=8` in every `rustflags`
+  source and the Linux linker), the `adr` that records the decision, a
+  `rationale` and a `review_trigger`. The route must be a configuration Cargo
+  can load, and the linker must be named only in sources that apply to Linux
+  alone (`cfg(unix)` also reaches macOS). BD-010 reports an exception whose
+  route, record, rationale or trigger is missing, or that names a clause outside
+  `waivable_clauses`, and the clauses keep reporting until it is substantiated.
+
 ### Auditing the spelling gate
 
 The `spelling-config-baseline` package audits a checkout's spelling gate

@@ -1,0 +1,9 @@
+language:
+  rust:
+    build_defaults:
+      exceptions:
+        - clauses: [BD-002, BD-004, BD-008]
+          route: tools/dev-fast/config.toml
+          adr: docs/adr-fast.md
+          rationale: ""
+          review_trigger: "Revisit when the wheel images carry mold."

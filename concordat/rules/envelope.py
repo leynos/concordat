@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 import typing as typ
 
+from .build_defaults_exceptions import StandardException, inspect_standard_exceptions
 from .cargo_config import (
     CargoConfigFacts,
     CodegenBackendSelection,
@@ -200,6 +201,7 @@ class BuildDefaultsEnvelope(typ.TypedDict):
     cargo_manifest_backends: typ.NotRequired[list[CodegenBackendSelection]]
     cargo_manifest_backend_error: typ.NotRequired[str]
     exceptions: list[DocumentScan]
+    standard_exceptions: typ.NotRequired[list[StandardException]]
     makefile: MakeutilReport | None
     makefile_error: str | None
     workflows: list[BuildWorkflowFile]
@@ -380,4 +382,9 @@ def build_build_defaults_envelope(
         "workflows": workflows,
     }
     _populate_manifest_backend_facts(envelope, cargo_parsed)
+    # Omitted when none is declared, so unrelated fixture envelopes keep their
+    # exact bytes.
+    standard_exceptions = inspect_standard_exceptions(checkout, resolved)
+    if standard_exceptions:
+        envelope["standard_exceptions"] = standard_exceptions
     return envelope
