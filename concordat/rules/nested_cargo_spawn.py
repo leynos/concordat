@@ -8,8 +8,8 @@ from a repository that needs none.
 
 - Only test sources count: a file under a test directory (`tests/`,
   `test_support/`, `testing/`, `ui/`, or named `*_test(s).rs`), or the text of
-  another `.rs` file after its first `#[cfg(test)]`. `build.rs` and `xtask` are
-  not tests.
+  another `.rs` file inside an item marked `#[cfg(test)]`, for that item's
+  braces only. `build.rs` and `xtask` are not tests.
 - A `cargo` spawn counts only with a compiling subcommand in the arguments of
   that same command (`build`, `check`, `test`, `run`, `package`, ...);
   `cargo metadata` or `cargo config` do no compilation. The arguments are read
@@ -33,6 +33,9 @@ import os
 import pathlib
 import re
 import typing as typ
+
+from .nested_cargo_source import brace_pairs
+from .rust_source import mask_literals
 
 TEST_PATH: typ.Final = re.compile(
     r"(^|/)(tests?|test_support|test-support|testing|ui)/|_tests?\.rs$"
@@ -62,6 +65,8 @@ COMPILES: typ.Final = re.compile(
     rf"""\.args?\(\s*(?:&?\[\s*)?(?:["']\+\w+["']\s*,\s*)?["'](?:{SUBCOMMANDS})["']"""
 )
 COMMAND_NEW: typ.Final = re.compile(r"Command::new\(")
+CFG_TEST: typ.Final = re.compile(r"#\[cfg\(test\)\]")
+ITEM_START: typ.Final = re.compile(r"[{;]")
 BINDING: typ.Final = re.compile(
     r"let[ \t]+(?:mut[ \t]+)?(?P<name>\w+)[ \t]*(?::[^=;]+)?=[ \t]*$"
 )
@@ -94,35 +99,66 @@ class Spawner(typ.TypedDict):
     test_functions: list[str]
 
 
-def _is_test_position(relative: str, text: str, position: int) -> bool:
-    """Report whether a match at *position* sits in test code."""
-    if TEST_PATH.search(relative):
-        return True
-    marker = text.find("#[cfg(test)]")
-    return 0 <= marker < position
+def _test_spans(text: str) -> list[tuple[int, int]]:
+    """Return the offset ranges of the items marked `#[cfg(test)]`.
 
-
-def _passed_on(text: str, start: int, window: str) -> bool:
-    """Report whether a bound command is handed to another function.
-
-    `let mut command = Command::new(cargo); build(&mut command)` adds its
-    arguments in the callee, which may sit anywhere in the file, so a command
-    that is bound and then passed on is read against the rest of the file.
+    A marked item is test code only for its own braces, so production code
+    after a closed `mod tests { .. }` is not. The structure is read from the
+    masked source (same offsets, comments and literal contents blanked), so a
+    marker in a comment or a brace in a string moves nothing. A marked item
+    with no braces (`mod tests;`, `use ..;`) holds no code of its own.
 
     Returns
     -------
-    bool
-        True when the command at *start* is bound to a name that *window* hands
-        to another function.
+    list[tuple[int, int]]
+        Each marked block as `(start, end)`.
     """
-    bound = BINDING.search(text[max(0, start - 120) : start])
-    if bound is None:
-        return False
-    name = re.escape(bound["name"])
-    return (
-        re.search(rf"(?:&mut[ \t]+{name}\b|[(,][ \t]*{name}[ \t]*[,)])", window)
-        is not None
+    masked = mask_literals(text)
+    closers = dict(brace_pairs(masked))
+    spans: list[tuple[int, int]] = []
+    for marker in CFG_TEST.finditer(masked):
+        item = ITEM_START.search(masked, marker.end())
+        if item is not None and item.group() == "{" and item.start() in closers:
+            spans.append((marker.start(), closers[item.start()]))
+    return spans
+
+
+def _is_test_position(
+    relative: str, spans: list[tuple[int, int]], position: int
+) -> bool:
+    """Report whether a match at *position* sits in test code."""
+    if TEST_PATH.search(relative):
+        return True
+    return any(start <= position < end for start, end in spans)
+
+
+def _callee_text(text: str, window: str, name: str) -> str:
+    """Return the bodies of the functions in *text* that receive a bound command.
+
+    `let mut command = Command::new(cargo); add_build(&mut command)` adds its
+    arguments in `add_build`, so the arguments are read from that function's
+    body. A callee defined in another file is not seen, which errs towards not
+    demanding configuration.
+
+    Returns
+    -------
+    str
+        The callee bodies, joined; empty when none is defined in this file.
+    """
+    passed = re.compile(
+        rf"(?P<callee>\w+)[ \t]*\([ \t]*(?:[^()]*,[ \t]*)?(?:&(?:mut[ \t]+)?)?"
+        rf"{re.escape(name)}[ \t]*[,)]"
     )
+    bodies: list[str] = []
+    for call in passed.finditer(window):
+        definition = re.search(rf"\bfn[ \t]+{re.escape(call['callee'])}\b", text)
+        if definition is None:
+            continue
+        tail = text[definition.end() :]
+        boundary = FUNCTION_BOUNDARY.search(tail)
+        end = definition.end() + (boundary.start() if boundary else len(tail))
+        bodies.append(text[definition.start() : end])
+    return "\n".join(bodies)
 
 
 def _command_window(text: str, start: int) -> str:
@@ -130,15 +166,15 @@ def _command_window(text: str, start: int) -> str:
 
     A command's arguments follow its construction, so the window runs to the
     next `Command::new` (another command) or the next function item, whichever
-    comes first. A command bound to a name and handed to another function is
-    read against the rest of the file, because the callee adds the arguments.
-    A window that ends early can miss an argument, which errs towards not
-    demanding configuration.
+    comes first. A command bound to a name and handed to a function defined in
+    the same file is also read against that function's body, because the
+    callee adds the arguments. A window that ends early can miss an argument,
+    which errs towards not demanding configuration.
 
     Returns
     -------
     str
-        The text from the spawn to the end of the window.
+        The text from the spawn to the end of the window, with any callee body.
     """
     tail = text[start + 1 :]
     ends = [len(tail)]
@@ -148,20 +184,24 @@ def _command_window(text: str, start: int) -> str:
         if found is not None
     )
     window = text[start : start + 1 + min(ends)]
-    return text[start:] if _passed_on(text, start, window) else window
+    bound = BINDING.search(text[max(0, start - 120) : start])
+    if bound is None:
+        return window
+    return f"{window}\n{_callee_text(text, window, bound['name'])}"
 
 
 def _spawn_kind(relative: str, text: str) -> str | None:
     """Return `rustc` or `cargo` if the file spawns a compiler in test code."""
     if "Command" not in text:
         return None
+    spans = _test_spans(text)
     for match in RUSTC_SPAWN.finditer(text):
-        if _is_test_position(relative, text, match.start()):
+        if _is_test_position(relative, spans, match.start()):
             return "rustc"
     compiles = any(
         COMPILES.search(_command_window(text, match.start()))
         for match in CARGO_SPAWN.finditer(text)
-        if _is_test_position(relative, text, match.start())
+        if _is_test_position(relative, spans, match.start())
     )
     return "cargo" if compiles else None
 
