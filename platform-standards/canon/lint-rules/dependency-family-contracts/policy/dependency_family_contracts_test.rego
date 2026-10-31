@@ -171,3 +171,48 @@ test_wrong_kind if {
   findings := policy.deny with input as data.fixtures.wrong_kind
   profile(findings) == {["DF-006", "indeterminate"]}
 }
+
+# maturin and PyO3 join one multi-ecosystem group: they arrive in one pull
+# request, so the tuple is protected without a bound or an ignore rule.
+test_maturin_multi_group if {
+  findings := policy.deny with input as data.fixtures.maturin_multi_group
+  count(findings) == 0
+}
+
+# Only one member joins the group, so the other still arrives alone.
+test_maturin_multi_group_one_member if {
+  findings := policy.deny with input as data.fixtures.maturin_multi_group_one_member
+  ids(findings) == {"DF-002"}
+}
+
+# Members in different groups arrive in different pull requests.
+test_maturin_multi_group_split if {
+  findings := policy.deny with input as data.fixtures.maturin_multi_group_split
+  ids(findings) == {"DF-002"}
+}
+
+# A group the file never defines protects nothing.
+test_maturin_multi_group_undefined if {
+  findings := policy.deny with input as data.fixtures.maturin_multi_group_undefined
+  ids(findings) == {"DF-002"}
+}
+
+# Patterns that miss a member leave it outside the group.
+test_maturin_multi_group_patterns_miss if {
+  findings := policy.deny with input as data.fixtures.maturin_multi_group_patterns_miss
+  ids(findings) == {"DF-002"}
+}
+
+# A member of the root workspace is read through the governed root, so a split
+# PyO3 family in the member is reported with the member's path.
+test_workspace_member_split if {
+  findings := policy.deny with input as data.fixtures.workspace_member_split
+  ids(findings) == {"DF-001"}
+  some finding in findings
+  finding.path == "native/Cargo.toml"
+}
+
+test_workspace_member_grouped if {
+  findings := policy.deny with input as data.fixtures.workspace_member_grouped
+  count(findings) == 0
+}

@@ -105,6 +105,39 @@ _PYLINT_GROUP: typ.Final = (
 )
 
 
+_MATURIN_PROJECT: typ.Final = """\
+[project]
+name = "demo"
+version = "0.1.0"
+dependencies = ["maturin==1.13.3"]
+"""
+_MATURIN_CONFIG: typ.Final = """\
+version: 2
+{definition}updates:
+  - package-ecosystem: cargo
+    directory: /
+    groups:
+      pyo3:
+        patterns: ['pyo3', 'pyo3-build-config']
+      minor-and-patch:
+        patterns: ['*']
+        update-types: [minor, patch]
+{cargo_join}    schedule:
+      interval: daily
+  - package-ecosystem: uv
+    directory: /
+    groups:
+      minor-and-patch:
+        patterns: ['*']
+        update-types: [minor, patch]
+{uv_join}    schedule:
+      interval: daily
+"""
+_MULTI_DEFINITION: typ.Final = (
+    "multi-ecosystem-groups:\n  maturin-pyo3:\n    schedule:\n      interval: daily\n"
+)
+
+
 @pytest.fixture
 def family_checkout(tmp_path: pathlib.Path) -> pathlib.Path:
     """Provide the checkout directory one scenario audits."""
@@ -135,6 +168,77 @@ def _write_pylint_pair(checkout: pathlib.Path, *, narrow: str) -> None:
     (github / "dependabot.yml").write_text(
         _UV_CONFIG.format(narrow=narrow), encoding="utf-8"
     )
+
+
+def _write_maturin_pyo3(checkout: pathlib.Path, *, joined: bool) -> None:
+    """Write an exactly pinned maturin beside a PyO3 crate, joined or not."""
+    (checkout / "Cargo.toml").write_text(_CARGO, encoding="utf-8")
+    (checkout / "Cargo.lock").write_text(_LOCK, encoding="utf-8")
+    (checkout / "pyproject.toml").write_text(_MATURIN_PROJECT, encoding="utf-8")
+    (checkout / "uv.lock").write_text(
+        'version = 1\n\n[[package]]\nname = "maturin"\nversion = "1.13.3"\n',
+        encoding="utf-8",
+    )
+    github = checkout / ".github"
+    github.mkdir()
+    join = "    multi-ecosystem-group: maturin-pyo3\n    patterns: ['{}']\n"
+    (github / "dependabot.yml").write_text(
+        _MATURIN_CONFIG.format(
+            definition=_MULTI_DEFINITION if joined else "",
+            cargo_join=join.format("pyo3") if joined else "",
+            uv_join=join.format("maturin") if joined else "",
+        ),
+        encoding="utf-8",
+    )
+
+
+@given(
+    "a checkout pinning maturin exactly with both ecosystems in one "
+    "multi-ecosystem group"
+)
+def given_maturin_multi_group(family_checkout: pathlib.Path) -> None:
+    """Write the protected shape: both entries join one defined group."""
+    _write_maturin_pyo3(family_checkout, joined=True)
+
+
+@given("a checkout pinning maturin exactly with no multi-ecosystem group")
+def given_maturin_unjoined(family_checkout: pathlib.Path) -> None:
+    """Write the unprotected shape: separate entries, an exact pin and no bound."""
+    _write_maturin_pyo3(family_checkout, joined=False)
+
+
+def _write_workspace_member(checkout: pathlib.Path, *, narrow: str) -> None:
+    """Write a root workspace whose member crate declares the PyO3 pair."""
+    (checkout / "Cargo.toml").write_text(
+        '[workspace]\nmembers = ["native"]\n\n[workspace.dependencies]\n'
+        'pyo3 = "0.28.3"\npyo3-build-config = "0.28.3"\n',
+        encoding="utf-8",
+    )
+    member = checkout / "native"
+    member.mkdir()
+    (member / "Cargo.toml").write_text(
+        '[package]\nname = "native"\nversion = "0.1.0"\n\n[dependencies]\n'
+        "pyo3 = { workspace = true }\npyo3-build-config = { workspace = true }\n",
+        encoding="utf-8",
+    )
+    (checkout / "Cargo.lock").write_text(_LOCK, encoding="utf-8")
+    github = checkout / ".github"
+    github.mkdir()
+    (github / "dependabot.yml").write_text(
+        _CONFIG.format(narrow=narrow), encoding="utf-8"
+    )
+
+
+@given("a checkout whose workspace member declares PyO3 under the catch-all group")
+def given_member_catch_all(family_checkout: pathlib.Path) -> None:
+    """Write the split shape inside a workspace member."""
+    _write_workspace_member(family_checkout, narrow="")
+
+
+@given("a checkout whose workspace member declares PyO3 in a narrow Dependabot group")
+def given_member_grouped(family_checkout: pathlib.Path) -> None:
+    """Write the compliant shape inside a workspace member."""
+    _write_workspace_member(family_checkout, narrow=_NARROW)
 
 
 @given("a checkout pinning Pylint and Astroid exactly with a shared Dependabot group")
