@@ -12,6 +12,7 @@ import json
 import subprocess
 import typing as typ
 
+from concordat import bounded_subprocess
 from concordat.errors import OperationalRuleError
 
 if typ.TYPE_CHECKING:
@@ -30,6 +31,9 @@ EXPECTED_STATUS_FOR_EXIT_CODE: typ.Final = {0: "complete", 1: "recovered"}
 # `makeutil` exits 2 when it refuses a Makefile outright, as opposed to
 # failing to run or emitting an unusable report.
 EXIT_CODE_REFUSED: typ.Final = 2
+MAX_CAPTURE_BYTES_PER_STREAM: typ.Final = (
+    bounded_subprocess.MAX_CAPTURE_BYTES_PER_STREAM
+)
 
 ERROR_MAKEUTIL_MISSING = (
     "makeutil is required but was not found on PATH; install the pinned "
@@ -166,28 +170,46 @@ def _run_makeutil(
 
     Raises
     ------
-    _makeutil_error
-        If makeutil cannot be started.
+    _makeutil_launch_error
+        If makeutil cannot be started, times out, or exceeds an output limit.
     """
     try:
-        return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed argv, no shell
-            ["makeutil", "parse", path.name],  # ruff: ignore[start-process-with-partial-path] - resolved from PATH
+        return bounded_subprocess.run_bounded(
+            ["makeutil", "parse", path.name],
             cwd=path.parent,
-            capture_output=True,
-            text=True,
             timeout=timeout,
-            check=False,
+            max_bytes_per_stream=MAX_CAPTURE_BYTES_PER_STREAM,
         )
-    except FileNotFoundError as error:
-        raise _makeutil_error(ERROR_MAKEUTIL_MISSING, path) from error
-    except subprocess.TimeoutExpired as error:
-        message = f"makeutil timed out after {timeout}s on {path}"
-        raise _makeutil_error(message, path) from error
-    except OSError as error:
-        # Permission denied, bad working directory, and similar launch
-        # failures must reach the CLI's operational-error boundary too.
-        message = f"could not launch makeutil for {path}: {error}"
-        raise _makeutil_error(message, path) from error
+    except (
+        OSError,
+        subprocess.TimeoutExpired,
+        bounded_subprocess.OutputLimitExceededError,
+    ) as error:
+        raise _makeutil_launch_error(error, path, timeout) from error
+
+
+def _makeutil_launch_error(
+    error: OSError
+    | subprocess.TimeoutExpired
+    | bounded_subprocess.OutputLimitExceededError,
+    path: pathlib.Path,
+    timeout: float,
+) -> OperationalRuleError:
+    """Translate one bounded-process failure into makeutil context."""
+    match error:
+        case FileNotFoundError():
+            message = ERROR_MAKEUTIL_MISSING
+        case subprocess.TimeoutExpired():
+            message = f"makeutil timed out after {timeout}s on {path}"
+        case bounded_subprocess.OutputLimitExceededError(
+            stream=stream, limit_bytes=limit_bytes
+        ):
+            message = f"makeutil {stream} exceeded {limit_bytes} byte limit on {path}"
+        case OSError():
+            # Permission denied, bad working directory, and similar launch
+            # failures must reach the CLI's operational-error boundary too.
+            message = f"could not launch makeutil for {path}: {error}"
+    return _makeutil_error(message, path)
 
 
 def _validate_exit_code(

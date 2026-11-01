@@ -346,6 +346,21 @@ exercise `plan`, `plan --keep-workdir`, and `apply --auto-approve` end to end
 using a fake `tofu` shim. This ensures workspace hygiene and option handling
 remain stable as the estate evolves.
 
+#### Resource bounds for Parabellum audits
+
+Parabellum subprocesses use one argv-only adapter that drains both output
+streams concurrently. It retains at most 1 MiB per stream, rejects stdout
+overflow so machine-readable output is never parsed partially, and marks
+truncated stderr while preserving its diagnostic prefix. Timeouts stop the
+process group, including descendants that remain in that group; intentionally
+detached descendants are outside the containment guarantee. The append-only
+ledger remains the source of truth; sweeps index package/version/commit keys
+for idempotency, while reports load only the selected package's latest records
+and omit the commit-history index they do not use. A sweep holds an
+operating-system lock keyed by the resolved ledger path from before loading its
+index until it finishes, so concurrent invocations cannot both audit the same
+unseen entry.
+
 ### 2.7 Rollout strategy
 
 The rollout mirrors other Concordat standards:
