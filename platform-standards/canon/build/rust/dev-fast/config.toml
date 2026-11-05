@@ -1,0 +1,25 @@
+# Explicitly selected Cargo configuration for accelerated development builds.
+# Adapted from leynos/netsuke tools/dev-fast/config.toml at commit
+# 924cb215d3841048dbf6649767a510d2a5dfb1b7; only comments are adapted.
+#
+# Copy to a consumer-owned path and select with cargo --config <path>.
+# This reference installs no toolchain, backend, linker, or Make targets.
+# Qualify the consumer's toolchain and command routes before adoption.
+#
+# Only the dev profile is declared. Cargo's test profile inherits dev, so
+# consumers must explicitly configure any required backend overrides.
+# Keep release, coverage, verification, and Whitaker routes appropriately
+# isolated; merely omitting this fragment does not prove their effective state.
+[unstable]
+codegen-backend = true
+
+[profile.dev]
+codegen-backend = "cranelift"
+
+# This condition matches the compilation target, not the host operating system.
+# Linux targets require a suitable mold installation and linker route, including
+# when cross-compiling. Other targets retain their own linker configuration.
+# Cargo rustflags sources replace one another; consumers must reconcile the
+# complete effective flags with their Make, CI, and environment configuration.
+[target.'cfg(target_os = "linux")']
+rustflags = ["-Clink-arg=-fuse-ld=mold"]

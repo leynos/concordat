@@ -1,11 +1,25 @@
-schema_version: 1
+---
+schema_version: 2
 source:
   repository: "leynos/netsuke"
   api: "https://api.github.com/repos/leynos/netsuke/labels"
-  observed_at: "2026-09-30T11:38:30Z"
+  observed_at: "2026-09-08T10:47:29Z"
   capture_command: "gh api repos/leynos/netsuke/labels --paginate"
-  captured_json_sha256: "dad7045b340d12e4393f7e94b61d7aea01073fe7faa17075368de29785f5103a"
+  captured_json_sha256:
+    "bdd8fa7d9da6e7ef6d2c46a1db2cddff0e803b95797bcae55cad26c18d513133"
   approval_reference: "leynos/concordat#157"
+  captured_label_count: 31
+  # The raw API response is unavailable; its hash is a maintainer attestation.
+  raw_json_verification: "unavailable"
+policy:
+  approval_reference:
+    "https://github.com/leynos/concordat/issues/157#issuecomment-6213191578"
+  snapshot_label_count: 31
+  # These later additions are not claimed to occur in the historical capture.
+  added_labels: ["security", "macos", "infra"]
+  projection_serialization: "json-sort-keys-compact-utf8"
+  projection_sha256:
+    "19600e430c336d9d4a24acd880e83e31df8fe0d9bab9c3b3eec37b466eed968d"
 labels:
   - name: "bug"
     color: "d73a4a"
@@ -21,10 +35,14 @@ labels:
     description: null
   - name: "concurrency"
     color: "5319e7"
-    description: "Concurrency, parallelism, and synchronization work, including races and deadlocks."
+    description: >-
+      Concurrency, parallelism, and synchronization work, including races and
+      deadlocks.
   - name: "critical"
     color: "b60205"
-    description: "Blocker-level work such as active incidents or production outages. Pre-empts all other work."
+    description: >-
+      Blocker-level work such as active incidents or production outages.
+      Pre-empts all other work.
   - name: "dependencies"
     color: "0366d6"
     description: "Dependency updates, applied to every Dependabot pull request."
@@ -42,7 +60,9 @@ labels:
     description: "Too much excitement for a little cat"
   - name: "github-actions"
     color: "ededed"
-    description: "Dependabot channel for GitHub Actions updates, batched into one pull request per run."
+    description: >-
+      Dependabot channel for GitHub Actions updates, batched into one pull
+      request per run.
   - name: "go"
     color: "ededed"
     description: "Dependabot channel for Go module updates."
@@ -54,7 +74,9 @@ labels:
     description: "Extra attention is needed"
   - name: "high"
     color: "d93f0b"
-    description: "Unblocks delivery within the current sprint or release window. Reaction time is days, not hours."
+    description: >-
+      Unblocks delivery within the current sprint or release window. Reaction
+      time is days, not hours.
   - name: "invalid"
     color: "e4e669"
     description: "This doesn't seem right"
@@ -63,16 +85,22 @@ labels:
     description: "A pull request originating from an issue"
   - name: "low"
     color: "0e8a16"
-    description: "Backlog work, hygiene, or technical debt planned opportunistically, without a strict deadline."
+    description: >-
+      Backlog work, hygiene, or technical debt planned opportunistically,
+      without a strict deadline.
   - name: "medium"
     color: "fbca04"
-    description: "Roadmap items to schedule within the current quarter. Clear scope, normal review cycles."
+    description: >-
+      Roadmap items to schedule within the current quarter. Clear scope, normal
+      review cycles.
   - name: "opentofu"
     color: "ededed"
     description: "Dependabot channel for OpenTofu provider and module updates."
   - name: "performance"
     color: "ededed"
-    description: "Bugs or prior decisions disproportionately impacting memory, time, storage or CPU usage"
+    description: >-
+      Bugs or prior decisions disproportionately impacting memory, time, storage
+      or CPU usage
   - name: "pip"
     color: "ededed"
     description: "Dependabot channel for Python dependency updates via pip."
@@ -90,7 +118,8 @@ labels:
     description: "Dependabot channel for Rust toolchain pin updates."
   - name: "testing"
     color: "1d76db"
-    description: "Test coverage, test infrastructure, and verification tooling work."
+    description: >-
+      Test coverage, test infrastructure, and verification tooling work.
   - name: "uv"
     color: "ededed"
     description: "Dependabot channel for Python dependency updates via uv."
@@ -100,3 +129,14 @@ labels:
   - name: "wontfix"
     color: "ffffff"
     description: "This will not be worked on"
+  - name: "security"
+    color: "b60205"
+    description: "keep the skiddies out"
+  - name: "macos"
+    color: "ededed"
+    description: "only breaks in mac land"
+  - name: "infra"
+    color: "5319e7"
+    description: >-
+      stuff that the user doesn't care about, but will hate us for when their
+      app doesn't land

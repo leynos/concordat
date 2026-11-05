@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.unit.rust_policy_seed_labels import _EXPECTED_LABEL_CONTENT
+from tests.unit.rust_policy_label_expectations import ADDED_LABEL_NAMES, APPROVED_LABELS
 from tests.unit.rust_policy_seed_mutations import (
     _bug_label_record,
     _change_actions_cooldown,
@@ -200,8 +200,12 @@ def test_label_seed_matches_captured_bug_record(
     }
 
 
-def test_label_seed_matches_raw_capture_hash_and_content() -> None:
-    """The independent capture hashes to and projects into the full oracle."""
+def test_september_30_capture_corroborates_original_policy_values() -> None:
+    """A separate September 30 capture corroborates the original 31 values.
+
+    This fixture does not verify the unavailable September 8 raw response
+    attested by the selected seed source metadata.
+    """
     capture_path = (
         Path(__file__).resolve().parents[1]
         / "fixtures"
@@ -233,8 +237,13 @@ def test_label_seed_matches_raw_capture_hash_and_content() -> None:
         assert description is None or len(description) <= 100
         projection[name] = (color, description)
 
-    assert len(projection) == 31
-    assert projection == _EXPECTED_LABEL_CONTENT
+    historical_policy = {
+        name: value
+        for name, value in APPROVED_LABELS.items()
+        if name not in ADDED_LABEL_NAMES
+    }
+    assert len(projection) == len(historical_policy) == 31
+    assert projection == historical_policy
     assert _label_seed_issues(_load_seed(LABEL_SEED)) == ()
 
 
