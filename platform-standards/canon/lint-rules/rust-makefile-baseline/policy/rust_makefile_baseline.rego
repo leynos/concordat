@@ -51,6 +51,15 @@ invalid_cargo_surfaces if {
 	not is_array(cargo_input.surfaces)
 }
 
+# `declared_surfaces` is optional, but when present it must be a list: a
+# malformed value falling back to the judged surfaces could credit a nested gate
+# to the root.
+invalid_cargo_surfaces if {
+	cargo_input_is_valid
+	"declared_surfaces" in object.keys(cargo_input)
+	not is_array(cargo_input.declared_surfaces)
+}
+
 cargo_surfaces := cargo_input.surfaces if {
 	cargo_surfaces_present
 	is_array(cargo_input.surfaces)
@@ -98,7 +107,7 @@ deny contains f if {
 	invalid_cargo_surfaces
 	f := finding(
 		"EN-001", "indeterminate", 0,
-		"policy input cargo must be an object and cargo.surfaces an array when present",
+		"policy input cargo must be an object, and cargo.surfaces and cargo.declared_surfaces arrays when present",
 	)
 }
 

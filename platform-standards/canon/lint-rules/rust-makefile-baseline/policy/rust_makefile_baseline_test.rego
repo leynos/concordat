@@ -342,6 +342,14 @@ test_a_nested_gate_aimed_at_an_unjudged_surface_does_not_qualify_the_root if {
 	contains(f.msg, "Cargo.toml")
 }
 
+# A present but malformed declared list is an envelope error, not a fallback.
+test_a_malformed_declared_list_is_an_indeterminate_envelope_error if {
+	root := data.fixtures.mixed_root_nested.cargo.surfaces[0]
+	cargo := {"parsed": null, "surfaces": [root], "declared_surfaces": null}
+	findings := policy.deny with input as object.union(data.fixtures.mixed_root_nested, {"cargo": cargo})
+	profile(findings) == {["EN-001", "indeterminate"]}
+}
+
 # Mutation: without the declared list the nested gate reads as the root's.
 test_without_the_declared_list_the_nested_gate_is_credited_to_the_root if {
 	root := data.fixtures.mixed_root_nested.cargo.surfaces[0]
