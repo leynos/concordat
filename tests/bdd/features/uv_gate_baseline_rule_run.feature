@@ -42,3 +42,10 @@ Feature: uv gate baseline rule run
     And I audit the same checkout for its spelling gate
     Then the uv gate audit exit status is 0
     And the spelling audit exit status is 0
+
+  Scenario: explicit release tag refs satisfy both policy packages together
+    Given a checkout with the canonical helper and spelling pin "refs/tags/v0.1.3"
+    When I audit the checkout for its uv gate
+    And I audit the same checkout for its spelling gate
+    Then the uv gate audit exit status is 0
+    And the spelling audit exit status is 0
