@@ -13,12 +13,35 @@ runs_isolated_whitaker(segment) if regex.match(
 	segment,
 )
 
+# What the route's own prefix says about the environment. The prefix is
+# captured by the same pattern that recognizes the route, and read token by
+# token, so a quoted value (`NOTE=" CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm"`)
+# or an argument after the binary is never mistaken for an assignment or a
+# removal.
+route_prefix(segment) := matches[0][1] if {
+	matches := regex.find_all_string_submatch_n(
+		`^[[:space:]]*[-@+]*[[:space:]]*(env[[:space:]]+((-u|--unset)[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]+|--unset=[A-Za-z_][A-Za-z0-9_]*[[:space:]]+|[A-Za-z_][A-Za-z0-9_]*=("[^"]*"|'[^']*'|[^[:space:]]*)[[:space:]]+)*|([A-Za-z_][A-Za-z0-9_]*=("[^"]*"|'[^']*'|[^[:space:]]*)[[:space:]]+)*)([^[:space:]"'()]*/)?whitaker(\.exe)?([[:space:]]|$)`,
+		segment, 1,
+	)
+	count(matches) == 1
+}
+
+prefix_tokens(segment) := regex.find_all_string_submatch_n(
+	`(?:^|[[:space:]])(?:([A-Za-z_][A-Za-z0-9_]*)=("[^"]*"|'[^']*'|[^[:space:]]*)|(?:-u|--unset)[[:space:]]+([A-Za-z_][A-Za-z0-9_]*)|--unset=([A-Za-z_][A-Za-z0-9_]*))`,
+	route_prefix(segment), -1,
+)
+
+# The values the route's prefix assigns to *name*, in order.
+route_assigned_values(segment, name) := [trim(token[2], `"'`) |
+	some token in prefix_tokens(segment)
+	token[1] == name
+]
+
 # The names an `env` prefix removes from the route's environment.
 unset_names(segment) := {name |
-	runs_isolated_whitaker(segment)
-	prefix := split(segment, "whitaker")[0]
-	some match in regex.find_all_string_submatch_n(`(?:^|[[:space:]])(?:-u[[:space:]]+|--unset[=[:space:]])([A-Za-z_][A-Za-z0-9_]*)`, prefix, -1)
-	name := match[1]
+	some token in prefix_tokens(segment)
+	some name in {token[3], token[4]}
+	name != ""
 }
 
 exempt_segment(segment) if runs_isolated_whitaker(segment)
@@ -118,7 +141,7 @@ inherited_suite_values(rule, name) := {expand(assignment.value) |
 }
 
 suite_values(rule, segment, name) := {values[count(values) - 1]} if {
-	values := assigned_values(segment, name)
+	values := route_assigned_values(segment, name)
 	count(values) > 0
 } else := {""} if {
 	# `env -u NAME` removes the variable, which for RUSTFLAGS leaves the

@@ -148,7 +148,7 @@ artifacts:
       platform-standards/canon/lint-rules/rust-build-defaults/policy/isolated_whitaker.rego
     description: >
       BD-008 direct Whitaker recognition and binding toolchain isolation.
-    sha256: 29dcb7a66d0d9eb488a783bfd27956217d8c4b00973dbb1a5a404eed72874d44
+    sha256: c88c646cbec9ed1a6820127f935a8958f4112031845697d99d4e35609ebacccd
   - id: lint-rule-rust-build-defaults-standard-exceptions
     type: opa-policy
     path: platform-standards/canon/lint-rules/rust-build-defaults/policy/standard_exceptions.rego
