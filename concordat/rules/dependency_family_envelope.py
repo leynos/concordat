@@ -364,16 +364,23 @@ def _inherited_for(
         The inheritable dependency table for *manifest*.
     """
     parent = pathlib.PurePosixPath(manifest).parent
+    named = _named_workspace(parent, parsed)
+    if named is not None:
+        return workspaces.get(named, {})
+    return next(
+        (workspaces[d] for d in (parent, *parent.parents) if d in workspaces),
+        everything,
+    )
+
+
+def _named_workspace(
+    parent: pathlib.PurePosixPath, parsed: dict[str, object]
+) -> pathlib.PurePosixPath | None:
+    """Return the directory `package.workspace` names, or ``None`` when unset."""
     named = (mapping(parsed.get("package")) or {}).get("workspace")
-    if isinstance(named, str):
-        root = pathlib.PurePosixPath(posixpath.normpath(str(parent / named)))
-        if root in workspaces:
-            return workspaces[root]
-        return {}
-    for directory in (parent, *parent.parents):
-        if directory in workspaces:
-            return workspaces[directory]
-    return everything
+    if not isinstance(named, str):
+        return None
+    return pathlib.PurePosixPath(posixpath.normpath(str(parent / named)))
 
 
 def _cargo_surfaces(
