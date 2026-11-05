@@ -188,9 +188,11 @@ def test_a_member_naming_its_workspace_inherits_from_that_workspace(
     assert manifests == {"a/Cargo.toml", "m/Cargo.toml"}
 
 
-@pytest.mark.parametrize("named", [True, False], ids=["named", "ancestor"])
+@pytest.mark.parametrize(
+    "naming", ['workspace = ".."\n', ""], ids=["named", "ancestor"]
+)
 def test_a_member_whose_workspace_is_not_governed_still_inherits_from_it(
-    repository: pathlib.Path, named: bool
+    repository: pathlib.Path, naming: str
 ) -> None:
     """Only the member is declared; its workspace root is read from the checkout."""
     _write(repository, ".github/dependabot.yml", _CONFIG)
@@ -209,7 +211,7 @@ def test_a_member_whose_workspace_is_not_governed_still_inherits_from_it(
         repository,
         "a/m/Cargo.toml",
         '[package]\nname = "m"\nversion = "0.1.0"\n'
-        + ('workspace = ".."\n' if named else "")
+        + naming
         + '\n[dependencies]\nshared.workspace = true\nserde = "1"\n',
     )
 
