@@ -66,6 +66,11 @@ class CargoPayload(typ.TypedDict):
 
     parsed: CargoManifest | None
     surfaces: list[CargoSurface]
+    # Every declared surface, when some are not build roots. `surfaces` is what
+    # the rule judges; this is what a gate invocation can be aimed at, so a
+    # nested gate is not credited to the root merely because its target is not
+    # judged.
+    declared_surfaces: typ.NotRequired[list[CargoSurface]]
 
 
 class Applicability(typ.TypedDict):
@@ -152,6 +157,8 @@ def build_envelope(
         },
         "makefile": makefile_report,
     }
+    if len(build_root_surfaces(resolution.surfaces)) != len(resolution.surfaces):
+        envelope["cargo"]["declared_surfaces"] = list(resolution.surfaces)
     return envelope
 
 

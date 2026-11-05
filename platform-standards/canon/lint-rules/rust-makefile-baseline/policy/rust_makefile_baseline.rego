@@ -444,8 +444,14 @@ surface_context_candidate(recipe, surface) if {
 	contains(recipe.text, sprintf("cd %s", [surface_directory]))
 }
 
+# Every declared surface, judged or not: a gate aimed at an unjudged nested
+# manifest is still not a root gate.
+declared_surfaces := cargo_input.declared_surfaces if is_array(object.get(cargo_input, "declared_surfaces", null))
+
+declared_surfaces := cargo_surfaces if not is_array(object.get(cargo_input, "declared_surfaces", null))
+
 nested_surface_context_candidate(recipe) if {
-	some surface in cargo_surfaces
+	some surface in declared_surfaces
 	not surface_is_root(surface)
 	surface_context_candidate(recipe, surface)
 }

@@ -624,15 +624,19 @@ fallback or causing the policy evaluator to fail.
 wants every declared manifest that carries dependencies. The development-build
 and Makefile rules judge each surface as a project root, and Cargo honours
 profiles only at the root it builds from, so a nested standalone crate or
-workspace with no `[profile]` table of its own cannot meet them.
-`resolve_rust_surfaces` therefore stamps each resolved surface with
+workspace with no `[profile]` table of its own is not a place those rules can
+usefully judge. Leaving it out is a scope decision, not a finding that the
+manifest could never satisfy them. `resolve_rust_surfaces` therefore stamps each resolved surface with
 `build_root`: true for the repository's root `Cargo.toml`, and for any other
 manifest only when it declares a `[profile]` table. Every surface stays in the
 resolution, so the dependency-family collector still reads them all.
 `rust_surfaces.build_root_surfaces` is the filter, and the
 `rust-dev-build-footprint`, `rust-makefile-baseline` and `rust-build-defaults`
 envelope builders apply it, so declaring a standalone nested crate for its
-dependencies does not subject it to those rules. A nested manifest that carries
+dependencies does not subject it to those rules. The Makefile envelope also lists
+every declared surface as `cargo.declared_surfaces` whenever some are not build
+roots, because a gate aimed at an unjudged nested manifest must still not be
+credited to the root. A nested manifest that carries
 its own `[profile.dev]` is judged by the footprint rule as before.
 `tests/unit/test_surface_build_root.py` holds the inference and both readers.
 

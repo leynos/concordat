@@ -141,6 +141,27 @@ def test_the_makefile_and_build_defaults_envelopes_list_only_build_roots(
     assert [s["path"] for s in cargo["surfaces"]] == expected, cargo
 
 
+def test_the_makefile_envelope_keeps_unjudged_surfaces_as_declared(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A gate aimed at an unjudged nested manifest must stay recognizable."""
+    _checkout(tmp_path, PACKAGE)
+    cargo = build_envelope(tmp_path)["cargo"]
+    assert [s["path"] for s in cargo["surfaces"]] == ["Cargo.toml"], cargo
+    assert [s["path"] for s in cargo["declared_surfaces"]] == [
+        "Cargo.toml",
+        NESTED,
+    ], cargo
+
+
+def test_the_makefile_envelope_omits_the_declared_list_when_all_are_judged(
+    tmp_path: pathlib.Path,
+) -> None:
+    """With every surface a build root the two lists agree, so one is enough."""
+    _checkout(tmp_path, PACKAGE + DISABLED)
+    assert "declared_surfaces" not in build_envelope(tmp_path)["cargo"]
+
+
 @pytest.mark.parametrize(
     "nested",
     [
