@@ -368,14 +368,15 @@ def _makefile_state(
     scan: _TargetScan, config: NextestConfig, profiles: list[str]
 ) -> tuple[str, str]:
     """Return the state a `test` scan proves, with the reason a reviewer needs."""
-    if scan.test == "nextest":
+    if scan.test == "nextest" and not scan.proven:
+        # A profile is recorded only where this entry point relies on it: one
+        # that fetches first covers its own run, and owes the profile nothing.
         profiles.append(scan.profile or DEFAULT_PROFILE)
-        if not scan.proven:
-            inherited = config.state(scan.profile)
-            if inherited == BEFORE:
-                return BEFORE, "the nextest profile's setup script fetches first"
-            if inherited == UNCERTAIN:
-                return UNCERTAIN, "the nextest configuration could not be read"
+        inherited = config.state(scan.profile)
+        if inherited == BEFORE:
+            return BEFORE, "the nextest profile's setup script fetches first"
+        if inherited == UNCERTAIN:
+            return UNCERTAIN, "the nextest configuration could not be read"
     if scan.proven:
         return BEFORE, scan.proven_reason
     if scan.uncertain_reason:
@@ -486,13 +487,17 @@ def _step_state(
         The state — `before`, `uncertain` or `absent` — and a reason a reader
         can check against the workflow.
     """
-    inherited = _inherited_state(command.meaning, make_entry, config, profiles)
+    # A fetch that gates this command covers its own run, so the command does
+    # not rely on the nextest profile and records none; asking for the
+    # inherited state first would record the profile for a run that never
+    # needed it.
     if gated:
         return BEFORE, "an earlier step runs cargo fetch --locked"
     if gates_fetch(commands, position) and not has_expression:
         # The chain proves the order only when the command text is settled: an
         # expression may supply the `|| true` that hides a failed fetch.
         return BEFORE, "cargo fetch --locked runs first in the same step"
+    inherited = _inherited_state(command.meaning, make_entry, config, profiles)
     if inherited == BEFORE:
         return BEFORE, "the delegated test target fetches first"
     if gated is None:

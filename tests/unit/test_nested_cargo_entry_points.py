@@ -1561,3 +1561,75 @@ def test_a_same_step_fetch_does_not_prove_order_across_an_expression(
     )
 
     assert states(tmp_path) == [("workflow", "test", "uncertain")]
+
+
+# --- a fetch before every entry point stands in for a setup script -----------
+
+CI_CONFIG = "[profile.ci]\nretries = 1\n"
+
+
+def test_a_fetch_before_every_entry_point_leaves_the_profile_owing_nothing(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Axinite's shape: no setup script, and a gated fetch before each entry."""
+    put(tmp_path, NEXTEST_CONFIG, CI_CONFIG)
+    put(
+        tmp_path,
+        MAKEFILE,
+        "test:\n\tcargo fetch --locked && cargo nextest run --profile ci\n",
+    )
+    put(
+        tmp_path,
+        WORKFLOW,
+        "jobs:\n  test:\n    steps:\n      - run: cargo fetch --locked\n"
+        "      - run: cargo nextest run --profile ci\n",
+    )
+    assert states(tmp_path) == [
+        ("makefile", "test", "before"),
+        ("workflow", "test", "before"),
+    ]
+
+
+def test_one_entry_point_without_the_fetch_still_leaves_the_profile_absent(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Mutation: the workflow step skips the fetch, so the profile is flagged."""
+    put(tmp_path, NEXTEST_CONFIG, CI_CONFIG)
+    put(
+        tmp_path,
+        MAKEFILE,
+        "test:\n\tcargo fetch --locked && cargo nextest run --profile ci\n",
+    )
+    put(
+        tmp_path,
+        WORKFLOW,
+        "jobs:\n  test:\n    steps:\n      - run: cargo nextest run --profile ci\n",
+    )
+    assert states(tmp_path) == [
+        ("makefile", "test", "before"),
+        ("nextest", "ci", "absent"),
+        ("workflow", "test", "absent"),
+    ]
+
+
+def test_a_fetch_that_is_not_success_gated_still_leaves_the_profile_absent(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Mutation: `;` between the fetch and the run proves no order."""
+    put(tmp_path, NEXTEST_CONFIG, CI_CONFIG)
+    put(
+        tmp_path,
+        MAKEFILE,
+        "test:\n\tcargo fetch --locked; cargo nextest run --profile ci\n",
+    )
+    put(
+        tmp_path,
+        WORKFLOW,
+        "jobs:\n  test:\n    steps:\n      - run: cargo fetch --locked || true\n"
+        "      - run: cargo nextest run --profile ci\n",
+    )
+    assert states(tmp_path) == [
+        ("makefile", "test", "absent"),
+        ("nextest", "ci", "absent"),
+        ("workflow", "test", "absent"),
+    ]
