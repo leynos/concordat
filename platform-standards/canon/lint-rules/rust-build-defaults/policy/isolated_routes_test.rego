@@ -179,3 +179,15 @@ test_only_the_routes_own_prefix_is_read if {
 	policy.unset_names(`env NOTE=" -u RUSTFLAGS " whitaker --all`) == set()
 	policy.unset_names(`env -u RUSTFLAGS --unset=OTHER whitaker --all`) == {"RUSTFLAGS", "OTHER"}
 }
+
+# Mutation: a Make variable that is not exported never reaches the route.
+test_an_unexported_make_variable_proves_nothing if {
+	findings := policy.deny with input as data.fixtures.whitaker_unexported_override
+	profile(findings) == {["BD-008", "indeterminate"]}
+}
+
+# Mutation: an escaped space keeps the override inside another variable's value.
+test_an_escaped_space_hides_no_override if {
+	findings := policy.deny with input as data.fixtures.whitaker_escaped_override
+	profile(findings) == {["BD-008", "indeterminate"]}
+}

@@ -26,10 +26,17 @@ route_prefix(segment) := matches[0][1] if {
 	count(matches) == 1
 }
 
+# A backslash can escape a space or a quote, which moves a token boundary in
+# ways this reader does not follow, so a prefix holding one is read as saying
+# nothing rather than guessed at.
+prefix_is_plain(segment) if not contains(route_prefix(segment), "\\")
+
 prefix_tokens(segment) := regex.find_all_string_submatch_n(
 	`(?:^|[[:space:]])(?:([A-Za-z_][A-Za-z0-9_]*)=("[^"]*"|'[^']*'|[^[:space:]]*)|(?:-u|--unset)[[:space:]]+([A-Za-z_][A-Za-z0-9_]*)|--unset=([A-Za-z_][A-Za-z0-9_]*))`,
 	route_prefix(segment), -1,
-)
+) if prefix_is_plain(segment)
+
+default prefix_tokens(_) := []
 
 # The values the route's prefix assigns to *name*, in order.
 route_assigned_values(segment, name) := [trim(token[2], `"'`) |
@@ -224,6 +231,9 @@ suite_isolation_unproved(rule, recipe, segment) if {
 profile_backend_overridden(rule, segment, backend) if {
 	backend.scope == "profile"
 	name := sprintf("CARGO_PROFILE_%s_CODEGEN_BACKEND", [upper(replace(backend.profile, "-", "_"))])
+	# Only the route's own prefix proves the override reaches Whitaker: a Make
+	# variable that is not exported never enters its environment.
+	route_assigned_values(segment, name) == ["llvm"]
 	suite_values(rule, segment, name) == {"llvm"}
 }
 
