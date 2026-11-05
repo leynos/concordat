@@ -71,14 +71,18 @@ makes only those clauses indeterminate; the others still run. See
   under a non-nightly pin stops the file loading for every consumer. LLVM on a
   profile other than `dev` is not a third backend: it is the dedicated coverage
   profile BD-007 accepts, and is not reported. LLVM on `dev` still is.
-- **BD-006** (error): the recorded exception names the pinned toolchain
-  channel. An exception measured on an older channel no longer covers the
-  toolchain the repository builds with, which is what keeps the recorded state
-  from drifting quietly behind the pin. Clearing it does not require a fresh
-  measurement: a line in the exception section saying what the pin is now,
-  whether a measurement was taken on it, and the date any deferral runs to is a
-  true statement of the recorded state and satisfies the clause. With no
-  channel pinned at all the finding is `indeterminate`.
+- **BD-006** (error): the recorded exception is current. It is current while
+  it names the pinned toolchain channel, or names a dated measurement
+  (`nightly-YYYY-MM-DD` or `beta-YYYY-MM-DD`) taken within the last 90 days
+  (`exception_window_days`), on any pin. Dependabot moves the pin daily, so an
+  exception that had to name today's pin would go stale overnight; the window
+  asks instead that a measurement is not old. The age is read against the date
+  the audit ran (`evaluated_on` in the envelope), and a measurement dated after
+  it does not count. Past the window, a line in the exception section saying
+  what the pin is now, whether a measurement was taken on it, and the date any
+  deferral runs to is a true statement of the recorded state and satisfies the
+  clause. With no channel pinned and no recent measurement the finding is
+  `indeterminate`.
 - **BD-007** (error): where Cranelift is the development default (selected by
   the `dev` profile or by `rustflags`), every coverage path and every
   dev-profile release build selects LLVM. A coverage path is any Makefile
@@ -199,26 +203,28 @@ that has neither.
 A recorded exception is recognized as a section of a declared document whose
 heading names the backend. The heading is structure and can be read reliably;
 the prose beneath it cannot, so the policy does not attempt to verify which
-tests are named. What it does check is the channel: an exception that names the
-pinned toolchain is current, and one that names an older toolchain is stale.
+tests are named. What it does check is currency: an exception that names the
+pinned toolchain, or a dated measurement within the last 90 days, is current
+even on an older pin, and one that names neither is stale.
 
 ### What the staleness finding does and does not claim
 
-BD-006 reports that the recorded measurement does not cover the pinned
-toolchain. It does not claim that a fresh measurement is owed, because whether
-one is depends on decisions the repository has recorded elsewhere and this
-policy cannot read them. netsuke is the case that made the distinction
-concrete: the backend is shelved there for six months by an explicit ruling,
-with a dated reminder issue, so a pin bump inside that window leaves the
-recorded measurement stale without obliging anyone to re-run a forty-minute
-suite.
+BD-006 reports that the recorded measurement neither names the pinned toolchain
+nor falls inside the 90-day window. It does not claim that a fresh measurement
+is owed, because whether one is depends on decisions the repository has
+recorded elsewhere and this policy cannot read them. netsuke is the case that
+made the distinction concrete: the backend is shelved there for six months by
+an explicit ruling, with a dated reminder issue, so once the measurement ages
+past the window the finding appears without obliging anyone to re-run a
+forty-minute suite.
 
 Either way the repository owes the same small thing, which is why the finding
 is a finding and not a warning: a line in the exception section giving what the
 pin is now, whether a measurement was taken on it, and the date any deferral
-runs to. netsuke's deferral runs to 2027-03-21 and is tracked by an issue, so a
-pin move inside that window is cleared by writing those three facts down rather
-than by re-running a forty-minute suite.
+runs to. netsuke's deferral runs to 2027-03-21 and is tracked by an issue, so
+the finding is cleared by writing those three facts down rather than by
+re-running a forty-minute suite. A measurement still inside the window needs no
+edit at all.
 
 Clearing it therefore costs an edit, and the property it preserves is worth the
 edit: the failure this clause exists to prevent is a guide that quietly
