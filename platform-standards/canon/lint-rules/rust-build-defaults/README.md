@@ -196,26 +196,28 @@ that has neither.
 A recorded exception is recognized as a section of a declared document whose
 heading names the backend. The heading is structure and can be read reliably;
 the prose beneath it cannot, so the policy does not attempt to verify which
-tests are named. What it does check is the channel: an exception that names the
-pinned toolchain is current, and one that names an older toolchain is stale.
+tests are named. What it does check is currency: an exception that names the
+pinned toolchain, or a dated measurement within the last 90 days, is current
+even on an older pin, and one that names neither is stale.
 
 ### What the staleness finding does and does not claim
 
-BD-006 reports that the recorded measurement does not cover the pinned
-toolchain. It does not claim that a fresh measurement is owed, because whether
-one is depends on decisions the repository has recorded elsewhere and this
-policy cannot read them. netsuke is the case that made the distinction
-concrete: the backend is shelved there for six months by an explicit ruling,
-with a dated reminder issue, so a pin bump inside that window leaves the
-recorded measurement stale without obliging anyone to re-run a forty-minute
-suite.
+BD-006 reports that the recorded measurement neither names the pinned toolchain
+nor falls inside the 90-day window. It does not claim that a fresh measurement
+is owed, because whether one is depends on decisions the repository has
+recorded elsewhere and this policy cannot read them. netsuke is the case that
+made the distinction concrete: the backend is shelved there for six months by
+an explicit ruling, with a dated reminder issue, so once the measurement ages
+past the window the finding appears without obliging anyone to re-run a
+forty-minute suite.
 
 Either way the repository owes the same small thing, which is why the finding
 is a finding and not a warning: a line in the exception section giving what the
 pin is now, whether a measurement was taken on it, and the date any deferral
-runs to. netsuke's deferral runs to 2027-03-21 and is tracked by an issue, so a
-pin move inside that window is cleared by writing those three facts down rather
-than by re-running a forty-minute suite.
+runs to. netsuke's deferral runs to 2027-03-21 and is tracked by an issue, so
+the finding is cleared by writing those three facts down rather than by
+re-running a forty-minute suite. A measurement still inside the window needs no
+edit at all.
 
 Clearing it therefore costs an edit, and the property it preserves is worth the
 edit: the failure this clause exists to prevent is a guide that quietly

@@ -62,8 +62,9 @@ def build_envelopes() -> dict[str, dict[str, object]]:
     for repo in sorted(path for path in REPOS_DIR.iterdir() if path.is_dir()):
         envelope = typ.cast(
             "dict[str, object]",
-            dict(build_build_defaults_envelope(repo, PARAMETERS, today=EVALUATED_ON)),
+            dict(build_build_defaults_envelope(repo, PARAMETERS)),
         )
+        envelope["evaluated_on"] = EVALUATED_ON.isoformat()
         # The recorded path is the fixture's name, never the absolute location
         # of the checkout, so the checked-in envelopes stay identical on every
         # machine that regenerates them.
