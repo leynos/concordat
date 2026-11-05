@@ -335,12 +335,16 @@ def _build_defaults_envelope(
     BuildDefaultsEnvelope
         The `policy-input/rust-build-defaults` document for *checkout*.
     """
-    return build_build_defaults_envelope(
+    envelope = build_build_defaults_envelope(
         checkout,
         parameters,
         inspect=inspect_makefile_observed,
         report_undecodable=log_undecodable_workflow,
     )
+    # The builder never reads a clock; BD-006 ages a recorded measurement
+    # against the date the audit ran, so this boundary supplies it.
+    envelope["evaluated_on"] = today_provider().isoformat()
+    return envelope
 
 
 def _markdown_envelope(

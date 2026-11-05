@@ -228,5 +228,6 @@
       "profile": "dev",
       "backend": "cranelift"
     }
-  ]
+  ],
+  "evaluated_on": "2026-11-05"
 }

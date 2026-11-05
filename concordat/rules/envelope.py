@@ -202,6 +202,7 @@ class BuildDefaultsEnvelope(typ.TypedDict):
     cargo_manifest_backend_error: typ.NotRequired[str]
     exceptions: list[DocumentScan]
     standard_exceptions: typ.NotRequired[list[StandardException]]
+    evaluated_on: typ.NotRequired[str]  # added at the command boundary
     makefile: MakeutilReport | None
     makefile_error: str | None
     workflows: list[BuildWorkflowFile]
