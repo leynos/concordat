@@ -7,7 +7,9 @@ import rego.v1
 # Recognize the executed binary, never an argument or a target named whitaker.
 # What may precede it: `VAR=val` assignments, and `env` carrying assignments
 # and `-u NAME` / `--unset NAME` / `--unset=NAME` removals. An `env` option this
-# does not know keeps the segment unrecognized, so it stays a gate build.
+# does not know keeps the segment unrecognized, so it stays a gate build. A
+# removal only recognizes the route: it is not isolation, because with the
+# variable unset Cargo still reads the configuration's rustflags.
 runs_isolated_whitaker(segment) if regex.match(
 	`^[[:space:]]*[-@+]*[[:space:]]*(env[[:space:]]+((-u|--unset)[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]+|--unset=[A-Za-z_][A-Za-z0-9_]*[[:space:]]+|[A-Za-z_][A-Za-z0-9_]*=("[^"]*"|'[^']*'|[^[:space:]]*)[[:space:]]+)*|([A-Za-z_][A-Za-z0-9_]*=("[^"]*"|'[^']*'|[^[:space:]]*)[[:space:]]+)*)([^[:space:]"'()]*/)?whitaker(\.exe)?([[:space:]]|$)`,
 	segment,
@@ -32,7 +34,7 @@ route_prefix(segment) := matches[0][1] if {
 prefix_is_plain(segment) if not contains(route_prefix(segment), "\\")
 
 prefix_tokens(segment) := regex.find_all_string_submatch_n(
-	`(?:^|[[:space:]])(?:([A-Za-z_][A-Za-z0-9_]*)=("[^"]*"|'[^']*'|[^[:space:]]*)|(?:-u|--unset)[[:space:]]+([A-Za-z_][A-Za-z0-9_]*)|--unset=([A-Za-z_][A-Za-z0-9_]*))`,
+	`(?:^|[[:space:]])(?:([A-Za-z_][A-Za-z0-9_]*)=("[^"]*"|'[^']*'|[^[:space:]]*)|(?:-u|--unset)[[:space:]]+[A-Za-z_][A-Za-z0-9_]*|--unset=[A-Za-z_][A-Za-z0-9_]*)`,
 	route_prefix(segment), -1,
 ) if prefix_is_plain(segment)
 
@@ -43,13 +45,6 @@ route_assigned_values(segment, name) := [trim(token[2], `"'`) |
 	some token in prefix_tokens(segment)
 	token[1] == name
 ]
-
-# The names an `env` prefix removes from the route's environment.
-unset_names(segment) := {name |
-	some token in prefix_tokens(segment)
-	some name in {token[3], token[4]}
-	name != ""
-}
 
 exempt_segment(segment) if runs_isolated_whitaker(segment)
 
@@ -150,10 +145,6 @@ inherited_suite_values(rule, name) := {expand(assignment.value) |
 suite_values(rule, segment, name) := {values[count(values) - 1]} if {
 	values := route_assigned_values(segment, name)
 	count(values) > 0
-} else := {""} if {
-	# `env -u NAME` removes the variable, which for RUSTFLAGS leaves the
-	# configuration's sources unreplaced and carrying nothing of the caller's.
-	name in unset_names(segment)
 } else := {value} if {
 	value := target_value(rule, name)
 } else := values if {
@@ -201,6 +192,10 @@ suite_contamination(rule, segment) if {
 suite_isolation_unproved(rule, _, segment) if {
 	count(suite_values(rule, segment, "RUSTFLAGS")) != 1
 }
+
+# A prefix holding a backslash is not read, so a Make-level value must not stand
+# in for what the route really assigns.
+suite_isolation_unproved(_, _, segment) if not prefix_is_plain(segment)
 
 # RUSTFLAGS does not displace a separate profile or package backend. The facts
 # do not prove how the suite's internal Cargo call selects/overrides these, so

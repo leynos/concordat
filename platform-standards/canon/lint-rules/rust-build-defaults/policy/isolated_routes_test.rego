@@ -176,8 +176,7 @@ test_only_the_routes_own_prefix_is_read if {
 	policy.route_assigned_values(`CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm whitaker --all`, "CARGO_PROFILE_DEV_CODEGEN_BACKEND") == ["llvm"]
 	policy.route_assigned_values(`NOTE=" CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm" whitaker --all`, "CARGO_PROFILE_DEV_CODEGEN_BACKEND") == []
 	policy.route_assigned_values(`whitaker --all RUSTFLAGS=-Dwarnings`, "RUSTFLAGS") == []
-	policy.unset_names(`env NOTE=" -u RUSTFLAGS " whitaker --all`) == set()
-	policy.unset_names(`env -u RUSTFLAGS --unset=OTHER whitaker --all`) == {"RUSTFLAGS", "OTHER"}
+	policy.route_assigned_values(`env -u RUSTFLAGS --unset=OTHER RUSTFLAGS= whitaker --all`, "RUSTFLAGS") == [""]
 }
 
 # Mutation: a Make variable that is not exported never reaches the route.
@@ -189,5 +188,18 @@ test_an_unexported_make_variable_proves_nothing if {
 # Mutation: an escaped space keeps the override inside another variable's value.
 test_an_escaped_space_hides_no_override if {
 	findings := policy.deny with input as data.fixtures.whitaker_escaped_override
+	profile(findings) == {["BD-008", "indeterminate"]}
+}
+
+# Mutation: removing RUSTFLAGS is not isolation. The configuration's rustflags
+# still apply, so a route that only unsets it stays unproved.
+test_unsetting_rustflags_alone_does_not_prove_isolation if {
+	findings := policy.deny with input as data.fixtures.whitaker_unset_only
+	profile(findings) == {["BD-008", "indeterminate"]}
+}
+
+# Mutation: an unreadable prefix must not fall back to a safe Make-level value.
+test_an_unreadable_prefix_does_not_fall_back_to_an_exported_value if {
+	findings := policy.deny with input as data.fixtures.whitaker_escaped_with_export
 	profile(findings) == {["BD-008", "indeterminate"]}
 }

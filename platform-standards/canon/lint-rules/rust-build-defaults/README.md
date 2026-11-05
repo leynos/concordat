@@ -123,17 +123,19 @@ makes only those clauses indeterminate; the others still run. See
   indeterminate. Unknown wrappers and executable substitutions receive no
   exemption. A Makefile with no such assignment or suite route is not
   applicable. A route may sit behind `VAR=val` assignments and an `env` prefix
-  carrying assignments and `-u NAME` removals; an `env -u RUSTFLAGS` leaves the
-  route with no assigned `RUSTFLAGS`, and any other `env` option leaves the
-  command unrecognized, so it stays a gate build. Cargo behind the same prefix
-  is still a gate build. A profile-level Cranelift selection in the
-  configuration is proved displaced only by an explicit
-  `CARGO_PROFILE_<PROFILE>_CODEGEN_BACKEND=llvm` on the route for each such
-  profile; a missing override, or one for another profile, stays indeterminate,
-  as does a package-override Cranelift selection, which no such variable
-  displaces. This check measures explicit Make/configuration facts, not the
-  caller's ambient environment; runtime and CI route qualification remains
-  separate evidence.
+  carrying assignments and `-u NAME` removals, which recognize the route but
+  are not isolation: with `RUSTFLAGS` unset Cargo still reads the
+  configuration's rustflags, so the route must assign it. Any other `env`
+  option leaves the command unrecognized, so it stays a gate build. A prefix
+  holding a backslash is not read, and the route is then indeterminate. Cargo
+  behind the same prefix is still a gate build. A profile-level Cranelift
+  selection in the configuration is proved displaced only by an explicit
+  `CARGO_PROFILE_<PROFILE>_CODEGEN_BACKEND=llvm` in the route's own prefix for
+  each such profile; a missing override, or one for another profile, stays
+  indeterminate, as does a package-override Cranelift selection, which no such
+  variable displaces. This check measures explicit Make/configuration facts,
+  not the caller's ambient environment; runtime and CI route qualification
+  remains separate evidence.
 
   `policy/isolated_whitaker.rego` privately owns this suite boundary within the
   package. It composes the existing Make reachability, assignment and flag
