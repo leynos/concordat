@@ -104,3 +104,43 @@ def test_a_workspace_inherited_versioned_path_dependency_is_collected(
     )
 
     assert _packages(repository) == {"local"}
+
+
+@pytest.mark.parametrize(
+    ("versioned", "path_only"),
+    [
+        pytest.param("a", "b", id="versioned-workspace-declared-first"),
+        pytest.param("b", "a", id="path-only-workspace-declared-first"),
+    ],
+)
+def test_inheritance_is_resolved_from_each_members_own_workspace(
+    repository: pathlib.Path, versioned: str, path_only: str
+) -> None:
+    """A same-named key in a sibling workspace must not decide this one's entry."""
+    _write(repository, ".github/dependabot.yml", _CONFIG)
+    _write(
+        repository,
+        ".concordat",
+        "language:\n  rust:\n    surfaces:\n"
+        "      - path: a/Cargo.toml\n      - path: b/Cargo.toml\n",
+    )
+    entries = {
+        versioned: 'shared = { path = "shared", version = "1" }\n',
+        path_only: 'shared = { path = "shared" }\n',
+    }
+    for name in ("a", "b"):
+        _write(
+            repository,
+            f"{name}/Cargo.toml",
+            f'[package]\nname = "{name}"\nversion = "0.1.0"\n\n'
+            "[dependencies]\nshared.workspace = true\n" + _WORKSPACE + entries[name],
+        )
+
+    envelope = build_dependency_family_envelope(repository)
+    manifests = {
+        declaration["manifest"]
+        for declaration in envelope["declarations"]
+        if declaration["package"] == "shared"
+    }
+
+    assert manifests == {f"{versioned}/Cargo.toml"}

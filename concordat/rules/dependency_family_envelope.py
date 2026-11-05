@@ -331,6 +331,42 @@ def _workspace_requirements(
     return inherited
 
 
+def _workspace_tables(
+    surfaces: cabc.Iterable[dict[str, object]],
+) -> dict[pathlib.PurePosixPath, dict[str, object]]:
+    """Return each workspace root's `[workspace.dependencies]`, by directory."""
+    tables: dict[pathlib.PurePosixPath, dict[str, object]] = {}
+    for surface in surfaces:
+        workspace = mapping((mapping(surface.get("parsed")) or {}).get("workspace"))
+        if workspace is not None:
+            directory = pathlib.PurePosixPath(str(surface["path"])).parent
+            tables[directory] = mapping(workspace.get("dependencies")) or {}
+    return tables
+
+
+def _inherited_for(
+    manifest: str,
+    workspaces: dict[pathlib.PurePosixPath, dict[str, object]],
+    everything: dict[str, object],
+) -> dict[str, object]:
+    """Return the `[workspace.dependencies]` a manifest's own workspace offers.
+
+    Cargo resolves `workspace = true` against the nearest ancestor workspace, so
+    a member must not inherit from a sibling workspace that happens to share a
+    key. A manifest under no declared workspace keeps the combined table.
+
+    Returns
+    -------
+    dict[str, object]
+        The inheritable dependency table for *manifest*.
+    """
+    parent = pathlib.PurePosixPath(manifest).parent
+    for directory in (parent, *parent.parents):
+        if directory in workspaces:
+            return workspaces[directory]
+    return everything
+
+
 def _cargo_surfaces(
     checkout: pathlib.Path, problems: list[str], members: cabc.Collection[str]
 ) -> list[dict[str, object]]:
@@ -395,7 +431,8 @@ def _cargo_declarations(
 ) -> list[Declaration]:
     """Return every dependency edge of the governed Cargo surfaces."""
     surfaces = _cargo_surfaces(checkout, problems, members)
-    inherited = _workspace_requirements(surfaces)
+    everything = _workspace_requirements(surfaces)
+    workspaces = _workspace_tables(surfaces)
     parsed = [(str(s["path"]), mapping(s.get("parsed"))) for s in surfaces]
     problems.extend(
         f"{path} could not be parsed" for path, doc in parsed if doc is None
@@ -405,7 +442,9 @@ def _cargo_declarations(
         for path, doc in parsed
         if doc is not None
         for declaration in _surface_declarations(
-            (checkout, path, doc), inherited, config
+            (checkout, path, doc),
+            _inherited_for(path, workspaces, everything),
+            config,
         )
     ]
 
