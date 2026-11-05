@@ -103,3 +103,54 @@ test_an_unknown_cd_resets_the_depth_to_the_checkout if {
 test_a_recipe_without_a_cd_runs_in_the_checkout if {
 	policy.cwd_depth([` whitaker --all`], 0) == 0
 }
+
+# -- explicit LLVM overrides and env prefixes ----------------------------------
+
+# statelet's shape: the configuration selects Cranelift for the dev profile and
+# the route names LLVM for that profile in its own environment.
+test_an_explicit_llvm_override_for_the_cranelift_profile_proves_isolation if {
+	findings := policy.deny with input as data.fixtures.whitaker_profile_override
+	count(findings) == 0
+}
+
+# Mutation: an override for some other profile leaves dev's Cranelift in force.
+test_an_override_for_another_profile_stays_unproved if {
+	findings := policy.deny with input as data.fixtures.whitaker_profile_override_wrong_profile
+	profile(findings) == {["BD-008", "indeterminate"]}
+}
+
+# Mutation: no override at all is the unproved case above.
+test_the_override_must_be_llvm if {
+	findings := policy.deny with input as data.fixtures.whitaker_profile_override
+	count(findings) == 0
+	segment := ` RUSTFLAGS= CARGO_PROFILE_DEV_CODEGEN_BACKEND=cranelift whitaker --all `
+	policy.suite_contamination(
+		{"targets": ["lint"], "recipes": []},
+		segment,
+	)
+}
+
+test_a_whitaker_route_behind_env_unset_prefixes_is_recognized if {
+	policy.runs_isolated_whitaker(`env -u RUSTFLAGS whitaker --all`)
+	policy.runs_isolated_whitaker(`env -u CARGO_ENCODED_RUSTFLAGS -u RUSTFLAGS /opt/bin/whitaker --all`)
+	policy.runs_isolated_whitaker(`env --unset=RUSTFLAGS --unset CARGO_ENCODED_RUSTFLAGS RUSTFLAGS= whitaker --all`)
+	policy.runs_isolated_whitaker(`@env -u RUSTFLAGS DYLINT_RUSTFLAGS="-D warnings" whitaker --all`)
+}
+
+test_env_options_it_does_not_know_are_not_isolated_routes if {
+	not policy.runs_isolated_whitaker(`env -i whitaker --all`)
+	not policy.runs_isolated_whitaker(`env -u whitaker`)
+	not policy.runs_isolated_whitaker(`env -u RUSTFLAGS cargo test -p whitaker`)
+	not policy.runs_isolated_whitaker(`-u RUSTFLAGS whitaker --all`)
+}
+
+test_a_whitaker_route_behind_env_unset_is_compliant if {
+	findings := policy.deny with input as data.fixtures.whitaker_env_unset
+	count(findings) == 0
+}
+
+# Mutation: cargo behind the same prefix is a gate build, held to the flags.
+test_cargo_behind_an_env_prefix_is_still_a_gate_build if {
+	findings := policy.deny with input as data.fixtures.gate_env_prefixed_cargo
+	profile(findings) == {["BD-008", "noncompliant"]}
+}

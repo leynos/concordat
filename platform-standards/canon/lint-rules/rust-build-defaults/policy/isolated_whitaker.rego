@@ -5,10 +5,21 @@ package canon.lint_rules.rust_build_defaults
 import rego.v1
 
 # Recognize the executed binary, never an argument or a target named whitaker.
+# What may precede it: `VAR=val` assignments, and `env` carrying assignments
+# and `-u NAME` / `--unset NAME` / `--unset=NAME` removals. An `env` option this
+# does not know keeps the segment unrecognized, so it stays a gate build.
 runs_isolated_whitaker(segment) if regex.match(
-	`^[[:space:]]*[-@+]*[[:space:]]*(env[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*=("[^"]*"|'[^']*'|[^[:space:]]*)[[:space:]]+)*([^[:space:]"'()]*/)?whitaker(\.exe)?([[:space:]]|$)`,
+	`^[[:space:]]*[-@+]*[[:space:]]*(env[[:space:]]+((-u|--unset)[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]+|--unset=[A-Za-z_][A-Za-z0-9_]*[[:space:]]+|[A-Za-z_][A-Za-z0-9_]*=("[^"]*"|'[^']*'|[^[:space:]]*)[[:space:]]+)*|([A-Za-z_][A-Za-z0-9_]*=("[^"]*"|'[^']*'|[^[:space:]]*)[[:space:]]+)*)([^[:space:]"'()]*/)?whitaker(\.exe)?([[:space:]]|$)`,
 	segment,
 )
+
+# The names an `env` prefix removes from the route's environment.
+unset_names(segment) := {name |
+	runs_isolated_whitaker(segment)
+	prefix := split(segment, "whitaker")[0]
+	some match in regex.find_all_string_submatch_n(`(?:^|[[:space:]])(?:-u[[:space:]]+|--unset[=[:space:]])([A-Za-z_][A-Za-z0-9_]*)`, prefix, -1)
+	name := match[1]
+}
 
 exempt_segment(segment) if runs_isolated_whitaker(segment)
 
@@ -109,6 +120,10 @@ inherited_suite_values(rule, name) := {expand(assignment.value) |
 suite_values(rule, segment, name) := {values[count(values) - 1]} if {
 	values := assigned_values(segment, name)
 	count(values) > 0
+} else := {""} if {
+	# `env -u NAME` removes the variable, which for RUSTFLAGS leaves the
+	# configuration's sources unreplaced and carrying nothing of the caller's.
+	name in unset_names(segment)
 } else := {value} if {
 	value := target_value(rule, name)
 } else := values if {
@@ -160,12 +175,6 @@ suite_isolation_unproved(rule, _, segment) if {
 # RUSTFLAGS does not displace a separate profile or package backend. The facts
 # do not prove how the suite's internal Cargo call selects/overrides these, so
 # preserve an explicit measurement gap instead of assuming an LLVM route.
-separate_config_backend if {
-	some backend in backends
-	backend.scope in {"profile", "package-override"}
-	backend.backend == "cranelift"
-}
-
 separate_manifest_backend if {
 	some backend in manifest_backends
 	backend.backend != "llvm"
@@ -177,9 +186,22 @@ suite_isolation_unproved(_, _, _) if separate_manifest_backend
 
 # A route that leaves the checkout never discovers its Cargo configuration, so
 # a backend selected there does not reach the suite.
-suite_isolation_unproved(_, recipe, segment) if {
-	separate_config_backend
+suite_isolation_unproved(rule, recipe, segment) if {
+	some backend in backends
+	backend.scope in {"profile", "package-override"}
+	backend.backend == "cranelift"
 	not route_leaves_checkout(recipe, segment)
+	not profile_backend_overridden(rule, segment, backend)
+}
+
+# An explicit `CARGO_PROFILE_<P>_CODEGEN_BACKEND=llvm` on the route displaces the
+# configuration's Cranelift for that profile, which is proof of isolation. Only
+# a profile table can be displaced this way: a package override has no such
+# variable, so it stays unproved.
+profile_backend_overridden(rule, segment, backend) if {
+	backend.scope == "profile"
+	name := sprintf("CARGO_PROFILE_%s_CODEGEN_BACKEND", [upper(replace(backend.profile, "-", "_"))])
+	suite_values(rule, segment, name) == {"llvm"}
 }
 
 suite_isolation_unproved(rule, _, segment) if {
