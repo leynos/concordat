@@ -7,7 +7,7 @@ import tempfile
 import typing as typ
 
 import pytest
-from hypothesis import given
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from concordat.errors import OperationalRuleError
@@ -369,6 +369,11 @@ def test_a_non_executing_command_never_runs_the_script(
     )
 
 
+# Each example writes a Makefile to a temporary directory and builds the
+# envelope from it, so one example can take longer than Hypothesis's 200 ms
+# default under `pytest -n auto` on a loaded host. That is a property of the
+# host, not of the walk, and it surfaced as a `FlakyFailure` on several runs.
+@settings(deadline=None)
 @given(
     st.lists(st.sampled_from(["a", "b", "c", "d"]), min_size=1, max_size=4, unique=True)
 )

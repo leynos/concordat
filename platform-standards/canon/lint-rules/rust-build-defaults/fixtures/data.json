@@ -76,7 +76,8 @@
       ],
       "makefile": null,
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "backend_without_gate": {
       "schema_version": 1,
@@ -166,7 +167,8 @@
       ],
       "makefile": null,
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "commented_flags": {
       "schema_version": 1,
@@ -255,7 +257,8 @@
       ],
       "makefile": null,
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "compliant_cranelift": {
       "schema_version": 1,
@@ -345,7 +348,8 @@
       ],
       "makefile": null,
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "compliant_exception": {
       "schema_version": 1,
@@ -439,7 +443,8 @@
       ],
       "makefile": null,
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "compliant_rustflags_backend": {
       "schema_version": 1,
@@ -537,7 +542,8 @@
       ],
       "makefile": null,
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "compliant_scoped_rustflags_backend": {
       "schema_version": 1,
@@ -669,7 +675,8 @@
       ],
       "makefile": null,
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "compliant_split_spelling": {
       "schema_version": 1,
@@ -763,7 +770,8 @@
       ],
       "makefile": null,
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "compliant_stable_pin": {
       "schema_version": 1,
@@ -845,7 +853,8 @@
       ],
       "makefile": null,
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "coverage_make_exception": {
       "schema_version": 1,
@@ -1010,7 +1019,8 @@
         ]
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "coverage_make_export": {
       "schema_version": 1,
@@ -1174,7 +1184,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "coverage_make_mention": {
       "schema_version": 1,
@@ -1319,7 +1330,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "coverage_make_prefix": {
       "schema_version": 1,
@@ -1483,7 +1495,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "coverage_make_profile": {
       "schema_version": 1,
@@ -1668,7 +1681,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "coverage_make_release": {
       "schema_version": 1,
@@ -1813,7 +1827,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "coverage_make_rustflags": {
       "schema_version": 1,
@@ -1958,7 +1973,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "coverage_make_rustflags_route": {
       "schema_version": 1,
@@ -2145,7 +2161,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "coverage_make_target_variable": {
       "schema_version": 1,
@@ -2313,7 +2330,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "coverage_make_test_profile": {
       "schema_version": 1,
@@ -2498,7 +2516,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "coverage_make_unresolved": {
       "schema_version": 1,
@@ -2708,7 +2727,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "coverage_make_unselected": {
       "schema_version": 1,
@@ -2872,7 +2892,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "coverage_make_variable": {
       "schema_version": 1,
@@ -3054,7 +3075,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "coverage_workflow_action": {
       "schema_version": 1,
@@ -3170,7 +3192,8 @@
           "error": null,
           "decode_category": null
         }
-      ]
+      ],
+      "evaluated_on": "2026-11-05"
     },
     "coverage_workflow_run": {
       "schema_version": 1,
@@ -3313,7 +3336,8 @@
           "error": null,
           "decode_category": null
         }
-      ]
+      ],
+      "evaluated_on": "2026-11-05"
     },
     "exception_adr_absent": {
       "schema_version": 1,
@@ -3457,7 +3481,8 @@
           "route_linker": true,
           "adr_present": false
         }
-      ]
+      ],
+      "evaluated_on": "2026-11-05"
     },
     "exception_dev_fast": {
       "schema_version": 1,
@@ -3601,7 +3626,8 @@
           "route_linker": true,
           "adr_present": true
         }
-      ]
+      ],
+      "evaluated_on": "2026-11-05"
     },
     "exception_empty_rationale": {
       "schema_version": 1,
@@ -3745,7 +3771,102 @@
           "route_linker": true,
           "adr_present": true
         }
-      ]
+      ],
+      "evaluated_on": "2026-11-05"
+    },
+    "exception_recent_measurement": {
+      "schema_version": 1,
+      "kind": "policy-input/rust-build-defaults",
+      "repository": {
+        "path": "exception-recent-measurement",
+        "name": null
+      },
+      "applicability": {
+        "root_cargo_toml": true,
+        "rust_surfaces_declared": false,
+        "cargo_config": true,
+        "toolchain_file": true
+      },
+      "cargo": {
+        "parsed": {
+          "package": {
+            "name": "fixture",
+            "version": "0.1.0"
+          }
+        },
+        "surfaces": [
+          {
+            "path": "Cargo.toml",
+            "role": "crate",
+            "parsed": {
+              "package": {
+                "name": "fixture",
+                "version": "0.1.0"
+              }
+            }
+          }
+        ]
+      },
+      "toolchain": {
+        "path": "rust-toolchain.toml",
+        "channel": "nightly-2026-08-23",
+        "channel_kind": "nightly-dated",
+        "parse_error": null
+      },
+      "cargo_config": {
+        "path": ".cargo/config.toml",
+        "sources": [
+          {
+            "name": "build",
+            "kind": "build",
+            "key": null,
+            "linux": false,
+            "linux_only": false,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8"
+            ]
+          },
+          {
+            "name": "target.cfg(target_os = \"linux\")",
+            "kind": "target",
+            "key": "cfg(target_os = \"linux\")",
+            "linux": true,
+            "linux_only": true,
+            "classified": true,
+            "flags": [
+              "-Zthreads=8",
+              "-Clink-arg=-fuse-ld=mold"
+            ]
+          }
+        ],
+        "backends": [],
+        "unstable_codegen_backend": null,
+        "parse_error": null
+      },
+      "exceptions": [
+        {
+          "path": "docs/developers-guide.md",
+          "present": true,
+          "read_error": null,
+          "sections": [
+            {
+              "path": "docs/developers-guide.md",
+              "heading": "Why Cranelift is not part of the standard",
+              "line": 8,
+              "level": 3,
+              "channels_named": [
+                "nightly-2026-09-21"
+              ],
+              "body_lines": 10
+            }
+          ]
+        }
+      ],
+      "makefile": null,
+      "makefile_error": null,
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "exception_route_absent": {
       "schema_version": 1,
@@ -3889,7 +4010,8 @@
           "route_linker": false,
           "adr_present": true
         }
-      ]
+      ],
+      "evaluated_on": "2026-11-05"
     },
     "exception_route_without_linker": {
       "schema_version": 1,
@@ -4033,7 +4155,8 @@
           "route_linker": false,
           "adr_present": true
         }
-      ]
+      ],
+      "evaluated_on": "2026-11-05"
     },
     "exception_route_without_threads": {
       "schema_version": 1,
@@ -4177,7 +4300,8 @@
           "route_linker": true,
           "adr_present": true
         }
-      ]
+      ],
+      "evaluated_on": "2026-11-05"
     },
     "exception_undeclared": {
       "schema_version": 1,
@@ -4304,7 +4428,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "exception_unreadable": {
       "schema_version": 1,
@@ -4517,7 +4642,8 @@
           "route_linker": true,
           "adr_present": true
         }
-      ]
+      ],
+      "evaluated_on": "2026-11-05"
     },
     "exception_without_pin": {
       "schema_version": 1,
@@ -4597,7 +4723,7 @@
               "line": 8,
               "level": 3,
               "channels_named": [
-                "nightly-2026-08-23"
+                "nightly-2026-03-26"
               ],
               "body_lines": 10
             }
@@ -4606,7 +4732,8 @@
       ],
       "makefile": null,
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "gate_build_after_cd": {
       "schema_version": 1,
@@ -4821,7 +4948,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "gate_delegated": {
       "schema_version": 1,
@@ -5000,7 +5128,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "gate_delegated_options": {
       "schema_version": 1,
@@ -5179,7 +5308,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "gate_dynamic": {
       "schema_version": 1,
@@ -5377,7 +5507,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "gate_dynamic_file": {
       "schema_version": 1,
@@ -5556,7 +5687,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "gate_exempt": {
       "schema_version": 1,
@@ -5809,7 +5941,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "gate_global": {
       "schema_version": 1,
@@ -5991,7 +6124,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "gate_global_no_gate": {
       "schema_version": 1,
@@ -6155,7 +6289,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "gate_inline_linux": {
       "schema_version": 1,
@@ -6337,7 +6472,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "gate_isolated_whitaker": {
       "schema_version": 1,
@@ -6686,7 +6822,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "gate_netsuke": {
       "schema_version": 1,
@@ -7103,7 +7240,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "gate_stable": {
       "schema_version": 1,
@@ -7240,7 +7378,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "gate_target_variable": {
       "schema_version": 1,
@@ -7410,7 +7549,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "gate_template": {
       "schema_version": 1,
@@ -7610,7 +7750,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "invalid_cargo": {
       "schema_version": 1,
@@ -7728,7 +7869,8 @@
       ],
       "makefile": null,
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "linker_unconditional": {
       "schema_version": 1,
@@ -7822,7 +7964,8 @@
       ],
       "makefile": null,
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "llvm_dev_profile": {
       "schema_version": 1,
@@ -7918,7 +8061,8 @@
       ],
       "makefile": null,
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "makefile_include": {
       "schema_version": 1,
@@ -8079,7 +8223,8 @@
         ]
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "makefile_recovered": {
       "schema_version": 1,
@@ -8261,7 +8406,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "makefile_refused": {
       "schema_version": 1,
@@ -8351,7 +8497,8 @@
       ],
       "makefile": null,
       "makefile_error": "makeutil exited with status 2 for Makefile",
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "negated_linux_cfg": {
       "schema_version": 1,
@@ -8456,7 +8603,8 @@
       ],
       "makefile": null,
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "no_backend_no_exception": {
       "schema_version": 1,
@@ -8539,7 +8687,8 @@
       ],
       "makefile": null,
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "no_config": {
       "schema_version": 1,
@@ -8592,7 +8741,8 @@
       ],
       "makefile": null,
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "no_linux_table": {
       "schema_version": 1,
@@ -8674,7 +8824,8 @@
       ],
       "makefile": null,
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "non_string_rustflags": {
       "schema_version": 1,
@@ -8733,7 +8884,8 @@
       ],
       "makefile": null,
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "not_rust": {
       "schema_version": 1,
@@ -8764,7 +8916,8 @@
       ],
       "makefile": null,
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "other_backend": {
       "schema_version": 1,
@@ -8854,7 +9007,8 @@
       ],
       "makefile": null,
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "package_override_backend": {
       "schema_version": 1,
@@ -8944,7 +9098,8 @@
       ],
       "makefile": null,
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "printed_cargo": {
       "schema_version": 1,
@@ -9139,7 +9294,8 @@
           "error": null,
           "decode_category": null
         }
-      ]
+      ],
+      "evaluated_on": "2026-11-05"
     },
     "release_workflow": {
       "schema_version": 1,
@@ -9295,7 +9451,8 @@
           "error": null,
           "decode_category": null
         }
-      ]
+      ],
+      "evaluated_on": "2026-11-05"
     },
     "stale_exception": {
       "schema_version": 1,
@@ -9389,7 +9546,8 @@
       ],
       "makefile": null,
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "threads_missing_from_build": {
       "schema_version": 1,
@@ -9481,7 +9639,8 @@
       ],
       "makefile": null,
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "threads_missing_from_linux": {
       "schema_version": 1,
@@ -9574,7 +9733,8 @@
       ],
       "makefile": null,
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "unclassified_only": {
       "schema_version": 1,
@@ -9667,7 +9827,8 @@
       ],
       "makefile": null,
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "unclassified_target": {
       "schema_version": 1,
@@ -9772,7 +9933,8 @@
       ],
       "makefile": null,
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "unknown_schema": {
       "schema_version": 2,
@@ -9855,7 +10017,8 @@
       ],
       "makefile": null,
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "whitaker_chained_inside": {
       "schema_version": 1,
@@ -10070,7 +10233,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "whitaker_chained_outside": {
       "schema_version": 1,
@@ -10285,7 +10449,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "whitaker_chained_outside_manifest_backend": {
       "schema_version": 1,
@@ -10518,7 +10683,8 @@
           "profile": "dev",
           "backend": "cranelift"
         }
-      ]
+      ],
+      "evaluated_on": "2026-11-05"
     },
     "whitaker_chained_subdirectory": {
       "schema_version": 1,
@@ -10733,7 +10899,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "workflow_rustflags_env": {
       "schema_version": 1,
@@ -10893,7 +11060,8 @@
           "error": null,
           "decode_category": null
         }
-      ]
+      ],
+      "evaluated_on": "2026-11-05"
     },
     "workflow_setup_rust": {
       "schema_version": 1,
@@ -11048,7 +11216,8 @@
           "error": null,
           "decode_category": null
         }
-      ]
+      ],
+      "evaluated_on": "2026-11-05"
     },
     "workflow_undecodable": {
       "schema_version": 1,
@@ -11145,7 +11314,8 @@
           "error": "invalid YAML: while parsing a flow sequence\n  in \"<unicode string>\", line 1, column 5:\n    on: [push\n        ^ (line: 1)\nexpected ',' or ']', but got ':'\n  in \"<unicode string>\", line 2, column 5:\n    jobs:\n        ^ (line: 2)",
           "decode_category": "invalid YAML"
         }
-      ]
+      ],
+      "evaluated_on": "2026-11-05"
     }
   }
 }
