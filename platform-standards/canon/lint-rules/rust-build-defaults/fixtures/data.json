@@ -5872,7 +5872,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "gate_exempt": {
       "schema_version": 1,
@@ -11272,7 +11273,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "whitaker_profile_override": {
       "schema_version": 1,
@@ -11486,7 +11488,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "whitaker_profile_override_wrong_profile": {
       "schema_version": 1,
@@ -11700,7 +11703,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "whitaker_quoted_override": {
       "schema_version": 1,
@@ -11914,7 +11918,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "whitaker_quoted_unset": {
       "schema_version": 1,
@@ -12154,7 +12159,8 @@
         "includes": []
       },
       "makefile_error": null,
-      "workflows": []
+      "workflows": [],
+      "evaluated_on": "2026-11-05"
     },
     "workflow_rustflags_env": {
       "schema_version": 1,
