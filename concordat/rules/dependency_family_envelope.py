@@ -25,6 +25,7 @@ cannot be read at all raises an operational error.
 from __future__ import annotations
 
 import pathlib
+import posixpath
 import re
 import tomllib
 import typing as typ
@@ -346,13 +347,15 @@ def _workspace_tables(
 
 def _inherited_for(
     manifest: str,
+    parsed: dict[str, object],
     workspaces: dict[pathlib.PurePosixPath, dict[str, object]],
     everything: dict[str, object],
 ) -> dict[str, object]:
     """Return the `[workspace.dependencies]` a manifest's own workspace offers.
 
-    Cargo resolves `workspace = true` against the nearest ancestor workspace, so
-    a member must not inherit from a sibling workspace that happens to share a
+    Cargo resolves `workspace = true` against the workspace the member belongs
+    to: the one `package.workspace` names, else the nearest ancestor workspace.
+    A member must not inherit from a sibling workspace that happens to share a
     key. A manifest under no declared workspace keeps the combined table.
 
     Returns
@@ -361,6 +364,12 @@ def _inherited_for(
         The inheritable dependency table for *manifest*.
     """
     parent = pathlib.PurePosixPath(manifest).parent
+    named = (mapping(parsed.get("package")) or {}).get("workspace")
+    if isinstance(named, str):
+        root = pathlib.PurePosixPath(posixpath.normpath(str(parent / named)))
+        if root in workspaces:
+            return workspaces[root]
+        return {}
     for directory in (parent, *parent.parents):
         if directory in workspaces:
             return workspaces[directory]
@@ -443,7 +452,7 @@ def _cargo_declarations(
         if doc is not None
         for declaration in _surface_declarations(
             (checkout, path, doc),
-            _inherited_for(path, workspaces, everything),
+            _inherited_for(path, doc, workspaces, everything),
             config,
         )
     ]

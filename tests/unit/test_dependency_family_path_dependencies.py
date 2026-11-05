@@ -144,3 +144,45 @@ def test_inheritance_is_resolved_from_each_members_own_workspace(
     }
 
     assert manifests == {f"{versioned}/Cargo.toml"}
+
+
+@pytest.mark.parametrize(
+    "order",
+    [
+        pytest.param(("a", "b", "m"), id="versioned-workspace-first"),
+        pytest.param(("b", "m", "a"), id="path-only-workspace-first"),
+    ],
+)
+def test_a_member_naming_its_workspace_inherits_from_that_workspace(
+    repository: pathlib.Path, order: tuple[str, ...]
+) -> None:
+    """`package.workspace` decides the table, wherever the member sits."""
+    _write(repository, ".github/dependabot.yml", _CONFIG)
+    declared = "".join(f"      - path: {name}/Cargo.toml\n" for name in order)
+    _write(repository, ".concordat", f"language:\n  rust:\n    surfaces:\n{declared}")
+    entries = {
+        "a": 'shared = { path = "shared", version = "1" }\n',
+        "b": 'shared = { path = "shared" }\n',
+    }
+    for name in ("a", "b"):
+        _write(
+            repository,
+            f"{name}/Cargo.toml",
+            f'[package]\nname = "{name}"\nversion = "0.1.0"\n\n'
+            "[dependencies]\nshared.workspace = true\n" + _WORKSPACE + entries[name],
+        )
+    _write(
+        repository,
+        "m/Cargo.toml",
+        '[package]\nname = "m"\nversion = "0.1.0"\nworkspace = "../a"\n\n'
+        "[dependencies]\nshared.workspace = true\n",
+    )
+
+    envelope = build_dependency_family_envelope(repository)
+    manifests = {
+        declaration["manifest"]
+        for declaration in envelope["declarations"]
+        if declaration["package"] == "shared"
+    }
+
+    assert manifests == {"a/Cargo.toml", "m/Cargo.toml"}
