@@ -2751,9 +2751,10 @@ under it; a repository whose suite fails records the failing tests as an
 exception in its developers' guide and re-measures on each toolchain bump. Both
 states are compliant and a repository with neither is not. The exception is
 recognized as a section of a declared document whose heading names the backend,
-and its currency is decided by whether that section names the pinned channel —
-which is what makes the re-test obligation checkable rather than aspirational.
-The policy does not attempt to read which tests the prose names.
+and its currency is decided by whether that section names the pinned channel or
+a dated measurement within the last 90 days — which is what makes the re-test
+obligation checkable rather than aspirational. The policy does not attempt to
+read which tests the prose names.
 
 - **Sensors:** parse `.cargo/config.toml` for the mold linker (RT-008), the
   parallel `rustc` frontend (RT-017), the equality of the `rustflags` sources

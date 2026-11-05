@@ -45,6 +45,7 @@ from .toolchain import ToolchainFacts, inspect_toolchain
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
+    import datetime as dt
     import pathlib
 
 _logger = logging.getLogger(__name__)
@@ -202,6 +203,7 @@ class BuildDefaultsEnvelope(typ.TypedDict):
     cargo_manifest_backend_error: typ.NotRequired[str]
     exceptions: list[DocumentScan]
     standard_exceptions: typ.NotRequired[list[StandardException]]
+    evaluated_on: typ.NotRequired[str]
     makefile: MakeutilReport | None
     makefile_error: str | None
     workflows: list[BuildWorkflowFile]
@@ -324,6 +326,7 @@ def build_build_defaults_envelope(
     *,
     inspect: MakefileInspector = inspect_makefile,
     report_undecodable: cabc.Callable[[str, str], None] | None = None,
+    today: dt.date | None = None,
 ) -> BuildDefaultsEnvelope:
     """Assemble the build-defaults policy input for one local checkout.
 
@@ -338,6 +341,9 @@ def build_build_defaults_envelope(
     inspect:
         Reads the root Makefile's facts. The default is the pure query; the
         command boundary injects an observing one.
+    today:
+        The date BD-006 ages a recorded measurement against; ``None`` leaves
+        it out of the envelope.
     report_undecodable:
         Called with the path and decode category of each workflow that did not
         decode. The default reports nothing, so the builder stays a pure
@@ -387,4 +393,9 @@ def build_build_defaults_envelope(
     standard_exceptions = inspect_standard_exceptions(checkout, resolved)
     if standard_exceptions:
         envelope["standard_exceptions"] = standard_exceptions
+    # The builder never reads a clock: BD-006 needs a "today" to age a recorded
+    # measurement, so the command boundary supplies one. Omitted when none is
+    # given, in which case no measurement counts as recent.
+    if today is not None:
+        envelope["evaluated_on"] = today.isoformat()
     return envelope

@@ -71,14 +71,18 @@ makes only those clauses indeterminate; the others still run. See
   under a non-nightly pin stops the file loading for every consumer. LLVM on a
   profile other than `dev` is not a third backend: it is the dedicated coverage
   profile BD-007 accepts, and is not reported. LLVM on `dev` still is.
-- **BD-006** (error): the recorded exception names the pinned toolchain
-  channel. An exception measured on an older channel no longer covers the
-  toolchain the repository builds with, which is what keeps the recorded state
-  from drifting quietly behind the pin. Clearing it does not require a fresh
-  measurement: a line in the exception section saying what the pin is now,
-  whether a measurement was taken on it, and the date any deferral runs to is a
-  true statement of the recorded state and satisfies the clause. With no
-  channel pinned at all the finding is `indeterminate`.
+- **BD-006** (error): the recorded exception is current. It is current while
+  it names the pinned toolchain channel, or names a dated measurement
+  (`nightly-YYYY-MM-DD` or `beta-YYYY-MM-DD`) taken within the last 90 days
+  (`exception_window_days`), on any pin. Dependabot moves the pin daily, so an
+  exception that had to name today's pin would go stale overnight; the window
+  asks instead that a measurement is not old. The age is read against the date
+  the audit ran (`evaluated_on` in the envelope), and a measurement dated after
+  it does not count. Past the window, a line in the exception section saying
+  what the pin is now, whether a measurement was taken on it, and the date any
+  deferral runs to is a true statement of the recorded state and satisfies the
+  clause. With no channel pinned and no recent measurement the finding is
+  `indeterminate`.
 - **BD-007** (error): where Cranelift is the development default (selected by
   the `dev` profile or by `rustflags`), every coverage path and every
   dev-profile release build selects LLVM. A coverage path is any Makefile

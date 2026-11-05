@@ -463,3 +463,16 @@ def test_the_command_boundary_hands_every_builder_the_observed_inspector(
     }[key]
     builder(tmp_path)
     assert seen == [tmp_path / "Makefile"], seen
+
+
+def test_the_envelope_carries_the_date_it_is_given(tmp_path: pathlib.Path) -> None:
+    """BD-006 ages a measurement against this date; no date leaves it out."""
+    import datetime as dt
+
+    (tmp_path / "Cargo.toml").write_text("[package]\nname = 'x'\n", encoding="utf-8")
+
+    dated = build_build_defaults_envelope(tmp_path, today=dt.date(2026, 11, 5))
+    undated = build_build_defaults_envelope(tmp_path)
+
+    assert dated["evaluated_on"] == "2026-11-05"
+    assert "evaluated_on" not in undated

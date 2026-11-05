@@ -340,6 +340,7 @@ def _build_defaults_envelope(
         parameters,
         inspect=inspect_makefile_observed,
         report_undecodable=log_undecodable_workflow,
+        today=today_provider(),
     )
 
 

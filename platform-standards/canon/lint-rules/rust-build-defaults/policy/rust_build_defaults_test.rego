@@ -159,6 +159,53 @@ test_an_exception_measured_on_an_older_toolchain_is_stale if {
 	contains(f.msg, "nightly-2026-08-23")
 }
 
+# A bump moves the pin daily, so a measurement stays current for the window on
+# any pin instead of going stale with each bump.
+test_a_recent_measurement_on_an_older_pin_is_current if {
+	findings := policy.deny with input as data.fixtures.exception_recent_measurement
+	not "BD-006" in {f.rule_id | some f in findings}
+}
+
+# Mutations: the same document aged past the window, and moved to the day the
+# window closes, which still counts.
+test_a_measurement_past_the_window_is_stale if {
+	findings := policy.deny with input as object.union(
+		data.fixtures.exception_recent_measurement,
+		{"evaluated_on": "2026-12-21"},
+	)
+	profile(findings) == {["BD-006", "noncompliant"]}
+}
+
+test_a_measurement_on_the_last_day_of_the_window_is_current if {
+	findings := policy.deny with input as object.union(
+		data.fixtures.exception_recent_measurement,
+		{"evaluated_on": "2026-12-20"},
+	)
+	not "BD-006" in {f.rule_id | some f in findings}
+}
+
+test_a_missing_clock_leaves_a_measurement_unproved if {
+	findings := policy.deny with input as json.remove(
+		data.fixtures.exception_recent_measurement,
+		["evaluated_on"],
+	)
+	profile(findings) == {["BD-006", "noncompliant"]}
+}
+
+test_a_measurement_dated_in_the_future_is_not_recent if {
+	findings := policy.deny with input as object.union(
+		data.fixtures.exception_recent_measurement,
+		{"evaluated_on": "2026-09-01"},
+	)
+	profile(findings) == {["BD-006", "noncompliant"]}
+}
+
+test_the_window_is_a_parameter if {
+	findings := policy.deny with input as data.fixtures.exception_recent_measurement
+		with data.parameters as {"exception_window_days": 10}
+	profile(findings) == {["BD-006", "noncompliant"]}
+}
+
 test_an_exception_with_no_pin_to_measure_against_is_indeterminate if {
 	findings := policy.deny with input as data.fixtures.exception_without_pin
 	profile(findings) == {["BD-006", "indeterminate"]}

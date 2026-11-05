@@ -25,6 +25,7 @@ Run from the rule package directory::
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import typing as typ
 from pathlib import Path
@@ -44,6 +45,11 @@ PARAMETERS: typ.Final[dict[str, object]] = {
 }
 
 
+# A fixed date, so BD-006's measurement age is the same on every machine and
+# on every day the fixtures are regenerated.
+EVALUATED_ON: typ.Final = dt.date(2026, 11, 5)
+
+
 def build_envelopes() -> dict[str, dict[str, object]]:
     """Return one envelope per fixture checkout, keyed by directory name.
 
@@ -56,7 +62,7 @@ def build_envelopes() -> dict[str, dict[str, object]]:
     for repo in sorted(path for path in REPOS_DIR.iterdir() if path.is_dir()):
         envelope = typ.cast(
             "dict[str, object]",
-            dict(build_build_defaults_envelope(repo, PARAMETERS)),
+            dict(build_build_defaults_envelope(repo, PARAMETERS, today=EVALUATED_ON)),
         )
         # The recorded path is the fixture's name, never the absolute location
         # of the checkout, so the checked-in envelopes stay identical on every
