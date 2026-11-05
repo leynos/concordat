@@ -333,16 +333,48 @@ def _workspace_requirements(
 
 
 def _workspace_tables(
-    surfaces: cabc.Iterable[dict[str, object]],
+    checkout: pathlib.Path, surfaces: list[dict[str, object]]
 ) -> dict[pathlib.PurePosixPath, dict[str, object]]:
-    """Return each workspace root's `[workspace.dependencies]`, by directory."""
+    """Return each workspace root's `[workspace.dependencies]`, by directory.
+
+    A governed member may belong to a workspace whose root is not itself a
+    governed surface, so the directories above each surface, and any one a
+    `package.workspace` names, are read from the checkout too.
+
+    Returns
+    -------
+    dict[pathlib.PurePosixPath, dict[str, object]]
+        The dependency table of every workspace root found.
+    """
     tables: dict[pathlib.PurePosixPath, dict[str, object]] = {}
+    candidates: set[pathlib.PurePosixPath] = set()
     for surface in surfaces:
-        workspace = mapping((mapping(surface.get("parsed")) or {}).get("workspace"))
+        parsed = mapping(surface.get("parsed")) or {}
+        parent = pathlib.PurePosixPath(str(surface["path"])).parent
+        workspace = mapping(parsed.get("workspace"))
         if workspace is not None:
-            directory = pathlib.PurePosixPath(str(surface["path"])).parent
+            tables[parent] = mapping(workspace.get("dependencies")) or {}
+        named = _named_workspace(parent, parsed)
+        candidates.update({parent, *parent.parents, *([named] if named else [])})
+    for directory in sorted(candidates - tables.keys()):
+        document = _workspace_document(checkout, directory)
+        workspace = mapping(document.get("workspace"))
+        if workspace is not None:
             tables[directory] = mapping(workspace.get("dependencies")) or {}
     return tables
+
+
+def _workspace_document(
+    checkout: pathlib.Path, directory: pathlib.PurePosixPath
+) -> dict[str, object]:
+    """Return the manifest in *directory*, or an empty one when it is not usable."""
+    if directory.is_absolute() or ".." in directory.parts:
+        return {}
+    manifest = checkout / directory / "Cargo.toml"
+    if not probe_file(manifest).present:
+        return {}
+    document, error = loose_manifest(manifest)
+    return document if error is None else {}
 
 
 def _inherited_for(
@@ -448,7 +480,7 @@ def _cargo_declarations(
     """Return every dependency edge of the governed Cargo surfaces."""
     surfaces = _cargo_surfaces(checkout, problems, members)
     everything = _workspace_requirements(surfaces)
-    workspaces = _workspace_tables(surfaces)
+    workspaces = _workspace_tables(checkout, surfaces)
     parsed = [(str(s["path"]), mapping(s.get("parsed"))) for s in surfaces]
     problems.extend(
         f"{path} could not be parsed" for path, doc in parsed if doc is None
