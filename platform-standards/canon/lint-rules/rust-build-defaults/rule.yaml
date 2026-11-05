@@ -75,6 +75,12 @@ parameters:
         description: >-
           Cargo subcommands a workflow step runs as a gate build, which BD-009
           holds to the fast flags when the step's RUSTFLAGS is set.
+      exception_window_days:
+        type: integer
+        minimum: 0
+        description: >-
+          How long a recorded exception stays current after the newest dated
+          toolchain channel it names, on any pin (BD-006).
       waivable_clauses:
         type: array
         items:
@@ -96,6 +102,7 @@ parameters:
     exception_documents:
       - docs/developers-guide.md
     exception_keyword: Cranelift
+    exception_window_days: 90
     gate_targets:
       - lint
       - test
