@@ -28,7 +28,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -98,7 +99,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -311,7 +313,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -523,7 +526,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -790,7 +794,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -1022,7 +1027,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -1220,7 +1226,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -1359,7 +1366,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           },
           {
             "path": "rust/Cargo.toml",
@@ -1367,8 +1375,14 @@
             "parsed": {
               "workspace": {
                 "members": []
+              },
+              "profile": {
+                "dev": {
+                  "debug": 0
+                }
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -1566,7 +1580,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -1821,7 +1836,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -2034,7 +2050,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -2219,7 +2236,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -2417,7 +2435,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -2650,7 +2669,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -2883,7 +2903,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -3151,7 +3172,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -3419,7 +3441,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -3652,7 +3675,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -3858,8 +3882,14 @@
             "parsed": {
               "workspace": {
                 "members": []
+              },
+              "profile": {
+                "dev": {
+                  "debug": 0
+                }
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -4050,8 +4080,14 @@
             "parsed": {
               "workspace": {
                 "members": []
+              },
+              "profile": {
+                "dev": {
+                  "debug": 0
+                }
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -4242,8 +4278,14 @@
             "parsed": {
               "workspace": {
                 "members": []
+              },
+              "profile": {
+                "dev": {
+                  "debug": 0
+                }
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -4434,8 +4476,14 @@
             "parsed": {
               "workspace": {
                 "members": []
+              },
+              "profile": {
+                "dev": {
+                  "debug": 0
+                }
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -4633,7 +4681,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -4873,7 +4922,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
