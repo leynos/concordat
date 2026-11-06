@@ -163,14 +163,14 @@ For the full story, head to the docs:
 Concordat follows the conventions in [AGENTS.md](AGENTS.md). The most useful
 Makefile targets:
 
-| Target           | Description                               |
-| ---------------- | ----------------------------------------- |
-| `make fmt`       | Format Python and Markdown sources        |
-| `make lint`      | Run Ruff, spelling, and Skylos lint tiers |
-| `make typecheck` | Run ty type checker                       |
-| `make test`      | Run the test suite                        |
-| `make check-fmt` | Verify formatting without changing files  |
-| `make spelling`  | Enforce shared en-GB-oxendict spelling    |
+| Target           | Description                                |
+| ---------------- | ------------------------------------------ |
+| `make fmt`       | Format Python and Markdown sources         |
+| `make lint`      | Run Ruff, interrogate, spelling and Skylos |
+| `make typecheck` | Run ty type checker                        |
+| `make test`      | Run the test suite                         |
+| `make check-fmt` | Verify formatting without changing files   |
+| `make spelling`  | Enforce shared en-GB-oxendict spelling     |
 
 Run all quality gates before committing:
 

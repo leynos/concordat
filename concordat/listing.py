@@ -57,8 +57,9 @@ def _github_api_error(error: Exception) -> ConcordatError:
 def _connection_error(error: Exception) -> ConcordatError:
     """Wrap a GitHub connection failure with its causes and TLS guidance.
 
-    The message lists each distinct error in the cause and context chain, so
-    the root cause of a TLS or proxy problem is visible to the user.
+    The message follows the chain from each error to its cause, or to its
+    context when it has no cause, and lists each distinct message once, so the
+    root cause of a TLS or proxy problem is visible to the user.
 
     Returns
     -------
@@ -115,8 +116,9 @@ def list_namespace_repositories(
 def _fetch_namespace(client: _RepositoryClient, namespace: str) -> list[str]:
     """Return the sorted SSH URLs of the repositories owned by ``namespace``.
 
-    A repository without ``ssh_url`` is given one from its full name or name.
-    GitHub errors are re-raised as ConcordatError.
+    A repository without ``ssh_url`` is given one from its full name or name;
+    one with none of the three is skipped. GitHub errors are re-raised as
+    ConcordatError.
 
     Returns
     -------
@@ -126,13 +128,15 @@ def _fetch_namespace(client: _RepositoryClient, namespace: str) -> list[str]:
     Raises
     ------
     _namespace_not_found_error
-        A ConcordatError when GitHub reports that the namespace does not exist.
+        Builds the ConcordatError raised when GitHub reports that the namespace
+        does not exist.
     _namespace_forbidden_error
-        A ConcordatError when access to the namespace is forbidden.
+        Builds the ConcordatError raised when access to the namespace is
+        forbidden.
     _connection_error
-        A ConcordatError when GitHub cannot be contacted.
+        Builds the ConcordatError raised when GitHub cannot be contacted.
     _github_api_error
-        A ConcordatError for any other GitHub API failure.
+        Builds the ConcordatError raised for any other GitHub API failure.
     """
     try:
         generator = client.repositories_by(namespace, type="owner", number=-1)

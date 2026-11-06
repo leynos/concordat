@@ -60,7 +60,9 @@ def _environ(env: EnvMapping | None) -> EnvMapping:
 def _base(env: EnvMapping | None, variable: str, fallback: tuple[str, ...]) -> Path:
     """Return the concordat directory for XDG ``variable``, or its fallback.
 
-    Relative values of ``variable`` are ignored, as the XDG specification requires.
+    A value of ``variable`` is expanded for ``~`` and used when it is then
+    absolute. Any other relative value is ignored, as the XDG specification
+    requires.
 
     Returns
     -------

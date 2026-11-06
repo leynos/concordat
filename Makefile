@@ -63,7 +63,7 @@ SKYLOS = $(SKYLOS_CLI) --config-file pyproject.toml
 SKYLOS_PRODUCTION_TARGETS ?= concordat scripts
 SKYLOS_EXCLUDE_FOLDERS ?= tests
 
-.PHONY: help all clean build build-release lint fmt check-fmt \
+.PHONY: help all clean build build-release lint interrogate fmt check-fmt \
 	        markdownlint nixie spelling skylos-allow makeutil conftest test typecheck \
 	        install-vale install-vale-styles check-vale vale $(TOOLS) \
         $(VENV_TOOLS)
@@ -126,11 +126,27 @@ check-fmt: build ## Verify formatting
 
 # Docstring presence for every Python file the repository owns; Ruff keeps style.
 INTERROGATE_TARGETS ?= concordat tests scripts platform-standards
-INTERROGATE := $(UV_ENV) uv tool run --from interrogate==1.7.0 interrogate --fail-under 100
+INTERROGATE_VERSION ?= 1.7.0
+INTERROGATE = $(UV) tool run \
+	--from 'interrogate==$(INTERROGATE_VERSION)' interrogate
+# Level 2 prints a MISSED row per undocumented definition, which the
+# `interrogate` target fails on: the rounded percentage alone passes a lone gap.
+INTERROGATE_FLAGS ?= -vv --fail-under 100
 
-lint: build ## Run linters
+# Interrogate rounds its percentage to one decimal, so `--fail-under 100` alone
+# passes a lone gap in a large repository; fail on any MISSED row as well.
+interrogate: ## Enforce complete Python docstring coverage
+	@report="$$($(INTERROGATE) $(INTERROGATE_FLAGS) $(INTERROGATE_TARGETS))"; \
+	  status=$$?; \
+	  printf '%s\n' "$$report"; \
+	  test "$$status" -eq 0 || exit "$$status"; \
+	  if printf '%s\n' "$$report" | grep -q '| *MISSED *|'; then \
+	    printf '%s\n' 'interrogate: undocumented definitions remain; see the MISSED rows above' >&2; \
+	    exit 1; \
+	  fi
+
+lint: build interrogate ## Run linters
 	$(RUFF) check
-	$(INTERROGATE) $(INTERROGATE_TARGETS)
 	$(PYLINT) $(PYLINT_TARGETS)
 	$(DF12_PYLINT) $(DF12_PYLINT_TARGETS)
 	$(AMBRLEAKS) tests

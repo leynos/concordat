@@ -303,7 +303,7 @@ def _disenrol_repository(
     The change is pushed when the repository is remote or *push_remote* is
     set. A missing document is an error unless *allow_missing_document* is
     true. The platform inventory removal PR is requested when standards are
-    configured.
+    configured and the repository's GitHub slug is known.
 
     Returns
     -------
@@ -314,7 +314,7 @@ def _disenrol_repository(
     Raises
     ------
     _missing_document_error
-        A ConcordatError when the document is absent and
+        Builds the ConcordatError raised when the document is absent and
         *allow_missing_document* is false.
     """
     with _repository_context(specification) as context:
@@ -384,8 +384,9 @@ def _enrol_repository(
 ) -> EnrollmentOutcome:
     """Write the enrolment document for one repository and commit it.
 
-    An already enrolled repository is left unchanged unless *force* is set.
-    In that case only the platform inventory PR is requested.
+    An already enrolled repository is left unchanged. When *force* is set, the
+    platform inventory PR is still requested, if standards are configured and
+    the repository's GitHub slug is known.
 
     Returns
     -------
@@ -530,11 +531,14 @@ def _repository_context(
     Raises
     ------
     _remote_clone_failed_error
-        A ConcordatError when a remote specification fails to clone.
+        Builds the ConcordatError raised when a remote specification fails to
+        clone.
     _remote_clone_bare_error
-        A ConcordatError when the cloned remote has no working tree.
+        Builds the ConcordatError raised when the cloned remote has no working
+        tree.
     _repository_bare_error
-        A ConcordatError when the local repository has no working tree.
+        Builds the ConcordatError raised when the local repository has no
+        working tree.
     """
     if _looks_like_remote(specification):
         callbacks = build_remote_callbacks(specification)
@@ -712,10 +716,10 @@ def _set_enrolled_value(location: Path, *, value: bool, specification: str) -> b
     Raises
     ------
     _missing_document_error
-        A ConcordatError when the document does not exist.
+        Builds the ConcordatError raised when the document does not exist.
     _invalid_document_error
-        A ConcordatError when the document is not a mapping, or its ``enrolled``
-        value is not a boolean.
+        Builds the ConcordatError raised when the document is not a mapping,
+        or its ``enrolled`` value is not a boolean.
     """
     destination = location / CONCORDAT_FILENAME
     if not destination.exists():

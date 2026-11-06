@@ -83,7 +83,10 @@ When implementing changes, adhere to the following testing procedures:
     - **Testing:** Passes all relevant unit and behavioural tests according to
       the guidelines above (run `make test` to verify).
     - **Linting:** Passes the complete `make lint` pipeline, including Ruff,
-      spelling, and the blocking Skylos dead-code scan. Investigate every
+      `make interrogate` (a docstring on every module, class and function
+      under `concordat`, `tests`, `scripts` and `platform-standards`, run
+      through `uv`), spelling, and the blocking Skylos dead-code scan.
+      Investigate every
       Skylos finding and remove genuine dead code. Record a verified false
       positive with
       `make skylos-allow SYMBOL=symbol REASON="verified runtime caller"`.
