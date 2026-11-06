@@ -19,13 +19,15 @@ def has_rust_sources(checkout: pathlib.Path) -> bool:
     """Return whether any `.rs` file lies below *checkout*.
 
     Hidden directories and vendored or generated trees are not entered, as for
-    every other walk the audit makes. A directory the walk cannot list leaves the
-    answer to the files it could see, so an unreadable tree never turns a
-    repository with sources into one without.
+    every other walk the audit makes. A directory the walk cannot list may hold
+    the only Rust files, so an incomplete scan answers True: an unreadable tree
+    never turns a repository with sources into one without.
 
     Returns
     -------
     bool
         True when at least one Rust source file is found.
     """
-    return any(path.suffix == ".rs" for path in walk_files(checkout, []))
+    unreadable: list[str] = []
+    files = walk_files(checkout, unreadable)
+    return bool(unreadable) or any(path.suffix == ".rs" for path in files)

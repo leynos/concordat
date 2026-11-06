@@ -11,7 +11,7 @@ import typing as typ
 
 import pytest
 
-from concordat.rules import packages
+from concordat.rules import packages, rust_sources
 from concordat.rules.rust_sources import has_rust_sources
 
 if typ.TYPE_CHECKING:
@@ -56,6 +56,21 @@ def test_a_rust_file_under_a_hidden_directory_does_not_count(
     (tmp_path / ".cache" / "stray.rs").write_text("", encoding="utf-8")
 
     assert not has_rust_sources(tmp_path)
+
+
+def test_an_incomplete_scan_does_not_claim_there_is_no_rust(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A directory the walk cannot list may hold the only Rust files."""
+    _checkout(tmp_path, with_source=False)
+
+    def incomplete(_checkout: pathlib.Path, problems: list[str]) -> list[pathlib.Path]:
+        problems.append("cannot list a directory")
+        return []
+
+    monkeypatch.setattr(rust_sources, "walk_files", incomplete)
+
+    assert has_rust_sources(tmp_path)
 
 
 @pytest.mark.parametrize("with_source", [False, True])
