@@ -17,6 +17,7 @@ import pathlib
 import posixpath
 
 from .dependency_family_coverage import mapping
+from .dependency_family_discovery import cargo_tables
 from .dependency_family_workspace_reader import dependency_table, read_workspace
 
 type Table = dict[str, object]
@@ -33,12 +34,11 @@ def _named_workspace(
 
 
 def _uses_inheritance(parsed: dict[str, object]) -> bool:
-    """Return whether any dependency table entry says `workspace = true`."""
+    """Return whether any dependency, target-specific ones included, inherits."""
     return any(
         (mapping(value) or {}).get("workspace") is True
-        for key, value in parsed.items()
-        if key in {"dependencies", "dev-dependencies", "build-dependencies"}
-        for value in (mapping(value) or {}).values()
+        for _, _, table in cargo_tables(parsed)
+        for value in table.values()
     )
 
 
@@ -110,8 +110,12 @@ def inherited_tables(
     resolver = _Resolver(checkout, governed, problems)
     result: dict[str, Table] = {}
     for path, doc in parsed.items():
-        table = resolver.owner_table(path, doc)
-        if table is None and _uses_inheritance(doc):
+        uses = _uses_inheritance(doc)
+        # A surface that inherits nothing and names no workspace has no use for
+        # one, so ancestors are not probed on its behalf.
+        needs_owner = uses or _named_workspace(pathlib.PurePosixPath(path).parent, doc)
+        table = resolver.owner_table(path, doc) if needs_owner else None
+        if table is None and uses:
             problems.append(f"{path} inherits from a workspace that could not be found")
         result[path] = table or {}
     return result

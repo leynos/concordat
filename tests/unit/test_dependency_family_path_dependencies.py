@@ -425,3 +425,49 @@ def test_a_member_no_workspace_owns_is_reported_not_guessed(
         "problems"
     ]
     assert "shared" in {d["package"] for d in envelope["declarations"]}
+
+
+def test_target_specific_inheritance_without_an_owner_is_reported(
+    repository: pathlib.Path,
+) -> None:
+    """`[target.*.dependencies]` entries that inherit count like the others."""
+    _write(repository, ".github/dependabot.yml", _CONFIG)
+    _write(
+        repository,
+        ".concordat",
+        "language:\n  rust:\n    surfaces:\n      - path: lone/Cargo.toml\n",
+    )
+    _write(
+        repository,
+        "lone/Cargo.toml",
+        '[package]\nname = "lone"\nversion = "0.1.0"\n\n'
+        "[target.'cfg(unix)'.dependencies]\nshared.workspace = true\n",
+    )
+
+    problems = build_dependency_family_envelope(repository)["problems"]
+
+    assert any("lone/Cargo.toml" in problem for problem in problems), problems
+
+
+def test_a_surface_that_inherits_nothing_probes_no_ancestors(
+    repository: pathlib.Path,
+) -> None:
+    """A malformed ungoverned ancestor says nothing about a self-contained crate."""
+    _write(repository, ".github/dependabot.yml", _CONFIG)
+    _write(
+        repository,
+        ".concordat",
+        "language:\n  rust:\n    surfaces:\n      - path: a/m/Cargo.toml\n",
+    )
+    _write(repository, "a/Cargo.toml", "[workspace\n")
+    _write(
+        repository,
+        "a/m/Cargo.toml",
+        '[package]\nname = "m"\nversion = "0.1.0"\n\n[dependencies]\nserde = "1"\n',
+    )
+
+    envelope = build_dependency_family_envelope(repository)
+
+    assert not any("a/Cargo.toml" in p for p in envelope["problems"]), envelope[
+        "problems"
+    ]
