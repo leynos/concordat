@@ -103,3 +103,146 @@ test_an_unknown_cd_resets_the_depth_to_the_checkout if {
 test_a_recipe_without_a_cd_runs_in_the_checkout if {
 	policy.cwd_depth([` whitaker --all`], 0) == 0
 }
+
+# -- explicit LLVM overrides and env prefixes ----------------------------------
+
+# statelet's shape: the configuration selects Cranelift for the dev profile and
+# the route names LLVM for that profile in its own environment.
+test_an_explicit_llvm_override_for_the_cranelift_profile_proves_isolation if {
+	findings := policy.deny with input as data.fixtures.whitaker_profile_override
+	count(findings) == 0
+}
+
+# Mutation: an override for some other profile leaves dev's Cranelift in force.
+test_an_override_for_another_profile_stays_unproved if {
+	findings := policy.deny with input as data.fixtures.whitaker_profile_override_wrong_profile
+	profile(findings) == {["BD-008", "indeterminate"]}
+}
+
+# Mutation: no override at all is the unproved case above.
+test_the_override_must_be_llvm if {
+	findings := policy.deny with input as data.fixtures.whitaker_profile_override
+	count(findings) == 0
+	segment := ` RUSTFLAGS= CARGO_PROFILE_DEV_CODEGEN_BACKEND=cranelift whitaker --all `
+	policy.suite_contamination(
+		{"targets": ["lint"], "recipes": []},
+		segment,
+	)
+}
+
+test_a_whitaker_route_behind_env_unset_prefixes_is_recognized if {
+	policy.runs_isolated_whitaker(`env -u RUSTFLAGS whitaker --all`)
+	policy.runs_isolated_whitaker(`env -u CARGO_ENCODED_RUSTFLAGS -u RUSTFLAGS /opt/bin/whitaker --all`)
+	policy.runs_isolated_whitaker(`env --unset=RUSTFLAGS --unset CARGO_ENCODED_RUSTFLAGS RUSTFLAGS= whitaker --all`)
+	policy.runs_isolated_whitaker(`@env -u RUSTFLAGS DYLINT_RUSTFLAGS="-D warnings" whitaker --all`)
+}
+
+test_env_options_it_does_not_know_are_not_isolated_routes if {
+	not policy.runs_isolated_whitaker(`env -i whitaker --all`)
+	not policy.runs_isolated_whitaker(`env -u whitaker`)
+	not policy.runs_isolated_whitaker(`env -u RUSTFLAGS cargo test -p whitaker`)
+	not policy.runs_isolated_whitaker(`-u RUSTFLAGS whitaker --all`)
+}
+
+test_a_whitaker_route_behind_env_unset_is_compliant if {
+	findings := policy.deny with input as data.fixtures.whitaker_env_unset
+	count(findings) == 0
+}
+
+# Mutation: cargo behind the same prefix is a gate build, held to the flags.
+test_cargo_behind_an_env_prefix_is_still_a_gate_build if {
+	findings := policy.deny with input as data.fixtures.gate_env_prefixed_cargo
+	profile(findings) == {["BD-008", "noncompliant"]}
+}
+
+# -- quoted text is not an environment operation --------------------------------
+
+# Mutation: a quoted value that merely contains the override is not the override.
+test_a_quoted_llvm_override_proves_nothing if {
+	findings := policy.deny with input as data.fixtures.whitaker_quoted_override
+	profile(findings) == {["BD-008", "indeterminate"]}
+}
+
+# Mutation: a quoted `-u RUSTFLAGS` is not a removal, so the exported
+# development flags still reach the route.
+test_a_quoted_unset_does_not_clear_exported_flags if {
+	findings := policy.deny with input as data.fixtures.whitaker_quoted_unset
+	profile(findings) == {["BD-008", "noncompliant"]}
+	some f in findings
+	contains(f.msg, "carries development")
+}
+
+test_only_the_routes_own_prefix_is_read if {
+	policy.route_assigned_values(`CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm whitaker --all`, "CARGO_PROFILE_DEV_CODEGEN_BACKEND") == ["llvm"]
+	policy.route_assigned_values(`NOTE=" CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm" whitaker --all`, "CARGO_PROFILE_DEV_CODEGEN_BACKEND") == []
+	policy.route_assigned_values(`whitaker --all RUSTFLAGS=-Dwarnings`, "RUSTFLAGS") == []
+	policy.route_assigned_values(`CARGO_PROFILE_DEV_CODEGEN_BACKEND="llvm" whitaker --all`, "CARGO_PROFILE_DEV_CODEGEN_BACKEND") == ["llvm"]
+	policy.route_assigned_values(`CARGO_PROFILE_DEV_CODEGEN_BACKEND='llvm' whitaker --all`, "CARGO_PROFILE_DEV_CODEGEN_BACKEND") == ["llvm"]
+	policy.route_assigned_values(`CARGO_PROFILE_DEV_CODEGEN_BACKEND='"llvm"' whitaker --all`, "CARGO_PROFILE_DEV_CODEGEN_BACKEND") == [`"llvm"`]
+	policy.route_assigned_values(`env -u RUSTFLAGS --unset=OTHER RUSTFLAGS= whitaker --all`, "RUSTFLAGS") == [""]
+	policy.unset_names(`env NOTE=" -u RUSTFLAGS " whitaker --all`) == set()
+	policy.unset_names(`env -u RUSTFLAGS --unset=OTHER whitaker --all`) == {"RUSTFLAGS", "OTHER"}
+}
+
+# Mutation: a Make variable that is not exported never reaches the route.
+test_an_unexported_make_variable_proves_nothing if {
+	findings := policy.deny with input as data.fixtures.whitaker_unexported_override
+	profile(findings) == {["BD-008", "indeterminate"]}
+}
+
+# Mutation: an escaped space keeps the override inside another variable's value.
+test_an_escaped_space_hides_no_override if {
+	findings := policy.deny with input as data.fixtures.whitaker_escaped_override
+	profile(findings) == {["BD-008", "indeterminate"]}
+}
+
+# Mutation: removing RUSTFLAGS is not isolation. The configuration's rustflags
+# still apply, so a route that only unsets it stays unproved.
+test_unsetting_rustflags_alone_does_not_prove_isolation if {
+	findings := policy.deny with input as data.fixtures.whitaker_unset_only
+	profile(findings) == {["BD-008", "indeterminate"]}
+}
+
+# Mutation: an unreadable prefix must not fall back to a safe Make-level value.
+test_an_unreadable_prefix_does_not_fall_back_to_an_exported_value if {
+	findings := policy.deny with input as data.fixtures.whitaker_escaped_with_export
+	profile(findings) == {["BD-008", "indeterminate"]}
+}
+
+# Mutation: unsetting RUSTFLAGS must not fall back to a safe exported value.
+test_unsetting_rustflags_does_not_fall_back_to_an_exported_value if {
+	findings := policy.deny with input as data.fixtures.whitaker_unset_with_export
+	profile(findings) == {["BD-008", "indeterminate"]}
+}
+
+# A later assignment on the route still isolates after an unset.
+test_an_assignment_after_an_unset_still_isolates if {
+	findings := policy.deny with input as data.fixtures.whitaker_unset_then_assigned
+	count(findings) == 0
+}
+
+# Mutation: a quote that opens mid-value hides the override inside NOTE's value.
+test_mixed_quoting_hides_no_override if {
+	findings := policy.deny with input as data.fixtures.whitaker_mixed_quote_override
+	profile(findings) == {["BD-008", "indeterminate"]}
+}
+
+# Mutation: a double-quoted value inside single quotes is not the bare word.
+test_a_nested_quote_is_not_the_llvm_override if {
+	findings := policy.deny with input as data.fixtures.whitaker_nested_quote_override
+	profile(findings) == {["BD-008", "indeterminate"]}
+}
+
+# An exported encoded-flags value is removed by the route's own env -u, so it is
+# not contamination; the route's RUSTFLAGS assignment isolates as before.
+test_an_unset_encoded_flags_value_is_not_contamination if {
+	findings := policy.deny with input as data.fixtures.whitaker_unset_encoded_flags
+	count(findings) == 0
+}
+
+# Mutation: an exported development RUSTFLAGS that the route removes is not what
+# Whitaker receives, so the verdict is unproved rather than contaminated.
+test_an_unset_rustflags_export_is_unproved_not_contaminated if {
+	findings := policy.deny with input as data.fixtures.whitaker_unset_dev_export
+	profile(findings) == {["BD-008", "indeterminate"]}
+}
