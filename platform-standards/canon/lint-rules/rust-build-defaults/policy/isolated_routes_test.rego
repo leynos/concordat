@@ -232,3 +232,10 @@ test_a_nested_quote_is_not_the_llvm_override if {
 	findings := policy.deny with input as data.fixtures.whitaker_nested_quote_override
 	profile(findings) == {["BD-008", "indeterminate"]}
 }
+
+# An exported encoded-flags value is removed by the route's own env -u, so it is
+# not contamination; the route's RUSTFLAGS assignment isolates as before.
+test_an_unset_encoded_flags_value_is_not_contamination if {
+	findings := policy.deny with input as data.fixtures.whitaker_unset_encoded_flags
+	count(findings) == 0
+}
