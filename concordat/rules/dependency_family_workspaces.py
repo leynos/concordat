@@ -91,10 +91,11 @@ def _workspace_document(
     dict[str, object]
         The decoded manifest, or an empty one.
     """
+    name = (directory / "Cargo.toml").as_posix()
     if directory.is_absolute() or ".." in directory.parts:
+        problems.append(f"{name} is a workspace manifest outside the checkout")
         return {}
     manifest = checkout / directory / "Cargo.toml"
-    name = (directory / "Cargo.toml").as_posix()
     probe = probe_file(manifest)
     if probe.read_error is not None:
         problems.append(

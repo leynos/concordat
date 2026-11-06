@@ -310,3 +310,27 @@ def test_a_workspace_root_behind_a_linked_parent_directory_is_a_problem(
     problems = build_dependency_family_envelope(checkout)["problems"]
 
     assert any("outside the checkout" in problem for problem in problems), problems
+
+
+def test_a_workspace_named_above_the_checkout_is_a_problem(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`package.workspace` may name a directory the checkout does not contain."""
+    checkout = tmp_path / "checkout"
+    _member_of_ungoverned_workspace(checkout, "a/Cargo.toml")
+    _write(
+        tmp_path,
+        "Cargo.toml",
+        "[workspace]\nmembers = []\n\n[workspace.dependencies]\n"
+        'shared = { path = "x" }\n',
+    )
+    _write(
+        checkout,
+        "a/m/Cargo.toml",
+        '[package]\nname = "m"\nversion = "0.1.0"\nworkspace = "../../.."\n\n'
+        '[dependencies]\nshared.workspace = true\nserde = "1"\n',
+    )
+
+    problems = build_dependency_family_envelope(checkout)["problems"]
+
+    assert any("outside the checkout" in problem for problem in problems), problems
