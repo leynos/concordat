@@ -332,6 +332,28 @@ def _workspace_requirements(
     return inherited
 
 
+def _dependency_table(parsed: dict[str, object]) -> dict[str, object] | None:
+    """Return a manifest's `[workspace.dependencies]`, or ``None`` outside a workspace."""
+    workspace = mapping(parsed.get("workspace"))
+    if workspace is None:
+        return None
+    return mapping(workspace.get("dependencies")) or {}
+
+
+def _workspace_candidates(
+    surfaces: list[dict[str, object]],
+) -> set[pathlib.PurePosixPath]:
+    """Return the directories that may hold a governed member's workspace root."""
+    candidates: set[pathlib.PurePosixPath] = set()
+    for surface in surfaces:
+        parent = pathlib.PurePosixPath(str(surface["path"])).parent
+        named = _named_workspace(parent, mapping(surface.get("parsed")) or {})
+        candidates.update({parent, *parent.parents})
+        if named is not None:
+            candidates.add(named)
+    return candidates
+
+
 def _workspace_tables(
     checkout: pathlib.Path, surfaces: list[dict[str, object]]
 ) -> dict[pathlib.PurePosixPath, dict[str, object]]:
@@ -347,20 +369,14 @@ def _workspace_tables(
         The dependency table of every workspace root found.
     """
     tables: dict[pathlib.PurePosixPath, dict[str, object]] = {}
-    candidates: set[pathlib.PurePosixPath] = set()
     for surface in surfaces:
-        parsed = mapping(surface.get("parsed")) or {}
-        parent = pathlib.PurePosixPath(str(surface["path"])).parent
-        workspace = mapping(parsed.get("workspace"))
-        if workspace is not None:
-            tables[parent] = mapping(workspace.get("dependencies")) or {}
-        named = _named_workspace(parent, parsed)
-        candidates.update({parent, *parent.parents, *([named] if named else [])})
-    for directory in sorted(candidates - tables.keys()):
-        document = _workspace_document(checkout, directory)
-        workspace = mapping(document.get("workspace"))
-        if workspace is not None:
-            tables[directory] = mapping(workspace.get("dependencies")) or {}
+        table = _dependency_table(mapping(surface.get("parsed")) or {})
+        if table is not None:
+            tables[pathlib.PurePosixPath(str(surface["path"])).parent] = table
+    for directory in sorted(_workspace_candidates(surfaces) - tables.keys()):
+        table = _dependency_table(_workspace_document(checkout, directory))
+        if table is not None:
+            tables[directory] = table
     return tables
 
 
