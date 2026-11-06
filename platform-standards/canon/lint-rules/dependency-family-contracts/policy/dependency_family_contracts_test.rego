@@ -154,10 +154,10 @@ test_undeclared_unparsable_manifest if {
   profile(findings) == {["DF-006", "indeterminate"]}
 }
 
-# A Python project outside the root is reported, not passed over.
+# A Python project outside the root is read, not reported as unreadable.
 test_nested_pyproject if {
   findings := policy.deny with input as data.fixtures.nested_pyproject
-  profile(findings) == {["DF-006", "indeterminate"]}
+  count({f | some f in findings; f.rule_id == "DF-006"}) == 0
 }
 
 # Nothing declared means no relationship applies.

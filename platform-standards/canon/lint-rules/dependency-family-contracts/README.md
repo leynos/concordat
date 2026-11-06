@@ -29,12 +29,11 @@ contacts no registry.
 - **DF-003** A narrow group matches every member of a family, but an earlier
   group takes one of them first. Repair: move it ahead of the shadowing group.
 - **DF-006** The facts could not be established: no decodable Dependabot
-  configuration, a manifest or lock that cannot be read, a Python project
-  outside the root, a Cargo manifest outside the governed Rust surfaces that
-  declares a package some relationship names or cannot be read (a repository
-  that has not declared `language.rust.surfaces` is read at its root only), or
-  an exception without a rationale and a review trigger. Always indeterminate,
-  never compliant.
+  configuration, a manifest or lock that cannot be read, a Cargo manifest
+  outside the governed Rust surfaces that declares a package some relationship
+  names or cannot be read (a repository that has not declared
+  `language.rust.surfaces` is read at its root only), or an exception without a
+  rationale and a review trigger. Always indeterminate, never compliant.
 
 DF-004 (derived-input equality between a tool pin and its generated inputs) and
 DF-005 (a documented bound relaxed without migration evidence) are not yet
@@ -66,8 +65,9 @@ data carries no estate-wide version number.
 
 ## What the rule declines to judge
 
-- Only the root `pyproject.toml` is read; a Python project elsewhere is
-  reported, not passed.
+- Every `pyproject.toml` outside hidden and vendored trees is read, each
+  against the `uv.lock` beside it and the Dependabot entries for its own
+  directory (an entry for the root does not cover a nested project).
 - Multi-ecosystem groups are read for one purpose: members that all join one
   group the file defines, with `patterns` that take each member, arrive as a
   single pull request. That protects a tuple (DF-002) and takes a family
