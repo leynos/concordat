@@ -62,7 +62,8 @@ def workspace_tables(
 
     A governed member may belong to a workspace whose root is not itself a
     governed surface, so the directories above each surface, and any one a
-    `package.workspace` names, are read from the checkout too.
+    `package.workspace` names, are read from the checkout too. What cannot be
+    read is appended to *problems*, never passed over as an absence.
 
     Returns
     -------
@@ -76,73 +77,65 @@ def workspace_tables(
         is not None
     }
     candidates, named_roots = _workspace_candidates(surfaces)
-    found = {
-        directory: table
-        for directory in sorted(candidates - governed.keys())
-        if (
-            table := _dependency_table(
-                _workspace_document(checkout, directory, problems)
-            )
+    read = {
+        directory: _read_workspace(
+            checkout, directory, is_named=directory in named_roots
         )
-        is not None
+        for directory in sorted(candidates - governed.keys())
     }
-    tables = governed | found
-    missing = [
-        directory
-        for directory in sorted(named_roots - tables.keys())
-        if not _already_reported(problems, directory)
-    ]
-    problems.extend(
-        f"{(directory / 'Cargo.toml').as_posix()} is named by package.workspace "
-        "but is not a workspace manifest"
-        for directory in missing
-    )
-    return tables
+    problems.extend(problem for _, problem in read.values() if problem is not None)
+    found = {
+        directory: table for directory, (table, _) in read.items() if table is not None
+    }
+    return governed | found
 
 
-def _already_reported(problems: list[str], directory: pathlib.PurePosixPath) -> bool:
-    """Return whether a problem already names *directory*'s manifest."""
-    name = (directory / "Cargo.toml").as_posix()
-    return any(problem.startswith(name) for problem in problems)
-
-
-def _workspace_document(
-    checkout: pathlib.Path, directory: pathlib.PurePosixPath, problems: list[str]
-) -> dict[str, object]:
-    """Return the manifest in *directory*, or an empty one when it is not usable.
+def _read_workspace(
+    checkout: pathlib.Path, directory: pathlib.PurePosixPath, *, is_named: bool
+) -> tuple[dict[str, object] | None, str | None]:
+    """Read the workspace manifest in *directory*: its table, or why not.
 
     A manifest that exists but cannot be used is a problem, never a silent
-    absence: the dependency facts that depend on it would otherwise look
-    complete. One that resolves outside the checkout, through a symbolic link
-    in any directory above it, is refused for the same reason it is refused
-    elsewhere.
+    absence, and one that resolves outside the checkout (through a symbolic link
+    in any directory above it, or a `..`) is refused unread. A directory that a
+    `package.workspace` names must hold a workspace; an ancestor need not.
 
     Returns
     -------
-    dict[str, object]
-        The decoded manifest, or an empty one.
+    tuple[dict[str, object] | None, str | None]
+        The `[workspace.dependencies]` table, or ``None`` with a problem
+        sentence when the evidence is incomplete, or ``None`` with no problem
+        when the directory is simply not a workspace root.
     """
     name = (directory / "Cargo.toml").as_posix()
     if directory.is_absolute() or ".." in directory.parts:
-        problems.append(f"{name} is a workspace manifest outside the checkout")
-        return {}
+        return None, f"{name} is a workspace manifest outside the checkout"
     manifest = checkout / directory / "Cargo.toml"
     probe = probe_file(manifest)
     if probe.read_error is not None:
-        problems.append(
-            f"{name} cannot be examined as a workspace manifest: {probe.read_error}"
+        return (
+            None,
+            f"{name} cannot be examined as a workspace manifest: {probe.read_error}",
         )
-        return {}
     if not probe.present:
-        return {}
+        return (
+            None,
+            f"{name} is named by package.workspace but is not there"
+            if is_named
+            else None,
+        )
     if not manifest.resolve().is_relative_to(checkout.resolve()):
-        problems.append(f"{name} is a workspace manifest outside the checkout")
-        return {}
+        return None, f"{name} is a workspace manifest outside the checkout"
     document, error = loose_manifest(manifest)
     if error is not None:
-        problems.append(f"{name} is a workspace manifest and cannot be read: {error}")
-        return {}
-    return document
+        return None, f"{name} is a workspace manifest and cannot be read: {error}"
+    table = _dependency_table(document)
+    if table is None and is_named:
+        return (
+            None,
+            f"{name} is named by package.workspace but is not a workspace manifest",
+        )
+    return table, None
 
 
 def inherited_for(
