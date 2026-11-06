@@ -209,6 +209,24 @@ def test_wireframes_feature_gate_package_is_exempt_by_default(
     assert rule_ids(tmp_path) == set()
 
 
+@pytest.mark.parametrize(
+    ("slug", "expected"),
+    [("wireframe", set()), ("other", {"NC-002"})],
+)
+def test_wireframes_lockless_feature_gate_package_is_exempt_only_at_home(
+    tmp_path: pathlib.Path, slug: str, expected: set[str]
+) -> None:
+    """The package has no committed lock in a fresh checkout, and is exempt there."""
+    _origin(tmp_path, f"https://github.com/leynos/{slug}.git")
+    workspace(tmp_path, ("serde", "1.0.0"))
+    put(
+        tmp_path,
+        "tests/feature_gate/Cargo.toml",
+        FIXTURE_MANIFEST + "[workspace]\n",
+    )
+    assert rule_ids(tmp_path) == expected
+
+
 def test_an_exemption_does_not_travel_to_another_repository(
     tmp_path: pathlib.Path,
 ) -> None:
