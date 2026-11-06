@@ -57,8 +57,17 @@ unset_names(segment) := {name |
 	name != ""
 }
 
+# Only a matching outer pair of quotes is shell quoting; a quote inside it is part
+# of the value (`'"llvm"'` is the text "llvm" with its quotes).
+unquote(value) := substring(value, 1, count(value) - 2) if {
+	count(value) >= 2
+	some quote in [`"`, "'"]
+	startswith(value, quote)
+	endswith(value, quote)
+} else := value
+
 # The values the route's prefix assigns to *name*, in order.
-route_assigned_values(segment, name) := [trim(token[2], `"'`) |
+route_assigned_values(segment, name) := [unquote(token[2]) |
 	some token in prefix_tokens(segment)
 	token[1] == name
 ]

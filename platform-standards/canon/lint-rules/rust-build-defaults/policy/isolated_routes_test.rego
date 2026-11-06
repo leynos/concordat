@@ -176,6 +176,9 @@ test_only_the_routes_own_prefix_is_read if {
 	policy.route_assigned_values(`CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm whitaker --all`, "CARGO_PROFILE_DEV_CODEGEN_BACKEND") == ["llvm"]
 	policy.route_assigned_values(`NOTE=" CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm" whitaker --all`, "CARGO_PROFILE_DEV_CODEGEN_BACKEND") == []
 	policy.route_assigned_values(`whitaker --all RUSTFLAGS=-Dwarnings`, "RUSTFLAGS") == []
+	policy.route_assigned_values(`CARGO_PROFILE_DEV_CODEGEN_BACKEND="llvm" whitaker --all`, "CARGO_PROFILE_DEV_CODEGEN_BACKEND") == ["llvm"]
+	policy.route_assigned_values(`CARGO_PROFILE_DEV_CODEGEN_BACKEND='llvm' whitaker --all`, "CARGO_PROFILE_DEV_CODEGEN_BACKEND") == ["llvm"]
+	policy.route_assigned_values(`CARGO_PROFILE_DEV_CODEGEN_BACKEND='"llvm"' whitaker --all`, "CARGO_PROFILE_DEV_CODEGEN_BACKEND") == [`"llvm"`]
 	policy.route_assigned_values(`env -u RUSTFLAGS --unset=OTHER RUSTFLAGS= whitaker --all`, "RUSTFLAGS") == [""]
 	policy.unset_names(`env NOTE=" -u RUSTFLAGS " whitaker --all`) == set()
 	policy.unset_names(`env -u RUSTFLAGS --unset=OTHER whitaker --all`) == {"RUSTFLAGS", "OTHER"}
@@ -221,5 +224,11 @@ test_an_assignment_after_an_unset_still_isolates if {
 # Mutation: a quote that opens mid-value hides the override inside NOTE's value.
 test_mixed_quoting_hides_no_override if {
 	findings := policy.deny with input as data.fixtures.whitaker_mixed_quote_override
+	profile(findings) == {["BD-008", "indeterminate"]}
+}
+
+# Mutation: a double-quoted value inside single quotes is not the bare word.
+test_a_nested_quote_is_not_the_llvm_override if {
+	findings := policy.deny with input as data.fixtures.whitaker_nested_quote_override
 	profile(findings) == {["BD-008", "indeterminate"]}
 }
