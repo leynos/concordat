@@ -84,6 +84,31 @@ class _Resolver:
                 return table
         return None
 
+    def inherited(self, manifest: str, parsed: dict[str, object]) -> Table:
+        """Return the table *manifest* inherits from, reporting an unowned member.
+
+        A surface that inherits nothing and names no workspace has no use for
+        one, so ancestors are not probed on its behalf. One that inherits
+        (`workspace = true`) but belongs to no workspace adds a problem and gets
+        an empty table, so its inherited entries stay declarations rather than
+        being judged against another workspace's.
+
+        Returns
+        -------
+        Table
+            The inheritable `[workspace.dependencies]`, empty when there is none.
+        """
+        parent = pathlib.PurePosixPath(manifest).parent
+        uses = _uses_inheritance(parsed)
+        if not (uses or _named_workspace(parent, parsed)):
+            return {}
+        table = self.owner_table(manifest, parsed)
+        if table is None and uses:
+            self.problems.append(
+                f"{manifest} inherits from a workspace that could not be found"
+            )
+        return table or {}
+
 
 def inherited_tables(
     checkout: pathlib.Path,
@@ -108,14 +133,4 @@ def inherited_tables(
         if (table := dependency_table(doc)) is not None
     }
     resolver = _Resolver(checkout, governed, problems)
-    result: dict[str, Table] = {}
-    for path, doc in parsed.items():
-        uses = _uses_inheritance(doc)
-        # A surface that inherits nothing and names no workspace has no use for
-        # one, so ancestors are not probed on its behalf.
-        needs_owner = uses or _named_workspace(pathlib.PurePosixPath(path).parent, doc)
-        table = resolver.owner_table(path, doc) if needs_owner else None
-        if table is None and uses:
-            problems.append(f"{path} inherits from a workspace that could not be found")
-        result[path] = table or {}
-    return result
+    return {path: resolver.inherited(path, doc) for path, doc in parsed.items()}
