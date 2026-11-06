@@ -41,6 +41,7 @@ class TestRunRuleDispatch:
         seen: dict[str, object] = {}
 
         def capture(argv: list[str], rule_id: str) -> subprocess.CompletedProcess[str]:
+            """Record the envelope and namespace given to Conftest and report a pass."""
             seen["envelope"] = json.loads(pathlib.Path(argv[-1]).read_text())
             seen["namespace"] = argv[argv.index("--namespace") + 1]
             return subprocess.CompletedProcess(

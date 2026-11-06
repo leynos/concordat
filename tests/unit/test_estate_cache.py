@@ -60,6 +60,7 @@ def test_ensure_estate_cache_creates_the_parent_before_cloning(
         destination: Path,
         callbacks: object,
     ) -> object:
+        """Record whether the cache parent exists, then create an empty repository."""
         observed.append(destination.parent.is_dir())
         destination.mkdir(parents=True, exist_ok=True)
         return pygit2.init_repository(str(destination))

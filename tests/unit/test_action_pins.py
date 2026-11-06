@@ -121,6 +121,7 @@ def test_resolve_pins_asks_once_per_distinct_pin(
     asked: list[tuple[str, str]] = []
 
     def resolver(repository: str, sha: str) -> PinResolution:
+        """Record each (repository, SHA) asked about and answer with a commit pin."""
         asked.append((repository, sha))
         return commit_pin(sha)
 
@@ -175,6 +176,7 @@ def test_with_action_pins_reads_the_named_action(tmp_path: pathlib.Path) -> None
     asked: list[str] = []
 
     def resolver(repository: str, sha: str) -> PinResolution:
+        """Record the repository asked about and answer with a commit pin."""
         asked.append(repository)
         return commit_pin(sha)
 

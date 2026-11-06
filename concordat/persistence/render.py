@@ -12,6 +12,7 @@ def _render_tfbackend(
     descriptor: PersistenceDescriptor,
     key_suffix: str,
 ) -> str:
+    """Render a Scaleway S3 backend file for *descriptor* under its key prefix."""
     key = f"{descriptor.key_prefix.rstrip('/')}/{key_suffix.lstrip('/')}"
     lines = [
         "# Scaleway Object Storage backend for the concordat estate stack.",

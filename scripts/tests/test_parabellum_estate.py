@@ -46,6 +46,7 @@ class TestManifestIdentifiers:
 
     @staticmethod
     def _manifest(tmp_path: pathlib.Path, body: str) -> pathlib.Path:
+        """Write *body* to an estate manifest under *tmp_path* and return its path."""
         path = tmp_path / "estate.yaml"
         path.write_text(body)
         return path

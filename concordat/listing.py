@@ -20,34 +20,51 @@ ERROR_NO_NAMESPACES = "Specify at least one namespace to list."
 
 
 class _RepositoryClient(typ.Protocol):
+    """Subset of the github3 client used to list repositories by owner."""
+
     def repositories_by(
         self,
         username: str,
         /,
         **kwargs: object,
-    ) -> typ.Iterable[object]: ...
+    ) -> typ.Iterable[object]:
+        """Return the repositories owned by ``username``."""
 
 
 def _no_namespaces_error() -> ConcordatError:
+    """Return the error raised when no namespace is supplied."""
     return ConcordatError(ERROR_NO_NAMESPACES)
 
 
 def _namespace_not_found_error(namespace: str) -> ConcordatError:
+    """Return a ConcordatError reporting that ``namespace`` does not exist."""
     message = f"Namespace {namespace!r} was not found on GitHub."
     return ConcordatError(message)
 
 
 def _namespace_forbidden_error(namespace: str) -> ConcordatError:
+    """Return a ConcordatError reporting that access to ``namespace`` is denied."""
     message = f"Access to namespace {namespace!r} is forbidden."
     return ConcordatError(message)
 
 
 def _github_api_error(error: Exception) -> ConcordatError:
+    """Wrap a generic GitHub API failure in a ConcordatError."""
     message = f"GitHub API error: {error}"
     return ConcordatError(message)
 
 
 def _connection_error(error: Exception) -> ConcordatError:
+    """Wrap a GitHub connection failure with its causes and TLS guidance.
+
+    The message lists each distinct error in the cause and context chain, so
+    the root cause of a TLS or proxy problem is visible to the user.
+
+    Returns
+    -------
+    ConcordatError
+        The error carrying the TLS guidance and the original error chain.
+    """
     parts: list[str] = []
     current: Exception | None = error
     seen: set[int] = set()
@@ -96,6 +113,27 @@ def list_namespace_repositories(
 
 
 def _fetch_namespace(client: _RepositoryClient, namespace: str) -> list[str]:
+    """Return the sorted SSH URLs of the repositories owned by ``namespace``.
+
+    A repository without ``ssh_url`` is given one from its full name or name.
+    GitHub errors are re-raised as ConcordatError.
+
+    Returns
+    -------
+    list[str]
+        The sorted SSH URLs of the namespace's repositories.
+
+    Raises
+    ------
+    _namespace_not_found_error
+        A ConcordatError when GitHub reports that the namespace does not exist.
+    _namespace_forbidden_error
+        A ConcordatError when access to the namespace is forbidden.
+    _connection_error
+        A ConcordatError when GitHub cannot be contacted.
+    _github_api_error
+        A ConcordatError for any other GitHub API failure.
+    """
     try:
         generator = client.repositories_by(namespace, type="owner", number=-1)
         ssh_urls: list[str] = []

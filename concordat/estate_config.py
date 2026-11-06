@@ -45,6 +45,19 @@ class _YamlConfig(cyclopts_config.ConfigFromFile):
     """Cyclopts config provider backed by ruamel.yaml."""
 
     def _load_config(self, path: Path) -> dict[str, typ.Any]:
+        """Parse the YAML file at ``path``, returning {} if absent or not a mapping.
+
+        Returns
+        -------
+        dict
+            The parsed mapping, or an empty dict when the file is absent or its
+            content is not a mapping.
+
+        Raises
+        ------
+        EstateError
+            If the file cannot be read or parsed as YAML.
+        """
         if not path.exists():
             return {}
         try:
@@ -303,6 +316,7 @@ def register_estate(
 
 
 def _load_config(config_path: Path | None) -> dict[str, typ.Any]:
+    """Return the estate configuration mapping from ``config_path`` or the default."""
     path = config_path or default_config_path()
     provider = _YamlConfig(path=str(path), must_exist=False)
     raw = provider.config or {}
@@ -310,6 +324,7 @@ def _load_config(config_path: Path | None) -> dict[str, typ.Any]:
 
 
 def _write_config(data: dict[str, typ.Any], config_path: Path | None) -> None:
+    """Write ``data`` as YAML to ``config_path``, creating parent directories."""
     path = config_path or default_config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
@@ -360,12 +375,14 @@ def _load_estates(config_path: Path | None) -> dict[str, EstateRecord]:
 
 
 def _load_metadata(config_path: Path | None) -> dict[str, typ.Any]:
+    """Return the ``estate`` metadata mapping, or {} if absent or not a mapping."""
     data = _load_config(config_path)
     section = data.get(ESTATE_SECTION, {})
     return section if isinstance(section, dict) else {}
 
 
 def _normalise_owner(owner: str | None) -> str | None:
+    """Strip surrounding whitespace from ``owner``, or return None if none remains."""
     if owner is None:
         return None
     trimmed = owner.strip()

@@ -92,6 +92,7 @@ _DEFAULT_MODEL = PriorityModel(
 
 
 def _sorted_labels(labels: typ.Iterable[PriorityLabel]) -> tuple[PriorityLabel, ...]:
+    """Return ``labels`` as a tuple sorted by their keys."""
     return tuple(sorted(labels, key=lambda label: label.key))
 
 

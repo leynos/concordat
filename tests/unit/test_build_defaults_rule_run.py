@@ -117,6 +117,7 @@ def test_the_manifest_defaults_reach_the_envelope_builder(
     def record(
         checkout_path: pathlib.Path, parameters: object = None
     ) -> runner.RuleEnvelope:
+        """Capture the parameters passed in and return a stub envelope."""
         captured["parameters"] = parameters
         return typ.cast(
             "runner.RuleEnvelope",
@@ -146,6 +147,7 @@ def test_a_substituted_resolver_is_the_one_used() -> None:
     substitute_calls: list[str] = []
 
     def substitute(rule_id: str, _checkout: pathlib.Path) -> runner.RuleEnvelope:
+        """Record the rule ID and return an envelope no checkout could produce."""
         substitute_calls.append(rule_id)
         # An envelope of the wrong schema version, which every policy refuses.
         # Typed through the cast the resolver contract expects; the whole point

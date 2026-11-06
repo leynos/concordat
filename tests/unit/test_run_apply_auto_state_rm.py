@@ -32,6 +32,7 @@ class _BaseTofuMock:
     calls: list[list[str]]
 
     def __init__(self, cwd: str, env: dict[str, str]) -> None:
+        """Store the working directory and environment, with no applies yet."""
         self.cwd = cwd
         self.env = env
         self._apply_count = 0
@@ -70,6 +71,7 @@ class _BaseTofuMock:
         *,
         raise_on_error: bool = False,
     ) -> SimpleNamespace:
+        """Record the call and return the canned response for its command."""
         self.calls.append(list(args))
         verb = args[0] if args else ""
 

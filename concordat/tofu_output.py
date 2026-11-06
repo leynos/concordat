@@ -154,6 +154,7 @@ def _format_tofu_diagnostics(errors: list[object], warnings: list[object]) -> st
     """
 
     def render(diagnostic: object) -> list[str]:
+        """Return the display lines for one diagnostic, header line first."""
         severity = str(getattr(diagnostic, "severity", "error") or "error").lower()
         summary = str(getattr(diagnostic, "summary", "") or "").strip()
         detail = str(getattr(diagnostic, "detail", "") or "").strip()

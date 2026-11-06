@@ -181,6 +181,7 @@ def _exercise_write_permissions(client: S3Client, bucket: str, key: str) -> None
 
 
 def _session_token_from_environment(env: typ.Mapping[str, str]) -> str | None:
+    """Return the AWS session token from *env*, or None when it is blank."""
     token = env.get(AWS_SESSION_TOKEN_VAR, "").strip()
     return token or None
 
@@ -189,6 +190,7 @@ def _credentials_from_environment(env: typ.Mapping[str, str]) -> dict[str, str]:
     """Resolve S3 credentials from AWS and supported vendor environment variables."""
 
     def present(*names: str) -> bool:
+        """Report whether every named variable is set to a non-blank value."""
         return all(env.get(name, "").strip() for name in names)
 
     if present(*AWS_BACKEND_ENV):

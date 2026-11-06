@@ -124,8 +124,13 @@ check-fmt: build ## Verify formatting
 	$(RUFF) format --check
 	$(MDTABLEFIX) --check $(MDTABLEFIX_SELECT) $(MDTABLEFIX_RULES)
 
+# Docstring presence for every Python file the repository owns; Ruff keeps style.
+INTERROGATE_TARGETS ?= concordat tests scripts platform-standards
+INTERROGATE := $(UV_ENV) uv tool run --from interrogate==1.7.0 interrogate --fail-under 100
+
 lint: build ## Run linters
 	$(RUFF) check
+	$(INTERROGATE) $(INTERROGATE_TARGETS)
 	$(PYLINT) $(PYLINT_TARGETS)
 	$(DF12_PYLINT) $(DF12_PYLINT_TARGETS)
 	$(AMBRLEAKS) tests

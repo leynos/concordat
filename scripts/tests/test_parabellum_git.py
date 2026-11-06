@@ -13,6 +13,7 @@ def _raise(error: Exception) -> typ.Callable[..., typ.NoReturn]:
     """Return a subprocess replacement that raises *error*."""
 
     def raise_error(*_args: object, **_kwargs: object) -> typ.NoReturn:
+        """Raise *error* in place of the patched subprocess call."""
         raise error
 
     return raise_error
@@ -38,6 +39,7 @@ class TestGitOperations:
             *args: object,
             **kwargs: object,
         ) -> sweep.subprocess.CompletedProcess[str]:
+            """Return a failed git ls-remote result with a not-found message."""
             return sweep.subprocess.CompletedProcess(
                 args=["git"],
                 returncode=128,
@@ -149,6 +151,7 @@ class TestCloneAndAuditPackage:
         monkeypatch.setattr(sweep.subprocess, "run", self._fake_git)
 
         def fake_run_rule(package: str, checkout: object) -> sweep.RuleRunResult:
+            """Record the package and checkout passed in, returning a clean result."""
             seen.append((package, checkout))
             return _result(package)
 

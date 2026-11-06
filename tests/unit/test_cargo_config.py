@@ -434,6 +434,7 @@ class TestReadFailures:
         write_config(tmp_path, '[build]\nrustflags = ["-Zthreads=8"]\n')
 
         def refuse(_self: pathlib.Path, *_args: object, **_kwargs: object) -> object:
+            """Raise PermissionError from stat, as a refused read does."""
             message = "Permission denied"
             raise PermissionError(13, message)
 

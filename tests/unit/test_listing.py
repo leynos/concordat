@@ -14,6 +14,7 @@ from concordat.errors import ConcordatError
 
 
 def _fake_response(status_code: int = 404, reason: str = "Not Found") -> object:
+    """Build a fake HTTP response carrying a GitHub-style error payload."""
     payload = {"message": reason, "errors": []}
     return types.SimpleNamespace(
         status_code=status_code,
@@ -31,6 +32,8 @@ def test_list_namespace_repositories_combines_namespaces() -> None:
     namespace_calls: list[str] = []
 
     class DummyClient:
+        """Stand-in client returning canned repositories for two namespaces."""
+
         session = types.SimpleNamespace(close=lambda: None)
 
         def repositories_by(
@@ -38,6 +41,7 @@ def test_list_namespace_repositories_combines_namespaces() -> None:
             namespace: str,
             **kwargs: object,
         ) -> list[types.SimpleNamespace]:
+            """Record the namespace and return its canned repositories."""
             namespace_calls.append(namespace)
             data = {
                 "first": [
@@ -73,6 +77,8 @@ def test_list_namespace_repositories_falls_back_to_full_name() -> None:
     """Construct SSH URLs when the API omits them."""
 
     class DummyClient:
+        """Stand-in client whose repositories omit the SSH URL."""
+
         session = types.SimpleNamespace(close=lambda: None)
 
         def repositories_by(
@@ -80,6 +86,7 @@ def test_list_namespace_repositories_falls_back_to_full_name() -> None:
             namespace: str,
             **kwargs: object,
         ) -> list[types.SimpleNamespace]:
+            """Return one repository in the namespace with no SSH URL."""
             return [
                 types.SimpleNamespace(
                     ssh_url=None,
@@ -100,6 +107,8 @@ def test_list_namespace_repositories_raises_when_namespace_missing() -> None:
     """Translate GitHub not-found errors into Concordat errors."""
 
     class DummyClient:
+        """Stand-in client whose namespace lookups always report not found."""
+
         session = types.SimpleNamespace(close=lambda: None)
 
         def repositories_by(
@@ -107,6 +116,7 @@ def test_list_namespace_repositories_raises_when_namespace_missing() -> None:
             namespace: str,
             **kwargs: object,
         ) -> list[types.SimpleNamespace]:
+            """Raise a GitHub not-found error for the requested namespace."""
             raise NotFoundError(_fake_response())
 
     with pytest.raises(ConcordatError) as caught:
@@ -128,6 +138,8 @@ def test_list_namespace_repositories_formats_connection_error() -> None:
     """Return a helpful message when TLS negotiation fails."""
 
     class DummyClient:
+        """Stand-in client whose lookups fail during TLS negotiation."""
+
         session = types.SimpleNamespace(close=lambda: None)
 
         def repositories_by(
@@ -135,6 +147,7 @@ def test_list_namespace_repositories_formats_connection_error() -> None:
             namespace: str,
             **kwargs: object,
         ) -> list[types.SimpleNamespace]:
+            """Raise a GitHub connection error caused by an SSL failure."""
             underlying = requests_exceptions.SSLError("unknown error (_ssl.c:3113)")
             raise GitHubConnectionError(underlying)
 

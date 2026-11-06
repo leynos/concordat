@@ -18,6 +18,7 @@ def _commit_file(
     contents: str,
     message: str,
 ) -> pygit2.Oid:
+    """Write ``contents`` to ``relative_path``, stage it and commit onto HEAD."""
     repo_path = pathlib.Path(repository.workdir or ".")
     target = repo_path / relative_path
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -44,6 +45,10 @@ def _commit_file(
 
 
 def _push_branch(repository: pygit2.Repository, *, origin: str, branch: str) -> None:
+    """Push a local branch to the ``origin`` remote under the same name.
+
+    The ``origin`` remote is created when the repository does not have one.
+    """
     try:
         remote = repository.remotes["origin"]
     except KeyError:
@@ -123,14 +128,22 @@ def test_ensure_repository_pr_updates_existing_remote_branch_without_non_fast_fo
     )
 
     class _FakePR:
+        """Stand in for a created pull request that exposes only its URL."""
+
         html_url = "https://example.com/pr/1"
 
     class _FakeRepo:
+        """Stand in for a repository whose ``create_pull`` returns a fake PR."""
+
         def create_pull(self, *args: object, **kwargs: object) -> _FakePR:
+            """Return a fake pull request whatever arguments are passed."""
             return _FakePR()
 
     class _FakeClient:
+        """Stand in for a github3 client that hands out the fake repository."""
+
         def repository(self, owner: str, name: str) -> _FakeRepo:
+            """Return the fake repository after checking the expected slug."""
             assert owner == "example"
             assert name == "platform-standards"
             return _FakeRepo()
@@ -199,14 +212,22 @@ def test_ensure_repository_pr_reports_existing_branch_pr_when_not_merged(
     )
 
     class _FakePR:
+        """Stand in for an existing pull request that exposes only its URL."""
+
         html_url = "https://example.com/pr/42"
 
     class _FakeRepo:
+        """Stand in for a repository whose ``create_pull`` returns a fake PR."""
+
         def create_pull(self, *args: object, **kwargs: object) -> _FakePR:
+            """Return a fake pull request whatever arguments are passed."""
             return _FakePR()
 
     class _FakeClient:
+        """Stand in for a github3 client that hands out the fake repository."""
+
         def repository(self, owner: str, name: str) -> _FakeRepo:
+            """Return the fake repository after checking the expected slug."""
             assert owner == "example"
             assert name == "platform-standards"
             return _FakeRepo()

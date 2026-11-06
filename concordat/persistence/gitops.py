@@ -98,6 +98,16 @@ def _commit_changes(
     *,
     timestamp_factory: typ.Callable[[], dt.datetime] | None = None,
 ) -> str:
+    """Commit ``paths`` onto a new timestamped branch and return its name.
+
+    The branch is created from ``base_branch``, replacing any branch of the
+    same name, and is checked out before the commit is made.
+
+    Returns
+    -------
+    str
+        The name of the new timestamped branch that holds the commit.
+    """
     target = repository.revparse_single(f"refs/heads/{base_branch}")
     commit = target.peel(pygit2.Commit)
     branch_name = _branch_name(timestamp_factory)
@@ -119,11 +129,21 @@ def _commit_changes(
 
 
 def _branch_name(timestamp_factory: typ.Callable[[], dt.datetime] | None = None) -> str:
+    """Return an ``estate/persist-<timestamp>`` branch name.
+
+    The timestamp comes from ``timestamp_factory`` when given, else the UTC clock.
+
+    Returns
+    -------
+    str
+        The branch name, with the timestamp formatted as ``%Y%m%d%H%M%S``.
+    """
     now = timestamp_factory() if timestamp_factory else dt.datetime.now(dt.UTC)
     return f"estate/persist-{now.strftime('%Y%m%d%H%M%S')}"
 
 
 def _push_branch(repository: pygit2.Repository, branch: str, repo_url: str) -> None:
+    """Force the push of ``branch`` to the remote matching ``repo_url``."""
     remote = _resolve_remote(repository, repo_url)
     callbacks = build_remote_callbacks(remote.url or repo_url)
     refspec = f"+refs/heads/{branch}:refs/heads/{branch}"

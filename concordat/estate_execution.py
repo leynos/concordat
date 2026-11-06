@@ -106,6 +106,7 @@ def _wrap_cache_error[T, **P](func: typ.Callable[P, T]) -> typ.Callable[P, T]:
     """Wrap a function to convert EstateCacheError to EstateExecutionError."""
 
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
+        """Call ``func``, re-raising EstateCacheError as EstateExecutionError."""
         try:
             return func(*args, **kwargs)
         except EstateCacheError as error:
@@ -392,6 +393,15 @@ def _run_estate_command(
     options: ExecutionOptions,
     io: ExecutionIO,
 ) -> tuple[int, Path]:
+    """Run ``init`` and then ``verb`` in an estate workspace.
+
+    The steps stop at the first non-zero exit.
+
+    Returns
+    -------
+    tuple[int, Path]
+        The exit code of the last step run, and the workspace path.
+    """
     command = [verb, *options.extra_args]
     env_source = _prepare_execution_environment(options)
     with estate_workspace(

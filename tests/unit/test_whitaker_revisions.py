@@ -292,6 +292,7 @@ def test_an_unresolvable_tip_is_an_operational_error(
     root = history.commit(action_files(ACTION_V1), "root")
 
     def refuse(_self: object, _tip: str) -> typ.NoReturn:
+        """Raise the parametrized failure in place of revparse_single."""
         raise failure
 
     monkeypatch.setattr(type(history.repository), "revparse_single", refuse)

@@ -300,6 +300,7 @@ def walk_files(
     """
 
     def unreadable(error: OSError) -> None:
+        """Record an unlistable directory as a problem once, and keep walking."""
         where = pathlib.Path(error.filename or ".").relative_to(checkout).as_posix()
         looking_for = f" for {label}" if label is not None else ""
         message = f"cannot scan {where}{looking_for}: {error.strerror}"

@@ -223,6 +223,7 @@ class TestMarkdownlintConfig:
             errors: str | None = None,
             newline: str | None = None,
         ) -> str:
+            """Deny the config file read with PermissionError and delegate others."""
             if self == path:
                 raise PermissionError("denied")
             return original(self, encoding=encoding, errors=errors, newline=newline)

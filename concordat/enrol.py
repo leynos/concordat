@@ -1,5 +1,7 @@
 """Utilities for enrolling Git repositories with concordat."""
 
+# pylint: disable=too-many-lines  # enrol and disenrol share one cohesive module
+
 from __future__ import annotations
 
 import dataclasses
@@ -33,67 +35,81 @@ ERROR_MISSING_ORIGIN = "Repository missing 'origin' remote."
 
 
 def _no_repositories_error() -> ConcordatError:
+    """Return the error for an enrolment call with no repositories."""
     return ConcordatError(ERROR_NO_REPOSITORIES)
 
 
 def _remote_clone_failed_error(specification: str, error: Exception) -> ConcordatError:
+    """Return the error for a remote specification that fails to clone."""
     detail = f"Failed to clone {specification!r}: {error}"
     return ConcordatError(detail)
 
 
 def _remote_clone_bare_error(specification: str) -> ConcordatError:
+    """Return the error for a remote clone that has no working tree."""
     detail = f"Remote clone for {specification!r} is bare."
     return ConcordatError(detail)
 
 
 def _repository_bare_error(specification: str) -> ConcordatError:
+    """Return the error for a local repository that has no working tree."""
     detail = f"Repository {specification!r} is bare."
     return ConcordatError(detail)
 
 
 def _repository_not_found_error(specification: str) -> ConcordatError:
+    """Return the error for a specification that names no repository."""
     detail = f"Repository {specification!r} not found."
     return ConcordatError(detail)
 
 
 def _open_repository_error(specification: str, error: Exception) -> ConcordatError:
+    """Return the error for a repository that cannot be opened."""
     detail = f"Cannot open repository {specification!r}: {error}"
     return ConcordatError(detail)
 
 
 def _unknown_branch_error() -> ConcordatError:
+    """Return the error for a HEAD that does not name a branch."""
     return ConcordatError(ERROR_UNKNOWN_BRANCH)
 
 
 def _missing_origin_error() -> ConcordatError:
+    """Return the error for a repository without an origin remote."""
     return ConcordatError(ERROR_MISSING_ORIGIN)
 
 
 def _push_failed_error(error: Exception) -> ConcordatError:
+    """Return the error for a push that Git rejects or cannot complete."""
     detail = f"Failed to push changes: {error}"
     return ConcordatError(detail)
 
 
 def _read_error(path: Path, error: Exception) -> ConcordatError:
+    """Return the error for a concordat document that cannot be read."""
     detail = f"Cannot read {path}: {error}"
     return ConcordatError(detail)
 
 
 def _unborn_head_error() -> ConcordatError:
+    """Return the error for a repository whose HEAD has no commits."""
     return ConcordatError(ERROR_UNBORN_HEAD)
 
 
 def _missing_document_error(specification: str) -> ConcordatError:
+    """Return the error for a repository without a concordat document."""
     detail = f"Repository {specification!r} does not contain a concordat document."
     return ConcordatError(detail)
 
 
 def _invalid_document_error(specification: str) -> ConcordatError:
+    """Return the error for a concordat document that is not a valid mapping."""
     detail = f"Repository {specification!r} has an invalid concordat document."
     return ConcordatError(detail)
 
 
 def _owner_slug_missing_error(specification: str) -> ConcordatError:
+    """Return the error for a repository whose GitHub slug is unknown."""
     detail = (
         f"Unable to determine the GitHub slug for {specification!r}. "
         "Set the repository's origin remote to a GitHub SSH/HTTPS URL or "
@@ -106,6 +122,7 @@ def _owner_mismatch_error(
     slug: str,
     github_owner: str,
 ) -> ConcordatError:
+    """Return the error for a repository outside the configured GitHub owner."""
     detail = (
         f"Repository {slug!r} does not belong to github_owner {github_owner!r}. "
         "Use `concordat estate use` to switch estates or enrol a repository "
@@ -281,6 +298,25 @@ def _disenrol_repository(
     github_owner: str | None,
     allow_missing_document: bool,
 ) -> DisenrollmentOutcome:
+    """Set ``enrolled: false`` in one repository and commit the change.
+
+    The change is pushed when the repository is remote or *push_remote* is
+    set. A missing document is an error unless *allow_missing_document* is
+    true. The platform inventory removal PR is requested when standards are
+    configured.
+
+    Returns
+    -------
+    DisenrollmentOutcome
+        The outcome for *specification*. ``updated`` is False when nothing
+        changed, and ``missing_document`` is True when the document was absent.
+
+    Raises
+    ------
+    _missing_document_error
+        A ConcordatError when the document is absent and
+        *allow_missing_document* is false.
+    """
     with _repository_context(specification) as context:
         repo_slug = _slug_with_owner_guard(
             _repository_slug(context.repository, specification),
@@ -346,6 +382,17 @@ def _enrol_repository(
     github_owner: str | None,
     force: bool,
 ) -> EnrollmentOutcome:
+    """Write the enrolment document for one repository and commit it.
+
+    An already enrolled repository is left unchanged unless *force* is set.
+    In that case only the platform inventory PR is requested.
+
+    Returns
+    -------
+    EnrollmentOutcome
+        The outcome for *specification*. ``created`` is False when the
+        repository was already enrolled.
+    """
     with _repository_context(specification) as context:
         repo_slug = _slug_with_owner_guard(
             _repository_slug(context.repository, specification),
@@ -457,6 +504,8 @@ def _platform_pr_removal_result(
 
 @dataclasses.dataclass(slots=True)
 class _RepositoryContext:
+    """Carry an open repository with its working directory and remote state."""
+
     repository: Repository
     location: Path
     is_remote: bool
@@ -467,6 +516,26 @@ class _RepositoryContext:
 def _repository_context(
     specification: str,
 ) -> typ.Iterator[_RepositoryContext]:
+    """Yield an open working copy for a local path or a remote URL.
+
+    Remote URLs are cloned into a temporary directory that is removed when
+    the context exits. Local specifications are opened in place. Errors from
+    opening a local specification propagate unchanged.
+
+    Yields
+    ------
+    _RepositoryContext
+        The open repository, its working directory, and whether it is remote.
+
+    Raises
+    ------
+    _remote_clone_failed_error
+        A ConcordatError when a remote specification fails to clone.
+    _remote_clone_bare_error
+        A ConcordatError when the cloned remote has no working tree.
+    _repository_bare_error
+        A ConcordatError when the local repository has no working tree.
+    """
     if _looks_like_remote(specification):
         callbacks = build_remote_callbacks(specification)
         with TemporaryDirectory(prefix="concordat-clone-") as temp_root:
@@ -506,6 +575,7 @@ def _repository_context(
 
 
 def _open_local_repository(specification: str) -> Repository:
+    """Open the Git repository that contains the given local path."""
     path = Path(specification).expanduser()
     try:
         resolved = pygit2.discover_repository(str(path))
@@ -522,6 +592,7 @@ def _open_local_repository(specification: str) -> Repository:
 
 
 def _stage_document(repository: Repository) -> None:
+    """Stage the concordat document in the repository index."""
     index = repository.index
     index.add(CONCORDAT_FILENAME)
     index.write()
@@ -533,6 +604,7 @@ def _commit_document(
     author_name: str | None,
     author_email: str | None,
 ) -> pygit2.Oid | None:
+    """Commit the enrolment document with the enrolment message."""
     return _commit_with_message(
         repository,
         author_name=author_name,
@@ -547,6 +619,7 @@ def _commit_disenrol_document(
     author_name: str | None,
     author_email: str | None,
 ) -> pygit2.Oid | None:
+    """Commit the document change with the disenrolment message."""
     return _commit_with_message(
         repository,
         author_name=author_name,
@@ -562,6 +635,7 @@ def _commit_with_message(
     author_email: str | None,
     message: str,
 ) -> pygit2.Oid | None:
+    """Commit the staged index to HEAD, raising if HEAD is unborn."""
     if repository.head_is_unborn:
         raise _unborn_head_error()
 
@@ -581,6 +655,7 @@ def _commit_with_message(
 
 
 def _push_document(repository: Repository, callbacks: RemoteCallbacks | None) -> None:
+    """Push the current branch to origin, raising when that cannot happen."""
     branch = repository.head.shorthand
     if not branch:
         raise _unknown_branch_error()
@@ -598,12 +673,21 @@ def _push_document(repository: Repository, callbacks: RemoteCallbacks | None) ->
 
 
 def _write_document(destination: Path, document: dict[str, object]) -> None:
+    """Write *document* as YAML to *destination*, creating parent directories."""
     destination.parent.mkdir(parents=True, exist_ok=True)
     with destination.open("w", encoding="utf-8") as handle:
         _yaml.dump(document, handle)
 
 
 def _ensure_concordat_document(location: Path) -> bool:
+    """Write the enrolment document unless the repository is already enrolled.
+
+    Returns
+    -------
+    bool
+        True when the document was written, and False when it already enrolled
+        the repository.
+    """
     destination = location / CONCORDAT_FILENAME
     if destination.exists():
         existing = _load_yaml(destination)
@@ -618,6 +702,21 @@ def _ensure_concordat_document(location: Path) -> bool:
 
 
 def _set_enrolled_value(location: Path, *, value: bool, specification: str) -> bool:
+    """Set the enrolled flag in the document and return whether it changed.
+
+    Returns
+    -------
+    bool
+        True when the flag was changed, and False when it already held *value*.
+
+    Raises
+    ------
+    _missing_document_error
+        A ConcordatError when the document does not exist.
+    _invalid_document_error
+        A ConcordatError when the document is not a mapping, or its ``enrolled``
+        value is not a boolean.
+    """
     destination = location / CONCORDAT_FILENAME
     if not destination.exists():
         raise _missing_document_error(specification)
@@ -641,6 +740,7 @@ def _set_enrolled_value(location: Path, *, value: bool, specification: str) -> b
 
 
 def _repository_slug(repository: Repository, specification: str) -> str | None:
+    """Return the GitHub slug from origin, falling back to *specification*."""
     try:
         origin = repository.remotes["origin"]
     except KeyError:
@@ -657,6 +757,7 @@ def _require_allowed_owner(
     github_owner: str,
     specification: str,
 ) -> str:
+    """Return the slug if its owner matches *github_owner*, else raise."""
     if not slug:
         raise _owner_slug_missing_error(specification)
     _guard_slug_format(slug, specification)
@@ -675,6 +776,7 @@ def _require_allowed_owner(
 
 
 def _guard_slug_format(slug: str, specification: str) -> None:
+    """Raise if *slug* does not contain the owner/repo separator."""
     if "/" in slug:
         return
     detail = (
@@ -685,6 +787,7 @@ def _guard_slug_format(slug: str, specification: str) -> None:
 
 
 def _load_yaml(path: Path) -> object:
+    """Load a YAML file, treating an empty document as an empty mapping."""
     try:
         with path.open("r", encoding="utf-8") as handle:
             return _yaml.load(handle) or {}
@@ -697,6 +800,15 @@ def _signature(
     author_name: str | None,
     author_email: str | None,
 ) -> Signature:
+    """Return the commit signature from the arguments or the repository default.
+
+    Returns
+    -------
+    Signature
+        The signature for *author_name* and *author_email* when both are given.
+        Otherwise it is the repository default, or a fixed ``concordat``
+        identity when the repository has none.
+    """
     if author_name and author_email:
         return Signature(author_name, author_email)
     try:
@@ -707,4 +819,5 @@ def _signature(
 
 
 def _looks_like_remote(specification: str) -> bool:
+    """Return True when *specification* is an SSH-style remote URL."""
     return specification.startswith("git@") or specification.startswith("ssh://")

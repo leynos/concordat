@@ -208,6 +208,7 @@ def test_an_unreadable_entry_is_reported_without_raising(
     _cache(cache_dir).put(REPOSITORY, COMMIT, commit_pin(COMMIT))
 
     def refuse(_self: pathlib.Path) -> typ.NoReturn:
+        """Raise PermissionError in place of reading the cache entry."""
         raise PermissionError
 
     monkeypatch.setattr(pathlib.Path, "read_bytes", refuse)
@@ -222,6 +223,7 @@ def test_a_corrupt_entry_is_replaced_by_the_next_answer(
     calls: list[str] = []
 
     def ask(_repository: str, sha: str) -> PinResolution:
+        """Record the queried SHA and answer with a commit pin."""
         calls.append(sha)
         return commit_pin(sha)
 
@@ -250,6 +252,7 @@ def test_a_failed_write_keeps_the_old_entry_and_the_audit_going(
     before = _entry(cache_dir).read_text(encoding="utf-8")
 
     def refuse(_self: pathlib.Path, _target: object) -> typ.NoReturn:
+        """Raise PermissionError in place of the atomic rename."""
         raise PermissionError
 
     monkeypatch.setattr(pathlib.Path, "replace", refuse)
@@ -266,6 +269,7 @@ def test_the_resolver_asks_once_per_pin_across_caches_on_one_directory(
     calls: list[tuple[str, str]] = []
 
     def ask(repository: str, sha: str) -> PinResolution:
+        """Record the repository and SHA queried and answer with a commit pin."""
         calls.append((repository, sha))
         return commit_pin(sha)
 
@@ -286,6 +290,7 @@ def test_the_resolver_asks_again_after_an_unresolved_answer(
     calls: list[str] = []
 
     def ask(_repository: str, sha: str) -> PinResolution:
+        """Record the queried SHA and return the next scripted answer."""
         calls.append(sha)
         return next(answers)
 

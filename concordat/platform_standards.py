@@ -18,10 +18,14 @@ from .gitutils import build_remote_callbacks
 
 
 class _PullRequest(typ.Protocol):
+    """Subset of a GitHub pull request that this module reads."""
+
     html_url: str
 
 
 class _PullRequestRepository(typ.Protocol):
+    """Subset of a GitHub repository used to open or find pull requests."""
+
     def create_pull(
         self,
         title: str,
@@ -29,7 +33,8 @@ class _PullRequestRepository(typ.Protocol):
         base: str,
         head: str,
         body: str,
-    ) -> _PullRequest: ...
+    ) -> _PullRequest:
+        """Open a pull request from ``head`` into ``base`` and return it."""
 
     def pull_requests(
         self,
@@ -37,7 +42,8 @@ class _PullRequestRepository(typ.Protocol):
         state: str,
         head: str,
         base: str,
-    ) -> typ.Iterable[_PullRequest]: ...
+    ) -> typ.Iterable[_PullRequest]:
+        """Return pull requests matching ``state``, ``head`` and ``base``."""
 
 
 _yaml = YAML(typ="safe")
@@ -469,6 +475,7 @@ def _build_canonical_inventory(
 
 
 def _update_inventory(path: Path, repo_slug: str) -> bool:
+    """Add ``repo_slug`` to the inventory file, returning True if it changed."""
     path.parent.mkdir(parents=True, exist_ok=True)
 
     data = _load_inventory_data(path)
@@ -561,6 +568,7 @@ def _remove_inventory(path: Path, repo_slug: str) -> bool:
 
 
 def _run_cmd(args: list[str], *, cwd: Path) -> None:
+    """Run ``args`` in ``cwd`` without a shell, raising on a non-zero exit."""
     subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]  # Fixed argv, no shell.
         args,
         check=True,
@@ -570,6 +578,7 @@ def _run_cmd(args: list[str], *, cwd: Path) -> None:
 
 
 def _run_tflint(workdir: Path) -> None:
+    """Run tflint against each module under ``tofu/modules``, if present."""
     modules_dir = workdir / "tofu" / "modules"
     if not modules_dir.exists():
         return
@@ -578,6 +587,7 @@ def _run_tflint(workdir: Path) -> None:
 
 
 def _run_tofu_validate(workdir: Path) -> None:
+    """Initialize without a backend and validate each module under ``tofu/modules``."""
     modules_dir = workdir / "tofu" / "modules"
     if not modules_dir.exists():
         return
@@ -587,6 +597,18 @@ def _run_tofu_validate(workdir: Path) -> None:
 
 
 def _github_slug_from_url(url: str) -> tuple[str, str]:
+    """Return the ``(owner, name)`` pair for a GitHub remote URL.
+
+    Returns
+    -------
+    tuple[str, str]
+        The owner and repository name parsed from *url*.
+
+    Raises
+    ------
+    ConcordatError
+        If *url* is not a recognized GitHub URL.
+    """
     slug = parse_github_slug(url)
     if not slug:
         raise ConcordatError(ERROR_SLUG)
@@ -607,6 +629,7 @@ def parse_github_slug(url: str) -> str | None:
 
 
 def _branch_name_for(slug: str, *, verb: str = "enrol") -> str:
+    """Return the ``concordat/<verb>/<owner>-<name>`` branch name for ``slug``."""
     safe = slug.replace("/", "-")
     return f"concordat/{verb}/{safe}"
 
@@ -643,6 +666,7 @@ def _resolve_remote_branch_commit(
     repository: pygit2.Repository,
     branch_name: str,
 ) -> pygit2.Commit | None:
+    """Return the commit at ``origin/<branch_name>``, or None if it is absent."""
     remote_name = f"origin/{branch_name}"
     try:
         branch = repository.branches.remote[remote_name]

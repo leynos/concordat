@@ -34,6 +34,7 @@ def betamax_recorder() -> typ.Iterator[typ.Callable[[str, requests.Session], Non
     with contextlib.ExitStack() as stack:
 
         def start(name: str, session: requests.Session) -> None:
+            """Start the named Betamax cassette on the session until teardown."""
             recorder = Betamax(session, cassette_library_dir=str(CASSETTE_DIR))
             stack.enter_context(recorder.use_cassette(name))
 
@@ -41,6 +42,7 @@ def betamax_recorder() -> typ.Iterator[typ.Callable[[str, requests.Session], Non
 
 
 def _run_cli(arguments: list[str]) -> RunResult:
+    """Run the concordat CLI in-process and capture its outcome."""
     buffer = io.StringIO()
     try:
         with redirect_stdout(buffer):
@@ -102,7 +104,10 @@ def given_betamax_cassette(
     betamax_recorder(name, session)
 
     class FakeOrg:
+        """Stand-in for a GitHub organization that records repository creation."""
+
         def __init__(self, owner: str) -> None:
+            """Bind the stand-in organization to its owner login."""
             self.owner = owner
 
         def create_repository(
@@ -119,6 +124,7 @@ def given_betamax_cassette(
             gitignore_template: str = "",
             has_projects: bool = True,
         ) -> object:
+            """Post the repository creation payload to the owner's org endpoint."""
             payload = {
                 "name": name,
                 "description": description,
@@ -139,7 +145,10 @@ def given_betamax_cassette(
             return object()
 
     class FakeGithubClient:
+        """Stand-in GitHub client that replays its calls through Betamax."""
+
         def repository(self, owner: str, name: str) -> object | None:
+            """Return a placeholder for the repository, or None on a 404."""
             resp = session.get(
                 f"https://api.github.com/repos/{owner}/{name}",
                 headers={"Authorization": "token betamax-token"},
@@ -147,6 +156,7 @@ def given_betamax_cassette(
             return None if resp.status_code == 404 else object()
 
         def organization(self, owner: str) -> FakeOrg:
+            """Fetch the organization through the session and wrap it in FakeOrg."""
             session.get(
                 f"https://api.github.com/orgs/{owner}",
                 headers={"Authorization": "token betamax-token"},
@@ -154,6 +164,7 @@ def given_betamax_cassette(
             return FakeOrg(owner)
 
         def me(self) -> object:
+            """Return a stand-in user whose login is the example owner."""
             return type("User", (), {"login": "example"})()
 
     fake_client = FakeGithubClient()
@@ -202,6 +213,7 @@ def given_prompt_responder(
     prompts: list[str] = []
 
     def fake_input(message: str = "") -> str:
+        """Record the prompt text and return the configured response."""
         prompts.append(message)
         return response
 
@@ -229,6 +241,10 @@ def _run_estate_init_cli(
     github_token: str | None = None,
     yes: bool = False,
 ) -> None:
+    """Run `estate init core` for the example remote and store the result.
+
+    A token is passed as ``--github-token``, and ``yes`` adds ``--yes``.
+    """
     args = [
         "estate",
         "init",

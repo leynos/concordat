@@ -34,13 +34,17 @@ def test_run_apply_offers_to_import_existing_github_repositories(
     calls: list[list[str]] = []
 
     class _TofuWithImport:
+        """Fake OpenTofu runner whose first apply fails with a 422 name clash."""
+
         def __init__(self, cwd: str, env: dict[str, str]) -> None:
+            """Store the working directory and environment for the fake run."""
             self.cwd = cwd
             self.env = env
 
         applied_once = False
 
         def _run(self, args: list[str], *, raise_on_error: bool = False) -> object:
+            """Record each call and fail the first apply with a 422 name clash."""
             calls.append(list(args))
             verb = args[0] if args else ""
 
@@ -99,13 +103,17 @@ def test_run_apply_imports_existing_repo_with_fallback_id(
     calls: list[list[str]] = []
 
     class _TofuWithImportFallback:
+        """Fake OpenTofu runner that rejects the bare-name import, accepts the slug."""
+
         def __init__(self, cwd: str, env: dict[str, str]) -> None:
+            """Store the working directory and environment for the fake run."""
             self.cwd = cwd
             self.env = env
 
         applied_once = False
 
         def _run(self, args: list[str], *, raise_on_error: bool = False) -> object:
+            """Record each call and fail the first apply and the bare-name import."""
             calls.append(list(args))
             verb = args[0] if args else ""
 
@@ -180,11 +188,15 @@ def test_run_apply_non_interactive_does_not_attempt_auto_import(
     calls: list[list[str]] = []
 
     class _TofuFailsImport:
+        """Fake OpenTofu runner whose every apply fails with a 422 name clash."""
+
         def __init__(self, cwd: str, env: dict[str, str]) -> None:
+            """Store the working directory and environment for the fake run."""
             self.cwd = cwd
             self.env = env
 
         def _run(self, args: list[str], *, raise_on_error: bool = False) -> object:
+            """Record each call and fail every apply with a 422 name clash."""
             calls.append(list(args))
             verb = args[0] if args else ""
 
@@ -241,11 +253,15 @@ def test_run_apply_user_declines_auto_import_prompt(
     calls: list[list[str]] = []
 
     class _TofuFailsApply:
+        """Fake OpenTofu runner that refuses every apply with a 422 name clash."""
+
         def __init__(self, cwd: str, env: dict[str, str]) -> None:
+            """Store the working directory and environment for the fake run."""
             self.cwd = cwd
             self.env = env
 
         def _run(self, args: list[str], *, raise_on_error: bool = False) -> object:
+            """Record each call and fail every apply with a 422 name clash."""
             calls.append(list(args))
             verb = args[0] if args else ""
 
@@ -300,11 +316,15 @@ def test_run_apply_all_import_attempts_fail(
     import_attempts: list[str] = []
 
     class _TofuAllImportsFail:
+        """Fake OpenTofu runner whose apply and every import attempt fail."""
+
         def __init__(self, cwd: str, env: dict[str, str]) -> None:
+            """Store the working directory and environment for the fake run."""
             self.cwd = cwd
             self.env = env
 
         def _run(self, args: list[str], *, raise_on_error: bool = False) -> object:
+            """Record import IDs and fail the apply and every import attempt."""
             verb = args[0] if args else ""
 
             if verb == "apply":
