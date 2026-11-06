@@ -34,7 +34,12 @@ the one-line parameter change recorded in `docs/roadmap.md` (DF12-109).
   checkout has at least one spawn or trybuild fact, so there is a nested build
   for the prefetch to protect. The finding is reported at the file and line of
   the entry point: the Makefile `test` target, a selected nextest profile's
-  setup script, or a workflow step.
+  setup script, or a workflow step. A nextest profile is an entry point only
+  where some command relies on it: a command that a success-gated
+  `cargo fetch --locked` precedes (the same recipe line joined by `&&`, or an
+  earlier workflow step) covers its own run, so a profile whose every command
+  is covered owes no setup script. A command with no such fetch leaves the
+  profile reported.
 - **EN-001** (same severity, indeterminate): a spawn is `unresolved` (its
   arguments or environment came from a source the reader cannot see), an entry
   point is `uncertain` (its ordering could not be read) *and* the checkout has
