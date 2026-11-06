@@ -98,7 +98,7 @@ def given_declared_nested_rust_checkout(checkout: pathlib.Path) -> None:
         encoding="utf-8",
     )
     (rust_directory / "Cargo.toml").write_text(
-        "[workspace]\nmembers = []\n",
+        "[workspace]\nmembers = []\n\n[profile.dev]\ndebug = 0\n",
         encoding="utf-8",
     )
     (checkout / "Makefile").write_text(

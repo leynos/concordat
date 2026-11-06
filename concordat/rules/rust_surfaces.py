@@ -19,6 +19,9 @@ from ruamel.yaml.error import YAMLError
 from concordat.errors import OperationalRuleError
 from concordat.rules.fs_probe import regular_file_exists
 
+if typ.TYPE_CHECKING:
+    import collections.abc as cabc
+
 CONCORDAT_FILENAME: typ.Final = ".concordat"
 MANIFEST_FILENAME: typ.Final = "Cargo.toml"
 OPERATION_RESOLVE_SURFACES: typ.Final = "resolve-rust-surfaces"
@@ -29,11 +32,17 @@ type CargoManifest = dict[str, object]
 
 
 class CargoSurface(typ.TypedDict):
-    """One resolved, governed Cargo manifest."""
+    """One resolved, governed Cargo manifest.
+
+    `build_root` says whether the build rules judge the surface as a project
+    root. Every surface stays in the resolution, so readers that only need the
+    manifests (the dependency-family rule) see them all.
+    """
 
     path: str
     role: str
     parsed: CargoManifest
+    build_root: bool
 
 
 class RustSurfaceResolution(typ.NamedTuple):
@@ -250,7 +259,38 @@ def _resolved_surface(
         "path": declaration.path,
         "role": declaration.role or inferred_role,
         "parsed": parsed,
+        "build_root": _is_build_root(declaration.path, parsed),
     }
+
+
+def _is_build_root(path: str, parsed: CargoManifest) -> bool:
+    """Return whether the build rules judge this manifest as a project root.
+
+    Cargo honours profiles only at the root it builds from, so the repository's
+    root manifest is always judged, and any other manifest only when it carries
+    a `[profile]` table of its own. A nested standalone crate or workspace
+    without one is declared for the readers that need its dependencies, not for
+    the development-build and Makefile rules.
+
+    Returns
+    -------
+    bool
+        Whether the build rules judge the manifest as a project root.
+    """
+    return path == MANIFEST_FILENAME or "profile" in parsed
+
+
+def build_root_surfaces(
+    surfaces: cabc.Iterable[CargoSurface],
+) -> tuple[CargoSurface, ...]:
+    """Return the surfaces the build rules judge, in declaration order.
+
+    Returns
+    -------
+    tuple[CargoSurface, ...]
+        The surfaces whose `build_root` is true.
+    """
+    return tuple(surface for surface in surfaces if surface["build_root"])
 
 
 def root_cargo_toml_exists(cargo_path: pathlib.Path) -> bool:

@@ -51,6 +51,15 @@ invalid_cargo_surfaces if {
 	not is_array(cargo_input.surfaces)
 }
 
+# `declared_surfaces` is optional, but when present it must be a list: a
+# malformed value falling back to the judged surfaces could credit a nested gate
+# to the root.
+invalid_cargo_surfaces if {
+	cargo_input_is_valid
+	"declared_surfaces" in object.keys(cargo_input)
+	not is_array(cargo_input.declared_surfaces)
+}
+
 cargo_surfaces := cargo_input.surfaces if {
 	cargo_surfaces_present
 	is_array(cargo_input.surfaces)
@@ -98,7 +107,7 @@ deny contains f if {
 	invalid_cargo_surfaces
 	f := finding(
 		"EN-001", "indeterminate", 0,
-		"policy input cargo must be an object and cargo.surfaces an array when present",
+		"policy input cargo must be an object, and cargo.surfaces and cargo.declared_surfaces arrays when present",
 	)
 }
 
@@ -444,8 +453,14 @@ surface_context_candidate(recipe, surface) if {
 	contains(recipe.text, sprintf("cd %s", [surface_directory]))
 }
 
+# Every declared surface, judged or not: a gate aimed at an unjudged nested
+# manifest is still not a root gate.
+declared_surfaces := cargo_input.declared_surfaces if is_array(object.get(cargo_input, "declared_surfaces", null))
+
+declared_surfaces := cargo_surfaces if not is_array(object.get(cargo_input, "declared_surfaces", null))
+
 nested_surface_context_candidate(recipe) if {
-	some surface in cargo_surfaces
+	some surface in declared_surfaces
 	not surface_is_root(surface)
 	surface_context_candidate(recipe, surface)
 }

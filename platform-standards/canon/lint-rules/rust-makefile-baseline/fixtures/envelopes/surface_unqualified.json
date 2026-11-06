@@ -19,8 +19,14 @@
         "parsed": {
           "workspace": {
             "members": []
+          },
+          "profile": {
+            "dev": {
+              "debug": 0
+            }
           }
-        }
+        },
+        "build_root": true
       }
     ]
   },
