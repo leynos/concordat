@@ -333,7 +333,7 @@ def _workspace_requirements(
 
 
 def _dependency_table(parsed: dict[str, object]) -> dict[str, object] | None:
-    """Return a manifest's `[workspace.dependencies]`, or ``None`` outside a workspace."""
+    """Return `[workspace.dependencies]`, or ``None`` for a manifest with no workspace."""
     workspace = mapping(parsed.get("workspace"))
     if workspace is None:
         return None
