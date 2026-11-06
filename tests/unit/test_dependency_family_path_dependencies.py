@@ -216,3 +216,57 @@ def test_a_member_whose_workspace_is_not_governed_still_inherits_from_it(
     )
 
     assert _packages(repository) == {"serde"}
+
+
+def _member_of_ungoverned_workspace(repository: pathlib.Path, root: str) -> None:
+    """Declare only the member `a/m`, whose workspace root is *root*."""
+    _write(repository, ".github/dependabot.yml", _CONFIG)
+    _write(
+        repository,
+        ".concordat",
+        "language:\n  rust:\n    surfaces:\n      - path: a/m/Cargo.toml\n",
+    )
+    _write(
+        repository,
+        "a/m/Cargo.toml",
+        '[package]\nname = "m"\nversion = "0.1.0"\n\n'
+        '[dependencies]\nshared.workspace = true\nserde = "1"\n',
+    )
+    (repository / root).parent.mkdir(parents=True, exist_ok=True)
+
+
+def test_an_unreadable_workspace_root_is_a_problem_not_an_absence(
+    repository: pathlib.Path,
+) -> None:
+    """A workspace manifest that will not decode must not look like no workspace."""
+    _member_of_ungoverned_workspace(repository, "a/Cargo.toml")
+    _write(repository, "a/Cargo.toml", "[workspace\n")
+
+    problems = build_dependency_family_envelope(repository)["problems"]
+
+    assert any("a/Cargo.toml" in problem for problem in problems), problems
+
+
+def test_a_workspace_root_outside_the_checkout_is_a_problem(
+    repository: pathlib.Path,
+) -> None:
+    """A symbolic link above the manifest must not lead the read out of the tree."""
+    outside = repository / "outside"
+    outside.mkdir()
+    _member_of_ungoverned_workspace(repository, "a/Cargo.toml")
+    _write(
+        outside,
+        "Cargo.toml",
+        "[workspace]\nmembers = []\n\n[workspace.dependencies]\n"
+        'shared = { path = "x" }\n',
+    )
+    (repository / "a" / "Cargo.toml").symlink_to(outside / "Cargo.toml")
+    checkout = repository / "checkout"
+    checkout.mkdir()
+    for entry in (".github", ".concordat", "a"):
+        (repository / entry).rename(checkout / entry)
+    # `a` is now a real directory inside the checkout holding a link out of it.
+
+    problems = build_dependency_family_envelope(checkout)["problems"]
+
+    assert any("outside the checkout" in problem for problem in problems), problems

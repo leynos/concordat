@@ -397,7 +397,7 @@ def _cargo_declarations(
     """Return every dependency edge of the governed Cargo surfaces."""
     surfaces = _cargo_surfaces(checkout, problems, members)
     everything = _workspace_requirements(surfaces)
-    workspaces = workspace_tables(checkout, surfaces)
+    workspaces = workspace_tables(checkout, surfaces, problems)
     parsed = [(str(s["path"]), mapping(s.get("parsed"))) for s in surfaces]
     problems.extend(
         f"{path} could not be parsed" for path, doc in parsed if doc is None

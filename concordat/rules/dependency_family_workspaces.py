@@ -41,7 +41,9 @@ def _workspace_candidates(
 
 
 def workspace_tables(
-    checkout: pathlib.Path, surfaces: list[dict[str, object]]
+    checkout: pathlib.Path,
+    surfaces: list[dict[str, object]],
+    problems: list[str],
 ) -> dict[pathlib.PurePosixPath, dict[str, object]]:
     """Return each workspace root's `[workspace.dependencies]`, by directory.
 
@@ -63,23 +65,46 @@ def workspace_tables(
     found = {
         directory: table
         for directory in sorted(_workspace_candidates(surfaces) - governed.keys())
-        if (table := _dependency_table(_workspace_document(checkout, directory)))
+        if (
+            table := _dependency_table(
+                _workspace_document(checkout, directory, problems)
+            )
+        )
         is not None
     }
     return governed | found
 
 
 def _workspace_document(
-    checkout: pathlib.Path, directory: pathlib.PurePosixPath
+    checkout: pathlib.Path, directory: pathlib.PurePosixPath, problems: list[str]
 ) -> dict[str, object]:
-    """Return the manifest in *directory*, or an empty one when it is not usable."""
+    """Return the manifest in *directory*, or an empty one when it is not usable.
+
+    A manifest that exists but cannot be used is a problem, never a silent
+    absence: the dependency facts that depend on it would otherwise look
+    complete. One that resolves outside the checkout, through a symbolic link
+    in any directory above it, is refused for the same reason it is refused
+    elsewhere.
+
+    Returns
+    -------
+    dict[str, object]
+        The decoded manifest, or an empty one.
+    """
     if directory.is_absolute() or ".." in directory.parts:
         return {}
     manifest = checkout / directory / "Cargo.toml"
     if not probe_file(manifest).present:
         return {}
+    name = (directory / "Cargo.toml").as_posix()
+    if not manifest.resolve().is_relative_to(checkout.resolve()):
+        problems.append(f"{name} is a workspace manifest outside the checkout")
+        return {}
     document, error = loose_manifest(manifest)
-    return document if error is None else {}
+    if error is not None:
+        problems.append(f"{name} is a workspace manifest and cannot be read: {error}")
+        return {}
+    return document
 
 
 def inherited_for(
