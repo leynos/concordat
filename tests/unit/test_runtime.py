@@ -18,6 +18,7 @@ def test_runtime_uses_native_hello_when_extension_is_available(
     """The runtime selects the optional extension's implementation."""
 
     def native_hello() -> str:
+        """Return the greeting from the native extension."""
         return "hello from Rust"
 
     native_module = types.SimpleNamespace(hello=native_hello)
@@ -44,6 +45,7 @@ def test_runtime_falls_back_to_pure_hello_when_extension_is_missing(
     """The runtime retains a working Python implementation without the extension."""
 
     def raise_module_not_found(_: str) -> typ.NoReturn:
+        """Raise ModuleNotFoundError as if the native extension were absent."""
         raise ModuleNotFoundError(name="_concordat_rs")
 
     try:
@@ -70,6 +72,7 @@ def test_runtime_reraises_missing_native_dependency(
     error = ModuleNotFoundError(name="native_dependency")
 
     def raise_dependency_error(_: str) -> typ.NoReturn:
+        """Raise the original dependency error, as a failing native import would."""
         raise error
 
     try:

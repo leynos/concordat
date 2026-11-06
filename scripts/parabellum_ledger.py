@@ -308,6 +308,7 @@ def _load_ledger(path: pathlib.Path) -> Ledger:
 
 
 def _timestamp() -> str:
+    """Return the current UTC time as a whole-second ISO 8601 string ending in Z."""
     return (
         dt.datetime
         .now(dt.UTC)
@@ -389,6 +390,7 @@ def _excluded_record(
     package: str = RULE_PACKAGE,
     version: str | None = None,
 ) -> LedgerRecord:
+    """Return a ledger record marking ``repository`` as excluded for ``reason``."""
     record = _base_record(repository, package=package, version=version)
     record["verdict"] = "excluded"
     record["exclusion_reason"] = reason

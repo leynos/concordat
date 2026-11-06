@@ -127,6 +127,7 @@ def _spelling_agents_md() -> str:
     blocks = manifest["parameters"]["defaults"]["agents_md_blocks"]
 
     def key(tag: str) -> tuple[int, ...]:
+        """Order a ``vX.Y.Z`` tag numerically, so v1.10 sorts after v1.9."""
         return tuple(int(part) for part in tag.removeprefix("v").split("."))
 
     body = blocks[max(blocks, key=key)]

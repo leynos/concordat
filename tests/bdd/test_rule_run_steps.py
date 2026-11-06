@@ -210,6 +210,7 @@ def given_no_makeutil(monkeypatch: pytest.MonkeyPatch) -> None:
     """Make every subprocess launch fail as if the binary were absent."""
 
     def raise_missing(*args: object, **kwargs: object) -> typ.NoReturn:
+        """Raise FileNotFoundError for any launch, as if makeutil were absent."""
         raise FileNotFoundError("makeutil")
 
     monkeypatch.setattr(subprocess, "run", raise_missing)

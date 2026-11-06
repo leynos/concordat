@@ -297,6 +297,7 @@ class TestEnsureRepositoryExists:
         name: str | None = "core",
         client: github3.GitHub | None = None,
     ) -> estate_repository.RepositoryPlan:
+        """Build a plan that needs creation, with the given identity and client."""
         return estate_repository.RepositoryPlan(
             needs_creation=True,
             slug=slug,
@@ -310,6 +311,7 @@ class TestEnsureRepositoryExists:
         plan: estate_repository.RepositoryPlan,
         confirmer: typ.Callable[[str], bool],
     ) -> None:
+        """Run the ensure step for *plan* with a fixed token and *confirmer*."""
         estate_repository._ensure_repository_exists(
             plan,
             "token",

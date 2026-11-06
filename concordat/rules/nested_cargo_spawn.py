@@ -242,6 +242,7 @@ def _rust_files(checkout: pathlib.Path, problems: list[str]) -> list[pathlib.Pat
     """Return every `.rs` file below the checkout, skipping non-source trees."""
 
     def unreadable(error: OSError) -> None:
+        """Record an unreadable directory as a problem, once per message."""
         message = f"cannot scan {error.filename} for Rust tests: {error.strerror}"
         if message not in problems:
             problems.append(message)

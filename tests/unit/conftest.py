@@ -34,6 +34,7 @@ def mock_remote_probe(
         empty: bool,
         error: str | None = None,
     ) -> mock.Mock:
+        """Patch ``_probe_remote`` to report the given remote state."""
         probe = RemoteProbe(
             reachable=reachable,
             exists=exists,
@@ -299,13 +300,17 @@ def fake_tofu(monkeypatch: pytest.MonkeyPatch) -> list[typ.Any]:
     created: list[typ.Any] = []
 
     class _FakeTofu:
+        """Stand in for ``Tofu`` and record every command in ``calls``."""
+
         def __init__(self, cwd: str, env: dict[str, str]) -> None:
+            """Record the working directory and environment, then register self."""
             self.cwd = cwd
             self.env = env
             self.calls: list[list[str]] = []
             created.append(self)
 
         def _record(self, verb: str, extra_args: list[str]) -> SimpleNamespace:
+            """Record ``verb`` with its arguments and return a successful result."""
             args = [verb, *extra_args]
             self.calls.append(args)
             return SimpleNamespace(stdout="", stderr="", returncode=0, errored=False)
@@ -317,6 +322,7 @@ def fake_tofu(monkeypatch: pytest.MonkeyPatch) -> list[typ.Any]:
             disable_backends: bool = False,
             extra_args: list[str] | None = None,
         ) -> bool:
+            """Record an ``init`` call with its backend arguments and report success."""
             args = list(extra_args or [])
             if backend_conf:
                 args.append(f"-backend-config={backend_conf}")
@@ -334,6 +340,7 @@ def fake_tofu(monkeypatch: pytest.MonkeyPatch) -> list[typ.Any]:
         def plan(
             self, *, extra_args: list[str] | None = None
         ) -> tuple[SimpleNamespace, SimpleNamespace]:
+            """Record a ``plan`` call and return an empty log and an error-free plan."""
             self._record("plan", list(extra_args or []))
             plan_log = SimpleNamespace(stdout="", stderr="", errored=False)
             plan = SimpleNamespace(errored=False)
@@ -345,6 +352,7 @@ def fake_tofu(monkeypatch: pytest.MonkeyPatch) -> list[typ.Any]:
             *,
             extra_args: list[str] | None = None,
         ) -> SimpleNamespace:
+            """Record an ``apply`` call, noting any plan file, and return its result."""
             args = list(extra_args or [])
             if plan_file:
                 args.append(plan_file)
@@ -353,6 +361,7 @@ def fake_tofu(monkeypatch: pytest.MonkeyPatch) -> list[typ.Any]:
             return result
 
         def _run(self, args: list[str], *, raise_on_error: bool = False) -> object:
+            """Route a raw command through ``_record`` as the fallback path."""
             # Fallback path when public methods are unavailable.
             return self._record(args[0], args[1:])
 

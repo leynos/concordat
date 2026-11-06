@@ -125,6 +125,7 @@ def test_unsafe_members_refuse_installation_at_every_position(
         github_path.write_text("existing PATH entry\n")
 
         def refuse_staging(_body: bytes, _destination: Path) -> None:
+            """Fail the test if the installer reaches staging for an unsafe archive."""
             pytest.fail("unsafe archive validation must finish before staging")
 
         patch.setattr(installer, "_stage_binary", refuse_staging)
@@ -217,6 +218,7 @@ def test_member_reads_are_bounded_and_only_exact_bytes_install(
     def extract_member(
         _archive: tarfile.TarFile, _member: tarfile.TarInfo
     ) -> RecordedStream:
+        """Return a recording stream over ``actual`` for any requested member."""
         return RecordedStream(actual)
 
     with (

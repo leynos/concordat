@@ -62,10 +62,12 @@ UNKNOWN: typ.Final = "0123456789abcdef0123456789abcdef01234567"
 
 
 def _commit_path(sha: str) -> str:
+    """Return the fake API path of the action's commit object for *sha*."""
     return f"/repos/{ACTION}/git/commits/{sha}"
 
 
 def _tag_path(sha: str) -> str:
+    """Return the fake API path of the action's tag object for *sha*."""
     return f"/repos/{ACTION}/git/tags/{sha}"
 
 

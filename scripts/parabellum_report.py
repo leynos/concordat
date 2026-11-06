@@ -39,6 +39,7 @@ VERDICT_ORDER: typ.Final = (
 def _latest_records(
     ledger: Ledger,
 ) -> dict[str, LedgerRecord]:
+    """Return the last record for each repository in ledger order."""
     latest: dict[str, LedgerRecord] = {}
     for record in ledger:
         latest[record["repository"]] = record
@@ -405,6 +406,7 @@ def _aligned_table(rows: cabc.Sequence[tuple[str, ...]]) -> list[str]:
     header, *body = rows
 
     def line(cells: tuple[str, ...]) -> str:
+        """Render one row with each cell padded to its column width."""
         return (
             "| " + " | ".join(it.starmap(_pad, zip(cells, widths, strict=True))) + " |"
         )

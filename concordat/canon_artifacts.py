@@ -296,6 +296,18 @@ def _resolve_status(
     manifest_sha256: str,
     published_sha256: str | None,
 ) -> ArtifactStatus:
+    """Classify one artifact from its template, manifest and published hashes.
+
+    A template that disagrees with the manifest is reported first, whatever the
+    published copy holds.
+
+    Returns
+    -------
+    ArtifactStatus
+        ``TEMPLATE_MANIFEST_MISMATCH`` when the template and manifest hashes
+        differ, ``MISSING`` when there is no published hash, ``OUTDATED`` when
+        the published hash differs from the template, and ``OK`` otherwise.
+    """
     if template_sha256 != manifest_sha256:
         return ArtifactStatus.TEMPLATE_MANIFEST_MISMATCH
     if published_sha256 is None:

@@ -88,6 +88,7 @@ class TestFileBackedToken:
 
     @staticmethod
     def _write_credentials(owner: str, body: str) -> None:
+        """Write *body* to the owner's credentials file with mode 0600."""
         path = xdg.owner_credentials_path(owner)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(body, encoding="utf-8")
@@ -131,6 +132,7 @@ class TestFileBackedToken:
             *,
             token: str | None = None,
         ) -> list[str]:
+            """Capture the namespaces and token, then return no repositories."""
             captured["namespaces"] = tuple(namespaces)
             # Keyed as "credential" rather than "token": ruff's
             # hardcoded-password check fires on comparing a literal against a

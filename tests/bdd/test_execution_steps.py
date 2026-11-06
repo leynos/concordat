@@ -279,6 +279,7 @@ def given_fake_tofu(
 
 
 def _run_cli(arguments: list[str]) -> RunResult:
+    """Run the CLI with *arguments* and capture its output and exit status."""
     buffer_out = io.StringIO()
     buffer_err = io.StringIO()
     try:
@@ -331,6 +332,7 @@ def when_run_command_with_options(
 
 
 def _workspace_path(result: RunResult) -> Path:
+    """Return the execution workspace path reported on stderr."""
     for line in result.stderr.splitlines():
         if line.startswith("execution workspace:"):
             return Path(line.split(":", 1)[1].strip())

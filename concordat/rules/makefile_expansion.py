@@ -161,6 +161,7 @@ def expand(text: str, values: cabc.Mapping[str, str]) -> Expansion:
     known = {**BUILTIN_VARIABLES, **values}
 
     def substitute(match: re.Match[str]) -> str:
+        """Replace one ``$(NAME)`` reference, leaving unknown names untouched."""
         value = known.get(match.group(1))
         # A `$$` in a value is a shell dollar once the reference is expanded.
         return match.group(0) if value is None else value.replace("$$", SHELL_DOLLAR)

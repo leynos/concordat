@@ -216,6 +216,19 @@ def _git(
     operation: str,
     resource: str,
 ) -> str:
+    """Run git with fixed arguments and return its standard output.
+
+    Returns
+    -------
+    str
+        The standard output of the git command.
+
+    Raises
+    ------
+    OperationalRuleError
+        If git is not found on PATH, times out, or exits non-zero. The error is
+        tagged with the operation and resource.
+    """
     try:
         completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed argv, no shell
             ["git", *args],  # ruff: ignore[start-process-with-partial-path] - resolved from PATH
@@ -342,6 +355,7 @@ def _audit_record(
     package: str,
     version: str,
 ) -> LedgerRecord:
+    """Audit one estate repository into a ledger record, noting any failure."""
     repository = f"{owner}/{entry.name}"
     record = _base_record(repository, package=package, version=version)
     try:

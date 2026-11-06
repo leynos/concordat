@@ -157,7 +157,10 @@ def test_bucket_versioning_status_wraps_errors(
     """Versioning failures surface as PersistenceError."""
 
     class Client(S3Client):
+        """Stub S3 client whose versioning lookup raises the parametrized error."""
+
         def get_bucket_versioning(self, **kwargs: object) -> dict[str, str]:
+            """Raise the parametrized exception from the versioning lookup."""
             raise exception_factory()
 
     client = Client()
@@ -181,13 +184,17 @@ def test_exercise_write_permissions_wraps_errors(
     """Write/delete probe failures become PersistenceError."""
 
     class Client(S3Client):
+        """Stub S3 client whose put or delete fails for the selected operation."""
+
         def put_object(self, **kwargs: object) -> dict[str, str]:
+            """Raise a BotoCoreError on put when selected, otherwise succeed."""
             if failing_operation == "put":
                 exc = boto_exceptions.BotoCoreError()
                 raise exc
             return {}
 
         def delete_object(self, **kwargs: object) -> dict[str, str]:
+            """Raise a BotoCoreError on delete when selected, otherwise succeed."""
             if failing_operation == "delete":
                 exc = boto_exceptions.BotoCoreError()
                 raise exc

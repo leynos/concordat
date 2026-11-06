@@ -33,6 +33,11 @@ app = App()
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class _Filter:
+    """Hold the artifact id and type sets that restrict a command.
+
+    A ``None`` set places no restriction on that field.
+    """
+
     ids: set[str] | None
     types: set[str] | None
 
@@ -64,12 +69,14 @@ class CliSyncConfig:
 
 
 def _build_filter(*, ids: tuple[str, ...], types: tuple[str, ...]) -> _Filter:
+    """Build a filter from the ids and types, where empty tuples mean no limit."""
     ids_filter = set(ids) if ids else None
     types_filter = set(types) if types else None
     return _Filter(ids=ids_filter, types=types_filter)
 
 
 def _resolve_manifest_path(template_root: Path | None) -> Path:
+    """Return the manifest path under *template_root* or the resolved concordat root."""
     root = template_root or resolve_concordat_root()
     return root / DEFAULT_MANIFEST_RELATIVE
 

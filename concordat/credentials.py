@@ -72,6 +72,7 @@ class MalformedCredentialsError(ConcordatError):
 
 
 def _environ(env: xdg.EnvMapping | None) -> xdg.EnvMapping:
+    """Return *env*, or the process environment when it is None."""
     return os.environ if env is None else env
 
 

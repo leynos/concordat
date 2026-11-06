@@ -426,6 +426,7 @@ def expand(token: str, environment: dict[str, str]) -> str:
     """
 
     def substitute(match: re.Match[str]) -> str:
+        """Replace one matched reference with its value, or keep it if undefined."""
         name = match.group("braced") or match.group("bare")
         return environment.get(name, match.group(0))
 

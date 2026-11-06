@@ -47,6 +47,7 @@ def _raise_process_error(
     """Return a subprocess replacement that raises *error*."""
 
     def raise_error(*args: object, **kwargs: object) -> typ.NoReturn:
+        """Raise the stored error in place of the patched subprocess call."""
         raise error
 
     return raise_error

@@ -23,6 +23,7 @@ def build_remote_callbacks(specification: str) -> RemoteCallbacks | None:
 
 
 def _username_for(specification: str) -> str:
+    """Return the SSH username in *specification*, defaulting to ``git``."""
     if specification.startswith("git@"):
         return specification.split("@", 1)[0]
     parsed = urlparse(specification)
@@ -32,6 +33,7 @@ def _username_for(specification: str) -> str:
 
 
 def _looks_like_local_path(specification: str) -> bool:
+    """Return True when *specification* names a local filesystem path."""
     if specification.startswith("git@") or specification.startswith("ssh://"):
         return False
     parsed = urlparse(specification)

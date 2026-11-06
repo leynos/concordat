@@ -265,13 +265,17 @@ def test_run_plan_surfaces_the_cli_plan_diff_output(
     created: list[typ.Any] = []
 
     class _SchemaTofu:
+        """Stand in for ``Tofu`` and answer ``plan`` with a one-resource diff."""
+
         def __init__(self, cwd: str, env: dict[str, str]) -> None:
+            """Record the working directory and environment of the fake."""
             self.cwd = cwd
             self.env = env
             self.calls: list[list[str]] = []
             created.append(self)
 
         def _run(self, args: list[str], *, raise_on_error: bool = False) -> object:
+            """Return a canned plan for ``plan`` and an empty success otherwise."""
             self.calls.append(list(args))
             if args and args[0] == "plan":
                 return SimpleNamespace(
@@ -351,6 +355,7 @@ def test_run_plan_backend_config_validation(
     monkeypatch.setenv("SCW_SECRET_KEY", "scw-secret")
 
     def _fail_init(*args: object, **kwargs: object) -> object:
+        """Raise if Tofu is constructed, so the test fails when init is reached."""
         raise UnexpectedTofuInitialisationError
 
     monkeypatch.setattr("concordat.estate_execution.Tofu", _fail_init)
@@ -446,6 +451,7 @@ def test_run_plan_requires_backend_credentials(
         monkeypatch.delenv(variable, raising=False)
 
     def _fail_init(*args: object, **kwargs: object) -> object:
+        """Raise if Tofu is constructed, so the test fails when init is reached."""
         raise UnexpectedTofuInitialisationError
 
     monkeypatch.setattr("concordat.estate_execution.Tofu", _fail_init)

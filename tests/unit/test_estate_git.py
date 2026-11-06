@@ -47,6 +47,7 @@ class TestInventoryUrls:
 
     @staticmethod
     def _inventory(tmp_path: pathlib.Path, body: str) -> pathlib.Path:
+        """Write ``body`` to ``repositories.yaml`` under ``tmp_path``."""
         path = tmp_path / "repositories.yaml"
         path.write_text(body, encoding="utf-8")
         return path

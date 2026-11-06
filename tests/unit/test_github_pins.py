@@ -68,10 +68,12 @@ class _Session:
 
 
 def _commit(sha: str) -> str:
+    """Return the path of the git commit endpoint for *sha*."""
     return f"/repos/{ACTION}/git/commits/{sha}"
 
 
 def _tag(sha: str) -> str:
+    """Return the path of the git tag endpoint for *sha*."""
     return f"/repos/{ACTION}/git/tags/{sha}"
 
 
@@ -82,6 +84,7 @@ def _resolver(
     session = _Session(routes)
 
     def factory() -> GithubClient:
+        """Build a GitHub client whose requests go to the canned session."""
         client = GithubClient(token=None, api_url=API)
         client.session = typ.cast("typ.Any", session)
         return client
@@ -172,6 +175,7 @@ def test_the_client_is_built_once_on_first_use() -> None:
     session = _Session({_commit(COMMIT): _Response(200, {"sha": COMMIT})})
 
     def factory() -> GithubClient:
+        """Build a client wired to the canned session and record the build."""
         client = GithubClient(token=None, api_url=API)
         client.session = typ.cast("typ.Any", session)
         built.append(client)

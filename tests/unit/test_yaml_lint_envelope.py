@@ -252,6 +252,7 @@ def test_the_makefile_report_is_forwarded(tmp_path: pathlib.Path) -> None:
     seen: list[object] = []
 
     def inspect(path: pathlib.Path) -> MakefileFacts:
+        """Record the Makefile path and return a complete makeutil report."""
         seen.append(path)
         return MakefileFacts(
             report=typ.cast("MakeutilReport", MINIMAL_REPORT), status="complete"

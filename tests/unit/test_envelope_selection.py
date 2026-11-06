@@ -287,6 +287,7 @@ class TestRegisteredPackages:
         def build_third_envelope(
             _checkout: pathlib.Path, _parameters: object = None
         ) -> dict[str, object]:
+            """Return a stub envelope for a kind only the kind mapping declares."""
             return {"kind": "policy-input/third"}
 
         by_id = dict(packages.PACKAGE_ENVELOPE_BUILDERS)
@@ -713,6 +714,7 @@ class TestManifestReading:
         (tmp_path / "rule.yaml").write_text("id: x\n", encoding="utf-8")
 
         def refuse(_self: pathlib.Path, *_args: object, **_kwargs: object) -> object:
+            """Raise a permission error from ``stat`` on any path."""
             message = "Permission denied"
             raise PermissionError(13, message)
 
@@ -749,6 +751,7 @@ class TestManifestReading:
         (tmp_path / "rule.yaml").write_text("id: x\n", encoding="utf-8")
 
         def refuse(*_args: object, **_kwargs: object) -> str:
+            """Raise a permission error from ``read_text`` on any path."""
             message = "Permission denied"
             raise PermissionError(13, message)
 

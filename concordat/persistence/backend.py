@@ -107,6 +107,7 @@ def resolve_backend_environment(env: typ.Mapping[str, str]) -> dict[str, str]:
     """
 
     def present(*names: str) -> bool:
+        """Report whether every named variable is set to a non-blank value."""
         return all(env.get(name, "").strip() for name in names)
 
     if present(*AWS_BACKEND_ENV):

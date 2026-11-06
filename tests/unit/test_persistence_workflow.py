@@ -61,6 +61,7 @@ def test_persist_estate_uses_env_token_and_remote(
     pr_log: dict[str, str | None] = {}
 
     def pr_opener(context: persistence.PullRequestContext) -> str:
+        """Record the token and branch, then return a stand-in PR URL."""
         pr_log["github_token"] = context.github_token
         pr_log["branch_name"] = context.branch_name
         return "https://example.test/pr/1"
@@ -98,6 +99,7 @@ def test_persist_estate_prefers_explicit_github_token_over_env(
     captured_token: dict[str, str | None] = {"token": None}
 
     def pr_opener(context: persistence.PullRequestContext) -> str:
+        """Capture the GitHub token that reaches the pull-request opener."""
         captured_token["token"] = context.github_token
         return "https://example.test/pr/2"
 
@@ -145,6 +147,7 @@ class TestOwnerScopedCredentials:
         seen: dict[str, str | None] = {}
 
         def pr_opener(context: persistence.PullRequestContext) -> str:
+            """Capture the GitHub token that reaches the pull-request opener."""
             seen["token"] = context.github_token
             return "https://example.test/pr/3"
 
@@ -181,6 +184,7 @@ class TestOwnerScopedCredentials:
             *,
             owner: str | None = None,
         ) -> object:
+            """Record the owner the default S3 factory was bound to, and stub it."""
             seen["owner"] = owner
             return ctx.stub_s3()
 
@@ -220,6 +224,7 @@ class TestOwnerScopedCredentials:
         # cast restates the contract the assertions below then check at run
         # time.
         def factory(*args: object, **kwargs: object) -> persistence.S3Client:
+            """Record every call made to the injected factory, then stub it."""
             calls.append((args, kwargs))
             return typ.cast("persistence.S3Client", ctx.stub_s3())
 
@@ -257,7 +262,10 @@ class TestOwnerScopedCredentials:
         record = dataclasses.replace(ctx.record, github_owner="bravo")
 
         def forbidden(name: str) -> typ.Callable[..., typ.NoReturn]:
+            """Return a stand-in that fails the test if the named step runs."""
+
             def refuse(*_args: object, **_kwargs: object) -> typ.NoReturn:
+                """Raise AssertionError naming the step that ran after the mismatch."""
                 message = f"{name} ran after an owner mismatch"
                 raise AssertionError(message)
 
@@ -383,6 +391,7 @@ def test_non_interactive_persist_defaults_endpoint_scheme_to_https(
     captured_endpoint: dict[str, str] = {}
 
     def s3_client_factory(region: str, endpoint: str) -> persistence.S3Client:
+        """Capture the endpoint the S3 client factory is given, then stub it."""
         captured_endpoint["endpoint"] = endpoint
         return ctx.stub_s3()
 

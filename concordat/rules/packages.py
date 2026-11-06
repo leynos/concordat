@@ -573,6 +573,7 @@ def _observed[E](
         _parameters: cabc.Mapping[str, object] | None = None,
         /,
     ) -> E:
+        """Run the wrapped builder with the observed Makefile inspector."""
         return build(checkout, inspect=inspect_makefile_observed)
 
     return typ.cast("_ParameterBlindBuilder[E]", resolve)

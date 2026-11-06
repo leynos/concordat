@@ -108,6 +108,7 @@ class TestBuildCodesceneCoverageEnvelope:
         read_paths: list[pathlib.Path] = []
 
         def record_read(path: pathlib.Path) -> str:
+            """Record the requested path, then fail so no target is read."""
             read_paths.append(path)
             raise AssertionError
 
@@ -138,6 +139,7 @@ class TestBuildCodesceneCoverageEnvelope:
         (workflows / "linked.yml").symlink_to(target)
 
         def refuse(_self: pathlib.Path) -> bool:
+            """Simulate a permission refusal from ``is_symlink`` on any path."""
             raise PermissionError(13, "Permission denied")
 
         monkeypatch.setattr(pathlib.Path, "is_symlink", refuse)
@@ -325,6 +327,7 @@ class TestBuildCodesceneCoverageEnvelope:
         expected = workflow.parent if case.resource == "directory" else workflow
 
         def refuse(*_args: object, **_kwargs: object) -> typ.NoReturn:
+            """Raise a permission error for whichever filesystem call is patched."""
             raise PermissionError(13, "Permission denied")
 
         monkeypatch.setattr(pathlib.Path, case.method, refuse)
@@ -399,9 +402,11 @@ class TestBuildCodesceneCoverageEnvelope:
         workflows = checkout / ".github" / "workflows"
 
         def missing(_self: pathlib.Path) -> cabc.Iterator[pathlib.Path]:
+            """Raise the missing-file error that a dangling link produces."""
             raise FileNotFoundError(2, "No such file or directory")
 
         def refuse(_self: pathlib.Path) -> object:
+            """Raise a permission error from ``lstat`` on any path."""
             raise PermissionError(13, "Permission denied")
 
         monkeypatch.setattr(pathlib.Path, "iterdir", missing)

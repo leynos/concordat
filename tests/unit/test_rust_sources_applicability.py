@@ -27,6 +27,7 @@ MANIFEST = '[package]\nname = "x"\nversion = "0.1.0"\n\n[profile.dev]\ndebug = 2
 
 
 def _checkout(root: pathlib.Path, *, with_source: bool) -> None:
+    """Write a Cargo manifest under *root*, adding a Rust file when asked."""
     (root / "Cargo.toml").write_text(MANIFEST, encoding="utf-8")
     if with_source:
         (root / "src").mkdir()
@@ -65,6 +66,7 @@ def test_an_incomplete_scan_does_not_claim_there_is_no_rust(
     _checkout(tmp_path, with_source=False)
 
     def incomplete(_checkout: pathlib.Path, problems: list[str]) -> list[pathlib.Path]:
+        """Record an unlistable directory and return no files, as a partial walk."""
         problems.append("cannot list a directory")
         return []
 

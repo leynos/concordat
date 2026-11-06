@@ -66,6 +66,7 @@ def test_apply_inventory_change_commits_and_validates_only_when_mutated(
     )
 
     def mutate_inventory(inventory: Path, repo_slug: str) -> bool:
+        """Record the mutation and return the parametrized mutation result."""
         calls.append("mutate")
         assert inventory == tmp_path / config.inventory_path, (
             "mutator should receive the configured inventory path"
@@ -74,9 +75,11 @@ def test_apply_inventory_change_commits_and_validates_only_when_mutated(
         return mutation_result
 
     def commit_inventory_changes(*args: object, **kwargs: object) -> None:
+        """Record that the inventory change was committed."""
         calls.append("commit")
 
     def validate_tofu_changes(workdir: Path) -> None:
+        """Check validation runs in the worktree, then record it."""
         assert workdir == tmp_path, "validation should run in the repository worktree"
         calls.append("validate")
 
@@ -117,6 +120,7 @@ def test_apply_inventory_change_follows_the_mutation_trace(
     )
 
     def mutate_inventory(inventory: Path, repo_slug: str) -> bool:
+        """Record the mutation and return the next value from the generated trace."""
         calls.append("mutate")
         assert inventory == Path("workspace") / config.inventory_path, (
             "mutator should receive the configured inventory path"
@@ -125,9 +129,11 @@ def test_apply_inventory_change_follows_the_mutation_trace(
         return next(mutations)
 
     def commit_inventory_changes(*args: object, **kwargs: object) -> None:
+        """Record that the inventory change was committed."""
         calls.append("commit")
 
     def validate_tofu_changes(workdir: Path) -> None:
+        """Check validation runs in the inventory worktree, then record it."""
         assert workdir == Path("workspace"), (
             "validation should run in the configured inventory worktree"
         )
@@ -202,6 +208,7 @@ def test_apply_inventory_change_commits_the_mutated_inventory(
     validated_heads: list[pygit2.Oid] = []
 
     def validate_tofu_changes(workdir: Path) -> None:
+        """Check validation runs in the worktree and record the HEAD it sees."""
         assert workdir == tmp_path, "validation should run in the repository worktree"
         validated_heads.append(repository.head.peel(pygit2.Commit).id)
 
