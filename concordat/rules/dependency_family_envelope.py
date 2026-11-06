@@ -546,19 +546,19 @@ def _python_declarations(
         parsed = _read_pyproject(checkout, manifest, problems)
         if parsed is not None:
             declarations += _project_declarations(
-                checkout, config, manifest, parsed, problems
+                (checkout, config), (manifest, parsed), problems
             )
     return declarations
 
 
 def _project_declarations(
-    checkout: pathlib.Path,
-    config: ConfigFile | None,
-    manifest: str,
-    parsed: dict[str, object],
+    context: tuple[pathlib.Path, ConfigFile | None],
+    project: tuple[str, dict[str, object]],
     problems: list[str],
 ) -> list[Declaration]:
     """Return the dependency edges of one decoded `pyproject.toml`."""
+    checkout, config = context
+    manifest, parsed = project
     parent = pathlib.PurePosixPath(manifest).parent
     lock_name = (parent / "uv.lock").as_posix()
     ecosystem = "uv" if probe_file(checkout / lock_name).present else "pip"
