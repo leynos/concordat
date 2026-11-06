@@ -239,3 +239,10 @@ test_an_unset_encoded_flags_value_is_not_contamination if {
 	findings := policy.deny with input as data.fixtures.whitaker_unset_encoded_flags
 	count(findings) == 0
 }
+
+# Mutation: an exported development RUSTFLAGS that the route removes is not what
+# Whitaker receives, so the verdict is unproved rather than contaminated.
+test_an_unset_rustflags_export_is_unproved_not_contaminated if {
+	findings := policy.deny with input as data.fixtures.whitaker_unset_dev_export
+	profile(findings) == {["BD-008", "indeterminate"]}
+}

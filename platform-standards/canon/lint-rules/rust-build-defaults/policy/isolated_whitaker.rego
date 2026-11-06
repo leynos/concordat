@@ -173,10 +173,10 @@ suite_values(rule, segment, name) := {values[count(values) - 1]} if {
 	count(values) > 0
 } else := set() if {
 	# `env -u NAME` removes the variable from the route's environment, so a
-	# Make-level value of it never reaches Whitaker. RUSTFLAGS is judged apart,
-	# because with it unset Cargo reads the configuration's rustflags instead.
+	# Make-level value of it never reaches Whitaker. For RUSTFLAGS that leaves
+	# nothing assigned, which is unproved (Cargo reads the configuration's
+	# rustflags) rather than contaminated or isolated.
 	name in unset_names(segment)
-	name != "RUSTFLAGS"
 } else := {value} if {
 	value := target_value(rule, name)
 } else := values if {
