@@ -51,7 +51,7 @@ from .dependency_family_discovery import (
     ungoverned_problems,
     workspace_member_manifests,
 )
-from .dependency_family_workspaces import inherited_for, workspace_tables
+from .dependency_family_workspaces import inherited_tables
 from .fs_probe import probe_file
 from .rust_surfaces import resolve_rust_surfaces
 
@@ -396,8 +396,7 @@ def _cargo_declarations(
 ) -> list[Declaration]:
     """Return every dependency edge of the governed Cargo surfaces."""
     surfaces = _cargo_surfaces(checkout, problems, members)
-    everything = _workspace_requirements(surfaces)
-    workspaces = workspace_tables(checkout, surfaces, problems)
+    inherited = inherited_tables(checkout, surfaces, problems)
     parsed = [(str(s["path"]), mapping(s.get("parsed"))) for s in surfaces]
     problems.extend(
         f"{path} could not be parsed" for path, doc in parsed if doc is None
@@ -408,7 +407,7 @@ def _cargo_declarations(
         if doc is not None
         for declaration in _surface_declarations(
             (checkout, path, doc),
-            inherited_for(path, doc, workspaces, everything),
+            inherited[path],
             config,
         )
     ]

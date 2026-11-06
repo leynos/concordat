@@ -378,3 +378,50 @@ def test_a_malformed_ancestor_is_not_probed_for_a_member_naming_its_workspace(
         "problems"
     ]
     assert {d["package"] for d in envelope["declarations"]} == {"serde"}
+
+
+def test_discovery_stops_at_the_nearest_workspace(
+    repository: pathlib.Path,
+) -> None:
+    """A malformed manifest above the owning workspace is not this member's."""
+    _member_of_ungoverned_workspace(repository, "a/Cargo.toml")
+    _write(
+        repository,
+        "a/Cargo.toml",
+        '[workspace]\nmembers = ["m"]\n\n[workspace.dependencies]\n'
+        'shared = { path = "x" }\n',
+    )
+    _write(repository, "Cargo.toml", "[workspace\n")
+
+    envelope = build_dependency_family_envelope(repository)
+
+    assert not any(
+        problem.startswith("Cargo.toml") for problem in envelope["problems"]
+    ), envelope["problems"]
+    assert {d["package"] for d in envelope["declarations"]} == {"serde"}
+
+
+def test_a_member_no_workspace_owns_is_reported_not_guessed(
+    repository: pathlib.Path,
+) -> None:
+    """A sibling workspace's entry must not stand in for a missing owner."""
+    _member_of_ungoverned_workspace(repository, "a/Cargo.toml")
+    _write(
+        repository,
+        "sibling/Cargo.toml",
+        "[workspace]\nmembers = []\n\n[workspace.dependencies]\n"
+        'shared = { path = "x" }\n',
+    )
+    _write(
+        repository,
+        ".concordat",
+        "language:\n  rust:\n    surfaces:\n"
+        "      - path: a/m/Cargo.toml\n      - path: sibling/Cargo.toml\n",
+    )
+
+    envelope = build_dependency_family_envelope(repository)
+
+    assert any("a/m/Cargo.toml" in p for p in envelope["problems"]), envelope[
+        "problems"
+    ]
+    assert "shared" in {d["package"] for d in envelope["declarations"]}
