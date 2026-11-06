@@ -325,16 +325,17 @@ def _makefile_envelope(
     return envelope
 
 
-def _mark_no_rust_sources(envelope: typ.Any) -> None:  # noqa: ANN401
+def _mark_no_rust_sources(envelope: PolicyEnvelope | BuildDefaultsEnvelope) -> None:
     """Make a Cargo-only checkout read as not applicable to the Rust build rules.
 
     A `Cargo.toml` with no `.rs` source has no Rust build to judge. The builders
     stay pure queries about the manifests; this command boundary decides the
     repository is not Rust and empties the surfaces the policies iterate.
     """
-    envelope["cargo"]["surfaces"] = []
-    envelope.pop("cargo_manifest_backends", None)
-    envelope["applicability"]["rust_sources"] = False
+    document = typ.cast("dict[str, typ.Any]", envelope)
+    document["cargo"]["surfaces"] = []
+    document.pop("cargo_manifest_backends", None)
+    document["applicability"]["rust_sources"] = False
 
 
 def _dev_build_envelope(
