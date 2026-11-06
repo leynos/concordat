@@ -34,11 +34,18 @@ route_prefix(segment) := matches[0][1] if {
 prefix_is_plain(segment) if not contains(route_prefix(segment), "\\")
 
 prefix_tokens(segment) := regex.find_all_string_submatch_n(
-	`(?:^|[[:space:]])(?:([A-Za-z_][A-Za-z0-9_]*)=("[^"]*"|'[^']*'|[^[:space:]]*)|(?:-u|--unset)[[:space:]]+[A-Za-z_][A-Za-z0-9_]*|--unset=[A-Za-z_][A-Za-z0-9_]*)`,
+	`(?:^|[[:space:]])(?:([A-Za-z_][A-Za-z0-9_]*)=("[^"]*"|'[^']*'|[^[:space:]]*)|(?:-u|--unset)[[:space:]]+([A-Za-z_][A-Za-z0-9_]*)|--unset=([A-Za-z_][A-Za-z0-9_]*))`,
 	route_prefix(segment), -1,
 ) if prefix_is_plain(segment)
 
 default prefix_tokens(_) := []
+
+# The names the route's `env` prefix removes from its environment.
+unset_names(segment) := {name |
+	some token in prefix_tokens(segment)
+	some name in {token[3], token[4]}
+	name != ""
+}
 
 # The values the route's prefix assigns to *name*, in order.
 route_assigned_values(segment, name) := [trim(token[2], `"'`) |
@@ -191,6 +198,14 @@ suite_contamination(rule, segment) if {
 
 suite_isolation_unproved(rule, _, segment) if {
 	count(suite_values(rule, segment, "RUSTFLAGS")) != 1
+}
+
+# Removing RUSTFLAGS is not isolation: Cargo then reads the configuration's
+# rustflags. Without a later assignment on the route, a Make-level value must not
+# stand in for what the route's environment holds.
+suite_isolation_unproved(_, _, segment) if {
+	"RUSTFLAGS" in unset_names(segment)
+	count(route_assigned_values(segment, "RUSTFLAGS")) == 0
 }
 
 # A prefix holding a backslash is not read, so a Make-level value must not stand

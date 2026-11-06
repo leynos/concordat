@@ -177,6 +177,8 @@ test_only_the_routes_own_prefix_is_read if {
 	policy.route_assigned_values(`NOTE=" CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm" whitaker --all`, "CARGO_PROFILE_DEV_CODEGEN_BACKEND") == []
 	policy.route_assigned_values(`whitaker --all RUSTFLAGS=-Dwarnings`, "RUSTFLAGS") == []
 	policy.route_assigned_values(`env -u RUSTFLAGS --unset=OTHER RUSTFLAGS= whitaker --all`, "RUSTFLAGS") == [""]
+	policy.unset_names(`env NOTE=" -u RUSTFLAGS " whitaker --all`) == set()
+	policy.unset_names(`env -u RUSTFLAGS --unset=OTHER whitaker --all`) == {"RUSTFLAGS", "OTHER"}
 }
 
 # Mutation: a Make variable that is not exported never reaches the route.
@@ -202,4 +204,16 @@ test_unsetting_rustflags_alone_does_not_prove_isolation if {
 test_an_unreadable_prefix_does_not_fall_back_to_an_exported_value if {
 	findings := policy.deny with input as data.fixtures.whitaker_escaped_with_export
 	profile(findings) == {["BD-008", "indeterminate"]}
+}
+
+# Mutation: unsetting RUSTFLAGS must not fall back to a safe exported value.
+test_unsetting_rustflags_does_not_fall_back_to_an_exported_value if {
+	findings := policy.deny with input as data.fixtures.whitaker_unset_with_export
+	profile(findings) == {["BD-008", "indeterminate"]}
+}
+
+# A later assignment on the route still isolates after an unset.
+test_an_assignment_after_an_unset_still_isolates if {
+	findings := policy.deny with input as data.fixtures.whitaker_unset_then_assigned
+	count(findings) == 0
 }
