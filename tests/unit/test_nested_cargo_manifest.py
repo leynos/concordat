@@ -317,6 +317,7 @@ def test_an_unreadable_actions_directory_does_not_stop_the_audit(
         ("leynos/rstest-bdd", "tests/fixtures/published-gpui-e2e"),
         ("leynos/axinite", "tools-src/telegram/patches/grammers-crypto"),
         ("leynos/lille", "third_party/feldera-size-of"),
+        ("leynos/wireframe", "tests/feature_gate"),
     ],
 )
 def test_the_shipped_exemptions_apply_to_their_repository_only(

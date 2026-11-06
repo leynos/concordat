@@ -198,6 +198,17 @@ def test_a_named_exemption_applies_through_the_real_runner(
     assert rule_ids(tmp_path) == set()
 
 
+def test_wireframes_feature_gate_package_is_exempt_by_default(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Wireframe's independently resolved feature-gate package is not audited."""
+    _origin(tmp_path, "https://github.com/leynos/wireframe.git")
+    workspace(tmp_path, ("serde", "1.0.0"))
+    put(tmp_path, "tests/feature_gate/Cargo.toml", FIXTURE_MANIFEST)
+    put(tmp_path, "tests/feature_gate/Cargo.lock", DRIFTED)
+    assert rule_ids(tmp_path) == set()
+
+
 def test_an_exemption_does_not_travel_to_another_repository(
     tmp_path: pathlib.Path,
 ) -> None:
