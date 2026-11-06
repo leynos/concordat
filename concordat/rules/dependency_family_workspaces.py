@@ -28,16 +28,29 @@ def _dependency_table(parsed: dict[str, object]) -> dict[str, object] | None:
 
 def _workspace_candidates(
     surfaces: list[dict[str, object]],
-) -> set[pathlib.PurePosixPath]:
-    """Return the directories that may hold a governed member's workspace root."""
+) -> tuple[set[pathlib.PurePosixPath], set[pathlib.PurePosixPath]]:
+    """Return the directories that may hold a member's workspace, and the named ones.
+
+    A member naming its workspace belongs to that one alone, so its ancestors are
+    not probed on its behalf: a malformed unrelated manifest above it says
+    nothing about the member.
+
+    Returns
+    -------
+    tuple[set[pathlib.PurePosixPath], set[pathlib.PurePosixPath]]
+        Every directory to read, and the subset a `package.workspace` names.
+    """
     candidates: set[pathlib.PurePosixPath] = set()
+    named_roots: set[pathlib.PurePosixPath] = set()
     for surface in surfaces:
         parent = pathlib.PurePosixPath(str(surface["path"])).parent
         named = _named_workspace(parent, mapping(surface.get("parsed")) or {})
-        candidates.update({parent, *parent.parents})
-        if named is not None:
+        if named is None:
+            candidates.update({parent, *parent.parents})
+        else:
             candidates.add(named)
-    return candidates
+            named_roots.add(named)
+    return candidates, named_roots
 
 
 def workspace_tables(
@@ -62,9 +75,10 @@ def workspace_tables(
         if (table := _dependency_table(mapping(surface.get("parsed")) or {}))
         is not None
     }
+    candidates, named_roots = _workspace_candidates(surfaces)
     found = {
         directory: table
-        for directory in sorted(_workspace_candidates(surfaces) - governed.keys())
+        for directory in sorted(candidates - governed.keys())
         if (
             table := _dependency_table(
                 _workspace_document(checkout, directory, problems)
@@ -72,7 +86,24 @@ def workspace_tables(
         )
         is not None
     }
-    return governed | found
+    tables = governed | found
+    missing = [
+        directory
+        for directory in sorted(named_roots - tables.keys())
+        if not _already_reported(problems, directory)
+    ]
+    problems.extend(
+        f"{(directory / 'Cargo.toml').as_posix()} is named by package.workspace "
+        "but is not a workspace manifest"
+        for directory in missing
+    )
+    return tables
+
+
+def _already_reported(problems: list[str], directory: pathlib.PurePosixPath) -> bool:
+    """Return whether a problem already names *directory*'s manifest."""
+    name = (directory / "Cargo.toml").as_posix()
+    return any(problem.startswith(name) for problem in problems)
 
 
 def _workspace_document(

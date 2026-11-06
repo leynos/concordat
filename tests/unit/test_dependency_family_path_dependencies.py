@@ -334,3 +334,47 @@ def test_a_workspace_named_above_the_checkout_is_a_problem(
     problems = build_dependency_family_envelope(checkout)["problems"]
 
     assert any("outside the checkout" in problem for problem in problems), problems
+
+
+def test_a_named_workspace_without_a_manifest_is_a_problem(
+    repository: pathlib.Path,
+) -> None:
+    """Naming a workspace that is not there leaves the inheritance unknown."""
+    _member_of_ungoverned_workspace(repository, "a/Cargo.toml")
+    _write(
+        repository,
+        "a/m/Cargo.toml",
+        '[package]\nname = "m"\nversion = "0.1.0"\nworkspace = "../elsewhere"\n\n'
+        '[dependencies]\nshared.workspace = true\nserde = "1"\n',
+    )
+
+    problems = build_dependency_family_envelope(repository)["problems"]
+
+    assert any("elsewhere/Cargo.toml" in problem for problem in problems), problems
+
+
+def test_a_malformed_ancestor_is_not_probed_for_a_member_naming_its_workspace(
+    repository: pathlib.Path,
+) -> None:
+    """The named workspace is the member's own; unrelated ancestors say nothing."""
+    _member_of_ungoverned_workspace(repository, "a/Cargo.toml")
+    _write(repository, "a/Cargo.toml", "[workspace\n")
+    _write(
+        repository,
+        "w/Cargo.toml",
+        "[workspace]\nmembers = []\n\n[workspace.dependencies]\n"
+        'shared = { path = "x" }\n',
+    )
+    _write(
+        repository,
+        "a/m/Cargo.toml",
+        '[package]\nname = "m"\nversion = "0.1.0"\nworkspace = "../../w"\n\n'
+        '[dependencies]\nshared.workspace = true\nserde = "1"\n',
+    )
+
+    envelope = build_dependency_family_envelope(repository)
+
+    assert not any("a/Cargo.toml" in p for p in envelope["problems"]), envelope[
+        "problems"
+    ]
+    assert {d["package"] for d in envelope["declarations"]} == {"serde"}
