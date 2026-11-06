@@ -28,10 +28,16 @@ route_prefix(segment) := matches[0][1] if {
 	count(matches) == 1
 }
 
-# A backslash can escape a space or a quote, which moves a token boundary in
-# ways this reader does not follow, so a prefix holding one is read as saying
-# nothing rather than guessed at.
-prefix_is_plain(segment) if not contains(route_prefix(segment), "\\")
+# A backslash can escape a space or a quote, and a quote can open mid-value,
+# which moves a token boundary in ways this reader does not follow, so such a
+# prefix is read as saying nothing rather than guessed at.
+prefix_is_plain(segment) if {
+	prefix := route_prefix(segment)
+	not contains(prefix, "\\")
+	# A quote that opens mid-value (`NOTE=x" Y=z"`) splits differently in a shell
+	# than in the token pattern, so it is not read either.
+	not regex.match(`=[^"'[:space:]]+["']`, prefix)
+}
 
 prefix_tokens(segment) := regex.find_all_string_submatch_n(
 	`(?:^|[[:space:]])(?:([A-Za-z_][A-Za-z0-9_]*)=("[^"]*"|'[^']*'|[^[:space:]]*)|(?:-u|--unset)[[:space:]]+([A-Za-z_][A-Za-z0-9_]*)|--unset=([A-Za-z_][A-Za-z0-9_]*))`,

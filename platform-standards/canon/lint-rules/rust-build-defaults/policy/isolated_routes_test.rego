@@ -217,3 +217,9 @@ test_an_assignment_after_an_unset_still_isolates if {
 	findings := policy.deny with input as data.fixtures.whitaker_unset_then_assigned
 	count(findings) == 0
 }
+
+# Mutation: a quote that opens mid-value hides the override inside NOTE's value.
+test_mixed_quoting_hides_no_override if {
+	findings := policy.deny with input as data.fixtures.whitaker_mixed_quote_override
+	profile(findings) == {["BD-008", "indeterminate"]}
+}
