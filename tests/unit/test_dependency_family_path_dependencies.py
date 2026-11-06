@@ -270,3 +270,43 @@ def test_a_workspace_root_outside_the_checkout_is_a_problem(
     problems = build_dependency_family_envelope(checkout)["problems"]
 
     assert any("outside the checkout" in problem for problem in problems), problems
+
+
+def test_a_workspace_manifest_the_probe_refuses_is_a_problem(
+    repository: pathlib.Path,
+) -> None:
+    """A directory where `Cargo.toml` belongs is neither a workspace nor absent."""
+    _member_of_ungoverned_workspace(repository, "a/Cargo.toml")
+    (repository / "a" / "Cargo.toml").mkdir()
+
+    problems = build_dependency_family_envelope(repository)["problems"]
+
+    assert any("a/Cargo.toml" in problem for problem in problems), problems
+
+
+def test_a_workspace_root_behind_a_linked_parent_directory_is_a_problem(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A symbolic link on the way to the manifest must not lead the read out."""
+    checkout = tmp_path / "checkout"
+    outside = tmp_path / "outside"
+    _member_of_ungoverned_workspace(checkout, "a/Cargo.toml")
+    _write(
+        outside,
+        "Cargo.toml",
+        "[workspace]\nmembers = []\n\n[workspace.dependencies]\n"
+        'shared = { path = "x" }\n',
+    )
+    # `a/m` is the declared member; `a/..` is the checkout, so name a workspace
+    # directory that is itself a link out: `linked/` -> outside.
+    (checkout / "linked").symlink_to(outside, target_is_directory=True)
+    _write(
+        checkout,
+        "a/m/Cargo.toml",
+        '[package]\nname = "m"\nversion = "0.1.0"\nworkspace = "../../linked"\n\n'
+        '[dependencies]\nshared.workspace = true\nserde = "1"\n',
+    )
+
+    problems = build_dependency_family_envelope(checkout)["problems"]
+
+    assert any("outside the checkout" in problem for problem in problems), problems

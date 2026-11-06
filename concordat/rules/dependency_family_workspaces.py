@@ -94,9 +94,15 @@ def _workspace_document(
     if directory.is_absolute() or ".." in directory.parts:
         return {}
     manifest = checkout / directory / "Cargo.toml"
-    if not probe_file(manifest).present:
-        return {}
     name = (directory / "Cargo.toml").as_posix()
+    probe = probe_file(manifest)
+    if probe.read_error is not None:
+        problems.append(
+            f"{name} cannot be examined as a workspace manifest: {probe.read_error}"
+        )
+        return {}
+    if not probe.present:
+        return {}
     if not manifest.resolve().is_relative_to(checkout.resolve()):
         problems.append(f"{name} is a workspace manifest outside the checkout")
         return {}
