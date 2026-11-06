@@ -51,6 +51,7 @@ from .dependency_family_discovery import (
     ungoverned_problems,
     workspace_member_manifests,
 )
+from .dependency_family_workspaces import inherited_tables
 from .fs_probe import probe_file
 from .rust_surfaces import resolve_rust_surfaces
 
@@ -202,6 +203,26 @@ def _cargo_requirement(value: object) -> tuple[str, bool]:
     if table.get("workspace") is True:
         return "", True
     return (version if isinstance(version, str) else ""), False
+
+
+def _is_path_only(value: object, inherited: dict[str, object], key: str) -> bool:
+    """Return whether a dependency is a local path with no registry version.
+
+    Dependabot never offers an update for a crate that resolves from a path, so
+    it cannot drift from its family and is not a declaration to judge. A path
+    dependency that also names a `version` is published and stays collected, as
+    does one inherited from `[workspace.dependencies]` whose entry has a version.
+
+    Returns
+    -------
+    bool
+        True for a table with `path` and neither `version` nor a versioned
+        workspace inheritance.
+    """
+    table = mapping(value) or {}
+    if table.get("workspace") is True:
+        table = mapping(inherited.get(key)) or {}
+    return "path" in table and not isinstance(table.get("version"), str)
 
 
 def _classify(requirement: str) -> tuple[str, bool]:
@@ -375,7 +396,7 @@ def _cargo_declarations(
 ) -> list[Declaration]:
     """Return every dependency edge of the governed Cargo surfaces."""
     surfaces = _cargo_surfaces(checkout, problems, members)
-    inherited = _workspace_requirements(surfaces)
+    inherited = inherited_tables(checkout, surfaces, problems)
     parsed = [(str(s["path"]), mapping(s.get("parsed"))) for s in surfaces]
     problems.extend(
         f"{path} could not be parsed" for path, doc in parsed if doc is None
@@ -385,7 +406,9 @@ def _cargo_declarations(
         for path, doc in parsed
         if doc is not None
         for declaration in _surface_declarations(
-            (checkout, path, doc), inherited, config
+            (checkout, path, doc),
+            inherited[path],
+            config,
         )
     ]
 
@@ -412,6 +435,7 @@ def _surface_declarations(
         )
         for section, target, table in table_rows
         for key, value in table.items()
+        if not _is_path_only(value, inherited, key)
     ]
 
 
