@@ -7,11 +7,14 @@ any directory above it, or a `..`) is refused unread.
 
 from __future__ import annotations
 
-import pathlib
+import typing as typ
 
 from .dependency_family_coverage import mapping
 from .dependency_family_discovery import loose_manifest
 from .fs_probe import probe_file
+
+if typ.TYPE_CHECKING:
+    import pathlib
 
 
 def dependency_table(parsed: dict[str, object]) -> dict[str, object] | None:
