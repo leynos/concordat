@@ -46,10 +46,11 @@ the `exemptions` parameter with its `repository` (`owner/name`, read from the
 `origin` remote), its `path` (the directory, relative to the root), a
 `rationale` and a `review_trigger` (the event after which the exemption is
 revisited). A blank rationale or trigger suppresses nothing. An exemption does
-not apply to another repository. Three exemptions ship by default, each for a
+not apply to another repository. Four exemptions ship by default, each for a
 manifest that Dependabot should not touch: leynos/rstest-bdd's derived
-`published-gpui-e2e` fixture, leynos/axinite's vendored Telegram crypto patch
-and leynos/lille's vendored `feldera-size-of` fork.
+`published-gpui-e2e` fixture, leynos/axinite's vendored Telegram crypto patch,
+leynos/lille's vendored `feldera-size-of` fork and leynos/wireframe's
+`tests/feature_gate` package, which resolves independently of the root lock.
 
 ## Severity
 
