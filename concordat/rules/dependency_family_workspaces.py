@@ -54,16 +54,19 @@ def workspace_tables(
     dict[pathlib.PurePosixPath, dict[str, object]]
         The dependency table of every workspace root found.
     """
-    tables: dict[pathlib.PurePosixPath, dict[str, object]] = {}
-    for surface in surfaces:
-        table = _dependency_table(mapping(surface.get("parsed")) or {})
-        if table is not None:
-            tables[pathlib.PurePosixPath(str(surface["path"])).parent] = table
-    for directory in sorted(_workspace_candidates(surfaces) - tables.keys()):
-        table = _dependency_table(_workspace_document(checkout, directory))
-        if table is not None:
-            tables[directory] = table
-    return tables
+    governed = {
+        pathlib.PurePosixPath(str(surface["path"])).parent: table
+        for surface in surfaces
+        if (table := _dependency_table(mapping(surface.get("parsed")) or {}))
+        is not None
+    }
+    found = {
+        directory: table
+        for directory in sorted(_workspace_candidates(surfaces) - governed.keys())
+        if (table := _dependency_table(_workspace_document(checkout, directory)))
+        is not None
+    }
+    return governed | found
 
 
 def _workspace_document(
