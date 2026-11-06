@@ -96,7 +96,7 @@
     "schema_version": 1,
     "tool": {
       "name": "makeutil",
-      "version": "0.1.0",
+      "version": "0.1.2",
       "parser": "makefile-lossless",
       "parser_version": "0.3.40"
     },
