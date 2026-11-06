@@ -498,34 +498,26 @@ def _python_requirements(
 
 
 def _read_pyproject(
-    checkout: pathlib.Path, problems: list[str]
+    checkout: pathlib.Path, relative: str, problems: list[str]
 ) -> dict[str, object] | None:
-    """Return the decoded root `pyproject.toml`, or None with the reason recorded.
-
-    Only the root project is read; a repository with Python projects in
-    subdirectories gets a problem fact rather than a pass for them.
+    """Return the decoded `pyproject.toml` at *relative*, or None with the reason.
 
     Returns
     -------
     dict[str, object] | None
         The decoded document, or None when absent or unreadable.
     """
-    problems.extend(
-        f"{nested.relative_to(checkout).as_posix()} is not read: only the root "
-        "pyproject.toml is"
-        for nested in nested_files(checkout, "pyproject.toml", problems)
-    )
-    path = checkout / "pyproject.toml"
+    path = checkout / relative
     probe = probe_file(path)
     if probe.read_error is not None:
-        problems.append(f"cannot read pyproject.toml: {probe.read_error}")
+        problems.append(f"cannot read {relative}: {probe.read_error}")
         return None
     if not probe.present:
         return None
     try:
         return tomllib.loads(path.read_text(encoding="utf-8"))
     except (tomllib.TOMLDecodeError, UnicodeDecodeError, OSError) as error:
-        problems.append(f"cannot parse pyproject.toml: {error}")
+        problems.append(f"cannot parse {relative}: {error}")
         return None
 
 
@@ -534,31 +526,59 @@ def _python_declarations(
     config: ConfigFile | None,
     problems: list[str],
 ) -> list[Declaration]:
-    """Return every dependency edge of the root `pyproject.toml`.
+    """Return every dependency edge of every `pyproject.toml` in the checkout.
+
+    The root project and each nested one (hidden and vendored trees excepted)
+    are read, each against the `uv.lock` beside it and the Dependabot entries
+    for its own directory.
 
     Returns
     -------
     list[Declaration]
         One declaration per requirement, with its locked versions and coverage.
     """
-    parsed = _read_pyproject(checkout, problems)
-    if parsed is None:
-        return []
-    ecosystem = "uv" if probe_file(checkout / "uv.lock").present else "pip"
+    manifests = ["pyproject.toml"] + [
+        path.relative_to(checkout).as_posix()
+        for path in nested_files(checkout, "pyproject.toml", problems)
+    ]
+    declarations: list[Declaration] = []
+    for manifest in manifests:
+        parsed = _read_pyproject(checkout, manifest, problems)
+        if parsed is not None:
+            declarations += _project_declarations(
+                (checkout, config), (manifest, parsed), problems
+            )
+    return declarations
+
+
+def _project_declarations(
+    context: tuple[pathlib.Path, ConfigFile | None],
+    project: tuple[str, dict[str, object]],
+    problems: list[str],
+) -> list[Declaration]:
+    """Return the dependency edges of one decoded `pyproject.toml`."""
+    checkout, config = context
+    manifest, parsed = project
+    parent = pathlib.PurePosixPath(manifest).parent
+    lock_name = (parent / "uv.lock").as_posix()
+    ecosystem = "uv" if probe_file(checkout / lock_name).present else "pip"
     rows = _python_requirements(parsed)
     matches = [
         (_REQUIREMENT_NAME.match(text), section, extra) for section, extra, text in rows
     ]
     names = {normalise(m.group("name")) for m, _, _ in matches if m}
-    versions, reason = _lock_versions(checkout / "uv.lock", names, python=True)
+    versions, reason = _lock_versions(checkout / lock_name, names, python=True)
+    directory = "/" if str(parent) == "." else f"/{parent.as_posix()}"
     evidence = (config, ecosystem, versions, reason)
     problems.extend(
-        f"cannot read the requirement {text!r} in pyproject.toml"
+        f"cannot read the requirement {text!r} in {manifest}"
         for (match, _, _), (_, _, text) in zip(matches, rows, strict=True)
         if match is None
     )
     return [
-        _python_declaration((m, section, extra), evidence)
+        _python_declaration(
+            (m, section, extra), evidence, (manifest, lock_name, directory)
+        )
         for m, section, extra in matches
         if m is not None
     ]
@@ -567,15 +587,17 @@ def _python_declarations(
 def _python_declaration(
     requirement: tuple[re.Match[str], str, str | None],
     evidence: tuple[ConfigFile | None, str, dict[str, list[str]], str | None],
+    where: tuple[str, str, str],
 ) -> Declaration:
     """Return one `pyproject.toml` requirement as a declaration fact."""
     match, section, extra = requirement
     config, ecosystem, versions, reason = evidence
+    manifest, lock_name, directory = where
     package = normalise(match.group("name"))
     spec = match.group("spec")
     kind, bounded = _classify(spec)
     return {
-        "manifest": "pyproject.toml",
+        "manifest": manifest,
         "ecosystem": ecosystem,
         "section": section if extra is None else f"{section}:{extra}",
         "target": None,
@@ -586,8 +608,8 @@ def _python_declaration(
         "requirement": spec,
         "requirement_kind": kind,
         "upper_bounded": bounded,
-        "resolved": _resolved(versions, package, "uv.lock", reason),
-        "coverage": coverage(config, ecosystem, ["/"], package),
+        "resolved": _resolved(versions, package, lock_name, reason),
+        "coverage": coverage(config, ecosystem, [directory], package),
     }
 
 
