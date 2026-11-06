@@ -5720,7 +5720,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -11155,7 +11156,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -11378,7 +11380,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -11593,7 +11596,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -11819,7 +11823,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -12034,7 +12039,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -12249,7 +12255,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -12464,7 +12471,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -12705,7 +12713,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -12938,7 +12947,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -13161,7 +13171,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -13384,7 +13395,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
