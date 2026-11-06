@@ -52,7 +52,8 @@ def _tracked(*patterns: str) -> list[str]:
     """Return the Git-tracked files matching *patterns*.
 
     Git is the authority on what the repository owns: a walk would also see
-    the virtual environments CI creates beside the sources.
+    the virtual environments CI creates beside the sources. Names are read from
+    NUL-separated output, so a path containing whitespace stays whole.
 
     Returns
     -------
@@ -61,12 +62,13 @@ def _tracked(*patterns: str) -> list[str]:
     """
     git = shutil.which("git")
     assert git, "git must be on the path"
-    return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - argv
-        [git, "-C", str(ROOT), "ls-files", *patterns],
+    output = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - argv
+        [git, "-C", str(ROOT), "ls-files", "-z", *patterns],
         capture_output=True,
         text=True,
         check=True,
-    ).stdout.split()
+    ).stdout
+    return [name for name in output.split("\0") if name]
 
 
 def _python_directories() -> set[Path]:
@@ -122,7 +124,7 @@ def test_every_python_directory_is_a_target() -> None:
 
 
 def test_ci_installs_uv_before_it_runs_make_lint() -> None:
-    """Each job with an exact `make lint` step sets up uv first; one such job exists."""
+    """Each ci.yml job with an exact `make lint` step has uv first; one exists."""
     workflow = YAML(typ="safe").load(CI.read_text(encoding="utf-8"))
     checked = 0
     for name, job in workflow["jobs"].items():
