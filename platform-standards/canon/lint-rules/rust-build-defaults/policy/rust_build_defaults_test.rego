@@ -358,3 +358,30 @@ test_the_backend_parameter_admits_the_repository_that_matches_it if {
 		with data.parameters as {"codegen_backend": "experimental"}
 	count(findings) == 0
 }
+
+# A checkout with a Cargo manifest but no Rust source is not applicable: no
+# surfaces, no AP-001, nothing to judge.
+test_a_checkout_with_no_rust_sources_is_not_applicable if {
+	input_without_sources := object.union(
+		data.fixtures.no_config,
+		{"cargo": {"parsed": null, "surfaces": []}, "applicability": {
+			"root_cargo_toml": true, "rust_surfaces_declared": false,
+			"cargo_config": false, "toolchain_file": false, "rust_sources": false,
+		}},
+	)
+	findings := policy.deny with input as input_without_sources
+	count(findings) == 0
+}
+
+# Mutation: the same envelope without the flag still reports AP-001.
+test_without_the_sources_flag_an_empty_checkout_is_indeterminate if {
+	input_unflagged := object.union(
+		data.fixtures.no_config,
+		{"cargo": {"parsed": null, "surfaces": []}, "applicability": {
+			"root_cargo_toml": true, "rust_surfaces_declared": false,
+			"cargo_config": false, "toolchain_file": false,
+		}},
+	)
+	findings := policy.deny with input as input_unflagged
+	profile(findings) == {["AP-001", "indeterminate"]}
+}

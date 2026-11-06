@@ -115,6 +115,7 @@ deny contains f if {
 	envelope_ok
 	not invalid_cargo_surfaces
 	not rust_surfaces_declared
+	object.get(input.applicability, "rust_sources", true) != false
 	count(cargo_surfaces) == 0
 	f := finding(
 		"AP-001", "indeterminate", 0,

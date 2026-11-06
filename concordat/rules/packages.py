@@ -70,6 +70,7 @@ from .markdown_envelope import ENVELOPE_KIND as MARKDOWN_ENVELOPE_KIND
 from .nested_cargo_registry import BY_KIND as NESTED_CARGO_BY_KIND
 from .nested_cargo_registry import BY_PACKAGE as NESTED_CARGO_BY_PACKAGE
 from .nested_cargo_registry import NestedCargoEnvelope
+from .rust_sources import has_rust_sources
 from .spelling_envelope import (
     DEFAULT_VENDORED_PATTERNS,
     SpellingEnvelope,
@@ -318,7 +319,39 @@ def _makefile_envelope(
     PolicyEnvelope
         The `policy-input/rust-makefile-baseline` document for *checkout*.
     """
-    return build_envelope(checkout, inspect=inspect_makefile_observed)
+    envelope = build_envelope(checkout, inspect=inspect_makefile_observed)
+    if not has_rust_sources(checkout):
+        _mark_no_rust_sources(envelope)
+    return envelope
+
+
+def _mark_no_rust_sources(envelope: typ.Any) -> None:  # noqa: ANN401
+    """Make a Cargo-only checkout read as not applicable to the Rust build rules.
+
+    A `Cargo.toml` with no `.rs` source has no Rust build to judge. The builders
+    stay pure queries about the manifests; this command boundary decides the
+    repository is not Rust and empties the surfaces the policies iterate.
+    """
+    envelope["cargo"]["surfaces"] = []
+    envelope.pop("cargo_manifest_backends", None)
+    envelope["applicability"]["rust_sources"] = False
+
+
+def _dev_build_envelope(
+    checkout: pathlib.Path,
+    parameters: cabc.Mapping[str, object] | None = None,
+) -> DevBuildEnvelope:
+    """Build the development-build envelope, empty for a checkout with no Rust.
+
+    Returns
+    -------
+    DevBuildEnvelope
+        The `policy-input/rust-dev-build-footprint` document for *checkout*.
+    """
+    envelope = build_dev_build_envelope(checkout, parameters)
+    if not has_rust_sources(checkout):
+        envelope["surfaces"] = []
+    return envelope
 
 
 def _build_defaults_envelope(
@@ -344,6 +377,8 @@ def _build_defaults_envelope(
     # The builder never reads a clock; BD-006 ages a recorded measurement
     # against the date the audit ran, so this boundary supplies it.
     envelope["evaluated_on"] = today_provider().isoformat()
+    if not has_rust_sources(checkout):
+        _mark_no_rust_sources(envelope)
     return envelope
 
 
@@ -559,7 +594,7 @@ _yaml_lint_envelope = _observed(build_yaml_lint_envelope)
 PACKAGE_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     "rust-makefile-baseline": _makefile_envelope,
     "rust-build-defaults": _build_defaults_envelope,
-    "rust-dev-build-footprint": build_dev_build_envelope,
+    "rust-dev-build-footprint": _dev_build_envelope,
     **NESTED_CARGO_BY_PACKAGE,
     "main-owned-codescene-coverage": _coverage_envelope,
     "dependabot-update-shape": _dependabot_envelope,
@@ -578,7 +613,7 @@ PACKAGE_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
 INPUT_KIND_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     ENVELOPE_KIND: _makefile_envelope,
     BUILD_DEFAULTS_ENVELOPE_KIND: _build_defaults_envelope,
-    DEV_BUILD_ENVELOPE_KIND: build_dev_build_envelope,
+    DEV_BUILD_ENVELOPE_KIND: _dev_build_envelope,
     **NESTED_CARGO_BY_KIND,
     MARKDOWN_ENVELOPE_KIND: _markdown_envelope,
     COVERAGE_ENVELOPE_KIND: _coverage_envelope,
