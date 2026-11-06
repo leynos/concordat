@@ -142,6 +142,17 @@ test_recovered_parse_is_indeterminate if {
 
 # -- applicability and envelope guards -------------------------------------
 
+# A Cargo manifest with no Rust source is not applicable, and says nothing.
+test_a_checkout_with_no_rust_sources_is_not_applicable if {
+	empty := object.union(data.fixtures.not_rust, {
+		"applicability": {"root_cargo_toml": true, "root_makefile": true,
+			"rust_surfaces_declared": false, "rust_sources": false},
+		"cargo": {"parsed": null, "surfaces": []},
+	})
+	findings := policy.deny with input as empty
+	count(findings) == 0
+}
+
 test_not_rust_is_single_applicability_finding if {
 	findings := policy.deny with input as data.fixtures.not_rust
 	count(findings) == 1

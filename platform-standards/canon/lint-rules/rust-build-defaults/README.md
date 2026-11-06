@@ -137,6 +137,15 @@ makes only those clauses indeterminate; the others still run. See
   not the caller's ambient environment; runtime and CI route qualification
   remains separate evidence.
 
+  A note on the override variable: `CARGO_PROFILE_<PROFILE>_CODEGEN_BACKEND` is
+  an unstable Cargo key. It takes effect only where unstable codegen backends
+  are enabled, which `[unstable] codegen-backend = true` in the checkout's
+  configuration does. A route that runs where that configuration is not read
+  (after a `cd` out of the checkout) must also set
+  `CARGO_UNSTABLE_CODEGEN_BACKEND=true`, as statelet's route does. The policy
+  does not require the variable, because it cannot tell which configuration the
+  route will read; it only requires the LLVM override to be written.
+
   `policy/isolated_whitaker.rego` privately owns this suite boundary within the
   package. It composes the existing Make reachability, assignment and flag
   facts; it is not a general shell or Make evaluator. The production policy
@@ -190,6 +199,12 @@ makes only those clauses indeterminate; the others still run. See
   channel could not be classified.
 - **AP-001** (error, indeterminate): no `language.rust.surfaces` list was
   declared and the checkout has no root `Cargo.toml`.
+- **Not applicable**: a checkout with no `.rs` source (outside hidden and
+  vendored trees) has no Rust build to judge, however many `Cargo.toml` files
+  it holds. The command boundary empties the surfaces and sets
+  `applicability.rust_sources` to false, so no clause and not AP-001 is
+  reported. `rust-makefile-baseline` and `rust-dev-build-footprint` read it the
+  same way.
 - **EN-001** (error, indeterminate): the envelope has an unknown schema
   version or kind, or `cargo`/`cargo.surfaces` has an invalid shape.
 

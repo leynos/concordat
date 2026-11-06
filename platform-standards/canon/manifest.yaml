@@ -93,7 +93,7 @@ artifacts:
     description: >
       Sensor policy for the rust-makefile-baseline rule package: FP-003
       canonical Make targets and QG-001 binding Whitaker lint gate.
-    sha256: 0706312ed6270675c60ac02b54038e0abf71ecb057fd4aa0734a4d7c79ac2eff
+    sha256: 7ba8dcd1acaa0f80b5142c0a86a57c91a01c0e3ed1ff1b773935f36a97b06cb9
   - id: lint-rule-rust-makefile-baseline-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/rust-makefile-baseline/rule.yaml
@@ -132,7 +132,7 @@ artifacts:
       Sensor policy for the rust-build-defaults rule package: the parallel
       frontend and linker defaults, the rustflags sources held equal, and the
       codegen backend configured or refused by a recorded exception.
-    sha256: b532407b14b9afaf4db2bcd2a01ab7dcf60cde324e9ffbd67339f0826b1de04d
+    sha256: 2567a38e07e1c8f1a44d7e7eb7907ec26d50f354d8cc9fb979745dc42f1cef9a
   - id: lint-rule-rust-build-defaults-build-paths-make
     type: opa-policy
     path: >-
