@@ -122,7 +122,7 @@ def test_every_python_directory_is_a_target() -> None:
 
 
 def test_ci_installs_uv_before_it_runs_make_lint() -> None:
-    """Every job that runs `make lint` needs uv set up first, and one must run it."""
+    """Each job with an exact `make lint` step sets up uv first; one such job exists."""
     workflow = YAML(typ="safe").load(CI.read_text(encoding="utf-8"))
     checked = 0
     for name, job in workflow["jobs"].items():
@@ -179,7 +179,7 @@ def test_the_target_passes_the_configured_flags_and_targets(tmp_path: Path) -> N
 
 
 def test_the_target_fails_when_the_tool_fails(tmp_path: Path) -> None:
-    """The tool's own non-zero status is kept."""
+    """A failing tool fails the target."""
     result = _run_target(tmp_path, "echo 'FAILED'\nexit 1\n")
     assert result.returncode != 0, "a failing tool must fail the target"
 
@@ -192,7 +192,7 @@ def test_the_target_fails_when_the_tool_fails(tmp_path: Path) -> None:
 def test_the_target_fails_on_a_missed_row_the_percentage_hid(
     tmp_path: Path, cell: str
 ) -> None:
-    """Rounded to 100.0% with exit 0, a MISSED row still fails the target.
+    """A MISSED row in a report from a successful run still fails the target.
 
     The guard must not depend on how many spaces pad the status cell.
     """
