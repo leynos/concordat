@@ -24,12 +24,12 @@ from ruamel.yaml import YAML
 
 REPOSITORY_ROOT = Path(__file__).parents[2]
 _MAKEUTIL_COMMAND: typ.Final = ("makeutil", "parse", "Makefile")
-# makeutil v0.1.0's x86_64 musl release asset, verified against this digest.
+# makeutil v0.1.2's x86_64 musl release asset, verified against this digest.
 _MAKEUTIL_ENVIRONMENT: typ.Final = {
-    "MAKEUTIL_VERSION": "0.1.0",
+    "MAKEUTIL_VERSION": "0.1.2",
     "MAKEUTIL_ASSET": "makeutil-x86_64-unknown-linux-musl",
     "MAKEUTIL_SHA256": (
-        "99dd28a138dbe07e88e4dc5dd3954e6b29b46cc959635311d326cb537253115d"
+        "688c3385ac2f5cb630e8a0ffe640815f366793195d35e89821b918b09531adf8"
     ),
     "MAKEUTIL_RELEASES": "https://github.com/leynos/makeutil/releases/download",
 }

@@ -396,14 +396,11 @@ backend on another supported route remains an audit gap requiring policy-owner
 resolution, not an approved exception.
 
 A `makeutil` parse that recovered from a construct it does not understand is
-`indeterminate` for BD-007 and BD-008, even where the Makefile is valid.
-netsuke's Makefile reads `indeterminate` for BD-008 today for that reason. The
-pinned `makeutil` 0.1.0 does not parse its `unexport RUSTDOC_FLAGS` directive
-([makeutil#25](https://github.com/leynos/makeutil/issues/25)), and reports the
-recovery at unrelated lines. makeutil
-[#45](https://github.com/leynos/makeutil/pull/45), released in 0.1.1, fixes it,
-and netsuke then parses completely. Everything the pinned release does parse is
-compliant, and the verdict clears when concordat repins `makeutil`.
+`indeterminate` for BD-007 and BD-008, even where the Makefile is valid. Run
+the release concordat's CI pins: makeutil 0.1.0 reports valid Makefiles as
+recovered, including any `unexport` directive
+([makeutil#25](https://github.com/leynos/makeutil/issues/25)), which 0.1.1
+fixed.
 
 BD-009 covers steps that run cargo directly. A `make` step whose recipe assigns
 no `RUSTFLAGS` still inherits the toolchain action's export, and neither clause
