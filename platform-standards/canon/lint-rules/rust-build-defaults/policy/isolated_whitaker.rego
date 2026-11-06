@@ -34,9 +34,13 @@ route_prefix(segment) := matches[0][1] if {
 prefix_is_plain(segment) if {
 	prefix := route_prefix(segment)
 	not contains(prefix, "\\")
-	# A quote that opens mid-value (`NOTE=x" Y=z"`) splits differently in a shell
-	# than in the token pattern, so it is not read either.
-	not regex.match(`=[^"'[:space:]]+["']`, prefix)
+	# Every token must be a whole assignment or removal: a bare value holds no
+	# quote, and a quoted value ends where whitespace follows, so a quote that
+	# opens mid-value (`NOTE=x" Y=z"`) is refused rather than split.
+	regex.match(
+		`^[[:space:]]*[-@+]*[[:space:]]*(env[[:space:]]+)?(((-u|--unset)[[:space:]]+[A-Za-z_][A-Za-z0-9_]*|--unset=[A-Za-z_][A-Za-z0-9_]*|[A-Za-z_][A-Za-z0-9_]*=("[^"]*"|'[^']*'|[^[:space:]"']*))[[:space:]]+)*$`,
+		prefix,
+	)
 }
 
 prefix_tokens(segment) := regex.find_all_string_submatch_n(
