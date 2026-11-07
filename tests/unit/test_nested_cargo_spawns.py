@@ -1256,6 +1256,55 @@ def test_a_cfg_test_enum_variant_closes_at_its_comma_or_brace(
         assert problems == []
 
 
+@pytest.mark.parametrize(
+    ("source", "gated"),
+    [
+        ("enum E {\n    A,\n    #[cfg(test)]\n    B,\n    C,\n}\n", "B,"),
+        ("enum E {\n    A,\n    #[cfg(test)]\n    B\n}\n", "B"),
+        ("enum E {\n    #[cfg(test)]\n    A = 1 << 2,\n    B = 3,\n}\n", "A = 1 << 2,"),
+        ("enum E {\n    #[cfg(test)]\n    P { n: u64 },\n    A,\n}\n", "P { n: u64 },"),
+        (
+            "struct S {\n    #[cfg(test)]\n    m: HashMap<u8, Vec<u8>>,\n    n: u8,\n}",
+            "m: HashMap<u8, Vec<u8>>,",
+        ),
+        (
+            "struct S {\n    #[cfg(test)]\n    f: Array<{ 1 }, 2>,\n    g: u8,\n}\n",
+            "f: Array<{ 1 }, 2>,",
+        ),
+        (
+            "struct S {\n    #[cfg(test)]\n    union: u8,\n    other: u8,\n}\n",
+            "union: u8,",
+        ),
+        (
+            (
+                "fn f(x: u8) -> u8 {\n    match x {\n        #[cfg(test)]\n"
+                "        1 => x << 2,\n        2 => x,\n        _ => 0,\n    }\n}\n"
+            ),
+            "1 => x << 2,",
+        ),
+        (
+            "#[cfg(test)]\nunion U<A, B> {\n    a: u8,\n}\nfn f() {}\n",
+            "union U<A, B> {\n    a: u8,\n}",
+        ),
+    ],
+)
+def test_a_gated_member_covers_exactly_that_member(source: str, gated: str) -> None:
+    """The test scope ends where the member does, never at a sibling or past it."""
+    import pathlib
+
+    from concordat.rules.nested_cargo_modules import scan_scope
+    from concordat.rules.nested_cargo_source import RustSource
+    from concordat.rules.rust_source import mask_literals
+
+    relative = pathlib.PurePosixPath("src/lib.rs")
+    problems: list[str] = []
+    scope, _ = scan_scope(RustSource(relative, source, mask_literals(source)), problems)
+
+    assert problems == []
+    expected = source[source.index("#[cfg(test)]") : source.index(gated) + len(gated)]
+    assert [source[start:end] for start, end in scope.ranges] == [expected]
+
+
 def test_an_unterminated_literal_is_a_problem(tmp_path: pathlib.Path) -> None:
     """Once a literal runs to the end of the file, the structure is a fiction."""
     put(

@@ -48,8 +48,9 @@ _ATTRIBUTE: typ.Final = re.compile(r"#\[")
 _MODULE: typ.Final = re.compile(r"mod\s+(?P<name>[A-Za-z_]\w*)")
 _MODIFIERS: typ.Final = re.compile(r"(?:pub(?:\s*\([^)]*\))?\s+)*")
 _ITEM_KEYWORD: typ.Final = re.compile(
-    r"(?:fn|struct|enum|union|trait|impl|mod|use|const|static|type|extern|unsafe|"
-    r"async|macro_rules|macro|let|if|match|loop|while|for)\b"
+    r"(?:fn|struct|enum|trait|impl|mod|use|const|static|type|extern|unsafe|"
+    r"async|macro|let|if|match|loop|while|for|union(?=\s+[A-Za-z_])|"
+    r"macro_rules(?=\s*!))\b"
 )
 _ENCLOSING_MODULE: typ.Final = re.compile(r"\bmod\s+([A-Za-z_]\w*)\s*$")
 _CFG_PREDICATE: typ.Final = re.compile(r"cfg\s*\((.*)\)\s*$", re.DOTALL)
@@ -149,9 +150,9 @@ def _item_end(masked: str, index: int) -> tuple[int, bool] | None:
     tuple[int, bool] | None
         The index after the item, and whether the item is one with a `{}` body.
     """
-    member = _ITEM_KEYWORD.match(masked, index) is None
+    if _ITEM_KEYWORD.match(masked, index) is None:
+        return _member_end(masked, index)
     depth = 0
-    angle = 0
     position = index
     while position < len(masked):
         char = masked[position]
@@ -163,17 +164,56 @@ def _item_end(masked: str, index: int) -> tuple[int, bool] | None:
             return position + 1, False
         elif depth == 0 and char == "{":
             close = scan_balanced(masked, position)
-            if close is None:
-                return None
-            return (_after_member_comma(masked, close) if member else close), True
-        elif member and depth == 0:
-            # An enum variant or struct field is not an item with a keyword: it
-            # ends at its comma, or at the brace of the block it ends.
+            return (close, True) if close is not None else None
+        position += 1
+    return None
+
+
+def _member_end(masked: str, index: int) -> tuple[int, bool] | None:
+    """Return the end of an enum variant, struct field or statement at *index*.
+
+    A member has no keyword to say what it is. It ends at its comma, at the
+    brace of the block it ends, at a `;`, or after its own `{}` body (and the
+    comma that follows it). Angle brackets are counted only once a field's
+    `name: Type` colon has been seen, so a shift or comparison in a
+    discriminant or a match arm never hides the comma that ends it, and a brace
+    inside the angle brackets is a const argument, not a body.
+
+    Returns
+    -------
+    tuple[int, bool] | None
+        The index after the member, and whether it has a `{}` body; None if a
+        body never closes.
+    """
+    depth = angle = 0
+    in_type = False
+    position = index
+    while position < len(masked):
+        char = masked[position]
+        before = masked[position - 1] if position > index else ""
+        after = masked[position + 1 : position + 2]
+        if char in "([":
+            depth += 1
+        elif char in ")]":
+            depth -= 1
+        elif depth == 0:
+            if char == ";":
+                return position + 1, False
             if char == "}":
-                return position, False
-            if char == "<":
+                return len(masked[:position].rstrip()), False
+            if char == "{":
+                close = scan_balanced(masked, position)
+                if close is None:
+                    return None
+                if angle == 0:
+                    return _after_member_comma(masked, close), True
+                position = close
+                continue
+            if char == ":" and ":" not in {before, after}:
+                in_type = True
+            elif in_type and char == "<":
                 angle += 1
-            elif char == ">" and masked[position - 1] not in "-=":
+            elif in_type and char == ">" and before not in "-=":
                 angle = max(angle - 1, 0)
             elif char == "," and angle == 0:
                 return position + 1, False
