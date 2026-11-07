@@ -48,7 +48,8 @@ _VARIABLE_REFERENCE: typ.Final = re.compile(r"\$[({]([A-Za-z_][A-Za-z0-9_]*)[)}]
 # A plain reference: `$(NAME)`, `${NAME}` or the single-character `$X`. Anything
 # fancier (a substitution reference, a name with odd characters) is not one.
 _SIMPLE_REFERENCE: typ.Final = re.compile(
-    r"\$(?:[({](?P<long>[A-Za-z_][A-Za-z0-9_]*)[)}]|(?P<short>[A-Za-z0-9_]))"
+    r"\$(?:\((?P<paren>[A-Za-z_][A-Za-z0-9_]*)\)|\{(?P<brace>[A-Za-z_][A-Za-z0-9_]*)\}"
+    r"|(?P<short>[A-Za-z0-9_]))"
 )
 _UNRESOLVED_REFERENCE: typ.Final = re.compile(r"\$[({]")
 _IF_CALL: typ.Final = re.compile(r"\$\(if\s")
@@ -227,7 +228,7 @@ def _is_error_call(text: str) -> bool:
 
 def _reference_name(match: re.Match[str]) -> str:
     """Return the variable name a `$(NAME)`, `${NAME}` or `$X` reference names."""
-    return match.group("long") or match.group("short")
+    return match.group("paren") or match.group("brace") or match.group("short")
 
 
 def _is_pure(
@@ -340,8 +341,13 @@ def expand(text: str, values: cabc.Mapping[str, str]) -> Expansion:
     Expansion
         The substituted text and whether every reference was resolved.
     """
-    known = {**BUILTIN_VARIABLES, **values}
     assigned = getattr(values, "assigned", frozenset())
+    # A built-in the Makefile assigns itself is the Makefile's, not Make's.
+    known = {
+        name: value
+        for name, value in {**BUILTIN_VARIABLES, **values}.items()
+        if name in values or name not in assigned
+    }
 
     def substitute(match: re.Match[str]) -> str:
         """Replace one ``$(NAME)`` reference, leaving unknown names untouched."""

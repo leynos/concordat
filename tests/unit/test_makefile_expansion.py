@@ -175,6 +175,20 @@ def test_a_guard_condition_through_a_deep_chain_stays_unresolved() -> None:
     assert result.is_resolved is False
 
 
+def test_mismatched_delimiters_are_not_a_reference() -> None:
+    """`$(X}Y)` names the variable `X}Y`, which the reader does not follow."""
+    values = Assignments({"X}Y": "$(eval CMD := cargo test)"}, ["X}Y", "CMD"])
+
+    assert expand("$(if $(X}Y),$(error stop))go", values).is_resolved is False
+
+
+def test_a_builtin_the_makefile_assigns_twice_is_not_provably_pure() -> None:
+    """A built-in name the Makefile reassigns ambiguously is the Makefile's own."""
+    values = Assignments({}, ["CURDIR", "CURDIR"])
+
+    assert expand("$(if $(CURDIR),$(error stop))go", values).is_resolved is False
+
+
 def test_a_single_character_reference_is_followed() -> None:
     """`$X` is a reference to the variable `X`; its eval must be seen."""
     values = Assignments({"X": "$(eval CMD := cargo test)"}, ["X", "CMD"])
