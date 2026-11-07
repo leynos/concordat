@@ -46,9 +46,7 @@ BUILTIN_VARIABLES: typ.Final = types.MappingProxyType({
 
 _VARIABLE_REFERENCE: typ.Final = re.compile(r"\$[({]([A-Za-z_][A-Za-z0-9_]*)[)}]")
 # Any reference to a variable by name, including `$(NAME:a=b)` substitution references.
-_ANY_REFERENCE: typ.Final = re.compile(
-    r"\$[({]([A-Za-z_][A-Za-z0-9_]*)(?::[^)}]*)?[)}]"
-)
+_ANY_REFERENCE: typ.Final = re.compile(r"\$[({]([^\s:#=(){},$]+)(?::[^)}]*)?[)}]")
 _UNRESOLVED_REFERENCE: typ.Final = re.compile(r"\$[({]")
 _IF_CALL: typ.Final = re.compile(r"\$\(if\s")
 _ERROR_CALL: typ.Final = re.compile(r"\$\(error\s")
@@ -233,7 +231,10 @@ def _is_pure(
     through, substitution references included, since their values are expanded
     with it. A variable the Makefile assigns but the expansion cannot follow, or
     a chain longer than the passes allow, is not provably pure. A variable the
-    Makefile never assigns is data from the environment.
+    Makefile never assigns is data from the environment, such as
+    `CARGO_BUILD_TARGET`. That is a stated assumption, not a proof: this reads
+    the Makefile as committed, and a caller who puts Make code in the
+    environment or on the command line can defeat any static reading of it.
 
     Returns
     -------

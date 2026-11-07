@@ -175,6 +175,15 @@ def test_a_guard_condition_through_a_deep_chain_stays_unresolved() -> None:
     assert result.is_resolved is False
 
 
+def test_a_hyphenated_variable_name_is_followed() -> None:
+    """Make allows `SET-UP`; its eval must not slip past the purity check."""
+    values = Assignments({"SET-UP": "$(eval CMD := cargo test)"}, ["SET-UP", "CMD"])
+
+    result = expand("$(if $(SET-UP),$(error stop))go", values)
+
+    assert result.is_resolved is False
+
+
 def test_a_guard_on_an_environment_variable_is_dropped() -> None:
     """A variable the Makefile never assigns is data, not code."""
     values = Assignments({"FLAGS": "-q"}, ["FLAGS"])
