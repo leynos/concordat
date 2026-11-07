@@ -35,6 +35,7 @@ from .makefile_expansion import (
     single_assignments,
 )
 from .makefile_facts import MakefileRefusedError, inspect_makefile
+from .makefile_tool_paths import read_tool_paths
 from .markdown_envelope import (
     WORKFLOW_SUFFIXES,
     WORKFLOWS_DIRECTORY,
@@ -332,7 +333,7 @@ def _makefile_entry(
         problems.append(f"cannot parse {MAKEFILE}: {error}")
         return _MakefileEntry(None, [], refused=True)
     report = facts.report
-    values = single_assignments(report["variables"])
+    values = read_tool_paths(single_assignments(report["variables"]))
     index = _rules_by_target(report)
     if TEST_TARGET not in index:
         return _MakefileEntry(None, [])
