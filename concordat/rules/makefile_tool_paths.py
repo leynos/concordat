@@ -105,12 +105,11 @@ def _alternative(text: str, known: Assignments) -> str | None:
     if call is None:
         return _path_name(text, known)
     function, body = call
+    commas = top_level_commas(body)
     parts = [
         body[start:end]
         for start, end in zip(
-            [0, *(i + 1 for i in top_level_commas(body))],
-            [*top_level_commas(body), len(body)],
-            strict=True,
+            [0, *(i + 1 for i in commas)], [*commas, len(body)], strict=True
         )
     ]
     match function:
