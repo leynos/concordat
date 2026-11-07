@@ -1299,6 +1299,26 @@ def test_a_cfg_test_enum_variant_closes_at_its_comma_or_brace(
         ),
         (
             (
+                "fn f(x: u8) {\n    match x {\n        #[cfg(test)]\n"
+                "        0 => consume::<Vec<u8>, u16>(\n"
+                '            Command::new("cargo").arg("build").status(),\n'
+                "        ),\n        _ => (),\n    }\n}\n"
+            ),
+            (
+                "0 => consume::<Vec<u8>, u16>(\n"
+                '            Command::new("cargo").arg("build").status(),\n'
+                "        ),"
+            ),
+        ),
+        (
+            (
+                "enum E {\n    V {\n        #[cfg(test)]\n        field: u8,\n"
+                "        other: u8,\n    },\n}\nfn f() {}\n"
+            ),
+            "field: u8,",
+        ),
+        (
+            (
                 "impl S {\n    #[cfg(test)]\n    const A: u8 = 1;\n"
                 "    const B: u8 = 2;\n}\n"
             ),

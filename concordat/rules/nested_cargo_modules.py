@@ -52,6 +52,7 @@ _MODIFIERS: typ.Final = re.compile(r"(?:pub(?:\s*\([^)]*\))?\s+)*")
 _MEMBER_BLOCK_HEAD: typ.Final = re.compile(
     r"(?:\b(?:enum|struct|union)\s+[A-Za-z_]\w*|\bmatch\b)[^;{}]*$"
 )
+_VARIANT_HEAD: typ.Final = re.compile(r"[A-Za-z_]\w*\s*$")
 _MEMBER_HEAD_WINDOW: typ.Final = 400
 _ENCLOSING_MODULE: typ.Final = re.compile(r"\bmod\s+([A-Za-z_]\w*)\s*$")
 _CFG_PREDICATE: typ.Final = re.compile(r"cfg\s*\((.*)\)\s*$", re.DOTALL)
@@ -149,7 +150,13 @@ def _in_member_block(masked: str, pairs: list[tuple[int, int]], offset: int) -> 
     if block is None:
         return False
     head = masked[max(0, block[0] - _MEMBER_HEAD_WINDOW) : block[0]]
-    return _MEMBER_BLOCK_HEAD.search(head) is not None
+    if _MEMBER_BLOCK_HEAD.search(head) is not None:
+        return True
+    # A struct-like variant (`V { field: u8 }`) is a name opening a block inside
+    # an enum body, so it is a member block when the block around it is one.
+    return _VARIANT_HEAD.search(head) is not None and _in_member_block(
+        masked, pairs, block[0]
+    )
 
 
 def _item_end(
@@ -226,7 +233,7 @@ def _member_end(masked: str, index: int) -> tuple[int, bool] | None:
                 continue
             if char == ":" and ":" not in {before, after}:
                 in_type = True
-            elif char == "<" and (in_type or before == ":"):
+            elif char == "<" and (in_type or angle or before == ":"):
                 angle += 1
             elif char == ">" and angle and before not in "-=":
                 angle -= 1
