@@ -95,46 +95,65 @@ def _plans_its_matrix(job: dict[str, object], jobs: dict[str, object]) -> bool:
     )
 
 
+def _script_lines(run: str) -> list[str] | None:
+    """Return the script's command lines, or None if an expression hides in it.
+
+    GitHub substitutes an expression before the shell reads the script, a
+    comment line included, so none may appear outside the dist command itself.
+
+    Returns
+    -------
+    list[str] | None
+        The non-blank, non-comment lines, or None when an expression is hidden.
+    """
+    lines = [line.strip() for line in run.splitlines()]
+    if any("${{" in line and not _DIST_REDIRECT.fullmatch(line) for line in lines):
+        return None
+    return [line for line in lines if line and not line.startswith("#")]
+
+
+def _plan_file(lines: list[str]) -> str | None:
+    """Return the file the one `dist ... > FILE` command writes, if there is one.
+
+    Returns
+    -------
+    str | None
+        The file name, or None unless exactly one line is a dist redirect.
+    """
+    written = [_DIST_REDIRECT.fullmatch(line) for line in lines]
+    found = [match.group(1) for match in written if match is not None]
+    return found[0] if len(found) == 1 else None
+
+
 def _is_dist_plan(run: str) -> bool:
     """Return whether *run* is cargo-dist's generated plan script and nothing more.
 
     Every line must be one of four things: the one `dist ... > FILE` command, a
     plain `echo` of fixed text, `cat FILE`, or the one line that publishes
-    `manifest=$(jq -c . FILE)` to `$GITHUB_OUTPUT`. Any other line could write
-    to the file or to the output, so a script with one is not read as the plan.
+    `manifest=$(jq -c . FILE)` to `$GITHUB_OUTPUT`, and the publication must
+    follow the dist command. Any other line could write to the file or to the
+    output, so a script with one is not read as the plan.
 
     Returns
     -------
     bool
         True when the step has cargo-dist's generated plan shape.
     """
-    lines = [line.strip() for line in run.splitlines()]
-    # GitHub substitutes an expression before the shell reads the script, a
-    # comment line included, so none may appear outside the dist command itself.
-    if any("${{" in line and not _DIST_REDIRECT.fullmatch(line) for line in lines):
+    lines = _script_lines(run)
+    target = _plan_file(lines) if lines is not None else None
+    if lines is None or target is None:
         return False
-    lines = [line for line in lines if line and not line.startswith("#")]
-    written = [_DIST_REDIRECT.fullmatch(line) for line in lines]
-    files = {match.group(1) for match in written if match is not None}
-    if len(files) != 1 or sum(match is not None for match in written) != 1:
-        return False
-    target = re.escape(next(iter(files)))
+    quoted = re.escape(target)
     publish = re.compile(
-        rf"echo\s+\"manifest=\$\(jq\s+-c\s+[\"']?\.[\"']?\s+{target}\s*\)\""
+        rf"echo\s+\"manifest=\$\(jq\s+-c\s+[\"']?\.[\"']?\s+{quoted}\s*\)\""
         r"\s+>>\s+[\"']?\$\{?GITHUB_OUTPUT\}?[\"']?"
     )
-    dump = re.compile(rf"cat\s+{target}")
-    allowed = (_DIST_REDIRECT, _PLAIN_ECHO, publish, dump)
-    publications = [
-        index for index, line in enumerate(lines) if publish.fullmatch(line)
-    ]
-    redirects = [
-        index for index, line in enumerate(lines) if _DIST_REDIRECT.fullmatch(line)
-    ]
-    # The file is published only after dist has written it.
+    allowed = (_DIST_REDIRECT, _PLAIN_ECHO, publish, re.compile(rf"cat\s+{quoted}"))
+    published = [i for i, line in enumerate(lines) if publish.fullmatch(line)]
+    dist_at = next(i for i, line in enumerate(lines) if _DIST_REDIRECT.fullmatch(line))
     return (
-        len(publications) == 1
-        and publications[0] > redirects[0]
+        len(published) == 1
+        and published[0] > dist_at
         and all(any(pattern.fullmatch(line) for pattern in allowed) for line in lines)
     )
 
