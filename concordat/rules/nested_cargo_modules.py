@@ -52,7 +52,9 @@ _MODIFIERS: typ.Final = re.compile(r"(?:pub(?:\s*\([^)]*\))?\s+)*")
 _MEMBER_BLOCK_HEAD: typ.Final = re.compile(
     r"(?:\b(?:enum|struct|union)\s+[A-Za-z_]\w*|\bmatch\b)[^;{}]*$"
 )
-_VARIANT_HEAD: typ.Final = re.compile(r"[A-Za-z_]\w*\s*$")
+# An enum variant is written UpperCamelCase; `loop`, `else`, `unsafe` and the
+# like are not.
+_VARIANT_HEAD: typ.Final = re.compile(r"\b[A-Z]\w*\s*$")
 _MEMBER_HEAD_WINDOW: typ.Final = 400
 _ENCLOSING_MODULE: typ.Final = re.compile(r"\bmod\s+([A-Za-z_]\w*)\s*$")
 _CFG_PREDICATE: typ.Final = re.compile(r"cfg\s*\((.*)\)\s*$", re.DOTALL)

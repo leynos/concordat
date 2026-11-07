@@ -1312,6 +1312,21 @@ def test_a_cfg_test_enum_variant_closes_at_its_comma_or_brace(
         ),
         (
             (
+                "fn run(x: u8) {\n    match x {\n        0 => loop {\n"
+                "            #[cfg(test)]\n"
+                "            let spawn = |_: u8, _: u8| {\n"
+                '                Command::new("cargo").arg("build").status()\n'
+                "            };\n            break;\n        },\n"
+                "        _ => (),\n    }\n}\n"
+            ),
+            (
+                "let spawn = |_: u8, _: u8| {\n"
+                '                Command::new("cargo").arg("build").status()\n'
+                "            }"
+            ),
+        ),
+        (
+            (
                 "enum E {\n    V {\n        #[cfg(test)]\n        field: u8,\n"
                 "        other: u8,\n    },\n}\nfn f() {}\n"
             ),
