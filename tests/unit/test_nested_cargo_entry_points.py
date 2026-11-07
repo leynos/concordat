@@ -1321,40 +1321,54 @@ def test_an_expression_valued_command_is_uncertain(tmp_path: pathlib.Path) -> No
     assert states(tmp_path) == [("workflow", "test", "uncertain")]
 
 
-def test_a_matrix_lookup_in_a_dist_job_is_not_a_test(tmp_path: pathlib.Path) -> None:
-    """cargo-dist installs its own tools through a matrix lookup before `dist build`."""
-    put(
-        tmp_path,
-        WORKFLOW,
-        "jobs:\n  build:\n    steps:\n"
-        "      - run: ${{ matrix.install_dist.run }}\n"
-        "      - run: dist build --output-format=json ${{ matrix.dist_args }}\n",
+PLANNED = "${{ fromJson(needs.plan.outputs.val).ci.github.artifacts_matrix }}"
+
+
+def dist_job(matrix: str, run: str) -> str:
+    """Return a one-job workflow that runs *run*, then `dist build`."""
+    return (
+        f"jobs:\n  build:\n    strategy:\n      matrix: {matrix}\n    steps:\n"
+        f"      - run: {run}\n      - run: dist build ${{{{ matrix.dist_args }}}}\n"
     )
+
+
+def test_a_planned_matrix_lookup_in_a_dist_job_is_not_a_test(
+    tmp_path: pathlib.Path,
+) -> None:
+    """cargo-dist installs its own tools from the plan job's matrix."""
+    put(tmp_path, WORKFLOW, dist_job(PLANNED, "${{ matrix.install_dist.run }}"))
     assert states(tmp_path) == []
 
 
-def test_a_matrix_lookup_without_dist_stays_uncertain(tmp_path: pathlib.Path) -> None:
+@pytest.mark.parametrize(
+    ("matrix", "run"),
+    [
+        # A matrix written out in the workflow can hold a test command.
+        ("{command: [cargo test]}", "${{ matrix.command }}"),
+        # A lookup with an operator can fall back to a test command.
+        (PLANNED, "${{ matrix.install_dist.run || 'cargo test' }}"),
+        # Only a matrix lookup is released, not another context.
+        (PLANNED, "${{ inputs.command }}"),
+        (PLANNED, "${{ matrix['install_dist'].run }}"),
+    ],
+)
+def test_other_expressions_in_a_dist_job_stay_uncertain(
+    tmp_path: pathlib.Path, matrix: str, run: str
+) -> None:
+    """The release reading is as narrow as the shape cargo-dist generates."""
+    put(tmp_path, WORKFLOW, dist_job(matrix, run))
+    assert states(tmp_path) == [("workflow", "build", "uncertain")]
+
+
+def test_a_planned_matrix_lookup_without_dist_stays_uncertain(
+    tmp_path: pathlib.Path,
+) -> None:
     """A job that never runs cargo-dist gets no release reading."""
     put(
         tmp_path,
         WORKFLOW,
-        "jobs:\n  build:\n    steps:\n"
-        "      - run: ${{ matrix.install_dist.run }}\n"
-        "      - run: echo done\n",
-    )
-    assert states(tmp_path) == [("workflow", "build", "uncertain")]
-
-
-def test_a_context_lookup_in_a_dist_job_stays_uncertain(
-    tmp_path: pathlib.Path,
-) -> None:
-    """The release reading covers matrix lookups, not any expression."""
-    put(
-        tmp_path,
-        WORKFLOW,
-        "jobs:\n  build:\n    steps:\n"
-        "      - run: ${{ inputs.command }}\n"
-        "      - run: dist build\n",
+        f"jobs:\n  build:\n    strategy:\n      matrix: {PLANNED}\n    steps:\n"
+        "      - run: ${{ matrix.install_dist.run }}\n      - run: echo done\n",
     )
     assert states(tmp_path) == [("workflow", "build", "uncertain")]
 

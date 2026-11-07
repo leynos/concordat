@@ -53,7 +53,7 @@ from .nested_cargo_nextest import (
     NextestConfig,
     read_nextest,
 )
-from .nested_cargo_release import is_matrix_lookup, runs_dist
+from .nested_cargo_release import hides_command, is_planned_dist_job
 from .nested_cargo_scripts import (
     TEST_TARGET,
     CommandMeaning,
@@ -576,11 +576,7 @@ def _step_scan(
             reason=reason,
         )
         return _StepScan(facts=[fact], fetches=fetches)
-    if (
-        has_expression
-        and not visible.strip()
-        and not (releases and is_matrix_lookup(run))
-    ):
+    if hides_command(visible, run, has_expression=has_expression, releases=releases):
         fact = EntryPointFact(
             kind="workflow",
             path=relative,
@@ -617,7 +613,7 @@ def _job_entries(
         if not isinstance(steps, list):
             continue
         runs_on = job.get("runs-on")
-        releases = runs_dist(steps)
+        releases = is_planned_dist_job(job)
         fetches = False
         for raw_step in steps:
             step = _mapping(raw_step)
