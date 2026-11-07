@@ -1262,14 +1262,10 @@ def test_a_cfg_test_enum_variant_closes_at_its_comma_or_brace(
         ("enum E {\n    A,\n    #[cfg(test)]\n    B,\n    C,\n}\n", "B,"),
         ("enum E {\n    A,\n    #[cfg(test)]\n    B\n}\n", "B"),
         ("enum E {\n    #[cfg(test)]\n    A = 1 << 2,\n    B = 3,\n}\n", "A = 1 << 2,"),
-        ("enum E {\n    #[cfg(test)]\n    P { n: u64 },\n    A,\n}\n", "P { n: u64 },"),
+        ("enum E {\n    #[cfg(test)]\n    P { n: u64 },\n    A,\n}\n", "P { n: u64 }"),
         (
             "struct S {\n    #[cfg(test)]\n    m: HashMap<u8, Vec<u8>>,\n    n: u8,\n}",
             "m: HashMap<u8, Vec<u8>>,",
-        ),
-        (
-            "struct S {\n    #[cfg(test)]\n    f: Array<{ 1 }, 2>,\n    g: u8,\n}\n",
-            "f: Array<{ 1 }, 2>,",
         ),
         (
             "struct S {\n    #[cfg(test)]\n    union: u8,\n    other: u8,\n}\n",

@@ -47,22 +47,6 @@ CRATE_ROOT_DIRECTORIES: typ.Final = frozenset({"tests", "benches", "examples"})
 _ATTRIBUTE: typ.Final = re.compile(r"#\[")
 _MODULE: typ.Final = re.compile(r"mod\s+(?P<name>[A-Za-z_]\w*)")
 _MODIFIERS: typ.Final = re.compile(r"(?:pub(?:\s*\([^)]*\))?\s+)*")
-# The head of a block whose entries are comma-separated members, not items: an
-# enum, struct or union body, or the arms of a `match`.
-_MEMBER_BLOCK_HEAD: typ.Final = re.compile(
-    r"(?:\b(?:enum|struct|union)\s+[A-Za-z_]\w*|\bmatch\b)[^;{}]*$"
-)
-_VARIANT_HEAD: typ.Final = re.compile(r"[A-Za-z_]\w*\s*$")
-_MEMBER_HEAD_WINDOW: typ.Final = 400
-# What a statement or item starts with. A member of an enum, struct or match
-# never does, so a gated `let` or `fn` is read to its `;` or body even in a block
-# the head test took for a member block. `union` and `macro_rules` are weak
-# keywords, so they count only with the name or `!` that follows them.
-_STATEMENT_START: typ.Final = re.compile(
-    r"(?:let|if|match|loop|while|for|unsafe|async|return|break|continue|fn|struct|"
-    r"enum|trait|impl|mod|use|const|static|type|extern|macro|"
-    r"union(?=\s+[A-Za-z_])|macro_rules(?=\s*!))\b"
-)
 _ENCLOSING_MODULE: typ.Final = re.compile(r"\bmod\s+([A-Za-z_]\w*)\s*$")
 _CFG_PREDICATE: typ.Final = re.compile(r"cfg\s*\((.*)\)\s*$", re.DOTALL)
 _PATH_ATTRIBUTE: typ.Final = re.compile(r"\bpath\s*=\s*\"[^\"]*\"")
@@ -153,36 +137,14 @@ def _is_test_attribute(masked: str, match: re.Match[str]) -> bool:
     return predicate is not None and _predicate_mentions_test(predicate.group(1))
 
 
-def _in_member_block(masked: str, pairs: list[tuple[int, int]], offset: int) -> bool:
-    """Return whether *offset* sits in an enum, struct or union body or a match."""
-    block = enclosing_block(pairs, offset)
-    if block is None:
-        return False
-    head = masked[max(0, block[0] - _MEMBER_HEAD_WINDOW) : block[0]]
-    if _MEMBER_BLOCK_HEAD.search(head) is not None:
-        return True
-    # A struct-like variant (`V { field: u8 }`) is a name opening a block inside
-    # an enum body, so it is a member block when the block around it is one.
-    return _VARIANT_HEAD.search(head) is not None and _in_member_block(
-        masked, pairs, block[0]
-    )
-
-
-def _item_end(
-    masked: str, index: int, *, member: bool = False
-) -> tuple[int, bool] | None:
+def _item_end(masked: str, index: int) -> tuple[int, bool] | None:
     """Return an item's end and whether it opens a body, or None if unbalanced.
-
-    *member* says the item is an entry of an enum, struct or union body or a
-    `match`, which ends at a comma rather than at a `;`.
 
     Returns
     -------
     tuple[int, bool] | None
         The index after the item, and whether the item is one with a `{}` body.
     """
-    if member:
-        return _member_end(masked, index)
     depth = 0
     position = index
     while position < len(masked):
@@ -201,14 +163,14 @@ def _item_end(
 
 
 def _member_end(masked: str, index: int) -> tuple[int, bool] | None:
-    """Return the end of an enum variant, struct field or statement at *index*.
+    """Return the end of an enum variant, struct field or match arm at *index*.
 
-    A member has no keyword to say what it is. It ends at its comma, at the
-    brace of the block it ends, at a `;`, or after its own `{}` body (and the
-    comma that follows it). Angle brackets are counted only once a field's
-    `name: Type` colon has been seen, so a shift or comparison in a
-    discriminant or a match arm never hides the comma that ends it, and a brace
-    inside the angle brackets is a const argument, not a body.
+    This is the reading of an entry that has no `;` or body of its own and so
+    runs to the end of its block: it ends at its comma, at the brace of the
+    block it ends, at a `;`, or after its own `{}` body (and the comma that
+    follows it). Angle brackets are counted once a field's `name: Type` colon or
+    a turbofish `::<` opens them, so a comma between generic arguments does not
+    end the entry, and a shift in a discriminant never counts.
 
     Returns
     -------
@@ -591,10 +553,13 @@ def scan_scope(
             continue
         run = (match.start(), _attribute_run_end(source.masked, match.start()))
         declaration = skip_trivia(source.masked, _modifier_end(source.masked, run[1]))
-        member = _in_member_block(
-            source.masked, pairs, match.start()
-        ) and not _STATEMENT_START.match(source.masked, declaration)
-        item = _item_end(source.masked, declaration, member=member)
+        item = _item_end(source.masked, declaration)
+        block = enclosing_block(pairs, match.start())
+        if block is not None and (item is None or item[0] >= block[1]):
+            # An item cannot outlast the block that holds it. One that does has
+            # no `;` or body of its own: an enum variant, a struct field or a
+            # match arm, which a comma or the block's brace ends.
+            item = _member_end(source.masked, declaration)
         if item is None:
             problems.append(
                 f"{source.relative.as_posix()}: a #[cfg(test)] item never closes"
