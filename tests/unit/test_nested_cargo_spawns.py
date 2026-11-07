@@ -1327,6 +1327,27 @@ def test_a_cfg_test_enum_variant_closes_at_its_comma_or_brace(
         ),
         (
             (
+                "const CONDITION: bool = true;\nfn run(x: u8) {\n    match x {\n"
+                "        _ => if CONDITION {\n            #[cfg(test)]\n"
+                "            let spawn = |_: u8, _: u8| {\n"
+                '                Command::new("cargo").arg("build").status()\n'
+                "            };\n        },\n    }\n}\n"
+            ),
+            (
+                "let spawn = |_: u8, _: u8| {\n"
+                '                Command::new("cargo").arg("build").status()\n'
+                "            }"
+            ),
+        ),
+        (
+            (
+                "enum E {\n    variant {\n        #[cfg(test)]\n        field: u8,\n"
+                "        other: u8,\n    },\n}\nfn f() {}\n"
+            ),
+            "field: u8,",
+        ),
+        (
+            (
                 "enum E {\n    V {\n        #[cfg(test)]\n        field: u8,\n"
                 "        other: u8,\n    },\n}\nfn f() {}\n"
             ),
@@ -1374,6 +1395,24 @@ def test_a_gated_statement_with_a_generic_call_keeps_its_spawn_in_scope(
         "src/lib.rs",
         "fn run() {\n    #[cfg(test)]\n    consume::<u8, u16>(\n"
         '        Command::new("cargo").arg("build").status(),\n    );\n}\n',
+    )
+    problems: list[str] = []
+    assert evidence(tmp_path, problems).spawns != []
+    assert problems == []
+
+
+def test_a_gated_closure_in_a_conditional_arm_keeps_its_spawn_in_scope(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The cargo call in a gated `let` stays in test scope, whatever block holds it."""
+    put(
+        tmp_path,
+        "src/lib.rs",
+        "const CONDITION: bool = true;\nfn run(x: u8) {\n    match x {\n"
+        "        _ => if CONDITION {\n            #[cfg(test)]\n"
+        "            let spawn = |_: u8, _: u8| {\n"
+        '                Command::new("cargo").arg("build").status()\n'
+        "            };\n        },\n    }\n}\n",
     )
     problems: list[str] = []
     assert evidence(tmp_path, problems).spawns != []

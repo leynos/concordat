@@ -52,10 +52,17 @@ _MODIFIERS: typ.Final = re.compile(r"(?:pub(?:\s*\([^)]*\))?\s+)*")
 _MEMBER_BLOCK_HEAD: typ.Final = re.compile(
     r"(?:\b(?:enum|struct|union)\s+[A-Za-z_]\w*|\bmatch\b)[^;{}]*$"
 )
-# An enum variant is written UpperCamelCase; `loop`, `else`, `unsafe` and the
-# like are not.
-_VARIANT_HEAD: typ.Final = re.compile(r"\b[A-Z]\w*\s*$")
+_VARIANT_HEAD: typ.Final = re.compile(r"[A-Za-z_]\w*\s*$")
 _MEMBER_HEAD_WINDOW: typ.Final = 400
+# What a statement or item starts with. A member of an enum, struct or match
+# never does, so a gated `let` or `fn` is read to its `;` or body even in a block
+# the head test took for a member block. `union` and `macro_rules` are weak
+# keywords, so they count only with the name or `!` that follows them.
+_STATEMENT_START: typ.Final = re.compile(
+    r"(?:let|if|match|loop|while|for|unsafe|async|return|break|continue|fn|struct|"
+    r"enum|trait|impl|mod|use|const|static|type|extern|macro|"
+    r"union(?=\s+[A-Za-z_])|macro_rules(?=\s*!))\b"
+)
 _ENCLOSING_MODULE: typ.Final = re.compile(r"\bmod\s+([A-Za-z_]\w*)\s*$")
 _CFG_PREDICATE: typ.Final = re.compile(r"cfg\s*\((.*)\)\s*$", re.DOTALL)
 _PATH_ATTRIBUTE: typ.Final = re.compile(r"\bpath\s*=\s*\"[^\"]*\"")
@@ -584,7 +591,9 @@ def scan_scope(
             continue
         run = (match.start(), _attribute_run_end(source.masked, match.start()))
         declaration = skip_trivia(source.masked, _modifier_end(source.masked, run[1]))
-        member = _in_member_block(source.masked, pairs, match.start())
+        member = _in_member_block(
+            source.masked, pairs, match.start()
+        ) and not _STATEMENT_START.match(source.masked, declaration)
         item = _item_end(source.masked, declaration, member=member)
         if item is None:
             problems.append(
