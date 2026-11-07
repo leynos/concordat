@@ -11,6 +11,7 @@ if typ.TYPE_CHECKING:
 
 from concordat.rules.makefile_expansion import (
     SHELL_DOLLAR,
+    Assignments,
     expand,
     shown,
     single_assignments,
@@ -146,6 +147,41 @@ def test_a_guard_condition_that_reaches_eval_through_a_variable_stays_unresolved
     result = expand("$(if $(SETUP),$(error stop))go", values)
 
     assert result.is_resolved is False
+
+
+def test_a_substitution_reference_is_looked_through() -> None:
+    """`$(SETUP:x=y)` expands SETUP, so SETUP's eval is part of the condition."""
+    values = Assignments({"SETUP": "$(eval CMD := cargo test)"}, ["SETUP", "CMD"])
+
+    result = expand("$(if $(SETUP:x=y),$(error stop))go", values)
+
+    assert result.is_resolved is False
+
+
+def test_a_guard_naming_an_unfollowable_assignment_stays_unresolved() -> None:
+    """A variable the Makefile assigns twice has no one value to prove pure."""
+    values = Assignments({}, ["SETUP", "SETUP"])
+
+    assert expand("$(if $(SETUP),$(error stop))go", values).is_resolved is False
+
+
+def test_a_guard_condition_through_a_deep_chain_stays_unresolved() -> None:
+    """A chain of variables longer than the passes cannot be proved pure."""
+    chain = {f"V{index}": f"$(V{index + 1})" for index in range(20)}
+    chain["V20"] = "$(eval X := 1)"
+
+    result = expand("$(if $(V0),$(error stop))go", Assignments(chain, list(chain)))
+
+    assert result.is_resolved is False
+
+
+def test_a_guard_on_an_environment_variable_is_dropped() -> None:
+    """A variable the Makefile never assigns is data, not code."""
+    values = Assignments({"FLAGS": "-q"}, ["FLAGS"])
+
+    result = expand("$(if $(CARGO_BUILD_TARGET)$(FLAGS),$(error stop))go", values)
+
+    assert (result.text, result.is_resolved) == ("go", True)
 
 
 def test_make_builtins_are_known() -> None:

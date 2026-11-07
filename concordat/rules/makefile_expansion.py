@@ -16,6 +16,7 @@ that was left behind; :func:`shown` turns the placeholders back into `$`.
 
 from __future__ import annotations
 
+import collections
 import dataclasses
 import posixpath
 import re
@@ -44,6 +45,10 @@ BUILTIN_VARIABLES: typ.Final = types.MappingProxyType({
 })
 
 _VARIABLE_REFERENCE: typ.Final = re.compile(r"\$[({]([A-Za-z_][A-Za-z0-9_]*)[)}]")
+# Any reference to a variable by name, including `$(NAME:a=b)` substitution references.
+_ANY_REFERENCE: typ.Final = re.compile(
+    r"\$[({]([A-Za-z_][A-Za-z0-9_]*)(?::[^)}]*)?[)}]"
+)
 _UNRESOLVED_REFERENCE: typ.Final = re.compile(r"\$[({]")
 _IF_CALL: typ.Final = re.compile(r"\$\(if\s")
 _ERROR_CALL: typ.Final = re.compile(r"\$\(error\s")
@@ -84,7 +89,26 @@ def _is_plain(variable: MakeVariable, count: int) -> bool:
     return count == 1 and not variable.get("define_block", False) and not has_conditions
 
 
-def single_assignments(variables: cabc.Sequence[MakeVariable]) -> dict[str, str]:
+class Assignments(collections.UserDict[str, str]):
+    """The variables with one plain value, and the names of every other assignment.
+
+    *assigned* lists every variable the Makefile assigns, whether or not the
+    expansion can substitute it. A variable named there but absent from the
+    mapping is one the Makefile defines in a way the expansion cannot follow;
+    a variable named nowhere comes from the environment or the command line.
+    """
+
+    assigned: frozenset[str]
+
+    def __init__(
+        self, values: cabc.Mapping[str, str], assigned: cabc.Iterable[str]
+    ) -> None:
+        """Hold the substitutable *values* and the *assigned* names."""
+        super().__init__(values)
+        self.assigned = frozenset(assigned)
+
+
+def single_assignments(variables: cabc.Sequence[MakeVariable]) -> Assignments:
     r"""Return each variable that has exactly one plain assignment, and its value.
 
     A variable assigned twice, conditionally or in a `define` block has no one
@@ -94,15 +118,16 @@ def single_assignments(variables: cabc.Sequence[MakeVariable]) -> dict[str, str]
 
     Returns
     -------
-    dict[str, str]
-        Variable name to its raw value.
+    Assignments
+        Variable name to its raw value, remembering every name assigned.
     """
     names = [str(variable.get("name", "")) for variable in variables]
-    return {
+    values = {
         name: joined(str(variable.get("raw_value", ""))).replace("\\#", "#")
         for name, variable in zip(names, variables, strict=True)
         if _is_plain(variable, names.count(name))
     }
+    return Assignments(values, names)
 
 
 def _dir(words: list[str]) -> list[str]:
@@ -197,13 +222,18 @@ def _is_error_call(text: str) -> bool:
     )
 
 
-def _is_pure(condition: str, known: cabc.Mapping[str, str]) -> bool:
+def _is_pure(
+    condition: str, known: cabc.Mapping[str, str], assigned: cabc.Container[str]
+) -> bool:
     """Return whether evaluating *condition* can only test text, never change it.
 
     `$(eval ...)`, `$(shell ...)`, `$(file ...)` and the like can redefine a
     variable the recipe goes on to use, so a guard whose condition calls one
     does not vanish. The known variables the condition names are looked
-    through, since their values are expanded with it.
+    through, substitution references included, since their values are expanded
+    with it. A variable the Makefile assigns but the expansion cannot follow, or
+    a chain longer than the passes allow, is not provably pure. A variable the
+    Makefile never assigns is data from the environment.
 
     Returns
     -------
@@ -212,16 +242,50 @@ def _is_pure(condition: str, known: cabc.Mapping[str, str]) -> bool:
     """
     current = condition
     for _ in range(EXPANSION_PASSES):
-        updated = _VARIABLE_REFERENCE.sub(
+        names = {match.group(1) for match in _ANY_REFERENCE.finditer(current)}
+        if any(name in assigned and name not in known for name in names):
+            return False
+        updated = _ANY_REFERENCE.sub(
             lambda match: known.get(match.group(1), match.group(0)), current
         )
         if updated == current:
             break
         current = updated
+    else:
+        return False
     return all(name in _PURE_FUNCTIONS for name in _FUNCTION_NAME.findall(current))
 
 
-def _drop_error_guards(text: str, known: cabc.Mapping[str, str]) -> str:
+def _guard_close(
+    text: str,
+    match: re.Match[str],
+    known: cabc.Mapping[str, str],
+    assigned: cabc.Container[str],
+) -> int | None:
+    """Return where the `$(if` at *match* closes, if it is a droppable guard.
+
+    Returns
+    -------
+    int | None
+        The index of its closing parenthesis, or None when the call is not an
+        error-only guard with a side-effect-free condition.
+    """
+    close = _close_of(text, match.start() + 1)
+    if close is None:
+        return None
+    body = text[match.end() : close]
+    commas = _top_level_commas(body)
+    if len(commas) != 1:
+        return None
+    branch = body[commas[0] + 1 :]
+    if _is_error_call(branch) and _is_pure(body[: commas[0]], known, assigned):
+        return close
+    return None
+
+
+def _drop_error_guards(
+    text: str, known: cabc.Mapping[str, str], assigned: cabc.Container[str]
+) -> str:
     """Remove each `$(if COND,$(error ...))`, which expands to nothing or aborts.
 
     A guard whose only branch is `$(error ...)` either stops Make before any
@@ -238,21 +302,12 @@ def _drop_error_guards(text: str, known: cabc.Mapping[str, str]) -> str:
     """
     position = 0
     while (match := _IF_CALL.search(text, position)) is not None:
-        open_index = match.start() + 1
-        close = _close_of(text, open_index)
+        close = _guard_close(text, match, known, assigned)
         if close is None:
-            return text
-        body = text[match.end() : close]
-        commas = _top_level_commas(body)
-        if (
-            len(commas) == 1
-            and _is_error_call(body[commas[0] + 1 :])
-            and _is_pure(body[: commas[0]], known)
-        ):
+            position = match.end()
+        else:
             text = text[: match.start()] + text[close + 1 :]
             position = match.start()
-        else:
-            position = match.end()
     return text
 
 
@@ -269,6 +324,7 @@ def expand(text: str, values: cabc.Mapping[str, str]) -> Expansion:
         The substituted text and whether every reference was resolved.
     """
     known = {**BUILTIN_VARIABLES, **values}
+    assigned = getattr(values, "assigned", frozenset())
 
     def substitute(match: re.Match[str]) -> str:
         """Replace one ``$(NAME)`` reference, leaving unknown names untouched."""
@@ -280,7 +336,9 @@ def expand(text: str, values: cabc.Mapping[str, str]) -> Expansion:
     for _ in range(EXPANSION_PASSES):
         updated = _FUNCTION_CALL.sub(
             _call_function,
-            _VARIABLE_REFERENCE.sub(substitute, _drop_error_guards(current, known)),
+            _VARIABLE_REFERENCE.sub(
+                substitute, _drop_error_guards(current, known, assigned)
+            ),
         )
         if updated == current:
             break
