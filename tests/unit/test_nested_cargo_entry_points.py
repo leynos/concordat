@@ -381,6 +381,67 @@ def test_a_cargo_variable_prefetch_is_proof_when_it_resolves(
     assert makefile_state(tmp_path) == [("test", "before")]
 
 
+@pytest.mark.parametrize(
+    "assignment",
+    [
+        "CARGO ?= $(or $(shell command -v cargo 2>/dev/null),$(HOME)/.cargo/bin/cargo)",
+        (
+            "USER_CARGO := $(HOME)/.cargo/bin/cargo\n"
+            "CARGO ?= $(or $(shell command -v cargo 2>/dev/null),"
+            "$(wildcard $(USER_CARGO)),cargo)"
+        ),
+        (
+            "CARGO ?= $(if $(wildcard $(HOME)/.cargo/bin/cargo),"
+            "$(HOME)/.cargo/bin/cargo,cargo)"
+        ),
+    ],
+)
+def test_a_cargo_search_whose_every_alternative_is_cargo_is_read(
+    assignment: str, tmp_path: pathlib.Path
+) -> None:
+    """Whichever path Make picks, the recipe runs cargo, so the fetch counts."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        f"{assignment}\n\ntest:\n\t$(CARGO) fetch --locked\n\t$(CARGO) test\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "before")]
+
+
+@pytest.mark.parametrize(
+    "assignment",
+    [
+        # A fallback that is another program.
+        "CARGO ?= $(or $(shell command -v cargo 2>/dev/null),$(HOME)/bin/true)",
+        # A shell command that does more than look the tool up.
+        "CARGO ?= $(or $(shell command -v cargo; true),cargo)",
+        "CARGO ?= $(or $(shell which cargo),cargo)",
+        # A glob can match a file with any name.
+        "CARGO ?= $(or $(wildcard $(HOME)/.cargo/bin/*),cargo)",
+        # An alternative that is not a path word, or ends in a variable.
+        "CARGO ?= $(or $(shell command -v cargo),$(HOME)/.cargo/bin/$(BIN))",
+        # An `if` with no else branch can leave the variable empty.
+        "CARGO ?= $(if $(wildcard $(HOME)/.cargo/bin/cargo),$(HOME)/.cargo/bin/cargo)",
+        # A condition that can run code.
+        "CARGO ?= $(if $(shell touch x),cargo,cargo)",
+        # A function the reader does not follow.
+        "CARGO ?= $(call find,cargo)",
+        # A search for a tool the variable is not named for.
+        "CARGO ?= $(or $(shell command -v rustc),rustc)",
+    ],
+)
+def test_a_search_that_may_not_end_in_cargo_stays_unresolved(
+    assignment: str, tmp_path: pathlib.Path
+) -> None:
+    """Only a search provably ending in the tool's name is read."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        f"{assignment}\n\ntest:\n\t$(CARGO) fetch --locked\n\t$(CARGO) test\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "uncertain")]
+
+
 def test_an_unresolved_cargo_variable_is_uncertain(tmp_path: pathlib.Path) -> None:
     """A variable the expansion cannot settle leaves both commands unknown."""
     put(

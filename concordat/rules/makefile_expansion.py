@@ -190,7 +190,7 @@ def _call_function(match: re.Match[str]) -> str:
     return " ".join(_FUNCTIONS[match.group(1)](match.group(2).split()))
 
 
-def _close_of(text: str, start: int) -> int | None:
+def close_of(text: str, start: int) -> int | None:
     """Return the index of the parenthesis closing the one at *start*, if any."""
     depth = 0
     for index in range(start, len(text)):
@@ -206,7 +206,7 @@ def _close_of(text: str, start: int) -> int | None:
     return None
 
 
-def _top_level_commas(body: str) -> list[int]:
+def top_level_commas(body: str) -> list[int]:
     """Return the offsets of the commas in *body* that sit outside parentheses."""
     depth = 0
     found: list[int] = []
@@ -228,7 +228,7 @@ def _is_error_call(text: str) -> bool:
     stripped = text.strip()
     return (
         _ERROR_CALL.match(stripped) is not None
-        and _close_of(stripped, 1) == len(stripped) - 1
+        and close_of(stripped, 1) == len(stripped) - 1
     )
 
 
@@ -237,7 +237,7 @@ def _reference_name(match: re.Match[str]) -> str:
     return match.group("paren") or match.group("brace") or match.group("short")
 
 
-def _is_pure(
+def is_pure(
     condition: str, known: cabc.Mapping[str, str], assigned: cabc.Container[str]
 ) -> bool:
     """Return whether evaluating *condition* can only test text, never change it.
@@ -294,15 +294,15 @@ def _guard_close(
         The index of its closing parenthesis, or None when the call is not an
         error-only guard with a side-effect-free condition.
     """
-    close = _close_of(text, match.start() + 1)
+    close = close_of(text, match.start() + 1)
     if close is None:
         return None
     body = text[match.end() : close]
-    commas = _top_level_commas(body)
+    commas = top_level_commas(body)
     if len(commas) != 1:
         return None
     branch = body[commas[0] + 1 :]
-    if _is_error_call(branch) and _is_pure(body[: commas[0]], known, assigned):
+    if _is_error_call(branch) and is_pure(body[: commas[0]], known, assigned):
         return close
     return None
 

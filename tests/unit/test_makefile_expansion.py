@@ -16,6 +16,7 @@ from concordat.rules.makefile_expansion import (
     shown,
     single_assignments,
 )
+from concordat.rules.makefile_tool_paths import read_tool_paths
 
 
 def _variable(
@@ -266,3 +267,40 @@ def test_a_guard_on_an_environment_variable_is_dropped() -> None:
 def test_make_builtins_are_known() -> None:
     """`$(MAKE)` and `$(MAKEFILE_LIST)` name the root Makefile's own run."""
     assert expand("$(MAKE) x $(MAKEFILE_LIST)", {}).text == "make x Makefile"
+
+
+def _read(*variables: MakeVariable) -> dict[str, str]:
+    """Return the tool-path reading of *variables* as a plain mapping."""
+    return dict(read_tool_paths(single_assignments(list(variables))))
+
+
+def test_a_uv_search_reads_as_uv() -> None:
+    """A `$(if $(wildcard ...))` whose branches both end in `uv` is `uv`."""
+    values = _read(
+        _variable(
+            "UV", "$(if $(wildcard $(HOME)/.local/bin/uv),$(HOME)/.local/bin/uv,uv)"
+        )
+    )
+
+    assert values == {"UV": "uv"}
+
+
+def test_a_plain_path_variable_keeps_its_path() -> None:
+    """Only a search is read; a path a recipe may use as a path is untouched."""
+    values = _read(_variable("CARGO_TARGET_DIR", "$(CURDIR)/target"))
+
+    assert values == {"CARGO_TARGET_DIR": "$(CURDIR)/target"}
+
+
+def test_a_search_for_another_tool_keeps_its_value() -> None:
+    """A variable named for one tool is not read from a search for another."""
+    value = "$(or $(shell command -v rustc),rustc)"
+
+    assert _read(_variable("CARGO", value)) == {"CARGO": value}
+
+
+def test_alternatives_naming_different_tools_keep_their_value() -> None:
+    """One alternative ending in another name makes the whole value unreadable."""
+    value = "$(or $(shell command -v cargo),$(HOME)/bin/rustc)"
+
+    assert _read(_variable("CARGO", value)) == {"CARGO": value}
