@@ -1323,6 +1323,19 @@ def test_a_cfg_test_enum_variant_closes_at_its_comma_or_brace(
         ),
         (
             (
+                "fn run(x: u8) {\n    let spawn: fn(u8, u8) = match x {\n"
+                "        #[cfg(test)]\n"
+                '        0 => |_: u8, _: u8| Command::new("cargo")\n'
+                '            .arg("build").status(),\n'
+                '        _ => |_, _| Command::new("true").status(),\n    };\n}\n'
+            ),
+            (
+                '0 => |_: u8, _: u8| Command::new("cargo")\n'
+                '            .arg("build").status(),'
+            ),
+        ),
+        (
+            (
                 "const CONDITION: bool = true;\nfn run(x: u8) {\n    match x {\n"
                 "        _ => if CONDITION {\n            #[cfg(test)]\n"
                 "            let spawn = |_: u8, _: u8| {\n"
@@ -1409,6 +1422,20 @@ def test_a_gated_closure_in_a_conditional_arm_keeps_its_spawn_in_scope(
         "            let spawn = |_: u8, _: u8| {\n"
         '                Command::new("cargo").arg("build").status()\n'
         "            };\n        },\n    }\n}\n",
+    )
+    problems: list[str] = []
+    assert evidence(tmp_path, problems).spawns != []
+    assert problems == []
+
+
+def test_a_gated_closure_arm_keeps_its_spawn_in_scope(tmp_path: pathlib.Path) -> None:
+    """A closure arm without a brace body still reaches its cargo call."""
+    put(
+        tmp_path,
+        "src/lib.rs",
+        "fn run(x: u8) {\n    let spawn: fn(u8, u8) = match x {\n        #[cfg(test)]\n"
+        '        0 => |_: u8, _: u8| Command::new("cargo").arg("build").status(),\n'
+        '        _ => |_, _| Command::new("true").status(),\n    };\n}\n',
     )
     problems: list[str] = []
     assert evidence(tmp_path, problems).spawns != []

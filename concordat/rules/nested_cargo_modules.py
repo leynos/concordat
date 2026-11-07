@@ -179,7 +179,7 @@ def _member_end(masked: str, index: int) -> tuple[int, bool] | None:
         body never closes.
     """
     depth = angle = 0
-    in_type = False
+    in_type = after_arrow = in_closure_params = False
     position = index
     while position < len(masked):
         char = masked[position]
@@ -204,11 +204,16 @@ def _member_end(masked: str, index: int) -> tuple[int, bool] | None:
                 continue
             if char == ":" and ":" not in {before, after}:
                 in_type = True
+            elif char == "=" and after == ">":
+                after_arrow = True
+            elif char == "|" and after_arrow and "|" not in {before, after}:
+                # A closure's parameter list, `|a: u8, b: u8|`, in an arm's body.
+                in_closure_params = not in_closure_params
             elif char == "<" and (in_type or angle or before == ":"):
                 angle += 1
             elif char == ">" and angle and before not in "-=":
                 angle -= 1
-            elif char == "," and angle == 0:
+            elif char == "," and angle == 0 and not in_closure_params:
                 return position + 1, False
         position += 1
     return None
