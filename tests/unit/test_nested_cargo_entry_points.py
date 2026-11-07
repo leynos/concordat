@@ -1328,7 +1328,9 @@ PLAN_HEAD = (
 )
 DIST_PLAN = (
     PLAN_HEAD
-    + "          dist ${{ inputs.mode }} --output-format=json > plan.json\n"
+    + "          dist ${{ (!github.event.pull_request && "
+    + "format('host --steps=create --tag={0}', github.ref_name)) || 'plan' }} "
+    + "--output-format=json > plan.json\n"
     + '          echo "manifest=$(jq -c "." plan.json)" >> "$GITHUB_OUTPUT"\n'
 )
 DIVERTED_PLAN = (
@@ -1340,6 +1342,16 @@ OVERWRITTEN_PLAN = (
     PLAN_HEAD
     + "          dist plan --output-format=json > plan.json\n"
     + '          echo \'{"command":["cargo test"]}\' > plan.json\n'
+    + '          echo "manifest=$(jq -c "." plan.json)" >> "$GITHUB_OUTPUT"\n'
+)
+COMMENTED_PLAN = (
+    PLAN_HEAD
+    + "          dist plan --output-format=json # > plan.json\n"
+    + '          echo "manifest=$(jq -c "." plan.json)" >> "$GITHUB_OUTPUT"\n'
+)
+INJECTED_PLAN = (
+    PLAN_HEAD
+    + "          dist ${{ 'plan; echo ''{}''' }} > plan.json\n"
     + '          echo "manifest=$(jq -c "." plan.json)" >> "$GITHUB_OUTPUT"\n'
 )
 COMPOUND_PLAN = (
@@ -1413,6 +1425,15 @@ def test_a_plan_file_overwritten_before_publication_stays_uncertain(
         WORKFLOW,
         dist_job(PLANNED, "${{ matrix.command }}", plan=OVERWRITTEN_PLAN),
     )
+    assert states(tmp_path) == [("workflow", "build", "uncertain")]
+
+
+@pytest.mark.parametrize("plan", [COMMENTED_PLAN, INJECTED_PLAN])
+def test_a_plan_whose_redirect_is_not_dists_stays_uncertain(
+    tmp_path: pathlib.Path, plan: str
+) -> None:
+    """A commented-out redirect or a substituted expression is not dist's output."""
+    put(tmp_path, WORKFLOW, dist_job(PLANNED, "${{ matrix.command }}", plan=plan))
     assert states(tmp_path) == [("workflow", "build", "uncertain")]
 
 

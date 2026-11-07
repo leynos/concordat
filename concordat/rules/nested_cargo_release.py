@@ -24,9 +24,21 @@ _PLANNED_MATRIX: typ.Final = re.compile(
     r"\s*\$\{\{\s*fromJ[Ss][Oo][Nn]\(\s*needs\."
     r"([A-Za-z_][\w-]*)\.outputs\.([A-Za-z_][\w-]*)\s*\)(?:\.[A-Za-z_][\w-]*)*\s*\}\}\s*"
 )
-# `dist ... > file`: a dist command whose output goes to a file.
+# The subcommand expression cargo-dist's own release workflow generates.
+_GENERATED_SUBCOMMAND: typ.Final = re.escape(
+    "${{ (!github.event.pull_request && "
+    "format('host --steps=create --tag={0}', github.ref_name)) || 'plan' }}"
+)
+_DIST_FLAGS: typ.Final = r"(?:\s+--?\w[\w=./:-]*)*"
+# `dist plan|host [flags] > file`, or the generated expression in place of the
+# subcommand: a dist command whose output goes to a file, and nothing else on the
+# line. No `#`, `;`, `&`, `|`, backtick or other substitution can appear.
 _DIST_REDIRECT: typ.Final = re.compile(
-    r"(?:cargo\s+)?dist\s(?:[^\n>;&|`$]|\$\{\{(?:(?!\}\}).)*\}\})*>\s*([\w./-]+)"
+    r"(?:cargo\s+)?dist\s+(?:plan|host|"
+    + _GENERATED_SUBCOMMAND
+    + ")"
+    + _DIST_FLAGS
+    + r"\s*>\s*([\w./-]+)"
 )
 # An `echo` of fixed text that writes nothing: no substitution, no redirect.
 _PLAIN_ECHO: typ.Final = re.compile(r"echo\s+(?:\"[^\"$`>]*\"|'[^'>]*')")
