@@ -2,11 +2,12 @@
 
 A cargo-dist release workflow installs dist, and the packages it needs, with
 `run: ${{ matrix.install_dist.run }}`: a command the plan job writes into the
-matrix. The step has no text to read, but it is no test when two things hold:
-the job's matrix is the plan job's output (`fromJson(needs.plan.outputs...)`,
-not a literal list the reader could read for itself), and the job goes on to
-run `dist build`. Anything else that is only an expression stays unread, and
-so does any lookup in a job whose matrix is written out in the workflow.
+matrix. The step has no text to read, but it is no test when three things hold:
+the job's matrix is the `manifest` output of a step that runs `dist` in the
+job named by `needs.<job>.outputs.<name>`, the lookup is a bare dotted path, and
+the job goes on to run `dist build`. Anything else that is only an expression
+stays unread, and so does any lookup in a job whose matrix is written out in the
+workflow or produced by a script.
 """
 
 from __future__ import annotations
@@ -19,31 +20,65 @@ _MATRIX_LOOKUP: typ.Final = re.compile(
     r"\s*\$\{\{\s*matrix(?:\.[A-Za-z_][A-Za-z0-9_-]*)+\s*\}\}\s*"
 )
 # A matrix that is another job's output rather than a list written here.
-_PLANNED_MATRIX: typ.Final = re.compile(r"\s*\$\{\{\s*fromJ[Ss][Oo][Nn]\(\s*needs\.")
+_PLANNED_MATRIX: typ.Final = re.compile(
+    r"\s*\$\{\{\s*fromJ[Ss][Oo][Nn]\(\s*needs\."
+    r"([A-Za-z_][\w-]*)\.outputs\.([A-Za-z_][\w-]*)\s*\)"
+)
+# An output that is a step's `manifest` output.
+_MANIFEST_OUTPUT: typ.Final = re.compile(
+    r"\s*\$\{\{\s*steps\.([A-Za-z_][\w-]*)\.outputs\.manifest\s*\}\}\s*"
+)
 # A command line that starts cargo-dist: the job builds release artefacts.
-_DIST_COMMAND: typ.Final = re.compile(r"^\s*(?:cargo\s+)?dist\s+[a-z]", re.MULTILINE)
+_DIST_COMMAND: typ.Final = re.compile(r"^\s*(?:cargo\s+)?dist\s+[$a-z]", re.MULTILINE)
 
 
-def _plans_its_matrix(job: dict[str, object]) -> bool:
-    """Return whether the job's matrix is the output of the job that planned it."""
-    strategy = job.get("strategy")
-    matrix = strategy.get("matrix") if isinstance(strategy, dict) else None
-    return isinstance(matrix, str) and _PLANNED_MATRIX.match(matrix) is not None
+def _mapping(value: object) -> dict[str, object]:
+    """Return *value* when it is a mapping, otherwise an empty one."""
+    return typ.cast("dict[str, object]", value) if isinstance(value, dict) else {}
 
 
-def _runs_dist(job: dict[str, object]) -> bool:
-    """Return whether any step of the job runs a cargo-dist subcommand."""
+def _dist_steps(job: dict[str, object]) -> list[dict[str, object]]:
+    """Return the steps of *job* whose `run` starts a cargo-dist command."""
     steps = job.get("steps")
-    for raw in steps if isinstance(steps, list) else []:
-        run = raw.get("run") if isinstance(raw, dict) else None
-        if isinstance(run, str) and _DIST_COMMAND.search(run) is not None:
-            return True
-    return False
+    found = [_mapping(raw) for raw in steps] if isinstance(steps, list) else []
+    return [
+        step
+        for step in found
+        if isinstance(step.get("run"), str)
+        and _DIST_COMMAND.search(str(step["run"])) is not None
+    ]
 
 
-def is_planned_dist_job(job: dict[str, object]) -> bool:
-    """Return whether *job* builds release artefacts from a planned matrix."""
-    return _plans_its_matrix(job) and _runs_dist(job)
+def _manifest_step(planner: dict[str, object], output: str) -> str | None:
+    """Return the id of the step whose `manifest` output *planner* exposes."""
+    value = _mapping(planner.get("outputs")).get(output)
+    match = _MANIFEST_OUTPUT.fullmatch(value) if isinstance(value, str) else None
+    return match.group(1) if match is not None else None
+
+
+def _plans_its_matrix(job: dict[str, object], jobs: dict[str, object]) -> bool:
+    """Return whether the job's matrix is a cargo-dist plan job's manifest.
+
+    Returns
+    -------
+    bool
+        True when the matrix names `needs.<job>.outputs.<name>` and that job's
+        output is the `manifest` output of a step that runs `dist`.
+    """
+    matrix = _mapping(job.get("strategy")).get("matrix")
+    named = _PLANNED_MATRIX.match(matrix) if isinstance(matrix, str) else None
+    if named is None:
+        return False
+    planner = _mapping(jobs.get(named.group(1)))
+    step_id = _manifest_step(planner, named.group(2))
+    return step_id is not None and any(
+        step.get("id") == step_id for step in _dist_steps(planner)
+    )
+
+
+def is_planned_dist_job(job: dict[str, object], jobs: dict[str, object]) -> bool:
+    """Return whether *job* builds release artefacts from a cargo-dist plan."""
+    return bool(_dist_steps(job)) and _plans_its_matrix(job, jobs)
 
 
 def hides_command(

@@ -1322,12 +1322,23 @@ def test_an_expression_valued_command_is_uncertain(tmp_path: pathlib.Path) -> No
 
 
 PLANNED = "${{ fromJson(needs.plan.outputs.val).ci.github.artifacts_matrix }}"
+DIST_PLAN = (
+    "  plan:\n    outputs:\n      val: ${{ steps.plan.outputs.manifest }}\n"
+    "    steps:\n      - id: plan\n"
+    "        run: dist ${{ inputs.mode }} --output-format=json\n"
+)
+SCRIPT_PLAN = (
+    "  plan:\n    outputs:\n      val: ${{ steps.set.outputs.manifest }}\n"
+    "    steps:\n      - id: set\n"
+    '        run: echo \'manifest={"command":["cargo test"]}\' >> "$GITHUB_OUTPUT"\n'
+)
 
 
-def dist_job(matrix: str, run: str) -> str:
-    """Return a one-job workflow that runs *run*, then `dist build`."""
+def dist_job(matrix: str, run: str, plan: str = DIST_PLAN) -> str:
+    """Return a workflow whose build job runs *run*, then `dist build`."""
     return (
-        f"jobs:\n  build:\n    strategy:\n      matrix: {matrix}\n    steps:\n"
+        f"jobs:\n{plan}  build:\n    needs: plan\n    strategy:\n"
+        f"      matrix: {matrix}\n    steps:\n"
         f"      - run: {run}\n      - run: dist build ${{{{ matrix.dist_args }}}}\n"
     )
 
@@ -1360,6 +1371,16 @@ def test_other_expressions_in_a_dist_job_stay_uncertain(
     assert states(tmp_path) == [("workflow", "build", "uncertain")]
 
 
+def test_a_matrix_planned_by_a_script_stays_uncertain(tmp_path: pathlib.Path) -> None:
+    """Only a plan job that runs dist vouches for what its matrix holds."""
+    put(
+        tmp_path,
+        WORKFLOW,
+        dist_job(PLANNED, "${{ matrix.command }}", plan=SCRIPT_PLAN),
+    )
+    assert states(tmp_path) == [("workflow", "build", "uncertain")]
+
+
 def test_a_planned_matrix_lookup_without_dist_stays_uncertain(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -1367,7 +1388,8 @@ def test_a_planned_matrix_lookup_without_dist_stays_uncertain(
     put(
         tmp_path,
         WORKFLOW,
-        f"jobs:\n  build:\n    strategy:\n      matrix: {PLANNED}\n    steps:\n"
+        f"jobs:\n{DIST_PLAN}  build:\n    needs: plan\n    strategy:\n"
+        f"      matrix: {PLANNED}\n    steps:\n"
         "      - run: ${{ matrix.install_dist.run }}\n      - run: echo done\n",
     )
     assert states(tmp_path) == [("workflow", "build", "uncertain")]

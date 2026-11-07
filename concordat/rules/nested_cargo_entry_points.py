@@ -613,7 +613,7 @@ def _job_entries(
         if not isinstance(steps, list):
             continue
         runs_on = job.get("runs-on")
-        releases = is_planned_dist_job(job)
+        releases = is_planned_dist_job(job, jobs)
         fetches = False
         for raw_step in steps:
             step = _mapping(raw_step)
