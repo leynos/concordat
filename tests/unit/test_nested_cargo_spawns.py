@@ -1323,6 +1323,15 @@ def test_a_cfg_test_enum_variant_closes_at_its_comma_or_brace(
         ),
         (
             (
+                "fn probe(x: u8) -> bool {\n    match x {\n        #[cfg(test)]\n"
+                "        0 => true | false,\n"
+                '        _ => Command::new("cargo").arg("build").status().is_ok(),\n'
+                "    }\n}\n"
+            ),
+            "0 => true | false,",
+        ),
+        (
+            (
                 "fn run(x: u8) {\n    let spawn: fn(u8, u8) = match x {\n"
                 "        #[cfg(test)]\n"
                 '        0 => |_: u8, _: u8| Command::new("cargo")\n'

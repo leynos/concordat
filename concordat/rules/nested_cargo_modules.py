@@ -162,6 +162,40 @@ def _item_end(masked: str, index: int) -> tuple[int, bool] | None:
     return None
 
 
+@dataclasses.dataclass(slots=True)
+class _MemberState:
+    """What `_member_end` has seen that decides whether a comma ends the entry."""
+
+    angle: int = 0
+    in_type: bool = False
+    arm_body_starts: bool = False
+    in_closure_params: bool = False
+
+    def observe(self, char: str, before: str, after: str) -> None:
+        """Take one character at the entry's own level into account."""
+        if not char.isspace() and char not in "=>|":
+            self.arm_body_starts = False
+        if char == ":" and ":" not in {before, after}:
+            self.in_type = True
+        elif char == "=" and after == ">":
+            self.arm_body_starts = True
+        elif char == "|" and "|" not in {before, after}:
+            # A closure's parameter list, `|a: u8, b: u8|`, opening an arm's
+            # body; a `|` later in an expression (`true | false`) is no closure.
+            if self.arm_body_starts or self.in_closure_params:
+                self.in_closure_params = not self.in_closure_params
+                self.arm_body_starts = False
+        elif char == "<" and (self.in_type or self.angle or before == ":"):
+            self.angle += 1
+        elif char == ">" and self.angle and before not in "-=":
+            self.angle -= 1
+
+    @property
+    def at_top_level(self) -> bool:
+        """Report whether a comma here ends the entry."""
+        return self.angle == 0 and not self.in_closure_params
+
+
 def _member_end(masked: str, index: int) -> tuple[int, bool] | None:
     """Return the end of an enum variant, struct field or match arm at *index*.
 
@@ -178,13 +212,11 @@ def _member_end(masked: str, index: int) -> tuple[int, bool] | None:
         The index after the member, and whether it has a `{}` body; None if a
         body never closes.
     """
-    depth = angle = 0
-    in_type = after_arrow = in_closure_params = False
+    depth = 0
+    state = _MemberState()
     position = index
     while position < len(masked):
         char = masked[position]
-        before = masked[position - 1] if position > index else ""
-        after = masked[position + 1 : position + 2]
         if char in "([":
             depth += 1
         elif char in ")]":
@@ -198,23 +230,17 @@ def _member_end(masked: str, index: int) -> tuple[int, bool] | None:
                 close = scan_balanced(masked, position)
                 if close is None:
                     return None
-                if angle == 0:
+                if state.angle == 0:
                     return _after_member_comma(masked, close), True
                 position = close
                 continue
-            if char == ":" and ":" not in {before, after}:
-                in_type = True
-            elif char == "=" and after == ">":
-                after_arrow = True
-            elif char == "|" and after_arrow and "|" not in {before, after}:
-                # A closure's parameter list, `|a: u8, b: u8|`, in an arm's body.
-                in_closure_params = not in_closure_params
-            elif char == "<" and (in_type or angle or before == ":"):
-                angle += 1
-            elif char == ">" and angle and before not in "-=":
-                angle -= 1
-            elif char == "," and angle == 0 and not in_closure_params:
+            if char == "," and state.at_top_level:
                 return position + 1, False
+        if depth == 0 and char not in "()[]":
+            before = masked[position - 1] if position > index else ""
+            state.observe(char, before, masked[position + 1 : position + 2])
+        else:
+            state.arm_body_starts = False
         position += 1
     return None
 
