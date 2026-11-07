@@ -22,8 +22,13 @@ _MATRIX_LOOKUP: typ.Final = re.compile(
 # A matrix that is another job's output rather than a list written here.
 _PLANNED_MATRIX: typ.Final = re.compile(
     r"\s*\$\{\{\s*fromJ[Ss][Oo][Nn]\(\s*needs\."
-    r"([A-Za-z_][\w-]*)\.outputs\.([A-Za-z_][\w-]*)\s*\)"
+    r"([A-Za-z_][\w-]*)\.outputs\.([A-Za-z_][\w-]*)\s*\)(?:\.[A-Za-z_][\w-]*)*\s*\}\}\s*"
 )
+# `dist ... > file`: a dist command whose output goes to a file.
+_DIST_REDIRECT: typ.Final = re.compile(
+    r"^\s*(?:cargo\s+)?dist\s[^\n>]*>\s*(\S+)\s*$", re.MULTILINE
+)
+_GITHUB_OUTPUT: typ.Final = re.compile(r">>\s*[\"']?\$\{?GITHUB_OUTPUT\}?[\"']?")
 # An output that is a step's `manifest` output.
 _MANIFEST_OUTPUT: typ.Final = re.compile(
     r"\s*\$\{\{\s*steps\.([A-Za-z_][\w-]*)\.outputs\.manifest\s*\}\}\s*"
@@ -66,14 +71,35 @@ def _plans_its_matrix(job: dict[str, object], jobs: dict[str, object]) -> bool:
         output is the `manifest` output of a step that runs `dist`.
     """
     matrix = _mapping(job.get("strategy")).get("matrix")
-    named = _PLANNED_MATRIX.match(matrix) if isinstance(matrix, str) else None
+    named = _PLANNED_MATRIX.fullmatch(matrix) if isinstance(matrix, str) else None
     if named is None:
         return False
     planner = _mapping(jobs.get(named.group(1)))
     step_id = _manifest_step(planner, named.group(2))
     return step_id is not None and any(
-        step.get("id") == step_id for step in _dist_steps(planner)
+        step.get("id") == step_id and _is_dist_plan(str(step["run"]))
+        for step in _dist_steps(planner)
     )
+
+
+def _is_dist_plan(run: str) -> bool:
+    """Return whether *run* publishes dist's own output file as its manifest.
+
+    The script must send a `dist` command's output to a file and write that
+    file, through `jq`, as the one `manifest` output it sets. A script that
+    writes any other output, or a manifest of its own making, is not it.
+
+    Returns
+    -------
+    bool
+        True when the step has cargo-dist's generated plan shape.
+    """
+    written = _DIST_REDIRECT.search(run)
+    if written is None or len(_GITHUB_OUTPUT.findall(run)) != 1:
+        return False
+    manifest = re.escape(written.group(1))
+    publish = rf"manifest=\$\(jq\s+-c\s+[\"']?\.[\"']?\s+{manifest}\s*\)"
+    return re.search(publish, run) is not None
 
 
 def is_planned_dist_job(job: dict[str, object], jobs: dict[str, object]) -> bool:

@@ -1322,10 +1322,19 @@ def test_an_expression_valued_command_is_uncertain(tmp_path: pathlib.Path) -> No
 
 
 PLANNED = "${{ fromJson(needs.plan.outputs.val).ci.github.artifacts_matrix }}"
-DIST_PLAN = (
+PLAN_HEAD = (
     "  plan:\n    outputs:\n      val: ${{ steps.plan.outputs.manifest }}\n"
-    "    steps:\n      - id: plan\n"
-    "        run: dist ${{ inputs.mode }} --output-format=json\n"
+    "    steps:\n      - id: plan\n        run: |\n"
+)
+DIST_PLAN = (
+    PLAN_HEAD
+    + "          dist ${{ inputs.mode }} --output-format=json > plan.json\n"
+    + '          echo "manifest=$(jq -c "." plan.json)" >> "$GITHUB_OUTPUT"\n'
+)
+DIVERTED_PLAN = (
+    PLAN_HEAD
+    + "          dist plan --output-format=json > plan.json\n"
+    + '          echo \'manifest={"command":["cargo test"]}\' >> "$GITHUB_OUTPUT"\n'
 )
 SCRIPT_PLAN = (
     "  plan:\n    outputs:\n      val: ${{ steps.set.outputs.manifest }}\n"
@@ -1368,6 +1377,28 @@ def test_other_expressions_in_a_dist_job_stay_uncertain(
 ) -> None:
     """The release reading is as narrow as the shape cargo-dist generates."""
     put(tmp_path, WORKFLOW, dist_job(matrix, run))
+    assert states(tmp_path) == [("workflow", "build", "uncertain")]
+
+
+def test_a_plan_step_that_writes_another_manifest_stays_uncertain(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Running dist is not enough; the manifest must be dist's own output."""
+    put(
+        tmp_path,
+        WORKFLOW,
+        dist_job(PLANNED, "${{ matrix.command }}", plan=DIVERTED_PLAN),
+    )
+    assert states(tmp_path) == [("workflow", "build", "uncertain")]
+
+
+def test_a_compound_matrix_expression_stays_uncertain(tmp_path: pathlib.Path) -> None:
+    """A plan output combined with another value is not the plan's matrix."""
+    compound = (
+        "${{ fromJson(needs.plan.outputs.val) && "
+        'fromJson(\'{"command":["cargo test"]}\') }}'
+    )
+    put(tmp_path, WORKFLOW, dist_job(compound, "${{ matrix.command }}"))
     assert states(tmp_path) == [("workflow", "build", "uncertain")]
 
 
