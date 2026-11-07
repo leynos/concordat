@@ -170,10 +170,18 @@ class _MemberState:
     in_type: bool = False
     arm_body_starts: bool = False
     in_closure_params: bool = False
+    word: str = ""
 
     def observe(self, char: str, before: str, after: str) -> None:
         """Take one character at the entry's own level into account."""
-        if not char.isspace() and char not in "=>|":
+        self.word = self.word + char if char.isalnum() or char == "_" else ""
+        # `move |a, b| ...` is a closure too, so the letters of `move` leave the
+        # start of an arm body standing.
+        if (
+            not char.isspace()
+            and char not in "=>|"
+            and not (self.word and "move".startswith(self.word))
+        ):
             self.arm_body_starts = False
         if char == ":" and ":" not in {before, after}:
             self.in_type = True
