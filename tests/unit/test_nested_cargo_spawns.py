@@ -1233,6 +1233,29 @@ def test_an_unbalanced_scope_is_a_problem(tmp_path: pathlib.Path) -> None:
     assert any("tests/broken.rs" in problem for problem in problems)
 
 
+@pytest.mark.parametrize(
+    "members",
+    [
+        "    A,\n    #[cfg(test)]\n    PanicForTest,\n",
+        "    A,\n    #[cfg(test)]\n    PanicForTest\n",
+        "    #[cfg(test)]\n    Probe { sent: u64 },\n    A,\n",
+        "    #[cfg(test)]\n    Probe { sent: u64 }\n",
+        "    #[cfg(test)]\n    Pair(std::collections::HashMap<u8, u8>),\n    A,\n",
+    ],
+)
+def test_a_cfg_test_enum_variant_closes_at_its_comma_or_brace(
+    tmp_path: pathlib.Path, members: str
+) -> None:
+    """A gated variant is an item that ends without `;` or a body of its own."""
+    spawn = 'fn run() {\n    Command::new("cargo").arg("build");\n}\n'
+    enum = f"pub enum Command {{\n{members}}}\n"
+    for text in (f"{enum}\n{spawn}", f"{spawn}\n{enum}"):
+        put(tmp_path, "src/lib.rs", text)
+        problems: list[str] = []
+        assert evidence(tmp_path, problems).spawns == []
+        assert problems == []
+
+
 def test_an_unterminated_literal_is_a_problem(tmp_path: pathlib.Path) -> None:
     """Once a literal runs to the end of the file, the structure is a fiction."""
     put(

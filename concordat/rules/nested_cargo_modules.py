@@ -47,6 +47,10 @@ CRATE_ROOT_DIRECTORIES: typ.Final = frozenset({"tests", "benches", "examples"})
 _ATTRIBUTE: typ.Final = re.compile(r"#\[")
 _MODULE: typ.Final = re.compile(r"mod\s+(?P<name>[A-Za-z_]\w*)")
 _MODIFIERS: typ.Final = re.compile(r"(?:pub(?:\s*\([^)]*\))?\s+)*")
+_ITEM_KEYWORD: typ.Final = re.compile(
+    r"(?:fn|struct|enum|union|trait|impl|mod|use|const|static|type|extern|unsafe|"
+    r"async|macro_rules|macro|let|if|match|loop|while|for)\b"
+)
 _ENCLOSING_MODULE: typ.Final = re.compile(r"\bmod\s+([A-Za-z_]\w*)\s*$")
 _CFG_PREDICATE: typ.Final = re.compile(r"cfg\s*\((.*)\)\s*$", re.DOTALL)
 _PATH_ATTRIBUTE: typ.Final = re.compile(r"\bpath\s*=\s*\"[^\"]*\"")
@@ -145,7 +149,9 @@ def _item_end(masked: str, index: int) -> tuple[int, bool] | None:
     tuple[int, bool] | None
         The index after the item, and whether the item is one with a `{}` body.
     """
+    member = _ITEM_KEYWORD.match(masked, index) is None
     depth = 0
+    angle = 0
     position = index
     while position < len(masked):
         char = masked[position]
@@ -157,9 +163,28 @@ def _item_end(masked: str, index: int) -> tuple[int, bool] | None:
             return position + 1, False
         elif depth == 0 and char == "{":
             close = scan_balanced(masked, position)
-            return (close, True) if close is not None else None
+            if close is None:
+                return None
+            return (_after_member_comma(masked, close) if member else close), True
+        elif member and depth == 0:
+            # An enum variant or struct field is not an item with a keyword: it
+            # ends at its comma, or at the brace of the block it ends.
+            if char == "}":
+                return position, False
+            if char == "<":
+                angle += 1
+            elif char == ">" and masked[position - 1] not in "-=":
+                angle = max(angle - 1, 0)
+            elif char == "," and angle == 0:
+                return position + 1, False
         position += 1
     return None
+
+
+def _after_member_comma(masked: str, index: int) -> int:
+    """Return the index after the comma that follows a member's body, if any."""
+    after = skip_trivia(masked, index)
+    return after + 1 if masked.startswith(",", after) else index
 
 
 def _modifier_end(masked: str, index: int) -> int:
