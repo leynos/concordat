@@ -1286,6 +1286,31 @@ def test_a_cfg_test_enum_variant_closes_at_its_comma_or_brace(
             "#[cfg(test)]\nunion U<A, B> {\n    a: u8,\n}\nfn f() {}\n",
             "union U<A, B> {\n    a: u8,\n}",
         ),
+        (
+            (
+                "fn run() {\n    #[cfg(test)]\n    consume::<u8, u16>(\n"
+                '        Command::new("cargo").arg("build").status(),\n    );\n'
+                "    other();\n}\n"
+            ),
+            (
+                "consume::<u8, u16>(\n"
+                '        Command::new("cargo").arg("build").status(),\n    );'
+            ),
+        ),
+        (
+            (
+                "impl S {\n    #[cfg(test)]\n    const A: u8 = 1;\n"
+                "    const B: u8 = 2;\n}\n"
+            ),
+            "const A: u8 = 1;",
+        ),
+        (
+            (
+                "fn f(x: u8) {\n    match x {\n        #[cfg(test)]\n"
+                "        1 => v::<u8, u8>(x),\n        _ => (),\n    }\n}\n"
+            ),
+            "1 => v::<u8, u8>(x),",
+        ),
     ],
 )
 def test_a_gated_member_covers_exactly_that_member(source: str, gated: str) -> None:
@@ -1303,6 +1328,21 @@ def test_a_gated_member_covers_exactly_that_member(source: str, gated: str) -> N
     assert problems == []
     expected = source[source.index("#[cfg(test)]") : source.index(gated) + len(gated)]
     assert [source[start:end] for start, end in scope.ranges] == [expected]
+
+
+def test_a_gated_statement_with_a_generic_call_keeps_its_spawn_in_scope(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A turbofish comma inside a gated statement does not end it early."""
+    put(
+        tmp_path,
+        "src/lib.rs",
+        "fn run() {\n    #[cfg(test)]\n    consume::<u8, u16>(\n"
+        '        Command::new("cargo").arg("build").status(),\n    );\n}\n',
+    )
+    problems: list[str] = []
+    assert evidence(tmp_path, problems).spawns != []
+    assert problems == []
 
 
 def test_an_unterminated_literal_is_a_problem(tmp_path: pathlib.Path) -> None:

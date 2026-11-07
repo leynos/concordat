@@ -47,11 +47,12 @@ CRATE_ROOT_DIRECTORIES: typ.Final = frozenset({"tests", "benches", "examples"})
 _ATTRIBUTE: typ.Final = re.compile(r"#\[")
 _MODULE: typ.Final = re.compile(r"mod\s+(?P<name>[A-Za-z_]\w*)")
 _MODIFIERS: typ.Final = re.compile(r"(?:pub(?:\s*\([^)]*\))?\s+)*")
-_ITEM_KEYWORD: typ.Final = re.compile(
-    r"(?:fn|struct|enum|trait|impl|mod|use|const|static|type|extern|unsafe|"
-    r"async|macro|let|if|match|loop|while|for|union(?=\s+[A-Za-z_])|"
-    r"macro_rules(?=\s*!))\b"
+# The head of a block whose entries are comma-separated members, not items: an
+# enum, struct or union body, or the arms of a `match`.
+_MEMBER_BLOCK_HEAD: typ.Final = re.compile(
+    r"(?:\b(?:enum|struct|union)\s+[A-Za-z_]\w*|\bmatch\b)[^;{}]*$"
 )
+_MEMBER_HEAD_WINDOW: typ.Final = 400
 _ENCLOSING_MODULE: typ.Final = re.compile(r"\bmod\s+([A-Za-z_]\w*)\s*$")
 _CFG_PREDICATE: typ.Final = re.compile(r"cfg\s*\((.*)\)\s*$", re.DOTALL)
 _PATH_ATTRIBUTE: typ.Final = re.compile(r"\bpath\s*=\s*\"[^\"]*\"")
@@ -142,15 +143,29 @@ def _is_test_attribute(masked: str, match: re.Match[str]) -> bool:
     return predicate is not None and _predicate_mentions_test(predicate.group(1))
 
 
-def _item_end(masked: str, index: int) -> tuple[int, bool] | None:
+def _in_member_block(masked: str, pairs: list[tuple[int, int]], offset: int) -> bool:
+    """Return whether *offset* sits in an enum, struct or union body or a match."""
+    block = enclosing_block(pairs, offset)
+    if block is None:
+        return False
+    head = masked[max(0, block[0] - _MEMBER_HEAD_WINDOW) : block[0]]
+    return _MEMBER_BLOCK_HEAD.search(head) is not None
+
+
+def _item_end(
+    masked: str, index: int, *, member: bool = False
+) -> tuple[int, bool] | None:
     """Return an item's end and whether it opens a body, or None if unbalanced.
+
+    *member* says the item is an entry of an enum, struct or union body or a
+    `match`, which ends at a comma rather than at a `;`.
 
     Returns
     -------
     tuple[int, bool] | None
         The index after the item, and whether the item is one with a `{}` body.
     """
-    if _ITEM_KEYWORD.match(masked, index) is None:
+    if member:
         return _member_end(masked, index)
     depth = 0
     position = index
@@ -211,10 +226,10 @@ def _member_end(masked: str, index: int) -> tuple[int, bool] | None:
                 continue
             if char == ":" and ":" not in {before, after}:
                 in_type = True
-            elif in_type and char == "<":
+            elif char == "<" and (in_type or before == ":"):
                 angle += 1
-            elif in_type and char == ">" and before not in "-=":
-                angle = max(angle - 1, 0)
+            elif char == ">" and angle and before not in "-=":
+                angle -= 1
             elif char == "," and angle == 0:
                 return position + 1, False
         position += 1
@@ -560,7 +575,8 @@ def scan_scope(
             continue
         run = (match.start(), _attribute_run_end(source.masked, match.start()))
         declaration = skip_trivia(source.masked, _modifier_end(source.masked, run[1]))
-        item = _item_end(source.masked, declaration)
+        member = _in_member_block(source.masked, pairs, match.start())
+        item = _item_end(source.masked, declaration, member=member)
         if item is None:
             problems.append(
                 f"{source.relative.as_posix()}: a #[cfg(test)] item never closes"
