@@ -1344,6 +1344,17 @@ OVERWRITTEN_PLAN = (
     + '          echo \'{"command":["cargo test"]}\' > plan.json\n'
     + '          echo "manifest=$(jq -c "." plan.json)" >> "$GITHUB_OUTPUT"\n'
 )
+PUBLISHED_FIRST_PLAN = (
+    PLAN_HEAD
+    + '          echo "manifest=$(jq -c "." plan.json)" >> "$GITHUB_OUTPUT"\n'
+    + "          dist plan --output-format=json > plan.json\n"
+)
+EXPRESSION_ECHO_PLAN = (
+    PLAN_HEAD
+    + "          dist plan --output-format=json > plan.json\n"
+    + "          echo '${{ inputs.payload }}'\n"
+    + '          echo "manifest=$(jq -c "." plan.json)" >> "$GITHUB_OUTPUT"\n'
+)
 COMMENTED_PLAN = (
     PLAN_HEAD
     + "          dist plan --output-format=json # > plan.json\n"
@@ -1428,7 +1439,10 @@ def test_a_plan_file_overwritten_before_publication_stays_uncertain(
     assert states(tmp_path) == [("workflow", "build", "uncertain")]
 
 
-@pytest.mark.parametrize("plan", [COMMENTED_PLAN, INJECTED_PLAN])
+@pytest.mark.parametrize(
+    "plan",
+    [COMMENTED_PLAN, INJECTED_PLAN, PUBLISHED_FIRST_PLAN, EXPRESSION_ECHO_PLAN],
+)
 def test_a_plan_whose_redirect_is_not_dists_stays_uncertain(
     tmp_path: pathlib.Path, plan: str
 ) -> None:

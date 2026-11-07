@@ -41,7 +41,7 @@ _DIST_REDIRECT: typ.Final = re.compile(
     + r"\s*>\s*([\w./-]+)"
 )
 # An `echo` of fixed text that writes nothing: no substitution, no redirect.
-_PLAIN_ECHO: typ.Final = re.compile(r"echo\s+(?:\"[^\"$`>]*\"|'[^'>]*')")
+_PLAIN_ECHO: typ.Final = re.compile(r"echo\s+(?:\"[^\"$`>]*\"|'[^'>$]*')")
 # An output that is a step's `manifest` output.
 _MANIFEST_OUTPUT: typ.Final = re.compile(
     r"\s*\$\{\{\s*steps\.([A-Za-z_][\w-]*)\.outputs\.manifest\s*\}\}\s*"
@@ -121,8 +121,17 @@ def _is_dist_plan(run: str) -> bool:
     )
     dump = re.compile(rf"cat\s+{target}")
     allowed = (_DIST_REDIRECT, _PLAIN_ECHO, publish, dump)
-    return sum(publish.fullmatch(line) is not None for line in lines) == 1 and all(
-        any(pattern.fullmatch(line) for pattern in allowed) for line in lines
+    publications = [
+        index for index, line in enumerate(lines) if publish.fullmatch(line)
+    ]
+    redirects = [
+        index for index, line in enumerate(lines) if _DIST_REDIRECT.fullmatch(line)
+    ]
+    # The file is published only after dist has written it.
+    return (
+        len(publications) == 1
+        and publications[0] > redirects[0]
+        and all(any(pattern.fullmatch(line) for pattern in allowed) for line in lines)
     )
 
 
