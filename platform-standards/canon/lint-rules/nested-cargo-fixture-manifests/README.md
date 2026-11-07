@@ -49,8 +49,9 @@ revisited). A blank rationale or trigger suppresses nothing. An exemption does
 not apply to another repository. Four exemptions ship by default, each for a
 manifest that Dependabot should not touch: leynos/rstest-bdd's derived
 `published-gpui-e2e` fixture, leynos/axinite's vendored Telegram crypto patch,
-leynos/lille's vendored `feldera-size-of` fork and leynos/wireframe's
-`tests/feature_gate` package, which resolves independently of the root lock.
+leynos/lille's vendored `feldera-size-of` fork, leynos/wireframe's
+`tests/feature_gate` package, which resolves independently of the root lock,
+and leynos/combobulate's `verus-wiring-probe`, pinned to the Verus release.
 
 ## Severity
 

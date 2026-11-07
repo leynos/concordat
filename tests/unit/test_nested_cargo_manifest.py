@@ -318,6 +318,7 @@ def test_an_unreadable_actions_directory_does_not_stop_the_audit(
         ("leynos/axinite", "tools-src/telegram/patches/grammers-crypto"),
         ("leynos/lille", "third_party/feldera-size-of"),
         ("leynos/wireframe", "tests/feature_gate"),
+        ("leynos/combobulate", "tools/verifier-fixtures/verus-wiring-probe"),
     ],
 )
 def test_the_shipped_exemptions_apply_to_their_repository_only(
