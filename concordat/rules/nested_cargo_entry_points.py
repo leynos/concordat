@@ -53,6 +53,7 @@ from .nested_cargo_nextest import (
     NextestConfig,
     read_nextest,
 )
+from .nested_cargo_release import hides_command, is_planned_dist_job
 from .nested_cargo_scripts import (
     TEST_TARGET,
     CommandMeaning,
@@ -536,8 +537,18 @@ def _step_scan(
     make_entry: _MakefileEntry,
     config: NextestConfig,
     profiles: list[str],
+    releases: bool = False,
 ) -> _StepScan:
-    """Classify one `run` step, returning its facts and whether it fetches first."""
+    """Classify one `run` step, returning its facts and whether it fetches first.
+
+    *releases* says the step's job builds release artefacts with cargo-dist,
+    so a step that is only a matrix lookup installs the tool and is no test.
+
+    Returns
+    -------
+    _StepScan
+        The step's entry-point facts and whether it fetches first.
+    """
     visible, has_expression = _visible(run)
     commands = script_commands(visible, newline_gates=shell.fail_fast)
     fetches = line_fetches(commands, is_resolved=True) and not has_expression
@@ -565,7 +576,7 @@ def _step_scan(
             reason=reason,
         )
         return _StepScan(facts=[fact], fetches=fetches)
-    if has_expression and not visible.strip():
+    if hides_command(visible, run, has_expression=has_expression, releases=releases):
         fact = EntryPointFact(
             kind="workflow",
             path=relative,
@@ -602,6 +613,7 @@ def _job_entries(
         if not isinstance(steps, list):
             continue
         runs_on = job.get("runs-on")
+        releases = is_planned_dist_job(job, jobs)
         fetches = False
         for raw_step in steps:
             step = _mapping(raw_step)
@@ -620,6 +632,7 @@ def _job_entries(
                 make_entry=make_entry,
                 config=config,
                 profiles=profiles,
+                releases=releases,
             )
             facts.extend(scan.facts)
             if (

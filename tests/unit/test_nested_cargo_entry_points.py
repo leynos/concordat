@@ -1321,6 +1321,192 @@ def test_an_expression_valued_command_is_uncertain(tmp_path: pathlib.Path) -> No
     assert states(tmp_path) == [("workflow", "test", "uncertain")]
 
 
+PLANNED = "${{ fromJson(needs.plan.outputs.val).ci.github.artifacts_matrix }}"
+PLAN_HEAD = (
+    "  plan:\n    outputs:\n      val: ${{ steps.plan.outputs.manifest }}\n"
+    "    steps:\n      - id: plan\n        run: |\n"
+)
+DIST_PLAN = (
+    PLAN_HEAD
+    + "          dist ${{ (!github.event.pull_request && "
+    + "format('host --steps=create --tag={0}', github.ref_name)) || 'plan' }} "
+    + "--output-format=json > plan.json\n"
+    + '          echo "manifest=$(jq -c "." plan.json)" >> "$GITHUB_OUTPUT"\n'
+)
+DIVERTED_PLAN = (
+    PLAN_HEAD
+    + "          dist plan --output-format=json > plan.json\n"
+    + '          echo \'manifest={"command":["cargo test"]}\' >> "$GITHUB_OUTPUT"\n'
+)
+OVERWRITTEN_PLAN = (
+    PLAN_HEAD
+    + "          dist plan --output-format=json > plan.json\n"
+    + '          echo \'{"command":["cargo test"]}\' > plan.json\n'
+    + '          echo "manifest=$(jq -c "." plan.json)" >> "$GITHUB_OUTPUT"\n'
+)
+PUBLISHED_FIRST_PLAN = (
+    PLAN_HEAD
+    + '          echo "manifest=$(jq -c "." plan.json)" >> "$GITHUB_OUTPUT"\n'
+    + "          dist plan --output-format=json > plan.json\n"
+)
+EXPRESSION_ECHO_PLAN = (
+    PLAN_HEAD
+    + "          dist plan --output-format=json > plan.json\n"
+    + "          echo '${{ inputs.payload }}'\n"
+    + '          echo "manifest=$(jq -c "." plan.json)" >> "$GITHUB_OUTPUT"\n'
+)
+COMMENT_EXPRESSION_PLAN = (
+    PLAN_HEAD
+    + "          dist plan --output-format=json > plan.json\n"
+    + "          # ${{ github.event.pull_request.body }}\n"
+    + '          echo "manifest=$(jq -c "." plan.json)" >> "$GITHUB_OUTPUT"\n'
+)
+COMMENTED_PLAN = (
+    PLAN_HEAD
+    + "          dist plan --output-format=json # > plan.json\n"
+    + '          echo "manifest=$(jq -c "." plan.json)" >> "$GITHUB_OUTPUT"\n'
+)
+INJECTED_PLAN = (
+    PLAN_HEAD
+    + "          dist ${{ 'plan; echo ''{}''' }} > plan.json\n"
+    + '          echo "manifest=$(jq -c "." plan.json)" >> "$GITHUB_OUTPUT"\n'
+)
+COMPOUND_PLAN = (
+    PLAN_HEAD
+    + "          dist plan --output-format=json;"
+    + ' echo \'{"command":["cargo test"]}\' > plan.json\n'
+    + '          echo "manifest=$(jq -c "." plan.json)" >> "$GITHUB_OUTPUT"\n'
+)
+SCRIPT_PLAN = (
+    "  plan:\n    outputs:\n      val: ${{ steps.set.outputs.manifest }}\n"
+    "    steps:\n      - id: set\n"
+    '        run: echo \'manifest={"command":["cargo test"]}\' >> "$GITHUB_OUTPUT"\n'
+)
+
+
+def dist_job(matrix: str, run: str, plan: str = DIST_PLAN) -> str:
+    """Return a workflow whose build job runs *run*, then `dist build`."""
+    return (
+        f"jobs:\n{plan}  build:\n    needs: plan\n    strategy:\n"
+        f"      matrix: {matrix}\n    steps:\n"
+        f"      - run: {run}\n      - run: dist build ${{{{ matrix.dist_args }}}}\n"
+    )
+
+
+def test_a_planned_matrix_lookup_in_a_dist_job_is_not_a_test(
+    tmp_path: pathlib.Path,
+) -> None:
+    """cargo-dist installs its own tools from the plan job's matrix."""
+    put(tmp_path, WORKFLOW, dist_job(PLANNED, "${{ matrix.install_dist.run }}"))
+    assert states(tmp_path) == []
+
+
+@pytest.mark.parametrize(
+    ("matrix", "run"),
+    [
+        # A matrix written out in the workflow can hold a test command.
+        ("{command: [cargo test]}", "${{ matrix.command }}"),
+        # A lookup with an operator can fall back to a test command.
+        (PLANNED, "${{ matrix.install_dist.run || 'cargo test' }}"),
+        # Only a matrix lookup is released, not another context.
+        (PLANNED, "${{ inputs.command }}"),
+        (PLANNED, "${{ matrix['install_dist'].run }}"),
+    ],
+)
+def test_other_expressions_in_a_dist_job_stay_uncertain(
+    tmp_path: pathlib.Path, matrix: str, run: str
+) -> None:
+    """The release reading is as narrow as the shape cargo-dist generates."""
+    put(tmp_path, WORKFLOW, dist_job(matrix, run))
+    assert states(tmp_path) == [("workflow", "build", "uncertain")]
+
+
+def test_a_plan_step_that_writes_another_manifest_stays_uncertain(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Running dist is not enough; the manifest must be dist's own output."""
+    put(
+        tmp_path,
+        WORKFLOW,
+        dist_job(PLANNED, "${{ matrix.command }}", plan=DIVERTED_PLAN),
+    )
+    assert states(tmp_path) == [("workflow", "build", "uncertain")]
+
+
+def test_a_plan_file_overwritten_before_publication_stays_uncertain(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The file must still hold dist's output when `jq` reads it."""
+    put(
+        tmp_path,
+        WORKFLOW,
+        dist_job(PLANNED, "${{ matrix.command }}", plan=OVERWRITTEN_PLAN),
+    )
+    assert states(tmp_path) == [("workflow", "build", "uncertain")]
+
+
+@pytest.mark.parametrize(
+    "plan",
+    [
+        COMMENTED_PLAN,
+        INJECTED_PLAN,
+        PUBLISHED_FIRST_PLAN,
+        EXPRESSION_ECHO_PLAN,
+        COMMENT_EXPRESSION_PLAN,
+    ],
+)
+def test_a_plan_whose_redirect_is_not_dists_stays_uncertain(
+    tmp_path: pathlib.Path, plan: str
+) -> None:
+    """A commented-out redirect or a substituted expression is not dist's output."""
+    put(tmp_path, WORKFLOW, dist_job(PLANNED, "${{ matrix.command }}", plan=plan))
+    assert states(tmp_path) == [("workflow", "build", "uncertain")]
+
+
+def test_a_compound_plan_command_stays_uncertain(tmp_path: pathlib.Path) -> None:
+    """A second command on the dist line can write the file the plan publishes."""
+    put(
+        tmp_path,
+        WORKFLOW,
+        dist_job(PLANNED, "${{ matrix.command }}", plan=COMPOUND_PLAN),
+    )
+    assert states(tmp_path) == [("workflow", "build", "uncertain")]
+
+
+def test_a_compound_matrix_expression_stays_uncertain(tmp_path: pathlib.Path) -> None:
+    """A plan output combined with another value is not the plan's matrix."""
+    compound = (
+        "${{ fromJson(needs.plan.outputs.val) && "
+        'fromJson(\'{"command":["cargo test"]}\') }}'
+    )
+    put(tmp_path, WORKFLOW, dist_job(compound, "${{ matrix.command }}"))
+    assert states(tmp_path) == [("workflow", "build", "uncertain")]
+
+
+def test_a_matrix_planned_by_a_script_stays_uncertain(tmp_path: pathlib.Path) -> None:
+    """Only a plan job that runs dist vouches for what its matrix holds."""
+    put(
+        tmp_path,
+        WORKFLOW,
+        dist_job(PLANNED, "${{ matrix.command }}", plan=SCRIPT_PLAN),
+    )
+    assert states(tmp_path) == [("workflow", "build", "uncertain")]
+
+
+def test_a_planned_matrix_lookup_without_dist_stays_uncertain(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A job that never runs cargo-dist gets no release reading."""
+    put(
+        tmp_path,
+        WORKFLOW,
+        f"jobs:\n{DIST_PLAN}  build:\n    needs: plan\n    strategy:\n"
+        f"      matrix: {PLANNED}\n    steps:\n"
+        "      - run: ${{ matrix.install_dist.run }}\n      - run: echo done\n",
+    )
+    assert states(tmp_path) == [("workflow", "build", "uncertain")]
+
+
 def test_a_workflow_that_does_not_decode_is_a_problem(tmp_path: pathlib.Path) -> None:
     """A YAML error leaves every step in the file unknown."""
     put(tmp_path, WORKFLOW, "jobs:\n  test:\n   steps:\n  - run: [\n")
