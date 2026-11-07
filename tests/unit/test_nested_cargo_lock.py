@@ -211,6 +211,22 @@ def test_wireframes_feature_gate_package_is_exempt_by_default(
 
 @pytest.mark.parametrize(
     ("slug", "expected"),
+    [("combobulate", set()), ("other", {"NC-001"})],
+)
+def test_combobulates_verus_probe_lock_is_exempt_only_at_home(
+    tmp_path: pathlib.Path, slug: str, expected: set[str]
+) -> None:
+    """The probe resolves the pinned Verus stack on purpose; its lock is not audited."""
+    _origin(tmp_path, f"https://github.com/leynos/{slug}.git")
+    workspace(tmp_path, ("serde", "1.0.0"))
+    probe = "tools/verifier-fixtures/verus-wiring-probe"
+    put(tmp_path, f"{probe}/Cargo.toml", FIXTURE_MANIFEST)
+    put(tmp_path, f"{probe}/Cargo.lock", DRIFTED)
+    assert rule_ids(tmp_path) == expected
+
+
+@pytest.mark.parametrize(
+    ("slug", "expected"),
     [("wireframe", set()), ("other", {"NC-002"})],
 )
 def test_wireframes_lockless_feature_gate_package_is_exempt_only_at_home(

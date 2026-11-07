@@ -104,3 +104,13 @@ parameters:
         review_trigger: >-
           review when the feature-gate check stops depending on an independent
           resolution, or when its lock is committed
+      - repository: leynos/combobulate
+        path: tools/verifier-fixtures/verus-wiring-probe
+        rationale: >-
+          Its Verus crates are pinned to the release that `tools/verus`
+          records, so a Dependabot bump would name a release the verifier does
+          not use. The verifier records hash the fixture tree whole, so the
+          exemption lives here rather than in a manifest comment.
+        review_trigger: >-
+          review when the probe stops pinning the Verus release recorded in
+          `tools/verus`, or when the verifier records stop hashing the tree
