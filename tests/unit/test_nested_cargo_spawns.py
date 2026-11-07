@@ -1336,6 +1336,15 @@ def test_a_cfg_test_enum_variant_closes_at_its_comma_or_brace(
         ),
         (
             (
+                "fn probe(x: u8, m: bool, n: bool) -> bool {\n    match x {\n"
+                "        #[cfg(test)]\n        0 => m | n,\n"
+                '        _ => Command::new("cargo").arg("build").status().is_ok(),\n'
+                "    }\n}\n"
+            ),
+            "0 => m | n,",
+        ),
+        (
+            (
                 "fn probe(x: u8) -> bool {\n    match x {\n        #[cfg(test)]\n"
                 "        0 => true | false,\n"
                 '        _ => Command::new("cargo").arg("build").status().is_ok(),\n'

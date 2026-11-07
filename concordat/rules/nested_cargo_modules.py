@@ -171,28 +171,36 @@ class _MemberState:
     arm_body_starts: bool = False
     in_closure_params: bool = False
     word: str = ""
+    arm_words: tuple[str, ...] = ()
 
     def observe(self, char: str, before: str, after: str) -> None:
         """Take one character at the entry's own level into account."""
-        self.word = self.word + char if char.isalnum() or char == "_" else ""
-        # `move |a, b| ...` is a closure too, so the letters of `move` leave the
-        # start of an arm body standing.
+        if char.isalnum() or char == "_":
+            self.word += char
+        elif self.word:
+            # A word of the arm body is complete: only `move` may precede a
+            # closure's parameter list.
+            self.arm_words += (self.word,)
+            self.word = ""
         if (
             not char.isspace()
             and char not in "=>|"
-            and not (self.word and "move".startswith(self.word))
+            and not (char.isalnum() or char == "_")
         ):
             self.arm_body_starts = False
         if char == ":" and ":" not in {before, after}:
             self.in_type = True
         elif char == "=" and after == ">":
             self.arm_body_starts = True
+            self.arm_words = ()
         elif char == "|" and "|" not in {before, after}:
             # A closure's parameter list, `|a: u8, b: u8|`, opening an arm's
-            # body; a `|` later in an expression (`true | false`) is no closure.
-            if self.arm_body_starts or self.in_closure_params:
+            # body (after at most `move`); a `|` later in an expression
+            # (`true | false`, `m | n`) is no closure.
+            opens = self.arm_body_starts and self.arm_words in ((), ("move",))
+            if opens or self.in_closure_params:
                 self.in_closure_params = not self.in_closure_params
-                self.arm_body_starts = False
+            self.arm_body_starts = False
         elif char == "<" and (self.in_type or self.angle or before == ":"):
             self.angle += 1
         elif char == ">" and self.angle and before not in "-=":
