@@ -162,6 +162,115 @@ def _item_end(masked: str, index: int) -> tuple[int, bool] | None:
     return None
 
 
+# The words that may stand between `=>` and a closure's parameter list.
+_CLOSURE_PREFIXES: typ.Final = ((), ("move",), ("async",), ("async", "move"))
+
+
+@dataclasses.dataclass(slots=True)
+class _MemberState:
+    """What `_member_end` has seen that decides whether a comma ends the entry."""
+
+    angle: int = 0
+    in_type: bool = False
+    arm_body_starts: bool = False
+    in_closure_params: bool = False
+    word: str = ""
+    arm_words: tuple[str, ...] = ()
+
+    def observe(self, char: str, before: str, after: str) -> None:
+        """Take one character at the entry's own level into account."""
+        if char.isalnum() or char == "_":
+            self.word += char
+        elif self.word:
+            # A word of the arm body is complete: only `move` may precede a
+            # closure's parameter list.
+            self.arm_words += (self.word,)
+            self.word = ""
+        if (
+            not char.isspace()
+            and char not in "=>|"
+            and not (char.isalnum() or char == "_")
+        ):
+            self.arm_body_starts = False
+        if char == ":" and ":" not in {before, after}:
+            self.in_type = True
+        elif char == "=" and after == ">":
+            self.arm_body_starts = True
+            self.arm_words = ()
+        elif char == "|" and "|" not in {before, after}:
+            # A closure's parameter list, `|a: u8, b: u8|`, opening an arm's
+            # body (after at most `move`); a `|` later in an expression
+            # (`true | false`, `m | n`) is no closure.
+            opens = self.arm_body_starts and self.arm_words in _CLOSURE_PREFIXES
+            if opens or self.in_closure_params:
+                self.in_closure_params = not self.in_closure_params
+            self.arm_body_starts = False
+        elif char == "<" and (self.in_type or self.angle or before == ":"):
+            self.angle += 1
+        elif char == ">" and self.angle and before not in "-=":
+            self.angle -= 1
+
+    @property
+    def at_top_level(self) -> bool:
+        """Report whether a comma here ends the entry."""
+        return self.angle == 0 and not self.in_closure_params
+
+
+def _member_end(masked: str, index: int) -> tuple[int, bool] | None:
+    """Return the end of an enum variant, struct field or match arm at *index*.
+
+    This is the reading of an entry that has no `;` or body of its own and so
+    runs to the end of its block: it ends at its comma, at the brace of the
+    block it ends, at a `;`, or after its own `{}` body (and the comma that
+    follows it). Angle brackets are counted once a field's `name: Type` colon or
+    a turbofish `::<` opens them, so a comma between generic arguments does not
+    end the entry, and a shift in a discriminant never counts.
+
+    Returns
+    -------
+    tuple[int, bool] | None
+        The index after the member, and whether it has a `{}` body; None if a
+        body never closes.
+    """
+    depth = 0
+    state = _MemberState()
+    position = index
+    while position < len(masked):
+        char = masked[position]
+        if char in "([":
+            depth += 1
+        elif char in ")]":
+            depth -= 1
+        elif depth == 0:
+            if char == ";":
+                return position + 1, False
+            if char == "}":
+                return len(masked[:position].rstrip()), False
+            if char == "{":
+                close = scan_balanced(masked, position)
+                if close is None:
+                    return None
+                if state.angle == 0:
+                    return _after_member_comma(masked, close), True
+                position = close
+                continue
+            if char == "," and state.at_top_level:
+                return position + 1, False
+        if depth == 0 and char not in "()[]":
+            before = masked[position - 1] if position > index else ""
+            state.observe(char, before, masked[position + 1 : position + 2])
+        else:
+            state.arm_body_starts = False
+        position += 1
+    return None
+
+
+def _after_member_comma(masked: str, index: int) -> int:
+    """Return the index after the comma that follows a member's body, if any."""
+    after = skip_trivia(masked, index)
+    return after + 1 if masked.startswith(",", after) else index
+
+
 def _modifier_end(masked: str, index: int) -> int:
     """Return the index after any visibility modifiers at *index*."""
     match = _MODIFIERS.match(masked, skip_trivia(masked, index))
@@ -496,6 +605,12 @@ def scan_scope(
         run = (match.start(), _attribute_run_end(source.masked, match.start()))
         declaration = skip_trivia(source.masked, _modifier_end(source.masked, run[1]))
         item = _item_end(source.masked, declaration)
+        block = enclosing_block(pairs, match.start())
+        if block is not None and (item is None or item[0] >= block[1]):
+            # An item cannot outlast the block that holds it. One that does has
+            # no `;` or body of its own: an enum variant, a struct field or a
+            # match arm, which a comma or the block's brace ends.
+            item = _member_end(source.masked, declaration)
         if item is None:
             problems.append(
                 f"{source.relative.as_posix()}: a #[cfg(test)] item never closes"

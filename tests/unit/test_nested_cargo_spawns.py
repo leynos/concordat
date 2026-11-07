@@ -1233,6 +1233,260 @@ def test_an_unbalanced_scope_is_a_problem(tmp_path: pathlib.Path) -> None:
     assert any("tests/broken.rs" in problem for problem in problems)
 
 
+@pytest.mark.parametrize(
+    "members",
+    [
+        "    A,\n    #[cfg(test)]\n    PanicForTest,\n",
+        "    A,\n    #[cfg(test)]\n    PanicForTest\n",
+        "    #[cfg(test)]\n    Probe { sent: u64 },\n    A,\n",
+        "    #[cfg(test)]\n    Probe { sent: u64 }\n",
+        "    #[cfg(test)]\n    Pair(std::collections::HashMap<u8, u8>),\n    A,\n",
+    ],
+)
+def test_a_cfg_test_enum_variant_closes_at_its_comma_or_brace(
+    tmp_path: pathlib.Path, members: str
+) -> None:
+    """A gated variant is an item that ends without `;` or a body of its own."""
+    spawn = 'fn run() {\n    Command::new("cargo").arg("build");\n}\n'
+    enum = f"pub enum Command {{\n{members}}}\n"
+    for text in (f"{enum}\n{spawn}", f"{spawn}\n{enum}"):
+        put(tmp_path, "src/lib.rs", text)
+        problems: list[str] = []
+        assert evidence(tmp_path, problems).spawns == []
+        assert problems == []
+
+
+@pytest.mark.parametrize(
+    ("source", "gated"),
+    [
+        ("enum E {\n    A,\n    #[cfg(test)]\n    B,\n    C,\n}\n", "B,"),
+        ("enum E {\n    A,\n    #[cfg(test)]\n    B\n}\n", "B"),
+        ("enum E {\n    #[cfg(test)]\n    A = 1 << 2,\n    B = 3,\n}\n", "A = 1 << 2,"),
+        ("enum E {\n    #[cfg(test)]\n    P { n: u64 },\n    A,\n}\n", "P { n: u64 }"),
+        (
+            "struct S {\n    #[cfg(test)]\n    m: HashMap<u8, Vec<u8>>,\n    n: u8,\n}",
+            "m: HashMap<u8, Vec<u8>>,",
+        ),
+        (
+            "struct S {\n    #[cfg(test)]\n    union: u8,\n    other: u8,\n}\n",
+            "union: u8,",
+        ),
+        (
+            (
+                "fn f(x: u8) -> u8 {\n    match x {\n        #[cfg(test)]\n"
+                "        1 => x << 2,\n        2 => x,\n        _ => 0,\n    }\n}\n"
+            ),
+            "1 => x << 2,",
+        ),
+        (
+            "#[cfg(test)]\nunion U<A, B> {\n    a: u8,\n}\nfn f() {}\n",
+            "union U<A, B> {\n    a: u8,\n}",
+        ),
+        (
+            (
+                "fn run() {\n    #[cfg(test)]\n    consume::<u8, u16>(\n"
+                '        Command::new("cargo").arg("build").status(),\n    );\n'
+                "    other();\n}\n"
+            ),
+            (
+                "consume::<u8, u16>(\n"
+                '        Command::new("cargo").arg("build").status(),\n    );'
+            ),
+        ),
+        (
+            (
+                "fn f(x: u8) {\n    match x {\n        #[cfg(test)]\n"
+                "        0 => consume::<Vec<u8>, u16>(\n"
+                '            Command::new("cargo").arg("build").status(),\n'
+                "        ),\n        _ => (),\n    }\n}\n"
+            ),
+            (
+                "0 => consume::<Vec<u8>, u16>(\n"
+                '            Command::new("cargo").arg("build").status(),\n'
+                "        ),"
+            ),
+        ),
+        (
+            (
+                "fn run(x: u8) {\n    match x {\n        0 => loop {\n"
+                "            #[cfg(test)]\n"
+                "            let spawn = |_: u8, _: u8| {\n"
+                '                Command::new("cargo").arg("build").status()\n'
+                "            };\n            break;\n        },\n"
+                "        _ => (),\n    }\n}\n"
+            ),
+            (
+                "let spawn = |_: u8, _: u8| {\n"
+                '                Command::new("cargo").arg("build").status()\n'
+                "            }"
+            ),
+        ),
+        (
+            (
+                "fn run(x: u8) {\n    let spawn: fn(u8, u8) = match x {\n"
+                "        #[cfg(test)]\n"
+                '        0 => move |_: u8, _: u8| Command::new("cargo")\n'
+                '            .arg("build").status(),\n'
+                '        _ => |_, _| Command::new("true").status(),\n    };\n}\n'
+            ),
+            (
+                '0 => move |_: u8, _: u8| Command::new("cargo")\n'
+                '            .arg("build").status(),'
+            ),
+        ),
+        (
+            (
+                "async fn run(x: u8) {\n    let spawn = match x {\n"
+                "        #[cfg(test)]\n"
+                '        0 => async move |_: u8, _: u8| Command::new("cargo")\n'
+                '            .arg("build").status(),\n'
+                '        _ => async |_: u8, _: u8| Command::new("true").status(),\n'
+                "    };\n}\n"
+            ),
+            (
+                '0 => async move |_: u8, _: u8| Command::new("cargo")\n'
+                '            .arg("build").status(),'
+            ),
+        ),
+        (
+            (
+                "fn probe(x: u8, m: bool, n: bool) -> bool {\n    match x {\n"
+                "        #[cfg(test)]\n        0 => m | n,\n"
+                '        _ => Command::new("cargo").arg("build").status().is_ok(),\n'
+                "    }\n}\n"
+            ),
+            "0 => m | n,",
+        ),
+        (
+            (
+                "fn probe(x: u8) -> bool {\n    match x {\n        #[cfg(test)]\n"
+                "        0 => true | false,\n"
+                '        _ => Command::new("cargo").arg("build").status().is_ok(),\n'
+                "    }\n}\n"
+            ),
+            "0 => true | false,",
+        ),
+        (
+            (
+                "fn run(x: u8) {\n    let spawn: fn(u8, u8) = match x {\n"
+                "        #[cfg(test)]\n"
+                '        0 => |_: u8, _: u8| Command::new("cargo")\n'
+                '            .arg("build").status(),\n'
+                '        _ => |_, _| Command::new("true").status(),\n    };\n}\n'
+            ),
+            (
+                '0 => |_: u8, _: u8| Command::new("cargo")\n'
+                '            .arg("build").status(),'
+            ),
+        ),
+        (
+            (
+                "const CONDITION: bool = true;\nfn run(x: u8) {\n    match x {\n"
+                "        _ => if CONDITION {\n            #[cfg(test)]\n"
+                "            let spawn = |_: u8, _: u8| {\n"
+                '                Command::new("cargo").arg("build").status()\n'
+                "            };\n        },\n    }\n}\n"
+            ),
+            (
+                "let spawn = |_: u8, _: u8| {\n"
+                '                Command::new("cargo").arg("build").status()\n'
+                "            }"
+            ),
+        ),
+        (
+            (
+                "enum E {\n    variant {\n        #[cfg(test)]\n        field: u8,\n"
+                "        other: u8,\n    },\n}\nfn f() {}\n"
+            ),
+            "field: u8,",
+        ),
+        (
+            (
+                "enum E {\n    V {\n        #[cfg(test)]\n        field: u8,\n"
+                "        other: u8,\n    },\n}\nfn f() {}\n"
+            ),
+            "field: u8,",
+        ),
+        (
+            (
+                "impl S {\n    #[cfg(test)]\n    const A: u8 = 1;\n"
+                "    const B: u8 = 2;\n}\n"
+            ),
+            "const A: u8 = 1;",
+        ),
+        (
+            (
+                "fn f(x: u8) {\n    match x {\n        #[cfg(test)]\n"
+                "        1 => v::<u8, u8>(x),\n        _ => (),\n    }\n}\n"
+            ),
+            "1 => v::<u8, u8>(x),",
+        ),
+    ],
+)
+def test_a_gated_member_covers_exactly_that_member(source: str, gated: str) -> None:
+    """The test scope ends where the member does, never at a sibling or past it."""
+    import pathlib
+
+    from concordat.rules.nested_cargo_modules import scan_scope
+    from concordat.rules.nested_cargo_source import RustSource
+    from concordat.rules.rust_source import mask_literals
+
+    relative = pathlib.PurePosixPath("src/lib.rs")
+    problems: list[str] = []
+    scope, _ = scan_scope(RustSource(relative, source, mask_literals(source)), problems)
+
+    assert problems == []
+    expected = source[source.index("#[cfg(test)]") : source.index(gated) + len(gated)]
+    assert [source[start:end] for start, end in scope.ranges] == [expected]
+
+
+def test_a_gated_statement_with_a_generic_call_keeps_its_spawn_in_scope(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A turbofish comma inside a gated statement does not end it early."""
+    put(
+        tmp_path,
+        "src/lib.rs",
+        "fn run() {\n    #[cfg(test)]\n    consume::<u8, u16>(\n"
+        '        Command::new("cargo").arg("build").status(),\n    );\n}\n',
+    )
+    problems: list[str] = []
+    assert evidence(tmp_path, problems).spawns != []
+    assert problems == []
+
+
+def test_a_gated_closure_in_a_conditional_arm_keeps_its_spawn_in_scope(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The cargo call in a gated `let` stays in test scope, whatever block holds it."""
+    put(
+        tmp_path,
+        "src/lib.rs",
+        "const CONDITION: bool = true;\nfn run(x: u8) {\n    match x {\n"
+        "        _ => if CONDITION {\n            #[cfg(test)]\n"
+        "            let spawn = |_: u8, _: u8| {\n"
+        '                Command::new("cargo").arg("build").status()\n'
+        "            };\n        },\n    }\n}\n",
+    )
+    problems: list[str] = []
+    assert evidence(tmp_path, problems).spawns != []
+    assert problems == []
+
+
+def test_a_gated_closure_arm_keeps_its_spawn_in_scope(tmp_path: pathlib.Path) -> None:
+    """A closure arm without a brace body still reaches its cargo call."""
+    put(
+        tmp_path,
+        "src/lib.rs",
+        "fn run(x: u8) {\n    let spawn: fn(u8, u8) = match x {\n        #[cfg(test)]\n"
+        '        0 => |_: u8, _: u8| Command::new("cargo").arg("build").status(),\n'
+        '        _ => |_, _| Command::new("true").status(),\n    };\n}\n',
+    )
+    problems: list[str] = []
+    assert evidence(tmp_path, problems).spawns != []
+    assert problems == []
+
+
 def test_an_unterminated_literal_is_a_problem(tmp_path: pathlib.Path) -> None:
     """Once a literal runs to the end of the file, the structure is a fiction."""
     put(
