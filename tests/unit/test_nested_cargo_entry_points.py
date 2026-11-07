@@ -1336,6 +1336,12 @@ DIVERTED_PLAN = (
     + "          dist plan --output-format=json > plan.json\n"
     + '          echo \'manifest={"command":["cargo test"]}\' >> "$GITHUB_OUTPUT"\n'
 )
+OVERWRITTEN_PLAN = (
+    PLAN_HEAD
+    + "          dist plan --output-format=json > plan.json\n"
+    + '          echo \'{"command":["cargo test"]}\' > plan.json\n'
+    + '          echo "manifest=$(jq -c "." plan.json)" >> "$GITHUB_OUTPUT"\n'
+)
 SCRIPT_PLAN = (
     "  plan:\n    outputs:\n      val: ${{ steps.set.outputs.manifest }}\n"
     "    steps:\n      - id: set\n"
@@ -1388,6 +1394,18 @@ def test_a_plan_step_that_writes_another_manifest_stays_uncertain(
         tmp_path,
         WORKFLOW,
         dist_job(PLANNED, "${{ matrix.command }}", plan=DIVERTED_PLAN),
+    )
+    assert states(tmp_path) == [("workflow", "build", "uncertain")]
+
+
+def test_a_plan_file_overwritten_before_publication_stays_uncertain(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The file must still hold dist's output when `jq` reads it."""
+    put(
+        tmp_path,
+        WORKFLOW,
+        dist_job(PLANNED, "${{ matrix.command }}", plan=OVERWRITTEN_PLAN),
     )
     assert states(tmp_path) == [("workflow", "build", "uncertain")]
 

@@ -25,10 +25,9 @@ _PLANNED_MATRIX: typ.Final = re.compile(
     r"([A-Za-z_][\w-]*)\.outputs\.([A-Za-z_][\w-]*)\s*\)(?:\.[A-Za-z_][\w-]*)*\s*\}\}\s*"
 )
 # `dist ... > file`: a dist command whose output goes to a file.
-_DIST_REDIRECT: typ.Final = re.compile(
-    r"^\s*(?:cargo\s+)?dist\s[^\n>]*>\s*(\S+)\s*$", re.MULTILINE
-)
-_GITHUB_OUTPUT: typ.Final = re.compile(r">>\s*[\"']?\$\{?GITHUB_OUTPUT\}?[\"']?")
+_DIST_REDIRECT: typ.Final = re.compile(r"(?:cargo\s+)?dist\s[^\n>]*>\s*(\S+)")
+# An `echo` of fixed text that writes nothing: no substitution, no redirect.
+_PLAIN_ECHO: typ.Final = re.compile(r"echo\s+(?:\"[^\"$`>]*\"|'[^'>]*')")
 # An output that is a step's `manifest` output.
 _MANIFEST_OUTPUT: typ.Final = re.compile(
     r"\s*\$\{\{\s*steps\.([A-Za-z_][\w-]*)\.outputs\.manifest\s*\}\}\s*"
@@ -83,23 +82,34 @@ def _plans_its_matrix(job: dict[str, object], jobs: dict[str, object]) -> bool:
 
 
 def _is_dist_plan(run: str) -> bool:
-    """Return whether *run* publishes dist's own output file as its manifest.
+    """Return whether *run* is cargo-dist's generated plan script and nothing more.
 
-    The script must send a `dist` command's output to a file and write that
-    file, through `jq`, as the one `manifest` output it sets. A script that
-    writes any other output, or a manifest of its own making, is not it.
+    Every line must be one of four things: the one `dist ... > FILE` command, a
+    plain `echo` of fixed text, `cat FILE`, or the one line that publishes
+    `manifest=$(jq -c . FILE)` to `$GITHUB_OUTPUT`. Any other line could write
+    to the file or to the output, so a script with one is not read as the plan.
 
     Returns
     -------
     bool
         True when the step has cargo-dist's generated plan shape.
     """
-    written = _DIST_REDIRECT.search(run)
-    if written is None or len(_GITHUB_OUTPUT.findall(run)) != 1:
+    lines = [line.strip() for line in run.splitlines()]
+    lines = [line for line in lines if line and not line.startswith("#")]
+    written = [_DIST_REDIRECT.fullmatch(line) for line in lines]
+    files = {match.group(1) for match in written if match is not None}
+    if len(files) != 1 or sum(match is not None for match in written) != 1:
         return False
-    manifest = re.escape(written.group(1))
-    publish = rf"manifest=\$\(jq\s+-c\s+[\"']?\.[\"']?\s+{manifest}\s*\)"
-    return re.search(publish, run) is not None
+    target = re.escape(next(iter(files)))
+    publish = re.compile(
+        rf"echo\s+\"manifest=\$\(jq\s+-c\s+[\"']?\.[\"']?\s+{target}\s*\)\""
+        r"\s+>>\s+[\"']?\$\{?GITHUB_OUTPUT\}?[\"']?"
+    )
+    dump = re.compile(rf"cat\s+{target}")
+    allowed = (_DIST_REDIRECT, _PLAIN_ECHO, publish, dump)
+    return sum(publish.fullmatch(line) is not None for line in lines) == 1 and all(
+        any(pattern.fullmatch(line) for pattern in allowed) for line in lines
+    )
 
 
 def is_planned_dist_job(job: dict[str, object], jobs: dict[str, object]) -> bool:
