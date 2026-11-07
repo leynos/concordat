@@ -107,6 +107,30 @@ def test_the_file_name_functions_are_evaluated(text: str, expected: str) -> None
     assert expand(text, {}).text == expected
 
 
+def test_an_error_only_guard_expands_to_nothing() -> None:
+    """`$(if COND,$(error ...))` either aborts Make or adds no text."""
+    guard = (
+        "$(if $(or $(strip $(T)),$(findstring --x,$(F) $(G))),"
+        "$(error use cargo directly, or unset T))"
+    )
+    result = expand("$(GUARD)RUSTFLAGS=-Dw cargo test", {"GUARD": guard})
+
+    assert (result.text, result.is_resolved) == ("RUSTFLAGS=-Dw cargo test", True)
+
+
+@pytest.mark.parametrize(
+    "guard",
+    [
+        "$(if $(T),$(error no),yes)",
+        "$(if $(T),echo hi)",
+        "$(if $(T),$(error no) and more)",
+    ],
+)
+def test_a_guard_with_other_text_stays_unresolved(guard: str) -> None:
+    """Only a guard whose sole branch is an error is empty; the rest is unread."""
+    assert expand(f"{guard} cargo test", {}).is_resolved is False
+
+
 def test_make_builtins_are_known() -> None:
     """`$(MAKE)` and `$(MAKEFILE_LIST)` name the root Makefile's own run."""
     assert expand("$(MAKE) x $(MAKEFILE_LIST)", {}).text == "make x Makefile"

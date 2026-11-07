@@ -45,6 +45,8 @@ BUILTIN_VARIABLES: typ.Final = types.MappingProxyType({
 
 _VARIABLE_REFERENCE: typ.Final = re.compile(r"\$[({]([A-Za-z_][A-Za-z0-9_]*)[)}]")
 _UNRESOLVED_REFERENCE: typ.Final = re.compile(r"\$[({]")
+_IF_CALL: typ.Final = re.compile(r"\$\(if\s")
+_ERROR_CALL: typ.Final = re.compile(r"\$\(error[\s)]")
 _FUNCTION_CALL: typ.Final = re.compile(
     r"\$\((dir|notdir|lastword|firstword|abspath|realpath|strip)\s+([^()$]*)\)"
 )
@@ -146,6 +148,77 @@ def _call_function(match: re.Match[str]) -> str:
     return " ".join(_FUNCTIONS[match.group(1)](match.group(2).split()))
 
 
+def _close_of(text: str, start: int) -> int | None:
+    """Return the index of the parenthesis closing the one at *start*, if any."""
+    depth = 0
+    for index in range(start, len(text)):
+        match text[index]:
+            case "(":
+                depth += 1
+            case ")":
+                depth -= 1
+                if depth == 0:
+                    return index
+            case _:
+                pass
+    return None
+
+
+def _top_level_commas(body: str) -> list[int]:
+    """Return the offsets of the commas in *body* that sit outside parentheses."""
+    depth = 0
+    found: list[int] = []
+    for index, char in enumerate(body):
+        match char:
+            case "(":
+                depth += 1
+            case ")":
+                depth -= 1
+            case "," if depth == 0:
+                found.append(index)
+            case _:
+                pass
+    return found
+
+
+def _is_error_call(text: str) -> bool:
+    """Return whether *text* is one `$(error ...)` call and nothing else."""
+    stripped = text.strip()
+    return (
+        _ERROR_CALL.match(stripped) is not None
+        and _close_of(stripped, 1) == len(stripped) - 1
+    )
+
+
+def _drop_error_guards(text: str) -> str:
+    """Remove each `$(if COND,$(error ...))`, which expands to nothing or aborts.
+
+    A guard whose only branch is `$(error ...)` either stops Make before any
+    recipe runs or contributes no text, so for reading a recipe that does run it
+    is empty whatever its condition. A guard with an else branch, or with any
+    other text in its branch, is left for the caller to find unresolved.
+
+    Returns
+    -------
+    str
+        *text* without those guards.
+    """
+    position = 0
+    while (match := _IF_CALL.search(text, position)) is not None:
+        open_index = match.start() + 1
+        close = _close_of(text, open_index)
+        if close is None:
+            return text
+        body = text[match.end() : close]
+        commas = _top_level_commas(body)
+        if len(commas) == 1 and _is_error_call(body[commas[0] + 1 :]):
+            text = text[: match.start()] + text[close + 1 :]
+            position = match.start()
+        else:
+            position = match.end()
+    return text
+
+
 def expand(text: str, values: cabc.Mapping[str, str]) -> Expansion:
     """Substitute `$(NAME)` references until the text settles.
 
@@ -169,7 +242,8 @@ def expand(text: str, values: cabc.Mapping[str, str]) -> Expansion:
     current = text.replace("$$", SHELL_DOLLAR)
     for _ in range(EXPANSION_PASSES):
         updated = _FUNCTION_CALL.sub(
-            _call_function, _VARIABLE_REFERENCE.sub(substitute, current)
+            _call_function,
+            _VARIABLE_REFERENCE.sub(substitute, _drop_error_guards(current)),
         )
         if updated == current:
             break
