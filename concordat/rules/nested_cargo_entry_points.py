@@ -53,6 +53,7 @@ from .nested_cargo_nextest import (
     NextestConfig,
     read_nextest,
 )
+from .nested_cargo_release import is_matrix_lookup, runs_dist
 from .nested_cargo_scripts import (
     TEST_TARGET,
     CommandMeaning,
@@ -78,11 +79,6 @@ MAKEFILE: typ.Final = "Makefile"
 ONESHELL_TARGET: typ.Final = ".ONESHELL"
 
 _EXPRESSION: typ.Final = re.compile(r"\$\{\{.*?\}\}", re.DOTALL)
-# A step that is nothing but one matrix lookup, such as cargo-dist's
-# `run: ${{ matrix.install_dist.run }}`.
-_MATRIX_LOOKUP: typ.Final = re.compile(r"\s*\$\{\{\s*matrix\.[^}]*\}\}\s*")
-# A command line that starts cargo-dist: the job builds release artefacts.
-_DIST_COMMAND: typ.Final = re.compile(r"^\s*(?:cargo\s+)?dist\s+[a-z]", re.MULTILINE)
 _YAML = YAML(typ="rt")
 
 
@@ -547,6 +543,11 @@ def _step_scan(
 
     *releases* says the step's job builds release artefacts with cargo-dist,
     so a step that is only a matrix lookup installs the tool and is no test.
+
+    Returns
+    -------
+    _StepScan
+        The step's entry-point facts and whether it fetches first.
     """
     visible, has_expression = _visible(run)
     commands = script_commands(visible, newline_gates=shell.fail_fast)
@@ -578,7 +579,7 @@ def _step_scan(
     if (
         has_expression
         and not visible.strip()
-        and not (releases and _MATRIX_LOOKUP.fullmatch(run))
+        and not (releases and is_matrix_lookup(run))
     ):
         fact = EntryPointFact(
             kind="workflow",
@@ -616,12 +617,7 @@ def _job_entries(
         if not isinstance(steps, list):
             continue
         runs_on = job.get("runs-on")
-        releases = any(
-            isinstance(raw, dict)
-            and isinstance(raw.get("run"), str)
-            and _DIST_COMMAND.search(raw["run"]) is not None
-            for raw in steps
-        )
+        releases = runs_dist(steps)
         fetches = False
         for raw_step in steps:
             step = _mapping(raw_step)
