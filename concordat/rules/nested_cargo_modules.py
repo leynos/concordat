@@ -162,6 +162,10 @@ def _item_end(masked: str, index: int) -> tuple[int, bool] | None:
     return None
 
 
+# The words that may stand between `=>` and a closure's parameter list.
+_CLOSURE_PREFIXES: typ.Final = ((), ("move",), ("async",), ("async", "move"))
+
+
 @dataclasses.dataclass(slots=True)
 class _MemberState:
     """What `_member_end` has seen that decides whether a comma ends the entry."""
@@ -197,7 +201,7 @@ class _MemberState:
             # A closure's parameter list, `|a: u8, b: u8|`, opening an arm's
             # body (after at most `move`); a `|` later in an expression
             # (`true | false`, `m | n`) is no closure.
-            opens = self.arm_body_starts and self.arm_words in ((), ("move",))
+            opens = self.arm_body_starts and self.arm_words in _CLOSURE_PREFIXES
             if opens or self.in_closure_params:
                 self.in_closure_params = not self.in_closure_params
             self.arm_body_starts = False

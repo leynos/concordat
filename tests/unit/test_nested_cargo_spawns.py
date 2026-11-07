@@ -1336,6 +1336,20 @@ def test_a_cfg_test_enum_variant_closes_at_its_comma_or_brace(
         ),
         (
             (
+                "async fn run(x: u8) {\n    let spawn = match x {\n"
+                "        #[cfg(test)]\n"
+                '        0 => async move |_: u8, _: u8| Command::new("cargo")\n'
+                '            .arg("build").status(),\n'
+                '        _ => async |_: u8, _: u8| Command::new("true").status(),\n'
+                "    };\n}\n"
+            ),
+            (
+                '0 => async move |_: u8, _: u8| Command::new("cargo")\n'
+                '            .arg("build").status(),'
+            ),
+        ),
+        (
+            (
                 "fn probe(x: u8, m: bool, n: bool) -> bool {\n    match x {\n"
                 "        #[cfg(test)]\n        0 => m | n,\n"
                 '        _ => Command::new("cargo").arg("build").status().is_ok(),\n'
