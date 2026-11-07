@@ -175,6 +175,21 @@ def test_a_guard_condition_through_a_deep_chain_stays_unresolved() -> None:
     assert result.is_resolved is False
 
 
+def test_a_single_character_reference_is_followed() -> None:
+    """`$X` is a reference to the variable `X`; its eval must be seen."""
+    values = Assignments({"X": "$(eval CMD := cargo test)"}, ["X", "CMD"])
+
+    assert expand("$(if $X,$(error stop))go", values).is_resolved is False
+
+
+def test_an_eval_nested_in_a_substitution_operand_is_seen() -> None:
+    """The operand of `$(A:...=x)` is expanded first, so a function there runs."""
+    values = Assignments({"SETUP": "text"}, ["SETUP", "CMD"])
+    condition = "$(filter never,$(SETUP:$(eval CMD := cargo test)=x))"
+
+    assert expand(f"$(if {condition},$(error stop))go", values).is_resolved is False
+
+
 def test_a_hyphenated_variable_name_is_followed() -> None:
     """Make allows `SET-UP`; its eval must not slip past the purity check."""
     values = Assignments({"SET-UP": "$(eval CMD := cargo test)"}, ["SET-UP", "CMD"])

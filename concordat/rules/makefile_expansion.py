@@ -46,7 +46,9 @@ BUILTIN_VARIABLES: typ.Final = types.MappingProxyType({
 
 _VARIABLE_REFERENCE: typ.Final = re.compile(r"\$[({]([A-Za-z_][A-Za-z0-9_]*)[)}]")
 # Any reference to a variable by name, including `$(NAME:a=b)` substitution references.
-_ANY_REFERENCE: typ.Final = re.compile(r"\$[({]([^\s:#=(){},$]+)(?::[^)}]*)?[)}]")
+_ANY_REFERENCE: typ.Final = re.compile(
+    r"\$(?:[({](?P<long>[^\s:#=(){},$]+)(?::[^)}]*)?[)}]|(?P<short>[A-Za-z0-9_]))"
+)
 _UNRESOLVED_REFERENCE: typ.Final = re.compile(r"\$[({]")
 _IF_CALL: typ.Final = re.compile(r"\$\(if\s")
 _ERROR_CALL: typ.Final = re.compile(r"\$\(error\s")
@@ -220,6 +222,11 @@ def _is_error_call(text: str) -> bool:
     )
 
 
+def _reference_name(match: re.Match[str]) -> str:
+    """Return the variable name a `$(NAME)`, `$(NAME:a=b)` or `$X` reference names."""
+    return match.group("long") or match.group("short")
+
+
 def _is_pure(
     condition: str, known: cabc.Mapping[str, str], assigned: cabc.Container[str]
 ) -> bool:
@@ -243,11 +250,15 @@ def _is_pure(
     """
     current = condition
     for _ in range(EXPANSION_PASSES):
-        names = {match.group(1) for match in _ANY_REFERENCE.finditer(current)}
+        # A function is checked before the references around it are replaced, so
+        # one nested in a substitution reference's operand is still seen.
+        if not all(name in _PURE_FUNCTIONS for name in _FUNCTION_NAME.findall(current)):
+            return False
+        names = {_reference_name(match) for match in _ANY_REFERENCE.finditer(current)}
         if any(name in assigned and name not in known for name in names):
             return False
         updated = _ANY_REFERENCE.sub(
-            lambda match: known.get(match.group(1), match.group(0)), current
+            lambda match: known.get(_reference_name(match), match.group(0)), current
         )
         if updated == current:
             break
