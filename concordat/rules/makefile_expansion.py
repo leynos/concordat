@@ -46,7 +46,14 @@ BUILTIN_VARIABLES: typ.Final = types.MappingProxyType({
 _VARIABLE_REFERENCE: typ.Final = re.compile(r"\$[({]([A-Za-z_][A-Za-z0-9_]*)[)}]")
 _UNRESOLVED_REFERENCE: typ.Final = re.compile(r"\$[({]")
 _IF_CALL: typ.Final = re.compile(r"\$\(if\s")
-_ERROR_CALL: typ.Final = re.compile(r"\$\(error[\s)]")
+_ERROR_CALL: typ.Final = re.compile(r"\$\(error\s")
+# A function call, as opposed to a variable reference, has a space after its name.
+_FUNCTION_NAME: typ.Final = re.compile(r"\$[({]\s*([A-Za-z][A-Za-z0-9_-]*)\s")
+_PURE_FUNCTIONS: typ.Final = frozenset({
+    "if", "or", "and", "not", "strip", "findstring", "filter", "filter-out",
+    "subst", "patsubst", "word", "words", "firstword", "lastword", "sort",
+    "dir", "notdir", "basename", "suffix", "join", "wordlist",
+})  # fmt: skip
 _FUNCTION_CALL: typ.Final = re.compile(
     r"\$\((dir|notdir|lastword|firstword|abspath|realpath|strip)\s+([^()$]*)\)"
 )
@@ -190,13 +197,39 @@ def _is_error_call(text: str) -> bool:
     )
 
 
-def _drop_error_guards(text: str) -> str:
+def _is_pure(condition: str, known: cabc.Mapping[str, str]) -> bool:
+    """Return whether evaluating *condition* can only test text, never change it.
+
+    `$(eval ...)`, `$(shell ...)`, `$(file ...)` and the like can redefine a
+    variable the recipe goes on to use, so a guard whose condition calls one
+    does not vanish. The known variables the condition names are looked
+    through, since their values are expanded with it.
+
+    Returns
+    -------
+    bool
+        True when every function the condition reaches is a pure text function.
+    """
+    current = condition
+    for _ in range(EXPANSION_PASSES):
+        updated = _VARIABLE_REFERENCE.sub(
+            lambda match: known.get(match.group(1), match.group(0)), current
+        )
+        if updated == current:
+            break
+        current = updated
+    return all(name in _PURE_FUNCTIONS for name in _FUNCTION_NAME.findall(current))
+
+
+def _drop_error_guards(text: str, known: cabc.Mapping[str, str]) -> str:
     """Remove each `$(if COND,$(error ...))`, which expands to nothing or aborts.
 
     A guard whose only branch is `$(error ...)` either stops Make before any
     recipe runs or contributes no text, so for reading a recipe that does run it
-    is empty whatever its condition. A guard with an else branch, or with any
-    other text in its branch, is left for the caller to find unresolved.
+    is empty whatever its condition says, provided the condition has no side
+    effects. A guard with an else branch, with any other text in its branch, or
+    with a condition that may change a variable is left for the caller to find
+    unresolved.
 
     Returns
     -------
@@ -211,7 +244,11 @@ def _drop_error_guards(text: str) -> str:
             return text
         body = text[match.end() : close]
         commas = _top_level_commas(body)
-        if len(commas) == 1 and _is_error_call(body[commas[0] + 1 :]):
+        if (
+            len(commas) == 1
+            and _is_error_call(body[commas[0] + 1 :])
+            and _is_pure(body[: commas[0]], known)
+        ):
             text = text[: match.start()] + text[close + 1 :]
             position = match.start()
         else:
@@ -243,7 +280,7 @@ def expand(text: str, values: cabc.Mapping[str, str]) -> Expansion:
     for _ in range(EXPANSION_PASSES):
         updated = _FUNCTION_CALL.sub(
             _call_function,
-            _VARIABLE_REFERENCE.sub(substitute, _drop_error_guards(current)),
+            _VARIABLE_REFERENCE.sub(substitute, _drop_error_guards(current, known)),
         )
         if updated == current:
             break

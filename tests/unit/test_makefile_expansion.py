@@ -124,11 +124,28 @@ def test_an_error_only_guard_expands_to_nothing() -> None:
         "$(if $(T),$(error no),yes)",
         "$(if $(T),echo hi)",
         "$(if $(T),$(error no) and more)",
+        # `$(error)` with no text is a reference to a variable named `error`.
+        "$(if yes,$(error))",
+        # A condition that can redefine a variable the recipe then uses.
+        "$(if $(eval CMD := cargo test),$(error stop))",
+        "$(if $(shell touch x),$(error stop))",
+        "$(if $(file >x,y),$(error stop))",
     ],
 )
 def test_a_guard_with_other_text_stays_unresolved(guard: str) -> None:
     """Only a guard whose sole branch is an error is empty; the rest is unread."""
     assert expand(f"{guard} cargo test", {}).is_resolved is False
+
+
+def test_a_guard_condition_that_reaches_eval_through_a_variable_stays_unresolved() -> (
+    None
+):
+    """A known variable in the condition is looked through for side effects."""
+    values = {"SETUP": "$(eval CMD := cargo test)"}
+
+    result = expand("$(if $(SETUP),$(error stop))go", values)
+
+    assert result.is_resolved is False
 
 
 def test_make_builtins_are_known() -> None:
