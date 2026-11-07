@@ -1342,6 +1342,12 @@ OVERWRITTEN_PLAN = (
     + '          echo \'{"command":["cargo test"]}\' > plan.json\n'
     + '          echo "manifest=$(jq -c "." plan.json)" >> "$GITHUB_OUTPUT"\n'
 )
+COMPOUND_PLAN = (
+    PLAN_HEAD
+    + "          dist plan --output-format=json;"
+    + ' echo \'{"command":["cargo test"]}\' > plan.json\n'
+    + '          echo "manifest=$(jq -c "." plan.json)" >> "$GITHUB_OUTPUT"\n'
+)
 SCRIPT_PLAN = (
     "  plan:\n    outputs:\n      val: ${{ steps.set.outputs.manifest }}\n"
     "    steps:\n      - id: set\n"
@@ -1406,6 +1412,16 @@ def test_a_plan_file_overwritten_before_publication_stays_uncertain(
         tmp_path,
         WORKFLOW,
         dist_job(PLANNED, "${{ matrix.command }}", plan=OVERWRITTEN_PLAN),
+    )
+    assert states(tmp_path) == [("workflow", "build", "uncertain")]
+
+
+def test_a_compound_plan_command_stays_uncertain(tmp_path: pathlib.Path) -> None:
+    """A second command on the dist line can write the file the plan publishes."""
+    put(
+        tmp_path,
+        WORKFLOW,
+        dist_job(PLANNED, "${{ matrix.command }}", plan=COMPOUND_PLAN),
     )
     assert states(tmp_path) == [("workflow", "build", "uncertain")]
 

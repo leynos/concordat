@@ -25,7 +25,9 @@ _PLANNED_MATRIX: typ.Final = re.compile(
     r"([A-Za-z_][\w-]*)\.outputs\.([A-Za-z_][\w-]*)\s*\)(?:\.[A-Za-z_][\w-]*)*\s*\}\}\s*"
 )
 # `dist ... > file`: a dist command whose output goes to a file.
-_DIST_REDIRECT: typ.Final = re.compile(r"(?:cargo\s+)?dist\s[^\n>]*>\s*(\S+)")
+_DIST_REDIRECT: typ.Final = re.compile(
+    r"(?:cargo\s+)?dist\s(?:[^\n>;&|`$]|\$\{\{(?:(?!\}\}).)*\}\})*>\s*([\w./-]+)"
+)
 # An `echo` of fixed text that writes nothing: no substitution, no redirect.
 _PLAIN_ECHO: typ.Final = re.compile(r"echo\s+(?:\"[^\"$`>]*\"|'[^'>]*')")
 # An output that is a step's `manifest` output.
