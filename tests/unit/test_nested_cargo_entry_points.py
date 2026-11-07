@@ -1321,6 +1321,44 @@ def test_an_expression_valued_command_is_uncertain(tmp_path: pathlib.Path) -> No
     assert states(tmp_path) == [("workflow", "test", "uncertain")]
 
 
+def test_a_matrix_lookup_in_a_dist_job_is_not_a_test(tmp_path: pathlib.Path) -> None:
+    """cargo-dist installs its own tools through a matrix lookup before `dist build`."""
+    put(
+        tmp_path,
+        WORKFLOW,
+        "jobs:\n  build:\n    steps:\n"
+        "      - run: ${{ matrix.install_dist.run }}\n"
+        "      - run: dist build --output-format=json ${{ matrix.dist_args }}\n",
+    )
+    assert states(tmp_path) == []
+
+
+def test_a_matrix_lookup_without_dist_stays_uncertain(tmp_path: pathlib.Path) -> None:
+    """A job that never runs cargo-dist gets no release reading."""
+    put(
+        tmp_path,
+        WORKFLOW,
+        "jobs:\n  build:\n    steps:\n"
+        "      - run: ${{ matrix.install_dist.run }}\n"
+        "      - run: echo done\n",
+    )
+    assert states(tmp_path) == [("workflow", "build", "uncertain")]
+
+
+def test_a_context_lookup_in_a_dist_job_stays_uncertain(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The release reading covers matrix lookups, not any expression."""
+    put(
+        tmp_path,
+        WORKFLOW,
+        "jobs:\n  build:\n    steps:\n"
+        "      - run: ${{ inputs.command }}\n"
+        "      - run: dist build\n",
+    )
+    assert states(tmp_path) == [("workflow", "build", "uncertain")]
+
+
 def test_a_workflow_that_does_not_decode_is_a_problem(tmp_path: pathlib.Path) -> None:
     """A YAML error leaves every step in the file unknown."""
     put(tmp_path, WORKFLOW, "jobs:\n  test:\n   steps:\n  - run: [\n")
