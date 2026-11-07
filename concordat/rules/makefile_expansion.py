@@ -31,6 +31,9 @@ if typ.TYPE_CHECKING:
 SHELL_DOLLAR: typ.Final = "\x00"
 # Stands for a Make reference the expansion left; it lexes as a word of its own.
 UNRESOLVED_MARK: typ.Final = "\x01"
+# Follows the `$(` of an `if` call that has been judged and kept. A later pass,
+# after substitution has rewritten what is inside it, must not judge it again.
+JUDGED_MARK: typ.Final = "\x02"
 
 # How many times a value may name another variable before the expansion gives
 # up. A cycle never settles, so it ends as unresolved rather than looping.
@@ -80,7 +83,8 @@ class Expansion:
 
 def shown(text: str) -> str:
     """Return *text* with the placeholders turned back into what they stood for."""
-    return text.replace(SHELL_DOLLAR, "$").replace(UNRESOLVED_MARK, "$")
+    plain = text.replace(SHELL_DOLLAR, "$").replace(UNRESOLVED_MARK, "$")
+    return plain.replace(JUDGED_MARK, "")
 
 
 def joined(text: str) -> str:
@@ -324,7 +328,9 @@ def _drop_error_guards(
     while (match := _IF_CALL.search(text, position)) is not None:
         close = _guard_close(text, match, known, assigned)
         if close is None:
-            position = match.end()
+            keep = match.start() + 2
+            text = text[:keep] + JUDGED_MARK + text[keep:]
+            position = match.end() + 1
         else:
             text = text[: match.start()] + text[close + 1 :]
             position = match.start()

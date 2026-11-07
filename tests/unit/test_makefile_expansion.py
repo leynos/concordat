@@ -194,6 +194,18 @@ def test_a_later_pass_does_not_repair_a_mismatched_reference() -> None:
     assert result.is_resolved is False
 
 
+def test_a_kept_guard_is_not_judged_again_after_substitution() -> None:
+    """Substituting into a computed name must not make a kept guard look pure."""
+    values = Assignments(
+        {"X": "", "Y": ")(", "X)(": "$(eval CMD := cargo test)", "CMD": "echo safe"},
+        ["X", "Y", "X)(", "CMD"],
+    )
+
+    result = expand("$(if $(X$(Y)),$(error stop))$(CMD)", values)
+
+    assert result.is_resolved is False
+
+
 def test_a_builtin_the_makefile_assigns_twice_is_not_provably_pure() -> None:
     """A built-in name the Makefile reassigns ambiguously is the Makefile's own."""
     values = Assignments({}, ["CURDIR", "CURDIR"])
