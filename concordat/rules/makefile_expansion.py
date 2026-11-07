@@ -45,20 +45,23 @@ BUILTIN_VARIABLES: typ.Final = types.MappingProxyType({
 })
 
 _VARIABLE_REFERENCE: typ.Final = re.compile(r"\$[({]([A-Za-z_][A-Za-z0-9_]*)[)}]")
-# Any reference to a variable by name, including `$(NAME:a=b)` substitution references.
-_ANY_REFERENCE: typ.Final = re.compile(
-    r"\$(?:[({](?P<long>[^\s:#=(){},$]+)(?::[^)}]*)?[)}]|(?P<short>[A-Za-z0-9_]))"
+# A plain reference: `$(NAME)`, `${NAME}` or the single-character `$X`. Anything
+# fancier (a substitution reference, a name with odd characters) is not one.
+_SIMPLE_REFERENCE: typ.Final = re.compile(
+    r"\$(?:[({](?P<long>[A-Za-z_][A-Za-z0-9_]*)[)}]|(?P<short>[A-Za-z0-9_]))"
 )
 _UNRESOLVED_REFERENCE: typ.Final = re.compile(r"\$[({]")
 _IF_CALL: typ.Final = re.compile(r"\$\(if\s")
 _ERROR_CALL: typ.Final = re.compile(r"\$\(error\s")
-# A function call, as opposed to a variable reference, has a space after its name.
-_FUNCTION_NAME: typ.Final = re.compile(r"\$[({]\s*([A-Za-z][A-Za-z0-9_-]*)\s")
-_PURE_FUNCTIONS: typ.Final = frozenset({
+_PURE_FUNCTIONS: typ.Final = (
     "if", "or", "and", "not", "strip", "findstring", "filter", "filter-out",
     "subst", "patsubst", "word", "words", "firstword", "lastword", "sort",
     "dir", "notdir", "basename", "suffix", "join", "wordlist",
-})  # fmt: skip
+)  # fmt: skip
+# The opening of a call to one of those: `$(if `, `${strip ` and so on.
+_PURE_CALL_OPEN: typ.Final = re.compile(
+    r"\$[({]\s*(?:" + "|".join(re.escape(name) for name in _PURE_FUNCTIONS) + r")\s"
+)
 _FUNCTION_CALL: typ.Final = re.compile(
     r"\$\((dir|notdir|lastword|firstword|abspath|realpath|strip)\s+([^()$]*)\)"
 )
@@ -223,7 +226,7 @@ def _is_error_call(text: str) -> bool:
 
 
 def _reference_name(match: re.Match[str]) -> str:
-    """Return the variable name a `$(NAME)`, `$(NAME:a=b)` or `$X` reference names."""
+    """Return the variable name a `$(NAME)`, `${NAME}` or `$X` reference names."""
     return match.group("long") or match.group("short")
 
 
@@ -234,38 +237,40 @@ def _is_pure(
 
     `$(eval ...)`, `$(shell ...)`, `$(file ...)` and the like can redefine a
     variable the recipe goes on to use, so a guard whose condition calls one
-    does not vanish. The known variables the condition names are looked
-    through, substitution references included, since their values are expanded
-    with it. A variable the Makefile assigns but the expansion cannot follow, or
-    a chain longer than the passes allow, is not provably pure. A variable the
-    Makefile never assigns is data from the environment, such as
-    `CARGO_BUILD_TARGET`. That is a stated assumption, not a proof: this reads
-    the Makefile as committed, and a caller who puts Make code in the
-    environment or on the command line can defeat any static reading of it.
+    does not vanish. The condition is accepted only when every `$` in it opens a
+    call to a pure text function or is a plain reference (`$(NAME)`, `$X`):
+    a substitution reference, an odd variable name or a function not on the list
+    is not provably pure. The known variables the condition names are looked
+    through, since their values are expanded with it, and a variable the
+    Makefile assigns but the expansion cannot follow, or a chain longer than the
+    passes allow, is not provably pure. A variable the Makefile never assigns is
+    data from the environment, such as `CARGO_BUILD_TARGET`. That is a stated
+    assumption, not a proof: this reads the Makefile as committed, and a caller
+    who puts Make code in the environment or on the command line can defeat any
+    static reading of it.
 
     Returns
     -------
     bool
-        True when every function the condition reaches is a pure text function.
+        True when the condition is provably free of side effects.
     """
     current = condition
     for _ in range(EXPANSION_PASSES):
-        # A function is checked before the references around it are replaced, so
-        # one nested in a substitution reference's operand is still seen.
-        if not all(name in _PURE_FUNCTIONS for name in _FUNCTION_NAME.findall(current)):
+        rest = _SIMPLE_REFERENCE.sub("", _PURE_CALL_OPEN.sub("", current))
+        if "$" in rest:
             return False
-        names = {_reference_name(match) for match in _ANY_REFERENCE.finditer(current)}
+        names = {
+            _reference_name(match) for match in _SIMPLE_REFERENCE.finditer(current)
+        }
         if any(name in assigned and name not in known for name in names):
             return False
-        updated = _ANY_REFERENCE.sub(
+        updated = _SIMPLE_REFERENCE.sub(
             lambda match: known.get(_reference_name(match), match.group(0)), current
         )
         if updated == current:
-            break
+            return True
         current = updated
-    else:
-        return False
-    return all(name in _PURE_FUNCTIONS for name in _FUNCTION_NAME.findall(current))
+    return False
 
 
 def _guard_close(

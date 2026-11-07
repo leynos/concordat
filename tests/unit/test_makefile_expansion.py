@@ -190,6 +190,23 @@ def test_an_eval_nested_in_a_substitution_operand_is_seen() -> None:
     assert expand(f"$(if {condition},$(error stop))go", values).is_resolved is False
 
 
+def test_a_variable_inside_a_substitution_operand_is_not_provably_pure() -> None:
+    """`$(SETUP:$(X)=x)` expands `$(X)` first; the guard is not dropped."""
+    values = Assignments(
+        {"SETUP": "text", "X": "$(eval CMD := cargo test)"}, ["SETUP", "X", "CMD"]
+    )
+    condition = "$(filter never,$(SETUP:$(X)=x))"
+
+    assert expand(f"$(if {condition},$(error stop))go", values).is_resolved is False
+
+
+def test_a_variable_name_with_a_comma_is_not_provably_pure() -> None:
+    """Make allows `SET,UP`; the reader does not follow it, so it keeps the guard."""
+    values = Assignments({"SET,UP": "$(eval CMD := cargo test)"}, ["SET,UP", "CMD"])
+
+    assert expand("$(if $(SET,UP),$(error stop))go", values).is_resolved is False
+
+
 def test_a_hyphenated_variable_name_is_followed() -> None:
     """Make allows `SET-UP`; its eval must not slip past the purity check."""
     values = Assignments({"SET-UP": "$(eval CMD := cargo test)"}, ["SET-UP", "CMD"])
