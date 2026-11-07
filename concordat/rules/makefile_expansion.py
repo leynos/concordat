@@ -44,7 +44,9 @@ BUILTIN_VARIABLES: typ.Final = types.MappingProxyType({
     "CURDIR": ".",
 })
 
-_VARIABLE_REFERENCE: typ.Final = re.compile(r"\$[({]([A-Za-z_][A-Za-z0-9_]*)[)}]")
+_VARIABLE_REFERENCE: typ.Final = re.compile(
+    r"\$(?:\(([A-Za-z_][A-Za-z0-9_]*)\)|\{([A-Za-z_][A-Za-z0-9_]*)\})"
+)
 # A plain reference: `$(NAME)`, `${NAME}` or the single-character `$X`. Anything
 # fancier (a substitution reference, a name with odd characters) is not one.
 _SIMPLE_REFERENCE: typ.Final = re.compile(
@@ -351,7 +353,7 @@ def expand(text: str, values: cabc.Mapping[str, str]) -> Expansion:
 
     def substitute(match: re.Match[str]) -> str:
         """Replace one ``$(NAME)`` reference, leaving unknown names untouched."""
-        value = known.get(match.group(1))
+        value = known.get(match.group(1) or match.group(2))
         # A `$$` in a value is a shell dollar once the reference is expanded.
         return match.group(0) if value is None else value.replace("$$", SHELL_DOLLAR)
 

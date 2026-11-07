@@ -182,6 +182,18 @@ def test_mismatched_delimiters_are_not_a_reference() -> None:
     assert expand("$(if $(X}Y),$(error stop))go", values).is_resolved is False
 
 
+def test_a_later_pass_does_not_repair_a_mismatched_reference() -> None:
+    """`$(X}Y)` must stay as written; reading it as `$(X` plus `Y)` would drop it."""
+    values = Assignments(
+        {"X": "(", "X}Y": "$(eval CMD := cargo test)", "CMD": "echo safe"},
+        ["X", "X}Y", "CMD"],
+    )
+
+    result = expand("$(if $(X}Y),$(error stop))$(CMD)", values)
+
+    assert result.is_resolved is False
+
+
 def test_a_builtin_the_makefile_assigns_twice_is_not_provably_pure() -> None:
     """A built-in name the Makefile reassigns ambiguously is the Makefile's own."""
     values = Assignments({}, ["CURDIR", "CURDIR"])
