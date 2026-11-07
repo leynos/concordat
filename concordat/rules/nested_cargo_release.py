@@ -109,6 +109,10 @@ def _is_dist_plan(run: str) -> bool:
         True when the step has cargo-dist's generated plan shape.
     """
     lines = [line.strip() for line in run.splitlines()]
+    # GitHub substitutes an expression before the shell reads the script, a
+    # comment line included, so none may appear outside the dist command itself.
+    if any("${{" in line and not _DIST_REDIRECT.fullmatch(line) for line in lines):
+        return False
     lines = [line for line in lines if line and not line.startswith("#")]
     written = [_DIST_REDIRECT.fullmatch(line) for line in lines]
     files = {match.group(1) for match in written if match is not None}
