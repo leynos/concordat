@@ -11,10 +11,12 @@ if typ.TYPE_CHECKING:
 
 from concordat.rules.makefile_expansion import (
     SHELL_DOLLAR,
+    Assignments,
     expand,
     shown,
     single_assignments,
 )
+from concordat.rules.makefile_tool_paths import read_tool_paths
 
 
 def _variable(
@@ -107,6 +109,198 @@ def test_the_file_name_functions_are_evaluated(text: str, expected: str) -> None
     assert expand(text, {}).text == expected
 
 
+def test_an_error_only_guard_expands_to_nothing() -> None:
+    """`$(if COND,$(error ...))` either aborts Make or adds no text."""
+    guard = (
+        "$(if $(or $(strip $(T)),$(findstring --x,$(F) $(G))),"
+        "$(error use cargo directly, or unset T))"
+    )
+    result = expand("$(GUARD)RUSTFLAGS=-Dw cargo test", {"GUARD": guard})
+
+    assert (result.text, result.is_resolved) == ("RUSTFLAGS=-Dw cargo test", True)
+
+
+@pytest.mark.parametrize(
+    "guard",
+    [
+        "$(if $(T),$(error no),yes)",
+        "$(if $(T),echo hi)",
+        "$(if $(T),$(error no) and more)",
+        # `$(error)` with no text is a reference to a variable named `error`.
+        "$(if yes,$(error))",
+        # A condition that can redefine a variable the recipe then uses.
+        "$(if $(eval CMD := cargo test),$(error stop))",
+        "$(if $(shell touch x),$(error stop))",
+        "$(if $(file >x,y),$(error stop))",
+    ],
+)
+def test_a_guard_with_other_text_stays_unresolved(guard: str) -> None:
+    """Only a guard whose sole branch is an error is empty; the rest is unread."""
+    assert expand(f"{guard} cargo test", {}).is_resolved is False
+
+
+def test_a_guard_condition_that_reaches_eval_through_a_variable_stays_unresolved() -> (
+    None
+):
+    """A known variable in the condition is looked through for side effects."""
+    values = {"SETUP": "$(eval CMD := cargo test)"}
+
+    result = expand("$(if $(SETUP),$(error stop))go", values)
+
+    assert result.is_resolved is False
+
+
+def test_a_substitution_reference_is_looked_through() -> None:
+    """`$(SETUP:x=y)` expands SETUP, so SETUP's eval is part of the condition."""
+    values = Assignments({"SETUP": "$(eval CMD := cargo test)"}, ["SETUP", "CMD"])
+
+    result = expand("$(if $(SETUP:x=y),$(error stop))go", values)
+
+    assert result.is_resolved is False
+
+
+def test_a_guard_naming_an_unfollowable_assignment_stays_unresolved() -> None:
+    """A variable the Makefile assigns twice has no one value to prove pure."""
+    values = Assignments({}, ["SETUP", "SETUP"])
+
+    assert expand("$(if $(SETUP),$(error stop))go", values).is_resolved is False
+
+
+def test_a_guard_condition_through_a_deep_chain_stays_unresolved() -> None:
+    """A chain of variables longer than the passes cannot be proved pure."""
+    chain = {f"V{index}": f"$(V{index + 1})" for index in range(20)}
+    chain["V20"] = "$(eval X := 1)"
+
+    result = expand("$(if $(V0),$(error stop))go", Assignments(chain, list(chain)))
+
+    assert result.is_resolved is False
+
+
+def test_mismatched_delimiters_are_not_a_reference() -> None:
+    """`$(X}Y)` names the variable `X}Y`, which the reader does not follow."""
+    values = Assignments({"X}Y": "$(eval CMD := cargo test)"}, ["X}Y", "CMD"])
+
+    assert expand("$(if $(X}Y),$(error stop))go", values).is_resolved is False
+
+
+def test_a_later_pass_does_not_repair_a_mismatched_reference() -> None:
+    """`$(X}Y)` must stay as written; reading it as `$(X` plus `Y)` would drop it."""
+    values = Assignments(
+        {"X": "(", "X}Y": "$(eval CMD := cargo test)", "CMD": "echo safe"},
+        ["X", "X}Y", "CMD"],
+    )
+
+    result = expand("$(if $(X}Y),$(error stop))$(CMD)", values)
+
+    assert result.is_resolved is False
+
+
+def test_a_kept_guard_is_not_judged_again_after_substitution() -> None:
+    """Substituting into a computed name must not make a kept guard look pure."""
+    values = Assignments(
+        {"X": "", "Y": ")(", "X)(": "$(eval CMD := cargo test)", "CMD": "echo safe"},
+        ["X", "Y", "X)(", "CMD"],
+    )
+
+    result = expand("$(if $(X$(Y)),$(error stop))$(CMD)", values)
+
+    assert result.is_resolved is False
+
+
+def test_a_builtin_the_makefile_assigns_twice_is_not_provably_pure() -> None:
+    """A built-in name the Makefile reassigns ambiguously is the Makefile's own."""
+    values = Assignments({}, ["CURDIR", "CURDIR"])
+
+    assert expand("$(if $(CURDIR),$(error stop))go", values).is_resolved is False
+
+
+def test_a_single_character_reference_is_followed() -> None:
+    """`$X` is a reference to the variable `X`; its eval must be seen."""
+    values = Assignments({"X": "$(eval CMD := cargo test)"}, ["X", "CMD"])
+
+    assert expand("$(if $X,$(error stop))go", values).is_resolved is False
+
+
+def test_an_eval_nested_in_a_substitution_operand_is_seen() -> None:
+    """The operand of `$(A:...=x)` is expanded first, so a function there runs."""
+    values = Assignments({"SETUP": "text"}, ["SETUP", "CMD"])
+    condition = "$(filter never,$(SETUP:$(eval CMD := cargo test)=x))"
+
+    assert expand(f"$(if {condition},$(error stop))go", values).is_resolved is False
+
+
+def test_a_variable_inside_a_substitution_operand_is_not_provably_pure() -> None:
+    """`$(SETUP:$(X)=x)` expands `$(X)` first; the guard is not dropped."""
+    values = Assignments(
+        {"SETUP": "text", "X": "$(eval CMD := cargo test)"}, ["SETUP", "X", "CMD"]
+    )
+    condition = "$(filter never,$(SETUP:$(X)=x))"
+
+    assert expand(f"$(if {condition},$(error stop))go", values).is_resolved is False
+
+
+def test_a_variable_name_with_a_comma_is_not_provably_pure() -> None:
+    """Make allows `SET,UP`; the reader does not follow it, so it keeps the guard."""
+    values = Assignments({"SET,UP": "$(eval CMD := cargo test)"}, ["SET,UP", "CMD"])
+
+    assert expand("$(if $(SET,UP),$(error stop))go", values).is_resolved is False
+
+
+def test_a_hyphenated_variable_name_is_followed() -> None:
+    """Make allows `SET-UP`; its eval must not slip past the purity check."""
+    values = Assignments({"SET-UP": "$(eval CMD := cargo test)"}, ["SET-UP", "CMD"])
+
+    result = expand("$(if $(SET-UP),$(error stop))go", values)
+
+    assert result.is_resolved is False
+
+
+def test_a_guard_on_an_environment_variable_is_dropped() -> None:
+    """A variable the Makefile never assigns is data, not code."""
+    values = Assignments({"FLAGS": "-q"}, ["FLAGS"])
+
+    result = expand("$(if $(CARGO_BUILD_TARGET)$(FLAGS),$(error stop))go", values)
+
+    assert (result.text, result.is_resolved) == ("go", True)
+
+
 def test_make_builtins_are_known() -> None:
     """`$(MAKE)` and `$(MAKEFILE_LIST)` name the root Makefile's own run."""
     assert expand("$(MAKE) x $(MAKEFILE_LIST)", {}).text == "make x Makefile"
+
+
+def _read(*variables: MakeVariable) -> dict[str, str]:
+    """Return the tool-path reading of *variables* as a plain mapping."""
+    return dict(read_tool_paths(single_assignments(list(variables))))
+
+
+def test_a_uv_search_reads_as_uv() -> None:
+    """A `$(if $(wildcard ...))` whose branches both end in `uv` is `uv`."""
+    values = _read(
+        _variable(
+            "UV", "$(if $(wildcard $(HOME)/.local/bin/uv),$(HOME)/.local/bin/uv,uv)"
+        )
+    )
+
+    assert values == {"UV": "uv"}
+
+
+def test_a_plain_path_variable_keeps_its_path() -> None:
+    """Only a search is read; a path a recipe may use as a path is untouched."""
+    values = _read(_variable("CARGO_TARGET_DIR", "$(CURDIR)/target"))
+
+    assert values == {"CARGO_TARGET_DIR": "$(CURDIR)/target"}
+
+
+def test_a_search_for_another_tool_keeps_its_value() -> None:
+    """A variable named for one tool is not read from a search for another."""
+    value = "$(or $(shell command -v rustc),rustc)"
+
+    assert _read(_variable("CARGO", value)) == {"CARGO": value}
+
+
+def test_alternatives_naming_different_tools_keep_their_value() -> None:
+    """One alternative ending in another name makes the whole value unreadable."""
+    value = "$(or $(shell command -v cargo),$(HOME)/bin/rustc)"
+
+    assert _read(_variable("CARGO", value)) == {"CARGO": value}

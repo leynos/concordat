@@ -76,6 +76,7 @@ def given_repository_remote_owner(repository_path: pathlib.Path, owner: str) -> 
 
 
 def _run_cli(arguments: list[str]) -> RunResult:
+    """Run ``python -m concordat.cli`` with ``arguments`` and capture the result."""
     command = [sys.executable, "-m", "concordat.cli", *arguments]
     completed = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]
         command,
@@ -91,6 +92,7 @@ def _run_cli(arguments: list[str]) -> RunResult:
 
 
 def _cli_failure_message(result: RunResult) -> str:
+    """Describe a failed CLI run, preferring stderr and falling back to stdout."""
     return (
         "concordat CLI failed "
         f"(exit {result.returncode}):\n{result.stderr or result.stdout}"
@@ -162,6 +164,7 @@ def then_owner_mismatch(cli_invocation: dict[str, RunResult]) -> None:
 
 
 def _load_document(repository_path: pathlib.Path) -> dict[str, object]:
+    """Load the ``.concordat`` document in the repository as a plain dict."""
     document_path = pathlib.Path(repository_path, CONCORDAT_FILENAME)
     parser = YAML(typ="safe")
     parser.version = (1, 2)

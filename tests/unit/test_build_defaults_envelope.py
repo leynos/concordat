@@ -202,6 +202,7 @@ class TestBuildPathFacts:
         (tmp_path / "Makefile").write_text("all:\n", encoding="utf-8")
 
         def refuse(path: pathlib.Path) -> typ.NoReturn:
+            """Raise a makeutil refusal for the Makefile, as makeutil does."""
             message = f"makeutil exited with status 2 for {path.name}"
             raise MakefileRefusedError(
                 message, operation="parse-makefile", resource=path
@@ -228,6 +229,7 @@ class TestBuildPathFacts:
         (tmp_path / "Makefile").write_text("all:\n", encoding="utf-8")
 
         def fail(path: pathlib.Path) -> typ.NoReturn:
+            """Raise an operational error, as a timed-out makeutil run does."""
             message = f"makeutil timed out after 30s on {path}"
             raise OperationalRuleError(
                 message, operation="parse-makefile", resource=path
@@ -449,6 +451,7 @@ def test_the_command_boundary_hands_every_builder_the_observed_inspector(
     seen: list[pathlib.Path] = []
 
     def observed(path: pathlib.Path) -> MakefileFacts:
+        """Record the path the inspector receives and return complete facts."""
         seen.append(path)
         return MakefileFacts(
             report=typ.cast("MakeutilReport", MINIMAL_REPORT), status="complete"
@@ -463,3 +466,18 @@ def test_the_command_boundary_hands_every_builder_the_observed_inspector(
     }[key]
     builder(tmp_path)
     assert seen == [tmp_path / "Makefile"], seen
+
+
+def test_the_command_boundary_dates_the_envelope(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """BD-006 ages a measurement against the date the package path supplies."""
+    import datetime as dt
+
+    (tmp_path / "Cargo.toml").write_text("[package]\nname = 'x'\n", encoding="utf-8")
+    monkeypatch.setattr(packages, "today_provider", lambda: dt.date(2026, 11, 5))
+
+    dated = packages._build_defaults_envelope(tmp_path)
+
+    assert dated["evaluated_on"] == "2026-11-05"
+    assert "evaluated_on" not in build_build_defaults_envelope(tmp_path)

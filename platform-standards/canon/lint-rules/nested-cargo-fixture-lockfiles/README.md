@@ -48,7 +48,10 @@ A fixture that resolves outside the workspace on purpose is listed in the
 `rationale` naming the lane that owns its lock and a `review_trigger` saying
 what event sends the exemption back for review (the shape of
 `dependencies.family_exceptions`). An exemption does not apply to another
-repository. The defaults carry rstest-bdd's three published-GPUI fixtures.
+repository. The defaults carry rstest-bdd's three published-GPUI fixtures and
+wireframe's `tests/feature_gate` package and combobulate's
+`tools/verifier-fixtures/verus-wiring-probe`, which resolves the pinned Verus
+release stack.
 
 ## What the rule declines to judge
 

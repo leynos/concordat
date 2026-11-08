@@ -93,3 +93,24 @@ parameters:
         review_trigger: >-
           review when feldera-size-of publishes ordered-float 5.x support and
           the fork is removed
+      - repository: leynos/wireframe
+        path: tests/feature_gate
+        rationale: >-
+          A standalone consumer package that must resolve its own dependencies
+          (`tokio-util` in particular) independently of the root lock, so that
+          `make test-feature-gate` proves the root manifest declares what it
+          uses. Dependabot bumps of its pins would not change what it proves,
+          and its lock is deliberately not committed.
+        review_trigger: >-
+          review when the feature-gate check stops depending on an independent
+          resolution, or when its lock is committed
+      - repository: leynos/combobulate
+        path: tools/verifier-fixtures/verus-wiring-probe
+        rationale: >-
+          Its Verus crates are pinned to the release that `tools/verus`
+          records, so a Dependabot bump would name a release the verifier does
+          not use. The verifier records hash the fixture tree whole, so the
+          exemption lives here rather than in a manifest comment.
+        review_trigger: >-
+          review when the probe stops pinning the Verus release recorded in
+          `tools/verus`, or when the verifier records stop hashing the tree

@@ -22,6 +22,14 @@ def _open_pr_if_configured(context: PullRequestContext) -> str | None:
 
 
 def _open_pr(context: PullRequestContext) -> str | None:
+    """Open the persistence pull request on GitHub and return its URL.
+
+    Returns
+    -------
+    str | None
+        The URL of the opened pull request, or None when the remote is not a
+        GitHub slug or no token is available.
+    """
     slug = parse_github_slug(context.record.repo_url)
     if not slug or not context.github_token:
         return None

@@ -49,6 +49,7 @@ def _serving(body: bytes, requested: list[str]) -> typ.Callable[[str], bytes]:
     """Return a download stand-in that records each URL and returns ``body``."""
 
     def fetch(url: str) -> bytes:
+        """Record the requested URL and return the stand-in body."""
         requested.append(url)
         return body
 
@@ -92,6 +93,7 @@ def test_a_failed_download_installs_nothing(tmp_path: Path) -> None:
     """A download error fails the install before anything is written."""
 
     def unreachable(url: str) -> bytes:
+        """Fail the download with an InstallError, as an unreachable host would."""
         message = f"could not download {url}"
         raise installer.InstallError(message)
 
@@ -467,6 +469,7 @@ def test_digest_is_checked_before_archive_decompression(
     """A replaced archive never reaches even the archive parser."""
 
     def refuse_open(*args: object, **kwargs: object) -> typ.NoReturn:
+        """Fail the test if archive parsing starts before the digest check."""
         pytest.fail("digest verification must precede archive parsing")
 
     monkeypatch.setattr(tarfile, "open", refuse_open)
@@ -511,6 +514,7 @@ def test_archive_read_is_bounded_and_actual_length_checked(
     def extract_member(
         _archive: tarfile.TarFile, _member: tarfile.TarInfo
     ) -> MemberStream:
+        """Return a stream holding the actual member bytes, whatever their length."""
         return MemberStream(actual)
 
     monkeypatch.setattr(tarfile.TarFile, "extractfile", extract_member)
@@ -532,6 +536,7 @@ def test_failed_staging_preserves_previous_binary(
     binary.write_bytes(b"previous binary")
 
     def refuse(*_args: object, **_kwargs: object) -> typ.NoReturn:
+        """Raise the controlled OSError in place of the patched operation."""
         message = "controlled installation failure"
         raise OSError(message)
 
@@ -562,12 +567,14 @@ def test_failed_staging_and_cleanup_preserve_primary_diagnostic(
     original_unlink = Path.unlink
 
     def refuse_replacement(path: Path, target: Path) -> Path:
+        """Fail the staged replacement and delegate every other replace."""
         if path.parent == binary.parent and path != binary:
             message = "primary replacement failure"
             raise OSError(message)
         return original_replace(path, target)
 
     def refuse_staged_cleanup(path: Path, *, missing_ok: bool = False) -> None:
+        """Fail cleanup of the staged file, recording it, and delegate otherwise."""
         if path.parent == binary.parent and path != binary:
             cleanup_attempts.append(path)
             message = "secondary cleanup failure"
@@ -662,6 +669,7 @@ def test_dependency_deflate_error_preserves_existing_installation(
     github_path.write_text("existing PATH entry\n")
 
     def fail_decompression(*_args: object, **_kwargs: object) -> typ.NoReturn:
+        """Raise a synthetic zlib error in place of archive opening."""
         message = "synthetic dependency deflate failure"
         raise zlib.error(message)
 

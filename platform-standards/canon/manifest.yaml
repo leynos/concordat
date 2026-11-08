@@ -93,7 +93,7 @@ artifacts:
     description: >
       Sensor policy for the rust-makefile-baseline rule package: FP-003
       canonical Make targets and QG-001 binding Whitaker lint gate.
-    sha256: 7dd963084fa8d80608a5e9a6c806696d1bf1d8a0198ea4a44cfb1fa7ef2505a2
+    sha256: 7ba8dcd1acaa0f80b5142c0a86a57c91a01c0e3ed1ff1b773935f36a97b06cb9
   - id: lint-rule-rust-makefile-baseline-manifest
     type: lint-config
     path: platform-standards/canon/lint-rules/rust-makefile-baseline/rule.yaml
@@ -132,7 +132,7 @@ artifacts:
       Sensor policy for the rust-build-defaults rule package: the parallel
       frontend and linker defaults, the rustflags sources held equal, and the
       codegen backend configured or refused by a recorded exception.
-    sha256: 3bae82abf4a827c448a1ada0515274a66d19050928d9514172264d80c5b18cc6
+    sha256: 2567a38e07e1c8f1a44d7e7eb7907ec26d50f354d8cc9fb979745dc42f1cef9a
   - id: lint-rule-rust-build-defaults-build-paths-make
     type: opa-policy
     path: >-
@@ -148,7 +148,7 @@ artifacts:
       platform-standards/canon/lint-rules/rust-build-defaults/policy/isolated_whitaker.rego
     description: >
       BD-008 direct Whitaker recognition and binding toolchain isolation.
-    sha256: f5c84bbe9c749d193f2781116bca12caebd1916b87c0d28c55074cc5458ecdd6
+    sha256: 877505fae983407320f7453ada419ac9f234f1794c5d44bf1a8b5348c4a95351
   - id: lint-rule-rust-build-defaults-standard-exceptions
     type: opa-policy
     path: platform-standards/canon/lint-rules/rust-build-defaults/policy/standard_exceptions.rego
@@ -178,7 +178,7 @@ artifacts:
     description: >
       Rule package manifest (sensor wiring, parameters, defaults) for
       rust-build-defaults.
-    sha256: 67e4d56dd94e93a0160c22bbbc768921880f41b1791122b0e912603ca07cbeab
+    sha256: 9839f9c701436ef2600f12889aa8450e0e1657d2f82c3efd8821134e0e511436
   - id: lint-rule-rust-dev-build-footprint
     type: opa-policy
     path: platform-standards/canon/lint-rules/rust-dev-build-footprint/policy/rust_dev_build_footprint.rego
@@ -205,7 +205,7 @@ artifacts:
     path: platform-standards/canon/lint-rules/nested-cargo-fixture-lockfiles/rule.yaml
     description: >-
       Rule package manifest for the nested cargo fixture lockfile audit.
-    sha256: 7efe178708acf254b5a0393a054d1a00e469efd93e384aec5c98a69fa3b4aef4
+    sha256: 0f344ab95d7677edf7157dfc7d6a4062d93036ce5c114f6bf7d21157ac704b95
   - id: lint-rule-nested-cargo-offline-tests
     type: opa-policy
     path: platform-standards/canon/lint-rules/nested-cargo-offline-tests/policy/nested_cargo_offline_tests.rego
@@ -232,7 +232,7 @@ artifacts:
     path: platform-standards/canon/lint-rules/nested-cargo-fixture-manifests/rule.yaml
     description: >-
       Rule package manifest for the nested cargo fixture manifest audit.
-    sha256: 0298f084690bc5c3606ce04b25a2f7b500a5dc27d9a83f1265bf391d7fceee72
+    sha256: dc5fdd00a911f30d386463ca7f42e012eb45a04329caf659a5ea48bc1df3d0a7
   - id: lint-rule-nested-cargo-nextest
     type: opa-policy
     path: platform-standards/canon/lint-rules/nested-cargo-nextest/policy/nested_cargo_nextest.rego

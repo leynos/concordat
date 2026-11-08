@@ -94,6 +94,20 @@ def _open_or_clone_cache(
     destination: Path,
     callbacks: pygit2.RemoteCallbacks | None,
 ) -> pygit2.Repository:
+    """Open and refresh an existing cache, or clone the repository into it.
+
+    A bare cache is rejected and Git failures are wrapped in EstateCacheError.
+
+    Returns
+    -------
+    pygit2.Repository
+        The refreshed cache repository, or the newly cloned repository.
+
+    Raises
+    ------
+    EstateCacheError
+        If the existing cache is bare, or Git fails to open, refresh or clone.
+    """
     try:
         if destination.exists():
             repository = pygit2.Repository(str(destination))
@@ -122,6 +136,7 @@ def _workdir_from_repository(
     destination: Path,
     repository: pygit2.Repository,
 ) -> Path:
+    """Return the working directory of *repository*, raising if it is bare."""
     if workdir := repository.workdir:
         return Path(workdir)
     detail = ERROR_BARE_CACHE.format(alias=alias, destination=destination)
@@ -175,6 +190,7 @@ def _fetch_origin_remote(
     repository: pygit2.Repository,
     callbacks: pygit2.RemoteCallbacks | None,
 ) -> pygit2.Remote:
+    """Fetch the origin remote and return it, raising if it is missing."""
     try:
         remote = repository.remotes["origin"]
     except KeyError as error:  # pragma: no cover - defensive guard
@@ -184,10 +200,12 @@ def _fetch_origin_remote(
 
 
 def _remote_display_name(remote: pygit2.Remote) -> str:
+    """Return the remote's name, falling back to its URL or ``origin``."""
     return remote.name or remote.url or "origin"
 
 
 def _missing_branch_error(branch: str, remote: pygit2.Remote) -> EstateCacheError:
+    """Return the error for a branch that the remote does not have."""
     detail = ERROR_MISSING_BRANCH.format(
         branch=branch,
         remote=_remote_display_name(remote),
@@ -200,6 +218,7 @@ def _resolve_remote_commit(
     remote: pygit2.Remote,
     branch: str,
 ) -> pygit2.Commit:
+    """Return the commit at the remote-tracking tip of *branch*."""
     ref_name = f"refs/remotes/{remote.name}/{branch}"
     try:
         remote_ref = repository.lookup_reference(ref_name)
@@ -224,6 +243,7 @@ def _sync_local_branch(
     branch: str,
     commit: pygit2.Commit,
 ) -> None:
+    """Point the local *branch* at *commit*, creating it when absent."""
     local_branch = repository.lookup_branch(branch)
     if local_branch is None:
         repository.create_branch(branch, commit)
@@ -232,6 +252,7 @@ def _sync_local_branch(
 
 
 def _reset_to_commit(repository: pygit2.Repository, commit: pygit2.Commit) -> None:
+    """Hard-reset the repository and its checkout to *commit*."""
     reset_mode = typ.cast("_Pygit2ResetMode", pygit2.GIT_RESET_HARD)
     repository.reset(commit.id, reset_mode)
     repository.checkout_head(strategy=pygit2.GIT_CHECKOUT_FORCE)

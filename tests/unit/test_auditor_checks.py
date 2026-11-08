@@ -20,6 +20,7 @@ from concordat.auditor.priority import load_priority_model
 
 
 def _base_context() -> AuditContext:
+    """Return a baseline audit context for ``example/demo`` that tests vary."""
     repository = RepositorySnapshot(
         owner="example",
         name="demo",

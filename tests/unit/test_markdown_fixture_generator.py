@@ -178,6 +178,7 @@ def test_a_drifted_envelope_fails_with_the_pin_check(
     real = generate.build_fixture_envelope
 
     def drifted(scenario: object) -> dict[str, object]:
+        """Return the real envelope with a marker that makes it disagree on disk."""
         return {**real(scenario), "drifted": True}
 
     monkeypatch.setattr(generate, "build_fixture_envelope", drifted)

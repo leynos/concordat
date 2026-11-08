@@ -35,6 +35,7 @@ from .makefile_expansion import (
     single_assignments,
 )
 from .makefile_facts import MakefileRefusedError, inspect_makefile
+from .makefile_tool_paths import read_tool_paths
 from .markdown_envelope import (
     WORKFLOW_SUFFIXES,
     WORKFLOWS_DIRECTORY,
@@ -53,6 +54,7 @@ from .nested_cargo_nextest import (
     NextestConfig,
     read_nextest,
 )
+from .nested_cargo_release import hides_command, is_planned_dist_job
 from .nested_cargo_scripts import (
     TEST_TARGET,
     CommandMeaning,
@@ -331,7 +333,7 @@ def _makefile_entry(
         problems.append(f"cannot parse {MAKEFILE}: {error}")
         return _MakefileEntry(None, [], refused=True)
     report = facts.report
-    values = single_assignments(report["variables"])
+    values = read_tool_paths(single_assignments(report["variables"]))
     index = _rules_by_target(report)
     if TEST_TARGET not in index:
         return _MakefileEntry(None, [])
@@ -368,14 +370,15 @@ def _makefile_state(
     scan: _TargetScan, config: NextestConfig, profiles: list[str]
 ) -> tuple[str, str]:
     """Return the state a `test` scan proves, with the reason a reviewer needs."""
-    if scan.test == "nextest":
+    if scan.test == "nextest" and not scan.proven:
+        # A profile is recorded only where this entry point relies on it: one
+        # that fetches first covers its own run, and owes the profile nothing.
         profiles.append(scan.profile or DEFAULT_PROFILE)
-        if not scan.proven:
-            inherited = config.state(scan.profile)
-            if inherited == BEFORE:
-                return BEFORE, "the nextest profile's setup script fetches first"
-            if inherited == UNCERTAIN:
-                return UNCERTAIN, "the nextest configuration could not be read"
+        inherited = config.state(scan.profile)
+        if inherited == BEFORE:
+            return BEFORE, "the nextest profile's setup script fetches first"
+        if inherited == UNCERTAIN:
+            return UNCERTAIN, "the nextest configuration could not be read"
     if scan.proven:
         return BEFORE, scan.proven_reason
     if scan.uncertain_reason:
@@ -486,13 +489,17 @@ def _step_state(
         The state — `before`, `uncertain` or `absent` — and a reason a reader
         can check against the workflow.
     """
-    inherited = _inherited_state(command.meaning, make_entry, config, profiles)
+    # A fetch that gates this command covers its own run, so the command does
+    # not rely on the nextest profile and records none; asking for the
+    # inherited state first would record the profile for a run that never
+    # needed it.
     if gated:
         return BEFORE, "an earlier step runs cargo fetch --locked"
     if gates_fetch(commands, position) and not has_expression:
         # The chain proves the order only when the command text is settled: an
         # expression may supply the `|| true` that hides a failed fetch.
         return BEFORE, "cargo fetch --locked runs first in the same step"
+    inherited = _inherited_state(command.meaning, make_entry, config, profiles)
     if inherited == BEFORE:
         return BEFORE, "the delegated test target fetches first"
     if gated is None:
@@ -531,8 +538,18 @@ def _step_scan(
     make_entry: _MakefileEntry,
     config: NextestConfig,
     profiles: list[str],
+    releases: bool = False,
 ) -> _StepScan:
-    """Classify one `run` step, returning its facts and whether it fetches first."""
+    """Classify one `run` step, returning its facts and whether it fetches first.
+
+    *releases* says the step's job builds release artefacts with cargo-dist,
+    so a step that is only a matrix lookup installs the tool and is no test.
+
+    Returns
+    -------
+    _StepScan
+        The step's entry-point facts and whether it fetches first.
+    """
     visible, has_expression = _visible(run)
     commands = script_commands(visible, newline_gates=shell.fail_fast)
     fetches = line_fetches(commands, is_resolved=True) and not has_expression
@@ -560,7 +577,7 @@ def _step_scan(
             reason=reason,
         )
         return _StepScan(facts=[fact], fetches=fetches)
-    if has_expression and not visible.strip():
+    if hides_command(visible, run, has_expression=has_expression, releases=releases):
         fact = EntryPointFact(
             kind="workflow",
             path=relative,
@@ -597,6 +614,7 @@ def _job_entries(
         if not isinstance(steps, list):
             continue
         runs_on = job.get("runs-on")
+        releases = is_planned_dist_job(job, jobs)
         fetches = False
         for raw_step in steps:
             step = _mapping(raw_step)
@@ -615,6 +633,7 @@ def _job_entries(
                 make_entry=make_entry,
                 config=config,
                 profiles=profiles,
+                releases=releases,
             )
             facts.extend(scan.facts)
             if (

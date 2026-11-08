@@ -50,6 +50,7 @@ class TestSweepCommand:
             ledger_path: pathlib.Path,
             options: sweep.SweepOptions,
         ) -> sweep.Ledger:
+            """Record the arguments of one sweep call and return an empty ledger."""
             calls.append({
                 "estate_path": estate_path,
                 "ledger_path": ledger_path,
@@ -219,6 +220,7 @@ class TestPackageFlag:
             ledger_path: pathlib.Path,
             options: sweep.SweepOptions,
         ) -> sweep.Ledger:
+            """Record the sweep options of one call and return an empty ledger."""
             del estate_path, ledger_path
             seen.append(options)
             return []
@@ -306,6 +308,7 @@ class TestReportCommandPackageFlag:
         def fake_render(
             _ledger_path: pathlib.Path, package: str = sweep.RULE_PACKAGE
         ) -> str:
+            """Record the package the renderer is asked for and return a stub."""
             seen.append(package)
             return "report\n"
 
@@ -333,6 +336,7 @@ class TestReportCommandPackageFlag:
         def fake_render(
             _ledger_path: pathlib.Path, package: str = sweep.RULE_PACKAGE
         ) -> str:
+            """Record the package the renderer is asked for and return a stub."""
             seen.append(package)
             return "report\n"
 
@@ -369,6 +373,7 @@ class TestReportCommandPackageFlag:
         def fake_render(
             _ledger_path: pathlib.Path, package: str = sweep.RULE_PACKAGE
         ) -> str:
+            """Record the ledger path if the renderer runs, returning a stub."""
             rendered.append(_ledger_path)
             return "survey\n"
 
@@ -403,6 +408,7 @@ class TestReportCommandPackageFlag:
         def fake_render(
             _ledger_path: pathlib.Path, package: str = sweep.RULE_PACKAGE
         ) -> str:
+            """Record the package the renderer is asked for and return a stub."""
             rendered.append(package)
             return "baseline\n"
 

@@ -27,7 +27,8 @@
             "name": "fixture",
             "version": "0.1.0"
           }
-        }
+        },
+        "build_root": true
       }
     ]
   },
@@ -75,7 +76,7 @@
           "line": 8,
           "level": 3,
           "channels_named": [
-            "nightly-2026-08-23"
+            "nightly-2026-03-26"
           ],
           "body_lines": 10
         }
@@ -84,5 +85,6 @@
   ],
   "makefile": null,
   "makefile_error": null,
-  "workflows": []
+  "workflows": [],
+  "evaluated_on": "2026-11-05"
 }

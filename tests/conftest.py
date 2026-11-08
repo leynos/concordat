@@ -275,3 +275,18 @@ def git_repo(tmp_path: pathlib.Path) -> GitRepo:
     repository.set_head("refs/heads/main")
 
     return GitRepo(repository=repository, path=repo_path)
+
+
+@pytest.fixture(name="rust_sources_are_assumed", autouse=True)
+def fixture_rust_sources_are_assumed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Let a checkout built from a bare `Cargo.toml` stand for a Rust repository.
+
+    The command boundary reads a checkout with no `.rs` file as not applicable
+    to the Rust build rules. Most tests write a manifest and the file under test
+    and nothing else, because the Rust source is beside the point; this makes
+    them read as Rust. The tests of the boundary itself override this fixture
+    by name.
+    """
+    from concordat.rules import packages
+
+    monkeypatch.setattr(packages, "has_rust_sources", lambda _checkout: True)

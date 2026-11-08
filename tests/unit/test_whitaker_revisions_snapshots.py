@@ -46,6 +46,7 @@ def run_redacted(
     clone = pathlib.Path(history.repository.workdir)
 
     def run(command: str) -> str:
+        """Run *command* against the clone and return its redacted output."""
         run_main(monkeypatch, clone, command)
         return _redacted(
             capsys.readouterr().out,

@@ -41,6 +41,7 @@ def _write_manifest_via_yaml(
     artifact_path: str,
     sha256: str,
 ) -> None:
+    """Write a manifest holding one lint-config artifact with the given digest."""
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(
         "\n".join([
@@ -62,6 +63,7 @@ def _write_manifest_entries(
     manifest_path: Path,
     artifacts: list[dict[str, str]],
 ) -> None:
+    """Write a manifest that lists the given artifact dictionaries."""
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     lines: list[str] = ["schema_version: 1", "artifacts:"]
     for artifact in artifacts:
@@ -77,6 +79,7 @@ def _write_manifest_entries(
 
 
 def _write_template_file(root: Path, relative_path: str, content: str) -> Path:
+    """Write *content* to *relative_path* under *root* and return the file path."""
     path = root / relative_path
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
@@ -87,6 +90,7 @@ def _setup_multi_artifact_scenario(
     tmp_path: Path,
     artifacts: list[tuple[str, str, str, str | None]],
 ) -> tuple[CanonManifest, Path]:
+    """Write templates, a manifest and published copies for several artifacts."""
     root = tmp_path / "concordat"
     published_root = tmp_path / "platform-standards-published"
     manifest_path = root / "platform-standards" / "canon" / "manifest.yaml"
@@ -131,6 +135,7 @@ def single_artifact_manifest(tmp_path: Path) -> typ.Callable[..., ManifestFixtur
         template_relpath: str = "platform-standards/canon/lint/python/ruff.toml",
         use_correct_sha: bool = True,
     ) -> ManifestFixture:
+        """Build a fresh template root and manifest, optionally with a wrong digest."""
         nonlocal counter
         counter += 1
 
@@ -166,6 +171,7 @@ def single_artifact_manifest(tmp_path: Path) -> typ.Callable[..., ManifestFixtur
 def _create_published_file(
     published_root: Path, artifact_relpath: str, content: str
 ) -> Path:
+    """Write *content* to an artifact's published copy and return that file."""
     relpath = Path(artifact_relpath)
     if relpath.parts[:1] == ("platform-standards",):
         relpath = Path(*relpath.parts[1:])

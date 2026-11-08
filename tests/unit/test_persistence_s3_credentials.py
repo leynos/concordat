@@ -83,6 +83,7 @@ def captured_client_kwargs(
     captured: CapturedCall = {}
 
     def fake_client(service_name: str, **kwargs: object) -> object:
+        """Record the service name and keyword arguments of a boto3 client call."""
         captured["service_name"] = service_name
         captured["kwargs"] = kwargs
         return object()
@@ -266,6 +267,7 @@ class TestOwnerScopedS3Credentials:
         captured: CapturedCall = {}
 
         def fake_client(service_name: str, **kwargs: object) -> object:
+            """Record the keyword arguments of a boto3 client call."""
             captured["kwargs"] = kwargs
             return object()
 

@@ -421,26 +421,52 @@ def test_a_declared_surface_list_is_authoritative(layout: pathlib.Path) -> None:
     assert build_dependency_family_envelope(layout)["problems"] == []
 
 
-def test_a_nested_python_project_is_reported_not_read(tmp_path: pathlib.Path) -> None:
-    """Only the root `pyproject.toml` is read, and the others are named."""
-    _write(tmp_path, "sub/pyproject.toml", _PYPROJECT)
-
-    assert build_dependency_family_envelope(tmp_path)["problems"] == [
-        "sub/pyproject.toml is not read: only the root pyproject.toml is"
-    ]
-
-
-def test_a_deeply_nested_python_project_is_reported_not_read(
+def test_a_nested_python_project_is_read_against_its_own_directory(
     tmp_path: pathlib.Path,
 ) -> None:
-    """A project at any depth is named; hidden and vendored trees are not."""
+    """A nested project is read with the lock beside it and its own entry."""
+    _write(tmp_path, "sub/pyproject.toml", _PYPROJECT)
+    _write(tmp_path, "sub/uv.lock", "version = 1\n")
+    _write(
+        tmp_path,
+        ".github/dependabot.yml",
+        'version: 2\nupdates:\n  - package-ecosystem: "uv"\n'
+        '    directory: "/sub"\n    schedule:\n      interval: "daily"\n',
+    )
+
+    envelope = build_dependency_family_envelope(tmp_path)
+    declared = _by_package(envelope)["sub/pyproject.toml", "maturin"]
+
+    assert envelope["problems"] == []
+    assert declared["ecosystem"] == "uv"
+    assert declared["coverage"]["entry"] is not None
+
+
+def test_a_nested_python_project_without_an_entry_for_its_directory_is_uncovered(
+    tmp_path: pathlib.Path,
+) -> None:
+    """An entry for the root does not cover a nested project's directory."""
     _write(tmp_path, "packages/a/pyproject.toml", _PYPROJECT)
+    _write(tmp_path, ".github/dependabot.yml", _CONFIG)
+
+    declared = _by_package(build_dependency_family_envelope(tmp_path))[
+        "packages/a/pyproject.toml", "maturin"
+    ]
+
+    assert declared["coverage"]["entry"] is None
+
+
+def test_hidden_and_vendored_python_projects_are_not_read(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Hidden and vendored trees are not projects."""
     _write(tmp_path, ".venv/lib/pyproject.toml", _PYPROJECT)
     _write(tmp_path, "node_modules/x/pyproject.toml", _PYPROJECT)
 
-    assert build_dependency_family_envelope(tmp_path)["problems"] == [
-        "packages/a/pyproject.toml is not read: only the root pyproject.toml is"
-    ]
+    envelope = build_dependency_family_envelope(tmp_path)
+
+    assert envelope["declarations"] == []
+    assert envelope["problems"] == []
 
 
 def test_optional_dependencies_are_optional_declarations(

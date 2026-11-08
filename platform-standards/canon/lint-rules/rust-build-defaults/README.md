@@ -71,14 +71,18 @@ makes only those clauses indeterminate; the others still run. See
   under a non-nightly pin stops the file loading for every consumer. LLVM on a
   profile other than `dev` is not a third backend: it is the dedicated coverage
   profile BD-007 accepts, and is not reported. LLVM on `dev` still is.
-- **BD-006** (error): the recorded exception names the pinned toolchain
-  channel. An exception measured on an older channel no longer covers the
-  toolchain the repository builds with, which is what keeps the recorded state
-  from drifting quietly behind the pin. Clearing it does not require a fresh
-  measurement: a line in the exception section saying what the pin is now,
-  whether a measurement was taken on it, and the date any deferral runs to is a
-  true statement of the recorded state and satisfies the clause. With no
-  channel pinned at all the finding is `indeterminate`.
+- **BD-006** (error): the recorded exception is current. It is current while
+  it names the pinned toolchain channel, or names a dated measurement
+  (`nightly-YYYY-MM-DD` or `beta-YYYY-MM-DD`) taken within the last 90 days
+  (`exception_window_days`), on any pin. Dependabot moves the pin daily, so an
+  exception that had to name today's pin would go stale overnight; the window
+  asks instead that a measurement is not old. The age is read against the date
+  the audit ran (`evaluated_on` in the envelope), and a measurement dated after
+  it does not count. Past the window, a line in the exception section saying
+  what the pin is now, whether a measurement was taken on it, and the date any
+  deferral runs to is a true statement of the recorded state and satisfies the
+  clause. With no channel pinned and no recent measurement the finding is
+  `indeterminate`.
 - **BD-007** (error): where Cranelift is the development default (selected by
   the `dev` profile or by `rustflags`), every coverage path and every
   dev-profile release build selects LLVM. A coverage path is any Makefile
@@ -118,11 +122,29 @@ makes only those clauses indeterminate; the others still run. See
   and profile overrides. Missing or unresolved suite selections are
   indeterminate. Unknown wrappers and executable substitutions receive no
   exemption. A Makefile with no such assignment or suite route is not
-  applicable. Separate profile or package-override Cranelift selections remain
-  indeterminate: replacing `RUSTFLAGS` does not remove them, and this reader
-  does not prove the suite's internal profile override route. This check
-  measures explicit Make/configuration facts, not the caller's ambient
-  environment; runtime and CI route qualification remains separate evidence.
+  applicable. A route may sit behind `VAR=val` assignments and an `env` prefix
+  carrying assignments and `-u NAME` removals, which recognize the route but
+  are not isolation: with `RUSTFLAGS` unset Cargo still reads the
+  configuration's rustflags, so the route must assign it. Any other `env`
+  option leaves the command unrecognized, so it stays a gate build. A prefix
+  holding a backslash is not read, and the route is then indeterminate. Cargo
+  behind the same prefix is still a gate build. A profile-level Cranelift
+  selection in the configuration is proved displaced only by an explicit
+  `CARGO_PROFILE_<PROFILE>_CODEGEN_BACKEND=llvm` in the route's own prefix for
+  each such profile; a missing override, or one for another profile, stays
+  indeterminate, as does a package-override Cranelift selection, which no such
+  variable displaces. This check measures explicit Make/configuration facts,
+  not the caller's ambient environment; runtime and CI route qualification
+  remains separate evidence.
+
+  A note on the override variable: `CARGO_PROFILE_<PROFILE>_CODEGEN_BACKEND` is
+  an unstable Cargo key. It takes effect only where unstable codegen backends
+  are enabled, which `[unstable] codegen-backend = true` in the checkout's
+  configuration does. A route that runs where that configuration is not read
+  (after a `cd` out of the checkout) must also set
+  `CARGO_UNSTABLE_CODEGEN_BACKEND=true`, as statelet's route does. The policy
+  does not require the variable, because it cannot tell which configuration the
+  route will read; it only requires the LLVM override to be written.
 
   `policy/isolated_whitaker.rego` privately owns this suite boundary within the
   package. It composes the existing Make reachability, assignment and flag
@@ -177,6 +199,12 @@ makes only those clauses indeterminate; the others still run. See
   channel could not be classified.
 - **AP-001** (error, indeterminate): no `language.rust.surfaces` list was
   declared and the checkout has no root `Cargo.toml`.
+- **Not applicable**: a checkout with no `.rs` source (outside hidden and
+  vendored trees) has no Rust build to judge, however many `Cargo.toml` files
+  it holds. The command boundary empties the surfaces and sets
+  `applicability.rust_sources` to false, so no clause and not AP-001 is
+  reported. `rust-makefile-baseline` and `rust-dev-build-footprint` read it the
+  same way.
 - **EN-001** (error, indeterminate): the envelope has an unknown schema
   version or kind, or `cargo`/`cargo.surfaces` has an invalid shape.
 
@@ -192,26 +220,28 @@ that has neither.
 A recorded exception is recognized as a section of a declared document whose
 heading names the backend. The heading is structure and can be read reliably;
 the prose beneath it cannot, so the policy does not attempt to verify which
-tests are named. What it does check is the channel: an exception that names the
-pinned toolchain is current, and one that names an older toolchain is stale.
+tests are named. What it does check is currency: an exception that names the
+pinned toolchain, or a dated measurement within the last 90 days, is current
+even on an older pin, and one that names neither is stale.
 
 ### What the staleness finding does and does not claim
 
-BD-006 reports that the recorded measurement does not cover the pinned
-toolchain. It does not claim that a fresh measurement is owed, because whether
-one is depends on decisions the repository has recorded elsewhere and this
-policy cannot read them. netsuke is the case that made the distinction
-concrete: the backend is shelved there for six months by an explicit ruling,
-with a dated reminder issue, so a pin bump inside that window leaves the
-recorded measurement stale without obliging anyone to re-run a forty-minute
-suite.
+BD-006 reports that the recorded measurement neither names the pinned toolchain
+nor falls inside the 90-day window. It does not claim that a fresh measurement
+is owed, because whether one is depends on decisions the repository has
+recorded elsewhere and this policy cannot read them. netsuke is the case that
+made the distinction concrete: the backend is shelved there for six months by
+an explicit ruling, with a dated reminder issue, so once the measurement ages
+past the window the finding appears without obliging anyone to re-run a
+forty-minute suite.
 
 Either way the repository owes the same small thing, which is why the finding
 is a finding and not a warning: a line in the exception section giving what the
 pin is now, whether a measurement was taken on it, and the date any deferral
-runs to. netsuke's deferral runs to 2027-03-21 and is tracked by an issue, so a
-pin move inside that window is cleared by writing those three facts down rather
-than by re-running a forty-minute suite.
+runs to. netsuke's deferral runs to 2027-03-21 and is tracked by an issue, so
+the finding is cleared by writing those three facts down rather than by
+re-running a forty-minute suite. A measurement still inside the window needs no
+edit at all.
 
 Clearing it therefore costs an edit, and the property it preserves is worth the
 edit: the failure this clause exists to prevent is a guide that quietly
@@ -381,14 +411,11 @@ backend on another supported route remains an audit gap requiring policy-owner
 resolution, not an approved exception.
 
 A `makeutil` parse that recovered from a construct it does not understand is
-`indeterminate` for BD-007 and BD-008, even where the Makefile is valid.
-netsuke's Makefile reads `indeterminate` for BD-008 today for that reason. The
-pinned `makeutil` 0.1.0 does not parse its `unexport RUSTDOC_FLAGS` directive
-([makeutil#25](https://github.com/leynos/makeutil/issues/25)), and reports the
-recovery at unrelated lines. makeutil
-[#45](https://github.com/leynos/makeutil/pull/45), released in 0.1.1, fixes it,
-and netsuke then parses completely. Everything the pinned release does parse is
-compliant, and the verdict clears when concordat repins `makeutil`.
+`indeterminate` for BD-007 and BD-008, even where the Makefile is valid. Run
+the release concordat's CI pins: makeutil 0.1.0 reports valid Makefiles as
+recovered, including any `unexport` directive
+([makeutil#25](https://github.com/leynos/makeutil/issues/25)), which 0.1.1
+fixed.
 
 BD-009 covers steps that run cargo directly. A `make` step whose recipe assigns
 no `RUSTFLAGS` still inherits the toolchain action's export, and neither clause

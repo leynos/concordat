@@ -91,6 +91,7 @@ deny contains f if {
 	envelope_ok
 	not invalid_cargo_surfaces
 	input.applicability.rust_surfaces_declared != true
+	object.get(input.applicability, "rust_sources", true) != false
 	count(cargo_surfaces) == 0
 	f := finding(
 		"AP-001", "indeterminate", "",
@@ -458,10 +459,19 @@ deny contains f if {
 	)
 }
 
-# The exception is current only while it names the toolchain it was measured
-# on. The finding states that and no more: whether a bump obliges a fresh
-# measurement, or only a line saying none was taken, depends on decisions the
-# repository has recorded elsewhere and this policy cannot read.
+# The exception is current while it names the pinned toolchain, or names a
+# dated measurement inside the window, on any pin. The window exists because
+# Dependabot moves the pin daily: an exception that had to name today's pin
+# would go stale overnight. The finding states only that the recorded state is
+# not shown current; whether a bump obliges a fresh measurement, or only a line
+# saying none was taken, depends on decisions the repository has recorded
+# elsewhere and this policy cannot read.
+default exception_window_days := 90
+
+exception_window_days := data.parameters.exception_window_days
+
+day_ns := 86400000000000
+
 exception_names_pin if {
 	input.toolchain != null
 	input.toolchain.channel != null
@@ -469,18 +479,42 @@ exception_names_pin if {
 	input.toolchain.channel in section.channels_named
 }
 
+# A dated channel spelling, `nightly-YYYY-MM-DD` or `beta-YYYY-MM-DD`, is the
+# date a measurement was taken. Bare versions and undated channels carry none.
+exception_measurement_dates contains date if {
+	some section in exception_sections
+	some channel in section.channels_named
+	matches := regex.find_all_string_submatch_n(`^(?:nightly|beta)-(\d{4}-\d{2}-\d{2})$`, channel, 1)
+	count(matches) == 1
+	date := matches[0][1]
+}
+
+exception_names_recent_measurement if {
+	input.evaluated_on
+	today_ns := time.parse_ns("2006-01-02", input.evaluated_on)
+	some date in exception_measurement_dates
+	measured_ns := time.parse_ns("2006-01-02", date)
+	age_ns := today_ns - measured_ns
+	age_ns >= 0
+	age_ns <= exception_window_days * day_ns
+}
+
+exception_is_current if exception_names_pin
+
+exception_is_current if exception_names_recent_measurement
+
 deny contains f if {
 	backend_clause_applies
 	not backend_configured
 	exception_recorded
 	input.toolchain != null
 	input.toolchain.channel != null
-	not exception_names_pin
+	not exception_is_current
 	f := finding(
 		"BD-006", "noncompliant", exception_sections[0].path,
 		sprintf(
-			"the recorded exception names no measurement on %q, so the recorded state does not cover the pinned toolchain",
-			[input.toolchain.channel],
+			"the recorded exception names no measurement on %q or within the last %d days, so the recorded state is not shown to be current",
+			[input.toolchain.channel, exception_window_days],
 		),
 	)
 }
@@ -490,9 +524,10 @@ deny contains f if {
 	not backend_configured
 	exception_recorded
 	not pinned_channel_known
+	not exception_is_current
 	f := finding(
 		"BD-006", "indeterminate", exception_sections[0].path,
-		"no toolchain channel is pinned, so the recorded exception cannot be shown to be current",
+		"no toolchain channel is pinned and the recorded exception names no recent measurement, so it cannot be shown to be current",
 	)
 }
 

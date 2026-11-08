@@ -15,6 +15,7 @@ if typ.TYPE_CHECKING:
 
 
 def _ledger_lines(path: pathlib.Path) -> list[dict[str, typ.Any]]:
+    """Return the JSON records in the ledger file, or an empty list if absent."""
     if not path.exists():
         return []
     return [json.loads(line) for line in path.read_text().splitlines() if line]
@@ -28,6 +29,7 @@ SURVEY_PACKAGE = "nested-cargo-offline-tests"
 def _fake_result(
     verdict: str, package: str = sweep.RULE_PACKAGE
 ) -> sweep.RuleRunResult:
+    """Build a rule run result with the given verdict and no findings."""
     return sweep.RuleRunResult(
         rule_package=package,
         verdict=verdict,
@@ -108,6 +110,7 @@ class TestSweep:
         def fake_clone_and_audit(
             owner: str, name: str, **_kwargs: object
         ) -> tuple[str, sweep.RuleRunResult]:
+            """Record the call and return the fixed head with a compliant verdict."""
             calls.append((owner, name))
             return head, _fake_result("compliant")
 
@@ -296,6 +299,7 @@ class TestSweep:
         """A resolve_head failure is ledgered without cloning or auditing."""
 
         def raise_resolve(owner: str, name: str) -> typ.NoReturn:
+            """Fail head resolution with an operational error."""
             message = "gh api head resolution failed"
             raise sweep.OperationalRuleError(
                 message,
@@ -305,6 +309,7 @@ class TestSweep:
             )
 
         def fail_if_audited(owner: str, name: str, **_kwargs: object) -> typ.NoReturn:
+            """Fail the test if the audit runs after a head-resolution failure."""
             message = "clone_and_audit must not run on head failure"
             raise AssertionError(message)
 
@@ -332,6 +337,7 @@ class TestSweep:
         """A head-resolution failure spends one audit slot under --limit."""
 
         def raise_resolve(owner: str, name: str) -> typ.NoReturn:
+            """Fail head resolution with an operational error for any repository."""
             message = "boom"
             raise sweep.OperationalRuleError(
                 message,
@@ -365,6 +371,7 @@ class TestSweep:
         """An audit failure is ledgered as an error record, not raised."""
 
         def raise_operational(owner: str, name: str, **_kwargs: object) -> typ.NoReturn:
+            """Fail the audit with an operational error, as a missing conftest does."""
             message = "conftest is required"
             raise sweep.OperationalRuleError(
                 message,
@@ -433,6 +440,7 @@ class TestPackageSelection:
             name: str,
             package: str = sweep.RULE_PACKAGE,
         ) -> tuple[str, sweep.RuleRunResult]:
+            """Record the package handed to the audit and return a compliant result."""
             audited.append(package)
             return "a" * 40, _fake_result("compliant", package)
 

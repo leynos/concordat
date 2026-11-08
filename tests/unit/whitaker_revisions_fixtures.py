@@ -76,6 +76,7 @@ def default_tip_cli(
     clone = pathlib.Path(history.repository.workdir)
 
     def run(command: str) -> int:
+        """Run one whitaker_revisions command on the clone; return its exit code."""
         monkeypatch.setattr(sys, "argv", ["whitaker_revisions", command, str(clone)])
         return whitaker_revisions.main()
 

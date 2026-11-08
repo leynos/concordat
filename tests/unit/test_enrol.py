@@ -33,6 +33,7 @@ else:
 
 
 def _load_yaml(path: pathlib.Path) -> dict[str, object]:
+    """Load the YAML document at ``path`` into a plain dict."""
     path = pathlib.Path(path)
     parser = YAML(typ="safe")
     parser.version = (1, 2)
@@ -43,12 +44,14 @@ def _load_yaml(path: pathlib.Path) -> dict[str, object]:
 
 
 def _set_origin(remote_repo: pygit2.Repository, url: str) -> None:
+    """Point the ``origin`` remote of ``remote_repo`` at ``url``, replacing any."""
     with suppress(KeyError):
         remote_repo.remotes.delete("origin")
     remote_repo.remotes.create("origin", url)
 
 
 def _platform_config() -> PlatformStandardsConfig:
+    """Return a platform-standards config for the example platform repository."""
     return PlatformStandardsConfig(
         repo_url="git@github.com:example/platform-standards.git",
     )
@@ -136,6 +139,7 @@ def test_enrol_force_still_opens_platform_pr(
         *,
         config: PlatformStandardsConfig,
     ) -> PlatformStandardsResult:
+        """Record the call and return the expected platform PR result."""
         called.append((repo_slug, config))
         return expected
 
@@ -170,9 +174,11 @@ def test_enrol_remote_repository_pushes(
     pushed: list[bool] = []
 
     def fake_clone(*args: object, **kwargs: object) -> object:
+        """Return the local test repository in place of a network clone."""
         return git_repo.repository
 
     def fake_push(repository: object, callbacks: object) -> None:
+        """Record that the document push was attempted."""
         pushed.append(True)
 
     monkeypatch.setattr("concordat.enrol.pygit2.clone_repository", fake_clone)
@@ -251,6 +257,7 @@ def test_platform_pr_result_returns_success(monkeypatch: pytest.MonkeyPatch) -> 
         *,
         config: PlatformStandardsConfig,
     ) -> PlatformStandardsResult:
+        """Check the slug and config are passed through, then return the result."""
         assert repo_slug == "example/repo"
         assert config is config_obj
         return expected
@@ -268,6 +275,7 @@ def test_platform_pr_result_coerces_errors(monkeypatch: pytest.MonkeyPatch) -> N
     config = _platform_config()
 
     def fake_ensure(*args: object, **kwargs: object) -> PlatformStandardsResult:
+        """Raise a ConcordatError so the helper must convert it to a result."""
         raise ConcordatError("boom")
 
     monkeypatch.setattr("concordat.enrol.ensure_repository_pr", fake_ensure)
@@ -338,9 +346,11 @@ def test_disenrol_remote_repository_pushes(
     pushed: list[bool] = []
 
     def fake_clone(*args: object, **kwargs: object) -> object:
+        """Return the local test repository in place of a network clone."""
         return git_repo.repository
 
     def fake_push(repository: object, callbacks: object) -> None:
+        """Record that the document push was attempted."""
         pushed.append(True)
 
     monkeypatch.setattr("concordat.enrol.pygit2.clone_repository", fake_clone)
@@ -370,6 +380,7 @@ def test_disenrol_can_open_platform_removal_pr(
     )
 
     def fake_remove_pr(*args: object, **kwargs: object) -> PlatformStandardsResult:
+        """Return the expected removal PR result without contacting GitHub."""
         return expected
 
     monkeypatch.setattr(

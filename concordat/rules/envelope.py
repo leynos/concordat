@@ -38,6 +38,7 @@ from .markdown_envelope import (
 from .rust_surfaces import (
     CargoManifest,
     CargoSurface,
+    build_root_surfaces,
     resolve_rust_surfaces,
     root_cargo_toml_exists,
 )
@@ -65,6 +66,11 @@ class CargoPayload(typ.TypedDict):
 
     parsed: CargoManifest | None
     surfaces: list[CargoSurface]
+    # Every declared surface, when some are not build roots. `surfaces` is what
+    # the rule judges; this is what a gate invocation can be aimed at, so a
+    # nested gate is not credited to the root merely because its target is not
+    # judged.
+    declared_surfaces: typ.NotRequired[list[CargoSurface]]
 
 
 class Applicability(typ.TypedDict):
@@ -145,9 +151,14 @@ def build_envelope(
             "root_makefile": makefile_report is not None,
             "rust_surfaces_declared": resolution.declared,
         },
-        "cargo": {"parsed": cargo_parsed, "surfaces": list(resolution.surfaces)},
+        "cargo": {
+            "parsed": cargo_parsed,
+            "surfaces": list(build_root_surfaces(resolution.surfaces)),
+        },
         "makefile": makefile_report,
     }
+    if len(build_root_surfaces(resolution.surfaces)) != len(resolution.surfaces):
+        envelope["cargo"]["declared_surfaces"] = list(resolution.surfaces)
     return envelope
 
 
@@ -202,6 +213,7 @@ class BuildDefaultsEnvelope(typ.TypedDict):
     cargo_manifest_backend_error: typ.NotRequired[str]
     exceptions: list[DocumentScan]
     standard_exceptions: typ.NotRequired[list[StandardException]]
+    evaluated_on: typ.NotRequired[str]  # added at the command boundary
     makefile: MakeutilReport | None
     makefile_error: str | None
     workflows: list[BuildWorkflowFile]
@@ -369,7 +381,10 @@ def build_build_defaults_envelope(
             "cargo_config": cargo_config is not None,
             "toolchain_file": toolchain is not None,
         },
-        "cargo": {"parsed": cargo_parsed, "surfaces": list(resolution.surfaces)},
+        "cargo": {
+            "parsed": cargo_parsed,
+            "surfaces": list(build_root_surfaces(resolution.surfaces)),
+        },
         "toolchain": toolchain,
         "cargo_config": cargo_config,
         "exceptions": find_exception_sections(

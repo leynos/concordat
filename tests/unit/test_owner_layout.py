@@ -100,6 +100,7 @@ class TestDefaultConfigPath:
         legacy.write_text(LEGACY_CONFIG)
 
         def refuse_cleanup(*_args: object, **_kwargs: object) -> typ.NoReturn:
+            """Raise an OSError in place of the legacy-section cleanup."""
             message = "cleanup denied"
             raise OSError(message)
 

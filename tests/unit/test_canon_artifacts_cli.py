@@ -25,6 +25,10 @@ def _write_template_and_manifest(
     content: str,
     sha_override: str | None = None,
 ) -> None:
+    """Write the ruff template and a one-artifact manifest under *template_root*.
+
+    A *sha_override* replaces the computed digest, so a test can supply a stale one.
+    """
     template_file = (
         template_root / "platform-standards" / "canon" / "lint" / "python" / "ruff.toml"
     )
@@ -54,6 +58,7 @@ def _write_manifest_entries(
     manifest_path: Path,
     entries: list[dict[str, str]],
 ) -> None:
+    """Write a manifest that lists the given entry dictionaries."""
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     lines: list[str] = ["schema_version: 1", "artifacts:"]
     for entry in entries:
@@ -69,6 +74,7 @@ def _write_manifest_entries(
 
 
 def _write_template_file(template_root: Path, relative_path: str, content: str) -> Path:
+    """Write *content* to *relative_path* under *template_root* and return the file."""
     path = template_root / relative_path
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
@@ -79,6 +85,7 @@ def _setup_multi_artifact_cli_scenario(
     tmp_path: Path,
     artifacts: list[tuple[str, str, str, str, str | None]],
 ) -> tuple[Path, Path]:
+    """Write templates and a manifest for several artifacts, publishing some."""
     template_root = tmp_path / "concordat"
     published_root = tmp_path / "platform-standards-published"
     manifest_path = template_root / "platform-standards" / "canon" / "manifest.yaml"

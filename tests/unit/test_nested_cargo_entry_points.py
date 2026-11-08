@@ -381,6 +381,67 @@ def test_a_cargo_variable_prefetch_is_proof_when_it_resolves(
     assert makefile_state(tmp_path) == [("test", "before")]
 
 
+@pytest.mark.parametrize(
+    "assignment",
+    [
+        "CARGO ?= $(or $(shell command -v cargo 2>/dev/null),$(HOME)/.cargo/bin/cargo)",
+        (
+            "USER_CARGO := $(HOME)/.cargo/bin/cargo\n"
+            "CARGO ?= $(or $(shell command -v cargo 2>/dev/null),"
+            "$(wildcard $(USER_CARGO)),cargo)"
+        ),
+        (
+            "CARGO ?= $(if $(wildcard $(HOME)/.cargo/bin/cargo),"
+            "$(HOME)/.cargo/bin/cargo,cargo)"
+        ),
+    ],
+)
+def test_a_cargo_search_whose_every_alternative_is_cargo_is_read(
+    assignment: str, tmp_path: pathlib.Path
+) -> None:
+    """Whichever path Make picks, the recipe runs cargo, so the fetch counts."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        f"{assignment}\n\ntest:\n\t$(CARGO) fetch --locked\n\t$(CARGO) test\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "before")]
+
+
+@pytest.mark.parametrize(
+    "assignment",
+    [
+        # A fallback that is another program.
+        "CARGO ?= $(or $(shell command -v cargo 2>/dev/null),$(HOME)/bin/true)",
+        # A shell command that does more than look the tool up.
+        "CARGO ?= $(or $(shell command -v cargo; true),cargo)",
+        "CARGO ?= $(or $(shell which cargo),cargo)",
+        # A glob can match a file with any name.
+        "CARGO ?= $(or $(wildcard $(HOME)/.cargo/bin/*),cargo)",
+        # An alternative that is not a path word, or ends in a variable.
+        "CARGO ?= $(or $(shell command -v cargo),$(HOME)/.cargo/bin/$(BIN))",
+        # An `if` with no else branch can leave the variable empty.
+        "CARGO ?= $(if $(wildcard $(HOME)/.cargo/bin/cargo),$(HOME)/.cargo/bin/cargo)",
+        # A condition that can run code.
+        "CARGO ?= $(if $(shell touch x),cargo,cargo)",
+        # A function the reader does not follow.
+        "CARGO ?= $(call find,cargo)",
+        # A search for a tool the variable is not named for.
+        "CARGO ?= $(or $(shell command -v rustc),rustc)",
+    ],
+)
+def test_a_search_that_may_not_end_in_cargo_stays_unresolved(
+    assignment: str, tmp_path: pathlib.Path
+) -> None:
+    """Only a search provably ending in the tool's name is read."""
+    put(
+        tmp_path,
+        MAKEFILE,
+        f"{assignment}\n\ntest:\n\t$(CARGO) fetch --locked\n\t$(CARGO) test\n",
+    )
+    assert makefile_state(tmp_path) == [("test", "uncertain")]
+
+
 def test_an_unresolved_cargo_variable_is_uncertain(tmp_path: pathlib.Path) -> None:
     """A variable the expansion cannot settle leaves both commands unknown."""
     put(
@@ -1321,6 +1382,192 @@ def test_an_expression_valued_command_is_uncertain(tmp_path: pathlib.Path) -> No
     assert states(tmp_path) == [("workflow", "test", "uncertain")]
 
 
+PLANNED = "${{ fromJson(needs.plan.outputs.val).ci.github.artifacts_matrix }}"
+PLAN_HEAD = (
+    "  plan:\n    outputs:\n      val: ${{ steps.plan.outputs.manifest }}\n"
+    "    steps:\n      - id: plan\n        run: |\n"
+)
+DIST_PLAN = (
+    PLAN_HEAD
+    + "          dist ${{ (!github.event.pull_request && "
+    + "format('host --steps=create --tag={0}', github.ref_name)) || 'plan' }} "
+    + "--output-format=json > plan.json\n"
+    + '          echo "manifest=$(jq -c "." plan.json)" >> "$GITHUB_OUTPUT"\n'
+)
+DIVERTED_PLAN = (
+    PLAN_HEAD
+    + "          dist plan --output-format=json > plan.json\n"
+    + '          echo \'manifest={"command":["cargo test"]}\' >> "$GITHUB_OUTPUT"\n'
+)
+OVERWRITTEN_PLAN = (
+    PLAN_HEAD
+    + "          dist plan --output-format=json > plan.json\n"
+    + '          echo \'{"command":["cargo test"]}\' > plan.json\n'
+    + '          echo "manifest=$(jq -c "." plan.json)" >> "$GITHUB_OUTPUT"\n'
+)
+PUBLISHED_FIRST_PLAN = (
+    PLAN_HEAD
+    + '          echo "manifest=$(jq -c "." plan.json)" >> "$GITHUB_OUTPUT"\n'
+    + "          dist plan --output-format=json > plan.json\n"
+)
+EXPRESSION_ECHO_PLAN = (
+    PLAN_HEAD
+    + "          dist plan --output-format=json > plan.json\n"
+    + "          echo '${{ inputs.payload }}'\n"
+    + '          echo "manifest=$(jq -c "." plan.json)" >> "$GITHUB_OUTPUT"\n'
+)
+COMMENT_EXPRESSION_PLAN = (
+    PLAN_HEAD
+    + "          dist plan --output-format=json > plan.json\n"
+    + "          # ${{ github.event.pull_request.body }}\n"
+    + '          echo "manifest=$(jq -c "." plan.json)" >> "$GITHUB_OUTPUT"\n'
+)
+COMMENTED_PLAN = (
+    PLAN_HEAD
+    + "          dist plan --output-format=json # > plan.json\n"
+    + '          echo "manifest=$(jq -c "." plan.json)" >> "$GITHUB_OUTPUT"\n'
+)
+INJECTED_PLAN = (
+    PLAN_HEAD
+    + "          dist ${{ 'plan; echo ''{}''' }} > plan.json\n"
+    + '          echo "manifest=$(jq -c "." plan.json)" >> "$GITHUB_OUTPUT"\n'
+)
+COMPOUND_PLAN = (
+    PLAN_HEAD
+    + "          dist plan --output-format=json;"
+    + ' echo \'{"command":["cargo test"]}\' > plan.json\n'
+    + '          echo "manifest=$(jq -c "." plan.json)" >> "$GITHUB_OUTPUT"\n'
+)
+SCRIPT_PLAN = (
+    "  plan:\n    outputs:\n      val: ${{ steps.set.outputs.manifest }}\n"
+    "    steps:\n      - id: set\n"
+    '        run: echo \'manifest={"command":["cargo test"]}\' >> "$GITHUB_OUTPUT"\n'
+)
+
+
+def dist_job(matrix: str, run: str, plan: str = DIST_PLAN) -> str:
+    """Return a workflow whose build job runs *run*, then `dist build`."""
+    return (
+        f"jobs:\n{plan}  build:\n    needs: plan\n    strategy:\n"
+        f"      matrix: {matrix}\n    steps:\n"
+        f"      - run: {run}\n      - run: dist build ${{{{ matrix.dist_args }}}}\n"
+    )
+
+
+def test_a_planned_matrix_lookup_in_a_dist_job_is_not_a_test(
+    tmp_path: pathlib.Path,
+) -> None:
+    """cargo-dist installs its own tools from the plan job's matrix."""
+    put(tmp_path, WORKFLOW, dist_job(PLANNED, "${{ matrix.install_dist.run }}"))
+    assert states(tmp_path) == []
+
+
+@pytest.mark.parametrize(
+    ("matrix", "run"),
+    [
+        # A matrix written out in the workflow can hold a test command.
+        ("{command: [cargo test]}", "${{ matrix.command }}"),
+        # A lookup with an operator can fall back to a test command.
+        (PLANNED, "${{ matrix.install_dist.run || 'cargo test' }}"),
+        # Only a matrix lookup is released, not another context.
+        (PLANNED, "${{ inputs.command }}"),
+        (PLANNED, "${{ matrix['install_dist'].run }}"),
+    ],
+)
+def test_other_expressions_in_a_dist_job_stay_uncertain(
+    tmp_path: pathlib.Path, matrix: str, run: str
+) -> None:
+    """The release reading is as narrow as the shape cargo-dist generates."""
+    put(tmp_path, WORKFLOW, dist_job(matrix, run))
+    assert states(tmp_path) == [("workflow", "build", "uncertain")]
+
+
+def test_a_plan_step_that_writes_another_manifest_stays_uncertain(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Running dist is not enough; the manifest must be dist's own output."""
+    put(
+        tmp_path,
+        WORKFLOW,
+        dist_job(PLANNED, "${{ matrix.command }}", plan=DIVERTED_PLAN),
+    )
+    assert states(tmp_path) == [("workflow", "build", "uncertain")]
+
+
+def test_a_plan_file_overwritten_before_publication_stays_uncertain(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The file must still hold dist's output when `jq` reads it."""
+    put(
+        tmp_path,
+        WORKFLOW,
+        dist_job(PLANNED, "${{ matrix.command }}", plan=OVERWRITTEN_PLAN),
+    )
+    assert states(tmp_path) == [("workflow", "build", "uncertain")]
+
+
+@pytest.mark.parametrize(
+    "plan",
+    [
+        COMMENTED_PLAN,
+        INJECTED_PLAN,
+        PUBLISHED_FIRST_PLAN,
+        EXPRESSION_ECHO_PLAN,
+        COMMENT_EXPRESSION_PLAN,
+    ],
+)
+def test_a_plan_whose_redirect_is_not_dists_stays_uncertain(
+    tmp_path: pathlib.Path, plan: str
+) -> None:
+    """A commented-out redirect or a substituted expression is not dist's output."""
+    put(tmp_path, WORKFLOW, dist_job(PLANNED, "${{ matrix.command }}", plan=plan))
+    assert states(tmp_path) == [("workflow", "build", "uncertain")]
+
+
+def test_a_compound_plan_command_stays_uncertain(tmp_path: pathlib.Path) -> None:
+    """A second command on the dist line can write the file the plan publishes."""
+    put(
+        tmp_path,
+        WORKFLOW,
+        dist_job(PLANNED, "${{ matrix.command }}", plan=COMPOUND_PLAN),
+    )
+    assert states(tmp_path) == [("workflow", "build", "uncertain")]
+
+
+def test_a_compound_matrix_expression_stays_uncertain(tmp_path: pathlib.Path) -> None:
+    """A plan output combined with another value is not the plan's matrix."""
+    compound = (
+        "${{ fromJson(needs.plan.outputs.val) && "
+        'fromJson(\'{"command":["cargo test"]}\') }}'
+    )
+    put(tmp_path, WORKFLOW, dist_job(compound, "${{ matrix.command }}"))
+    assert states(tmp_path) == [("workflow", "build", "uncertain")]
+
+
+def test_a_matrix_planned_by_a_script_stays_uncertain(tmp_path: pathlib.Path) -> None:
+    """Only a plan job that runs dist vouches for what its matrix holds."""
+    put(
+        tmp_path,
+        WORKFLOW,
+        dist_job(PLANNED, "${{ matrix.command }}", plan=SCRIPT_PLAN),
+    )
+    assert states(tmp_path) == [("workflow", "build", "uncertain")]
+
+
+def test_a_planned_matrix_lookup_without_dist_stays_uncertain(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A job that never runs cargo-dist gets no release reading."""
+    put(
+        tmp_path,
+        WORKFLOW,
+        f"jobs:\n{DIST_PLAN}  build:\n    needs: plan\n    strategy:\n"
+        f"      matrix: {PLANNED}\n    steps:\n"
+        "      - run: ${{ matrix.install_dist.run }}\n      - run: echo done\n",
+    )
+    assert states(tmp_path) == [("workflow", "build", "uncertain")]
+
+
 def test_a_workflow_that_does_not_decode_is_a_problem(tmp_path: pathlib.Path) -> None:
     """A YAML error leaves every step in the file unknown."""
     put(tmp_path, WORKFLOW, "jobs:\n  test:\n   steps:\n  - run: [\n")
@@ -1561,3 +1808,75 @@ def test_a_same_step_fetch_does_not_prove_order_across_an_expression(
     )
 
     assert states(tmp_path) == [("workflow", "test", "uncertain")]
+
+
+# --- a fetch before every entry point stands in for a setup script -----------
+
+CI_CONFIG = "[profile.ci]\nretries = 1\n"
+
+
+def test_a_fetch_before_every_entry_point_leaves_the_profile_owing_nothing(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Axinite's shape: no setup script, and a gated fetch before each entry."""
+    put(tmp_path, NEXTEST_CONFIG, CI_CONFIG)
+    put(
+        tmp_path,
+        MAKEFILE,
+        "test:\n\tcargo fetch --locked && cargo nextest run --profile ci\n",
+    )
+    put(
+        tmp_path,
+        WORKFLOW,
+        "jobs:\n  test:\n    steps:\n      - run: cargo fetch --locked\n"
+        "      - run: cargo nextest run --profile ci\n",
+    )
+    assert states(tmp_path) == [
+        ("makefile", "test", "before"),
+        ("workflow", "test", "before"),
+    ]
+
+
+def test_one_entry_point_without_the_fetch_still_leaves_the_profile_absent(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Mutation: the workflow step skips the fetch, so the profile is flagged."""
+    put(tmp_path, NEXTEST_CONFIG, CI_CONFIG)
+    put(
+        tmp_path,
+        MAKEFILE,
+        "test:\n\tcargo fetch --locked && cargo nextest run --profile ci\n",
+    )
+    put(
+        tmp_path,
+        WORKFLOW,
+        "jobs:\n  test:\n    steps:\n      - run: cargo nextest run --profile ci\n",
+    )
+    assert states(tmp_path) == [
+        ("makefile", "test", "before"),
+        ("nextest", "ci", "absent"),
+        ("workflow", "test", "absent"),
+    ]
+
+
+def test_a_fetch_that_is_not_success_gated_still_leaves_the_profile_absent(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Mutation: `;` between the fetch and the run proves no order."""
+    put(tmp_path, NEXTEST_CONFIG, CI_CONFIG)
+    put(
+        tmp_path,
+        MAKEFILE,
+        "test:\n\tcargo fetch --locked; cargo nextest run --profile ci\n",
+    )
+    put(
+        tmp_path,
+        WORKFLOW,
+        "jobs:\n  test:\n    steps:\n      - run: cargo fetch --locked || true\n"
+        "      - run: cargo nextest run --profile ci\n",
+    )
+    assert states(tmp_path) == [
+        ("makefile", "test", "absent"),
+        ("nextest", "ci", "absent"),
+        ("workflow", "test", "absent"),
+    ]

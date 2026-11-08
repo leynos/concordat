@@ -225,6 +225,7 @@ def cached_resolver(resolver: PinResolver, cache: PinCache) -> PinResolver:
     """
 
     def resolve(repository: str, sha: str) -> PinResolution:
+        """Return the pin for ``repository`` at ``sha``, asking only on a miss."""
         read = cache.get(repository, sha)
         _logger.debug(
             "read pin cache for %s@%s: %s", repository, sha, read.outcome.value

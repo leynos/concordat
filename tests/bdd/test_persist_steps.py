@@ -63,6 +63,7 @@ def prompt_queue(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     queue: list[str] = []
 
     def fake_input(_: str) -> str:
+        """Return the next queued prompt answer, or an empty string when exhausted."""
         return queue.pop(0) if queue else ""
 
     monkeypatch.setattr("builtins.input", fake_input)
@@ -118,6 +119,7 @@ def fake_s3(monkeypatch: pytest.MonkeyPatch) -> FakeS3Client:
     def factory(
         region: str, endpoint: str, *, owner: str | None = None
     ) -> FakeS3Client:
+        """Return the shared fake client, ignoring region, endpoint and owner."""
         return client
 
     monkeypatch.setattr(
@@ -140,6 +142,7 @@ def pr_stub(monkeypatch: pytest.MonkeyPatch) -> dict[str, typ.Any]:
     log: dict[str, typ.Any] = {}
 
     def opener(context: persistence.PullRequestContext) -> str:
+        """Record the PR context in the log and return a fixed PR URL."""
         log["branch"] = context.branch_name
         log["bucket"] = context.descriptor.bucket
         log["key_suffix"] = context.key_suffix
@@ -165,6 +168,7 @@ def config_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def _run_cli(arguments: list[str]) -> RunResult:
+    """Run the CLI with *arguments* and capture its output and exit status."""
     buffer_out = io.StringIO()
     try:
         with redirect_stdout(buffer_out):
@@ -185,6 +189,7 @@ def _run_cli(arguments: list[str]) -> RunResult:
 
 
 def _seed_estate_remote(root: Path) -> Path:
+    """Seed a bare estate remote with a copy of platform-standards."""
     source = root / "estate-source"
     shutil.copytree(Path(__file__).resolve().parents[2] / "platform-standards", source)
     repo = pygit2.init_repository(str(source), initial_head="main")
@@ -351,10 +356,12 @@ def then_command_fails_with(cli_invocation: dict[str, RunResult], text: str) -> 
 
 
 def _estate_path(alias: str, relative: str) -> Path:
+    """Return the path to *relative* inside the cache of estate *alias*."""
     return _estate_root(alias) / relative
 
 
 def _estate_root(alias: str) -> Path:
+    """Return the cache directory of the example-owned estate *alias*."""
     # Estates in these scenarios are registered under owner "example".
     return xdg.owner_estates_cache_dir("example") / alias
 

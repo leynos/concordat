@@ -205,6 +205,7 @@ def test_a_filesystem_refusal_is_reported_rather_than_read_as_absence(
     write_guide(tmp_path, "# Guide\n\n## Cranelift\n\nOn `nightly`.\n")
 
     def refuse(_self: pathlib.Path, *_args: object, **_kwargs: object) -> object:
+        """Raise PermissionError from stat, as a refused read does."""
         message = "Permission denied"
         raise PermissionError(13, message)
 

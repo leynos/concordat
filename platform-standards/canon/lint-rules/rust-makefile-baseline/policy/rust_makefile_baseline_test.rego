@@ -142,6 +142,17 @@ test_recovered_parse_is_indeterminate if {
 
 # -- applicability and envelope guards -------------------------------------
 
+# A Cargo manifest with no Rust source is not applicable, and says nothing.
+test_a_checkout_with_no_rust_sources_is_not_applicable if {
+	empty := object.union(data.fixtures.not_rust, {
+		"applicability": {"root_cargo_toml": true, "root_makefile": true,
+			"rust_surfaces_declared": false, "rust_sources": false},
+		"cargo": {"parsed": null, "surfaces": []},
+	})
+	findings := policy.deny with input as empty
+	count(findings) == 0
+}
+
 test_not_rust_is_single_applicability_finding if {
 	findings := policy.deny with input as data.fixtures.not_rust
 	count(findings) == 1
@@ -328,6 +339,34 @@ test_nested_gate_does_not_qualify_a_root_surface if {
 	profile(findings) == {["QG-001", "noncompliant"]}
 	some f in findings
 	contains(f.msg, "Cargo.toml")
+}
+
+# A declared nested manifest that the rule does not judge (no profile of its
+# own) still shows where a gate was aimed, so its gate is not the root's.
+test_a_nested_gate_aimed_at_an_unjudged_surface_does_not_qualify_the_root if {
+	root := data.fixtures.mixed_root_nested.cargo.surfaces[0]
+	nested := data.fixtures.mixed_root_nested.cargo.surfaces[1]
+	cargo := {"parsed": null, "surfaces": [root], "declared_surfaces": [root, nested]}
+	findings := policy.deny with input as object.union(data.fixtures.mixed_root_nested, {"cargo": cargo})
+	profile(findings) == {["QG-001", "noncompliant"]}
+	some f in findings
+	contains(f.msg, "Cargo.toml")
+}
+
+# A present but malformed declared list is an envelope error, not a fallback.
+test_a_malformed_declared_list_is_an_indeterminate_envelope_error if {
+	root := data.fixtures.mixed_root_nested.cargo.surfaces[0]
+	cargo := {"parsed": null, "surfaces": [root], "declared_surfaces": null}
+	findings := policy.deny with input as object.union(data.fixtures.mixed_root_nested, {"cargo": cargo})
+	profile(findings) == {["EN-001", "indeterminate"]}
+}
+
+# Mutation: without the declared list the nested gate reads as the root's.
+test_without_the_declared_list_the_nested_gate_is_credited_to_the_root if {
+	root := data.fixtures.mixed_root_nested.cargo.surfaces[0]
+	cargo := {"parsed": null, "surfaces": [root]}
+	findings := policy.deny with input as object.union(data.fixtures.mixed_root_nested, {"cargo": cargo})
+	count(findings) == 0
 }
 
 # Surface context must be proved from a command-shaped recipe. The two decoys

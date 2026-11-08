@@ -124,6 +124,7 @@ class TestParseMakefile:
         source.write_text("all:\n\t@true\n", encoding="utf-8")
 
         def refuse(*_args: object, **_kwargs: object) -> typ.NoReturn:
+            """Fail the subprocess launch with the parametrized error."""
             raise error
 
         monkeypatch.setattr(generate.subprocess, "run", refuse)
@@ -148,6 +149,7 @@ class TestParseMakefile:
         calls: list[dict[str, object]] = []
 
         def fake_run(args: list[str], **kwargs: object) -> object:
+            """Record the argv and working directory, then return the report."""
             calls.append({"args": args, "cwd": kwargs.get("cwd")})
             return subprocess.CompletedProcess(
                 args, 0, stdout=json.dumps(report), stderr=""

@@ -5,10 +5,72 @@ package canon.lint_rules.rust_build_defaults
 import rego.v1
 
 # Recognize the executed binary, never an argument or a target named whitaker.
+# What may precede it: `VAR=val` assignments, and `env` carrying assignments
+# and `-u NAME` / `--unset NAME` / `--unset=NAME` removals. An `env` option this
+# does not know keeps the segment unrecognized, so it stays a gate build. A
+# removal only recognizes the route: it is not isolation, because with the
+# variable unset Cargo still reads the configuration's rustflags.
 runs_isolated_whitaker(segment) if regex.match(
-	`^[[:space:]]*[-@+]*[[:space:]]*(env[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*=("[^"]*"|'[^']*'|[^[:space:]]*)[[:space:]]+)*([^[:space:]"'()]*/)?whitaker(\.exe)?([[:space:]]|$)`,
+	`^[[:space:]]*[-@+]*[[:space:]]*(env[[:space:]]+((-u|--unset)[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]+|--unset=[A-Za-z_][A-Za-z0-9_]*[[:space:]]+|[A-Za-z_][A-Za-z0-9_]*=("[^"]*"|'[^']*'|[^[:space:]]*)[[:space:]]+)*|([A-Za-z_][A-Za-z0-9_]*=("[^"]*"|'[^']*'|[^[:space:]]*)[[:space:]]+)*)([^[:space:]"'()]*/)?whitaker(\.exe)?([[:space:]]|$)`,
 	segment,
 )
+
+# What the route's own prefix says about the environment. The prefix is
+# captured by the same pattern that recognizes the route, and read token by
+# token, so a quoted value (`NOTE=" CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm"`)
+# or an argument after the binary is never mistaken for an assignment or a
+# removal.
+route_prefix(segment) := matches[0][1] if {
+	matches := regex.find_all_string_submatch_n(
+		`^[[:space:]]*[-@+]*[[:space:]]*(env[[:space:]]+((-u|--unset)[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]+|--unset=[A-Za-z_][A-Za-z0-9_]*[[:space:]]+|[A-Za-z_][A-Za-z0-9_]*=("[^"]*"|'[^']*'|[^[:space:]]*)[[:space:]]+)*|([A-Za-z_][A-Za-z0-9_]*=("[^"]*"|'[^']*'|[^[:space:]]*)[[:space:]]+)*)([^[:space:]"'()]*/)?whitaker(\.exe)?([[:space:]]|$)`,
+		segment, 1,
+	)
+	count(matches) == 1
+}
+
+# A backslash can escape a space or a quote, and a quote can open mid-value,
+# which moves a token boundary in ways this reader does not follow, so such a
+# prefix is read as saying nothing rather than guessed at.
+prefix_is_plain(segment) if {
+	prefix := route_prefix(segment)
+	not contains(prefix, "\\")
+	# Every token must be a whole assignment or removal: a bare value holds no
+	# quote, and a quoted value ends where whitespace follows, so a quote that
+	# opens mid-value (`NOTE=x" Y=z"`) is refused rather than split.
+	regex.match(
+		`^[[:space:]]*[-@+]*[[:space:]]*(env[[:space:]]+)?(((-u|--unset)[[:space:]]+[A-Za-z_][A-Za-z0-9_]*|--unset=[A-Za-z_][A-Za-z0-9_]*|[A-Za-z_][A-Za-z0-9_]*=("[^"]*"|'[^']*'|[^[:space:]"']*))[[:space:]]+)*$`,
+		prefix,
+	)
+}
+
+prefix_tokens(segment) := regex.find_all_string_submatch_n(
+	`(?:^|[[:space:]])(?:([A-Za-z_][A-Za-z0-9_]*)=("[^"]*"|'[^']*'|[^[:space:]]*)|(?:-u|--unset)[[:space:]]+([A-Za-z_][A-Za-z0-9_]*)|--unset=([A-Za-z_][A-Za-z0-9_]*))`,
+	route_prefix(segment), -1,
+) if prefix_is_plain(segment)
+
+default prefix_tokens(_) := []
+
+# The names the route's `env` prefix removes from its environment.
+unset_names(segment) := {name |
+	some token in prefix_tokens(segment)
+	some name in {token[3], token[4]}
+	name != ""
+}
+
+# Only a matching outer pair of quotes is shell quoting; a quote inside it is part
+# of the value (`'"llvm"'` is the text "llvm" with its quotes).
+unquote(value) := substring(value, 1, count(value) - 2) if {
+	count(value) >= 2
+	some quote in [`"`, "'"]
+	startswith(value, quote)
+	endswith(value, quote)
+} else := value
+
+# The values the route's prefix assigns to *name*, in order.
+route_assigned_values(segment, name) := [unquote(token[2]) |
+	some token in prefix_tokens(segment)
+	token[1] == name
+]
 
 exempt_segment(segment) if runs_isolated_whitaker(segment)
 
@@ -107,8 +169,14 @@ inherited_suite_values(rule, name) := {expand(assignment.value) |
 }
 
 suite_values(rule, segment, name) := {values[count(values) - 1]} if {
-	values := assigned_values(segment, name)
+	values := route_assigned_values(segment, name)
 	count(values) > 0
+} else := set() if {
+	# `env -u NAME` removes the variable from the route's environment, so a
+	# Make-level value of it never reaches Whitaker. For RUSTFLAGS that leaves
+	# nothing assigned, which is unproved (Cargo reads the configuration's
+	# rustflags) rather than contaminated or isolated.
+	name in unset_names(segment)
 } else := {value} if {
 	value := target_value(rule, name)
 } else := values if {
@@ -157,15 +225,21 @@ suite_isolation_unproved(rule, _, segment) if {
 	count(suite_values(rule, segment, "RUSTFLAGS")) != 1
 }
 
+# Removing RUSTFLAGS is not isolation: Cargo then reads the configuration's
+# rustflags. Without a later assignment on the route, a Make-level value must not
+# stand in for what the route's environment holds.
+suite_isolation_unproved(_, _, segment) if {
+	"RUSTFLAGS" in unset_names(segment)
+	count(route_assigned_values(segment, "RUSTFLAGS")) == 0
+}
+
+# A prefix holding a backslash is not read, so a Make-level value must not stand
+# in for what the route really assigns.
+suite_isolation_unproved(_, _, segment) if not prefix_is_plain(segment)
+
 # RUSTFLAGS does not displace a separate profile or package backend. The facts
 # do not prove how the suite's internal Cargo call selects/overrides these, so
 # preserve an explicit measurement gap instead of assuming an LLVM route.
-separate_config_backend if {
-	some backend in backends
-	backend.scope in {"profile", "package-override"}
-	backend.backend == "cranelift"
-}
-
 separate_manifest_backend if {
 	some backend in manifest_backends
 	backend.backend != "llvm"
@@ -177,9 +251,25 @@ suite_isolation_unproved(_, _, _) if separate_manifest_backend
 
 # A route that leaves the checkout never discovers its Cargo configuration, so
 # a backend selected there does not reach the suite.
-suite_isolation_unproved(_, recipe, segment) if {
-	separate_config_backend
+suite_isolation_unproved(rule, recipe, segment) if {
+	some backend in backends
+	backend.scope in {"profile", "package-override"}
+	backend.backend == "cranelift"
 	not route_leaves_checkout(recipe, segment)
+	not profile_backend_overridden(rule, segment, backend)
+}
+
+# An explicit `CARGO_PROFILE_<P>_CODEGEN_BACKEND=llvm` on the route displaces the
+# configuration's Cranelift for that profile, which is proof of isolation. Only
+# a profile table can be displaced this way: a package override has no such
+# variable, so it stays unproved.
+profile_backend_overridden(rule, segment, backend) if {
+	backend.scope == "profile"
+	name := sprintf("CARGO_PROFILE_%s_CODEGEN_BACKEND", [upper(replace(backend.profile, "-", "_"))])
+	# Only the route's own prefix proves the override reaches Whitaker: a Make
+	# variable that is not exported never enters its environment.
+	route_assigned_values(segment, name) == ["llvm"]
+	suite_values(rule, segment, name) == {"llvm"}
 }
 
 suite_isolation_unproved(rule, _, segment) if {

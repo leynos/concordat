@@ -102,6 +102,7 @@ class FakeClock:
     """A clock that advances by a fixed step on every read."""
 
     def __init__(self, step: float) -> None:
+        """Start the clock at zero and advance it by *step* per read."""
         self._now = 0.0
         self._step = step
 
@@ -157,6 +158,7 @@ class TestInspectMakefile:
         cmd_mox.replay()
 
         def forbidden() -> float:
+            """Fail the test if the query reads the performance counter."""
             pytest.fail("inspect_makefile read a clock")
 
         monkeypatch.setattr(time, "perf_counter", forbidden)

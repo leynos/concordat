@@ -50,6 +50,7 @@ def _forbid_fetch(monkeypatch: pytest.MonkeyPatch) -> None:
     """Make any attempted HTTP acquisition fail this local-cache test."""
 
     def fail_fetch(url: str) -> bytes:
+        """Fail the test immediately if a fetch is attempted."""
         pytest.fail(f"cache validation attempted to fetch {url}")
 
     monkeypatch.setattr(installer, "fetch_https", fail_fetch)
@@ -78,6 +79,7 @@ def test_install_stages_the_complete_zip_at_a_path_with_spaces(
     monkeypatch.setattr(style_archive, "ARCHIVE_SHA256", _digest(body))
 
     def fetch(url: str) -> bytes:
+        """Record the requested URL and return the complete archive body."""
         requested.append(url)
         return body
 
@@ -101,6 +103,7 @@ def test_digest_mismatch_preserves_an_existing_destination(
     monkeypatch.setattr(style_archive, "ARCHIVE_SHA256", _digest(expected))
 
     def fetch(url: str) -> bytes:
+        """Record the requested URL and return a body that fails the pin."""
         requested.append(url)
         return body
 
@@ -120,6 +123,7 @@ def test_download_failure_leaves_no_destination_or_parent(
     destination = tmp_path / "packages" / "concordat-0.3.1.zip"
 
     def fail_fetch(url: str) -> bytes:
+        """Record the requested URL and raise as a failed download would."""
         requested.append(url)
         message = "stand-in download failure"
         raise installer.InstallError(message)
@@ -218,9 +222,11 @@ def test_cli_returns_nonzero_and_prints_one_actionable_diagnostic(
     original_read_bytes = pathlib.Path.read_bytes
 
     def run_with_test_destination(operation: str) -> int:
+        """Run the archive operation against the test destination."""
         return actual_run(operation, destination)
 
     def read_stable_missing_archive(path: pathlib.Path) -> bytes:
+        """Report the test destination as missing and read other paths normally."""
         if path == destination:
             message = "stable missing archive fixture"
             raise FileNotFoundError(message)

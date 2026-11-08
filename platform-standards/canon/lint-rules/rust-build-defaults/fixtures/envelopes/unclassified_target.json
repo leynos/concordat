@@ -27,7 +27,8 @@
             "name": "fixture",
             "version": "0.1.0"
           }
-        }
+        },
+        "build_root": true
       }
     ]
   },
@@ -100,5 +101,6 @@
   ],
   "makefile": null,
   "makefile_error": null,
-  "workflows": []
+  "workflows": [],
+  "evaluated_on": "2026-11-05"
 }

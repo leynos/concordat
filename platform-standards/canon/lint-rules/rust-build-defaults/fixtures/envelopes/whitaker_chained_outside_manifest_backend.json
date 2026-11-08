@@ -37,7 +37,8 @@
               "codegen-backend": "cranelift"
             }
           }
-        }
+        },
+        "build_root": true
       }
     ]
   },
@@ -97,7 +98,7 @@
     "schema_version": 1,
     "tool": {
       "name": "makeutil",
-      "version": "0.1.0",
+      "version": "0.1.2",
       "parser": "makefile-lossless",
       "parser_version": "0.3.40"
     },
@@ -228,5 +229,6 @@
       "profile": "dev",
       "backend": "cranelift"
     }
-  ]
+  ],
+  "evaluated_on": "2026-11-05"
 }

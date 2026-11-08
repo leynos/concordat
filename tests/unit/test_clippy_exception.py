@@ -27,12 +27,14 @@ LINT_MAKEFILE: typ.Final = ".PHONY: lint\nlint:\n\tsh scripts/lanes.sh\n"
 
 
 def _write(root: pathlib.Path, relative: str, text: str) -> None:
+    """Write *text* to *relative* under *root*, creating parent directories."""
     path = root / relative
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
 
 
 def _exceptions(root: pathlib.Path) -> list[dict[str, typ.Any]]:
+    """Return the clippy-exception records from the documentation envelope."""
     return typ.cast(
         "list[dict[str, typ.Any]]",
         build_documentation_envelope(root)["clippy_exceptions"]["records"],
@@ -272,6 +274,7 @@ def test_a_script_the_filesystem_refuses_to_describe_carries_an_error(
     real = module.probe_file
 
     def refuse_scripts(path: pathlib.Path) -> FileProbe:
+        """Report lanes.sh as unreadable and delegate every other probe."""
         if path.name == "lanes.sh":
             return FileProbe(present=False, read_error="permission denied")
         return real(path)

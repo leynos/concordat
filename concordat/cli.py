@@ -82,6 +82,7 @@ def _github_token_fallback() -> str | None:
 
 
 def _env_flag(name: str) -> bool:
+    """Return True when the environment variable *name* is set to a true value."""
     value = os.getenv(name)
     if value is None:
         return False
@@ -536,14 +537,17 @@ def _ensure_github_owner_if_required(
 
 
 def _require_active_estate() -> EstateRecord:
+    """Return the active estate, requiring it to have a github_owner."""
     return _resolve_estate_or_active(require_owner=True)
 
 
 def _resolve_estate_record(alias: str | None) -> EstateRecord:
+    """Return the estate named by *alias*, or the active one, without an owner check."""
     return _resolve_estate_or_active(alias, require_owner=False)
 
 
 def _resolve_github_token(explicit: str | None = None) -> str:
+    """Return the explicit GitHub token, or the fallback token, raising if neither."""
     if not (token := explicit or _github_token_fallback()):
         raise ConcordatError(ERROR_MISSING_GITHUB_TOKEN)
     return token

@@ -111,6 +111,7 @@ def test_a_filesystem_refusal_is_reported_rather_than_read_as_absence(
     )
 
     def refuse(_self: pathlib.Path, *_args: object, **_kwargs: object) -> object:
+        """Raise a permission error from ``stat`` on any path."""
         message = "Permission denied"
         raise PermissionError(13, message)
 

@@ -28,7 +28,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -98,7 +99,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -106,7 +108,7 @@
         "schema_version": 1,
         "tool": {
           "name": "makeutil",
-          "version": "0.1.0",
+          "version": "0.1.2",
           "parser": "makefile-lossless",
           "parser_version": "0.3.40"
         },
@@ -311,7 +313,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -319,7 +322,7 @@
         "schema_version": 1,
         "tool": {
           "name": "makeutil",
-          "version": "0.1.0",
+          "version": "0.1.2",
           "parser": "makefile-lossless",
           "parser_version": "0.3.40"
         },
@@ -523,7 +526,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -531,7 +535,7 @@
         "schema_version": 1,
         "tool": {
           "name": "makeutil",
-          "version": "0.1.0",
+          "version": "0.1.2",
           "parser": "makefile-lossless",
           "parser_version": "0.3.40"
         },
@@ -790,7 +794,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -798,7 +803,7 @@
         "schema_version": 1,
         "tool": {
           "name": "makeutil",
-          "version": "0.1.0",
+          "version": "0.1.2",
           "parser": "makefile-lossless",
           "parser_version": "0.3.40"
         },
@@ -1022,7 +1027,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -1030,7 +1036,7 @@
         "schema_version": 1,
         "tool": {
           "name": "makeutil",
-          "version": "0.1.0",
+          "version": "0.1.2",
           "parser": "makefile-lossless",
           "parser_version": "0.3.40"
         },
@@ -1220,7 +1226,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -1228,7 +1235,7 @@
         "schema_version": 1,
         "tool": {
           "name": "makeutil",
-          "version": "0.1.0",
+          "version": "0.1.2",
           "parser": "makefile-lossless",
           "parser_version": "0.3.40"
         },
@@ -1359,7 +1366,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           },
           {
             "path": "rust/Cargo.toml",
@@ -1367,8 +1375,14 @@
             "parsed": {
               "workspace": {
                 "members": []
+              },
+              "profile": {
+                "dev": {
+                  "debug": 0
+                }
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -1376,7 +1390,7 @@
         "schema_version": 1,
         "tool": {
           "name": "makeutil",
-          "version": "0.1.0",
+          "version": "0.1.2",
           "parser": "makefile-lossless",
           "parser_version": "0.3.40"
         },
@@ -1566,7 +1580,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -1574,7 +1589,7 @@
         "schema_version": 1,
         "tool": {
           "name": "makeutil",
-          "version": "0.1.0",
+          "version": "0.1.2",
           "parser": "makefile-lossless",
           "parser_version": "0.3.40"
         },
@@ -1821,7 +1836,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -1829,7 +1845,7 @@
         "schema_version": 1,
         "tool": {
           "name": "makeutil",
-          "version": "0.1.0",
+          "version": "0.1.2",
           "parser": "makefile-lossless",
           "parser_version": "0.3.40"
         },
@@ -2034,7 +2050,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -2042,7 +2059,7 @@
         "schema_version": 1,
         "tool": {
           "name": "makeutil",
-          "version": "0.1.0",
+          "version": "0.1.2",
           "parser": "makefile-lossless",
           "parser_version": "0.3.40"
         },
@@ -2058,24 +2075,24 @@
               "message": "expected ':'",
               "code": null,
               "location": {
-                "start_byte": 11,
-                "end_byte": 12,
-                "start_line": 1,
-                "start_column": 12,
-                "end_line": 1,
-                "end_column": 13
+                "start_byte": 87,
+                "end_byte": 88,
+                "start_line": 9,
+                "start_column": 5,
+                "end_line": 10,
+                "end_column": 1
               }
             },
             {
               "message": "expected ':'",
               "code": null,
               "location": {
-                "start_byte": 107,
-                "end_byte": 107,
-                "start_line": 11,
+                "start_byte": 83,
+                "end_byte": 87,
+                "start_line": 9,
                 "start_column": 1,
-                "end_line": 11,
-                "end_column": 1
+                "end_line": 9,
+                "end_column": 5
               }
             }
           ]
@@ -2219,7 +2236,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -2227,7 +2245,7 @@
         "schema_version": 1,
         "tool": {
           "name": "makeutil",
-          "version": "0.1.0",
+          "version": "0.1.2",
           "parser": "makefile-lossless",
           "parser_version": "0.3.40"
         },
@@ -2417,7 +2435,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -2425,7 +2444,7 @@
         "schema_version": 1,
         "tool": {
           "name": "makeutil",
-          "version": "0.1.0",
+          "version": "0.1.2",
           "parser": "makefile-lossless",
           "parser_version": "0.3.40"
         },
@@ -2650,7 +2669,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -2658,7 +2678,7 @@
         "schema_version": 1,
         "tool": {
           "name": "makeutil",
-          "version": "0.1.0",
+          "version": "0.1.2",
           "parser": "makefile-lossless",
           "parser_version": "0.3.40"
         },
@@ -2883,7 +2903,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -2891,7 +2912,7 @@
         "schema_version": 1,
         "tool": {
           "name": "makeutil",
-          "version": "0.1.0",
+          "version": "0.1.2",
           "parser": "makefile-lossless",
           "parser_version": "0.3.40"
         },
@@ -3151,7 +3172,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -3159,7 +3181,7 @@
         "schema_version": 1,
         "tool": {
           "name": "makeutil",
-          "version": "0.1.0",
+          "version": "0.1.2",
           "parser": "makefile-lossless",
           "parser_version": "0.3.40"
         },
@@ -3419,7 +3441,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -3427,7 +3450,7 @@
         "schema_version": 1,
         "tool": {
           "name": "makeutil",
-          "version": "0.1.0",
+          "version": "0.1.2",
           "parser": "makefile-lossless",
           "parser_version": "0.3.40"
         },
@@ -3652,7 +3675,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -3660,7 +3684,7 @@
         "schema_version": 1,
         "tool": {
           "name": "makeutil",
-          "version": "0.1.0",
+          "version": "0.1.2",
           "parser": "makefile-lossless",
           "parser_version": "0.3.40"
         },
@@ -3858,8 +3882,14 @@
             "parsed": {
               "workspace": {
                 "members": []
+              },
+              "profile": {
+                "dev": {
+                  "debug": 0
+                }
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -3867,7 +3897,7 @@
         "schema_version": 1,
         "tool": {
           "name": "makeutil",
-          "version": "0.1.0",
+          "version": "0.1.2",
           "parser": "makefile-lossless",
           "parser_version": "0.3.40"
         },
@@ -4050,8 +4080,14 @@
             "parsed": {
               "workspace": {
                 "members": []
+              },
+              "profile": {
+                "dev": {
+                  "debug": 0
+                }
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -4059,7 +4095,7 @@
         "schema_version": 1,
         "tool": {
           "name": "makeutil",
-          "version": "0.1.0",
+          "version": "0.1.2",
           "parser": "makefile-lossless",
           "parser_version": "0.3.40"
         },
@@ -4242,8 +4278,14 @@
             "parsed": {
               "workspace": {
                 "members": []
+              },
+              "profile": {
+                "dev": {
+                  "debug": 0
+                }
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -4251,7 +4293,7 @@
         "schema_version": 1,
         "tool": {
           "name": "makeutil",
-          "version": "0.1.0",
+          "version": "0.1.2",
           "parser": "makefile-lossless",
           "parser_version": "0.3.40"
         },
@@ -4434,8 +4476,14 @@
             "parsed": {
               "workspace": {
                 "members": []
+              },
+              "profile": {
+                "dev": {
+                  "debug": 0
+                }
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -4443,7 +4491,7 @@
         "schema_version": 1,
         "tool": {
           "name": "makeutil",
-          "version": "0.1.0",
+          "version": "0.1.2",
           "parser": "makefile-lossless",
           "parser_version": "0.3.40"
         },
@@ -4633,7 +4681,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -4641,7 +4690,7 @@
         "schema_version": 1,
         "tool": {
           "name": "makeutil",
-          "version": "0.1.0",
+          "version": "0.1.2",
           "parser": "makefile-lossless",
           "parser_version": "0.3.40"
         },
@@ -4873,7 +4922,8 @@
                 "name": "fixture",
                 "version": "0.1.0"
               }
-            }
+            },
+            "build_root": true
           }
         ]
       },
@@ -4881,7 +4931,7 @@
         "schema_version": 1,
         "tool": {
           "name": "makeutil",
-          "version": "0.1.0",
+          "version": "0.1.2",
           "parser": "makefile-lossless",
           "parser_version": "0.3.40"
         },

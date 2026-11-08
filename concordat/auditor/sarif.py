@@ -98,6 +98,7 @@ class SarifBuilder:
         return path
 
     def _serialize_rule(self, rule: CheckDefinition) -> dict[str, object]:
+        """Convert *rule* into a SARIF rule descriptor, omitting an empty helpUri."""
         payload: dict[str, object] = {
             "id": rule.rule_id,
             "name": rule.name,

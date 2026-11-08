@@ -486,7 +486,8 @@ SCENARIOS: dict[str, dict[str, str]] = {
         "Cargo.toml": "[package\nname = ",
         ".github/dependabot.yml": dependabot(CATCH_ALL),
     },
-    # A Python project outside the root is not read, and says so.
+    # A Python project outside the root is read like the root one, so it is not
+    # an unreadable fact.
     "nested_pyproject": {
         "sub/pyproject.toml": MATURIN_PYPROJECT.format(spec="==1.13.3"),
         ".github/dependabot.yml": dependabot(CATCH_ALL, ecosystem="pip"),

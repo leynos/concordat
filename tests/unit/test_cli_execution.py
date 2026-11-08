@@ -26,6 +26,7 @@ if typ.TYPE_CHECKING:
 
 
 def _estate_record() -> EstateRecord:
+    """Return a ``core`` estate record owned by the ``example`` GitHub owner."""
     return EstateRecord(
         alias="core",
         repo_url="git@github.com:example/core.git",
@@ -50,6 +51,7 @@ def _apply_and_capture(
         options: ExecutionOptions,
         io: ExecutionIO,
     ) -> tuple[int, Path]:
+        """Capture the apply arguments and report success with a dummy workdir."""
         captured["record"] = record
         captured["options"] = options
         captured["io"] = io
@@ -93,6 +95,7 @@ def test_plan_runs_with_injected_token(monkeypatch: pytest.MonkeyPatch) -> None:
         options: ExecutionOptions,
         io: ExecutionIO,
     ) -> tuple[int, Path]:
+        """Capture the plan arguments and return exit code 2 with a dummy workdir."""
         called["record"] = record
         called["options"] = options
         called["io"] = io
@@ -121,6 +124,7 @@ def test_plan_allows_explicit_token(monkeypatch: pytest.MonkeyPatch) -> None:
         options: ExecutionOptions,
         io: ExecutionIO,
     ) -> tuple[int, Path]:
+        """Capture the plan arguments and report success with a dummy workdir."""
         captured["record"] = record
         captured["options"] = options
         captured["io"] = io

@@ -69,3 +69,23 @@ parameters:
           An independent workspace so gpui resolves from crates.io; its own
           `make update-published-gpui-e2e-lock` target owns the lock.
         review_trigger: review when published-gpui-e2e can resolve inside the workspace
+      - repository: leynos/wireframe
+        path: tests/feature_gate
+        rationale: >-
+          Resolves `tokio-util` independently of the root lock on purpose: the
+          check proves the root manifest declares the features it uses, which a
+          pinned resolution would hide. Its lock is ignored by `.gitignore`, and
+          `scripts/check-feature-gate.sh` owns the build.
+        review_trigger: >-
+          review when the feature-gate check stops depending on an independent
+          resolution, or when its lock is committed
+      - repository: leynos/combobulate
+        path: tools/verifier-fixtures/verus-wiring-probe
+        rationale: >-
+          Resolves the pinned Verus release stack on purpose, not the root
+          lock's graph: its crates are pinned to the release that
+          `tools/verus` records. The verifier records hash the fixture tree
+          whole, so the exemption lives here rather than in a manifest comment.
+        review_trigger: >-
+          review when the probe stops pinning the Verus release recorded in
+          `tools/verus`, or when the verifier records stop hashing the tree

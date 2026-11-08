@@ -53,10 +53,23 @@ type EnvMapping = typ.Mapping[str, str]
 
 
 def _environ(env: EnvMapping | None) -> EnvMapping:
+    """Return ``env`` when given, otherwise the process environment."""
     return os.environ if env is None else env
 
 
 def _base(env: EnvMapping | None, variable: str, fallback: tuple[str, ...]) -> Path:
+    """Return the concordat directory for XDG ``variable``, or its fallback.
+
+    A value of ``variable`` is expanded for ``~`` and used when it is then
+    absolute. Any other relative value is ignored, as the XDG specification
+    requires.
+
+    Returns
+    -------
+    Path
+        The ``concordat`` directory under the absolute value of *variable* when
+        it is set, otherwise under *fallback* beneath the home directory.
+    """
     source = _environ(env)
     # The XDG specification requires relative base directories to be
     # ignored, falling back to the default location.
@@ -136,6 +149,19 @@ def tofu_plugin_cache_dir(env: EnvMapping | None = None) -> Path:
 
 
 def _load_headline(env: EnvMapping | None) -> dict[str, typ.Any]:
+    """Load the headline configuration mapping, or {} if the file is absent.
+
+    Returns
+    -------
+    dict
+        The parsed mapping, or an empty dict when the file is absent or its
+        content is not a mapping.
+
+    Raises
+    ------
+    ConcordatError
+        If the file cannot be read or parsed as YAML.
+    """
     path = headline_config_path(env)
     if not path.is_file():
         return {}

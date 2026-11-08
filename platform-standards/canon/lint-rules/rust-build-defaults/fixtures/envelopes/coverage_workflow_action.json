@@ -27,7 +27,8 @@
             "name": "fixture",
             "version": "0.1.0"
           }
-        }
+        },
+        "build_root": true
       }
     ]
   },
@@ -111,5 +112,6 @@
       "error": null,
       "decode_category": null
     }
-  ]
+  ],
+  "evaluated_on": "2026-11-05"
 }

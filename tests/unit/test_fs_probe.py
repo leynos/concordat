@@ -114,6 +114,7 @@ def test_a_refusal_is_neither_presence_nor_absence(
     """The case the probe exists for: `is_file()` would report this absent."""
 
     def refuse(_self: pathlib.Path, *_args: object, **_kwargs: object) -> object:
+        """Raise PermissionError from stat, as a refused probe does."""
         message = "Permission denied"
         raise PermissionError(13, message)
 
@@ -140,10 +141,12 @@ def test_a_refusal_to_describe_the_link_is_not_an_absence(
     """
 
     def missing(_self: pathlib.Path, *_args: object, **_kwargs: object) -> object:
+        """Raise FileNotFoundError from stat, as a dangling link does."""
         message = "No such file or directory"
         raise FileNotFoundError(2, message)
 
     def refuse(_self: pathlib.Path, *_args: object, **_kwargs: object) -> object:
+        """Raise PermissionError from lstat, as a refused link check does."""
         message = "Permission denied"
         raise PermissionError(13, message)
 

@@ -1,0 +1,11 @@
+[unstable]
+codegen-backend = true
+
+# Cargo selects a single rustflags source rather than merging them, so
+# every flag that must survive is repeated in each source.
+[build]
+rustflags = ["-Zthreads=8", "-Zcodegen-backend=cranelift"]
+
+# The linker ships for Linux only, so the flag is gated behind a cfg.
+[target.'cfg(target_os = "linux")']
+rustflags = ["-Zthreads=8", "-Zcodegen-backend=cranelift", "-Clink-arg=-fuse-ld=mold"]

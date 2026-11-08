@@ -155,7 +155,7 @@ def given_declared_nested_rust_checkout(checkout: pathlib.Path) -> None:
         encoding="utf-8",
     )
     (rust_directory / "Cargo.toml").write_text(
-        "[workspace]\nmembers = []\n",
+        "[workspace]\nmembers = []\n\n[profile.dev]\ndebug = 0\n",
         encoding="utf-8",
     )
     (checkout / "Makefile").write_text(
@@ -267,6 +267,7 @@ def given_no_makeutil(monkeypatch: pytest.MonkeyPatch) -> None:
     """Make every subprocess launch fail as if the binary were absent."""
 
     def raise_missing(*args: object, **kwargs: object) -> typ.NoReturn:
+        """Raise FileNotFoundError for any launch, as if makeutil were absent."""
         raise FileNotFoundError("makeutil")
 
     monkeypatch.setattr(bounded_subprocess, "run_bounded", raise_missing)

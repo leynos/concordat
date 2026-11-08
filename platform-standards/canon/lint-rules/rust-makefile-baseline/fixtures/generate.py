@@ -34,17 +34,21 @@ class Surface(typ.TypedDict):
     path: str
     role: str
     parsed: dict[str, object]
+    build_root: bool
 
 
 ROOT_SURFACE: typ.Final[Surface] = {
     "path": "Cargo.toml",
     "role": "crate",
     "parsed": CARGO_PARSED,
+    "build_root": True,
 }
 NESTED_SURFACE: typ.Final[Surface] = {
     "path": "rust/Cargo.toml",
     "role": "workspace",
-    "parsed": {"workspace": {"members": []}},
+    # A nested manifest is judged as a build root only with a profile of its own.
+    "parsed": {"workspace": {"members": []}, "profile": {"dev": {"debug": 0}}},
+    "build_root": True,
 }
 
 # Only this fixture is expected to parse with recovery (makeutil exit 1).

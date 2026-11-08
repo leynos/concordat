@@ -7772,7 +7772,36 @@
           ]
         }
       ],
-      "declarations": [],
+      "declarations": [
+        {
+          "manifest": "sub/pyproject.toml",
+          "ecosystem": "pip",
+          "section": "dependencies",
+          "target": null,
+          "optional": false,
+          "workspace_inherited": false,
+          "declared_name": "maturin",
+          "package": "maturin",
+          "requirement": "==1.13.3",
+          "requirement_kind": "exact",
+          "upper_bounded": false,
+          "resolved": {
+            "versions": [],
+            "lock": null,
+            "reason": "uv.lock is absent"
+          },
+          "coverage": {
+            "entry": null,
+            "group": null,
+            "catch_all": false,
+            "matching": [],
+            "matching_narrow": [],
+            "ignored": false,
+            "multi_group": null,
+            "reason": "no pip entry covers /sub"
+          }
+        }
+      ],
       "config": {
         "path": ".github/dependabot.yml",
         "parsed": {
@@ -7806,9 +7835,7 @@
         ]
       },
       "exceptions": [],
-      "problems": [
-        "sub/pyproject.toml is not read: only the root pyproject.toml is"
-      ]
+      "problems": []
     },
     "no_declarations": {
       "schema_version": 1,

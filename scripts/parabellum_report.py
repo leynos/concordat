@@ -399,6 +399,7 @@ def _aligned_table(rows: cabc.Sequence[tuple[str, ...]]) -> list[str]:
     header, *body = rows
 
     def line(cells: tuple[str, ...]) -> str:
+        """Render one row with each cell padded to its column width."""
         return (
             "| " + " | ".join(it.starmap(_pad, zip(cells, widths, strict=True))) + " |"
         )
