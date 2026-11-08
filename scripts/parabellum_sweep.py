@@ -235,7 +235,8 @@ def _git(
     ------
     OperationalRuleError
         If git is not found on PATH, times out, or exits non-zero. The error is
-        tagged with the operation and resource.
+        tagged with the operation and resource. `_git_launch_error` translates
+        launch-time failures into this error.
     """
     try:
         completed = bounded_subprocess.run_bounded(
@@ -249,7 +250,8 @@ def _git(
         subprocess.TimeoutExpired,
         bounded_subprocess.OutputLimitExceededError,
     ) as error:
-        raise _git_launch_error(args, error, operation, resource) from error
+        launch_error = _git_launch_error(args, error, operation, resource)
+        raise launch_error from error
     if completed.returncode != 0:
         detail = (completed.stderr or "").strip()
         message = f"git {args[0]} failed: {detail}"

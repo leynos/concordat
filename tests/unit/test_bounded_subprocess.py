@@ -148,6 +148,7 @@ def test_reader_start_failure_terminates_the_child(
     started_threads = 0
 
     def fail_second_start(thread: threading.Thread) -> None:
+        """Fail the second reader start to exercise child cleanup."""
         nonlocal started_threads
         started_threads += 1
         if started_threads == 2:

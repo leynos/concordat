@@ -34,6 +34,15 @@ class OutputLimitExceededError(RuntimeError):
     """Raised after a child writes more than the stdout retention limit."""
 
     def __init__(self, stream: str, limit_bytes: int) -> None:
+        """Record the exceeded stream and its retention limit.
+
+        Parameters
+        ----------
+        stream:
+            Name of the stream that exceeded its retention limit.
+        limit_bytes:
+            Maximum number of bytes retained from the stream.
+        """
         super().__init__(f"subprocess {stream} exceeded {limit_bytes} byte limit")
         self.stream = stream
         self.limit_bytes = limit_bytes
