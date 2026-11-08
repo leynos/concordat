@@ -10,6 +10,7 @@ from __future__ import annotations
 import importlib
 import json
 import subprocess
+import sys
 import typing as typ
 
 import pytest
@@ -38,6 +39,57 @@ if typ.TYPE_CHECKING:
 
 class TestRunConftest:
     """The Conftest subprocess wrapper translates spawn failures."""
+
+    def test_stdout_overflow_raises_a_contextual_operational_error(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Oversized machine-readable output is rejected with rule context."""
+        limit = 128
+        monkeypatch.setattr(runner, "MAX_CAPTURE_BYTES_PER_STREAM", limit)
+        argv = [
+            sys.executable,
+            "-c",
+            f"import sys; sys.stdout.write('x' * {limit + 1})",
+        ]
+
+        with pytest.raises(OperationalRuleError, match="stdout") as exc_info:
+            runner._run_conftest(argv, "rust-makefile-baseline")
+
+        _assert_operational_context(
+            exc_info.value,
+            operation="invoke-conftest",
+            tool="conftest",
+            resource="rust-makefile-baseline",
+        )
+        assert str(limit) in str(exc_info.value), str(exc_info.value)
+
+    def test_stderr_overflow_is_capped_and_keeps_a_useful_error(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Oversized diagnostics stay bounded and retain their useful prefix."""
+        limit = 128
+        monkeypatch.setattr(runner, "MAX_CAPTURE_BYTES_PER_STREAM", limit)
+        diagnostic = "conftest: useful diagnostic"
+        argv = [
+            sys.executable,
+            "-c",
+            (
+                "import sys; "
+                f"sys.stderr.write({diagnostic!r} + 'x' * {limit}); "
+                "sys.exit(2)"
+            ),
+        ]
+
+        completed = runner._run_conftest(argv, "rust-makefile-baseline")
+
+        assert len(completed.stderr.encode("utf-8")) <= limit
+        assert completed.stderr.startswith(diagnostic)
+        assert "truncated" in completed.stderr
+        with pytest.raises(OperationalRuleError, match="conftest exited 2") as exc_info:
+            runner._require_policy_exit_code(completed, "rust-makefile-baseline")
+        assert diagnostic in str(exc_info.value)
 
     @pytest.mark.parametrize(
         "case",
@@ -69,7 +121,11 @@ class TestRunConftest:
         and a timeout, so a generic ``OSError`` is deliberately not covered
         here; the rule ID stands in for the resource being evaluated.
         """
-        monkeypatch.setattr(runner.subprocess, "run", _raise_process_error(case.error))
+        monkeypatch.setattr(
+            runner.bounded_subprocess,
+            "run_bounded",
+            _raise_process_error(case.error),
+        )
 
         with pytest.raises(OperationalRuleError, match=case.match) as exc_info:
             runner._run_conftest(["conftest", "test"], "rust-makefile-baseline")

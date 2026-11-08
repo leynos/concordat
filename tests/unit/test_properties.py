@@ -202,10 +202,21 @@ class TestManifestRepositoryNames:
 
 
 _REPOS = ("leynos/alpha", "leynos/beta", "leynos/gamma")
-
-
 _PACKAGES = ("rust-makefile-baseline", "nested-cargo-offline-tests")
 _VERSIONS = ("0.1.0", "0.2.0")
+
+
+def _ledger_index(
+    records: sweep.Ledger,
+    *,
+    package: str | None = None,
+    include_commit_history: bool = True,
+) -> sweep.LedgerIndex:
+    """Build the production index from a generated history."""
+    index = sweep.LedgerIndex(package, include_commit_history)
+    for record in records:
+        index.add(record)
+    return index
 
 
 def _record(
@@ -258,12 +269,27 @@ class TestLedgerSelection:
         The ledger is append-only, so a re-audit adds a row rather than
         replacing one; selection must therefore be last-wins.
         """
-        latest = sweep._latest_records(ledger)
-
-        assert set(latest) == {r["repository"] for r in ledger}, latest
-        for repository, record in latest.items():
-            tail = [r for r in ledger if r["repository"] == repository][-1]
-            assert record is tail, f"{repository}: expected the last record"
+        for package in _PACKAGES:
+            index = _ledger_index(
+                ledger,
+                package=package,
+                include_commit_history=False,
+            )
+            latest = index.latest_by_repository
+            expected = {
+                record["repository"]
+                for record in ledger
+                if record["rule_package"] == package
+            }
+            assert set(latest) == expected, latest
+            for repository, record in latest.items():
+                tail = [
+                    row
+                    for row in ledger
+                    if row["repository"] == repository
+                    and row["rule_package"] == package
+                ][-1]
+                assert record is tail, f"{repository} in {package}: expected last row"
 
     @given(_LEDGER)
     def test_idempotency_lookup_matches_a_scan(
@@ -278,6 +304,7 @@ class TestLedgerSelection:
         so a history mixing two campaigns must not answer either question from
         the other one's records.
         """
+        index = _ledger_index(ledger)
         for package in _PACKAGES:
             for repository in _REPOS:
                 excluded = any(
@@ -288,7 +315,7 @@ class TestLedgerSelection:
                 )
                 assert (
                     sweep._already_ledgered(
-                        ledger, repository, commit_sha=None, package=package
+                        index, repository, commit_sha=None, package=package
                     )
                     == excluded
                 ), f"{repository} in {package}"
@@ -303,7 +330,7 @@ class TestLedgerSelection:
                         )
                         assert (
                             sweep._already_ledgered(
-                                ledger,
+                                index,
                                 repository,
                                 commit_sha=sha,
                                 package=package,
