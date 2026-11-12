@@ -26,6 +26,8 @@ _SNAPSHOTS: typ.Final = (
     _FIXTURES / "approved-revisions-d5fded1.json",
     _FIXTURES / "approved-revisions-5a99aed.json",
     _FIXTURES / "approved-revisions-6e99f22.json",
+    _FIXTURES / "approved-revisions-2ef6299.json",
+    _FIXTURES / "approved-revisions-0eabb6b.json",
 )
 
 
@@ -102,17 +104,33 @@ def test_snapshot_records_the_complete_reviewed_first_parent_segment(
         ),
         (
             "6e99f225cb06684f9e6f89b63a7ca4a04095c067",
-            "872f59f53717b5bebe8e24b2f4a7496b089a939a",
+            "c7891db19a5b424111dcc693e7400fd949a8ef96",
             "68fcb35324561347c569785e422aca109d572538",
         ),
+        (
+            "2ef6299e7971fde1aafbcb021e21d98f883db525",
+            "6f53870bc36cfac0c0c9893daaee77a5eb4327f4",
+            "64bf11a749e66c62cb921e4ef4479f5b26bf1114",
+        ),
+        (
+            "0eabb6bc07148981de5da395e30cd78d83f5c7c2",
+            "0eabb6bc07148981de5da395e30cd78d83f5c7c2",
+            "2255888485647779a82692cc5826b89a43d7bc05",
+        ),
     ]
-    chain_a, chain_b, chain_c, chain_d = snapshots
+    chain_a, chain_b, chain_c, chain_d, chain_e, chain_f = snapshots
     assert chain_a["commits"][0]["first_parent"] == (
         "774cc5a01e457714aede66e14a97b3e257812fc2"
     )
     assert chain_b["commits"][0]["first_parent"] == chain_a["tip"]
     assert chain_c["commits"][0]["first_parent"] == chain_b["tip"]
     assert chain_d["commits"][0]["first_parent"] == chain_c["tip"]
+    assert chain_e["commits"][0]["first_parent"] == chain_d["tip"]
+    # 38905b4b (installer 0.2.12 default) sits between chains e and f and is not
+    # approved: it ships the 0.2.12 default without the version-keyed digests.
+    assert chain_f["commits"][0]["first_parent"] == (
+        "38905b4b2caec5b049438e6dc3f3f6b36c04d2df"
+    )
     for snapshot in snapshots:
         commits = snapshot["commits"]
         assert snapshot["repository"] == "leynos/shared-actions"
@@ -130,7 +148,7 @@ def test_snapshot_records_the_complete_reviewed_first_parent_segment(
 def test_runtime_digests_record_which_chains_run_the_same_action(
     snapshots: list[_Snapshot],
 ) -> None:
-    """Chains c and d differ in `tests/` only, so they share one runtime digest.
+    """Chains c, d and e differ in `tests/` only, so they share one runtime digest.
 
     The digests were captured with plain Git plumbing (`ls-tree -r`, drop
     `tests/` and Markdown, sort `<mode> <blob> <path>` records, SHA-256), not
@@ -139,9 +157,38 @@ def test_runtime_digests_record_which_chains_run_the_same_action(
     """
     digests = [snapshot["runtime_digest"] for snapshot in snapshots]
     assert all(re.fullmatch(r"[0-9a-f]{64}", digest) for digest in digests)
-    assert len(set(digests)) == 3
-    assert digests[2] == digests[3]
+    assert len(set(digests)) == 4
+    assert digests[2] == digests[3] == digests[4]
     assert snapshots[2]["action_tree"] != snapshots[3]["action_tree"]
+    assert snapshots[3]["action_tree"] != snapshots[4]["action_tree"]
+    assert digests[5] not in digests[:5]
+
+
+def test_the_0eabb6bc_root_carries_installer_0_2_12_runtime_content(
+    snapshots: list[_Snapshot],
+) -> None:
+    """The root's runtime content pins installer 0.2.12 and keys snapshots by it.
+
+    The lines were captured from `git show 0eabb6bc:<action>/...` and kept in the
+    oracle: one installer digest per platform asset of the default version, and
+    snapshot digests keyed by installer version, which differ for the same
+    commit's bundle between releases.
+    """
+    chain = typ.cast("dict[str, typ.Any]", snapshots[5])
+    assert chain["default_installer_version"] == "0.2.12"
+    installer = [line.split("  ") for line in chain["installer_digests"]]
+    assert len(installer) == 5
+    assert all(re.fullmatch(r"[0-9a-f]{64}", digest) for digest, _ in installer)
+    assert all(
+        asset.endswith(("-v0.2.12.tgz", "-v0.2.12.zip")) for _, asset in installer
+    )
+    keyed: dict[tuple[str, str], str] = {}
+    for line in chain["snapshot_digests"]:
+        digest, asset, version = line.split("  ")
+        assert re.fullmatch(r"[0-9a-f]{64}", digest)
+        keyed[asset, version] = digest
+    assert {version for _, version in keyed} == {"0.2.11", "0.2.12"}
+    assert len(set(keyed.values())) == len(keyed)
 
 
 def test_runtime_digests_recompute_from_their_recorded_preimage(
