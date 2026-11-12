@@ -1,0 +1,38 @@
+{
+  "repository": "leynos/shared-actions",
+  "tip": "0eabb6bc07148981de5da395e30cd78d83f5c7c2",
+  "root": "0eabb6bc07148981de5da395e30cd78d83f5c7c2",
+  "action_directory": ".github/actions/install-whitaker",
+  "action_tree": "2255888485647779a82692cc5826b89a43d7bc05",
+  "runtime_digest": "63ca3a1153d80a69715cce9b3671df32b069f071f4f74337387390353f493d06",
+  "runtime_records": [
+    "100644 69ad613774362e1779370f3270d0ff0ecdd84827 action.yml",
+    "100644 8d4174c57be4701275cf097ff039f179c9f5189f scripts/extract-zip.py",
+    "100644 938707e89c12fcd8c31f5452db20be0156efd677 clippy-snapshots.tsv",
+    "100644 978a8c7b0040a6d4b53bc6680e3c943c9e6f9186 snapshot-digests.sha256",
+    "100644 db7c307c23140118b37f210f25fc032b049f5f3a installer-digests.sha256",
+    "100755 042a4489be34c8acfd60fcf2e64d432b1653fe86 scripts/resolve-snapshot.sh",
+    "100755 42da00a3fed3cc5d54ef2a6ea99db5d1de4fc671 scripts/bootstrap-paths.sh",
+    "100755 6951f25e0648477b83d6dacbc70fcbec8496d906 scripts/verify_rolling_assets.py",
+    "100755 a3b089c3578cc6e33ae8ce885d92b7ca344e1cfd scripts/resolve-release.sh"
+  ],
+  "default_installer_version": "0.2.12",
+  "installer_digests": [
+    "b0c9bb7392b73e8040e2904ba5638719d278720bb94dc9884eb71e63424a93d5  whitaker-installer-aarch64-apple-darwin-v0.2.12.tgz",
+    "76c2e1e049f5a14610f3ebe294e21caa36f6d9e7f794ed9162cd9d4bcfb279df  whitaker-installer-aarch64-unknown-linux-gnu-v0.2.12.tgz",
+    "68a6398b4151d813c97e143e11e16328891f608a6555f675ea7f93667141ad94  whitaker-installer-x86_64-apple-darwin-v0.2.12.tgz",
+    "397275d5a29c01adfb9fa9f1347286a072ce53dda613f52e0f41a446ee306ed5  whitaker-installer-x86_64-pc-windows-msvc-v0.2.12.zip",
+    "62f12e7973de36ed87ef32bfdcb706a93429c0da7a1ba01a6c449de807465e1f  whitaker-installer-x86_64-unknown-linux-gnu-v0.2.12.tgz"
+  ],
+  "snapshot_digests": [
+    "11e0d766aa12f78c06807d8f4203663279154844ffbfe4e89e8ce59195b2f91f  whitaker-clippy-snapshot-e4608a25c2e20116fbc1e97a51a73f094a1db7a1.bundle  0.2.11",
+    "592e00baf4a06469d7066f84f884bd58671cf2da3dbbcd4356c59f8f8187d7ee  whitaker-clippy-snapshot-e4608a25c2e20116fbc1e97a51a73f094a1db7a1.bundle  0.2.12"
+  ],
+  "commits": [
+    {
+      "revision": "0eabb6bc07148981de5da395e30cd78d83f5c7c2",
+      "first_parent": "38905b4b2caec5b049438e6dc3f3f6b36c04d2df",
+      "action_tree": "2255888485647779a82692cc5826b89a43d7bc05"
+    }
+  ]
+}
