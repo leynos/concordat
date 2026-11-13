@@ -21,13 +21,14 @@ references keep production symbols live.
 3. The same gate enforces the resulting en-GB spelling policy.
 4. Skylos performs strict production dead-code detection.
 
-Skylos 4.33.2 scans `concordat` and `scripts`, excludes `tests`, and blocks the
-gate on findings. It runs in an isolated `uv tool run` environment pinned to
-Python 3.14. Skylos parses source through that interpreter's AST, so the pin
-prevents phantom results when project syntax is newer than an older runtime can
-parse. Scan-only options stay in `$(SKYLOS)`; `$(SKYLOS_CLI)` remains a bare
-command so `skylos whitelist <symbol> --reason <reason>` can dispatch its
-subcommand before scan options.
+Skylos scans `concordat` and `scripts`, excludes `tests`, and blocks the gate
+on findings. It runs through the installed `df12-skylos` command from
+df12-python-lints (whose `skylos` extra carries the Skylos pin) in an isolated
+`uv tool run` environment pinned to Python 3.14. Skylos parses source through
+that interpreter's AST, so the pin prevents phantom results when project syntax
+is newer than an older runtime can parse. The repository keeps only its policy:
+`[tool.df12_skylos]` (the production roots and the interpreter) and
+`[tool.skylos]`.
 
 Investigate every report. Remove genuine dead code. For an implicit runtime
 caller, prefer a typed `[tool.skylos.dead_code]` entry-point rule with its full
@@ -55,4 +56,4 @@ SHA-256 digest pinned in the workflow, not the release's own checksum file, and
 installs nothing on a mismatch. The jobs no longer compile Makeutil, which took
 35 to 75 seconds per run and needed a nightly toolchain. The shared release,
 digest and install command are what now keep the jobs identical, and
-`tests/unit/test_skylos_lint_contract.py` holds them to that.
+`tests/unit/test_makeutil_ci_contract.py` holds them to that.
