@@ -39,10 +39,14 @@ snapshots. The spelling subtarget runs the shared `typos-config-builder` gate,
 which regenerates `typos.toml` from the live shared dictionary and the
 `typos.local.toml` overlay before checking en-GB-oxendict spelling; because the
 dictionary is live, `typos.toml` is never drift checked in continuous
-integration. Finally, the blocking Skylos 4.33.2 dead-code scan covers only the
+integration. Finally, the blocking Skylos dead-code scan covers only the
 production `concordat` and `scripts` packages and excludes `tests`, so
-test-only references do not keep production symbols live. The separate df12
-process prevents its CPython dependency from changing the PyPy Pylint baseline.
+test-only references do not keep production symbols live. It runs through the
+installed `df12-skylos` command from df12-python-lints, provisioned by
+`make skylos` at the commit in `DF12_SKYLOS_SHA` (its `skylos` extra carries
+the one Skylos pin); CI runs the same check through the shared-actions
+`df12-skylos` action. The separate df12 process prevents its CPython dependency
+from changing the PyPy Pylint baseline.
 
 Treat each Skylos report as a dead-code candidate. Remove confirmed dead code.
 For a verified dynamic runtime entry point, add a precise rule in
@@ -54,17 +58,13 @@ a narrow named exception instead:
 make skylos-allow SYMBOL=symbol REASON="Loaded by plugin registry"
 ```
 
-The target requires both values to contain at least one non-whitespace
-character and records the reason in the version-controlled Skylos documented
-allow list. Use `SYMBOL`, not `NAME`: WSL injects `NAME` with the host name.
-Record the verified caller and its evidence in the reviewing change. Do not add
-bulk or unexplained exceptions; remove an exception when its runtime boundary
+The installed `df12-skylos allow` command requires both values to contain at
+least one non-whitespace character, refuses wildcards, and records the reason
+in the version-controlled Skylos documented allow list under a lock. Use
+`SYMBOL`, not `NAME`: WSL injects `NAME` with the host name. Record the
+verified caller and its evidence in the reviewing change. Do not add bulk or
+unexplained exceptions; remove an exception when its runtime boundary
 disappears.
-
-The Makefile uses `$(SKYLOS_CLI)` only for subcommands and keeps scan-only
-options such as `--config-file` in `$(SKYLOS)`. This keeps
-`skylos whitelist <symbol> --reason <reason>` in the command order that Skylos
-requires.
 
 ### Markdown formatting and linting
 
@@ -1403,7 +1403,7 @@ Two external tools must be on `PATH`:
   install. The file is renamed into place only after the digest matches, so a
   failed download or a mismatch installs nothing;
   `scripts/tests/test_install_release_binary.py` runs each path. Bump the
-  version and the digest together; `tests/unit/test_skylos_lint_contract.py`
+  version and the digest together; `tests/unit/test_makeutil_ci_contract.py`
   holds both workflows to the same release, digest and install command. CI used
   to compile makeutil from a commit SHA, and a check refused any SHA missing
   from makeutil's `main`, because an orphaned commit installs only until GitHub

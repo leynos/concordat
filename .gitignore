@@ -102,6 +102,7 @@ ipython_config.py
 .uv-cache/
 .uv-tools/
 .skylos/
+.pyproject.toml.df12.lock
 
 # Serena
 .serena/
