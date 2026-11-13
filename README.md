@@ -149,11 +149,11 @@ For the full story, head to the docs:
   decisions
 - [Developers' guide](docs/developers-guide.md) – Local gates and contributor
   workflows
-- [ADR-001: Four-tier Python linting](docs/adr-001-four-tier-python-linting.md)
+- [ADR-001: Four-tier Python linting](docs/adrs/adr-0001-four-tier-python-linting.md)
   – Lint architecture and dead-code policy
-- [ADR-002: Resolve action pins against GitHub](docs/adr-002-resolve-action-pins-against-github.md)
+- [ADR-002: Resolve action pins against GitHub](docs/adrs/adr-0002-resolve-action-pins-against-github.md)
   – PD-006 pin object types and the rule run's GitHub boundary
-- [ADR-003: rust-build-defaults reads the builds that replace its defaults](docs/adr-003-rust-build-defaults-reads-the-builds-that-replace-them.md)
+- [ADR-003: rust-build-defaults reads the builds that replace its defaults](docs/adrs/adr-0003-rust-build-defaults-reads-the-builds-that-replace-them.md)
   – BD-007 to BD-009 and the Makefile and workflow facts they read
 - [OpenTofu coding standards](docs/opentofu-coding-standards.md) – House rules
   for writing OpenTofu code
