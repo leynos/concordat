@@ -402,7 +402,7 @@ artifacts:
     path: platform-standards/canon/lint-rules/whitaker-provisioning/rule.yaml
     description: >
       Rule package manifest for the Whitaker provisioning policy.
-    sha256: 742138eaff98de7be6b2848fb35457bc6944b86758e57d513fa25d976dd03084
+    sha256: c64cac7eab9189907fe8a31bf8204b2b4da61068ae517ae061da9be63243ccb7
   - id: lint-rule-dependency-family-contracts
     type: opa-policy
     path: >-
