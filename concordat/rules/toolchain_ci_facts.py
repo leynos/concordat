@@ -48,6 +48,9 @@ _VALUE_OPTIONS: typ.Final = frozenset({
 _MSRV_JOB: typ.Final = re.compile(r"(?i)\bmsrv\b|cargo[- ]msrv")
 _READS_MANIFEST_MSRV: typ.Final = re.compile(r"(?i)rust[-_]version")
 _SELECTS_TOOLCHAIN: typ.Final = re.compile(r"(?i)rustup|toolchain")
+# The shared action that reads rust-version and checks the crate on it, so a
+# step using it exercises the MSRV without naming a version anywhere.
+_MSRV_ACTION: typ.Final = "leynos/shared-actions/.github/actions/msrv-check"
 _TOOLCHAIN_ACTIONS: typ.Final = (
     "dtolnay/rust-toolchain",
     "actions-rust-lang/setup-rust-toolchain",
@@ -178,7 +181,7 @@ def _resolve(value: object, scope: _Scope) -> list[str]:
 def _action_toolchains(step: dict[str, object], scope: _Scope) -> list[str]:
     """Return the toolchains a toolchain-installing action step selects."""
     uses = step.get("uses")
-    if not isinstance(uses, str) or not uses.startswith(_TOOLCHAIN_ACTIONS):
+    if not isinstance(uses, str) or uses.partition("@")[0] not in _TOOLCHAIN_ACTIONS:
         return []
     inputs = step.get("with")
     names = _resolve(inputs.get("toolchain"), scope) if isinstance(inputs, dict) else []
@@ -266,6 +269,12 @@ def _walk_steps(
             yield from _job_steps(job_id, job)
 
 
+def _uses_msrv_action(step: dict[str, object]) -> bool:
+    """Return whether *step* calls the shared msrv-check action."""
+    uses = step.get("uses")
+    return isinstance(uses, str) and uses.partition("@")[0] == _MSRV_ACTION
+
+
 def _step_text(label: str, step: dict[str, object]) -> str:
     """Return the words a step is about: its job, its name and its command."""
     run = step.get("run")
@@ -281,7 +290,7 @@ def _read_workflow(document: object, evidence: _Evidence) -> None:
         evidence.names.update(_action_toolchains(step, scope))
         evidence.names.update(_command_toolchains(step, scope))
         text = _step_text(label, step)
-        evidence.msrv_job |= bool(_MSRV_JOB.search(text))
+        evidence.msrv_job |= _uses_msrv_action(step) or bool(_MSRV_JOB.search(text))
         evidence.reads_manifest_msrv |= bool(
             _SELECTS_TOOLCHAIN.search(text) and _READS_MANIFEST_MSRV.search(text)
         )

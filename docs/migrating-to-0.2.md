@@ -22,7 +22,10 @@ findings to zero:
 - **RT-025**: declare `rust-version` on each publishable library crate, or mark
   an application crate `publish = false`.
 - **RT-026**: exercise each declared MSRV in CI with one
-  `cargo check --lib --locked`, not a second test run.
+  `cargo check --lib --locked`, not a second test run. The shared
+  `leynos/shared-actions/.github/actions/msrv-check` action does this from the
+  manifest's `rust-version`, so the workflow names no version; the rule
+  recognizes a step that uses it by its full action path, with any ref.
 - **RT-027**: name no dated nightly in a workflow other than the pinned one.
 
 ## A nightly that cannot move
