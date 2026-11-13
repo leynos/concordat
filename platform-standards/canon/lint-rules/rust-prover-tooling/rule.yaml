@@ -1,0 +1,54 @@
+schema_version: 1
+id: rust-prover-tooling
+name: Rust prover tooling
+description: >-
+  Audits how a repository that uses Kani or Verus obtains its provers
+  (PT-001 to PT-005). It pins `rust-prover-tools` to one commit, the agreed
+  `prover_tools_ref` (PT-001); installs provers in continuous integration only
+  through the shared-actions `install-prover-tools` action, never from a
+  workflow step or a Make target that CI runs and whose prerequisites install
+  (PT-002); pins that action by a full commit SHA (PT-003); carries no local
+  installer scripts (PT-004); and has no integration tests of prover
+  installation (PT-005). A step that only runs proofs on an installed
+  toolchain is not an installer. The commands are read from parsed shell and
+  recipe text, and Make prerequisites from the pinned `makeutil` report, so a
+  printed mention of an installer is not one. A repository that uses no
+  prover, or whose proofs nothing on main installs or runs, is not audited.
+  A repository that stays on another revision on purpose records the exception
+  as data in `.concordat` under `language.rust.prover_tools.exceptions`; it
+  waives PT-001 to PT-004 only while the pin it names is still the pin in the
+  checkout and its decision record exists.
+  Audit-only: this rule declares no mutations.
+version: 0.1.0
+sensor:
+  type: conftest
+  input: policy-input/rust-prover-tooling
+  policy: policy/
+  tests:
+    - policy/
+  data:
+    - fixtures/data.json
+parameters:
+  schema:
+    type: object
+    additionalProperties: false
+    properties:
+      prover_tools_ref:
+        type: string
+        pattern: '^[0-9a-f]{40}$'
+        description: >-
+          The one `rust-prover-tools` commit every repository pins (PT-001).
+          Bumping the estate's pin is a change to this default.
+      waivable_clauses:
+        type: array
+        items:
+          type: string
+        description: >-
+          Clauses a recorded exception can waive. PT-003 and PT-005 are not
+          among them.
+  defaults:
+    prover_tools_ref: 592558f7183b554fc749696246984c5d7300d029
+    waivable_clauses:
+      - PT-001
+      - PT-002
+      - PT-004

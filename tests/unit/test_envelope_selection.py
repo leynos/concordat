@@ -55,6 +55,9 @@ from concordat.rules.nested_cargo_offline_envelope import (
 from concordat.rules.nested_cargo_wiring_envelope import (
     ENVELOPE_KIND as NESTED_CARGO_WIRING_ENVELOPE_KIND,
 )
+from concordat.rules.prover_tooling_envelope import (
+    ENVELOPE_KIND as PROVER_TOOLING_ENVELOPE_KIND,
+)
 from concordat.rules.spelling_envelope import (
     ENVELOPE_KIND as SPELLING_ENVELOPE_KIND,
 )
@@ -160,6 +163,11 @@ class TestRegisteredPackages:
                 "nested-cargo-ci-wiring",
                 NESTED_CARGO_WIRING_ENVELOPE_KIND,
                 id="nested-cargo-ci-wiring",
+            ),
+            pytest.param(
+                "rust-prover-tooling",
+                PROVER_TOOLING_ENVELOPE_KIND,
+                id="rust-prover-tooling",
             ),
             pytest.param(
                 "markdown-formatting-baseline",
@@ -439,6 +447,7 @@ class TestDeclaredInputKind:
             ("nested-cargo-fixture-manifests", NESTED_CARGO_MANIFEST_ENVELOPE_KIND),
             ("nested-cargo-nextest", NESTED_CARGO_NEXTEST_ENVELOPE_KIND),
             ("nested-cargo-ci-wiring", NESTED_CARGO_WIRING_ENVELOPE_KIND),
+            ("rust-prover-tooling", PROVER_TOOLING_ENVELOPE_KIND),
             ("markdown-formatting-baseline", MARKDOWN_ENVELOPE_KIND),
             ("main-owned-codescene-coverage", COVERAGE_ENVELOPE_KIND),
             ("dependabot-update-shape", DEPENDABOT_ENVELOPE_KIND),
