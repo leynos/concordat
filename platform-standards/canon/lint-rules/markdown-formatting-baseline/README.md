@@ -118,7 +118,7 @@ REST API what each full-SHA pin of the action names (`git/commits/{sha}`, then
 fact. Offline, refused, or unknown pins are recorded unresolved, and an
 envelope without the fact is treated the same, so a run without network access
 reports PD-006 indeterminate rather than passing. See
-[ADR-002](../../../../docs/adr-002-resolve-action-pins-against-github.md).
+[ADR-002](../../../../docs/adrs/adr-0002-resolve-action-pins-against-github.md).
 
 Workflow facts carry no line numbers, so PD-006 findings cite line `0`. A job
 that calls a reusable workflow is not inspected; when no action step exists and

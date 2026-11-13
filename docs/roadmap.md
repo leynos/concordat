@@ -419,7 +419,7 @@ actuators that remediate them. Each check ships as a lint rule package under
   whose doctests are never executed is detected, and the mutated Makefile runs
   doctests under `make test`.
 - [ ] Ship the duplicate-gate-work rule packages (QG-005 to QG-007), per
-  [RFC 0003](rfcs/0003-no-duplicate-test-and-coverage-work.md): a test-only
+  [RFC 0003](rfcs/rfc-0003-no-duplicate-test-and-coverage-work.md): a test-only
   lane must not duplicate a coverage lane on the same trigger at the same
   scope, platform, nextest profile, resolved feature set, and test selection;
   two legs of one matrix that are otherwise equivalent must not resolve to one
@@ -724,8 +724,8 @@ the Section 2.1.2 format.
   and the exception clause has no mutation at all because recording one
   requires a measurement rather than an edit.
 - [ ] Ship the compiler-cache rule packages (RT-012 to RT-016), per
-  [RFC 0002](rfcs/0002-sccache-configuration-ruleset.md): every compiling Rust
-  job carries a configured backend and an action-exported wrapper; the
+  [RFC 0002](rfcs/rfc-0002-sccache-configuration-ruleset.md): every compiling
+  Rust job carries a configured backend and an action-exported wrapper; the
   `setup-rust` pin is one SHA across same-tree references and not one of a
   named set known to export neither half, with a uniformly unknown pin reported
   as an explicit indeterminate rather than a pass; a statistics step runs after
@@ -752,16 +752,16 @@ the Section 2.1.2 format.
   invariant under permutation, one distinct SHA never yields divergence, and
   the three RT-013 classes are total and disjoint.
 - [ ] Ship the tool-acquisition rule packages (TA-001 to TA-003), per
-  [RFC 0001](rfcs/0001-binary-only-tool-installation-in-ci.md): a continuous
-  integration job never builds a tool it merely consumes; a release archive is
-  verified by a digest computed from the downloaded bytes and compared with the
-  publisher's sidecar before the bytes are executed or extracted; and a pin is
-  a commit SHA or an exact version rather than a branch or a bare tag. This is
-  a new toolchain-baseline family because acquisition mode is
-  language-independent and no existing prefix covers it. Sequenced after RT-011
-  for the same reason as RT-012 to RT-016, and after QG-002 and QG-003, whose
-  pinned-release install sensor it generalizes. Acceptance: fixtures
-  `cargo-install-consumed-tool`, `indented-chained-cargo-install`,
+  [RFC 0001](rfcs/rfc-0001-binary-only-tool-installation-in-ci.md): a
+  continuous integration job never builds a tool it merely consumes; a release
+  archive is verified by a digest computed from the downloaded bytes and
+  compared with the publisher's sidecar before the bytes are executed or
+  extracted; and a pin is a commit SHA or an exact version rather than a branch
+  or a bare tag. This is a new toolchain-baseline family because acquisition
+  mode is language-independent and no existing prefix covers it. Sequenced
+  after RT-011 for the same reason as RT-012 to RT-016, and after QG-002 and
+  QG-003, whose pinned-release install sensor it generalizes. Acceptance:
+  fixtures `cargo-install-consumed-tool`, `indented-chained-cargo-install`,
   `digest-after-execution`, and `uses-branch-ref` each raise the intended
   finding, while `install-tool-pinned-archive`, `echo-mentions-cargo-install`,
   `digest-before-execution`, and `uses-sha-ref`, which pins a full forty-hex

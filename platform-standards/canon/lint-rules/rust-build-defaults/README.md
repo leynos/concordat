@@ -32,7 +32,7 @@ standard off for that build. And `-Cinstrument-coverage` is LLVM-only, so a
 coverage run that inherits a Cranelift default fails outright. BD-007 to BD-009
 read the Makefile and workflows for those builds. A Makefile `makeutil` refuses
 makes only those clauses indeterminate; the others still run. See
-[ADR-003](../../../../docs/adr-003-rust-build-defaults-reads-the-builds-that-replace-them.md).
+[ADR-003](../../../../docs/adrs/adr-0003-rust-build-defaults-reads-the-builds-that-replace-them.md).
 
 ## Checks
 

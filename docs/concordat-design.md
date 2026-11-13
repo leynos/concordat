@@ -2428,10 +2428,10 @@ Markdown let unformatted prose reach `main`. These checks have shipped as the
   under `.github/workflows`, requires the action pinned to a full commit SHA
   with `globs: '**/*.md'` (resolved against the GitHub API so an annotated tag
   object is refused and an unreachable API is indeterminate; see
-  [ADR-002](adr-002-resolve-action-pins-against-github.md)), and flags any
-  `run:` step that invokes `markdownlint-cli2` or drives `make markdownlint`; a
-  step that only installs the linter is flagged unless a compliant action step
-  lints Markdown in the same workflow. An unresolvable Make variable, a
+  [ADR-002](adrs/adr-0002-resolve-action-pins-against-github.md)), and flags any
+  `run:` step that invokes `markdownlint-cli2` or drives `make markdownlint`;
+  a step that only installs the linter is flagged unless a compliant action
+  step lints Markdown in the same workflow. An unresolvable Make variable, a
   conditional or `include` in the closure, an undecodable file, or a job that
   calls a reusable workflow is indeterminate.
 - **Actuators:** file-copy of the canonical `.markdownlint-cli2.jsonc` from
@@ -2692,7 +2692,7 @@ so the configuration can comply while the gate and coverage builds defeat it.
 The objection that kept the Makefile out, that a checkout the pinned parser
 rejects would make the rule unrunnable, is met by carrying the refusal as a
 fact that only these clauses read.
-[ADR-003](adr-003-rust-build-defaults-reads-the-builds-that-replace-them.md)
+[ADR-003](adrs/adr-0003-rust-build-defaults-reads-the-builds-that-replace-them.md)
 records the decision, and the package README the accepted shapes.
 
 The package privately owns `policy/scoped_backends.rego`, which distinguishes
@@ -3235,14 +3235,14 @@ bounded exception, and surface entirely through SARIF, so the Code Scanning
 dashboard is sufficient observability for them. The exception is PD-006's pin
 resolution, which reads what an action pin names from the GitHub API and
 reports the check indeterminate whenever that read fails
-([ADR-002](adr-002-resolve-action-pins-against-github.md)). The `github-api`
-sensors and actuators (CV-003, AM-001, AM-002, DP-001, DP-002) are different:
-the sensors consume snapshots produced by `rule acquire`, while the acquisition
-service and actuators make authenticated network calls. Actuators additionally
-take side effects (comments, issues, secret provisioning). A silent failure
-there is invisible in SARIF — the AM-002 `startup_failure` incident is
-precisely a check that failed with no signal — so each API-backed check carries
-explicit observability requirements.
+([ADR-002](adrs/adr-0002-resolve-action-pins-against-github.md)). The
+`github-api` sensors and actuators (CV-003, AM-001, AM-002, DP-001, DP-002) are
+different: the sensors consume snapshots produced by `rule acquire`, while the
+acquisition service and actuators make authenticated network calls. Actuators
+additionally take side effects (comments, issues, secret provisioning). A
+silent failure there is invisible in SARIF — the AM-002 `startup_failure`
+incident is precisely a check that failed with no signal — so each API-backed
+check carries explicit observability requirements.
 
 - **Structured logs.** Every API operation emits a structured (JSON) log line
   carrying the check ID, the operation (for example `list-secrets`,

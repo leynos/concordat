@@ -836,7 +836,7 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   for a package bringing its own builder. It also carries `action_pins`, what
   each full-SHA pin of `DavidAnson/markdownlint-cli2-action` names. The builder
   leaves it empty; the rule-run command fills it in a separate step
-  ([ADR-002](adr-002-resolve-action-pins-against-github.md)).
+  ([ADR-002](adrs/adr-0002-resolve-action-pins-against-github.md)).
 
 - `policy-input/uv-gate-baseline` — `uv_gate_envelope.build_uv_gate_envelope`.
   It reuses `markdown_envelope`'s containment guard and readers: the same
