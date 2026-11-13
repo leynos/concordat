@@ -55,16 +55,16 @@ AMBRLEAKS = $(UV_ENV) uv tool run --python $(DF12_PYTHON) \
 # CI. An unpinned `ty` drifts between machines and hides real findings.
 TY_VERSION ?= 0.0.65
 TY := uv tool run ty@$(TY_VERSION)
-SKYLOS_VERSION = 4.33.2
-# Skylos parses source using its own Python AST, so Python 3.14 prevents
-# phantom dead-code findings from syntax older tool runtimes cannot parse.
-SKYLOS_CLI = $(UV_ENV) uv tool run --python 3.14 --from 'skylos==$(SKYLOS_VERSION)' skylos
-SKYLOS = $(SKYLOS_CLI) --config-file pyproject.toml
-SKYLOS_PRODUCTION_TARGETS ?= concordat scripts
-SKYLOS_EXCLUDE_FOLDERS ?= tests
+# The dead-code gate is the installed df12-skylos command; its `skylos` extra
+# carries the one Skylos pin. Skylos parses source with its own runtime AST, so
+# the tool environment runs Python 3.14.
+DF12_SKYLOS_SHA = 56ad71721c3f1f2164ec84b69150582488f1a927
+SKYLOS = $(UV_ENV) uv tool run --python 3.14 --from \
+	'df12-python-lints[skylos] @ git+https://github.com/leynos/df12-python-lints.git@$(DF12_SKYLOS_SHA)' \
+	df12-skylos
 
 .PHONY: help all clean build build-release lint interrogate fmt check-fmt \
-	        markdownlint nixie spelling skylos-allow makeutil conftest test typecheck \
+	        markdownlint nixie spelling skylos skylos-allow makeutil conftest test typecheck \
 	        install-vale install-vale-styles check-vale vale $(TOOLS) \
         $(VENV_TOOLS)
 
@@ -151,14 +151,15 @@ lint: build interrogate ## Run linters
 	$(DF12_PYLINT) $(DF12_PYLINT_TARGETS)
 	$(AMBRLEAKS) tests
 	+$(MAKE) spelling
-	$(SKYLOS) $(SKYLOS_PRODUCTION_TARGETS) --exclude $(SKYLOS_EXCLUDE_FOLDERS) --category dead_code --gate --format concise --no-upload --no-provenance --no-grep-verify
+	$(MAKE) --no-print-directory skylos
+
+skylos: ## Detect dead production code
+	$(SKYLOS) check --repository .
 
 skylos-allow: export SKYLOS_SYMBOL = $(value SYMBOL)
 skylos-allow: export SKYLOS_REASON = $(value REASON)
-skylos-allow: ## Document one named Skylos exception, not an entry point
-	@case "$${SKYLOS_SYMBOL}" in *[![:space:]]*) ;; *) printf "Error: SYMBOL is required for a named whitelist exception\\n" >&2; exit 2;; esac
-	@case "$${SKYLOS_REASON}" in *[![:space:]]*) ;; *) printf "Error: REASON is required for a named whitelist exception\\n" >&2; exit 2;; esac
-	$(SKYLOS_CLI) whitelist "$${SKYLOS_SYMBOL}" --reason "$${SKYLOS_REASON}"
+skylos-allow: ## Document one named Skylos exception (SYMBOL=name REASON=text)
+	$(SKYLOS) allow --repository . --symbol="$${SKYLOS_SYMBOL}" --reason="$${SKYLOS_REASON}"
 
 typecheck: build uv ## Run typechecking
 	$(TY) --version

@@ -47,6 +47,13 @@ line-length = 88
 preview = true
 target-version = "py313"
 
+[tool.df12_skylos]
+roots = ["concordat", "scripts"]
+python = "3.14"
+
+[tool.skylos]
+exclude = ["tests"]
+
 [tool.skylos.gate]
 strict = true
 
