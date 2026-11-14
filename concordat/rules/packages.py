@@ -49,6 +49,13 @@ from .documentation_envelope import (
     DocumentationEnvelope,
     build_documentation_envelope,
 )
+from .duplication_gate_envelope import (
+    ENVELOPE_KIND as DUPLICATION_GATE_ENVELOPE_KIND,
+)
+from .duplication_gate_envelope import (
+    DuplicationGateEnvelope,
+    build_duplication_gate_envelope,
+)
 from .envelope import (
     BUILD_DEFAULTS_ENVELOPE_KIND,
     ENVELOPE_KIND,
@@ -124,6 +131,7 @@ type RuleEnvelope = (
     | SpellingEnvelope
     | ProvisioningEnvelope
     | DocumentationEnvelope
+    | DuplicationGateEnvelope
     | ToolchainPolicyEnvelope
     | YamlLintEnvelope
     | ProverToolingEnvelope
@@ -618,6 +626,7 @@ PACKAGE_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     "whitaker-provisioning": _provisioning_envelope,
     "yaml-lint-baseline": _yaml_lint_envelope,
     "rust-prover-tooling": _prover_tooling_envelope,
+    "python-duplication-gate": build_duplication_gate_envelope,
 })
 
 # The same builders by the envelope kind they produce, so a package whose input
@@ -639,6 +648,7 @@ INPUT_KIND_ENVELOPE_BUILDERS: typ.Final = types.MappingProxyType({
     PROVISIONING_ENVELOPE_KIND: _provisioning_envelope,
     YAML_LINT_ENVELOPE_KIND: _yaml_lint_envelope,
     PROVER_TOOLING_ENVELOPE_KIND: _prover_tooling_envelope,
+    DUPLICATION_GATE_ENVELOPE_KIND: build_duplication_gate_envelope,
 })
 
 

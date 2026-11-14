@@ -863,6 +863,21 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   leaves it empty; the rule-run command fills it in a separate step
   ([ADR-002](adrs/adr-0002-resolve-action-pins-against-github.md)).
 
+- `policy-input/python-duplication-gate` —
+  `duplication_gate_envelope.build_duplication_gate_envelope`. It reads
+  `pyproject.toml` with `tomllib` (through the shared containment guard), lifts
+  the `[tool.nose]` settings out with each shape problem recorded, and
+  reproduces the scan: it walks each root (never following links, pruning the
+  usual vendored directories) and matches `exclude` with `pathspec`'s
+  `GitIgnoreSpec` relative to the root, as nose 0.20.0 does. Per root it
+  records whether it exists, how many Python files the scan selects, and which
+  of those lie in a test tree. The manifest's `test_directory_names` parameter
+  reaches the builder, so it is not a policy-only tunable; the builder is
+  registered without an adapter because it takes the parameters itself. The
+  fixture generator (`fixtures/generate.py`) runs the production builder over
+  synthetic checkouts, and a unit test fails if the checked-in `data.json`
+  differs from regeneration. `pathspec` is the one runtime dependency this
+  envelope adds.
 - `policy-input/uv-gate-baseline` — `uv_gate_envelope.build_uv_gate_envelope`.
   It reuses `markdown_envelope`'s containment guard and readers: the same
   `makeutil` report for the root `Makefile` and the same decoded workflows,

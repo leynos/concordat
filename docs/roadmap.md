@@ -718,6 +718,13 @@ the Section 2.1.2 format.
   Acceptance: over the estate's main branches it reads the repositories the
   survey script reads as done as compliant, the one with local installers as
   noncompliant, and the excepted one as compliant.
+- [x] Ship the duplication gate scope rule (NS-001 to NS-004, DF12-104): the
+  `python-duplication-gate` package holds a repository that configures
+  `df12-duplication` to an uncapped scan (`top = 0`), no selected test tree and
+  roots that each select Python files, with none of it waivable. Acceptance:
+  over the estate's main branches it reads the repositories with `top = 0` and
+  excluded test trees as compliant and those with a positive `top` as
+  noncompliant.
 - [ ] Ship the remaining Rust toolchain and acceleration rule packages (RT-006,
   RT-007, RT-010, RT-011): nightly pins no older than one year, required
   toolchain components, Polonius-next for application-only repositories, and

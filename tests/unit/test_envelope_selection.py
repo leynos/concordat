@@ -33,6 +33,9 @@ from concordat.rules.dev_build_envelope import (
 from concordat.rules.documentation_envelope import (
     ENVELOPE_KIND as DOCUMENTATION_ENVELOPE_KIND,
 )
+from concordat.rules.duplication_gate_envelope import (
+    ENVELOPE_KIND as DUPLICATION_GATE_ENVELOPE_KIND,
+)
 from concordat.rules.envelope import (
     BUILD_DEFAULTS_ENVELOPE_KIND,
     ENVELOPE_KIND,
@@ -208,6 +211,11 @@ class TestRegisteredPackages:
                 "documentation-presence",
                 DOCUMENTATION_ENVELOPE_KIND,
                 id="documentation-presence",
+            ),
+            pytest.param(
+                "python-duplication-gate",
+                DUPLICATION_GATE_ENVELOPE_KIND,
+                id="python-duplication-gate",
             ),
             pytest.param(
                 "yaml-lint-baseline",
@@ -456,6 +464,7 @@ class TestDeclaredInputKind:
             ("spelling-config-baseline", SPELLING_ENVELOPE_KIND),
             ("uv-gate-baseline", UV_GATE_ENVELOPE_KIND),
             ("documentation-presence", DOCUMENTATION_ENVELOPE_KIND),
+            ("python-duplication-gate", DUPLICATION_GATE_ENVELOPE_KIND),
             ("yaml-lint-baseline", YAML_LINT_ENVELOPE_KIND),
         ):
             rule_dir = packages.rule_package_dir(rule_id)

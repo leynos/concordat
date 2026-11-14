@@ -12,6 +12,7 @@ dependencies = [
     "boto3>=1.43.68",
     "cyclopts",
     "github3.py",
+    "pathspec==1.1.1",
     "pygit2",
     "requests",
     "ruamel.yaml",

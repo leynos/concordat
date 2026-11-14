@@ -1,0 +1,1276 @@
+{
+  "fixtures": {
+    "compliant": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": true
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": {
+        "top_present": true,
+        "top": 0,
+        "roots": [
+          "pkg"
+        ],
+        "exclude": [
+          "**/tests/**"
+        ],
+        "problems": []
+      },
+      "roots": [
+        {
+          "root": "pkg",
+          "exists": true,
+          "selected_count": 2,
+          "test_file_count": 0,
+          "test_files": []
+        }
+      ]
+    },
+    "compliant_anchored_excludes": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": true
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": {
+        "top_present": true,
+        "top": 0,
+        "roots": [
+          "pkg"
+        ],
+        "exclude": [
+          "tests/**",
+          "unittests/"
+        ],
+        "problems": []
+      },
+      "roots": [
+        {
+          "root": "pkg",
+          "exists": true,
+          "selected_count": 2,
+          "test_file_count": 0,
+          "test_files": []
+        }
+      ]
+    },
+    "compliant_file_root": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": true
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": {
+        "top_present": true,
+        "top": 0,
+        "roots": [
+          "pkg",
+          "tool.py"
+        ],
+        "exclude": [
+          "**/tests/**"
+        ],
+        "problems": []
+      },
+      "roots": [
+        {
+          "root": "pkg",
+          "exists": true,
+          "selected_count": 2,
+          "test_file_count": 0,
+          "test_files": []
+        },
+        {
+          "root": "tool.py",
+          "exists": true,
+          "selected_count": 1,
+          "test_file_count": 0,
+          "test_files": []
+        }
+      ]
+    },
+    "compliant_test_tree_without_python": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": true
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": {
+        "top_present": true,
+        "top": 0,
+        "roots": [
+          "pkg"
+        ],
+        "exclude": [],
+        "problems": []
+      },
+      "roots": [
+        {
+          "root": "pkg",
+          "exists": true,
+          "selected_count": 2,
+          "test_file_count": 0,
+          "test_files": []
+        }
+      ]
+    },
+    "compliant_hidden_and_vendored_test_trees": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": true
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": {
+        "top_present": true,
+        "top": 0,
+        "roots": [
+          "pkg"
+        ],
+        "exclude": [],
+        "problems": []
+      },
+      "roots": [
+        {
+          "root": "pkg",
+          "exists": true,
+          "selected_count": 2,
+          "test_file_count": 0,
+          "test_files": []
+        }
+      ]
+    },
+    "compliant_file_root_beside_test_tree": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": true
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": {
+        "top_present": true,
+        "top": 0,
+        "roots": [
+          "pkg/mod.py"
+        ],
+        "exclude": [],
+        "problems": []
+      },
+      "roots": [
+        {
+          "root": "pkg/mod.py",
+          "exists": true,
+          "selected_count": 1,
+          "test_file_count": 0,
+          "test_files": []
+        }
+      ]
+    },
+    "top_absent": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": true
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": {
+        "top_present": false,
+        "top": null,
+        "roots": [
+          "pkg"
+        ],
+        "exclude": [
+          "**/tests/**"
+        ],
+        "problems": []
+      },
+      "roots": [
+        {
+          "root": "pkg",
+          "exists": true,
+          "selected_count": 2,
+          "test_file_count": 0,
+          "test_files": []
+        }
+      ]
+    },
+    "top_positive": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": true
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": {
+        "top_present": true,
+        "top": 30,
+        "roots": [
+          "pkg"
+        ],
+        "exclude": [
+          "**/tests/**"
+        ],
+        "problems": []
+      },
+      "roots": [
+        {
+          "root": "pkg",
+          "exists": true,
+          "selected_count": 2,
+          "test_file_count": 0,
+          "test_files": []
+        }
+      ]
+    },
+    "top_string": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": true
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": {
+        "top_present": true,
+        "top": null,
+        "roots": [
+          "pkg"
+        ],
+        "exclude": [
+          "**/tests/**"
+        ],
+        "problems": [
+          "[tool.nose].top must be an integer, not '0'"
+        ]
+      },
+      "roots": []
+    },
+    "top_positive_and_test_tree": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": true
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": {
+        "top_present": true,
+        "top": 30,
+        "roots": [
+          "pkg"
+        ],
+        "exclude": [],
+        "problems": []
+      },
+      "roots": [
+        {
+          "root": "pkg",
+          "exists": true,
+          "selected_count": 3,
+          "test_file_count": 1,
+          "test_files": [
+            "pkg/tests/test_mod.py"
+          ]
+        }
+      ]
+    },
+    "test_tree_not_excluded": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": true
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": {
+        "top_present": true,
+        "top": 0,
+        "roots": [
+          "pkg"
+        ],
+        "exclude": [],
+        "problems": []
+      },
+      "roots": [
+        {
+          "root": "pkg",
+          "exists": true,
+          "selected_count": 3,
+          "test_file_count": 1,
+          "test_files": [
+            "pkg/tests/test_mod.py"
+          ]
+        }
+      ]
+    },
+    "test_tree_partly_excluded": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": true
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": {
+        "top_present": true,
+        "top": 0,
+        "roots": [
+          "pkg"
+        ],
+        "exclude": [
+          "tests/unit/"
+        ],
+        "problems": []
+      },
+      "roots": [
+        {
+          "root": "pkg",
+          "exists": true,
+          "selected_count": 4,
+          "test_file_count": 2,
+          "test_files": [
+            "pkg/tests/test_mod.py",
+            "pkg/tests/integration/test_integration.py"
+          ]
+        }
+      ]
+    },
+    "test_tree_exclude_names_repository_path": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": true
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": {
+        "top_present": true,
+        "top": 0,
+        "roots": [
+          "pkg"
+        ],
+        "exclude": [
+          "pkg/tests/**"
+        ],
+        "problems": []
+      },
+      "roots": [
+        {
+          "root": "pkg",
+          "exists": true,
+          "selected_count": 3,
+          "test_file_count": 1,
+          "test_files": [
+            "pkg/tests/test_mod.py"
+          ]
+        }
+      ]
+    },
+    "test_tree_reincluded_by_negation": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": true
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": {
+        "top_present": true,
+        "top": 0,
+        "roots": [
+          "pkg"
+        ],
+        "exclude": [
+          "tests/**",
+          "!tests/test_mod.py"
+        ],
+        "problems": []
+      },
+      "roots": [
+        {
+          "root": "pkg",
+          "exists": true,
+          "selected_count": 3,
+          "test_file_count": 1,
+          "test_files": [
+            "pkg/tests/test_mod.py"
+          ]
+        }
+      ]
+    },
+    "test_tree_unittests_not_excluded": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": true
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": {
+        "top_present": true,
+        "top": 0,
+        "roots": [
+          "pkg"
+        ],
+        "exclude": [],
+        "problems": []
+      },
+      "roots": [
+        {
+          "root": "pkg",
+          "exists": true,
+          "selected_count": 3,
+          "test_file_count": 1,
+          "test_files": [
+            "pkg/unittests/test_mod.py"
+          ]
+        }
+      ]
+    },
+    "root_is_test_tree": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": true
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": {
+        "top_present": true,
+        "top": 0,
+        "roots": [
+          "tests"
+        ],
+        "exclude": [],
+        "problems": []
+      },
+      "roots": [
+        {
+          "root": "tests",
+          "exists": true,
+          "selected_count": 1,
+          "test_file_count": 1,
+          "test_files": [
+            "tests/test_mod.py"
+          ]
+        }
+      ]
+    },
+    "root_inside_test_tree": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": true
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": {
+        "top_present": true,
+        "top": 0,
+        "roots": [
+          "tests/helpers"
+        ],
+        "exclude": [],
+        "problems": []
+      },
+      "roots": [
+        {
+          "root": "tests/helpers",
+          "exists": true,
+          "selected_count": 1,
+          "test_file_count": 1,
+          "test_files": [
+            "tests/helpers/shared.py"
+          ]
+        }
+      ]
+    },
+    "root_is_test_tree_and_excluded": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": true
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": {
+        "top_present": true,
+        "top": 0,
+        "roots": [
+          "tests"
+        ],
+        "exclude": [
+          "*.py"
+        ],
+        "problems": []
+      },
+      "roots": [
+        {
+          "root": "tests",
+          "exists": true,
+          "selected_count": 0,
+          "test_file_count": 0,
+          "test_files": []
+        }
+      ]
+    },
+    "root_absent": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": true
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": {
+        "top_present": true,
+        "top": 0,
+        "roots": [
+          "pkg",
+          "missing"
+        ],
+        "exclude": [
+          "**/tests/**"
+        ],
+        "problems": []
+      },
+      "roots": [
+        {
+          "root": "pkg",
+          "exists": true,
+          "selected_count": 2,
+          "test_file_count": 0,
+          "test_files": []
+        },
+        {
+          "root": "missing",
+          "exists": false,
+          "selected_count": 0,
+          "test_file_count": 0,
+          "test_files": []
+        }
+      ]
+    },
+    "root_selects_nothing": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": true
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": {
+        "top_present": true,
+        "top": 0,
+        "roots": [
+          "pkg",
+          "docs"
+        ],
+        "exclude": [
+          "**/tests/**"
+        ],
+        "problems": []
+      },
+      "roots": [
+        {
+          "root": "pkg",
+          "exists": true,
+          "selected_count": 2,
+          "test_file_count": 0,
+          "test_files": []
+        },
+        {
+          "root": "docs",
+          "exists": true,
+          "selected_count": 0,
+          "test_file_count": 0,
+          "test_files": []
+        }
+      ]
+    },
+    "root_excluded_entirely": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": true
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": {
+        "top_present": true,
+        "top": 0,
+        "roots": [
+          "pkg"
+        ],
+        "exclude": [
+          "**/*.py"
+        ],
+        "problems": []
+      },
+      "roots": [
+        {
+          "root": "pkg",
+          "exists": true,
+          "selected_count": 0,
+          "test_file_count": 0,
+          "test_files": []
+        }
+      ]
+    },
+    "root_is_not_python_file": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": true
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": {
+        "top_present": true,
+        "top": 0,
+        "roots": [
+          "pkg",
+          "data.json"
+        ],
+        "exclude": [
+          "**/tests/**"
+        ],
+        "problems": []
+      },
+      "roots": [
+        {
+          "root": "pkg",
+          "exists": true,
+          "selected_count": 2,
+          "test_file_count": 0,
+          "test_files": []
+        },
+        {
+          "root": "data.json",
+          "exists": true,
+          "selected_count": 0,
+          "test_file_count": 0,
+          "test_files": []
+        }
+      ]
+    },
+    "no_pyproject": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": false,
+        "nose_table": false
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": null,
+      "nose": null,
+      "roots": []
+    },
+    "no_nose_table": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": false
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": null,
+      "roots": []
+    },
+    "pyproject_invalid": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": false
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": "invalid TOML: Expected ']' at the end of a table declaration (at line 1, column 11)"
+      },
+      "nose": null,
+      "roots": []
+    },
+    "nose_not_a_table": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": true
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": {
+        "top_present": false,
+        "top": null,
+        "roots": [],
+        "exclude": [],
+        "problems": [
+          "[tool.nose] must be a table"
+        ]
+      },
+      "roots": []
+    },
+    "roots_not_a_list": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": true
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": {
+        "top_present": true,
+        "top": 0,
+        "roots": [],
+        "exclude": [
+          "**/tests/**"
+        ],
+        "problems": [
+          "[tool.nose].roots must be a non-empty list of strings"
+        ]
+      },
+      "roots": []
+    },
+    "roots_empty": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": true
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": {
+        "top_present": true,
+        "top": 0,
+        "roots": [],
+        "exclude": [
+          "**/tests/**"
+        ],
+        "problems": [
+          "[tool.nose].roots must be a non-empty list of strings"
+        ]
+      },
+      "roots": []
+    },
+    "roots_absolute": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": true
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": {
+        "top_present": true,
+        "top": 0,
+        "roots": [
+          "/etc"
+        ],
+        "exclude": [
+          "**/tests/**"
+        ],
+        "problems": [
+          "scan root '/etc' is absolute or leaves the repository"
+        ]
+      },
+      "roots": []
+    },
+    "roots_leave_repository": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": true
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": {
+        "top_present": true,
+        "top": 0,
+        "roots": [
+          "../elsewhere"
+        ],
+        "exclude": [
+          "**/tests/**"
+        ],
+        "problems": [
+          "scan root '../elsewhere' is absolute or leaves the repository"
+        ]
+      },
+      "roots": []
+    },
+    "exclude_not_a_list": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": true
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": {
+        "top_present": true,
+        "top": 0,
+        "roots": [
+          "pkg"
+        ],
+        "exclude": [],
+        "problems": [
+          "[tool.nose].exclude must be a list of strings"
+        ]
+      },
+      "roots": []
+    },
+    "exclude_invalid_pattern": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": true
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": {
+        "top_present": true,
+        "top": 0,
+        "roots": [
+          "pkg"
+        ],
+        "exclude": [
+          "tests\\"
+        ],
+        "problems": [
+          "[tool.nose].exclude holds an invalid pattern: Invalid git pattern: 'tests\\\\'"
+        ]
+      },
+      "roots": []
+    }
+  },
+  "parameters": {
+    "test_directory_names": [
+      "tests",
+      "test",
+      "unittests",
+      "testing"
+    ]
+  }
+}
