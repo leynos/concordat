@@ -108,7 +108,7 @@ def test_the_cranelift_policy_parameter_reaches_the_policy(
     monkeypatch: pytest.MonkeyPatch, policy: str, fixture: str, expected: set[str]
 ) -> None:
     """Flipping `cranelift_policy` switches the backend clauses on or to refusal."""
-    original = runner._rule_parameters  # noqa: SLF001
+    original = runner._rule_parameters
 
     def with_policy(rule_dir: pathlib.Path) -> dict[str, object]:
         """Return the manifest defaults with the policy value replaced."""
@@ -118,7 +118,8 @@ def test_the_cranelift_policy_parameter_reaches_the_policy(
     result = run_rule(RULE_ID, checkout(fixture))
     reported = {finding.rule_id for finding in result.findings}
     assert reported == expected, (
-        f"{fixture} under {policy} should report {expected or 'no findings'}, got {reported}"
+        f"{fixture} under {policy} should report "
+        f"{expected or 'no findings'}, got {reported}"
     )
 
 
