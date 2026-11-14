@@ -15,12 +15,13 @@ import dataclasses
 import typing as typ
 
 from .prover_commands import is_installer, is_runner
+from .prover_pins import command_pins
 from .shell_commands import commands
 
 if typ.TYPE_CHECKING:
     import pathlib
 
-    from .prover_tooling_types import LocalInstaller
+    from .prover_tooling_types import LocalInstaller, Pin
 
 SCRIPT_DIRECTORIES: typ.Final = ("scripts", ".github/scripts", "tools")
 TEST_DIRECTORY: typ.Final = "tests"
@@ -53,31 +54,51 @@ class ScriptFacts:
     installers: list[LocalInstaller] = dataclasses.field(default_factory=list)
     runs: bool = False
     unreadable: list[str] = dataclasses.field(default_factory=list)
+    pins: list[Pin] = dataclasses.field(default_factory=list)
 
 
-def _children(directory: pathlib.Path) -> tuple[list[pathlib.Path], list[pathlib.Path]]:
-    """Return a directory's subdirectories to walk and its regular files."""
-    entries = [e for e in sorted(directory.iterdir()) if not e.is_symlink()]
-    folders = [e for e in entries if e.is_dir() and e.name not in SKIPPED_DIRECTORIES]
-    return folders, [e for e in entries if e.is_file()]
+def _listing(
+    directory: pathlib.Path, checkout: pathlib.Path, facts: ScriptFacts
+) -> list[pathlib.Path]:
+    """Return a directory's entries that are not links, recording a refusal."""
+    try:
+        entries = sorted(directory.iterdir())
+    except OSError as error:
+        relative = directory.relative_to(checkout).as_posix()
+        facts.unreadable.append(f"{relative}: {error}")
+        return []
+    return [entry for entry in entries if not entry.is_symlink()]
 
 
-def _walk(base: pathlib.Path) -> list[pathlib.Path]:
-    """Return the regular files under *base*, skipping vendored and test trees."""
+def _walk(
+    base: pathlib.Path, checkout: pathlib.Path, facts: ScriptFacts
+) -> list[pathlib.Path]:
+    """Return the regular files under *base*, skipping vendored and test trees.
+
+    A directory that cannot be listed is recorded as unreadable and the walk
+    carries on with the others.
+
+    Returns
+    -------
+    list[pathlib.Path]
+        The regular files found.
+    """
     found: list[pathlib.Path] = []
     stack = [base]
     while stack:
-        folders, files = _children(stack.pop())
-        stack.extend(folders)
-        found.extend(files)
+        for entry in _listing(stack.pop(), checkout, facts):
+            if entry.is_dir() and entry.name not in SKIPPED_DIRECTORIES:
+                stack.append(entry)
+            elif entry.is_file():
+                found.append(entry)
     return found
 
 
-def _script_files(checkout: pathlib.Path) -> list[pathlib.Path]:
+def _script_files(checkout: pathlib.Path, facts: ScriptFacts) -> list[pathlib.Path]:
     """Return the files under the script directories, in stable order."""
     bases = [checkout / name for name in SCRIPT_DIRECTORIES]
     real = [b for b in bases if b.is_dir() and not b.is_symlink()]
-    return sorted(path for base in real for path in _walk(base))
+    return sorted(path for base in real for path in _walk(base, checkout, facts))
 
 
 def _has_download_constant(source: str) -> bool:
@@ -149,6 +170,13 @@ def _runs_prover(path: pathlib.Path, source: str | None) -> bool:
     return any(is_runner(argv) for argv in commands(source))
 
 
+def _script_pins(path: pathlib.Path, relative: str, source: str | None) -> list[Pin]:
+    """Return the revisions a readable shell script's commands name."""
+    if source is None or path.suffix not in SHELL_SUFFIXES:
+        return []
+    return command_pins(commands(source), relative)
+
+
 def scan_scripts(checkout: pathlib.Path) -> ScriptFacts:
     """Return the local installers, prover runs and unreadable files in scripts.
 
@@ -158,13 +186,14 @@ def scan_scripts(checkout: pathlib.Path) -> ScriptFacts:
         What the script directories hold.
     """
     facts = ScriptFacts()
-    for path in _script_files(checkout):
+    for path in _script_files(checkout, facts):
         relative = path.relative_to(checkout).as_posix()
         source = _read(path, relative, facts)
         reason = installer_reason(path, source)
         if reason is not None:
             facts.installers.append({"path": relative, "reason": reason})
         facts.runs = facts.runs or _runs_prover(path, source)
+        facts.pins += _script_pins(path, relative, source)
     return facts
 
 

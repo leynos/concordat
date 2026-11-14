@@ -4,7 +4,7 @@ A workflow step that runs `make X` installs a prover when `X`, or any
 prerequisite of `X`, runs an installer. The pinned `makeutil` report supplies
 the rules; this module flattens it into prerequisites and recipe commands and
 follows them. A bare `make` builds `.DEFAULT_GOAL`, or the first ordinary
-target.
+target; the operands of options such as `-j 2` are not goals.
 """
 
 from __future__ import annotations
@@ -24,6 +24,29 @@ if typ.TYPE_CHECKING:
 
 OPERATION: typ.Final = "read-prover-tooling-facts"
 DEFAULT_GOAL_VARIABLE: typ.Final = ".DEFAULT_GOAL"
+# Make options whose next word is their operand, not a target.
+OPTIONS_WITH_ARGUMENT: typ.Final = frozenset({
+    "-f",
+    "-C",
+    "-I",
+    "-o",
+    "-W",
+    "-l",
+    "-O",
+    "--file",
+    "--makefile",
+    "--directory",
+    "--include-dir",
+    "--old-file",
+    "--what-if",
+    "--new-file",
+    "--assume-old",
+    "--assume-new",
+    "--load-average",
+    "--max-load",
+    "--output-sync",
+})
+JOB_OPTIONS: typ.Final = frozenset({"-j", "--jobs"})
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -33,6 +56,9 @@ class MakeRules:
     prerequisites: dict[str, list[str]]
     recipes: dict[str, list[Argv]]
     default_goal: str | None = None
+
+
+EMPTY_RULES: typ.Final = MakeRules({}, {})
 
 
 def closure(rules: MakeRules, targets: list[str]) -> list[str]:
@@ -67,15 +93,40 @@ def all_commands(rules: MakeRules) -> list[Argv]:
     return [argv for argvs in rules.recipes.values() for argv in argvs]
 
 
+def _consumes_next(option: str, following: str | None) -> bool:
+    """Return whether *option* takes *following* as its operand."""
+    if option in OPTIONS_WITH_ARGUMENT:
+        return following is not None
+    return option in JOB_OPTIONS and following is not None and following.isdigit()
+
+
+def _operands(words: list[str]) -> list[str]:
+    """Return the words of a `make` command that are targets."""
+    found: list[str] = []
+    skip = False
+    for index, word in enumerate(words):
+        following = words[index + 1] if index + 1 < len(words) else None
+        if skip:
+            skip = False
+        elif word.startswith("-"):
+            skip = _consumes_next(word, following)
+        elif "=" not in word:
+            found.append(word)
+    return found
+
+
 def goals(rules: MakeRules, argv: Argv) -> list[str]:
-    """Return the targets a `make` command builds: those named, else the default."""
-    named = [w for w in argv[1:] if not w.startswith("-") and "=" not in w]
+    """Return the targets a `make` command builds: those named, else the default.
+
+    Returns
+    -------
+    list[str]
+        The named targets, or the default goal when none is named.
+    """
+    named = _operands(argv[1:])
     if named:
         return named
     return [rules.default_goal] if rules.default_goal else []
-
-
-EMPTY_RULES: typ.Final = MakeRules({}, {})
 
 
 def _is_ordinary(target: str) -> bool:

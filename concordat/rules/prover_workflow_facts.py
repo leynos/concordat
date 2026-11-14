@@ -11,7 +11,7 @@ from __future__ import annotations
 import dataclasses
 import typing as typ
 
-from .prover_commands import is_installer, is_runner, script_invoked
+from .prover_commands import is_installer, is_runner, script_invoked, unwrap
 from .prover_make_facts import commands_reached, goals
 from .prover_pins import command_pins
 from .shell_commands import Argv, commands
@@ -94,19 +94,59 @@ def _add_make(facts: StepFacts, where: str, argv: Argv, context: Context) -> Non
     facts.runs = facts.runs or _make_runs(argv, context)
 
 
-def _add_command(facts: StepFacts, where: str, argv: Argv, context: Context) -> None:
-    """Record one `run` command's installs, runs and revision pins."""
+def _is_make(argv: Argv) -> bool:
+    """Return whether the command, looking through wrappers, is `make`."""
+    command = unwrap(argv)
+    return bool(command) and command[0] == "make"
+
+
+def _add_command(
+    facts: StepFacts, where: str, argv: Argv, context: Context, *, at_root: bool
+) -> None:
+    """Record one `run` command's installs, runs and revision pins.
+
+    The root Makefile's rules apply only to a `make` that runs from the
+    repository root; one that runs from another directory builds that
+    directory's Makefile, which the rule does not read.
+    """
     facts.pins += command_pins([argv], "workflow")
     is_install = installs(argv, context.installer_scripts)
     facts.runs = facts.runs or is_install or is_runner(argv)
     if is_install:
         facts.installers.append({"where": where, "command": " ".join(argv)})
-    if argv[0] == "make":
-        _add_make(facts, where, argv, context)
+    if at_root and _is_make(argv):
+        _add_make(facts, where, unwrap(argv), context)
 
 
-def step_facts(where: str, step: dict[str, object], context: Context) -> StepFacts:
+def _leaves_root(argv: Argv) -> bool:
+    """Return whether the command is a `cd` to somewhere other than the root."""
+    command = unwrap(argv)
+    if not command or command[0] != "cd":
+        return False
+    return not _is_root(next((w for w in command[1:] if not w.startswith("-")), None))
+
+
+def _is_root(directory: object) -> bool:
+    """Return whether a working directory is the repository root."""
+    return directory in {None, "", ".", "./"}
+
+
+def step_facts(
+    where: str, step: dict[str, object], context: Context, *, at_root: bool = True
+) -> StepFacts:
     """Return one step's prover facts.
+
+    Parameters
+    ----------
+    where:
+        The step's `<job>/<index>` place.
+    step:
+        The step mapping.
+    context:
+        What commands are read against.
+    at_root:
+        Whether the step starts in the repository root; a `cd` in its script
+        leaves it.
 
     Returns
     -------
@@ -116,7 +156,8 @@ def step_facts(where: str, step: dict[str, object], context: Context) -> StepFac
     facts = StepFacts(shared=_shared_use(where, step))
     run = step.get("run")
     for argv in commands(run) if isinstance(run, str) else []:
-        _add_command(facts, where, argv, context)
+        _add_command(facts, where, argv, context, at_root=at_root)
+        at_root = at_root and not _leaves_root(argv)
     return facts
 
 
@@ -134,10 +175,34 @@ def _jobs(document: dict[str, object]) -> dict[str, object]:
     return typ.cast("dict[str, object]", jobs) if isinstance(jobs, dict) else {}
 
 
-def _job_steps(document: dict[str, object]) -> list[tuple[str, dict[str, object]]]:
-    """Return every step of every job, with its `<job>/<index>` place."""
+def _default_directory(holder: object) -> object:
+    """Return a `defaults.run.working-directory` a workflow or job sets."""
+    defaults = holder.get("defaults") if isinstance(holder, dict) else None
+    run = defaults.get("run") if isinstance(defaults, dict) else None
+    return run.get("working-directory") if isinstance(run, dict) else None
+
+
+def _step_directory(
+    step: dict[str, object], job: object, document: dict[str, object]
+) -> object:
+    """Return the directory a step runs in, as its step, job or workflow sets it."""
+    return (
+        step.get("working-directory")
+        or _default_directory(job)
+        or _default_directory(document)
+    )
+
+
+def _job_steps(
+    document: dict[str, object],
+) -> list[tuple[str, dict[str, object], bool]]:
+    """Return every step: its place, its mapping and whether it starts at the root."""
     return [
-        (f"{job_id}/{index}", step)
+        (
+            f"{job_id}/{index}",
+            step,
+            _is_root(_step_directory(step, job, document)),
+        )
         for job_id, job in _jobs(document).items()
         for index, step in enumerate(_steps(job))
     ]
@@ -171,8 +236,8 @@ def workflow_facts(
         return facts, False, []
     runs = False
     pins: list[Pin] = []
-    for where, step in _job_steps(typ.cast("dict[str, object]", document)):
-        found = step_facts(where, step, context)
+    for where, step, at_root in _job_steps(typ.cast("dict[str, object]", document)):
+        found = step_facts(where, step, context, at_root=at_root)
         facts["installer_steps"] += found.installers
         facts["shared_uses"] += found.shared
         facts["calls_make"] = facts["calls_make"] or found.calls_make

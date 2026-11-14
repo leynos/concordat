@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import typing as typ
 
 import pytest
@@ -350,3 +351,60 @@ def test_an_installer_behind_a_shell_conditional_is_noncompliant(
     """`if ...; then cargo kani setup; fi` installs Kani."""
     steps = (run_step("if true; then cargo kani setup; fi"),)
     assert ids(checkout(tmp_path, steps=steps)) == {"PT-002"}
+
+
+def test_make_job_count_is_not_a_goal(tmp_path: pathlib.Path) -> None:
+    """The `2` of `make -j 2` is an option operand, so the default goal builds."""
+    makefile = "all: verus-install verus\n\n" + MAKEFILE
+    steps = (INSTALL_STEP, run_step("make -j 2"))
+    assert ids(checkout(tmp_path, makefile=makefile, steps=steps)) == {"PT-002"}
+
+
+def test_a_wrapped_make_step_is_followed(tmp_path: pathlib.Path) -> None:
+    """`env FOO=1 make verus` reaches the same targets as `make verus`."""
+    makefile = MAKEFILE.replace("verus:\n", "verus: verus-install\n")
+    steps = (INSTALL_STEP, run_step("env FOO=1 make verus"))
+    assert ids(checkout(tmp_path, makefile=makefile, steps=steps)) == {"PT-002"}
+
+
+def test_make_in_another_directory_does_not_use_the_root_makefile(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A step with a working directory runs that directory's own Makefile."""
+    makefile = MAKEFILE.replace("verus:\n", "verus: verus-install\n")
+    step = "      - run: make verus\n        working-directory: subproject\n"
+    assert (
+        ids(checkout(tmp_path, makefile=makefile, steps=(INSTALL_STEP, step))) == set()
+    )
+
+
+def test_make_after_a_cd_does_not_use_the_root_makefile(tmp_path: pathlib.Path) -> None:
+    """`cd sub && make verus` builds the other directory's target."""
+    makefile = MAKEFILE.replace("verus:\n", "verus: verus-install\n")
+    steps = (INSTALL_STEP, run_step("cd subproject && make verus"))
+    assert ids(checkout(tmp_path, makefile=makefile, steps=steps)) == set()
+
+
+def test_a_script_pin_is_compared(tmp_path: pathlib.Path) -> None:
+    """A shell script that names its own `rust-prover-tools` revision is a pin."""
+    root = checkout(tmp_path)
+    source = f"git+https://github.com/leynos/rust-prover-tools@{OLD}"
+    put(root, "scripts/prove.sh", f"uvx --from {source} prover-tools verus run\n")
+    assert ids(root) == {"PT-001"}
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root can list any directory")
+def test_an_unlistable_script_directory_is_indeterminate(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A directory the walk cannot list is a fact, and the other evidence is kept."""
+    root = checkout(tmp_path)
+    locked = root / "scripts" / "locked"
+    locked.mkdir(parents=True)
+    locked.chmod(0)
+    try:
+        envelope = build_prover_tooling_envelope(root)
+    finally:
+        locked.chmod(0o755)
+    assert any("scripts/locked" in item for item in envelope["unreadable"])
+    assert envelope["workflows"]

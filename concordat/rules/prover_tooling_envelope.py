@@ -105,7 +105,7 @@ def build_prover_tooling_envelope(
     scripts = scan_scripts(checkout)
     context = Context(rules, frozenset(item["path"] for item in scripts.installers))
     workflows, workflows_run, workflow_pins = _workflows(checkout, context)
-    pins = ref_file_pins(checkout, root) + workflow_pins
+    pins = ref_file_pins(checkout, root) + workflow_pins + scripts.pins
     pins += makefile_pins(report) if report is not None else []
     pins += command_pins(all_commands(rules), "Makefile recipe")
     makefile_runs = any(_runs(argv) for argv in all_commands(rules))

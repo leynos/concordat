@@ -30,7 +30,7 @@ import typing as typ
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
 
-__all__ = ["is_installer", "is_runner", "script_invoked"]
+__all__ = ["is_installer", "is_runner", "script_invoked", "unwrap"]
 
 TOOLS: typ.Final = frozenset({"kani", "verus", "z3"})
 RUN_VERBS: typ.Final = frozenset({"run", "exec", "check-version"})
@@ -47,7 +47,13 @@ WRAPPERS: typ.Final = frozenset({
     "nohup",
     "sudo",
 })
-ENV_OPTIONS_WITH_ARGUMENT: typ.Final = frozenset({"-u", "-C", "-S", "--unset"})
+# Options of each wrapper that consume the next word.
+WRAPPER_ARGUMENT_OPTIONS: typ.Final = {
+    "env": frozenset({"-u", "-C", "-S", "--unset", "--chdir", "--split-string"}),
+    "nice": frozenset({"-n", "--adjustment"}),
+    "sudo": frozenset({"-u", "-g", "-C", "-h", "-p", "-U", "-D", "-R", "-r", "-t"}),
+    "time": frozenset({"-f", "-o", "--format", "--output"}),
+}
 RUNNER_BINARIES: typ.Final = frozenset({"verus", "cargo-kani", "kani-verifier"})
 PROVER_TOOLS: typ.Final = "prover-tools"
 # Launchers that run the named tool as an argument (`uvx ... prover-tools`).
@@ -77,9 +83,8 @@ def _is_option_or_assignment(word: str) -> bool:
 
 def _takes_argument(wrapper: str, option: str, rest: list[str]) -> bool:
     """Return whether *option* of *wrapper* consumes the next word."""
-    if wrapper != "env":
-        return False
-    return option in ENV_OPTIONS_WITH_ARGUMENT and bool(rest)
+    options = WRAPPER_ARGUMENT_OPTIONS.get(wrapper, frozenset())
+    return option in options and bool(rest)
 
 
 def _drop_options(rest: list[str], wrapper: str) -> None:
@@ -90,7 +95,7 @@ def _drop_options(rest: list[str], wrapper: str) -> None:
             rest.pop(0)
 
 
-def _unwrap(argv: cabc.Sequence[str]) -> list[str]:
+def unwrap(argv: cabc.Sequence[str]) -> list[str]:
     """Return *argv* without leading wrapper commands and their options."""
     rest = list(argv)
     while rest and rest[0] in WRAPPERS:
@@ -165,7 +170,7 @@ def is_installer(argv: cabc.Sequence[str]) -> bool:
         and `cargo kani setup`. A command that only prints text, or that names
         no runner, is never one.
     """
-    unwrapped = _unwrap(argv)
+    unwrapped = unwrap(argv)
     words = _words(unwrapped)
     if _prints(words):
         return False
@@ -203,7 +208,7 @@ def is_runner(argv: cabc.Sequence[str]) -> bool:
         ``True`` for the Verus or Kani binaries, `cargo kani`, and
         `prover-tools <tool> run|exec|check-version`.
     """
-    unwrapped = _unwrap(argv)
+    unwrapped = unwrap(argv)
     words = _words(unwrapped)
     if _prints(words):
         return False
@@ -232,7 +237,7 @@ def script_invoked(argv: cabc.Sequence[str]) -> str | None:
     str | None
         The script path, or None when the command runs none.
     """
-    unwrapped = _unwrap(argv)
+    unwrapped = unwrap(argv)
     if not unwrapped:
         return None
     head = unwrapped[0]

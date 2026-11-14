@@ -37,6 +37,8 @@ from concordat.rules.shell_commands import commands
         ("env FOO=1 $(PROVER_TOOLS) z3 install", True, False),
         ("git commit -m verus install", False, False),
         ("git log verus install", False, False),
+        ("nice -n 10 cargo kani --harness h", False, True),
+        ("sudo -u builder cargo kani setup", True, True),
     ],
 )
 def test_classification(*, line: str, installs: bool, runs: bool) -> None:

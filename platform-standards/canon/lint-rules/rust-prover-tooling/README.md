@@ -37,9 +37,9 @@ classified:
 A command is read as the estate runner only when it names `prover-tools` or
 starts with a Make variable standing for it, so `git commit -m 'verus install'`
 is not an installer. Leading `env`, `command`, `exec` and similar wrappers are
-looked through. A `#` begins a comment only at the start of a word, an operator
-inside quotes does not split a command, and the body of a here-document is not
-a command.
+looked through (including options that take an argument, as in `nice -n 10`). A
+`#` begins a comment only at the start of a word, an operator inside quotes
+does not split a command, and the body of a here-document is not a command.
 
 A step that only runs proofs on an installed toolchain is therefore compliant,
 and `printf 'prover-tools verus install'` is not an installer. A workflow step
@@ -54,11 +54,12 @@ that hides the tool name inside a variable is not seen.
 
 - **PT-001** (error): every `rust-prover-tools` revision the checkout names
   (`tools/rust-prover-tools/REF`, a literal `rust-prover-tools@<ref>` in a
-  Makefile variable or recipe or a workflow command) is the same commit, and
-  equals the `prover_tools_ref` parameter. The reference is read whole, so a
-  branch name or `<sha>-patched` fails; a `$(shell ...)` reference is not a
-  literal, and the REF file is the pin there. No revision at all is also
-  noncompliant. Bumping the estate's pin is a change to the parameter's default.
+  Makefile variable or recipe, a workflow command or a shell script) is the
+  same commit, and equals the `prover_tools_ref` parameter. The reference is
+  read whole, so a branch name or `<sha>-patched` fails; a `$(shell ...)`
+  reference is not a literal, and the REF file is the pin there. No revision at
+  all is also noncompliant. Bumping the estate's pin is a change to the
+  parameter's default.
 - **PT-002** (error): no workflow step installs a prover itself: neither a `run`
   command, a `make` target whose prerequisites install, nor a step that runs a
   local installer script (so waiving PT-004 for the script does not clear the
@@ -109,6 +110,12 @@ rationale and review trigger are not blank, and every clause is waivable.
 Moving the pin therefore reopens the question rather than leaving a stale
 waiver. An exception that is not in force waives nothing and is reported as
 EX-001.
+
+A `make` step uses the root Makefile only when it runs from the repository
+root: a step with a `working-directory` (its own, or from `defaults.run`), or a
+`make` after a `cd` in the same script, builds another directory's Makefile,
+which the rule does not read. The operands of Make options (`make -j 2`,
+`make -C dir`) are not goals.
 
 ## What the rule declines to judge
 
