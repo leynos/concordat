@@ -309,6 +309,9 @@ def test_a_truncated_tree_is_unknown() -> None:
         {"path": "a", "mode": "100644", "type": "blob", "sha": "xyz"},
         {"path": "", "mode": "100644", "type": "blob", "sha": "1" * 40},
         {"path": "a", "mode": 100644, "type": "blob", "sha": "1" * 40},
+        {"type": "tree"},
+        {"path": "d", "mode": "100644", "type": "tree", "sha": "2" * 40},
+        {"path": "f", "mode": "040000", "type": "blob", "sha": "2" * 40},
     ],
     ids=[
         "not-an-object",
@@ -319,6 +322,9 @@ def test_a_truncated_tree_is_unknown() -> None:
         "short-sha",
         "empty-path",
         "numeric-mode",
+        "empty-subtree-record",
+        "tree-with-file-mode",
+        "file-with-tree-mode",
     ],
 )
 def test_a_malformed_tree_record_is_unknown_not_dropped(record: object) -> None:

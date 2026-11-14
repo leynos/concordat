@@ -55,6 +55,7 @@ _LOOKUP_FAILURES: typ.Final = (GithubError, requests.RequestException, ValueErro
 _ON_BRANCH: typ.Final = frozenset({"ahead", "identical"})
 _DESCENDS: typ.Final = frozenset({"ahead", "identical"})
 _TREE_TYPE: typ.Final = "tree"
+_TREE_MODE: typ.Final = "040000"
 _NON_EMPTY: typ.Final = re.compile(r".+", re.DOTALL)
 _MODE: typ.Final = re.compile(r"^[0-7]{6}$")
 _OBJECT_ID: typ.Final = re.compile(r"^[0-9a-f]{40}$")
@@ -99,10 +100,18 @@ def _file_entries(tree: dict[str, typ.Any], treeish: str) -> list[tuple[str, str
         message = f"git/trees/{treeish} was truncated or gave no tree"
         raise CertificationUnavailable(message)
     try:
-        return [_record(entry) for entry in entries if not _is_subtree(entry)]
+        # Every record is validated, subtrees included: one that is skipped
+        # unread could be the sign of a response that is not what it claims.
+        parsed = [(_record(entry), _is_subtree(entry)) for entry in entries]
     except (KeyError, TypeError, ValueError) as error:
         message = f"git/trees/{treeish} has a malformed record"
         raise CertificationUnavailable(message) from error
+    if any((mode == _TREE_MODE) != is_tree for (_, mode, _), is_tree in parsed):
+        message = (
+            f"git/trees/{treeish} has a malformed record: its mode and type disagree"
+        )
+        raise CertificationUnavailable(message)
+    return [record for record, is_tree in parsed if not is_tree]
 
 
 def _is_subtree(entry: object) -> bool:
