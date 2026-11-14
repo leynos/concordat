@@ -30,16 +30,19 @@ class History:
         self.repository = pygit2.init_repository(str(path), initial_head="main")
         self.parents: list[pygit2.Oid] = []
         self.executable: frozenset[str] = frozenset()
+        self.symlinks: frozenset[str] = frozenset()
 
     def commit(
         self,
         files: dict[str, str],
         message: str,
         executable: frozenset[str] = frozenset(),
+        symlinks: frozenset[str] = frozenset(),
     ) -> str:
         """Commit *files* as the whole tree and return the new commit id.
 
-        Paths in *executable* get the executable file mode.
+        Paths in *executable* get the executable file mode, and paths in
+        *symlinks* are symbolic links whose text is the file's content.
 
         Returns
         -------
@@ -47,6 +50,7 @@ class History:
             The id of the new commit.
         """
         self.executable = executable
+        self.symlinks = symlinks
         tree = self._tree(files)
         oid = self.repository.create_commit(
             "refs/heads/main", SIGNATURE, SIGNATURE, message, tree, self.parents
@@ -89,11 +93,12 @@ class History:
                 nested.setdefault(head, {})[tail] = text
             else:
                 blob = self.repository.create_blob(text.encode())
-                mode = (
-                    pygit2.GIT_FILEMODE_BLOB_EXECUTABLE
-                    if f"{prefix}{name}" in self.executable
-                    else pygit2.GIT_FILEMODE_BLOB
-                )
+                path = f"{prefix}{name}"
+                mode = pygit2.GIT_FILEMODE_BLOB
+                if path in self.executable:
+                    mode = pygit2.GIT_FILEMODE_BLOB_EXECUTABLE
+                if path in self.symlinks:
+                    mode = pygit2.GIT_FILEMODE_LINK
                 builder.insert(name, blob, mode)
         for head, children in nested.items():
             builder.insert(

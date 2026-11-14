@@ -42,6 +42,8 @@ STATUS_UNKNOWN: typ.Final = "unknown"
 
 EXCLUDED_DIRECTORY: typ.Final = "tests"
 EXCLUDED_SUFFIX: typ.Final = ".md"
+#: Git modes of a symlink and of a submodule's gitlink.
+UNSAFE_MODES: typ.Final = frozenset({"120000", "160000"})
 
 DEFAULT_TAG_PREFIX: typ.Final = "certified/install-whitaker/"
 DEFAULT_BRANCH: typ.Final = "main"
@@ -70,6 +72,15 @@ class Floor(typ.NamedTuple):
 
 class NoSuchCommit(LookupError):  # noqa: N818  # a lookup miss, not a failure.
     """Raised by a source when a revision names no commit of the repository."""
+
+
+class UnsafeContent(ValueError):  # noqa: N818  # a verdict about content, not a bug.
+    """Raised by a source for an action directory the digest cannot vouch for.
+
+    A symlink or a submodule in the directory leads to content the digest does
+    not read: it hashes the link text or the gitlink commit, so the target can
+    change without moving the digest. Such a revision is never certified.
+    """
 
 
 class CertificationUnavailable(RuntimeError):  # noqa: N818  # a source's "no answer", not a bug.
@@ -120,6 +131,20 @@ def is_excluded(relative: str) -> bool:
     return relative.split("/", 1)[0] == EXCLUDED_DIRECTORY or relative.endswith(
         EXCLUDED_SUFFIX
     )
+
+
+def unsafe_entry(entries: cabc.Iterable[tuple[str, str, str]]) -> str | None:
+    """Return the first path in *entries* that is a symlink or a submodule.
+
+    Every entry is checked, tests and Markdown included: the digest ignores
+    those paths, and a link at one of them could lead anywhere.
+
+    Returns
+    -------
+    str | None
+        The path of the first symlink or gitlink, or None when there is none.
+    """
+    return next((path for path, mode, _blob in entries if mode in UNSAFE_MODES), None)
 
 
 def runtime_digest_of(entries: cabc.Iterable[tuple[str, str, str]]) -> str:
@@ -174,6 +199,8 @@ def certify_revision(source: CertificationSource, sha: str) -> Certification:
         return _decide(source, sha)
     except NoSuchCommit:
         return uncertified(f"{sha} names no commit of the action repository")
+    except UnsafeContent as error:
+        return uncertified(str(error))
     except CertificationUnavailable as error:
         return unknown(error.reason)
 
@@ -196,6 +223,20 @@ def _decide(source: CertificationSource, sha: str) -> Certification:
         return uncertified(
             f"{sha} is older than, or unrelated to, every certification tag"
         )
+    return _match_content(source, sha, descended)
+
+
+def _match_content(
+    source: CertificationSource, sha: str, descended: cabc.Sequence[Floor]
+) -> Certification:
+    """Certify *sha* when its runtime digest equals that of a floor it follows.
+
+    Returns
+    -------
+    Certification
+        `certified` by the first floor with the same digest, otherwise
+        `uncertified` with the reason.
+    """
     digest = source.runtime_digest(sha)
     if digest is None:
         return uncertified(f"{sha} has no install-whitaker directory")

@@ -427,21 +427,33 @@ def build_whitaker_provisioning_envelope(
     }
 
 
+def _step_containers(parsed: object) -> list[object]:
+    """Return what holds steps in a decoded document: its jobs, or `runs`."""
+    if not isinstance(parsed, dict):
+        return []
+    jobs = parsed.get("jobs")
+    return [*(jobs.values() if isinstance(jobs, dict) else []), parsed.get("runs")]
+
+
+def _steps_of(container: object) -> list[object]:
+    """Return the steps a job or a `runs` mapping lists, or none."""
+    steps = container.get("steps") if isinstance(container, dict) else None
+    return list(steps) if isinstance(steps, list) else []
+
+
 def _action_uses(envelope: ProvisioningEnvelope) -> cabc.Iterator[str]:
     """Yield the `uses:` value of every step of every workflow and action."""
     documents = [*envelope["workflows"], *envelope["actions"]]
-    for document in documents:
-        parsed = document.get("parsed")
-        if not isinstance(parsed, dict):
-            continue
-        jobs = parsed.get("jobs")
-        job_list = list(jobs.values()) if isinstance(jobs, dict) else []
-        for container in [*job_list, parsed.get("runs")]:
-            steps = container.get("steps") if isinstance(container, dict) else None
-            for step in steps if isinstance(steps, list) else []:
-                uses = step.get("uses") if isinstance(step, dict) else None
-                if isinstance(uses, str):
-                    yield uses
+    steps = (
+        step
+        for document in documents
+        for container in _step_containers(document.get("parsed"))
+        for step in _steps_of(container)
+    )
+    for step in steps:
+        uses = step.get("uses") if isinstance(step, dict) else None
+        if isinstance(uses, str):
+            yield uses
 
 
 def pinned_action_revisions(envelope: ProvisioningEnvelope, action: str) -> list[str]:

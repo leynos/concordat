@@ -29,7 +29,7 @@ import pygit2
 
 from concordat.errors import OperationalRuleError
 
-from .whitaker_certification import is_excluded, runtime_digest_of
+from .whitaker_certification import is_excluded, runtime_digest_of, unsafe_entry
 
 if typ.TYPE_CHECKING:
     import collections.abc as cabc
@@ -126,6 +126,49 @@ def _refuse_excluded_references(
             raise OperationalRuleError(message, operation=OPERATION_DERIVE_REVISIONS)
 
 
+def _all_entries(
+    repository: pygit2.Repository, tree: pygit2.Tree, prefix: str = ""
+) -> cabc.Iterator[tuple[str, str, str]]:
+    """Yield `(path, octal mode, id)` for every non-tree entry, excluded ones too.
+
+    Yields
+    ------
+    tuple[str, str, str]
+        A path relative to the action directory, its mode and its object id.
+    """
+    for entry in tree:
+        relative = f"{prefix}{entry.name}"
+        if entry.filemode == pygit2.GIT_FILEMODE_TREE:
+            subtree = typ.cast("pygit2.Tree", repository[entry.id])
+            yield from _all_entries(repository, subtree, f"{relative}/")
+        else:
+            yield relative, f"{entry.filemode:o}", str(entry.id)
+
+
+def _refuse_links(
+    repository: pygit2.Repository, commit: pygit2.Commit, directory: str, root: str
+) -> None:
+    """Refuse a root with a symlink or a submodule anywhere in the directory.
+
+    The digest hashes a link's text or a gitlink's commit, not what they lead
+    to, and ignores `tests/` and Markdown wholesale, so a link could change what
+    the action runs without moving the digest.
+
+    Raises
+    ------
+    OperationalRuleError
+        When the directory holds a symlink or a submodule.
+    """
+    tree = _action_tree(repository, commit, directory)
+    link = None if tree is None else unsafe_entry(_all_entries(repository, tree))
+    if link is not None:
+        message = (
+            f"approved root {root} has a symlink or submodule at {link} in "
+            f"{directory}, whose target the runtime digest does not cover"
+        )
+        raise OperationalRuleError(message, operation=OPERATION_DERIVE_REVISIONS)
+
+
 def floor_digest(repository: pygit2.Repository, root: str, directory: str) -> str:
     """Return the action directory's runtime digest at one approved root.
 
@@ -138,12 +181,14 @@ def floor_digest(repository: pygit2.Repository, root: str, directory: str) -> st
     ------
     OperationalRuleError
         When *root* is not a readable commit in the clone, lacks the
-        directory, or has a runtime file that names an excluded path.
+        directory, has a runtime file that names an excluded path, or holds a
+        symlink or a submodule.
     """
     try:
         commit = typ.cast("pygit2.Commit", repository[root])
         digest = runtime_digest(repository, commit, directory)
         _refuse_excluded_references(repository, commit, directory, root)
+        _refuse_links(repository, commit, directory, root)
     except (pygit2.GitError, KeyError, ValueError) as error:
         message = f"cannot read approved root {root} from the shared-actions clone"
         raise OperationalRuleError(

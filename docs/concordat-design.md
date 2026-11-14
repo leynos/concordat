@@ -2007,12 +2007,17 @@ resolves commits that exist only in a fork. A tag, branch or short SHA is
 refused without asking. Certified answers are kept for the run only, not on
 disk, because a new tag changes them. Tags are created by the user: a floor
 needs a review, and `scripts/whitaker_revisions.py certify` checks a candidate
-and prints the `git tag` and `git push` commands without running them, since
-whoever can push such a tag can certify. A candidate whose runtime files mention
-`tests/` or a Markdown path is refused, because a script could otherwise run
-or read content the digest ignores; the scan is a guard, not a dependency
-analysis, so the review also checks that no runtime file reaches excluded
-content.
+and prints the `git -C <clone> tag` and `push` commands without running them,
+since whoever can push such a tag can certify. A candidate whose runtime files
+mention `tests/` or a Markdown path is refused, because a script could
+otherwise run or read content the digest ignores; the scan is a guard, not a
+dependency analysis, so the review also checks that no runtime file reaches
+excluded content (a glob or a computed path would evade the scan). A symlink or
+submodule anywhere in the action directory is refused too, at certification and
+in the audit, because the digest hashes the link text or the gitlink commit and
+not the target, so the target could change unseen. A pin whose digest equals a
+floor's has the floor's runtime files, so the audit does not repeat the literal
+scan.
 
 Rule version 0.3.2 refines three of QG-001's textual readings so that they
 match what the shell executes; run against netsuke's Makefile, the older

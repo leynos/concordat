@@ -10,7 +10,8 @@ List what the tags in a clone certify::
     uv run python scripts/whitaker_revisions.py list ../shared-actions
 
 Check a reviewed commit and print the commands that certify it. The commands
-are printed, never run: creating and pushing a tag is the maintainer's act::
+are printed, never run, and name the clone with `git -C`, so they work from any
+directory: creating and pushing a tag is the maintainer's act::
 
     uv run python scripts/whitaker_revisions.py certify ../shared-actions \
         <commit> --installer-version 0.2.12
@@ -23,6 +24,7 @@ a floor certifies, oldest first. The derivation lives in
 from __future__ import annotations
 
 import re
+import shlex
 import sys
 import typing as typ
 from pathlib import Path  # noqa: TC003  # cyclopts reads the annotation at runtime.
@@ -162,9 +164,12 @@ def certify(
     if tag in certified_tags(repository, prefix):
         message = f"the clone already has the tag {tag}; certify a new version"
         raise OperationalRuleError(message, operation=OPERATION)
+    # The commands name the clone, so they work from any directory, including a
+    # concordat checkout that holds none of shared-actions' commits.
+    git = f"git -C {shlex.quote(str(clone))}"
     print(f"runtime digest {digest}")
-    print(f'git tag -a {tag} {sha} -m "Certify install-whitaker {installer_version}"')
-    print(f"git push origin {tag}")
+    print(f'{git} tag -a {tag} {sha} -m "Certify install-whitaker {installer_version}"')
+    print(f"{git} push origin {tag}")
     return 0
 
 

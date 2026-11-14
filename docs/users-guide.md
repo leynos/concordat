@@ -646,12 +646,15 @@ uv run python scripts/whitaker_revisions.py list ../shared-actions
 
 `certify` exits 2 when the commit is not on the first-parent history of `--tip`
 (default `origin/main`), lacks the action, names a version that is already
-tagged, or has runtime files that mention `tests/` or a Markdown path; `list`
-prints each floor and the first-parent commits the floors certify, oldest
-first. Whitaker itself is exempt as the producer, and a developer-environment
-script that CI never runs may be exempted by name, repository and reason in the
-rule's parameters. Exemptions match the repository slug read from the `origin`
-remote. See
+tagged, holds a symlink or submodule, or has runtime files that mention
+`tests/` or a Markdown path. The `git -C <clone> tag` and `push` commands it
+prints name the clone, so they work from any directory. An audit also refuses
+(noncompliant) a pin whose action directory holds a symlink or submodule, since
+the digest cannot see their targets. `list` prints each floor and the
+first-parent commits the floors certify, oldest first. Whitaker itself is
+exempt as the producer, and a developer-environment script that CI never runs
+may be exempted by name, repository and reason in the rule's parameters.
+Exemptions match the repository slug read from the `origin` remote. See
 `platform-standards/canon/lint-rules/whitaker-provisioning/README.md` for what
 the policy recognizes and what it declines to judge.
 

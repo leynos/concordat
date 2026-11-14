@@ -12,6 +12,7 @@ from concordat.auditor.github import (
     GithubRateLimitError,
 )
 from concordat.rules.github_whitaker_certification import (
+    ActionLocation,
     GithubCertificationSource,
     GithubCertifier,
     github_certifier,
@@ -112,9 +113,7 @@ def _source(client: FakeClient) -> GithubCertificationSource:
     """Return a source over *client* for the shared-actions action."""
     return GithubCertificationSource(
         lambda: typ.cast("GithubClient", client),
-        "leynos/shared-actions",
-        DIRECTORY,
-        tag_prefix=TAG[:-6],
+        ActionLocation("leynos/shared-actions", DIRECTORY, tag_prefix=TAG[:-6]),
     )
 
 
@@ -172,6 +171,35 @@ def test_a_change_confined_to_tests_and_markdown_is_certified() -> None:
     client.trees[f"{PIN}:{DIRECTORY}"] = {"tree": edited, "truncated": False}
 
     assert _verdict(client)["status"] == STATUS_CERTIFIED
+
+
+@pytest.mark.parametrize(
+    ("path", "mode", "kind"),
+    [
+        ("scripts/run.sh", "120000", "blob"),
+        ("tests/t.py", "120000", "blob"),
+        ("README.md", "120000", "blob"),
+        ("vendor/dep", "160000", "commit"),
+    ],
+    ids=["runtime-symlink", "tests-symlink", "markdown-symlink", "submodule"],
+)
+def test_a_symlink_or_submodule_in_the_action_is_not_certified(
+    path: str, mode: str, kind: str
+) -> None:
+    """The digest hashes link text and gitlink commits, not their targets.
+
+    A link at an excluded path would let a runtime file reach content the
+    digest ignores, so no link or submodule is certifiable anywhere.
+    """
+    client = FakeClient()
+    linked = [dict(entry) for entry in ACTION_TREE]
+    linked.append({"path": path, "mode": mode, "type": kind, "sha": "6" * 40})
+    client.trees[f"{PIN}:{DIRECTORY}"] = {"tree": linked, "truncated": False}
+
+    verdict = _verdict(client)
+
+    assert verdict["status"] == STATUS_UNCERTIFIED
+    assert f"symlink or submodule at {path}" in verdict["reason"]
 
 
 def test_a_commit_not_ancestral_to_main_is_not_certified() -> None:

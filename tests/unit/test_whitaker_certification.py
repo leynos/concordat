@@ -16,6 +16,7 @@ from concordat.rules.whitaker_certification import (
     certify_revision,
     is_excluded,
     runtime_digest_of,
+    unsafe_entry,
 )
 from concordat.rules.whitaker_provisioning_envelope import (
     build_whitaker_provisioning_envelope,
@@ -286,6 +287,22 @@ def test_the_digest_moves_for_content_mode_and_name(
     base = [("action.yml", "100644", "a" * 40)]
 
     assert runtime_digest_of([change]) != runtime_digest_of(base)
+
+
+@pytest.mark.parametrize(
+    ("entries", "expected"),
+    [
+        ([("action.yml", "100644", "a" * 40)], None),
+        ([("a", "100644", "1" * 40), ("tests/l", "120000", "2" * 40)], "tests/l"),
+        ([("vendor/x", "160000", "3" * 40), ("l.md", "120000", "4" * 40)], "vendor/x"),
+    ],
+    ids=["none", "excluded-symlink", "first-of-two"],
+)
+def test_a_symlink_or_gitlink_is_found_wherever_it_is(
+    entries: list[tuple[str, str, str]], expected: str | None
+) -> None:
+    """Excluded paths are searched too: the digest cannot vouch for a link."""
+    assert unsafe_entry(entries) == expected
 
 
 def test_an_added_runtime_file_moves_the_digest() -> None:

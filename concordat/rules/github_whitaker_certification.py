@@ -36,8 +36,10 @@ from .whitaker_certification import (
     CertificationUnavailable,
     Floor,
     NoSuchCommit,
+    UnsafeContent,
     certify_revision,
     runtime_digest_of,
+    unsafe_entry,
 )
 
 if typ.TYPE_CHECKING:
@@ -72,6 +74,20 @@ def _unavailable(endpoint: str, error: Exception) -> CertificationUnavailable:
     return CertificationUnavailable(f"{endpoint} could not be read: {error}")
 
 
+class ActionLocation(typ.NamedTuple):
+    """Where the action lives and how its certification tags are named.
+
+    ``repository`` is `owner/name`, ``directory`` the action's path within it,
+    ``tag_prefix`` the start of every certification tag and ``branch`` the
+    default branch a certified revision must be on.
+    """
+
+    repository: str
+    directory: str
+    tag_prefix: str = DEFAULT_TAG_PREFIX
+    branch: str = DEFAULT_BRANCH
+
+
 class GithubCertificationSource:
     """Read certification facts from one action repository.
 
@@ -80,21 +96,17 @@ class GithubCertificationSource:
     a failure to audit at all, and it propagates to the command.
     """
 
-    def __init__(  # one keyword per fact of the action's location.
+    def __init__(
         self,
         client_factory: cabc.Callable[[], GithubClient],
-        repository: str,
-        directory: str,
-        *,
-        tag_prefix: str = DEFAULT_TAG_PREFIX,
-        branch: str = DEFAULT_BRANCH,
+        location: ActionLocation,
     ) -> None:
-        """Keep the factory and where the action lives (`owner/name`)."""
+        """Keep the factory and where the action lives."""
         self._client_factory = client_factory
-        self._owner, _, self._name = repository.partition("/")
-        self._directory = directory
-        self._tag_prefix = tag_prefix
-        self._branch = branch
+        self._owner, _, self._name = location.repository.partition("/")
+        self._directory = location.directory
+        self._tag_prefix = location.tag_prefix
+        self._branch = location.branch
         self._client: GithubClient | None = None
         self._floors: list[Floor] | None = None
         self._comparisons: dict[tuple[str, str], str | None] = {}
@@ -144,6 +156,8 @@ class GithubCertificationSource:
 
         A directory that cannot be read, or a listing GitHub truncates (which
         would digest part of the directory), ends the decision as unavailable.
+        A symlink or submodule anywhere in the directory, tests and Markdown
+        included, ends it as uncertifiable (see `UnsafeContent`).
 
         Returns
         -------
@@ -233,6 +247,32 @@ class GithubCertificationSource:
 
     def _read_digest(self, sha: str) -> str | None:
         """Read the action directory at *sha* and digest its runtime files."""
+        entries = self._read_entries(sha)
+        if entries is None:
+            return None
+        link = unsafe_entry(entries)
+        if link is not None:
+            message = (
+                f"{sha} has a symlink or submodule at {link} in the action "
+                "directory, whose target the runtime digest does not cover"
+            )
+            raise UnsafeContent(message)
+        return runtime_digest_of(entries)
+
+    def _read_entries(self, sha: str) -> list[tuple[str, str, str]] | None:
+        """Return `(path, mode, blob id)` for every file of the directory at *sha*.
+
+        Returns
+        -------
+        list[tuple[str, str, str]] | None
+            The entries (subtrees are walked, not listed), or None when the
+            commit has no such directory.
+
+        Raises
+        ------
+        CertificationUnavailable
+            When the read fails, or GitHub truncates the listing.
+        """
         treeish = f"{sha}:{self._directory}"
         try:
             tree = self._connected().git_tree(
@@ -243,18 +283,15 @@ class GithubCertificationSource:
             raise failure from error
         if tree is None:
             return None
-        if tree.get("truncated"):
-            message = f"git/trees/{treeish} was truncated by GitHub"
-            raise CertificationUnavailable(message)
         entries = tree.get("tree")
-        if not isinstance(entries, list):
-            message = f"git/trees/{treeish} answered with no tree"
+        if tree.get("truncated") or not isinstance(entries, list):
+            message = f"git/trees/{treeish} was truncated or gave no tree"
             raise CertificationUnavailable(message)
-        return runtime_digest_of(
+        return [
             (str(entry["path"]), str(entry["mode"]), str(entry["sha"]))
             for entry in entries
             if isinstance(entry, dict) and entry.get("type") != _TREE_TYPE
-        )
+        ]
 
     def _connected(self) -> GithubClient:
         """Return the client, building it on first use."""
@@ -280,14 +317,13 @@ def github_certifier(
         value = parameters.get(key)
         return value if isinstance(value, str) and value else default
 
-    source = GithubCertificationSource(
-        client_factory,
+    location = ActionLocation(
         text("action_repository", "leynos/shared-actions"),
         text("action_directory", ".github/actions/install-whitaker"),
-        tag_prefix=text("certification_tag_prefix", DEFAULT_TAG_PREFIX),
-        branch=text("action_branch", DEFAULT_BRANCH),
+        text("certification_tag_prefix", DEFAULT_TAG_PREFIX),
+        text("action_branch", DEFAULT_BRANCH),
     )
-    return GithubCertifier(source)
+    return GithubCertifier(GithubCertificationSource(client_factory, location))
 
 
 class GithubCertifier:

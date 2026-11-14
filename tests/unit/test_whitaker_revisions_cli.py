@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pathlib
+import shlex
 import sys
 import typing as typ
 
@@ -13,6 +14,7 @@ from scripts import whitaker_revisions
 from tests.unit.whitaker_revisions_support import (
     ACTION_V1,
     ACTION_V2,
+    DIRECTORY,
     History,
     action_files,
     run_main,
@@ -54,13 +56,17 @@ def test_list_prints_each_floor_then_what_it_certifies(
     ]
 
 
-def test_list_with_no_tags_prints_nothing(
+@pytest.mark.parametrize("tag_name", [None, "v1.2.0"], ids=["no-tag", "release-tag"])
+def test_list_prints_nothing_without_a_certification_tag(
     history: History,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    tag_name: str | None,
 ) -> None:
-    """Without a certification tag nothing is certified."""
-    history.commit(action_files(ACTION_V1), "root")
+    """With no tag, or only a release tag, nothing is certified."""
+    root = history.commit(action_files(ACTION_V1), "root")
+    if tag_name is not None:
+        tag(history, tag_name, root)
 
     assert run_main(monkeypatch, _clone(history), "list") == 0
     assert capsys.readouterr().out == ""
@@ -79,19 +85,6 @@ def test_list_reads_a_lightweight_tag(
     assert f"certified {root}" in capsys.readouterr().out
 
 
-def test_list_ignores_tags_outside_the_prefix(
-    history: History,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """A release tag is not a certification."""
-    root = history.commit(action_files(ACTION_V1), "root")
-    tag(history, "v1.2.0", root)
-
-    assert run_main(monkeypatch, _clone(history), "list") == 0
-    assert capsys.readouterr().out == ""
-
-
 def test_certify_prints_the_tag_commands_and_creates_nothing(
     history: History,
     monkeypatch: pytest.MonkeyPatch,
@@ -107,9 +100,10 @@ def test_certify_prints_the_tag_commands_and_creates_nothing(
     lines = capsys.readouterr().out.splitlines()
     assert status == 0
     assert lines[0].startswith("runtime digest ")
+    git = f"git -C {shlex.quote(str(_clone(history)))}"
     assert lines[1:] == [
-        f'git tag -a {PREFIX}0.2.12 {root} -m "Certify install-whitaker 0.2.12"',
-        f"git push origin {PREFIX}0.2.12",
+        f'{git} tag -a {PREFIX}0.2.12 {root} -m "Certify install-whitaker 0.2.12"',
+        f"{git} push origin {PREFIX}0.2.12",
     ]
     assert not [r for r in history.repository.references if "certified" in r]
 
@@ -184,6 +178,32 @@ def test_certify_refuses_a_commit_whose_runtime_names_excluded_content(
 
     assert status == 2
     assert "excludes" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "link", ["scripts/run.sh", "tests/helper.sh", "README.md"], ids=str
+)
+def test_certify_refuses_a_symlink_anywhere_in_the_action(
+    history: History,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    link: str,
+) -> None:
+    """The digest hashes a link's text, not its target, even under `tests/`."""
+    files = {
+        **action_files(ACTION_V1),
+        f"{DIRECTORY}/scripts/run.sh": "echo run\n",
+        f"{DIRECTORY}/tests/helper.sh": "echo helper\n",
+        f"{DIRECTORY}/README.md": "guide\n",
+    }
+    root = history.commit(files, "links", symlinks=frozenset({f"{DIRECTORY}/{link}"}))
+
+    status = run_main(
+        monkeypatch, _clone(history), "certify", root, "--installer-version", "0.2.12"
+    )
+
+    assert status == 2
+    assert f"symlink or submodule at {link}" in capsys.readouterr().err
 
 
 def test_certify_refuses_a_commit_the_clone_does_not_hold(

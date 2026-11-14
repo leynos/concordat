@@ -805,17 +805,22 @@ listed here; the CodeScene coverage and Dependabot kinds are described after
   `uv run python scripts/whitaker_revisions.py list <clone>` prints the floors
   and the first-parent commits they certify, and
   `certify <clone> <commit> --installer-version <v>` checks that a candidate is
-  on `--tip` (default `origin/main`), holds the action and has runtime files
-  that name no `tests/` or Markdown path, then prints the `git tag -a` and
-  `git push` commands; it never tags, since only a maintainer may certify. Both
-  exit 2 when the clone cannot be read. The fixture generator decides each
-  fixture's certification with the production decision over a synthetic action
-  repository (`FixtureHistory`), so the envelopes record real verdicts. The
-  reviewed revision snapshot under `tests/fixtures/whitaker/` is an independent
-  oracle: its chains are the complete history the retired list named, captured
-  with plain Git plumbing, and `test_whitaker_revision_snapshot.py` shows that
-  a tag at each approved root certifies every one of them, that the newest tag
-  alone would not, and that a later commit with unchanged runtime content is
+  on `--tip` (default `origin/main`), holds the action, has runtime files that
+  name no `tests/` or Markdown path and no symlink or submodule anywhere in the
+  directory, then prints the `git -C <clone> tag -a` and `git -C <clone> push`
+  commands; it never tags, since only a maintainer may certify. The audit
+  applies the link rule too (`UnsafeContent`, from `unsafe_entry`), because the
+  digest hashes a link's text or a gitlink's commit, not its target. It does
+  not repeat the literal-reference scan: a pin whose digest equals a floor's
+  has the same runtime files, so the floor's review covers it. Both exit 2 when
+  the clone cannot be read. The fixture generator decides each fixture's
+  certification with the production decision over a synthetic action repository
+  (`FixtureHistory`), so the envelopes record real verdicts. The reviewed
+  revision snapshot under `tests/fixtures/whitaker/` is an independent oracle:
+  its chains are the complete history the retired list named, captured with
+  plain Git plumbing, and `test_whitaker_revision_snapshot.py` shows that a tag
+  at each approved root certifies every one of them, that the newest tag alone
+  would not, and that a later commit with unchanged runtime content is
   certified. Approving a floor also needs a human check that its runtime files
   reach excluded content (tests or Markdown) by no indirect route, such as a
   glob or a computed path: the automatic scan only refuses literal `tests/` and

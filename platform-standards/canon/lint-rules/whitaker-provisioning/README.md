@@ -52,9 +52,13 @@ that fact. See "What the rule reports" below for how each answer is judged.
 `scripts/whitaker_revisions.py certify <clone> <commit> --installer-version
 <version>`
 checks a candidate (on `main`, holds the action, runtime files name no
-`tests/` or Markdown path) and prints the `git tag -a` and `git push` commands,
-which it never runs. `list <clone>` prints each floor and the first-parent
-commits the floors certify.
+`tests/` or Markdown path, no symlink or submodule in the directory) and prints
+the `git -C <clone> tag -a` and `git -C <clone> push` commands, which it never
+runs. The audit also refuses a pin whose directory holds a symlink or submodule
+(the digest hashes link text, not the target); a pin with a floor's digest has
+the floor's runtime files, so the floor's literal-reference check covers it.
+`list <clone>` prints each floor and the first-parent commits the floors
+certify.
 
 ### What the rule reports
 
