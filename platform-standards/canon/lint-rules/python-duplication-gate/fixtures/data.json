@@ -175,7 +175,7 @@
         }
       ]
     },
-    "compliant_hidden_and_vendored_test_trees": {
+    "compliant_hidden_test_trees": {
       "schema_version": 1,
       "kind": "policy-input/python-duplication-gate",
       "repository": {
@@ -203,6 +203,49 @@
           "pkg"
         ],
         "exclude": [],
+        "problems": []
+      },
+      "roots": [
+        {
+          "root": "pkg",
+          "exists": true,
+          "selected_count": 2,
+          "test_file_count": 0,
+          "test_files": []
+        }
+      ]
+    },
+    "compliant_negation_is_literal": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": true
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": {
+        "top_present": true,
+        "top": 0,
+        "roots": [
+          "pkg"
+        ],
+        "exclude": [
+          "tests/**",
+          "!tests/test_mod.py"
+        ],
         "problems": []
       },
       "roots": [
@@ -548,7 +591,91 @@
         }
       ]
     },
-    "test_tree_reincluded_by_negation": {
+    "test_tree_under_vendor_directory": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": true
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": {
+        "top_present": true,
+        "top": 0,
+        "roots": [
+          "pkg"
+        ],
+        "exclude": [],
+        "problems": []
+      },
+      "roots": [
+        {
+          "root": "pkg",
+          "exists": true,
+          "selected_count": 3,
+          "test_file_count": 1,
+          "test_files": [
+            "pkg/vendor/tests/test_dep.py"
+          ]
+        }
+      ]
+    },
+    "test_stub_in_test_tree": {
+      "schema_version": 1,
+      "kind": "policy-input/python-duplication-gate",
+      "repository": {
+        "path": ".",
+        "name": null
+      },
+      "applicability": {
+        "pyproject": true,
+        "nose_table": true
+      },
+      "test_directory_names": [
+        "tests",
+        "test",
+        "unittests",
+        "testing"
+      ],
+      "pyproject": {
+        "path": "pyproject.toml",
+        "error": null
+      },
+      "nose": {
+        "top_present": true,
+        "top": 0,
+        "roots": [
+          "pkg"
+        ],
+        "exclude": [],
+        "problems": []
+      },
+      "roots": [
+        {
+          "root": "pkg",
+          "exists": true,
+          "selected_count": 3,
+          "test_file_count": 1,
+          "test_files": [
+            "pkg/tests/helpers.pyi"
+          ]
+        }
+      ]
+    },
+    "root_excluded_by_negation_only": {
       "schema_version": 1,
       "kind": "policy-input/python-duplication-gate",
       "repository": {
@@ -576,8 +703,9 @@
           "pkg"
         ],
         "exclude": [
-          "tests/**",
-          "!tests/test_mod.py"
+          "**",
+          "!pkg/mod.py",
+          "!mod.py"
         ],
         "problems": []
       },
@@ -585,11 +713,9 @@
         {
           "root": "pkg",
           "exists": true,
-          "selected_count": 3,
-          "test_file_count": 1,
-          "test_files": [
-            "pkg/tests/test_mod.py"
-          ]
+          "selected_count": 0,
+          "test_file_count": 0,
+          "test_files": []
         }
       ]
     },

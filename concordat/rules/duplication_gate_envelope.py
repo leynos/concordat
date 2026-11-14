@@ -11,11 +11,14 @@ select and which of those sit in a test tree.
 Selection follows the detector: the `exclude` patterns are gitignore-style and
 are matched against each file's path relative to the scan root they apply to
 (measured against nose 0.20.0: `unittests/**` with the root `cuprum` excludes
-`cuprum/unittests`). The matcher is `pathspec`'s `GitIgnoreSpec`, so the
-patterns mean what git means by them, including `**`, a trailing `/` and
-negation. Only `[tool.nose].exclude` is read; nose also honours `.gitignore`
-files inside a root, which this envelope does not model, so a test tree that
-is hidden only by one reads as selected.
+`cuprum/unittests`). The matcher is `pathspec`'s `GitIgnoreSpec`, so `**` and
+a trailing `/` mean what git means by them. nose treats every entry as a plain
+exclusion, so a leading `!` or `#` is literal here, not negation or a comment.
+Hidden files and directories are skipped, as nose skips them, and nothing else
+is pruned by name. Only `[tool.nose].exclude` is read; nose also honours
+`.gitignore` files inside a root, which this envelope does not model, so a
+test tree that is hidden only by one reads as selected (a clean checkout holds
+no gitignored files, so this matters only for a dirty working tree).
 
 The file readers are `markdown_envelope`'s, so every envelope shares one
 containment guard: no policy input is read from outside the checkout.
@@ -32,7 +35,6 @@ import typing as typ
 import pathspec
 from pathspec.patterns.gitignore.base import GitIgnorePatternError
 
-from .documentation_envelope import PYTHON_PRUNED_DIRECTORIES
 from .markdown_envelope import (
     Repository,
     is_file,
@@ -49,6 +51,7 @@ if typ.TYPE_CHECKING:
 ENVELOPE_SCHEMA_VERSION: typ.Final = 1
 ENVELOPE_KIND: typ.Final = "policy-input/python-duplication-gate"
 PYPROJECT_FILENAME: typ.Final = "pyproject.toml"
+PYTHON_SUFFIXES: typ.Final = (".py", ".pyi")
 DEFAULT_TEST_DIRECTORY_NAMES: typ.Final = ("tests", "test", "unittests", "testing")
 # A repository with a thousand selected test files needs one finding, not a
 # thousand lines of evidence; the count carries the rest.
@@ -157,10 +160,31 @@ def _root_problem(root: str) -> str | None:
     return None
 
 
+def _exclusion_spec(patterns: list[str]) -> pathspec.GitIgnoreSpec:
+    """Compile *patterns* as plain exclusions, as the detector reads them.
+
+    nose passes every `exclude` entry through as an exclusion, so `!` does not
+    negate (measured on nose 0.20.0: `["**", "!m.py"]` selects nothing) and `#`
+    does not start a comment. gitignore syntax gives both meaning, so a leading
+    one is escaped to be the literal character it is for the detector.
+
+    Returns
+    -------
+    pathspec.GitIgnoreSpec
+        The compiled patterns. A pattern that is not valid gitignore syntax
+        raises pathspec's `GitIgnorePatternError`.
+    """
+    literal = ("!", "#")
+    return pathspec.GitIgnoreSpec.from_lines([
+        f"\\{pattern}" if pattern.startswith(literal) else pattern
+        for pattern in patterns
+    ])
+
+
 def _exclude_problem(patterns: list[str]) -> str | None:
     """Return why the patterns are not valid gitignore patterns, if they are not."""
     try:
-        pathspec.GitIgnoreSpec.from_lines(patterns)
+        _exclusion_spec(patterns)
     except GitIgnorePatternError as error:
         return f"[tool.nose].exclude holds an invalid pattern: {error}"
     return None
@@ -219,12 +243,20 @@ def _nose_fact(table: object) -> NoseFact:
     return fact
 
 
+def _is_python_name(name: str) -> bool:
+    """Return whether *name* is a Python source or stub file the scan reads."""
+    return not name.startswith(".") and name.endswith(PYTHON_SUFFIXES)
+
+
 def _python_files(base: pathlib.Path) -> cabc.Iterator[pathlib.PurePosixPath]:
     """Yield the Python files under directory *base*, relative to *base*.
 
-    The walk never follows symbolic links and skips a link to a file. A
-    directory that cannot be listed raises rather than reading as one with no
-    Python in it.
+    The walk never follows symbolic links and skips a link to a file. Hidden
+    directories and files are skipped, as the detector skips them; nothing else
+    is pruned by name, because the detector does not (measured on nose 0.20.0:
+    `vendor`, `venv` and `node_modules` are scanned unless a `.gitignore` or an
+    `exclude` pattern says otherwise). A directory that cannot be listed raises
+    rather than reading as one with no Python in it.
 
     Yields
     ------
@@ -233,11 +265,11 @@ def _python_files(base: pathlib.Path) -> cabc.Iterator[pathlib.PurePosixPath]:
     """
     for current, directories, files in os.walk(base, onerror=raise_walk_error):
         directories[:] = sorted(
-            name for name in directories if name not in PYTHON_PRUNED_DIRECTORIES
+            name for name in directories if not name.startswith(".")
         )
         here = pathlib.Path(current)
         for name in sorted(files):
-            if name.endswith(".py") and not is_symlink(
+            if _is_python_name(name) and not is_symlink(
                 here / name, OPERATION_SCAN_PYTHON
             ):
                 yield pathlib.PurePosixPath((here / name).relative_to(base).as_posix())
@@ -270,7 +302,9 @@ def _selected_files(scope: _Scope, root_name: str) -> list[str] | None:
     # `within_checkout` has already proved the path exists and answered for any
     # refusal, so this is a plain kind test, not a probe that could hide one.
     if path.is_file():
-        is_selected = path.suffix == ".py" and not scope.spec.match_file(path.name)
+        is_selected = _is_python_name(path.name) and not scope.spec.match_file(
+            path.name
+        )
         return [prefix.as_posix()] if is_selected else []
     return [
         (prefix / relative).as_posix()
@@ -346,7 +380,7 @@ def build_duplication_gate_envelope(
         scope = _Scope(
             checkout,
             root,
-            pathspec.GitIgnoreSpec.from_lines(nose["exclude"]),
+            _exclusion_spec(nose["exclude"]),
             frozenset(names),
         )
         roots = [_root_fact(scope, name) for name in nose["roots"]]

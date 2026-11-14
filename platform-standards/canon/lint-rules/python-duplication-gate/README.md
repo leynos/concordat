@@ -27,20 +27,30 @@ such table, is not audited. A Make recipe or workflow that mentions
 
 The facts come from parsers, never a text search. `pyproject.toml` is decoded
 with `tomllib`. The scan is then reproduced as the detector does it: each root
-is walked (never following symbolic links, and skipping `.git`, `.venv`,
-`node_modules`, `vendor` and the other pruned directories), and the `exclude`
-patterns are matched as gitignore patterns with `pathspec`'s `GitIgnoreSpec`, so
-`**`, a trailing `/` and `!` negation mean what git means by them.
+is walked (never following symbolic links), and the `exclude` patterns are
+matched as gitignore patterns with `pathspec`'s `GitIgnoreSpec`, so `**` and a
+trailing `/` mean what git means by them.
 
-Patterns are matched against each file's path **relative to the scan root**,
-not the repository root. This was measured against nose 0.20.0: with the root
-`pkg`, `unittests/**` excludes `pkg/unittests`, while `pkg/tests/**` excludes
-nothing. A file root (such as `openai_test_types.py`) is matched by its file
-name. Only `.py` files are selected.
+These details were measured against nose 0.20.0, not assumed:
+
+- Patterns are matched against each file's path **relative to the scan root**,
+  not the repository root. With the root `pkg`, `unittests/**` excludes
+  `pkg/unittests`, while `pkg/tests/**` excludes nothing. A file root (such as
+  `openai_test_types.py`) is matched by its file name.
+- Every entry is a plain exclusion. `!` is not negation (`["**", "!m.py"]`
+  selects nothing) and `#` does not start a comment, so a leading `!` or `#` is
+  matched literally.
+- Hidden files and directories are skipped, and nothing else is pruned by name:
+  `vendor`, `venv`, `node_modules` and `site-packages` are scanned unless an
+  exclusion covers them.
+- Python source is `.py` and `.pyi`. The detector also reads other languages,
+  but this is the Python gate, so a root that selects only other languages
+  selects nothing under NS-003.
 
 `[tool.nose].exclude` is the only exclusion the rule reads. nose also honours
 `.gitignore` files inside a root; the rule does not model them, so a test tree
-that is hidden only by one is reported as selected.
+that is hidden only by one is reported as selected. A clean checkout holds no
+gitignored files, so this matters only for a dirty working tree.
 
 ## Checks
 
@@ -51,15 +61,16 @@ that is hidden only by one is reported as selected.
   test tree is a directory whose name is in the `test_directory_names`
   parameter (default `tests`, `test`, `unittests`, `testing`), found below a
   scan root, as the root itself, or among the root's own path components (a root
-  `tests/helpers`). The check is per file: every selected file in such a
-  directory is a finding, however the exclusion was written, and a test tree
-  with no Python file has nothing to cover. A root that is itself a test tree
-  is reported here while it is selected, and under NS-003 if the excludes empty
-  it. `behaviour` is left out of the default names: in some repositories it is
-  a tree of BDD step definitions the gate should scan.
+  `tests/helpers`). The judgement is per file, however the exclusion was
+  written, and a test tree with no Python file has nothing to cover. The
+  finding is per root: it gives the count of selected test files and one
+  example, not a complete list, so rerun the audit after each fix. A root that
+  is itself a test tree is reported here while it is selected, and under NS-003
+  if the excludes empty it. `behaviour` is left out of the default names: in
+  some repositories it is a tree of BDD step definitions the gate should scan.
 - **NS-003** (error): every scan root exists and selects at least one Python
-  file after `exclude`. The detector refuses a scan that selects nothing
-  overall; this holds each root to it.
+  file (`.py` or `.pyi`) after `exclude`. The detector refuses a scan that
+  selects nothing overall; this holds each root to it.
 - **NS-004** (error, indeterminate): `pyproject.toml` is not valid TOML, or
   `[tool.nose]` is not a table, or `roots` is not a non-empty list of
   repository-relative strings, or `exclude` is not a list of valid gitignore

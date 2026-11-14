@@ -88,11 +88,17 @@ SCENARIOS: typ.Final[dict[str, dict[str, str | None]]] = {
         "pkg/tests/test_mod.py": None,
         "pkg/tests/data.json": "{}\n",
     },
-    "compliant_hidden_and_vendored_test_trees": {
+    "compliant_hidden_test_trees": {
+        # The detector skips hidden directories and files.
         "pyproject.toml": nose_table(exclude=None),
         "pkg/tests/test_mod.py": None,
         "pkg/.venv/tests/test_dep.py": CODE,
-        "pkg/node_modules/tests/test_dep.py": CODE,
+        "pkg/.hidden_tests.py": CODE,
+    },
+    "compliant_negation_is_literal": {
+        # The detector reads every entry as an exclusion, so `!` re-includes
+        # nothing and the test tree stays excluded.
+        "pyproject.toml": nose_table(exclude='["tests/**", "!tests/test_mod.py"]'),
     },
     "compliant_file_root_beside_test_tree": {
         "pyproject.toml": nose_table(roots='["pkg/mod.py"]', exclude=None),
@@ -114,8 +120,21 @@ SCENARIOS: typ.Final[dict[str, dict[str, str | None]]] = {
         # so a repository-relative pattern excludes nothing.
         "pyproject.toml": nose_table(exclude='["pkg/tests/**"]'),
     },
-    "test_tree_reincluded_by_negation": {
-        "pyproject.toml": nose_table(exclude='["tests/**", "!tests/test_mod.py"]'),
+    "test_tree_under_vendor_directory": {
+        # Nothing but hidden names is pruned: the detector scans `vendor`.
+        "pyproject.toml": nose_table(exclude=None),
+        "pkg/tests/test_mod.py": None,
+        "pkg/vendor/tests/test_dep.py": CODE,
+    },
+    "test_stub_in_test_tree": {
+        "pyproject.toml": nose_table(exclude=None),
+        "pkg/tests/test_mod.py": None,
+        "pkg/tests/helpers.pyi": "def helper() -> None: ...\n",
+    },
+    "root_excluded_by_negation_only": {
+        # `!` is not negation, so nothing here selects `pkg/mod.py`.
+        "pyproject.toml": nose_table(exclude='["**", "!pkg/mod.py", "!mod.py"]'),
+        "pkg/tests/test_mod.py": None,
     },
     "test_tree_unittests_not_excluded": {
         "pyproject.toml": nose_table(exclude=None),

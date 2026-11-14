@@ -24,7 +24,9 @@ test_compliant_file_root if reported(data.fixtures.compliant_file_root) == set()
 
 test_compliant_test_tree_without_python if reported(data.fixtures.compliant_test_tree_without_python) == set()
 
-test_compliant_hidden_and_vendored_test_trees if reported(data.fixtures.compliant_hidden_and_vendored_test_trees) == set()
+test_compliant_hidden_test_trees if reported(data.fixtures.compliant_hidden_test_trees) == set()
+
+test_compliant_negation_is_literal if reported(data.fixtures.compliant_negation_is_literal) == set()
 
 test_compliant_file_root_beside_test_tree if reported(data.fixtures.compliant_file_root_beside_test_tree) == set()
 
@@ -61,7 +63,9 @@ test_test_tree_partly_excluded if reported(data.fixtures.test_tree_partly_exclud
 
 test_test_tree_exclude_names_repository_path if reported(data.fixtures.test_tree_exclude_names_repository_path) == {"NS-002/noncompliant"}
 
-test_test_tree_reincluded_by_negation if reported(data.fixtures.test_tree_reincluded_by_negation) == {"NS-002/noncompliant"}
+test_test_tree_under_vendor_directory if reported(data.fixtures.test_tree_under_vendor_directory) == {"NS-002/noncompliant"}
+
+test_test_stub_in_test_tree if reported(data.fixtures.test_stub_in_test_tree) == {"NS-002/noncompliant"}
 
 test_test_tree_unittests_not_excluded if reported(data.fixtures.test_tree_unittests_not_excluded) == {"NS-002/noncompliant"}
 
@@ -83,6 +87,8 @@ test_root_absent_names_the_root if {
 test_root_selects_nothing if reported(data.fixtures.root_selects_nothing) == {"NS-003/noncompliant"}
 
 test_root_excluded_entirely if reported(data.fixtures.root_excluded_entirely) == {"NS-003/noncompliant"}
+
+test_root_excluded_by_negation_only if reported(data.fixtures.root_excluded_by_negation_only) == {"NS-003/noncompliant"}
 
 test_root_is_not_python_file if reported(data.fixtures.root_is_not_python_file) == {"NS-003/noncompliant"}
 

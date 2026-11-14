@@ -3114,15 +3114,16 @@ once. Applicability is the `[tool.nose]` table, because the command requires
 it. No clause is waivable, as uncapped scans are the point.
 
 The design question is what "excluded" means. The detector matches `exclude` as
-gitignore patterns relative to each scan root (measured on nose 0.20.0), so the
-envelope reproduces the scan: it walks each root and applies the patterns with
-`pathspec`'s `GitIgnoreSpec`, a new runtime dependency pinned in
-`pyproject.toml`, rather than a handwritten matcher. Judging per selected file
-instead of per test directory means every form of exclusion (`**/tests/**`,
-`tests/`, `unittests/**`) is read by what it does, and a test tree holding no
-Python needs no cover. The test directory names are a rule parameter. Settings
-in `.gitignore` files inside a root are not modelled; the rule reads only
-`[tool.nose].exclude`.
+gitignore-style patterns relative to each scan root, as plain exclusions (`!`
+is not negation, hidden names are skipped and nothing else is pruned; each
+measured on nose 0.20.0), so the envelope reproduces the scan: it walks each
+root and applies the patterns with `pathspec`'s `GitIgnoreSpec`, a new runtime
+dependency pinned in `pyproject.toml`, rather than a handwritten matcher.
+Judging per selected file instead of per test directory means every form of
+exclusion (`**/tests/**`, `tests/`, `unittests/**`) is read by what it does,
+and a test tree holding no Python needs no cover. The test directory names are
+a rule parameter. Settings in `.gitignore` files inside a root are not
+modelled; the rule reads only `[tool.nose].exclude`.
 
 #### 3.1.4 Verifying the reconciliation invariants
 

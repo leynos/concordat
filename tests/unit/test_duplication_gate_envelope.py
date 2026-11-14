@@ -190,11 +190,24 @@ class TestSelection:
         roots = self._roots(tmp_path, files, exclude='["tests/"]')
         assert (roots[0]["selected_count"], roots[0]["test_file_count"]) == (1, 0)
 
-    def test_negation_brings_a_file_back(self, tmp_path: pathlib.Path) -> None:
-        """A `!` pattern re-includes, and the re-included test file is reported."""
-        files = {"pkg/tests/t.py": CODE, "pkg/tests/keep.py": CODE}
+    def test_a_bang_is_literal_not_negation(self, tmp_path: pathlib.Path) -> None:
+        """The detector reads every entry as an exclusion; `!` re-includes nothing."""
+        files = {"pkg/tests/t.py": CODE, "pkg/tests/keep.py": CODE, "pkg/a.py": CODE}
         roots = self._roots(tmp_path, files, exclude='["tests/**", "!tests/keep.py"]')
-        assert roots[0]["test_files"] == ["pkg/tests/keep.py"]
+        assert (roots[0]["selected_count"], roots[0]["test_file_count"]) == (1, 0)
+
+    def test_everything_excluded_with_a_negation_selects_nothing(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """Measured on nose 0.20.0: `["**", "!m.py"]` selects no file."""
+        roots = self._roots(tmp_path, {"pkg/m.py": CODE}, exclude='["**", "!m.py"]')
+        assert roots[0]["selected_count"] == 0
+
+    def test_a_hash_is_literal_not_a_comment(self, tmp_path: pathlib.Path) -> None:
+        """A `#` entry is a name, not a gitignore comment that excludes nothing."""
+        files = {"pkg/#odd.py": CODE, "pkg/a.py": CODE}
+        roots = self._roots(tmp_path, files, exclude='["#odd.py"]')
+        assert roots[0]["selected_count"] == 1
 
     def test_only_python_files_are_selected(self, tmp_path: pathlib.Path) -> None:
         """Prose and data in a test tree select nothing, so nothing is reported."""
@@ -246,13 +259,28 @@ class TestSelection:
         assert envelope["test_directory_names"] == ["behaviour"]
         assert envelope["roots"][0]["test_files"] == ["pkg/behaviour/steps.py"]
 
-    def test_hidden_and_vendored_trees_are_not_walked(
+    def test_hidden_trees_and_files_are_not_walked(
         self, tmp_path: pathlib.Path
     ) -> None:
-        """A virtual environment's own tests are not the repository's."""
-        files = {"pkg/.venv/tests/t.py": CODE, "pkg/node_modules/tests/t.py": CODE}
+        """The detector skips hidden names, so a hidden virtual environment is out."""
+        files = {"pkg/.venv/tests/t.py": CODE, "pkg/.hidden.py": CODE}
         roots = self._roots(tmp_path, {**files, "pkg/a.py": CODE})
         assert (roots[0]["selected_count"], roots[0]["test_file_count"]) == (1, 0)
+
+    @pytest.mark.parametrize(
+        "name", ["vendor", "venv", "node_modules", "site-packages"]
+    )
+    def test_nothing_else_is_pruned_by_name(
+        self, tmp_path: pathlib.Path, name: str
+    ) -> None:
+        """Measured on nose 0.20.0: only hidden names are skipped; these are scanned."""
+        roots = self._roots(tmp_path, {f"pkg/{name}/tests/t.py": CODE})
+        assert roots[0]["test_files"] == [f"pkg/{name}/tests/t.py"]
+
+    def test_stubs_are_selected(self, tmp_path: pathlib.Path) -> None:
+        """`.pyi` files are source the detector reads."""
+        roots = self._roots(tmp_path, {"pkg/tests/h.pyi": CODE})
+        assert (roots[0]["selected_count"], roots[0]["test_file_count"]) == (1, 1)
 
     def test_a_file_root_is_selected_unless_excluded_by_name(
         self, tmp_path: pathlib.Path
